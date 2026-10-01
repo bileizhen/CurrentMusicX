@@ -42,11 +42,11 @@ export const castSupported = () => typeof window.NativeApi !== 'undefined'
 export const isCasting = () => S.casting;
 
 // 投屏音质降级梯（按**设备解码兼容性**由难到易）：
-//   超清母带(FLAC) → 高清臻音(FLAC) → 无损(FLAC) → 极高(MP3 320k) → 标准(MP3 128k)
-// 默认从最高档试起；设备放不了就逐档下探到能播为止。
-// 注意不含 sky/jyeffect（沉浸环绕声/臻音全景声）——它们是同族「效果变体」，
-// 体积同样巨大且更多设备解不了，不适合做自动降级目标（手动仍可在设置里选）。
-const CAST_LADDER = ['jymaster', 'hires', 'lossless', 'exhigh', 'standard'];
+//   无损(FLAC 44.1k) → 极高(MP3 320k) → 标准(MP3 128k)
+// 不再从超清母带/高清臻音（96/192kHz、多声道）起投——很多电视**接受连接却按错误
+// 参数解码**（慢放数倍、音调骤降），且"正在播放"不算失败，自动降级永远不会触发
+// （用户反馈的"恐怖慢放"即此）。服务端也会按文件头实测规格拦截这类档位。
+const CAST_LADDER = ['lossless', 'exhigh', 'standard'];
 const LEVEL_LABEL = {
   jymaster: '超清母带', jyeffect: '臻音全景声', sky: '沉浸环绕声',
   hires: '高清臻音', lossless: '无损', exhigh: '极高 320k', standard: '标准 128k',
@@ -340,8 +340,9 @@ export function openCastDialog() {
     actions: [{ text: '关闭' }],
   });
 
-  // 投屏音质：默认「最高（超清母带）」；设备放不了会自动逐档降级。
+  // 投屏音质：默认「最高（无损）」；设备放不了会自动逐档降级到 MP3。
   // 也可手动指定档位——指定后不再自动降级，便于已知设备能力时固定。
+  // （96/192kHz 与多声道档不参与投屏：电视常解不动，表现为慢放/变调。）
   const LEVELS = [
     { k: 'best', label: '最高' },
     { k: 'lossless', label: '无损' },
@@ -359,7 +360,7 @@ export function openCastDialog() {
         localStorage.setItem('cm.castLevel', el.dataset.k);
         renderQuality();
         toast(el.dataset.k === 'best'
-          ? '投屏音质：最高（放不了会自动降级）'
+          ? '投屏音质：最高（无损，放不了会自动降到 MP3）'
           : `投屏音质：${el.textContent}（固定，不再自动降级）`);
       };
     });
