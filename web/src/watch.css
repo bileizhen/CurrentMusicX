@@ -1,0 +1,71 @@
+/* ────────────────────────────────────────────────────────────────
+   手表 / 超小屏适配（Wear OS WebView 常见 200~450px，多为圆屏）
+
+   思路（圆屏可用区域约为边长的 0.71 倍，方形屏无此约束）：
+   · 内容左右各收 ~9vw，避开圆形切边；
+   · 底部导航只留图标（4 项文字在 200px 宽必溢出），高度收紧；
+   · 顶栏、迷你条、卡片、播放页控件整体缩小；触控目标仍 ≥ 40px。
+   断点用「宽与高都 ≤ 430px」：只命中手表这类方形/圆形小屏，
+   不影响正常手机（手机高度远大于 430px）。
+   ──────────────────────────────────────────────────────────────── */
+@media (max-width: 430px) and (max-height: 430px) {
+  :root { --cm-nav-h: 50px; --cm-mini-h: 44px; }
+
+  /* 圆屏安全区：内容收进中间 */
+  #out { padding-left: 9vw; padding-right: 9vw; }
+
+  /* 顶栏：更矮、标题缩小 */
+  #topbar { min-height: 40px; }
+  #pageTitle { font-size: calc(14px * var(--cm-fs, 1)); }
+
+  /* 底部导航：只留图标，收窄 */
+  #bottomNav { min-height: var(--cm-nav-h); }
+  #bottomNav .navItem { gap: 0; }
+  #bottomNav .navItem > span:not(.nav-ic) { display: none; }   /* 文字标签隐藏 */
+  #bottomNav .navItem .material-icons-outlined { font-size: calc(20px * var(--cm-fs, 1)); }
+  .nav-ic { width: 34px; height: 30px; }
+
+  /* 简约玻璃的悬浮胶囊同样收窄、只留图标（水滴几何按横向条计算，仍适用） */
+  html[data-ui-preset="frost"] #bottomNav { height: 50px; min-height: 50px; border-radius: 25px; }
+
+  /* 迷你播放条：隐藏歌手行，控件缩小 */
+  .cm-mini-inner { padding: 4px 8px; }
+  .cm-mini-name { font-size: calc(12px * var(--cm-fs, 1)); }
+  .cm-mini-sub { display: none; }
+  .cm-mini .cm-song-pic, .cm-mini img { width: 32px; height: 32px; }
+  .cm-mini-prog { height: 2px; }
+  .cm-mini-btn .material-icons-outlined { font-size: 26px; }
+
+  /* 卡片网格：封面与间距整体缩小 */
+  .cm-hscroll { gap: 8px; }
+  .cm-skel-card, .cm-card { width: 96px !important; }
+  .cm-card-name { font-size: calc(11px * var(--cm-fs, 1)); }
+  .cm-card-sub { display: none; }
+  .cm-sec-head h2 { font-size: calc(14px * var(--cm-fs, 1)); }
+
+  /* 一键开听四个入口：收小图标 */
+  .cm-quick i { font-size: 18px !important; }
+  .cm-quick b { font-size: calc(12px * var(--cm-fs, 1)); }
+
+  /* 播放页：封面/控件按 vmin 收（圆屏对角线才是可用长度） */
+  .pl-body.view-cover .pl-left { padding-top: 4px; }
+  #plCover { width: min(56vmin, 200px) !important; height: min(56vmin, 200px) !important; }
+  .pl-name { font-size: calc(15px * var(--cm-fs, 1)); }
+  .pl-stats { display: none; }                       /* 点赞数等次要信息让位 */
+  .pl-ctrl .material-icons-outlined { font-size: 18px; }
+  .pl-transport { gap: 14px; }
+  .pl-transport .material-icons-outlined { font-size: calc(30px * var(--cm-fs, 1)); }
+  .pl-transport .huge .material-icons-outlined { font-size: calc(46px * var(--cm-fs, 1)); }
+  .pl-waveform { height: 26px; }
+  .pl-seek { font-size: 9px; }
+  .pl-greet-title { font-size: calc(16px * var(--cm-fs, 1)); }
+
+  /* 歌词行：圆屏两侧留白 */
+  .pl-lyric { max-width: none; padding: 0 6vw; }
+
+  /* 弹窗：手表上几乎全屏。mdui 面板自带 min-width:17.5rem(280px)，
+     在 240px 屏上必然出屏 —— 用 ::part 覆盖，同时收一点内距腾出正文 */
+  mdui-dialog:not([fullscreen]) { padding: .25rem; }
+  mdui-dialog::part(panel) { min-width: 0; padding: 1rem; }
+  .cm-more-row { padding: 10px 2px; }
+}

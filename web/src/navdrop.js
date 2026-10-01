@@ -187,16 +187,25 @@ function previewAt(clientX) {
 function onDown(e) {
   if (document.documentElement.getAttribute('data-ui-preset') !== 'frost') return;
   if (e.button != null && e.button !== 0) return;
+  // ≥900px 是左侧**纵向**导航栏：水滴不显示（见 app.css），横向 scrub 也不适用
+  if (window.matchMedia && window.matchMedia('(min-width: 900px)').matches) return;
   if (!e.target.closest || !e.target.closest(ITEM_SEL)) return;
-  scrub = { id: e.pointerId, startX: e.clientX, startY: e.clientY, moved: false, item: null };
-  try { nav.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
+  scrub = { id: e.pointerId, startX: e.clientX, startY: e.clientY, moved: false, item: null, captured: false };
+  // 这里**不能**提前 setPointerCapture：捕获会把 pointerup 与后续 click 都重定向到
+  // #bottomNav，<a> 就收不到 click —— 桌面用鼠标点导航全部失效（触摸的 click 仍落在
+  // 原目标上，所以手机端一直没暴露）。改为超过拖动阈值后才捕获（见 onMove）。
 }
 
 function onMove(e) {
   if (!scrub || e.pointerId !== scrub.id) return;
   const dx = e.clientX - scrub.startX, dy = e.clientY - scrub.startY;
   if (!scrub.moved && Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
-  scrub.moved = true;
+  if (!scrub.moved) {
+    scrub.moved = true;
+    // 超过阈值才接管手势并捕获指针：拖出底栏也能继续跟。
+    // 普通点击永远不捕获 → click 落在 <a> 上，桌面鼠标照常跳转。
+    try { nav.setPointerCapture(e.pointerId); scrub.captured = true; } catch (err) { /* 忽略 */ }
+  }
   if (e.cancelable) e.preventDefault();       // 接管手势：不要再滚动/缩放
   previewAt(e.clientX);
 }
@@ -204,11 +213,11 @@ function onMove(e) {
 function onUp(e) {
   if (!scrub || e.pointerId !== scrub.id) return;
   const moved = scrub.moved, target = scrub.item;
-  const id = scrub.id;
+  const id = scrub.id, wasCaptured = scrub.captured;
   scrub = null;
   clearHover();
   if (drop) drop.classList.remove('scrubbing');
-  try { nav.releasePointerCapture(id); } catch (err) { /* 忽略 */ }
+  if (wasCaptured) { try { nav.releasePointerCapture(id); } catch (err) { /* 忽略 */ } }
   if (!moved) return;                          // 普通点击：交给 <a> 自己处理
   suppressClick = true;                        // 拦掉这次拖动末尾补发的 click
   setTimeout(() => { suppressClick = false; }, 400);

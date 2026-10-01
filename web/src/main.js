@@ -3,6 +3,7 @@ import './polyfill.js';   // 旧版 WebView 兼容垫片（必须在 mdui 之前
 import 'mdui/mdui.css';
 import '@material-design-icons/font/outlined.css';
 import './app.css';
+import './watch.css';   // 手表/超小屏适配（方形·圆形小屏专用断点）
 import { auth, settings, setAuthExpiredHandler, warmDecorScales } from './api.js';
 import { toast, initRipple, bootColorScheme, bootFontScale, initImageFade } from './ui.js';
 import { checkUpdate } from './update.js';
@@ -16,6 +17,21 @@ import { bootUiPreset } from './uipreset.js';
 import { applyCustomize } from './customize.js';
 import { initGlass } from './glass.js';
 import { initNavDrop } from './navdrop.js';
+
+// 手表小屏兜底：watch.css 用 mdui-dialog::part(panel) 压掉面板自带 min-width:280px，
+// 但 ::part() 需要 Chrome 73+；老 WebView（构建目标 chrome58）上该规则失效，
+// 240px 屏弹窗仍会出屏。这里在不支持 ::part() 且处于手表断点时用 JS 直接改面板样式。
+;(() => {
+  try {
+    const mq = matchMedia('(max-width:430px) and (max-height:430px)');
+    if (!mq.matches || (window.CSS && CSS.supports && CSS.supports('selector(::part(*))'))) return;
+    const fix = () => document.querySelectorAll('mdui-dialog').forEach(d => {
+      const p = d.shadowRoot && d.shadowRoot.querySelector('.panel');
+      if (p && p.style.minWidth !== '0') p.style.minWidth = '0';
+    });
+    new MutationObserver(fix).observe(document.body, { childList: true, subtree: true });
+  } catch (e) { /* 忽略：降级路径自身不能成为新故障点 */ }
+})();
 import { applyTheme } from './pages/settings.js';
 
 import * as home from './pages/home.js';
