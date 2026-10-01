@@ -214,7 +214,7 @@ export async function render(el) {
     const tintDef = 0.58;
     const diag = mdui.dialog({
       headline: '玻璃效果',
-      body: `<div class="cm-more" style="min-width:min(84vw,340px)">
+      body: `<div class="cm-more">
         <div class="cm-more-row">
           <div class="cm-more-t">模糊强度</div>
           <span id="fxBlurV" style="font-size:calc(12px * var(--cm-fs, 1));opacity:.7">${blur}</span>
@@ -253,7 +253,7 @@ export async function render(el) {
     let cur = waveTilt();
     const diag = mdui.dialog({
       headline: '频谱倾斜补偿',
-      body: `<div class="cm-more" style="min-width:min(84vw,340px)">
+      body: `<div class="cm-more">
         <div class="cm-more-row">
           <div class="cm-more-t">补偿强度</div>
           <span id="tiltV" style="font-size:12px;opacity:.7">${cur <= 0 ? '关闭' : cur.toFixed(1) + ' dB/oct'}</span>
@@ -286,7 +286,7 @@ export async function render(el) {
     const cur = waveStyle();
     const diag = mdui.dialog({
       headline: '波形样式',
-      body: `<div class="cm-more" style="min-width:min(84vw,340px)">
+      body: `<div class="cm-more">
         ${WAVE_STYLES.map(x => `<div class="cm-more-row" data-k="${x.key}">
           <div><div class="cm-more-t">${x.name}${x.key === cur ? ' ✓' : ''}</div>
             <div class="cm-more-s">${x.desc}</div></div>

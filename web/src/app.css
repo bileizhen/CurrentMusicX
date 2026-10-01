@@ -1114,7 +1114,22 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 }
 
 /* 更多抽屉 */
-.cm-more { display: flex; flex-direction: column; gap: 4px; min-width: min(86vw, 340px); }
+/* 弹窗内容一律自然宽度：绝不能用 vw 当最小宽（弹窗外距 3rem×2 + 内距 1.5rem×2
+   挡在中间，390px 屏正文盒只剩 ~246px，min(86vw,340px) 会溢出 89px 产生横向滚动）。
+   弹窗自身的尺寸由 mdui 面板约束（min 280px / max 560px），内容随其换行。 */
+.cm-more {
+  display: flex; flex-direction: column; gap: 4px;
+  min-width: min(100%, 340px); max-width: 100%;
+  /* 原生 <input type=range>（如频谱倾斜滑条）UA 内部绘制会比 100% 多出 ~2px，
+     落到弹窗正文层就变成横向滚动条。这里在容器层裁掉：横向本就不该滚。 */
+  overflow: hidden;
+}
+.cm-more, .cm-qm, .cm-wiki, .cm-si { box-sizing: border-box; max-width: 100%; }
+
+/* 手机：弹窗外距 48px→16px，面板能宽出 ~80px，内容不再局促 */
+@media (max-width: 599px) {
+  mdui-dialog:not([fullscreen]) { padding: 1rem; }
+}
 .cm-more-sec { font-size: calc(12px * var(--cm-fs, 1)); font-weight: 600; opacity: .6; margin: 10px 0 4px; }
 .cm-more-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .cm-more-row {
@@ -1240,7 +1255,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 .mi.fill { font-family: 'Material Icons'; font-weight: normal; }
 
 /* ---------- 在线更新弹窗 ---------- */
-.upd { display: flex; flex-direction: column; gap: 10px; min-width: min(88vw, 400px); }
+.upd { display: flex; flex-direction: column; gap: 10px; min-width: min(100%, 400px); }
 .upd-ver { display: flex; align-items: center; gap: 8px; font-size: calc(14px * var(--cm-fs, 1)); }
 .upd-ver b { color: var(--cm-primary); }
 .upd-ver .upd-new { font-size: calc(16px * var(--cm-fs, 1)); }
@@ -1342,7 +1357,7 @@ h2 .cm-ncmbadge { position: static; vertical-align: 4px; background: var(--cm-pr
 }
 
 /* ---------- 登录设备管理 ---------- */
-.cm-devs { display: flex; flex-direction: column; min-width: min(88vw, 380px); }
+.cm-devs { display: flex; flex-direction: column; min-width: min(100%, 380px); }
 .cm-dev { display: flex; align-items: center; gap: 12px; padding: 12px 4px; border-bottom: 1px solid color-mix(in srgb, var(--mdui-color-outline-variant, #cac4d0) 25%, transparent); }
 .cm-dev:last-child { border-bottom: none; }
 .cm-dev > .material-icons-outlined { color: var(--cm-primary); font-size: calc(22px * var(--cm-fs, 1)); }
@@ -2676,7 +2691,7 @@ html[data-ui-preset="frost"] #topbar { border-bottom-color: var(--frs-tabbar-lin
 .cm-post-act.on { color: #e5484d; opacity: 1; }
 
 /* ---------- 帖子：发帖编辑器 ---------- */
-.cm-peditor { display: flex; flex-direction: column; gap: 8px; min-width: min(88vw, 460px); }
+.cm-peditor { display: flex; flex-direction: column; gap: 8px; min-width: min(100%, 460px); }
 .cm-peditor-tools {
   display: flex; align-items: center; gap: 2px; flex-wrap: wrap;
   padding-bottom: 6px; border-bottom: 1px solid rgba(120, 128, 145, .2);
@@ -2711,7 +2726,7 @@ html[data-ui-preset="frost"] #topbar { border-bottom-color: var(--frs-tabbar-lin
 .cm-peditor-att .material-icons-outlined:hover { opacity: 1; }
 
 /* ---------- 帖子：附带内容选择器 ---------- */
-.cm-picker { display: flex; flex-direction: column; gap: 8px; min-width: min(88vw, 440px); }
+.cm-picker { display: flex; flex-direction: column; gap: 8px; min-width: min(100%, 440px); }
 .cm-picker-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
 .cm-picker-list { max-height: 46vh; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .cm-picker-item {
@@ -2731,7 +2746,7 @@ html[data-ui-preset="frost"] #topbar { border-bottom-color: var(--frs-tabbar-lin
 .cm-picker-check { font-size: calc(20px * var(--cm-fs, 1)); color: var(--cm-primary); opacity: .8; }
 
 /* ---------- 帖子：评论弹层 ---------- */
-.cm-pcmt { display: flex; flex-direction: column; gap: 10px; min-width: min(88vw, 420px); }
+.cm-pcmt { display: flex; flex-direction: column; gap: 10px; min-width: min(100%, 420px); }
 .cm-pcmt-list { max-height: 50vh; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
 .cm-pcmt-item { display: flex; gap: 9px; }
 .cm-pcmt-ava { flex: none; cursor: pointer; display: inline-flex; }
