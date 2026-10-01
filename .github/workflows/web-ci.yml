@@ -1,0 +1,37 @@
+name: Frontend checks
+
+on:
+  push:
+    branches: [feat/ui-ux-overhaul]
+  pull_request:
+    paths:
+      - "web/**"
+      - "decorations/**"
+      - ".github/workflows/web-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  web:
+    name: Test and build web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install dependencies
+        working-directory: web
+        run: npm install --no-audit --no-fund
+      - name: Run regression tests
+        working-directory: web
+        run: npm test
+      - name: Bundle frontend
+        working-directory: web
+        run: npm run build
+      - name: Check output
+        run: |
+          test -s app/src/main/assets/www/index.html
+          test -s app/src/main/assets/www/app.js
+          test -s app/src/main/assets/www/app.css

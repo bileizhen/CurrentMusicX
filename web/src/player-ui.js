@@ -54,8 +54,8 @@ function renderMini() {
         <div class="cm-mini-name">${esc(m.name)}</div>
         <div class="cm-mini-sub">${esc(m.artists)}${player.urlInfo ? ' · ' + tierLabel(player.urlInfo.level) : player.loading ? ' · 解析音质中…' : ''}</div>
       </div>
-      <span class="cm-mini-btn" id="miniPlay"><span class="material-icons-outlined">${player.isPlaying() ? 'pause_circle' : 'play_circle'}</span></span>
-      <span class="cm-mini-btn" id="miniNext"><span class="material-icons-outlined">skip_next</span></span>
+      <button type="button" class="cm-mini-btn" id="miniPlay" aria-label="${player.isPlaying() ? '暂停' : '播放'}"><span class="material-icons-outlined">${player.isPlaying() ? 'pause_circle' : 'play_circle'}</span></button>
+      <button type="button" class="cm-mini-btn" id="miniNext" aria-label="下一首"><span class="material-icons-outlined">skip_next</span></button>
     </div>`;
   el.querySelector('#miniPlay').onclick = e => { e.stopPropagation(); player.toggle(); };
   el.querySelector('#miniNext').onclick = e => { e.stopPropagation(); player.next(); };
@@ -194,14 +194,17 @@ function renderLyric() {
     }).join('') +
     `<div class="pl-lyric-pad" id="padBot"></div>`;
   box.querySelectorAll('.pl-lyric-line').forEach(el => {
-    let lp = null, lpFired = false;
+    let lp = null, lpFired = false, startX = 0, startY = 0;
     el.onclick = e => {
       e.stopPropagation();
       if (lpFired) { lpFired = false; return; }   // 长按已摘录：不要再 seek
       player.seek(lyricLines[+el.dataset.i].t / 1000);
     };
     // 长按摘录歌词（阶段二）：/song/lyrics/mark/add 是写操作，需登录 + 绑定网易云
-    el.addEventListener('pointerdown', () => {
+    el.addEventListener('pointerdown', e => {
+      if (e.button !== 0) return;
+      startX = e.clientX; startY = e.clientY;
+      lpFired = false;
       lp = setTimeout(async () => {
         lp = null; lpFired = true;
         const line = lyricLines[+el.dataset.i];
@@ -210,6 +213,11 @@ function renderLyric() {
         addLyricMark(player.meta, line.txt);
       }, 600);
     });
+    el.addEventListener('pointermove', e => {
+      if (lp && Math.hypot(e.clientX - startX, e.clientY - startY) > 10) {
+        clearTimeout(lp); lp = null; // 用户是在滚动歌词，不是长按摘录
+      }
+    }, { passive: true });
     ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt =>
       el.addEventListener(evt, () => { if (lp) { clearTimeout(lp); lp = null; } }));
   });
@@ -420,8 +428,9 @@ async function openFull() {
       </div>
       <div class="pl-body view-${playerView}">
         <div class="pl-left">
-          <div class="pl-cover-wrap" id="plCoverWrap" title="点击查看歌词">
-            <img id="plCover" src="${esc(m.pic)}" onerror="this.style.visibility='hidden'">
+          <div class="pl-cover-wrap${m.pic ? '' : ' cover-failed'}" id="plCoverWrap" title="点击查看歌词">
+            <span class="material-icons-outlined pl-cover-fallback" aria-hidden="true">music_note</span>
+            <img id="plCover" src="${esc(m.pic)}" alt="${esc(m.name)} 的专辑封面" onload="this.parentElement.classList.remove('cover-failed')" onerror="this.parentElement.classList.add('cover-failed')">
           </div>
           <div class="pl-info">
             <div class="pl-name">${esc(m.name)}</div>
@@ -459,6 +468,7 @@ async function openFull() {
           </div>
         </div>
         <div class="pl-right">
+          <div class="pl-lyric-action"><span>点击歌词跳转 · 长按或点此摘录</span><button type="button" class="pl-lyric-mark" id="plLyricMark"><span class="material-icons-outlined" aria-hidden="true">bookmark_add</span>摘录当前句</button></div>
           <div class="pl-lyric" id="plLyric"></div>
         </div>
       </div>
@@ -471,7 +481,7 @@ async function openFull() {
   const bodyEl = ov.querySelector('.pl-body');
   bodyEl.addEventListener('click', e => {
     if (window.matchMedia('(min-width: 600px)').matches) return;
-    if (e.target.closest('.pl-ctrl, .pl-progress-stack, .pl-transport')) return;      // 控制区不触发
+    if (e.target.closest('.pl-ctrl, .pl-progress-stack, .pl-transport, .pl-lyric-action')) return;      // 控制区不触发
     if (e.target.closest('.pl-lyric-line')) return;                          // 歌词行点击=跳播
     setPlayerView(playerView === 'cover' ? 'lyric' : 'cover');
   });
@@ -531,6 +541,12 @@ async function openFull() {
   };
   ov.querySelector('#plQuality').onclick = qualityMenu;
   ov.querySelector('#plMore').onclick = openMoreDrawer;
+  ov.querySelector('#plLyricMark').onclick = async () => {
+    const line = lyricLines[curLyricIdx] || lyricLines.find(l => l.t >= player.posMs());
+    if (!line) return toast('当前歌曲没有可摘录的歌词');
+    const { addLyricMark } = await import('./pages/lyricmarks.js');
+    addLyricMark(player.meta, line.txt);
+  };
   const castBtn = ov.querySelector('#plCast');
   if (castBtn) castBtn.onclick = () => openCastDialog();
   applyPlayerBg();
@@ -618,8 +634,14 @@ function chipsHTML(list, curKey, group) {
 
 function openMoreDrawer() {
   const diag = mdui.dialog({
-    headline: '更多',
-    body: `<div class="cm-more">
+    headline: '播放选项',
+    body: `<div class="cm-more cm-more-organized">
+      <div class="cm-more-tabs" role="tablist" aria-label="播放选项分类">
+        <button class="cm-more-tab active" type="button" role="tab" aria-selected="true" data-pane="lyric">歌词</button>
+        <button class="cm-more-tab" type="button" role="tab" aria-selected="false" data-pane="appearance">外观</button>
+        <button class="cm-more-tab" type="button" role="tab" aria-selected="false" data-pane="download">下载与详情</button>
+      </div>
+      <div class="cm-more-pane" data-section="lyric" role="tabpanel">
       <div class="cm-more-sec">歌词语言</div>
       <div class="cm-more-chips" id="chipsLang">${chipsHTML(LYRIC_MODES, lyricMode, 'lang')}</div>
       <div class="cm-more-sec">歌词字号</div>
@@ -628,10 +650,14 @@ function openMoreDrawer() {
         <div><div class="cm-more-t">逐字歌词</div><div class="cm-more-s">有逐字数据的歌曲逐字点亮（卡拉OK）</div></div>
         <mdui-switch id="mKara" ${lyricKaraoke ? 'checked' : ''}></mdui-switch>
       </div>
+      </div>
+      <div class="cm-more-pane" data-section="appearance" role="tabpanel" hidden>
       <div class="cm-more-row">
         <div><div class="cm-more-t">沉浸模式</div><div class="cm-more-s">封面主色流动渐变铺满播放页</div></div>
         <mdui-switch id="mGrad" ${bgGradOn ? 'checked' : ''}></mdui-switch>
       </div>
+      </div>
+      <div class="cm-more-pane" data-section="download" role="tabpanel" hidden>
       <div class="cm-more-sec">歌曲信息</div>
       <div class="cm-more-row" id="mWiki" style="cursor:pointer">
         <div><div class="cm-more-t">歌曲百科</div><div class="cm-more-s">创作信息 / 基本信息 / 百科正文</div></div>
@@ -644,11 +670,23 @@ function openMoreDrawer() {
       <div class="cm-more-sec">下载到本机</div>
       <div class="cm-more-chips" id="chipsDl">${QUALITY_TIERS.map(t =>
         `<mdui-chip data-g="dl" data-k="${t.key}" ${t.key === settings.quality ? 'selected' : ''}>${t.label}</mdui-chip>`).join('')}</div>
-      <div class="cm-more-s" style="margin-top:6px">目录：Music/${esc(localStorage.getItem('cm.downloadDir') || 'CurrentMusic')}（可在「我的-快捷功能」修改）</div>
+      <div class="cm-more-s" style="margin-top:6px">目录：Music/${esc(localStorage.getItem('cm.downloadDir') || 'CurrentMusic')}（可在「设置」修改）</div>
+      </div>
     </div>`,
     actions: [{ text: '关闭' }],
   });
   setTimeout(() => {
+    // 分页切换（协作者 LimAimo 的重构）
+    diag.querySelectorAll('.cm-more-tab').forEach(tab => {
+      tab.onclick = () => {
+        diag.querySelectorAll('.cm-more-tab').forEach(t => {
+          t.classList.toggle('active', t === tab);
+          t.setAttribute('aria-selected', String(t === tab));
+        });
+        diag.querySelectorAll('.cm-more-pane').forEach(pane => { pane.hidden = pane.dataset.section !== tab.dataset.pane; });
+      };
+    });
+    // 歌曲百科入口（本地功能，位于「下载与详情」分页）
     const wk = diag.querySelector('#mWiki');
     if (wk) wk.onclick = () => {
       diag.open = false;
@@ -809,7 +847,12 @@ function updateSongInfo() {
   const m = player.meta;
   if (!ov || ov.hidden || !m) return;
   const cover = document.getElementById('plCover');
-  if (cover) cover.src = m.pic || '';
+  if (cover) {
+    cover.parentElement.classList.toggle('cover-failed', !m.pic);
+    cover.style.visibility = '';
+    cover.alt = `${m.name} 的专辑封面`;
+    cover.src = m.pic || '';
+  }
   const name = ov.querySelector('.pl-name');
   if (name) name.textContent = m.name;
   const artist = ov.querySelector('.pl-artist');

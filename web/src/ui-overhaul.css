@@ -1,0 +1,125 @@
+/* UI/UX 合并修订：作为 app.css 之后的统一覆盖层，三个皮肤共享交互契约。 */
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { -webkit-user-select: text; user-select: text; -webkit-touch-callout: default; }
+/* 卡片和交互标签避免误选，正文/评论/歌词允许复制。 */
+.cm-quick, .navItem, .pl-btn, .cm-mini-btn, .cm-card, .cm-song-like,
+.cm-song-more, .cm-setting, .cm-hist-k, .cm-hot { user-select: none; -webkit-user-select: none; }
+.cm-empty, .cmt-content, .pl-lyric-line, .cm-song-name, .cm-song-sub,
+.cm-si-sub, .pl-name, .pl-artist { user-select: text; -webkit-user-select: text; }
+
+/* WCAG 可见焦点 / 触达面积：外观主题不能取消这些交互保障。 */
+:where(button, a, summary, input, select, textarea, [role="button"], [role="tab"]):focus-visible {
+  outline: 3px solid var(--mdui-color-primary, #6750a4);
+  outline-offset: 3px;
+}
+:where(.pl-btn, .cm-song-like, .cm-song-more, .cm-mini-btn,
+  #topBack, #topAction, #topSearch, .cm-dislike) { min-width: 44px; min-height: 44px; }
+:where(button, .cm-mini-btn, .pl-btn) { -webkit-tap-highlight-color: transparent; }
+#topAction, #topBack, .cm-mini-btn, .cm-dislike, .pl-lyric-mark {
+  border: 0; cursor: pointer; color: inherit;
+}
+#topAction, #topBack { background: transparent; display: inline-grid; place-items: center; padding: 0; }
+#topBack[hidden] { display: none !important; }
+#topBack { flex: 0 0 44px; border-radius: 50%; margin-right: 4px; font-size: 24px; }
+#topBack:active { background: var(--mdui-color-surface-container-high, rgba(103,80,164,.15)); }
+#pageTitle { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#topbar.has-back { gap: 2px; padding-left: max(6px, var(--safe-l, 0px)); }
+#topbar.has-back #topActs { flex: none; }
+@media (min-width: 900px) { #topbar.has-back #brandLock { margin-right: 12px; } }
+
+.cm-mini-btn { background: transparent; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+.cm-mini-btn:active, .pl-lyric-mark:active, .cm-search-go:active { transform: scale(.94); }
+.cm-quick:is(button) { display: flex; flex-direction: column; text-align: left; color: inherit; font-family: inherit; font-size: inherit; cursor: pointer; }
+.cm-quick:is(button) i { font-style: normal; }
+.cm-setting[aria-disabled="true"] { opacity: .58; cursor: not-allowed; }
+
+/* 搜索：一个主要操作，高级功能有明确折叠入口。 */
+.cm-search-entry { display: flex; align-items: center; gap: 10px; }
+.cm-search-entry mdui-text-field { flex: 1; min-width: 0; }
+.cm-search-go, .cm-retry {
+  display: inline-flex; justify-content: center; align-items: center; gap: 6px;
+  min-height: 44px; padding: 0 16px; border: 0; border-radius: 14px;
+  background: var(--mdui-color-primary, #6750a4);
+  color: var(--mdui-color-on-primary, #fff); font: inherit; font-size: calc(14px * var(--cm-fs, 1));
+  font-weight: 600; cursor: pointer;
+}
+.cm-search-go { width: 48px; padding: 0; flex: none; }
+.cm-advanced-search { margin: 18px 0 8px; border-top: 1px solid var(--mdui-color-outline-variant, #ddd); }
+.cm-advanced-search summary {
+  display: flex; align-items: center; gap: 8px; min-height: 44px;
+  color: var(--mdui-color-on-surface-variant, #49454f); font-size: calc(13px * var(--cm-fs, 1));
+  cursor: pointer; list-style: none;
+}
+.cm-advanced-search summary::-webkit-details-marker { display: none; }
+.cm-advanced-search summary::after { content: 'expand_more'; font: 22px 'Material Icons Outlined'; margin-left: auto; }
+.cm-advanced-search[open] summary::after { content: 'expand_less'; }
+.cm-advanced-hint { opacity: .85; font-size: calc(12px * var(--cm-fs, 1)); }
+.cm-error { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; line-height: 1.6; padding: 26px 16px; }
+.cm-error .cm-retry { margin-top: 4px; }
+
+/* “不感兴趣”不再是贴在封面角落、难以点中的半透明小图标。 */
+.cm-card { position: relative; }
+.cm-dislike {
+  position: absolute; top: 6px; right: 6px; z-index: 3;
+  display: inline-grid; place-items: center; padding: 0; border-radius: 50%;
+  background: rgba(0,0,0,.70); color: #fff; font-size: 21px; font-family: 'Material Icons Outlined';
+  box-shadow: 0 2px 7px rgba(0,0,0,.20); transition: transform 160ms ease, background-color 160ms ease;
+}
+.cm-dislike:hover { background: rgba(0,0,0,.9); }
+.cm-dislike:disabled { opacity: .5; }
+
+/* 播放器设置：按任务分组，不在一个巨型长弹窗里混放所有选项。 */
+.cm-more-organized { min-width: 0; }
+.cm-more-tabs { display: flex; gap: 6px; margin: 0 0 18px; padding: 4px; border-radius: 16px; background: var(--mdui-color-surface-container, #f0ebf5); }
+.cm-more-tab {
+  flex: 1; min-width: 0; border: none; border-radius: 12px; padding: 10px 5px;
+  font: inherit; font-size: calc(13px * var(--cm-fs, 1)); font-weight: 600;
+  background: transparent; color: var(--mdui-color-on-surface-variant, #49454f);
+  cursor: pointer; transition: background-color .16s ease, color .16s ease;
+}
+.cm-more-tab.active { color: var(--mdui-color-on-primary-container, #21005d); background: var(--mdui-color-primary-container, #eaddff); }
+.cm-more-pane { min-height: 120px; }
+.cm-more-pane[hidden] { display: none !important; }
+
+/* 歌词：明确展示摘录操作，滑动时不触发长按。 */
+.pl-lyric-action { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px auto 0; width: 100%; max-width: 560px; }
+.pl-lyric-action > span { color: rgba(255,255,255,.82); font-size: calc(12px * var(--cm-fs, 1)); line-height: 1.35; }
+.pl-lyric-mark {
+  flex: none; min-height: 40px; padding: 6px 12px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 5px;
+  color: #fff; background: rgba(255,255,255,.20); border: 1px solid rgba(255,255,255,.33);
+  font-size: calc(12px * var(--cm-fs, 1)); font-weight: 600;
+  backdrop-filter: blur(12px); transition: transform 150ms ease;
+}
+.pl-lyric-mark .material-icons-outlined { font-size: 17px; }
+.pl-lyric-line { touch-action: pan-y; }
+.pl-lyric-trans { opacity: .90; }
+@media (max-width: 599px) { .pl-lyric-action { padding: 0 4px; } .pl-lyric-action > span { max-width: 45%; } }
+
+/* 封面失败时保持视觉锚点；动态切歌后可自动恢复。 */
+.pl-cover-wrap { position: relative; isolation: isolate; overflow: hidden; border-radius: 20px; }
+.pl-cover-fallback {
+  display: none; position: absolute; inset: 0; place-items: center;
+  background: linear-gradient(145deg, #3f3658, #191821); color: rgba(255,255,255,.82);
+  font-size: clamp(54px, 9vw, 90px); z-index: 0;
+}
+.pl-cover-wrap.cover-failed .pl-cover-fallback { display: grid; }
+.pl-cover-wrap.cover-failed #plCover { visibility: hidden; }
+#plCover { position: relative; z-index: 1; }
+
+/* 三皮肤均需保证次级文案的对比度，避免低 opacity 与浅背景叠加。 */
+.cm-card-sub, .cm-plsub, .cm-song-sub, .cm-detail-sub, .cm-more-s,
+.cm-setting i, .cm-sec-sub, .cm-mini-sub, .cm-greet-date { opacity: 1; color: var(--mdui-color-on-surface-variant, #49454f); }
+.cm-more-s, .cm-sec-sub, .cm-card-sub { font-size: max(12px, calc(12px * var(--cm-fs, 1))); }
+.mdui-theme-dark :is(.cm-card-sub, .cm-plsub, .cm-song-sub, .cm-detail-sub, .cm-more-s, .cm-setting i, .cm-sec-sub, .cm-mini-sub, .cm-greet-date) {
+  color: var(--mdui-color-on-surface-variant, #cac4d0);
+}
+html[data-ui-preset="glass"] :is(.cm-card-sub, .cm-song-sub, .cm-sec-sub),
+html[data-ui-preset="frost"] :is(.cm-card-sub, .cm-song-sub, .cm-sec-sub) {
+  text-shadow: 0 1px 2px rgba(0,0,0,.04);
+}
+@media (prefers-reduced-motion: reduce) {
+  :where(.cm-page, .cm-card, .cm-song, .pl-btn, .cm-more-tab, .cm-mini-btn, .cm-dislike, .pl-lyric-mark) {
+    animation: none !important; transition-duration: .01ms !important; scroll-behavior: auto !important;
+  }
+}

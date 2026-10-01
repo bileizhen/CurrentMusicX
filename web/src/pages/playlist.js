@@ -41,7 +41,8 @@ export async function render(el, params) {
       throw new Error('未知列表');
     }
   } catch (e) {
-    el.innerHTML = `<div class="cm-empty">${esc(e.message)}</div>`;
+    el.innerHTML = `<div class="cm-empty cm-error" role="alert">歌单加载失败：${esc(e.message)}<button class="cm-retry" id="playlistRetry" type="button">重新加载</button></div>`;
+    el.querySelector('#playlistRetry').onclick = () => render(el, params);
     return;
   }
 
@@ -99,11 +100,17 @@ export async function render(el, params) {
   if (saveOrderBtn) saveOrderBtn.onclick = async () => {
     const ids = (songs || []).map(s2 => s2.ncm_id).filter(Boolean);
     if (!ids.length) return toast('列表为空');
-    if (!await confirmDialog(`把当前顺序保存到网易云歌单？\n（共 ${ids.length} 首，会覆盖云端顺序）`)) return;
-    try {
-      await api.ncm('/song/order/update', { pid: id, ids: ids.join(','), confirm: 1 });
-      toast('已保存到网易云');
-    } catch (e) { toast(e.message.includes('绑定') || /401/.test(e.message) ? '需先绑定网易云账号' : e.message); }
+    confirmDialog({
+      title: '保存当前排序？',
+      body: `将 ${ids.length} 首歌曲的当前顺序写回网易云歌单，覆盖原来的顺序。`,
+      onOk: async () => {
+        saveOrderBtn.loading = true;
+        try {
+          await api.ncm('/song/order/update', { pid: id, ids: ids.join(','), confirm: 1 });
+          toast('已保存到网易云');
+        } finally { saveOrderBtn.loading = false; }
+      },
+    });
   };
 
   const plCmtBtn = el.querySelector('#plComments');

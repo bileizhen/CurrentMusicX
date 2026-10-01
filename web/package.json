@@ -3,7 +3,10 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "build": "node build.mjs"
+    "build": "node build.mjs",
+    "preview": "node serve.mjs",
+    "dev": "npm run build && npm run preview",
+    "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
     "mdui": "^2.1.5",

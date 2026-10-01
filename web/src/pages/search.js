@@ -58,17 +58,17 @@ let seq = 0;
 
 export async function render(el, params = []) {
   el.innerHTML = `
-    <div class="cm-search-bar">
+    <div class="cm-search-bar cm-search-entry">
       <mdui-text-field id="kw" label="搜索歌曲 / 歌手 / 专辑" variant="outlined" clearable style="width:100%"></mdui-text-field>
+      <button type="button" class="cm-search-go" id="searchGo" aria-label="搜索"><span class="material-icons-outlined" aria-hidden="true">search</span></button>
     </div>
     <div id="sugBox"></div>
     <div id="histBox"></div>
-    <div class="cm-plsort" id="matchRow">
-      <span class="cm-plsort-l"><span class="material-icons-outlined">graphic_eq</span>听歌识曲式匹配</span>
-      <mdui-chip id="matchLocal">本地文件匹配</mdui-chip>
-      <mdui-chip id="matchMulti">多重匹配</mdui-chip>
-    </div>
-    <div id="matchBox"></div>
+    <details class="cm-advanced-search" id="matchTools">
+      <summary><span class="material-icons-outlined" aria-hidden="true">tune</span>高级音频匹配工具<span class="cm-advanced-hint">需预先准备文件指纹</span></summary>
+      <div class="cm-plsort" id="matchRow"><mdui-chip id="matchLocal">本地文件匹配</mdui-chip><mdui-chip id="matchMulti">多重匹配</mdui-chip></div>
+      <div id="matchBox"></div>
+    </details>
     <div id="resultBox"></div>`;
 
   const input = el.querySelector('#kw');
@@ -159,12 +159,15 @@ export async function render(el, params = []) {
 
   /** 取某一类型的一页（offset 为 0 时覆盖，否则追加）。返回本次新增条数。 */
   async function load(t, offset) {
-    const d = await api.search(S.kw, offset, BATCH, t);
+    const state = S; // 每个响应只能更新发起它的搜索状态
+    if (!state) return 0;
+    const d = await api.search(state.kw, offset, BATCH, t);
+    if (state !== S || !el.isConnected) return 0;
     const got = d[ARR[t]] || [];
-    S.items[t] = offset ? (S.items[t] || []).concat(got) : got;
-    S.total[t] = (d.totals && d.totals[t]) || S.items[t].length;
-    S.more[t] = !!(d.hasMore && d.hasMore[t]);
-    S.loaded[t] = true;
+    state.items[t] = offset ? (state.items[t] || []).concat(got) : got;
+    state.total[t] = (d.totals && d.totals[t]) || state.items[t].length;
+    state.more[t] = !!(d.hasMore && d.hasMore[t]);
+    state.loaded[t] = true;
     return got.length;
   }
 
@@ -243,7 +246,7 @@ export async function render(el, params = []) {
         btn.disabled = false;
         btn.textContent = `显示更多（${loadedCount(t)}/${S.total[t] || loadedCount(t)}）`;
       } finally {
-        S.loading[t] = false;
+        if (my === seq && S) S.loading[t] = false;
       }
     };
   }
@@ -261,8 +264,10 @@ export async function render(el, params = []) {
       p.querySelector('#addAll').onclick = () => addToPlaylist(S.items.song || []);
       refreshMore('song');
     }
-    const rows = await renderSongList(p.querySelector('#songList'), S.items.song || [],
-      { from, onPlay: i => player.playList(S.items.song, i) });
+    const state = S;
+    const rows = await renderSongList(p.querySelector('#songList'), state.items.song || [],
+      { from, onPlay: i => player.playList(state.items.song, i) });
+    if (state !== S || S.cur !== 'song' || !el.isConnected) return;
     // 追加时动画新增行；首次出结果时也渐入（那时没有面板整体动画）
     if (from) { animateIn(rows); refreshMore('song'); }
     else if (items) animateIn(rows);
@@ -379,9 +384,10 @@ export async function render(el, params = []) {
         panel().innerHTML = `<div class="cm-empty">加载失败：${esc(e.message)}</div>`;
         return;
       }
-      if (my !== seq) return;
+      if (my !== seq || !S || S.cur !== k || !el.isConnected) return;
       renderTabs();
     }
+    if (!S || S.cur !== k || !el.isConnected) return;
     renderPanel(0, { items: false });
     animatePanel(dir);
   }
@@ -408,7 +414,10 @@ export async function render(el, params = []) {
     try {
       await load('song', 0);
     } catch (e) {
-      if (my === seq) resultBox.innerHTML = `<div class="cm-empty">搜索失败：${esc(e.message)}</div>`;
+      if (my === seq && el.isConnected) {
+        resultBox.innerHTML = `<div class="cm-empty cm-error" role="alert">搜索失败：${esc(e.message)}<button type="button" class="cm-retry">重试搜索</button></div>`;
+        resultBox.querySelector('.cm-retry').onclick = () => doSearch(kw);
+      }
       return;
     }
     if (my !== seq) return;
@@ -416,11 +425,15 @@ export async function render(el, params = []) {
     const others = TABS.filter(t => t.k !== 'song').map(t => t.k);
     if (!loadedCount('song')) {
       // 单曲为空：先把其余类型取回来再判断，避免先闪一下「没有结果」
-      await Promise.allSettled(others.map(t => load(t, 0)));
+      const extraResults = await Promise.allSettled(others.map(t => load(t, 0)));
       if (my !== seq) return;
       const hit = TABS.find(t => loadedCount(t.k) > 0);
       if (!hit) {
-        resultBox.innerHTML = `<div class="cm-empty">没有找到「${esc(kw)}」的相关结果</div>`;
+        const failed = extraResults.some(r => r.status === 'rejected');
+        resultBox.innerHTML = failed
+          ? `<div class="cm-empty cm-error" role="alert">部分搜索请求失败，无法确认是否有结果<button class="cm-retry" id="retrySearch" type="button">重试搜索</button></div>`
+          : `<div class="cm-empty">没有找到「${esc(kw)}」的相关结果</div>`;
+        resultBox.querySelector('#retrySearch')?.addEventListener('click', () => doSearch(kw));
         return;
       }
       S.cur = hit.k;
@@ -445,6 +458,7 @@ export async function render(el, params = []) {
   }
 
   // 输入不触发搜索：只有回车（或点击热搜/历史词条这类明确动作）才发起请求
+  el.querySelector('#searchGo').onclick = () => { const kw = (input.value || '').trim(); if (kw) { sugBox.innerHTML = ''; doSearch(kw); } else input.focus(); };
   input.addEventListener('input', () => {
     if (!(input.value || '').trim()) { seq++; S = null; resultBox.innerHTML = ''; sugBox.innerHTML = ''; renderHist(); renderHot(); return; }
     queueSuggest(input.value.trim());

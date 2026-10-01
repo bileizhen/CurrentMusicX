@@ -538,7 +538,21 @@ export async function renderSongList(el, songs, opts = {}) {
       const act = e.target.closest('[data-act]');
       if (act && act.dataset.act === 'like') {
         e.stopPropagation();
-        openLikeMenu(songs[i], () => renderSongList(el, songs, opts));
+        openLikeMenu(songs[i], () => {
+          if (!row.isConnected) return;
+          const st = getStatus(songs[i].ncm_id);
+          const like = row.querySelector('[data-act="like"]');
+          if (!like) return;
+          like.classList.toggle('on', !!st.liked);
+          like.querySelector('.material-icons-outlined').textContent = st.liked ? 'favorite' : 'favorite_border';
+          like.querySelector('.cm-ncmdot')?.remove();
+          if (isNcmLiked(songs[i].ncm_id)) like.insertAdjacentHTML('beforeend', '<i class="cm-ncmdot" title="已在网易云红心"></i>');
+          const sub = row.querySelector('.cm-song-sub');
+          if (sub) {
+            sub.querySelector('.cm-like-n')?.remove();
+            if (st.count) sub.insertAdjacentHTML('beforeend', `<span class="cm-like-n" title="CurrentMusic 点赞数"><span class="mi">favorite</span>${fmtCount(st.count)}</span>`);
+          }
+        });
         return;
       }
       if (act && act.dataset.act === 'remove') {
@@ -562,7 +576,7 @@ export async function renderSongList(el, songs, opts = {}) {
 // 注意：mdui 2 的 dialog 不支持 onAction 选项，确认逻辑必须挂在
 // action 的 onClick 上（返回 promise 自动在完成后关闭，返回 false 不关闭）。
 
-export function promptDialog({ title, label, value = '', placeholder = '', type = 'text', onOk }) {
+export function promptDialog({ title, label, value = '', placeholder = '', type = 'text', allowEmpty = false, onOk }) {
   const diag = mdui.dialog({
     headline: title,
     body: `<mdui-text-field label="${esc(label)}" variant="outlined" value="${esc(value)}" placeholder="${esc(placeholder)}" ${type === 'password' ? 'type="password"' : ''} style="width:100%"></mdui-text-field>`,
@@ -572,8 +586,8 @@ export function promptDialog({ title, label, value = '', placeholder = '', type 
         text: '确定',
         onClick: () => {
           const v = diag.querySelector('mdui-text-field').value.trim();
-          if (!v) { toast('内容不能为空'); return false; }
-          return Promise.resolve(onOk(v)).catch(e => { toast(e.message); return false; });
+          if (!v && !allowEmpty) { toast('内容不能为空'); return false; }
+          return Promise.resolve().then(() => onOk(v)).catch(e => { toast(e.message); return false; });
         },
       },
     ],
@@ -581,12 +595,15 @@ export function promptDialog({ title, label, value = '', placeholder = '', type 
   return diag;
 }
 
-export function confirmDialog({ title, body = '', onOk }) {
+export function confirmDialog({ title, body = '', onOk = () => {} }) {
   return mdui.dialog({
     headline: title, body,
     actions: [
       { text: '取消' },
-      { text: '确定', onClick: () => Promise.resolve(onOk()).catch(e => toast(e.message)) },
+      { text: '确定', onClick: () => Promise.resolve().then(onOk).catch(e => {
+        toast(`操作失败：${e.message}`);
+        return false; // 异步提交失败时留在弹窗里，允许重新确认
+      }) },
     ],
   });
 }

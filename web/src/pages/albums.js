@@ -6,7 +6,7 @@
 // 说明：/album/detail 与 /album/list/style 是**数字专辑**（vipmall）接口，参数 id 必须来自
 //      /album/list 返回的 albumId；传普通音乐专辑 id 会被上游判 404（已踩过）。
 import { api, auth } from '../api.js';
-import { esc, toast, skelGrid, fmtCount } from '../ui.js';
+import { esc, toast, skelGrid, fmtCount, confirmDialog } from '../ui.js';
 
 const KEY = 'cm.albumsTab';
 const PAGE = 24;
@@ -329,14 +329,22 @@ function digitalAlbumDialog(id, buyMode) {
         <mdui-button variant="filled" id="daBuy">购买</mdui-button>
       </div>
       <div class="cm-pe-hint" id="daBuyHint">购买会调用 /digitalAlbum/ordering（T2：你的账号 + confirm=1）</div>`;
-    box.querySelector('#daBuy').onclick = () => {
-      if (!buyMode && !confirm('现在购买这张数字专辑？')) return;
-      const hint = box.querySelector('#daBuyHint');
-      hint.textContent = '下单中…';
-      api.ncm('/digitalAlbum/ordering', { id, payment: 0, quantity: 1, confirm: 1 })
-        .then(() => { hint.textContent = '已下单（支付在上游完成，本页不代付）'; toast('已下单'); })
-        .catch(e => { hint.textContent = `下单失败：${/绑定|401/.test(e.message) ? '需先绑定网易云账号' : e.message}`; });
-    };
+    box.querySelector('#daBuy').onclick = () => confirmDialog({
+      title: '确认下单？',
+      body: '将为这张数字专辑创建订单；后续支付需要在上游平台完成。',
+      onOk: async () => {
+        const hint = box.querySelector('#daBuyHint');
+        hint.textContent = '下单中…';
+        try {
+          await api.ncm('/digitalAlbum/ordering', { id, payment: 0, quantity: 1, confirm: 1 });
+          hint.textContent = '订单已创建，支付请前往上游平台完成';
+          toast('已下单');
+        } catch (e) {
+          hint.textContent = `下单失败：${/绑定|401/.test(e.message) ? '需先绑定网易云账号' : e.message}`;
+          throw e;
+        }
+      },
+    });
   }).catch(e => {
     if (box) box.textContent = `详情加载失败：${e.message}`;
   });

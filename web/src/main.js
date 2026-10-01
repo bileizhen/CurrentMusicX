@@ -3,8 +3,10 @@ import './polyfill.js';   // 旧版 WebView 兼容垫片（必须在 mdui 之前
 import 'mdui/mdui.css';
 import '@material-design-icons/font/outlined.css';
 import './app.css';
+import './ui-overhaul.css';
 import { auth, settings, setAuthExpiredHandler, warmDecorScales } from './api.js';
-import { toast, initRipple, bootColorScheme, bootFontScale, initImageFade } from './ui.js';
+import { toast, esc, initRipple, bootColorScheme, bootFontScale, initImageFade } from './ui.js';
+import { initAccessibleControls } from './ux-controls.js';
 import { checkUpdate } from './update.js';
 import { initPullToRefresh } from './ptr.js';
 import { engineChrome, engineOutdated } from './version.js';
@@ -100,6 +102,15 @@ const out = () => document.getElementById('out');
 // ---------- 路由方向感知（前进=上入 / 后退=左入） ----------
 let navStack = [];
 let navDirection = 'fwd';
+let activeRouteHash = null;
+let routeVersion = 0;
+const routeScroll = new Map();
+const ROOT_TABS = new Set(['#/home', '#/search', '#/square', '#/library', '#/user']);
+
+function navigateBack() {
+  if (navStack.length > 1) history.back();
+  else location.hash = '#/home';
+}
 
 window.addEventListener('hashchange', () => {
   const hash = location.hash || '#/home';
@@ -142,21 +153,34 @@ async function router() {
   if (!matched) { location.hash = '#/home'; return; }
   if (params) params.query = query;   // 页面按需读取（大多忽略）
 
+  // 同步返回按钮和页面标题；Tab 页不需要重复的返回入口。
+  const pathIsTab = ROOT_TABS.has(routePath);
+  const back = document.getElementById('topBack');
+  back.hidden = pathIsTab;
+  document.getElementById('topbar').classList.toggle('has-back', !pathIsTab);
   document.getElementById('pageTitle').textContent = matched.title;
   document.querySelectorAll('#bottomNav .navItem').forEach(a => {
     a.classList.toggle('cur', a.getAttribute('href') === hash.split('/').slice(0, 2).join('/'));
   });
   // MD3 页面过渡：每页包一层；后退时用 back 变体（左入）
+  const changed = activeRouteHash !== hash;
+  if (changed && activeRouteHash) routeScroll.set(activeRouteHash, out().scrollTop);
+  activeRouteHash = hash;
+  const currentVersion = ++routeVersion;
   const wrap = document.createElement('div');
   wrap.className = 'cm-page' + (navDirection === 'back' ? ' cm-page-back' : '');
   out().replaceChildren(wrap);
+  if (changed) out().scrollTop = navDirection === 'back' ? (routeScroll.get(hash) || 0) : 0;
   try {
     await matched.page.render(wrap, params);
   } catch (e) {
-    wrap.innerHTML = `<div class="cm-empty">页面加载失败：${e.message}</div>`;
+    if (currentVersion !== routeVersion) return;
+    wrap.innerHTML = `<div class="cm-empty cm-error" role="alert">页面加载失败：${esc(e.message)}<button class="cm-retry" id="cmPageRetry" type="button">重新加载</button></div>`;
+    wrap.querySelector('#cmPageRetry').onclick = () => router();
   }
-  out().scrollTop = 0;
-  window.scrollTo(0, 0);
+  if (currentVersion !== routeVersion) return;
+  // 只有后退才恢复旧位置；主动刷新保留当前位置，新页面归零。
+  if (changed && navDirection === 'back') out().scrollTop = routeScroll.get(hash) || 0;
 }
 
 function boot() {
@@ -180,7 +204,10 @@ function boot() {
   window.__cmBooted = true;   // 供 index.html 的启动诊断判定
   document.getElementById('boot').remove();
 
-  document.getElementById('topAction').onclick = () => { location.hash = '#/settings'; };   // 齿轮直达设置页
+  document.getElementById('topAction').onclick = () => { location.hash = '#/settings'; };
+  document.getElementById('topBack').onclick = navigateBack;
+  try { history.scrollRestoration = 'manual'; } catch { /* 旧版 WebView 不支持 */ }
+  initAccessibleControls(); // 动态页面补齐键盘操作、焦点和可访问名称
 
   // 网页版顶栏「下载安卓版 APP」入口（App 内有 NativeApi，不渲染）
   if (!(window.NativeApi && window.NativeApi.versionCode)) {

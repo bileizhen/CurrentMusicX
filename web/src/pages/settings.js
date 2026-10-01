@@ -51,8 +51,8 @@ export async function render(el) {
     <div class="cm-setting-list">
       <div class="cm-setting" id="sqPublic">
         <span class="material-icons-outlined">public</span>在「发现」页公开我
-        <i>${u.publicSquare === false ? '已关闭' : '公开中'}</i>
-        <mdui-switch id="sqPublicSw" ${u.publicSquare === false ? '' : 'checked'} style="margin-left:8px"></mdui-switch>
+        <i>${!auth.token ? '登录后可设置' : (u.publicSquare === false ? '已关闭' : '公开中')}</i>
+        <mdui-switch id="sqPublicSw" aria-label="公开到发现页" ${u.publicSquare === false || !auth.token ? '' : 'checked'} ${auth.token ? '' : 'disabled'} style="margin-left:8px"></mdui-switch>
       </div>
     </div>
     <div class="cm-sec-head"><h2>服务器</h2></div>
@@ -62,7 +62,7 @@ export async function render(el) {
     </div>
     <div class="cm-sec-head"><h2>关于</h2></div>
     <div class="cm-setting-list">
-      ${!isApp ? `<div class="cm-setting" id="dlApk"><span class="material-icons-outlined">android</span>下载安卓版 APP<i>APK · 支持后台播放</i></div>` : ''}
+      ${!isApp ? `<div class="cm-setting" id="dlApk"><span class="material-icons-outlined">android</span>下载安卓版 APP<i>APK · 支持锁屏控制</i></div>` : ''}
       <div class="cm-setting" id="checkUpd"><span class="material-icons-outlined">system_update</span>检查更新<i>v${esc(currentVersion().name)}<span class="material-icons-outlined" style="font-size:calc(15px * var(--cm-fs, 1));vertical-align:-3px;margin-left:4px">chevron_right</span></i></div>
       <div class="cm-setting"><span class="material-icons-outlined">person</span>当前账号<i>${esc(u.nickname || u.username || '未登录')}${u.isSuper ? ' · 超级管理员' : u.isAdmin ? ' · 管理员' : ''}</i></div>
       ${(auth.user && auth.user.isAdmin) ? `<div class="cm-setting" id="adminEntry"><span class="material-icons-outlined">admin_panel_settings</span>管理员面板<i>用户/设备/系统</i></div>` : ''}
@@ -81,7 +81,9 @@ export async function render(el) {
       if (i) i.textContent = on ? '公开中' : '已关闭';
     }).catch(() => {});
     sqSw.addEventListener('change', async () => {
+      if (!auth.token) return;
       const on = !!sqSw.checked;
+      sqSw.disabled = true;
       try {
         const r = await api.setSquarePublic(on);
         auth.saveLogin(auth.token, r);            // 同步本地缓存的用户信息
@@ -91,7 +93,7 @@ export async function render(el) {
       } catch (e) {
         sqSw.checked = !on;                     // 回滚
         toast('设置失败：' + e.message);
-      }
+      } finally { sqSw.disabled = false; }
     });
   }
 

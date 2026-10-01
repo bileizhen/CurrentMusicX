@@ -170,17 +170,22 @@ export async function render(el, params = {}) {
     impBtn.className = 'cm-pe-acts';
     impBtn.innerHTML = '<mdui-button variant="text" id="clImport">导入已上传文件（/cloud/import）</mdui-button>';
     body.appendChild(impBtn);
-    impBtn.querySelector('#clImport').onclick = () => {
-      const ids = prompt('填「md5,fileSize,songId」三项，逗号分隔', '');
-      if (!ids) return;
-      const [md5, fileSize, songId] = String(ids).split(',').map(x => x.trim());
-      if (!md5 || !fileSize) return toast('至少要有 md5 与 fileSize');
-      api.ncm('/cloud/import', {
-        md5, fileSize, id: songId || -2, bitrate: 999000, fileType: 'mp3',
-        song: '', artist: '', album: '', confirm: 1,
-      }).then(d => { toast(d.message || '已提交导入'); render(el, { tab: 'cloud' }); })
-        .catch(e => toast(/绑定|401/.test(e.message) ? '需先绑定网易云账号' : e.message));
-    };
+    impBtn.querySelector('#clImport').onclick = () => promptDialog({
+      title: '导入已上传文件', label: 'MD5,文件大小,歌曲 ID',
+      placeholder: '例如 abcd1234,3456789,123456',
+      onOk: async ids => {
+        const [md5, fileSize, songId] = ids.split(',').map(x => x.trim());
+        if (!/^[a-f0-9]{32}$/i.test(md5 || '') || !/^\d+$/.test(fileSize || '')) {
+          throw new Error('请填写 32 位 MD5 和数字文件大小，以英文逗号分隔');
+        }
+        const d = await api.ncm('/cloud/import', {
+          md5, fileSize, id: songId || -2, bitrate: 999000, fileType: 'mp3',
+          song: '', artist: '', album: '', confirm: 1,
+        });
+        toast(d.message || '已提交导入');
+        render(el, { tab: 'cloud' });
+      },
+    });
     return;
   }
 

@@ -36,7 +36,7 @@ export async function render(el) {
   // 横幅不阻塞首屏：与每日推荐并行请求；结果先存起来，整页重渲染后再插入
   let bannerHTML = '';
   let daily = [], forYou = [], recent = [], artists = [];
-  let recPls = [], ncmBound = false;
+  let recPls = [], ncmBound = false, dailyFailed = false;
   // 首屏聚合（v1.28.3）：me/daily/bind/recent 一次请求取回，服务端并行查好。
   // 原先这四条要各自建立连接（移动网络下每次 TLS 握手都要付出代价）。
   // 旧服务端没有 /bootstrap → boot 为 null，走下面的回退分支，行为与之前完全一致。
@@ -50,7 +50,7 @@ export async function render(el) {
     recent = (boot.recent && boot.recent.songs) || [];
   } else {
     const bannerJob = decorBannerHTML().then(html => { bannerHTML = html; }).catch(() => {});
-    const jobs = [api.daily().then(d => { daily = d.daily || []; forYou = d.forYou || []; artists = d.artists || []; }).catch(() => {})];
+    const jobs = [api.daily().then(d => { daily = d.daily || []; forYou = d.forYou || []; artists = d.artists || []; }).catch(() => { dailyFailed = true; })];
     if (auth.token) jobs.push(api.bindStatus().then(b => { if (b && b.bound) ncmBound = true; }).catch(() => {}));
     if (auth.token) jobs.push(api.recentPlays(20).then(d => { recent = d.songs || []; }).catch(() => {}));
     await Promise.allSettled(jobs);
@@ -64,7 +64,7 @@ export async function render(el) {
       // T1：账号维度的每日推荐。拿到就用它覆盖服务端 SVIP 档（对已绑定用户更准确）
       api.ncm('/recommend/songs').then(d => {
         const own = ncmSongs(((d.data || {}).dailySongs) || []);
-        if (own.length) daily = own;
+        if (own.length) { daily = own; dailyFailed = false; }
       }),
     ]);
   }
@@ -93,7 +93,7 @@ export async function render(el) {
             <div class="cm-card-name">${esc(s.name)}</div>
             <div class="cm-card-sub">${esc(s.artists)}</div>
           </div>`).join('')
-      }</div>` : `<div class="cm-empty small">今日推荐暂不可用</div>`}
+      }</div>` : `<div class="cm-empty small${dailyFailed ? ' cm-error' : ''}" ${dailyFailed ? 'role="alert"' : ''}>${dailyFailed ? '今日推荐加载失败，请检查网络或服务器连接' : '今天还没有推荐歌曲'}${dailyFailed ? '<button type="button" class="cm-retry" id="retryDaily">重新加载</button>' : ''}</div>`}
     </section>
     ${recent.length ? `
     <section class="cm-sec">
@@ -125,14 +125,13 @@ export async function render(el) {
         <a class="cm-quick" href="#/ncmpl/3779629"><span class="material-icons-outlined">star</span><b>新歌榜</b></a>
       </div>
     </section>
-    ${forYou.length ? `
     <section class="cm-sec">
       <div class="cm-sec-head"><h2>一起听</h2><span class="cm-sec-more" id="goRooms"><span class="material-icons-outlined">groups</span> 房间广场</span></div>
       <div class="cm-quickrow">
         <a class="cm-quick" href="#/rooms"><span class="material-icons-outlined">meeting_room</span><b>加入房间</b><i>多人同步播放</i></a>
-        <a class="cm-quick" id="quickCreateRoom"><span class="material-icons-outlined">add_circle</span><b>创建房间</b><i>可设密码</i></a>
+        <button type="button" class="cm-quick" id="quickCreateRoom"><span class="material-icons-outlined">add_circle</span><b>创建房间</b><i>可设密码</i></button>
       </div>
-    </section>` : ''}
+    </section>
     ${!auth.token ? `
     <section class="cm-sec">
       <div class="cm-login-tip">
@@ -146,7 +145,8 @@ export async function render(el) {
   if (dailyRow) dailyRow.querySelectorAll('.cm-card').forEach(c => {
     c.onclick = () => player.playList(daily, +c.dataset.i);
   });
-  el.querySelector('#playDaily')?.addEventListener('click', () => player.playList(daily, 0));
+  el.querySelector('#playDaily')?.addEventListener('click', () => daily.length ? player.playList(daily, 0) : toast('今日暂无推荐歌曲'));
+  el.querySelector('#retryDaily')?.addEventListener('click', () => render(el));
   // 一键开听：心动模式以「最近播放第一首」优先做种子（更贴近"接着刚才的口味听"），
   // 其次用每日推荐首曲；都没有时明确说明原因，不给假按钮。
   el.querySelector('#quickDaily')?.addEventListener('click', () => {
@@ -168,19 +168,28 @@ export async function render(el) {
     const i = +c.dataset.i;
     const s2 = daily[i];
     if (!s2) return;
-    const btn = document.createElement('span');
+    const btn = document.createElement('button');
+    btn.type = 'button';
     btn.className = 'material-icons-outlined';
     btn.textContent = 'block';
     btn.title = '不感兴趣';
-    btn.style.cssText = 'position:absolute;top:4px;right:4px;font-size:calc(16px * var(--cm-fs, 1));opacity:.55';
-    btn.addEventListener('click', async ev => {
+    btn.classList.add('cm-dislike');
+    btn.setAttribute('aria-label', `减少推荐：${s2.name}`);
+    btn.addEventListener('click', ev => {
       ev.stopPropagation();
-      if (!ncmBound) return toast('需先绑定网易云账号');
-      try {
-        await api.ncm('/recommend/songs/dislike', { id: s2.ncm_id, confirm: 1 });
-        toast('已标记不感兴趣');
-        c.remove();
-      } catch (e) { toast('操作失败：' + e.message); }
+      if (!ncmBound) return toast('先绑定网易云账号才能调整推荐');
+      import('../ui.js').then(({ confirmDialog }) => confirmDialog({
+        title: '减少这首歌的推荐？',
+        body: `以后尽量少推荐「${s2.name}」。该操作会同步到你的网易云账号。`,
+        onOk: async () => {
+          btn.disabled = true;
+          try {
+            await api.ncm('/recommend/songs/dislike', { id: s2.ncm_id, confirm: 1 });
+            c.remove();
+            toast('已减少推荐');
+          } finally { btn.disabled = false; }
+        },
+      }));
     });
     c.style.position = 'relative';
     c.appendChild(btn);

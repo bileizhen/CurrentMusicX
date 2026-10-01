@@ -2,7 +2,7 @@
 // 音质档位 / 副歌时间 / 红心数 / 创作者 / 音乐百科 / 相似歌曲 / 乐谱 / 评论统计
 // 数据全部来自 /ncm/* 泛化网关（阶段二已启用的 T0/T1 接口）。
 import { api, auth, ncmSongs } from './api.js';
-import { esc, toast } from './ui.js';
+import { esc, toast, promptDialog } from './ui.js';
 import { player } from './player.js';
 
 const sec = (title, body, extra = '') =>
@@ -78,14 +78,14 @@ export async function openSongInfo(meta) {
       toast('已同步红心到网易云');
     } catch (e) { toast(e.message.includes('绑定') || /401/.test(e.message) ? '需先绑定网易云账号' : e.message); }
   };
-  diag.querySelector('#siShare').onclick = async () => {
-    const msg = prompt('分享到网易云动态（可写一句话，留空则只分享歌曲）', '');
-    if (msg == null) return;
-    try {
-      await api.ncm('/share/resource', { id: sid, type: 'song', msg: msg || '', confirm: 1 });
+  diag.querySelector('#siShare').onclick = () => promptDialog({
+    title: '分享到网易云动态', label: '想说点什么？',
+    placeholder: '可留空，只分享歌曲', allowEmpty: true,
+    onOk: async msg => {
+      await api.ncm('/share/resource', { id: sid, type: 'song', msg, confirm: 1 });
       toast('已分享到网易云动态');
-    } catch (e) { toast(e.message.includes('绑定') || /401/.test(e.message) ? '需先绑定网易云账号' : e.message); }
-  };
+    },
+  });
 
   // 并行取数：任一失败只影响自己的分区（不整页报错）
   const [ql, cho, red, cre, wiki, simi, sheet, cinfo, cpr, wikiSum, dynCover, simi2, vec, url302] = await Promise.allSettled([
