@@ -47,18 +47,50 @@
   .cm-quick i { font-size: 18px !important; }
   .cm-quick b { font-size: calc(12px * var(--cm-fs, 1)); }
 
-  /* 播放页：封面/控件按 vmin 收（圆屏对角线才是可用长度） */
-  .pl-body.view-cover .pl-left { padding-top: 4px; }
-  #plCover { width: min(56vmin, 200px) !important; height: min(56vmin, 200px) !important; }
-  .pl-name { font-size: calc(15px * var(--cm-fs, 1)); }
-  .pl-stats { display: none; }                       /* 点赞数等次要信息让位 */
-  .pl-ctrl .material-icons-outlined { font-size: 18px; }
-  .pl-transport { gap: 14px; }
-  .pl-transport .material-icons-outlined { font-size: calc(30px * var(--cm-fs, 1)); }
-  .pl-transport .huge .material-icons-outlined { font-size: calc(46px * var(--cm-fs, 1)); }
-  .pl-waveform { height: 26px; }
-  .pl-seek { font-size: 9px; }
-  .pl-greet-title { font-size: calc(16px * var(--cm-fs, 1)); }
+  /* ── 播放页：手机版是「封面→信息→控制行→进度→走带」五段竖排，
+     240px 高根本放不下（原实测约 344px），全挤在一起。
+     手表上重排为两列网格：封面与歌名并排（省一整行），
+     控制行/进度/走带各占整行，走带沉底。 ── */
+  .pl-page { padding: 5px 6vw 8px; }
+  .pl-top { min-height: 24px; margin: 0 0 1px; }
+  .pl-top .pl-btn { padding: 3px; }
+  .pl-top .pl-btn .material-icons-outlined { font-size: 16px; }
+  .pl-topact { gap: 0; }
+  .pl-quality { font-size: 9px; padding: 1px 6px; }
+
+  .pl-left {
+    display: grid; align-items: center; width: 100%; gap: 2px;
+    grid-template-columns: auto minmax(0, 1fr);   /* 第一列=封面宽，第二列=文字 */
+    grid-template-areas: "cover info" "ctrl ctrl" "prog prog" "tr tr";
+    grid-template-rows: auto auto auto 1fr;
+  }
+  /* 封面缩成小方块，与文字并排 */
+  .pl-cover-wrap { grid-area: cover; margin: 0; width: 27vmin; height: 27vmin; flex: none; }
+  #plCover { width: 100% !important; height: 100% !important; }
+  .pl-info { grid-area: info; text-align: left; align-self: center; padding-left: 7px; min-width: 0; }
+  .pl-stats { display: none; }   /* 加载骨架（120px 宽）在手表上既占高又超宽 */
+  .pl-name { font-size: calc(12px * var(--cm-fs, 1)); display: -webkit-box; -webkit-box-orient: vertical;
+             -webkit-line-clamp: 2; overflow: hidden; }
+  .pl-artist { font-size: calc(10px * var(--cm-fs, 1)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  /* 六个次级操作：单行放下（图标收小），不再换行挤两行 */
+  .pl-ctrl { grid-area: ctrl; justify-content: center; gap: 0; margin: 1px 0 0; }
+  .pl-ctrl .pl-btn { padding: 4px; }
+  .pl-ctrl .pl-btn .material-icons-outlined { font-size: 15px; }
+
+  /* 波形是装饰：手表上让位给控制；进度条保住可用性 */
+  .pl-progress-stack { grid-area: prog; margin: 0; }
+  .pl-waveform { display: none; }
+  .pl-seek { font-size: 8px; gap: 5px; }
+  .pl-seekbar { height: 3px; }
+  .pl-seek input[type=range] { height: 14px; }
+  .pl-stall { font-size: 9px; }
+
+  /* 走带沉底：网格最后一行占满剩余高度，主操作永远在腕部易点处 */
+  .pl-transport { grid-area: tr; margin: 0; gap: 14px; justify-content: center; align-self: end; padding-bottom: 2px; }
+  .pl-transport .pl-btn { padding: 5px; }
+  .pl-transport .pl-btn svg { width: 22px; height: 22px; }
+  .pl-transport .pl-btn.huge svg { width: 38px; height: 38px; }
 
   /* 歌词行：圆屏两侧留白 */
   .pl-lyric { max-width: none; padding: 0 6vw; }
