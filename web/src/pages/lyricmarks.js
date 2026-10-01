@@ -2,7 +2,6 @@
 // 读：/song/lyrics/mark/user/page（T1）  写：/song/lyrics/mark/add、/del（T2，需 confirm=1）
 // 摘录是网易云账号维度数据，必须用用户自己的 cookie，未绑定则整页提示绑定。
 import { api, auth } from '../api.js';
-import { invalidateMarks } from '../lyricmark.js';
 import { esc, toast } from '../ui.js';
 
 export async function render(el) {
@@ -35,7 +34,7 @@ export async function render(el) {
       return;
     }
     if (!list.length) {
-      body.innerHTML = '<div class="cm-empty small">还没有摘录。在播放页「更多 → 摘录当前句」，或长按歌词行即可摘录。</div>';
+      body.innerHTML = '<div class="cm-empty small">还没有摘录。在播放页歌词里选中一句即可摘录。</div>';
       return;
     }
     body.innerHTML = `<div id="lmList">${list.map((m, i) => `
@@ -56,7 +55,6 @@ export async function render(el) {
         try {
           await api.ncm('/song/lyrics/mark/del', { markId, confirm: 1 });
           toast('已删除');
-          invalidateMarks();          // 删掉后不能让播放页的去重提示还用旧缓存
           load();
         } catch (e) { toast('删除失败：' + e.message); }
       };
@@ -73,4 +71,21 @@ export async function render(el) {
   load();
 }
 
-// 摘录的提交逻辑已收敛到 src/lyricmark.js（本页只负责展示与删除）。
+/**
+ * 添加歌词摘录（供播放页歌词视图调用）。
+ * @param {object} meta 当前歌曲（ncm_id / name）
+ * @param {string} lyricText 选中的歌词文本
+ * @param {number} markId 若为修改已有摘录则传入
+ */
+export async function addLyricMark(meta, lyricText, markId = 0) {
+  if (!auth.token) return toast('登录后才能摘录歌词');
+  if (!lyricText || !lyricText.trim()) return toast('请先选中一句歌词');
+  try {
+    const params = { id: meta.ncm_id, data: JSON.stringify({ lyric: lyricText.trim() }), confirm: 1 };
+    if (markId) params.markId = markId;
+    await api.ncm('/song/lyrics/mark/add', params);
+    toast('已加入歌词本');
+  } catch (e) {
+    toast(e.message.includes('绑定') ? '请先绑定网易云账号' : `摘录失败：${e.message}`);
+  }
+}

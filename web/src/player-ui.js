@@ -168,16 +168,6 @@ function setPlayerView(v) {
   }
 }
 
-/**
- * 摘录当前句：「更多 → 摘录当前句」用。
- * 与长按歌词行共用 lyricmark.js 的同一段提交逻辑。
- */
-async function markCurrentLyric() {
-  const { pickCurrentLine, markLyric } = await import('./lyricmark.js');
-  const line = pickCurrentLine(lyricLines, curLyricIdx, player.posMs());
-  await markLyric(player.meta, line && line.txt);
-}
-
 function renderLyric() {
   const box = document.getElementById('plLyric');
   if (!box) return;
@@ -204,27 +194,22 @@ function renderLyric() {
     }).join('') +
     `<div class="pl-lyric-pad" id="padBot"></div>`;
   box.querySelectorAll('.pl-lyric-line').forEach(el => {
-    let lp = null, lpFired = false, sx = 0, sy = 0;
+    let lp = null, lpFired = false;
     el.onclick = e => {
       e.stopPropagation();
       if (lpFired) { lpFired = false; return; }   // 长按已摘录：不要再 seek
       player.seek(lyricLines[+el.dataset.i].t / 1000);
     };
-    // 长按摘录（600ms）。修掉"想滑歌词却误摘"：手指移动超过 10px 即视为滚动并取消。
-    el.addEventListener('pointerdown', e => {
-      if (e.button !== 0) return;                 // 只认左键/触摸主键
-      sx = e.clientX; sy = e.clientY;
+    // 长按摘录歌词（阶段二）：/song/lyrics/mark/add 是写操作，需登录 + 绑定网易云
+    el.addEventListener('pointerdown', () => {
       lp = setTimeout(async () => {
         lp = null; lpFired = true;
         const line = lyricLines[+el.dataset.i];
         if (!line || !player.meta) return;
-        const { markLyric } = await import('./lyricmark.js');
-        markLyric(player.meta, line.txt);
+        const { addLyricMark } = await import('./pages/lyricmarks.js');
+        addLyricMark(player.meta, line.txt);
       }, 600);
     });
-    el.addEventListener('pointermove', e => {
-      if (lp && Math.hypot(e.clientX - sx, e.clientY - sy) > 10) { clearTimeout(lp); lp = null; }
-    }, { passive: true });
     ['pointerup', 'pointerleave', 'pointercancel'].forEach(evt =>
       el.addEventListener(evt, () => { if (lp) { clearTimeout(lp); lp = null; } }));
   });
@@ -643,10 +628,6 @@ function openMoreDrawer() {
         <div><div class="cm-more-t">逐字歌词</div><div class="cm-more-s">有逐字数据的歌曲逐字点亮（卡拉OK）</div></div>
         <mdui-switch id="mKara" ${lyricKaraoke ? 'checked' : ''}></mdui-switch>
       </div>
-      <div class="cm-more-row" id="mMark" style="cursor:pointer">
-        <div><div class="cm-more-t">摘录当前句</div><div class="cm-more-s">收进「我的歌词本」（也可长按歌词行）</div></div>
-        <span class="material-icons-outlined">bookmark_add</span>
-      </div>
       <div class="cm-more-row">
         <div><div class="cm-more-t">沉浸模式</div><div class="cm-more-s">封面主色流动渐变铺满播放页</div></div>
         <mdui-switch id="mGrad" ${bgGradOn ? 'checked' : ''}></mdui-switch>
@@ -668,8 +649,6 @@ function openMoreDrawer() {
     actions: [{ text: '关闭' }],
   });
   setTimeout(() => {
-    const mk = diag.querySelector('#mMark');
-    if (mk) mk.onclick = () => { diag.open = false; markCurrentLyric(); };
     const wk = diag.querySelector('#mWiki');
     if (wk) wk.onclick = () => {
       diag.open = false;

@@ -5,7 +5,7 @@
 // 楼层：/comment/floor    统计：/comment/info/list    抱一抱列表：/comment/hug/list
 // 举报：/comment/report
 import { api, auth } from './api.js';
-import { esc, toast, skelComments, promptDialog } from './ui.js';
+import { esc, toast, skelComments } from './ui.js';
 import { renderEmoticons, fmtCmtTime } from './commentutil.js';
 
 // 显式路径表：上游每个维度是独立路由，写清楚比拼接更可读、也便于覆盖率工具识别
@@ -49,7 +49,6 @@ export async function openComments({ type = 0, id, title = '' } = {}) {
   document.body.appendChild(ov);
 
   let offset = 0, total = 0, more = true, meUid = 0, loading = false, replyTo = null;
-  let requestVersion = 0; // 每次重置/切换排序都会废弃旧请求
   // 三种排序各有独立上游：推荐=实体列表接口（热门+最新），最热=/comment/hot，最新=/comment/new
   let mode = 'default';
   const likedSet = new Set(JSON.parse(sessionStorage.getItem('cm.cmtLiked') || '[]'));
@@ -74,7 +73,7 @@ export async function openComments({ type = 0, id, title = '' } = {}) {
           <mdui-button variant="filled" id="cmtSend" ${meUid ? '' : 'disabled'}>发送</mdui-button>
         </div>
       </div>`;
-    ov.querySelector('#cmtClose').onclick = () => { requestVersion++; ov.classList.add('closing'); setTimeout(() => ov.remove(), 240); };
+    ov.querySelector('#cmtClose').onclick = () => { ov.classList.add('closing'); setTimeout(() => ov.remove(), 240); };
     ov.querySelector('#cmtSend').onclick = send;
     ov.querySelector('#cmtInput').onkeydown = e => { if (e.key === 'Enter') send(); };
     ov.querySelector('#cmtReplyCancel').onclick = () => setReply(null);
@@ -127,24 +126,21 @@ export async function openComments({ type = 0, id, title = '' } = {}) {
   }
 
   async function load(reset) {
-    if (loading && !reset) return;
-    if (reset) { requestVersion++; offset = 0; more = true; }
-    if (!more) return;
-    const version = requestVersion;
-    const selectedMode = mode;
+    if (loading) return;
     loading = true;
+    if (reset) { offset = 0; more = true; }
+    if (!more) { loading = false; return; }
     try {
       const pg = ov.querySelector('#cmtMore');
       if (pg) pg.outerHTML = '<div class="cmt-more-loading" id="cmtMoreWrap"><mdui-circular-progress></mdui-circular-progress> 加载中…</div>';
       let d;
-      if (selectedMode === 'hot') {
+      if (mode === 'hot') {
         d = await api.ncm('/comment/hot', { id, type, offset, limit: 20 });
-      } else if (selectedMode === 'new') {
+      } else if (mode === 'new') {
         d = await api.ncm('/comment/new', { id, type, pageNo: Math.floor(offset / 20) + 1, pageSize: 20, sortType: 2 });
       } else {
         d = await api.ncm(path, { id, type, offset, limit: 20 });
       }
-      if (version !== requestVersion || !ov.isConnected || selectedMode !== mode) return;
       meUid = d.userId || meUid;
       total = d.total || ((d.data || {}).total) || 0;
       if (reset) render();
@@ -169,15 +165,10 @@ export async function openComments({ type = 0, id, title = '' } = {}) {
       }
       bindActions();
     } catch (e) {
-      if (version !== requestVersion || !ov.isConnected) return;
       ov.querySelector('#cmtMoreWrap')?.remove();
-      const box = ov.querySelector('#cmtList');
-      if (box) {
-        box.insertAdjacentHTML('beforeend', `<div class="cm-empty cm-error" role="alert">评论加载失败：${esc(e.message)}<button class="cm-retry" type="button" id="cmtRetry">重试</button></div>`);
-        box.querySelector('#cmtRetry').onclick = () => { box.querySelector('.cm-error')?.remove(); load(reset); };
-      }
+      toast(`评论加载失败：${e.message}`);
     } finally {
-      if (version === requestVersion) loading = false;
+      loading = false;
     }
   }
 
@@ -234,13 +225,12 @@ export async function openComments({ type = 0, id, title = '' } = {}) {
     ov.querySelectorAll('.cmt-report').forEach(el => {
       el.onclick = async () => {
         const cid = +el.dataset.rpt;
-        promptDialog({
-          title: '举报评论', label: '举报原因', placeholder: '请说明原因',
-          onOk: async reason => {
-            await api.ncm('/comment/report', { id, cid, reason, confirm: 1 });
-            toast('已提交举报');
-          },
-        });
+        const reason = prompt('举报原因（留空取消）', '');
+        if (reason == null) return;
+        try {
+          await api.ncm('/comment/report', { id, cid, reason: reason || '其他', confirm: 1 });
+          toast('已提交举报');
+        } catch (e) { toast(e.message); }
       };
     });
     ov.querySelectorAll('.cmt-floor-btn').forEach(el => {

@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <title>CurrentMusic</title>
   <!-- UI 预设：在样式表之前把皮肤属性打到 <html> 上，避免切到非默认皮肤时闪一下默认样式。
        只读 localStorage，出错静默（默认即原样式）。 -->
@@ -34,11 +34,10 @@
 
   <header id="topbar">
     <div id="brandLock"><span class="material-icons-outlined">graphic_eq</span><b>CurrentMusic</b></div>
-    <button id="topBack" type="button" class="material-icons-outlined" aria-label="返回上一页" hidden>arrow_back</button>
-    <div id="pageTitle" aria-live="polite">CurrentMusic</div>
+    <div id="pageTitle">CurrentMusic</div>
     <div id="topActs">
       <a id="topSearch" href="#/search" class="material-icons-outlined" title="搜索">search</a>
-      <button type="button" id="topAction" class="material-icons-outlined" title="设置" aria-label="设置">settings</button>
+      <span id="topAction" class="material-icons-outlined" title="设置">settings</span>
     </div>
   </header>
 
