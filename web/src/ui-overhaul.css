@@ -15,7 +15,7 @@ body { -webkit-user-select: text; user-select: text; -webkit-touch-callout: defa
 :where(.pl-btn, .cm-song-like, .cm-song-more, .cm-mini-btn,
   #topBack, #topAction, #topSearch, .cm-dislike) { min-width: 44px; min-height: 44px; }
 :where(button, .cm-mini-btn, .pl-btn) { -webkit-tap-highlight-color: transparent; }
-#topAction, #topBack, .cm-mini-btn, .cm-dislike, .pl-lyric-mark {
+#topAction, #topBack, .cm-mini-btn, .cm-dislike {
   border: 0; cursor: pointer; color: inherit;
 }
 #topAction, #topBack { background: transparent; display: inline-grid; place-items: center; padding: 0; }
@@ -28,7 +28,7 @@ body { -webkit-user-select: text; user-select: text; -webkit-touch-callout: defa
 @media (min-width: 900px) { #topbar.has-back #brandLock { margin-right: 12px; } }
 
 .cm-mini-btn { background: transparent; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
-.cm-mini-btn:active, .pl-lyric-mark:active, .cm-search-go:active { transform: scale(.94); }
+.cm-mini-btn:active, .cm-search-go:active { transform: scale(.94); }
 .cm-quick:is(button) { display: flex; flex-direction: column; text-align: left; color: inherit; font-family: inherit; font-size: inherit; cursor: pointer; }
 .cm-quick:is(button) i { font-style: normal; }
 .cm-setting[aria-disabled="true"] { opacity: .58; cursor: not-allowed; }
@@ -81,20 +81,9 @@ body { -webkit-user-select: text; user-select: text; -webkit-touch-callout: defa
 .cm-more-pane { min-height: 120px; }
 .cm-more-pane[hidden] { display: none !important; }
 
-/* 歌词：明确展示摘录操作，滑动时不触发长按。 */
-.pl-lyric-action { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px auto 0; width: 100%; max-width: 560px; }
-.pl-lyric-action > span { color: rgba(255,255,255,.82); font-size: calc(12px * var(--cm-fs, 1)); line-height: 1.35; }
-.pl-lyric-mark {
-  flex: none; min-height: 40px; padding: 6px 12px; border-radius: 999px;
-  display: inline-flex; align-items: center; gap: 5px;
-  color: #fff; background: rgba(255,255,255,.20); border: 1px solid rgba(255,255,255,.33);
-  font-size: calc(12px * var(--cm-fs, 1)); font-weight: 600;
-  backdrop-filter: blur(12px); transition: transform 150ms ease;
-}
-.pl-lyric-mark .material-icons-outlined { font-size: 17px; }
+/* 歌词行本身：纵向滚动不触发长按摘录（摘录入口已移至「更多」菜单）。 */
 .pl-lyric-line { touch-action: pan-y; }
 .pl-lyric-trans { opacity: .90; }
-@media (max-width: 599px) { .pl-lyric-action { padding: 0 4px; } .pl-lyric-action > span { max-width: 45%; } }
 
 /* 封面失败时保持视觉锚点；动态切歌后可自动恢复。 */
 .pl-cover-wrap { position: relative; isolation: isolate; overflow: hidden; border-radius: 20px; }
@@ -119,7 +108,7 @@ html[data-ui-preset="frost"] :is(.cm-card-sub, .cm-song-sub, .cm-sec-sub) {
   text-shadow: 0 1px 2px rgba(0,0,0,.04);
 }
 @media (prefers-reduced-motion: reduce) {
-  :where(.cm-page, .cm-card, .cm-song, .pl-btn, .cm-more-tab, .cm-mini-btn, .cm-dislike, .pl-lyric-mark) {
+  :where(.cm-page, .cm-card, .cm-song, .pl-btn, .cm-more-tab, .cm-mini-btn, .cm-dislike) {
     animation: none !important; transition-duration: .01ms !important; scroll-behavior: auto !important;
   }
 }

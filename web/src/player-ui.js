@@ -168,6 +168,17 @@ function setPlayerView(v) {
   }
 }
 
+/**
+ * 摘录当前歌词句。
+ * 「更多 → 歌词 → 摘录当前句」与「长按歌词行」共用这一段，避免两处逻辑分叉。
+ */
+async function markCurrentLyric() {
+  const line = lyricLines[curLyricIdx] || lyricLines.find(l => l.t >= player.posMs());
+  if (!line || !line.txt) return toast('当前歌曲没有可摘录的歌词');
+  const { addLyricMark } = await import('./pages/lyricmarks.js');
+  addLyricMark(player.meta, line.txt);
+}
+
 function renderLyric() {
   const box = document.getElementById('plLyric');
   if (!box) return;
@@ -210,7 +221,7 @@ function renderLyric() {
         const line = lyricLines[+el.dataset.i];
         if (!line || !player.meta) return;
         const { addLyricMark } = await import('./pages/lyricmarks.js');
-        addLyricMark(player.meta, line.txt);
+        addLyricMark(player.meta, line.txt);   // 长按摘录的是被按住的那一行
       }, 600);
     });
     el.addEventListener('pointermove', e => {
@@ -468,7 +479,6 @@ async function openFull() {
           </div>
         </div>
         <div class="pl-right">
-          <div class="pl-lyric-action"><span>点击歌词跳转 · 长按或点此摘录</span><button type="button" class="pl-lyric-mark" id="plLyricMark"><span class="material-icons-outlined" aria-hidden="true">bookmark_add</span>摘录当前句</button></div>
           <div class="pl-lyric" id="plLyric"></div>
         </div>
       </div>
@@ -481,7 +491,7 @@ async function openFull() {
   const bodyEl = ov.querySelector('.pl-body');
   bodyEl.addEventListener('click', e => {
     if (window.matchMedia('(min-width: 600px)').matches) return;
-    if (e.target.closest('.pl-ctrl, .pl-progress-stack, .pl-transport, .pl-lyric-action')) return;      // 控制区不触发
+    if (e.target.closest('.pl-ctrl, .pl-progress-stack, .pl-transport')) return;      // 控制区不触发
     if (e.target.closest('.pl-lyric-line')) return;                          // 歌词行点击=跳播
     setPlayerView(playerView === 'cover' ? 'lyric' : 'cover');
   });
@@ -541,12 +551,6 @@ async function openFull() {
   };
   ov.querySelector('#plQuality').onclick = qualityMenu;
   ov.querySelector('#plMore').onclick = openMoreDrawer;
-  ov.querySelector('#plLyricMark').onclick = async () => {
-    const line = lyricLines[curLyricIdx] || lyricLines.find(l => l.t >= player.posMs());
-    if (!line) return toast('当前歌曲没有可摘录的歌词');
-    const { addLyricMark } = await import('./pages/lyricmarks.js');
-    addLyricMark(player.meta, line.txt);
-  };
   const castBtn = ov.querySelector('#plCast');
   if (castBtn) castBtn.onclick = () => openCastDialog();
   applyPlayerBg();
@@ -634,14 +638,18 @@ function chipsHTML(list, curKey, group) {
 
 function openMoreDrawer() {
   const diag = mdui.dialog({
-    headline: '播放选项',
+    headline: '更多',
     body: `<div class="cm-more cm-more-organized">
-      <div class="cm-more-tabs" role="tablist" aria-label="播放选项分类">
+      <div class="cm-more-tabs" role="tablist" aria-label="更多选项分类">
         <button class="cm-more-tab active" type="button" role="tab" aria-selected="true" data-pane="lyric">歌词</button>
         <button class="cm-more-tab" type="button" role="tab" aria-selected="false" data-pane="appearance">外观</button>
-        <button class="cm-more-tab" type="button" role="tab" aria-selected="false" data-pane="download">下载与详情</button>
+        <button class="cm-more-tab" type="button" role="tab" aria-selected="false" data-pane="download">详情</button>
       </div>
       <div class="cm-more-pane" data-section="lyric" role="tabpanel">
+      <div class="cm-more-row" id="mMark" style="cursor:pointer">
+        <div><div class="cm-more-t">摘录当前句</div><div class="cm-more-s">把当前这句歌词收进歌词本（也可长按歌词行）</div></div>
+        <span class="material-icons-outlined">bookmark_add</span>
+      </div>
       <div class="cm-more-sec">歌词语言</div>
       <div class="cm-more-chips" id="chipsLang">${chipsHTML(LYRIC_MODES, lyricMode, 'lang')}</div>
       <div class="cm-more-sec">歌词字号</div>
@@ -676,6 +684,8 @@ function openMoreDrawer() {
     actions: [{ text: '关闭' }],
   });
   setTimeout(() => {
+    const mk = diag.querySelector('#mMark');
+    if (mk) mk.onclick = () => { diag.open = false; markCurrentLyric(); };
     // 分页切换（协作者 LimAimo 的重构）
     diag.querySelectorAll('.cm-more-tab').forEach(tab => {
       tab.onclick = () => {

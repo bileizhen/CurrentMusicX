@@ -49,8 +49,12 @@ test('播放选项分组，歌词长按有滑动取消，封面失败有回退',
   assert.match(player, /data-pane="appearance"/);
   assert.match(player, /data-pane="download"/);
   assert.match(player, /Math\.hypot\(e\.clientX - startX/);
-  assert.match(player, /id="plLyricMark"/);
   assert.match(player, /cover-failed/);
+  // 摘录入口在「更多 → 歌词」分页里，播放器歌词区上方不再有提示行与独立按钮
+  assert.match(player, /id="mMark"/);
+  assert.match(player, /markCurrentLyric/);
+  assert.doesNotMatch(player, /pl-lyric-action/);
+  assert.doesNotMatch(player, /id="plLyricMark"/);
 });
 
 test('高级搜索折叠，复制、缩放、焦点及减少动效有明确支持', async () => {
