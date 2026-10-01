@@ -43,18 +43,26 @@ test('首页一起听和推荐结果独立，并对撤销风险给出确认', as
   assert.match(home, /retryDaily/);
 });
 
-test('播放选项分组，歌词长按有滑动取消，封面失败有回退', async () => {
-  const player = await src('src/player-ui.js');
-  assert.match(player, /data-pane="lyric"/);
-  assert.match(player, /data-pane="appearance"/);
-  assert.match(player, /data-pane="download"/);
-  assert.match(player, /Math\.hypot\(e\.clientX - startX/);
-  assert.match(player, /cover-failed/);
-  // 摘录入口在「更多 → 歌词」分页里，播放器歌词区上方不再有提示行与独立按钮
-  assert.match(player, /id="mMark"/);
-  assert.match(player, /markCurrentLyric/);
+test('播放器无分页，摘录入口在「更多」内且长按可滑动取消', async () => {
+  const [player, mark, marks] = await Promise.all([
+    src('src/player-ui.js'), src('src/lyricmark.js'), src('src/pages/lyricmarks.js'),
+  ]);
+  // 播放器页已回退到非分页形态：歌词区上方不再有提示行/独立按钮
   assert.doesNotMatch(player, /pl-lyric-action/);
   assert.doesNotMatch(player, /id="plLyricMark"/);
+  // 摘录入口在「更多」抽屉里，并与长按共用同一段逻辑
+  assert.match(player, /id="mMark"/);
+  assert.match(player, /markCurrentLyric/);
+  // 长按摘录：600ms 定时 + 移动超阈值取消（避免滑歌词误摘）
+  assert.match(player, /Math\.hypot\(e\.clientX - sx/);
+  assert.match(player, /600/);
+  // 提交逻辑收敛在 lyricmark.js：登录/绑定校验、去重提示、失败文案
+  assert.match(mark, /export async function markLyric/);
+  assert.match(mark, /登录后才能摘录歌词/);
+  assert.match(mark, /song\/lyrics\/mark\/add/);
+  assert.match(mark, /confirm: 1/);
+  // 页面模块不再自带提交函数（避免两套实现）
+  assert.doesNotMatch(marks, /export async function addLyricMark/);
 });
 
 test('高级搜索折叠，复制、缩放、焦点及减少动效有明确支持', async () => {

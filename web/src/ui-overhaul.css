@@ -68,19 +68,6 @@ body { -webkit-user-select: text; user-select: text; -webkit-touch-callout: defa
 .cm-dislike:hover { background: rgba(0,0,0,.9); }
 .cm-dislike:disabled { opacity: .5; }
 
-/* 播放器设置：按任务分组，不在一个巨型长弹窗里混放所有选项。 */
-.cm-more-organized { min-width: 0; }
-.cm-more-tabs { display: flex; gap: 6px; margin: 0 0 18px; padding: 4px; border-radius: 16px; background: var(--mdui-color-surface-container, #f0ebf5); }
-.cm-more-tab {
-  flex: 1; min-width: 0; border: none; border-radius: 12px; padding: 10px 5px;
-  font: inherit; font-size: calc(13px * var(--cm-fs, 1)); font-weight: 600;
-  background: transparent; color: var(--mdui-color-on-surface-variant, #49454f);
-  cursor: pointer; transition: background-color .16s ease, color .16s ease;
-}
-.cm-more-tab.active { color: var(--mdui-color-on-primary-container, #21005d); background: var(--mdui-color-primary-container, #eaddff); }
-.cm-more-pane { min-height: 120px; }
-.cm-more-pane[hidden] { display: none !important; }
-
 /* 歌词行本身：纵向滚动不触发长按摘录（摘录入口已移至「更多」菜单）。 */
 .pl-lyric-line { touch-action: pan-y; }
 .pl-lyric-trans { opacity: .90; }
@@ -108,7 +95,7 @@ html[data-ui-preset="frost"] :is(.cm-card-sub, .cm-song-sub, .cm-sec-sub) {
   text-shadow: 0 1px 2px rgba(0,0,0,.04);
 }
 @media (prefers-reduced-motion: reduce) {
-  :where(.cm-page, .cm-card, .cm-song, .pl-btn, .cm-more-tab, .cm-mini-btn, .cm-dislike) {
+  :where(.cm-page, .cm-card, .cm-song, .pl-btn, .cm-mini-btn, .cm-dislike) {
     animation: none !important; transition-duration: .01ms !important; scroll-behavior: auto !important;
   }
 }
