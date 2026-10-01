@@ -2,7 +2,7 @@ name: Frontend checks
 
 on:
   push:
-    branches: [feat/ui-ux-overhaul]
+    branches: [main]
   pull_request:
     paths:
       - "web/**"

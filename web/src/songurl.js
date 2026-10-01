@@ -32,7 +32,11 @@ export async function resolveSongUrl(meta, level) {
   try {
     const info = await api.songUrl(id, level);
     const url = pickUrl(info);
-    if (url) return { url, type: (info && info.type) || 'mp3', level: (info && info.level) || level || 'auto' };
+    // 透传上游字段：sr/bits/ch（文件头解析出的真实规格，客户端据此提示高解析度档位）、
+    // br/size/md5（展示与缓存判断）—— 曾经只挑 url/type/level，导致规格信息丢失。
+    if (url) return Object.assign({}, info, {
+      url, type: (info && info.type) || 'mp3', level: (info && info.level) || level || 'auto',
+    });
     lastErr = new Error('该音质档位无可用地址');
   } catch (e) { lastErr = e; }
 

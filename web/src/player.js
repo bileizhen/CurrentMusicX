@@ -184,6 +184,26 @@ let clockSource = null;
 export function setClockSource(fn) { clockSource = fn; }
 const clock = () => (typeof clockSource === 'function' ? clockSource() : null);
 
+// 高解析度档位提示：192kHz/24bit 母带、96kHz、多声道全景声对**设备解码与重采样**
+// 要求高，部分机型会出现杂音（用户反馈的"爆音"多为此类）。每个会话提示一次，
+// 不反复打扰；规格来自服务端解析的文件头（sr/bits/ch），拿不到就不提示。
+let hiresWarned = false;
+function warnHiRes(info) {
+  if (hiresWarned || !info) return;
+  const sr = info.sr || 0, ch = info.ch || 0;
+  if (sr <= 48000 && ch <= 2) return;            // 常规档位：不打扰
+  hiresWarned = true;
+  const spec = [
+    sr ? (sr % 1000 === 0 ? (sr / 1000) + 'kHz' : (sr / 1000).toFixed(1) + 'kHz') : '',
+    info.bits ? info.bits + 'bit' : '',
+    ch > 2 ? ch + '声道' : '',
+  ].filter(Boolean).join('/');
+  const name = tierLabel(info.level) || '该音质';
+  setTimeout(() => {
+    toast(`${name}${spec ? '（' + spec + '）' : ''}对设备要求较高，若出现杂音可在音质中切到「无损 FLAC」`);
+  }, 1500);
+}
+
 export const player = {
   queue: [],
   index: -1,
@@ -395,6 +415,7 @@ export const player = {
     if (!this.meta || this.queue[this.index] !== this.meta) return; // 已切歌
     this.urlInfo = info;
     this.loading = false;
+    warnHiRes(info);               // 192kHz/多声道档位：提示设备兼容性
     loadUrl(info.url, 0);          // 优先 CORS 干净加载（可视化前提），失败自动回退
     this.wantPlaying = true;
     audio.play().catch(() => toast('点击播放键开始播放'));

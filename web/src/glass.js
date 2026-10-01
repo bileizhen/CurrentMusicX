@@ -204,8 +204,7 @@ function watchSize() {
     if (r.width < 8 || r.height < 8) return;          // 尚未布局
     const sig = Math.round(r.width) + 'x' + Math.round(r.height);
     // 除尺寸外还要比对**元素实例**：目标元素若被 innerHTML 重建而尺寸恰好
-    // 相同，lastSig 命中会跳过重建——新节点上没有内联 --frs-lens，折射就丢了
-    // （只剩 CSS 的模糊兜底）。AI 审查在 PR #9 里提醒此修复应独立于具体目标保留。
+    // 相同，lastSig 命中会跳过重建——新节点上没有内联 --frs-lens，折射就丢了。
     const sameEl = built[t.id] && built[t.id].el === el;
     if (lastSig[t.id] === sig && sameEl) return;
     lastSig[t.id] = sig;
