@@ -17,6 +17,6 @@ class MusicRepository(private val api: ApiClient) {
     suspend fun source(id: Long, quality: AudioQuality): AudioSource {
         val dto = api.get<SongUrlDto>("ncm/song/url", mapOf("id" to "$id", "level" to quality.value))
         val url = dto.url?.toHttpUrlOrNull() ?: throw ApiException(ErrorKind.NotFound)
-        return AudioSource(url.toString(), dto.level, maxOf(dto.sr, dto.sampleRate), maxOf(dto.ch, dto.channelCount))
+        return AudioSource(url.toString(), dto.level, maxOf(dto.sr, dto.sampleRate), maxOf(dto.ch, dto.channelCount), dto.type)
     }
 }

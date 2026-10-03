@@ -18,7 +18,7 @@ data class SearchPage(val songs: List<Song>, val total: Int, val hasMore: Boolea
 @Serializable data class SongDetailDto(val songs: List<SongDto> = emptyList())
 @Serializable data class SongUrlDto(val url: String? = null, val type: String = "", val level: String = "",
                                   val sr: Int = 0, val ch: Int = 0, val sampleRate: Int = 0, val channelCount: Int = 0)
-data class AudioSource(val url: String, val level: String, val sampleRate: Int, val channelCount: Int) {
+data class AudioSource(val url: String, val level: String, val sampleRate: Int, val channelCount: Int, val format: String = "") {
     val highSpec get() = sampleRate > 48000 || channelCount > 2
 }
 @Serializable data class LyricDto(val lines: List<LyricLine> = emptyList())
