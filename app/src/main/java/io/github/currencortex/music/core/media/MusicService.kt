@@ -25,6 +25,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.guava.future
 import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class MusicService : MediaSessionService() {
@@ -71,11 +72,33 @@ class MusicService : MediaSessionService() {
             // must not remove the transport commands for the independent business queue.
             override fun getState(): State {
                 val state = super.getState()
-                return state.buildUpon().setAvailableCommands(state.availableCommands.buildUpon()
+                val builder = state.buildUpon().setAvailableCommands(state.availableCommands.buildUpon()
                     .add(Player.COMMAND_SEEK_TO_NEXT).add(Player.COMMAND_SEEK_TO_PREVIOUS)
-                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM).add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM).build()).build()
+                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM).add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM).build())
+                val remote = container.playerController.state.value
+                if (remote.mode == PlayerMode.CAST && remote.song != null) {
+                    val metadata = MediaItemFactory.create(remote.song, "")
+                    builder.setPlaylist(listOf(SimpleBasePlayer.MediaItemData.Builder("cast-${remote.song.id}")
+                        .setMediaItem(metadata).setMediaMetadata(metadata.mediaMetadata).setDurationUs(remote.durationMs.coerceAtLeast(0) * 1000)
+                        .setIsSeekable(true).build())).setCurrentMediaItemIndex(0).setContentPositionMs(remote.positionMs)
+                        .setPlayWhenReady(remote.playing, Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE)
+                        .setPlaybackState(Player.STATE_READY).setPlaybackSuppressionReason(Player.PLAYBACK_SUPPRESSION_REASON_NONE)
+                        .setAvailableCommands(state.availableCommands.buildUpon().add(Player.COMMAND_PLAY_PAUSE)
+                            .add(Player.COMMAND_STOP).add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+                            .add(Player.COMMAND_SEEK_TO_NEXT).add(Player.COMMAND_SEEK_TO_PREVIOUS).build())
+                }
+                return builder.build()
             }
+            fun remoteChanged() { invalidateState() }
             override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> {
+                container.playerController.external?.let {
+                    when (seekCommand) {
+                        Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> it.next()
+                        Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> it.previous()
+                        else -> it.seek(positionMs)
+                    }
+                    return Futures.immediateVoidFuture()
+                }
                 when (seekCommand) {
                     Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> nextSong()
                     Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> previousSong()
@@ -84,6 +107,7 @@ class MusicService : MediaSessionService() {
                 return Futures.immediateVoidFuture()
             }
             override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
+                container.playerController.external?.let { it.play(playWhenReady); return Futures.immediateVoidFuture() }
                 if (!playWhenReady) {
                     pendingPlay = false
                     loading?.cancel()
@@ -98,6 +122,7 @@ class MusicService : MediaSessionService() {
                 return super.handleSetPlayWhenReady(playWhenReady)
             }
             override fun handleStop(): ListenableFuture<*> {
+                container.playerController.external?.let { it.stop(); return Futures.immediateVoidFuture() }
                 loading?.cancel()
                 return super.handleStop()
             }
@@ -105,6 +130,13 @@ class MusicService : MediaSessionService() {
         session = MediaSession.Builder(this, forwarding).setSessionActivity(
             PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         ).setCallback(MusicSessionCallback()).build()
+        scope.launch {
+            var wasCasting = false
+            container.playerController.state.collect { state ->
+                if (state.mode == PlayerMode.CAST || wasCasting) forwarding.remoteChanged()
+                wasCasting = state.mode == PlayerMode.CAST
+            }
+        }
         player.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 listening.update(SystemClock.elapsedRealtime(), isPlaying)
@@ -116,11 +148,13 @@ class MusicService : MediaSessionService() {
                 if (!isPlaying) flushListening()
             }
             override fun onPlaybackStateChanged(state: Int) {
-                if (state == Player.STATE_ENDED) { container.playbackQueue.next(automatic = true); prepareSong(true, 0) }
+                if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.ROOM) container.playerController.external?.ended()
+                if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.LOCAL) { container.playbackQueue.next(automatic = true); prepareSong(true, 0) }
             }
             override fun onPlayerError(error: PlaybackException) {
                 container.playerController.state.value = container.playerController.state.value.copy(error = "音频播放失败，请重试或降低音质")
                 container.logger.warn("Player", "Playback failed code=${error.errorCode}")
+                if (container.playerController.state.value.mode == PlayerMode.ROOM) container.playerController.external?.failed()
             }
         })
         scope.launch(Dispatchers.IO) {
@@ -152,6 +186,7 @@ class MusicService : MediaSessionService() {
     private fun nextSong() { container.playbackQueue.next(); prepareSong(true, 0) }
     private fun previousSong() { container.playbackQueue.previous(); prepareSong(true, 0) }
     private fun prepareSong(play: Boolean, position: Long) {
+        if (container.playerController.state.value.mode != PlayerMode.LOCAL) return
         loading?.cancel()
         player.pause()
         val song = container.playbackQueue.state.value.current ?: return
@@ -184,13 +219,28 @@ class MusicService : MediaSessionService() {
         override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
                 .add(SessionCommand(LOAD, Bundle.EMPTY)).add(SessionCommand(ACCEPT_SPEC, Bundle.EMPTY)).build()
-            return MediaSession.ConnectionResult.AcceptedResultBuilder(session).setAvailableSessionCommands(commands).build()
+            val remoteCommands = commands.buildUpon().add(SessionCommand(QUIESCE, Bundle.EMPTY))
+                .add(SessionCommand(ROOM_TRACK, Bundle.EMPTY)).add(SessionCommand(ROOM_SYNC, Bundle.EMPTY)).build()
+            return MediaSession.ConnectionResult.AcceptedResultBuilder(session).setAvailableSessionCommands(remoteCommands).build()
         }
         override fun onCustomCommand(session: MediaSession, controller: MediaSession.ControllerInfo,
                                      command: SessionCommand, args: Bundle): ListenableFuture<SessionResult> = scope.future {
             // Queue mutation commands are reserved for this application's controller.
             if (controller.packageName != packageName) return@future SessionResult(SessionError.ERROR_PERMISSION_DENIED)
             when (command.customAction) {
+                QUIESCE -> { loading?.cancel(); player.pause(); player.clearMediaItems(); player.setPlaybackSpeed(1f); flushListening(); trackedSong = null }
+                ROOM_TRACK -> if (container.playerController.state.value.mode == PlayerMode.ROOM) {
+                    val song = ApiJson.decodeFromString<Song>(args.getString("song") ?: return@future SessionResult(SessionError.ERROR_BAD_VALUE))
+                    val url = args.getString("url") ?: return@future SessionResult(SessionError.ERROR_BAD_VALUE)
+                    loading?.cancel(); player.pause(); flushListening(); trackedSong = song; trackedSession = currentSession(); recorded = false
+                    player.setPlaybackSpeed(1f); player.setMediaItem(MediaItemFactory.create(song, url), args.getLong("position")); player.prepare()
+                    container.playerController.state.value = container.playerController.state.value.copy(resolving = false)
+                    player.playWhenReady = args.getBoolean("play")
+                }
+                ROOM_SYNC -> if (container.playerController.state.value.mode == PlayerMode.ROOM && player.currentMediaItem != null) {
+                    if (args.getBoolean("seek") && player.playbackState == Player.STATE_READY) player.seekTo(args.getLong("position"))
+                    player.setPlaybackSpeed(args.getFloat("speed", 1f)); player.playWhenReady = args.getBoolean("play")
+                }
                 LOAD -> prepareSong(args.getBoolean("play", true), args.getLong("position", 0))
                 ACCEPT_SPEC -> {
                     approvedSong = container.playerController.state.value.warning?.songId
@@ -203,7 +253,7 @@ class MusicService : MediaSessionService() {
     }
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo) = session
     override fun onTaskRemoved(rootIntent: Intent?) {
-        if (!player.playWhenReady) { container.playerController.disconnect(); stopSelf() }
+        if (container.playerController.state.value.mode == PlayerMode.LOCAL && !player.playWhenReady) { container.playerController.disconnect(); stopSelf() }
     }
     override fun onDestroy() {
         flushListening(); reports.close(); videoView?.player = null; videoView = null
@@ -212,5 +262,9 @@ class MusicService : MediaSessionService() {
         session?.release(); player.release(); session = null
         super.onDestroy()
     }
-    companion object { const val LOAD = "currentmusic.load"; const val ACCEPT_SPEC = "currentmusic.acceptSpec"; const val VIDEO_SURFACE = "io.github.currencortex.music.VIDEO_SURFACE" }
+    companion object {
+        const val LOAD = "currentmusic.load"; const val ACCEPT_SPEC = "currentmusic.acceptSpec"
+        const val QUIESCE = "currentmusic.quiesce"; const val ROOM_TRACK = "currentmusic.roomTrack"; const val ROOM_SYNC = "currentmusic.roomSync"
+        const val VIDEO_SURFACE = "io.github.currencortex.music.VIDEO_SURFACE"
+    }
 }
