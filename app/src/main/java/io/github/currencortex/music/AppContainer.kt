@@ -41,17 +41,21 @@ class AppContainer(context: Context, storageNamespace: String = "") : java.io.Cl
         io.github.currencortex.music.core.update.AndroidUpdateInstaller(context.applicationContext), appScope)
     val logger = AppLogger(context)
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
-    val accountRepository = AccountRepository(SecureTokenStore(context, storageSuffix), appScope)
+    val accountVault = EncryptedAccountVault.create(context, storageSuffix, settingsStore, appScope)
+    val accountRepository = AccountRepository(SecureTokenStore(context, storageSuffix), appScope, accountVault)
     val apiClient = ApiClient(
         server = { accountRepository.server.ifBlank { musicSettings.state.value.server } },
         token = { accountRepository.token }, onUnauthorized = accountRepository::expired,
         log = { logger.info("Network", it) },
     )
     val authRepository = AuthRepository(apiClient, accountRepository, "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
-        musicSettings::setAccount)
+        persistServer = musicSettings::setServer, persistAccount = musicSettings::setAccount)
     val musicRepository = MusicRepository(apiClient)
     val libraryRepository = io.github.currencortex.music.data.library.LibraryRepository(apiClient,
         { accountRepository.state.value.account?.id ?: 0L }, { RequestSession(accountRepository.server, accountRepository.token) })
+    val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
+    val bindingRepository = io.github.currencortex.music.data.binding.BindingRepository(apiClient,
+        { RequestSession(accountRepository.server, accountRepository.token) }) { libraryRepository.revision.value += 1 }
     val database = Room.databaseBuilder(context.applicationContext, MusicDatabase::class.java, "music$storageSuffix.db").build()
     val playbackQueue = PlaybackQueue()
     val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)

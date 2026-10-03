@@ -6,6 +6,8 @@ This template uses the following libraries at runtime:
 - AndroidX / Jetpack Compose, under the Apache License 2.0.
 - Kotlin and kotlinx.coroutines by JetBrains and contributors, Apache-2.0.
 - Material Icons by Google, Apache-2.0.
+- Coil (including animated image decoders) by Coil contributors, Apache-2.0: https://github.com/coil-kt/coil.
+- ZXing QR encoder by ZXing authors, Apache-2.0: https://github.com/zxing/zxing. Copyright 2008 ZXing authors. Used for native login QR generation; the Apache-2.0 license is available offline with the notices.
 
 ## Floating Bottom Bar and Liquid Glass
 

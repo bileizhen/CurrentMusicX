@@ -77,6 +77,8 @@ import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.feature.library.*
 import io.github.currencortex.music.data.song.Song
 import java.net.URLDecoder
+import io.github.currencortex.music.feature.profile.*
+import io.github.currencortex.music.feature.binding.*
 
 private const val ROOT = 0
 private const val APPEARANCE = 1
@@ -102,6 +104,13 @@ fun CurrentMusicApp(container: AppContainer) {
     val musicSettingsVm: MusicSettingsViewModel = viewModel(factory = viewModelFactory { MusicSettingsViewModel(container) })
     val playerVm: PlayerViewModel = viewModel(factory = viewModelFactory { PlayerViewModel(container) })
     val libraryVm: LibraryViewModel = viewModel(factory = viewModelFactory { LibraryViewModel(container) })
+    val profileVm: ProfileViewModel = viewModel(key = "my-profile", factory = viewModelFactory { ProfileViewModel(container) })
+    val discoverVm: DiscoverViewModel = viewModel(factory = viewModelFactory { DiscoverViewModel(container) })
+    val profileDialog by profileVm.dialog.collectAsStateWithLifecycle()
+    val profileMessage by profileVm.message.collectAsStateWithLifecycle()
+    val account by container.accountRepository.state.collectAsStateWithLifecycle()
+    val sessionRevision by container.accountRepository.sessionRevision.collectAsStateWithLifecycle()
+    LaunchedEffect(sessionRevision) { profileVm.dialog.value = null; profileVm.avatar.value = null; profileVm.message.value = null }
     val libraryMessage by libraryVm.message.collectAsStateWithLifecycle()
     val libraryDialogSong by libraryVm.selectedSong.collectAsStateWithLifecycle()
     val playerState by playerVm.state.collectAsStateWithLifecycle()
@@ -169,15 +178,12 @@ fun CurrentMusicApp(container: AppContainer) {
                                         when (selected) {
                                             0 -> MusicHomeScreen(libraryVm, onSearch = { selected = 2 }, onSettings = { navigateTo(SETTINGS) },
                                                 navigate = ::navigateLibrary, play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
-                                            1 -> Column(Modifier.padding(24.dp)) { Text("发现"); Text("当前版本支持搜索与音乐播放"); TextButton("搜索音乐", onClick = { selected = 2 }) }
+                                            1 -> DiscoverScreen(discoverVm, ::navigateLibrary)
                                             2 -> SearchScreen(searchVm, container.playerController, actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) }) { songs, index ->
                                                 playWithPermission { container.playerController.playList(songs, index) }
                                             }
-                                            3 -> Column {
-                                                TextButton("设置", onClick = { navigateTo(SETTINGS) })
-                                                LibraryLinks(::navigateLibrary)
-                                                LoginScreen(authVm)
-                                            }
+                                            3 -> MeScreen(profileVm, authVm, ::navigateLibrary, { navigateTo(SETTINGS) },
+                                                play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
                                         }
                                     }
                                 }
@@ -238,6 +244,35 @@ fun CurrentMusicApp(container: AppContainer) {
                         }
                     }
                 }
+                backStack.filter { it.startsWith("user/") }.distinct().forEach { route ->
+                    entry(route) {
+                        Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                            when {
+                                route == "user/accounts" -> AccountScreen(container, authVm, ::navigateBack) {
+                                    authVm.begin(); navigateLibrary("user/login")
+                                }
+                                route == "user/login" -> Column {
+                                    TextButton("返回", onClick = ::navigateBack)
+                                    LoginScreen(authVm, addingAccount = true, onDone = ::navigateBack)
+                                }
+                                route == "user/decorations" -> {
+                                    val vm: DecorationViewModel = viewModel(key = route, factory = viewModelFactory { DecorationViewModel(container) })
+                                    DecorationScreen(vm, ::navigateBack)
+                                }
+                                route == "user/binding" -> {
+                                    val vm: BindingViewModel = viewModel(key = route, factory = viewModelFactory { BindingViewModel(container) })
+                                    BindingScreen(vm, ::navigateBack)
+                                }
+                                route.startsWith("user/profile/") -> {
+                                    val id = route.substringAfterLast('/').toLongOrNull() ?: 0L
+                                    val vm: ProfileViewModel = if (id == account.account?.id) profileVm else viewModel(key = route,
+                                        factory = viewModelFactory { ProfileViewModel(container, id) })
+                                    ProfileScreen(vm, ::navigateLibrary, { songs, index -> playWithPermission { container.playerController.playList(songs, index) } }, onBack = ::navigateBack)
+                                }
+                            }
+                        }
+                    }
+                }
                 backStack.filter { it.startsWith("lib/") }.distinct().forEach { route ->
                     entry(route) {
                         when {
@@ -272,7 +307,7 @@ fun CurrentMusicApp(container: AppContainer) {
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !predictiveBack && !showLogs &&
-                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null,
+                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }
@@ -280,6 +315,10 @@ fun CurrentMusicApp(container: AppContainer) {
         LogExportDialog(showLogs, container.logger) { showLogs = false }
         UpdateDialog(container.updates, container.updateTransfer)
         LibraryDialogs(libraryVm)
+        ProfileDialogs(profileVm, authVm)
+        if (profileMessage != null) MusicDialog("账号操作", onDismiss = { profileVm.message.value = null }) {
+            Text(profileMessage.orEmpty()); TextButton("关闭", onClick = { profileVm.message.value = null })
+        }
         if (libraryMessage != null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             androidx.compose.foundation.layout.Row(Modifier.navigationBarsPadding().padding(12.dp)
                 .background(MiuixTheme.colorScheme.surface, androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).padding(12.dp),

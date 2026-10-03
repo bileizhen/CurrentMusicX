@@ -43,6 +43,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
+    implementation("io.coil-kt.coil3:coil-gif:3.3.0")
+    implementation("com.google.zxing:core:3.5.3")
     implementation("androidx.room:room-runtime:2.8.5")
     implementation("androidx.room:room-ktx:2.8.5")
     ksp("androidx.room:room-compiler:2.8.5")

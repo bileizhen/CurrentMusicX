@@ -6,8 +6,30 @@ import kotlinx.coroutines.*
 import okhttp3.mockwebserver.*
 import org.junit.Assert.*
 import org.junit.Test
+import kotlinx.serialization.json.*
 
 class AuthRepositoryTest {
+    @Test fun registrationAndVerificationCodesUseContactSpecificFieldsWithoutCurrentCredentials() = runBlocking {
+        MockWebServer().use { server ->
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            try {
+                val store = Store(); val accounts = AccountRepository(store, scope)
+                val base = server.url("/cm/").toString(); accounts.server = base
+                val repo = AuthRepository(ApiClient({ base }, { accounts.token }, accounts::expired), accounts, "test-device") { _, _ -> }
+                listOf(false, true).forEach { phone ->
+                    server.enqueue(MockResponse().setBody("{}")); assertTrue(repo.sendRegistrationCode("contact", phone) is AppResult.Success)
+                    val code = server.takeRequest(); assertNull(code.getHeader("Authorization"))
+                    assertEquals(if (phone) "/cm/auth/phone/code" else "/cm/auth/email/code", code.path)
+                    server.enqueue(MockResponse().setBody("""{"token":"registered-session","user":{"id":5,"nickname":"Name"}}"""))
+                    assertTrue(repo.register(RegistrationInput("name", "sample-password", "Name", "contact", "1234", phone)) is AppResult.Success)
+                    val request = server.takeRequest(); assertNull(request.getHeader("Authorization"))
+                    val body = ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject
+                    assertEquals("1234", body[if (phone) "phoneCode" else "emailCode"]!!.jsonPrimitive.content)
+                    assertEquals("app", body["platform"]!!.jsonPrimitive.content)
+                }
+            } finally { scope.cancel() }
+        }
+    }
     private class Store : TokenStore {
         var value: String? = "stored"
         override fun read() = value
