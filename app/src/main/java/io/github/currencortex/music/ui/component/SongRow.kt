@@ -16,14 +16,22 @@ import coil3.request.ImageRequest
 import io.github.currencortex.music.data.song.Song
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.squircle.squircleClip
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 data class SongRowUi(val song: Song, val title: String = song.name, val subtitle: String = listOf(song.artists, song.album).filter { it.isNotBlank() }.joinToString(" · "))
+fun coverRequestUrl(url: String, pixels: Int): String {
+    val parsed = url.toHttpUrlOrNull() ?: return url
+    if (parsed.host != "music.126.net" && !parsed.host.endsWith(".music.126.net")) return url
+    val size = pixels.coerceIn(32, 1200)
+    return parsed.newBuilder().scheme("https").setQueryParameter("param", "${size}y$size").build().toString()
+}
 @Composable fun MusicCover(url: String, modifier: Modifier = Modifier, pixels: Int = 160) {
-    AsyncImage(ImageRequest.Builder(LocalContext.current).data(url).size(pixels).build(),
+    AsyncImage(ImageRequest.Builder(LocalContext.current).data(coverRequestUrl(url, pixels)).size(pixels).build(),
         contentDescription = "歌曲封面", contentScale = ContentScale.Crop,
         modifier = modifier.squircleClip(22.dp))
 }
-@Composable fun SongRow(row: SongRowUi, onPlay: () -> Unit, onNext: () -> Unit, onQueue: () -> Unit) {
+@Composable fun SongRow(row: SongRowUi, onPlay: () -> Unit, onNext: () -> Unit, onQueue: () -> Unit,
+    extraActions: (@Composable () -> Unit)? = null) {
     var menu by remember { mutableStateOf(false) }
     Column {
         Row(Modifier.fillMaxWidth().clickable(onClick = onPlay).padding(vertical = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
@@ -35,10 +43,11 @@ data class SongRowUi(val song: Song, val title: String = song.name, val subtitle
             }
             TextButton("⋯", onClick = { menu = !menu }, modifier = Modifier.testTag("song_menu_${row.song.id}"))
         }
-        if (menu) Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (menu) Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             TextButton("立即播放", onClick = { menu = false; onPlay() })
             TextButton("下一首播放", onClick = { menu = false; onNext() })
             TextButton("加入队列", onClick = { menu = false; onQueue() })
+            extraActions?.invoke()
         }
     }
 }

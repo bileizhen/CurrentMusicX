@@ -19,7 +19,7 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val settings = container.musicSettings.state
     val lyrics = MutableStateFlow(LyricsUiState())
     init { viewModelScope.launch {
-        queue.map { it.current?.id }.distinctUntilChanged().collectLatest { id ->
+        queue.map { it.current?.takeUnless { song -> song.video }?.id }.distinctUntilChanged().collectLatest { id ->
             if (id == null) { lyrics.value = LyricsUiState(); return@collectLatest }
             lyrics.value = LyricsUiState(loading = true)
             when (val result = container.musicRepository.lyrics(id)) {

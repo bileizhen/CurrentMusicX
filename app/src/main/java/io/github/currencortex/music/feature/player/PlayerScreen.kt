@@ -22,13 +22,15 @@ import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-@Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit) {
+@Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
+    actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     var showLyrics by rememberSaveable { mutableStateOf(false) }
     var showQueue by rememberSaveable { mutableStateOf(false) }
     var showQuality by rememberSaveable { mutableStateOf(false) }
+    var showActions by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(16.dp).testTag("player_screen")) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton("返回", onClick = onBack, modifier = Modifier.testTag("navigate_back"))
@@ -49,6 +51,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             TextButton(queue.mode.label, onClick = { vm.player.setMode(PlaybackMode.entries[(queue.mode.ordinal + 1) % PlaybackMode.entries.size]) })
             TextButton(if (showLyrics) "封面" else "歌词", onClick = { showLyrics = !showLyrics }, modifier = Modifier.testTag("open_lyrics"))
             TextButton("队列 ${queue.songs.size}", onClick = { showQueue = !showQueue })
+            if (actions != null && queue.current != null) TextButton("更多", onClick = { showActions = true })
+        }
+        if (showActions && queue.current != null) MusicDialog("歌曲操作", onDismiss = { showActions = false }) {
+            actions?.invoke(queue.current!!)
         }
         if (showQueue) MusicDialog("播放队列", onDismiss = { showQueue = false }) {
             TextButton("清空队列", onClick = { vm.player.clear(); showQueue = false })

@@ -14,6 +14,20 @@ class PlayerController(private val context: Context, val queue: PlaybackQueue, p
     val state = MutableStateFlow(PlayerState())
     private var controller: MediaController? = null
     private var connecting: Deferred<MediaController>? = null
+    private var beforeVideo: QueueSnapshot? = null
+    fun queueForPersistence() = beforeVideo ?: queue.state.value
+    fun playVideo(song: Song) {
+        if (queue.state.value.current?.video != true) beforeVideo = queue.state.value
+        queue.replace(listOf(song), 0); load()
+    }
+    fun closeVideo() {
+        if (queue.state.value.current?.video != true) return
+        pause()
+        val saved = beforeVideo
+        beforeVideo = null
+        if (saved == null || saved.songs.isEmpty()) clear()
+        else { queue.restore(saved); load(false, saved.positionMs) }
+    }
     suspend fun connect(): MediaController {
         controller?.let { return it }
         val pending = connecting ?: scope.async(Dispatchers.Main.immediate) {
@@ -42,7 +56,7 @@ class PlayerController(private val context: Context, val queue: PlaybackQueue, p
             }).await()
         } catch (e: CancellationException) { throw e } catch (_: Exception) { state.value = state.value.copy(error = "无法连接播放器") }
     }
-    fun playList(songs: List<Song>, index: Int) { queue.replace(songs, index); load() }
+    fun playList(songs: List<Song>, index: Int) { beforeVideo = null; queue.replace(songs, index); load() }
     fun toggle() = scope.launch(Dispatchers.Main.immediate) {
         val player = connect()
         if (state.value.playing || state.value.loading || player.playWhenReady) player.pause()
@@ -55,7 +69,7 @@ class PlayerController(private val context: Context, val queue: PlaybackQueue, p
     fun seek(position: Long) { controller?.seekTo(position.coerceAtLeast(0)) }
     fun add(song: Song, next: Boolean = false) { queue.add(song, next) }
     fun remove(index: Int) { if (queue.remove(index)) { if (queue.state.value.current == null) clear() else load(state.value.playing) } }
-    fun clear() { queue.clear(); controller?.stop(); controller?.clearMediaItems(); state.value = PlayerState() }
+    fun clear() { beforeVideo = null; queue.clear(); controller?.stop(); controller?.clearMediaItems(); state.value = PlayerState() }
     fun select(index: Int) { queue.select(index); load() }
     fun setMode(mode: PlaybackMode) { queue.state.value = queue.state.value.copy(mode = mode) }
     fun qualityChanged() { load(state.value.playing || state.value.warning != null, state.value.positionMs) }

@@ -17,7 +17,8 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.*
 
-@Composable fun SearchScreen(vm: SearchViewModel, player: PlayerController, onPlay: (List<Song>, Int) -> Unit) {
+@Composable fun SearchScreen(vm: SearchViewModel, player: PlayerController,
+    actions: (@Composable (Song) -> Unit)? = null, onPlay: (List<Song>, Int) -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
     LazyColumn(Modifier.fillMaxSize().testTag("search_screen"), contentPadding = PaddingValues(20.dp),
@@ -39,7 +40,9 @@ import top.yukonga.miuix.kmp.basic.*
         if (state.loading) item { Text("正在搜索…") }
         if (state.searched && !state.loading && state.error == null) item { Text("找到 ${state.total} 首歌曲") }
         itemsIndexed(state.songs, key = { index, song -> "${song.id}-$index" }) { index, song ->
-            SongRow(SongRowUi(song), { onPlay(state.songs, index) }, { player.add(song, true) }, { player.add(song) })
+            SongRow(SongRowUi(song), { onPlay(state.songs, index) }, { player.add(song, true) }, { player.add(song) }) {
+                actions?.invoke(song)
+            }
         }
         if (state.more) item { TextButton("加载更多", onClick = { vm.search(more = true) }, enabled = !state.loading) }
     }

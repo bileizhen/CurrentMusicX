@@ -23,12 +23,17 @@ import io.github.currencortex.music.data.local.MusicDatabase
 import io.github.currencortex.music.data.settings.MusicSettingsRepository
 import androidx.room.Room
 import kotlinx.serialization.decodeFromString
+import kotlinx.coroutines.flow.distinctUntilChanged
 
-class AppContainer(context: Context) {
+class AppContainer(context: Context, storageNamespace: String = "") : java.io.Closeable {
+    private val storageSuffix = if (storageNamespace.isEmpty()) "" else ".$storageNamespace".also {
+        require(storageNamespace.matches(Regex("[a-zA-Z0-9-]+")))
+    }
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val settingsStore = PreferenceDataStoreFactory.create(
         scope = appScope,
-        produceFile = { context.preferencesDataStoreFile("app.preferences_pb") },
+        produceFile = { context.preferencesDataStoreFile("app$storageSuffix.preferences_pb") },
     )
 
     val updateTransfer = io.github.currencortex.music.core.update.UpdateTransfer(
@@ -36,7 +41,7 @@ class AppContainer(context: Context) {
         io.github.currencortex.music.core.update.AndroidUpdateInstaller(context.applicationContext), appScope)
     val logger = AppLogger(context)
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
-    val accountRepository = AccountRepository(SecureTokenStore(context), appScope)
+    val accountRepository = AccountRepository(SecureTokenStore(context, storageSuffix), appScope)
     val apiClient = ApiClient(
         server = { accountRepository.server.ifBlank { musicSettings.state.value.server } },
         token = { accountRepository.token }, onUnauthorized = accountRepository::expired,
@@ -45,12 +50,19 @@ class AppContainer(context: Context) {
     val authRepository = AuthRepository(apiClient, accountRepository, "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
         musicSettings::setAccount)
     val musicRepository = MusicRepository(apiClient)
-    val database = Room.databaseBuilder(context.applicationContext, MusicDatabase::class.java, "music.db").build()
+    val libraryRepository = io.github.currencortex.music.data.library.LibraryRepository(apiClient,
+        { accountRepository.state.value.account?.id ?: 0L }, { RequestSession(accountRepository.server, accountRepository.token) })
+    val database = Room.databaseBuilder(context.applicationContext, MusicDatabase::class.java, "music$storageSuffix.db").build()
     val playbackQueue = PlaybackQueue()
-    val playerController = PlayerController(context.applicationContext, playbackQueue, CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate))
+    val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)
     val ready = CompletableDeferred<Unit>()
     val sessionRestored = CompletableDeferred<Unit>()
     init {
+        appScope.launch {
+            kotlinx.coroutines.flow.combine(accountRepository.state, musicSettings.state) { account, preferences ->
+                account.account?.id to preferences.server
+            }.distinctUntilChanged().collect { libraryRepository.clearSession() }
+        }
         appScope.launch {
             try {
                 val initial = musicSettings.snapshot()
@@ -81,4 +93,9 @@ class AppContainer(context: Context) {
         settings = updateSettings,
         logger = logger,
     )
+    override fun close() {
+        appScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+        playerScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+        database.close()
+    }
 }

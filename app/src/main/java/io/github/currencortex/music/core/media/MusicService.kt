@@ -3,6 +3,12 @@ package io.github.currencortex.music.core.media
 import android.app.PendingIntent
 import android.content.Intent
 import android.os.Bundle
+import android.os.Binder
+import android.os.IBinder
+import android.os.SystemClock
+import androidx.media3.ui.PlayerView
+import io.github.currencortex.music.data.song.Song
+import kotlinx.coroutines.channels.Channel
 import androidx.media3.common.*
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -30,6 +36,27 @@ class MusicService : MediaSessionService() {
     private var pendingPosition = 0L
     private var pendingPlay = true
     private var approvedSong: Long? = null
+    private val listening = ListeningTracker()
+    private var trackedSong: Song? = null
+    private var trackedSession = RequestSession("", null)
+    private var recorded = false
+    private var lastFlush = 0L
+    private var videoView: PlayerView? = null
+    private data class Report(val song: Song, val session: RequestSession, val ms: Long? = null)
+    private val reports = Channel<Report>(Channel.UNLIMITED)
+    private fun currentSession() = RequestSession(container.accountRepository.server, container.accountRepository.token)
+    private fun flushListening() {
+        val ms = listening.drain(SystemClock.elapsedRealtime())
+        trackedSong?.takeIf { recorded && ms > 0 && !it.video }?.let { reports.trySend(Report(it, trackedSession, ms)) }
+    }
+    inner class VideoBinder : Binder() {
+        fun attach(view: PlayerView) {
+            if (videoView !== view) { videoView?.player = null; videoView = view }
+            if (view.player !== player) view.player = player
+        }
+        fun detach(view: PlayerView) { if (videoView === view) { view.player = null; videoView = null } }
+    }
+    override fun onBind(intent: Intent?): IBinder? = if (intent?.action == VIDEO_SURFACE) VideoBinder() else super.onBind(intent)
     override fun onCreate() {
         super.onCreate()
         player = ExoPlayer.Builder(this)
@@ -79,6 +106,15 @@ class MusicService : MediaSessionService() {
             PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         ).setCallback(MusicSessionCallback()).build()
         player.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                listening.update(SystemClock.elapsedRealtime(), isPlaying)
+                val song = trackedSong
+                if (isPlaying && !recorded && song != null && !song.video && container.accountRepository.token != null) {
+                    recorded = true
+                    reports.trySend(Report(song, trackedSession))
+                }
+                if (!isPlaying) flushListening()
+            }
             override fun onPlaybackStateChanged(state: Int) {
                 if (state == Player.STATE_ENDED) { container.playbackQueue.next(automatic = true); prepareSong(true, 0) }
             }
@@ -87,9 +123,21 @@ class MusicService : MediaSessionService() {
                 container.logger.warn("Player", "Playback failed code=${error.errorCode}")
             }
         })
+        scope.launch(Dispatchers.IO) {
+            for (report in reports) if (report.session == currentSession()) {
+                val result = appResult {
+                    if (report.ms == null) container.libraryRepository.recordPlay(report.song, report.session)
+                    else container.libraryRepository.listen(report.song, report.ms, report.session)
+                }
+                if (result is AppResult.Failure) container.logger.warn("Player", "Listening report failed: ${result.kind}")
+            }
+        }
         scope.launch {
             while (isActive) {
                 delay(1500)
+                val now = SystemClock.elapsedRealtime()
+                listening.update(now, player.isPlaying)
+                if (now - lastFlush >= 15_000) { flushListening(); lastFlush = now }
                 val queue = container.playbackQueue
                 if (player.currentMediaItem?.mediaId == queue.state.value.current?.id?.toString())
                     queue.state.value = queue.state.value.copy(positionMs = player.currentPosition.coerceAtLeast(0), quality = container.musicSettings.state.value.quality)
@@ -99,7 +147,7 @@ class MusicService : MediaSessionService() {
         scope.launch { container.playbackQueue.state.collectLatest { persistQueue() } }
     }
     private suspend fun persistQueue() {
-        container.database.music().saveQueue(QueueSnapshotEntity(payload = ApiJson.encodeToString(container.playbackQueue.state.value)))
+        container.database.music().saveQueue(QueueSnapshotEntity(payload = ApiJson.encodeToString(container.playerController.queueForPersistence())))
     }
     private fun nextSong() { container.playbackQueue.next(); prepareSong(true, 0) }
     private fun previousSong() { container.playbackQueue.previous(); prepareSong(true, 0) }
@@ -107,9 +155,15 @@ class MusicService : MediaSessionService() {
         loading?.cancel()
         player.pause()
         val song = container.playbackQueue.state.value.current ?: return
+        if (trackedSong?.id != song.id || trackedSession != currentSession()) {
+            flushListening(); trackedSong = song; trackedSession = currentSession(); recorded = false
+        }
         container.playerController.state.value = PlayerState(song = song, loading = true, resolving = true, positionMs = position, durationMs = song.durationMs)
         loading = scope.launch {
-            when (val result = appResult { withContext(Dispatchers.IO) { container.musicRepository.source(song.id, container.musicSettings.snapshot().quality) } }) {
+            when (val result = appResult { withContext(Dispatchers.IO) {
+                if (song.video) io.github.currencortex.music.data.song.AudioSource(container.libraryRepository.mvSource(song.mv), "video", 0, 0)
+                else container.musicRepository.source(song.id, container.musicSettings.snapshot().quality)
+            } }) {
                 is AppResult.Failure -> container.playerController.state.value = container.playerController.state.value.copy(loading = false, resolving = false, error = result.kind.message)
                 is AppResult.Success -> {
                     if (container.playbackQueue.state.value.current?.id != song.id) return@launch
@@ -152,10 +206,11 @@ class MusicService : MediaSessionService() {
         if (!player.playWhenReady) { container.playerController.disconnect(); stopSelf() }
     }
     override fun onDestroy() {
+        flushListening(); reports.close(); videoView?.player = null; videoView = null
         loading?.cancel()
         scope.cancel()
         session?.release(); player.release(); session = null
         super.onDestroy()
     }
-    companion object { const val LOAD = "currentmusic.load"; const val ACCEPT_SPEC = "currentmusic.acceptSpec" }
+    companion object { const val LOAD = "currentmusic.load"; const val ACCEPT_SPEC = "currentmusic.acceptSpec"; const val VIDEO_SURFACE = "io.github.currencortex.music.VIDEO_SURFACE" }
 }

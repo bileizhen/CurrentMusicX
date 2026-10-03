@@ -74,6 +74,9 @@ import io.github.currencortex.music.ui.component.MusicDialog
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import io.github.currencortex.music.core.media.AudioQuality
+import io.github.currencortex.music.feature.library.*
+import io.github.currencortex.music.data.song.Song
+import java.net.URLDecoder
 
 private const val ROOT = 0
 private const val APPEARANCE = 1
@@ -98,6 +101,9 @@ fun CurrentMusicApp(container: AppContainer) {
     val authVm: AuthViewModel = viewModel(factory = viewModelFactory { AuthViewModel(container) })
     val musicSettingsVm: MusicSettingsViewModel = viewModel(factory = viewModelFactory { MusicSettingsViewModel(container) })
     val playerVm: PlayerViewModel = viewModel(factory = viewModelFactory { PlayerViewModel(container) })
+    val libraryVm: LibraryViewModel = viewModel(factory = viewModelFactory { LibraryViewModel(container) })
+    val libraryMessage by libraryVm.message.collectAsStateWithLifecycle()
+    val libraryDialogSong by libraryVm.selectedSong.collectAsStateWithLifecycle()
     val playerState by playerVm.state.collectAsStateWithLifecycle()
     val queue by playerVm.queue.collectAsStateWithLifecycle()
     val tabsState = rememberSaveableStateHolder()
@@ -111,9 +117,15 @@ fun CurrentMusicApp(container: AppContainer) {
                 startupRouted = true
             }
         }
-        var backStack by rememberSaveable { mutableStateOf(listOf(ROOT)) }
-        fun navigateBack() { if (backStack.size > 1) backStack = backStack.dropLast(1) }
-        fun navigateTo(route: Int) { if (backStack.last() != route) backStack = backStack + route }
+        var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
+        fun navigateBack() {
+            if (backStack.size > 1) {
+                if (backStack.last() == "lib/video") container.playerController.closeVideo()
+                backStack = backStack.dropLast(1)
+            }
+        }
+        fun navigateTo(route: Int) { if (backStack.last() != route.toString()) backStack = backStack + route.toString() }
+        fun navigateLibrary(route: String) { if (backStack.last() != route) backStack = backStack + route }
         var showLogs by rememberSaveable { mutableStateOf(false) }
         var showScale by rememberSaveable { mutableStateOf(false) }
         var memberFocus by remember { mutableStateOf<MemberFocus?>(null) }
@@ -148,26 +160,28 @@ fun CurrentMusicApp(container: AppContainer) {
             entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator()),
             onBack = ::navigateBack,
             entryProvider = entryProvider {
-                entry(ROOT) {
+                entry(ROOT.toString()) {
                     Box(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
                         val page: @Composable () -> Unit = {
                             Column(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 92.dp).statusBarsPadding()) {
                                 Box(Modifier.weight(1f)) {
                                     tabsState.SaveableStateProvider(selected) {
                                         when (selected) {
-                                            0 -> MusicHomeScreen(container, onSearch = { selected = 2 }, onSettings = { navigateTo(SETTINGS) })
+                                            0 -> MusicHomeScreen(libraryVm, onSearch = { selected = 2 }, onSettings = { navigateTo(SETTINGS) },
+                                                navigate = ::navigateLibrary, play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
                                             1 -> Column(Modifier.padding(24.dp)) { Text("发现"); Text("当前版本支持搜索与音乐播放"); TextButton("搜索音乐", onClick = { selected = 2 }) }
-                                            2 -> SearchScreen(searchVm, container.playerController) { songs, index ->
+                                            2 -> SearchScreen(searchVm, container.playerController, actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) }) { songs, index ->
                                                 playWithPermission { container.playerController.playList(songs, index) }
                                             }
                                             3 -> Column {
                                                 TextButton("设置", onClick = { navigateTo(SETTINGS) })
+                                                LibraryLinks(::navigateLibrary)
                                                 LoginScreen(authVm)
                                             }
                                         }
                                     }
                                 }
-                                MiniPlayer(playerVm, { navigateTo(PLAYER) }, { playWithPermission { container.playerController.toggle() } },
+                                MiniPlayer(playerVm, { if (queue.current?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) }, { playWithPermission { container.playerController.toggle() } },
                                     Modifier.padding(horizontal = 12.dp))
                             }
                         }
@@ -194,7 +208,7 @@ fun CurrentMusicApp(container: AppContainer) {
                         }
                     }
                 }
-                entry(SETTINGS) {
+                entry(SETTINGS.toString()) {
                     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                         TextButton("返回", onClick = ::navigateBack, modifier = Modifier.then(androidx.compose.ui.Modifier))
                         TextButton("网络与播放", onClick = { navigateTo(NETWORK) })
@@ -203,23 +217,50 @@ fun CurrentMusicApp(container: AppContainer) {
                             onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates) }
                     }
                 }
-                entry(NETWORK) { MusicSettingsScreen(musicSettingsVm, ::navigateBack) }
-                entry(PLAYER) { PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } }) }
-                entry(APPEARANCE) {
+                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, ::navigateBack) }
+                entry(PLAYER.toString()) { PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
+                    actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) }) }
+                entry(APPEARANCE.toString()) {
                     Box(Modifier.fillMaxSize().navigationBarsPadding()) {
                         AppearanceScreen(settingsVm, onBack = ::navigateBack, onOpenScale = { showScale = true })
                     }
                 }
-                entry(ABOUT) {
+                entry(ABOUT.toString()) {
                     AboutScreen(onBack = ::navigateBack, enableBlur = settings.blur,
                         onOpenDocument = { navigateTo(it.route()) },
                         onOpenMember = { member, group -> memberFocus = MemberFocus(member, group) })
                 }
                 LegalDocument.entries.forEach { document ->
-                    entry(document.route()) {
+                    entry(document.route().toString()) {
                         Box(Modifier.fillMaxSize().navigationBarsPadding()) {
                             LegalDocumentScreen(document, onBack = ::navigateBack,
                                 onOpenDocument = { navigateTo(it.route()) })
+                        }
+                    }
+                }
+                backStack.filter { it.startsWith("lib/") }.distinct().forEach { route ->
+                    entry(route) {
+                        when {
+                            route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateBack, ::navigateLibrary)
+                            route == "lib/video" -> if (queue.current?.video == true) io.github.currencortex.music.feature.mv.MvPlayerScreen(container, ::navigateBack)
+                                else PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } })
+                            route.startsWith("lib/browse/") -> {
+                                val parts = route.split('/')
+                                val catalogVm: CatalogViewModel = viewModel(key = route, factory = viewModelFactory {
+                                    CatalogViewModel(container, parts[2] == "album", URLDecoder.decode(parts.getOrElse(3) { "" }, "UTF-8"))
+                                })
+                                CatalogScreen(catalogVm, ::navigateBack, ::navigateLibrary)
+                            }
+                            else -> {
+                                val detailVm: LibraryDetailViewModel = viewModel(key = route, factory = viewModelFactory { LibraryDetailViewModel(container, route) })
+                                LibraryDetailScreen(detailVm, libraryVm, ::navigateBack, ::navigateLibrary,
+                                    play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
+                                    playMv = { mv -> playWithPermission {
+                                        container.playerController.playVideo(Song(-mv.id, mv.name, mv.artistName, cover = mv.cover,
+                                            durationMs = mv.duration, mv = mv.id, video = true))
+                                        navigateLibrary("lib/video")
+                                    } }, deleted = ::navigateBack)
+                            }
                         }
                     }
                 }
@@ -231,13 +272,21 @@ fun CurrentMusicApp(container: AppContainer) {
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !predictiveBack && !showLogs &&
-                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null,
+                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }
         MemberDetailDialog(show = memberFocus != null, focus = shownMember, onDismiss = { memberFocus = null })
         LogExportDialog(showLogs, container.logger) { showLogs = false }
         UpdateDialog(container.updates, container.updateTransfer)
+        LibraryDialogs(libraryVm)
+        if (libraryMessage != null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+            androidx.compose.foundation.layout.Row(Modifier.navigationBarsPadding().padding(12.dp)
+                .background(MiuixTheme.colorScheme.surface, androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically) {
+                Text(libraryMessage.orEmpty(), Modifier.weight(1f)); TextButton("关闭", onClick = { libraryVm.message.value = null })
+            }
+        }
         if (pendingPlay != null) MusicDialog("后台播放通知", onDismiss = {
             explained = true; val action = pendingPlay; pendingPlay = null; action?.invoke()
         }) {

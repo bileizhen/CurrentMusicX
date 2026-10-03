@@ -4,10 +4,12 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 
 @Serializable data class Song(val id: Long, val name: String, val artists: String = "",
-                             val album: String = "", val cover: String = "", val durationMs: Long = 0, val mv: Long = 0)
+                             val album: String = "", val cover: String = "", val durationMs: Long = 0, val mv: Long = 0,
+                             val artistIds: List<Long> = emptyList(), val video: Boolean = false)
 @Serializable data class SongDto(@SerialName("ncm_id") val id: Long, val name: String, val artists: String = "",
-                                val album: String = "", val pic: String = "", val duration: Long = 0, val mv: Long = 0) {
-    fun toDomain() = Song(id, name, artists, album, pic.replace("http:", "https:"), duration, mv)
+                                val album: String = "", val pic: String = "", val duration: Long = 0, val mv: Long = 0,
+                                @SerialName("artist_ids") val artistIds: List<Long> = emptyList()) {
+    fun toDomain() = Song(id, name, artists, album, pic.replace("http:", "https:"), duration, mv, artistIds)
 }
 @Serializable data class SearchDto(val songs: List<SongDto> = emptyList(), val totals: SearchTotals = SearchTotals(), val hasMore: SearchMore = SearchMore())
 @Serializable data class SearchTotals(val song: Int = 0)

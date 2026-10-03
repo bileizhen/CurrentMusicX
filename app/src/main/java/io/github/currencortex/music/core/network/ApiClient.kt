@@ -23,8 +23,9 @@ class ApiClient(
 ) {
     private val http = client.newBuilder().addInterceptor(AuthInterceptor()).build()
     suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
-                        body: JsonElement? = null, authenticated: Boolean = false): JsonElement = withContext(Dispatchers.IO) {
+                        body: JsonElement? = null, authenticated: Boolean = false, expectedSession: RequestSession? = null): JsonElement = withContext(Dispatchers.IO) {
         val session = RequestSession(server(), if (authenticated) token() else null)
+        if (expectedSession != null && expectedSession != session) throw ApiException(ErrorKind.Unauthorized)
         val url = ServerUrl.endpoint(session.server, path, query)
         val request = Request.Builder().url(url).tag(RequestSession::class.java, session)
             .header("Accept", "application/json")

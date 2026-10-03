@@ -28,8 +28,8 @@ class TokenCipher(private val key: SecretKey) {
         return cipher.doFinal(bytes.copyOfRange(12, bytes.size)).toString(Charsets.UTF_8)
     }
 }
-class SecureTokenStore(context: Context) : TokenStore {
-    private val file = File(context.noBackupFilesDir, "session.aes")
+class SecureTokenStore(context: Context, storageSuffix: String = "") : TokenStore {
+    private val file = File(context.noBackupFilesDir, "session$storageSuffix.aes")
     private val cipher by lazy {
         val alias = "CurrentMusic.Session"
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
