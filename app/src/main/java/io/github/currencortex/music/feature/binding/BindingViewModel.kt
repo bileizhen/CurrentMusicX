@@ -34,14 +34,20 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
             }
         }
     }
-    fun action(block: suspend () -> String) {
+    private fun failureMessage(failure: AppResult.Failure, stage: String): String {
+        val status = if (failure.status > 0) "（HTTP ${failure.status}）" else ""
+        if (failure.kind == ErrorKind.Server) return "网易云${stage}暂时失败$status，请稍后重试" +
+            (if (stage == "手机验证码登录") "，或改用扫码登录。" else "。")
+        return "网易云$stage$status：${failure.kind.message}"
+    }
+    fun action(stage: String = "账号操作", block: suspend () -> String) {
         if (busy.value) return
         busy.value = true
         val expected = session()
         viewModelScope.launch {
             try { when (val r = appResult { block() }) {
                 is AppResult.Success -> if (expected == session()) { message.value = r.value; reload() }
-                is AppResult.Failure -> if (expected == session()) { message.value = r.kind.message; reload() }
+                is AppResult.Failure -> if (expected == session()) { message.value = failureMessage(r, stage); reload() }
             } } finally { busy.value = false }
         }
     }
@@ -54,29 +60,29 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
     fun unbind() = action { container.bindingRepository.unbind(); "网易云已解绑，已导入歌单保留为快照" }
     fun code(phone: String, country: String) {
         if (SystemClock.elapsedRealtime() < state.value.codeUntil) return
-        action { container.bindingRepository.sendCode(phone, country); state.update { it.copy(codeUntil = SystemClock.elapsedRealtime() + 60_000) }; "验证码已发送" }
+        action("验证码发送") { container.bindingRepository.sendCode(phone, country); state.update { it.copy(codeUntil = SystemClock.elapsedRealtime() + 60_000) }; "验证码已发送" }
     }
-    fun phone(phone: String, captcha: String, country: String) = action {
+    fun phone(phone: String, captcha: String, country: String) = action("手机验证码登录") {
         val expected = session()
         container.bindingRepository.bindPhone(phone, captcha, country)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         when (val result = appResult { container.bindingRepository.sync(expected) }) {
             is AppResult.Success -> "绑定成功；${result.value.message()}"
-            is AppResult.Failure -> "绑定成功；歌单同步失败：${result.kind.message}，可再次同步"
+            is AppResult.Failure -> "绑定成功；${failureMessage(result, "歌单同步")}，可再次同步"
         }
     }
     suspend fun qrSession() {
         val expected = session()
         state.update { it.copy(qrUrl = null, qrMessage = "正在生成二维码…") }
         when (val key = appResult { container.bindingRepository.qrKey(expected) }) {
-            is AppResult.Failure -> if (expected == session()) state.update { it.copy(qrMessage = key.kind.message) }
+            is AppResult.Failure -> if (expected == session()) state.update { it.copy(qrMessage = failureMessage(key, "二维码生成")) }
             is AppResult.Success -> {
                 if (expected != session()) return
                 state.update { it.copy(qrUrl = container.bindingRepository.qrUrl(key.value), qrMessage = "等待扫码…") }
                 while (currentCoroutineContext().isActive && expected == session()) {
                     delay(2000)
                     when (val status = appResult { container.bindingRepository.qrStatus(key.value, expected) }) {
-                        is AppResult.Failure -> if (expected == session()) state.update { it.copy(qrMessage = status.kind.message) }
+                        is AppResult.Failure -> if (expected == session()) state.update { it.copy(qrMessage = failureMessage(status, "扫码状态查询")) }
                         is AppResult.Success -> {
                             if (expected != session()) return
                             when (status.value.code) {

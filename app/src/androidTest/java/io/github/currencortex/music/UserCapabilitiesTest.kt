@@ -29,6 +29,8 @@ class UserCapabilitiesTest {
     @Volatile private var sentCode = ""
     @Volatile private var uploadedAvatar: ByteArray? = null
     private val qrChecks = AtomicInteger()
+    @Volatile private var failNextPhoneLogin = false
+    private val syncRequests = AtomicInteger()
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
     private fun user(id: Int = 7): String = """{"id":$id,"username":"user$id","nickname":"${if (id == 7) nickname else "Second user"}","bio":"Profile bio","avatarDecoration":"$decoration","publicSquare":true,"stat":{"likes":3,"favs":2,"playDays":5,"listenMs":7200000}}"""
     @Before fun prepare() = runBlocking {
@@ -63,11 +65,15 @@ class UserCapabilitiesTest {
                     path == "/cm/ncmbind/qr/key" -> json("""{"key":"isolated-qr-key"}""")
                     path == "/cm/ncmbind/qr/check" -> { qrChecks.incrementAndGet(); json("""{"code":801}""") }
                     path == "/cm/ncmbind/phone/login" -> {
+                        if (failNextPhoneLogin) {
+                            failNextPhoneLogin = false
+                            return MockResponse().setResponseCode(502).setBody("""{"error":"upstream failure","captcha":"private-code"}""")
+                        }
                         val body = ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject
                         sentPhone = body["phone"]!!.jsonPrimitive.content; sentCode = body["captcha"]!!.jsonPrimitive.content
                         bound = true; json("{}")
                     }
-                    path == "/cm/ncmbind/sync" -> json("""{"imported":2,"tracks":10,"pending":1}""")
+                    path == "/cm/ncmbind/sync" -> { syncRequests.incrementAndGet(); json("""{"imported":2,"tracks":10,"pending":1}""") }
                     else -> MockResponse().setResponseCode(404)
                 }
             }
@@ -194,6 +200,15 @@ class UserCapabilitiesTest {
         compose.onNodeWithTag("open_binding").performScrollTo().performClick()
         compose.onNodeWithText("手机验证码").performScrollTo().performClick()
         compose.onNodeWithTag("binding_phone").performScrollTo().performTextInput("123456789")
+        compose.onNodeWithTag("binding_code").performScrollTo().performTextInput("1234")
+        failNextPhoneLogin = true
+        compose.onNodeWithTag("confirm_phone_binding").performScrollTo().performClick()
+        val failure = "网易云手机验证码登录暂时失败（HTTP 502），请稍后重试，或改用扫码登录。"
+        compose.waitUntil(10000) { bindingVm.message.value == failure }
+        compose.onNodeWithTag("binding_screen").performScrollToNode(hasText(failure))
+        compose.onNodeWithText(failure).assertExists()
+        assertEquals(7L, container.accountRepository.state.value.account?.id)
+        assertFalse(bound); assertEquals(0, syncRequests.get())
         compose.onNodeWithTag("binding_code").performScrollTo().performTextInput("1234")
         compose.onNodeWithTag("confirm_phone_binding").performScrollTo().performClick()
         val success = "绑定成功；已同步 2 个歌单 / 10 首歌曲，1 个待续传"

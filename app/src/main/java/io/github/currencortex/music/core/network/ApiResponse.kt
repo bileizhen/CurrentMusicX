@@ -13,7 +13,7 @@ enum class ErrorKind(val message: String) {
 class ApiException(val kind: ErrorKind, val status: Int = 0) : IOException(kind.message)
 sealed interface AppResult<out T> {
     data class Success<T>(val value: T) : AppResult<T>
-    data class Failure(val kind: ErrorKind) : AppResult<Nothing>
+    data class Failure(val kind: ErrorKind, val status: Int = 0) : AppResult<Nothing>
 }
 suspend fun <T> appResult(block: suspend () -> T): AppResult<T> = try {
     AppResult.Success(block())
@@ -25,5 +25,5 @@ suspend fun <T> appResult(block: suspend () -> T): AppResult<T> = try {
         is SerializationException -> ErrorKind.Parse
         is IOException -> ErrorKind.Network
         else -> ErrorKind.Unknown
-    })
+    }, status = (e as? ApiException)?.status ?: 0)
 }

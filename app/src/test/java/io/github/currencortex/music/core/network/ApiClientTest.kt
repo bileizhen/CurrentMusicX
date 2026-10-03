@@ -12,6 +12,16 @@ import kotlinx.serialization.json.put
 
 class ApiClientTest {
     @Serializable data class Value(val ok: Boolean)
+    @Test fun serverFailuresRetainHttpStatusWithoutExposingResponseBodyOrExpiringSession() = runBlocking {
+        MockWebServer().use { server ->
+            var expired = false
+            val api = ApiClient({ server.url("/cm/").toString() }, { "test-secret" }, { expired = true })
+            server.enqueue(MockResponse().setResponseCode(502).setBody("""{"error":"upstream failure","captcha":"private-code","token":"private-token"}"""))
+            val failure = appResult { api.request("POST", "ncmbind/phone/login", authenticated = true) } as AppResult.Failure
+            assertEquals(ErrorKind.Server, failure.kind); assertEquals(502, failure.status)
+            assertFalse(failure.toString().contains("private-")); assertFalse(expired)
+        }
+    }
     @Test fun verbsBearerEncodingAndServerPrefix() = runBlocking {
         MockWebServer().use { server ->
             val api = ApiClient({ server.url("/cm/").toString() }, { "test-secret" }, {})
