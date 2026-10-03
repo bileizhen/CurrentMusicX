@@ -13,4 +13,5 @@ class LegalAssetsTest(unittest.TestCase):
         self.assertEqual((ROOT / "THIRD_PARTY_NOTICES.md").read_text("utf-8"),
                          (assets / "NOTICES.md").read_text("utf-8"))
         self.assertIn("Apache License", (assets / "APACHE-2.0.txt").read_text("utf-8"))
-        self.assertIn("@@APP_NAME@@", (assets / "PRIVACY.md").read_text("utf-8"))
+        self.assertEqual((ROOT / "PRIVACY.md").read_text("utf-8"), (assets / "PRIVACY.md").read_text("utf-8"))
+        self.assertIn("Copyright (c) 2026 Rcst20", (assets / "NOTICES.md").read_text("utf-8"))

@@ -8,9 +8,11 @@ object LogRedactor {
     )
     private val headers = Regex("(?im)^(\\s*(?:authorization|cookie|set-cookie)\\s*:\\s*).*$")
 
+    private val verificationCode = Regex("(?i)([\\\"']?\\b(?:phoneCode|emailCode|verification_code|sms_code|code)[\\\"']?\\s*[:=]\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|[^\\s&,;]+)")
     fun redact(text: String): String {
         val safeHeaders = headers.replace(text) { "${it.groupValues[1]}[REDACTED]" }
         val safeBearer = bearer.replace(safeHeaders, "Bearer [REDACTED]")
-        return credentials.replace(safeBearer) { "${it.groupValues[1]}[REDACTED]" }
+        val result = credentials.replace(safeBearer) { "${it.groupValues[1]}[REDACTED]" }
+        return verificationCode.replace(result) { "${it.groupValues[1]}[REDACTED]" }
     }
 }

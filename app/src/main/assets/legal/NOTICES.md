@@ -26,9 +26,9 @@ Full GPL-3.0 and Apache-2.0 texts are packaged in `app/src/main/assets/legal/` a
 
 ## Shared settings, About, diagnostic and update UI
 
-The saveable page stack, MIUIX NavDisplay navigation and non-predictive NavigationBackHandler fallback in `ui/LeiTemplateApp.kt` are adapted from local XBlocker `ui/MainActivity.kt`, whose navigation pattern derives from SukiSU-Ultra v4.1.3 (`0ca744a`), GPL-3.0-only. MIUIX owns gesture seeking, cancellation, settling, corner clipping and dimming. Dialogs are hosted once outside navigation entries and retain back-event priority.
+The saveable page stack, MIUIX NavDisplay navigation and non-predictive NavigationBackHandler fallback in `ui/CurrentMusicApp.kt` are adapted from local XBlocker `ui/MainActivity.kt`, whose navigation pattern derives from SukiSU-Ultra v4.1.3 (`0ca744a`), GPL-3.0-only. MIUIX owns gesture seeking, cancellation, settling, corner clipping and dimming. Dialogs are hosted once outside navigation entries and retain back-event priority.
 
-The phone theme preview, icon paths, appearance layout, LeiFetch About logo/fade layout, grouped member layout, QQ avatar rows, member dialogs, AnimatedList entry motion and blurred bars, animated About background shaders, bottom dialogs and update Markdown renderer are adapted from the local 123PanX / LeiFetch / XBlocker / SukiSU-Ultra source chain. GPL-3.0-only attribution headers are retained. Template branding and product configuration replace application-specific data.
+The phone theme preview, icon paths, appearance layout, LeiFetch About logo/fade layout, grouped member layout, QQ avatar rows, member dialogs, AnimatedList entry motion and blurred bars, animated About background shaders, bottom dialogs and update Markdown renderer are adapted from the local 123PanX / LeiFetch / XBlocker / SukiSU-Ultra source chain. GPL-3.0-only attribution headers are retained. CurrentMusic branding and product configuration replace application-specific data.
 
 The cancellable HTTPS download and verification helper is adapted from 123PanX `UpdateDownloader.kt`, originally XBlocker `data/AppUpdates.kt`. OkHttp and Okio are used under Apache-2.0. The upstream helper's MIT permission follows:
 

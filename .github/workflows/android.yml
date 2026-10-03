@@ -25,7 +25,7 @@ jobs:
       - name: Install Android SDK
         run: sdkmanager "platforms;android-37.0" "build-tools;35.0.0"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Test template initialization
+      - name: Test native source contract and legal assets
         run: python3 -m unittest discover -s scripts/tests -v
       - name: Build debug APK and run unit tests
         run: ./gradlew assembleDebug testDebugUnitTest assembleDebugAndroidTest lintDebug --no-daemon --stacktrace -Plei.officialRepositoriesFirst=true
