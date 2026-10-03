@@ -23,6 +23,7 @@ import top.yukonga.miuix.kmp.basic.*
                 Row { Text("CurrentMusic", fontSize = 30.sp, modifier = Modifier.weight(1f)); TextButton("设置", onClick = onSettings) }
                 Text(account.account?.let { "欢迎，${it.nickname}" } ?: "音乐，从这里开始", fontSize = 22.sp)
                 TextButton("搜索音乐", onClick = onSearch)
+                TextButton("一起听", onClick = { navigate("room/list") })
                 LibraryLinks(navigate)
             }
             item { TextButton("刷新推荐", onClick = vm::refresh, enabled = !home.loading, modifier = Modifier.testTag("refresh_home")) }

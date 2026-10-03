@@ -10,6 +10,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.ui.platform.testTag
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
@@ -79,6 +84,7 @@ import io.github.currencortex.music.data.song.Song
 import java.net.URLDecoder
 import io.github.currencortex.music.feature.profile.*
 import io.github.currencortex.music.feature.binding.*
+import io.github.currencortex.music.feature.room.*
 
 private const val ROOT = 0
 private const val APPEARANCE = 1
@@ -127,7 +133,10 @@ fun CurrentMusicApp(container: AppContainer) {
             }
         }
         var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
+        var roomDialogOpen by remember { mutableStateOf(false) }
+        var castDialogOpen by remember { mutableStateOf(false) }
         fun navigateBack() {
+            if (roomDialogOpen || castDialogOpen) return
             if (backStack.size > 1) {
                 if (backStack.last() == "lib/video") container.playerController.closeVideo()
                 backStack = backStack.dropLast(1)
@@ -170,9 +179,10 @@ fun CurrentMusicApp(container: AppContainer) {
             onBack = ::navigateBack,
             entryProvider = entryProvider {
                 entry(ROOT.toString()) {
-                    Box(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
+                    BoxWithConstraints(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
+                        val wide = maxWidth >= 700.dp
                         val page: @Composable () -> Unit = {
-                            Column(Modifier.fillMaxSize().navigationBarsPadding().padding(bottom = 92.dp).statusBarsPadding()) {
+                            Column(Modifier.fillMaxSize().navigationBarsPadding().padding(start = if (wide) 104.dp else 0.dp, bottom = if (wide) 16.dp else 92.dp).statusBarsPadding()) {
                                 Box(Modifier.weight(1f)) {
                                     tabsState.SaveableStateProvider(selected) {
                                         when (selected) {
@@ -191,7 +201,13 @@ fun CurrentMusicApp(container: AppContainer) {
                                     Modifier.padding(horizontal = 12.dp))
                             }
                         }
-                        if (settings.floatingBar && settings.blur && Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) {
+                        if (wide) {
+                            page()
+                            Column(Modifier.width(100.dp).fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(8.dp)
+                                .testTag("wide_navigation"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                labels.forEachIndexed { index, label -> TextButton(if (selected == index) "● $label" else label, onClick = { selected = index }) }
+                            }
+                        } else if (settings.floatingBar && settings.blur && Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) {
                             HighApiFloatingNavigation(
                                 selectedIndex = selected, labels = labels, icons = icons, onSelect = { selected = it },
                                 blur = settings.blur, glass = settings.liquidGlass, visible = true,
@@ -225,7 +241,16 @@ fun CurrentMusicApp(container: AppContainer) {
                 }
                 entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, ::navigateBack) }
                 entry(PLAYER.toString()) { PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
-                    actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) }) }
+                    actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
+                    onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") }) }
+                entry("cast/devices") {
+                    val vm: io.github.currencortex.music.feature.cast.CastViewModel = viewModel(factory = viewModelFactory { io.github.currencortex.music.feature.cast.CastViewModel(container) })
+                    io.github.currencortex.music.feature.cast.CastScreen(vm, ::navigateBack, { castDialogOpen = it })
+                }
+                entry("room/list") {
+                    val vm: RoomViewModel = viewModel(factory = viewModelFactory { RoomViewModel(container) })
+                    RoomScreen(vm, ::navigateBack, { selected = 2; backStack = listOf(ROOT.toString()) }, { navigateTo(PLAYER) }, { roomDialogOpen = it })
+                }
                 entry(APPEARANCE.toString()) {
                     Box(Modifier.fillMaxSize().navigationBarsPadding()) {
                         AppearanceScreen(settingsVm, onBack = ::navigateBack, onOpenScale = { showScale = true })
@@ -307,7 +332,7 @@ fun CurrentMusicApp(container: AppContainer) {
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !predictiveBack && !showLogs &&
-                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null,
+                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }

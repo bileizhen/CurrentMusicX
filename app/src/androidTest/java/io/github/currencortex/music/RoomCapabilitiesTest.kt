@@ -1,0 +1,163 @@
+package io.github.currencortex.music
+
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.test.*
+import androidx.compose.ui.test.junit4.*
+import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.test.core.app.ApplicationProvider
+import io.github.currencortex.music.core.media.*
+import io.github.currencortex.music.core.network.ApiJson
+import io.github.currencortex.music.data.auth.UserDto
+import io.github.currencortex.music.data.song.Song
+import io.github.currencortex.music.feature.room.*
+import io.github.currencortex.music.ui.CurrentMusicApp
+import io.github.currencortex.music.ui.theme.LeiTheme
+import io.github.currencortex.music.data.settings.AppearanceSettings
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.serialization.json.*
+import okhttp3.mockwebserver.*
+import org.junit.*
+import org.junit.Assert.*
+import java.util.UUID
+import java.util.concurrent.atomic.AtomicInteger
+
+class RoomCapabilitiesTest {
+    @get:Rule val compose = createComposeRule()
+    private lateinit var container: AppContainer
+    private lateinit var server: MockWebServer
+    private lateinit var player: SilentDevicePlayer
+    @Volatile private var owner = true
+    @Volatile private var approved = false
+    private val approvals = AtomicInteger()
+    private val playRequests = AtomicInteger()
+    private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
+    @Before fun prepare() = runBlocking {
+        player = SilentDevicePlayer().apply { queue.replace(listOf(Song(55, "Original local queue")), 0) }
+        container = AppContainer(ApplicationProvider.getApplicationContext<CurrentMusicApplication>(), "room-test-${UUID.randomUUID()}", player)
+        container.ready.await(); container.sessionRestored.await()
+        server = MockWebServer()
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.requestUrl!!.encodedPath
+                return when {
+                    path == "/cm/rooms" -> json("""{"rooms":[{"id":1,"name":"Fixture room","code":"001234","online":2,"owner_name":"Owner"}]}""")
+                    path == "/cm/rooms/search" -> json("""{"room":{"id":1,"code":"001234","name":"Fixture room"}}""")
+                    path == "/cm/rooms/1" -> json("""{"room":{"id":1,"code":"001234","name":"Fixture room"},"members":[{"userId":7,"nickname":"Fixture user","role":"${if(owner) "owner" else "member"}"}],"queue":[{"id":12,"name":"Requested song","status":"${if(approved) "approved" else "pending"}","mine":false}],"latestSeq":0}""")
+                    path == "/cm/rooms/1/queue/12/approve" -> { approvals.incrementAndGet(); approved = true; json("{}") }
+                    path == "/cm/rooms/1/play" -> { playRequests.incrementAndGet(); json("{}") }
+                    path == "/cm/rooms/1/sync" -> json("""{"serverNow":${System.currentTimeMillis()}}""")
+                    path == "/cm/live/1/events" -> MockResponse().setHeader("Content-Type", "text/event-stream").setBody(": ping\n\n")
+                    path == "/cm/auth/me" -> json("""{"id":7,"username":"fixture","nickname":"Fixture user"}""")
+                    path == "/cm/daily" -> json("""{"daily":[],"forYou":[]}""")
+                    path == "/cm/playlists" -> json("""{"playlists":[]}""")
+                    path == "/cm/plays/recent" -> json("""{"songs":[]}""")
+                    path == "/cm/decorations/scales" -> json("""{"scales":{}}""")
+                    else -> json("{}")
+                }
+            }
+        }
+        server.start()
+        val base = server.url("/cm/").toString()
+        container.musicSettings.setServer(base); container.accountRepository.server = base
+        container.accountRepository.save("isolated-room-device-token", UserDto(7, "fixture", "Fixture user"))
+        container.updateSettings.setAutoCheck(false)
+        container.settings.edit { AppearanceSettings(blur = false) }
+    }
+    @After fun finish() = runBlocking {
+        if (::container.isInitialized) { container.accountRepository.clear(); container.accountRepository.savedAccounts.value.forEach { container.accountRepository.removeSaved(it.key) }; container.close() }
+        if (::server.isInitialized) server.shutdown()
+    }
+    private fun show(wide: Boolean = false): RoomViewModel {
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
+            top.yukonga.miuix.kmp.basic.Scaffold(contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0,0,0,0)) {
+                androidx.compose.foundation.layout.Box(if(wide) Modifier.requiredSize(900.dp, 650.dp) else Modifier) { RoomScreen(vm, {}, {}, {}) }
+            }
+        } }
+        compose.waitUntil(10000) { compose.onAllNodesWithText("加入").fetchSemanticsNodes().isNotEmpty() }
+        if (wide) compose.runOnIdle { vm.find("001234") } else compose.onNodeWithText("加入").performClick()
+        compose.waitUntil(10000) { vm.session.state.value.detail != null }
+        return vm
+    }
+    @Test fun ownerApprovesRequestAndExitRestoresLocalQueuePaused() {
+        val vm = show()
+        compose.onNodeWithText("通过").performClick()
+        compose.waitUntil(10000) { approvals.get() == 1 && vm.session.state.value.detail?.queue?.firstOrNull()?.status == "approved" }
+        compose.onNodeWithText("已加入队列").assertExists()
+        compose.onNodeWithText("退出房间").performClick()
+        compose.onNodeWithTag("confirm_leave_room").performClick()
+        compose.waitUntil(10000) { !vm.session.active }
+        assertEquals(55L, player.queue.state.value.current?.id); assertEquals(PlayerMode.LOCAL, player.state.value.mode); assertFalse(player.state.value.playing)
+    }
+    @Test fun memberCannotApproveOrControlPlayback() {
+        owner = false
+        val vm = show()
+        compose.onNodeWithText("通过").assertDoesNotExist()
+        compose.onNodeWithText("播放").assertDoesNotExist()
+        compose.runOnIdle { vm.session.play(true); vm.session.queueAction(vm.session.state.value.detail!!.queue.first(), "approve") }
+        compose.waitForIdle(); assertEquals(0, playRequests.get()); assertEquals(0, approvals.get())
+    }
+    @Test fun wideRoomShowsQueueAndMembersTogether() {
+        show(wide = true)
+        compose.onNodeWithTag("room_two_panes").assertExists()
+        compose.onNodeWithText("Requested song").assertExists()
+        compose.onNodeWithText("Fixture user · 房主").assertExists()
+    }
+    @Test fun wideRootUsesPermanentNavigationAndRestoresSelectedTab() {
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent { androidx.compose.foundation.layout.Box(Modifier.requiredSize(900.dp, 650.dp)) { CurrentMusicApp(container) } }
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("wide_navigation").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("wide_navigation").assertExists()
+        compose.onNodeWithText("搜索").performClick()
+        restoration.emulateSavedInstanceStateRestore()
+        compose.onNodeWithText("● 搜索").assertExists()
+    }
+    @Test fun cancelledWifiDiscoveryReleasesRealMulticastLock() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
+        org.junit.Assume.assumeTrue(manager.allNetworks.any { manager.getNetworkCapabilities(it)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true })
+        val discovery = io.github.currencortex.music.core.dlna.DlnaDiscovery(context)
+        val scan = launch(Dispatchers.IO) { discovery.scan() }
+        withTimeout(3000) { while (!discovery.multicastHeld) delay(10) }
+        scan.cancelAndJoin()
+        assertFalse("Multicast lock must be released when scanning is cancelled", discovery.multicastHeld)
+    }
+    @Test fun nativeSoapAndXmlPipelineControlsSilentRendererEmulator() = runBlocking {
+        okhttp3.mockwebserver.MockWebServer().use { renderer ->
+            fun response(fields: String = "<ok/>") = MockResponse().setBody("""<s:Envelope xmlns:s="http://schemas.xmlsoap.org/soap/envelope/"><s:Body>$fields</s:Body></s:Envelope>""")
+            val service = io.github.currencortex.music.core.dlna.DlnaService("urn:schemas-upnp-org:service:AVTransport:1", renderer.url("/av").toString())
+            val soap = io.github.currencortex.music.core.dlna.SoapClient()
+            val av = io.github.currencortex.music.core.dlna.AvTransportClient(soap, service)
+            renderer.enqueue(response())
+            av.setUri("https://cdn.test/song.mp3?a=1&b=2", io.github.currencortex.music.core.dlna.DidlMetadataBuilder.build(Song(1, "A & B"), "https://cdn.test/song.mp3?a=1&b=2", "audio/mpeg"))
+            val request = renderer.takeRequest(); assertNull(request.getHeader("Authorization"))
+            val xml = io.github.currencortex.music.core.dlna.DlnaXml.parse(request.body.readUtf8())
+            assertEquals("https://cdn.test/song.mp3?a=1&b=2", io.github.currencortex.music.core.dlna.DlnaXml.value(xml, "CurrentURI"))
+            renderer.enqueue(response()); av.play()
+            renderer.enqueue(response()); av.pause()
+            renderer.enqueue(response()); av.seek(60000)
+            renderer.enqueue(response("<RelTime>00:01:00</RelTime><TrackDuration>00:03:00</TrackDuration>"))
+            assertEquals(60000L, av.position().positionMs)
+            renderer.enqueue(response()); av.stop()
+            val rendering = io.github.currencortex.music.core.dlna.RenderingControlClient(soap, service.copy(type = "urn:schemas-upnp-org:service:RenderingControl:1"))
+            renderer.enqueue(response()); rendering.volume(65)
+            renderer.enqueue(response("<CurrentVolume>65</CurrentVolume>")); assertEquals(65, rendering.volume())
+        }
+    }
+    private class SilentDevicePlayer : ExternalPlayer {
+        override val state = MutableStateFlow(PlayerState())
+        override val queue = PlaybackQueue()
+        override var external: ExternalPlayback? = null
+        private var saved: QueueSnapshot? = null
+        override suspend fun beginExternal(mode: PlayerMode, controls: ExternalPlayback): Boolean {
+            if (state.value.mode != PlayerMode.LOCAL) return false
+            saved = queue.state.value; external = controls; state.value = state.value.copy(mode = mode, playing = false); return true
+        }
+        override fun endExternal(controls: ExternalPlayback) { if (external === controls) { external = null; saved?.let(queue::restore); state.value = PlayerState(song = queue.state.value.current) } }
+        override suspend fun roomTrack(song: Song?, url: String?, position: Long, playing: Boolean) { queue.replace(listOfNotNull(song), 0); state.value = PlayerState(song, playing, mode = PlayerMode.ROOM, positionMs = position) }
+        override suspend fun roomCorrection(position: Long, seek: Boolean, speed: Float, playing: Boolean) { state.value = state.value.copy(positionMs = if(seek) position else state.value.positionMs, playing = playing) }
+    }
+}

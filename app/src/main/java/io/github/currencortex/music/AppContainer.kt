@@ -25,7 +25,7 @@ import androidx.room.Room
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-class AppContainer(context: Context, storageNamespace: String = "") : java.io.Closeable {
+class AppContainer(context: Context, storageNamespace: String = "", externalPlayer: ExternalPlayer? = null) : java.io.Closeable {
     private val storageSuffix = if (storageNamespace.isEmpty()) "" else ".$storageNamespace".also {
         require(storageNamespace.matches(Regex("[a-zA-Z0-9-]+")))
     }
@@ -59,9 +59,23 @@ class AppContainer(context: Context, storageNamespace: String = "") : java.io.Cl
     val database = Room.databaseBuilder(context.applicationContext, MusicDatabase::class.java, "music$storageSuffix.db").build()
     val playbackQueue = PlaybackQueue()
     val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)
+    val roomRepository = io.github.currencortex.music.data.room.RoomRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
+    val roomSession = io.github.currencortex.music.core.room.RoomSession(roomRepository,
+        io.github.currencortex.music.core.room.RoomSseClient(), externalPlayer ?: playerController, playerScope,
+        { accountRepository.state.value.account?.id ?: 0 }, accountRepository::expired)
+    private val dlnaSoap = io.github.currencortex.music.core.dlna.SoapClient(networkSocketFactory = {
+        val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
+        manager.allNetworks.firstOrNull { manager.getNetworkCapabilities(it)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true }?.socketFactory
+    })
+    val dlnaDiscovery = io.github.currencortex.music.core.dlna.DlnaDiscovery(context, soap = dlnaSoap)
+    val dlnaController = io.github.currencortex.music.core.dlna.DlnaController(externalPlayer ?: playerController, musicRepository,
+        { RequestSession(accountRepository.server, accountRepository.token) }, playerScope, dlnaSoap)
     val ready = CompletableDeferred<Unit>()
     val sessionRestored = CompletableDeferred<Unit>()
     init {
+        playerScope.launch {
+            accountRepository.sessionRevision.collect { roomSession.disconnect(); dlnaController.stop() }
+        }
         appScope.launch {
             kotlinx.coroutines.flow.combine(accountRepository.state, musicSettings.state) { account, preferences ->
                 account.account?.id to preferences.server
@@ -98,6 +112,7 @@ class AppContainer(context: Context, storageNamespace: String = "") : java.io.Cl
         logger = logger,
     )
     override fun close() {
+        roomSession.disconnect()
         appScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         playerScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         database.close()

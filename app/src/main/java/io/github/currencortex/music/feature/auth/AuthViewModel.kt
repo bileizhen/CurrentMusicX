@@ -40,7 +40,12 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
             if (it is AppResult.Success) codeUntil.value = SystemClock.elapsedRealtime() + 60_000
         } }
     }
-    fun switch(key: String) = action("账号已切换") { container.playerController.pause(); container.authRepository.switchAccount(key) }
+    fun switch(key: String) = action("账号已切换") {
+        if (container.roomSession.active) container.roomSession.leave()
+        container.dlnaController.stop()
+        if (container.playerController.state.value.mode == io.github.currencortex.music.core.media.PlayerMode.LOCAL) container.playerController.pause()
+        container.authRepository.switchAccount(key)
+    }
     fun removeSaved(key: String) = action("已移除本机保存的账号") { appResult { container.accountRepository.removeSaved(key) } }
     fun retry() = viewModelScope.launch {
         state.value = AuthUiState(loading = true)

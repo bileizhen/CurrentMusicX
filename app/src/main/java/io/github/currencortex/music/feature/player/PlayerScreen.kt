@@ -23,7 +23,8 @@ import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
-    actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null) {
+    actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null,
+    onCast: (() -> Unit)? = null, onRoom: (() -> Unit)? = null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -35,7 +36,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             TextButton("返回", onClick = onBack, modifier = Modifier.testTag("navigate_back"))
             Text("正在播放", Modifier.weight(1f))
-            TextButton(settings.quality.label, onClick = { showQuality = !showQuality })
+            TextButton(settings.quality.label, onClick = { showQuality = !showQuality }, enabled = state.mode == PlayerMode.LOCAL)
+        }
+        Row {
+            if (onCast != null) TextButton(if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏", onClick = onCast)
+            if (onRoom != null) TextButton(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = onRoom)
         }
         if (showQuality) LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             items(AudioQuality.entries) { quality -> TextButton(quality.label, onClick = { vm.quality(quality); showQuality = false }) }
@@ -48,7 +53,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             else PlayerControls(vm, onToggle, Modifier.fillMaxSize())
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            TextButton(queue.mode.label, onClick = { vm.player.setMode(PlaybackMode.entries[(queue.mode.ordinal + 1) % PlaybackMode.entries.size]) })
+            TextButton(queue.mode.label, onClick = { vm.player.setMode(PlaybackMode.entries[(queue.mode.ordinal + 1) % PlaybackMode.entries.size]) }, enabled = state.mode == PlayerMode.LOCAL)
             TextButton(if (showLyrics) "封面" else "歌词", onClick = { showLyrics = !showLyrics }, modifier = Modifier.testTag("open_lyrics"))
             TextButton("队列 ${queue.songs.size}", onClick = { showQueue = !showQueue })
             if (actions != null && queue.current != null) TextButton("更多", onClick = { showActions = true })
@@ -57,12 +62,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             actions?.invoke(queue.current!!)
         }
         if (showQueue) MusicDialog("播放队列", onDismiss = { showQueue = false }) {
-            TextButton("清空队列", onClick = { vm.player.clear(); showQueue = false })
+            TextButton("清空队列", onClick = { vm.player.clear(); showQueue = false }, enabled = state.mode == PlayerMode.LOCAL)
             LazyColumn(Modifier.heightIn(max = 360.dp)) {
                 itemsIndexed(queue.songs) { index, song ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        TextButton((if (index == queue.index) "▶ " else "") + song.name, onClick = { vm.player.select(index) }, modifier = Modifier.weight(1f))
-                        TextButton("移除", onClick = { vm.player.remove(index) })
+                        TextButton((if (index == queue.index) "▶ " else "") + song.name, onClick = { vm.player.select(index) }, enabled = state.mode == PlayerMode.LOCAL, modifier = Modifier.weight(1f))
+                        TextButton("移除", onClick = { vm.player.remove(index) }, enabled = state.mode == PlayerMode.LOCAL)
                     }
                 }
             }
