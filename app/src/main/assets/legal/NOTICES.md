@@ -1,0 +1,79 @@
+# Third-party notices
+
+This template uses the following libraries at runtime:
+
+- MIUIX KMP by Yukonga and contributors (`top.yukonga.miuix.kmp`), Apache-2.0.
+- AndroidX / Jetpack Compose, under the Apache License 2.0.
+- Kotlin and kotlinx.coroutines by JetBrains and contributors, Apache-2.0.
+- Material Icons by Google, Apache-2.0.
+
+## Floating Bottom Bar and Liquid Glass
+
+`FloatingBottomBar.kt`, `liquid/{CombinedBackdrop,InnerShadow,Lens,Vibrancy}.kt`, `miuix/animation/{DampedDragAnimation,InteractiveHighlight}.kt` and `miuix/modifier/DragGestureInspector.kt` were ported from the user's local 123PanX / LeiFetch implementation. Package names were adapted for this template; the original attribution headers remain in each file.
+
+The source chain runs through LeiFetch / XBlocker to SukiSU-Ultra v4.1.3 (`0ca744a`), GPL-3.0. The underlying liquid glass examples are derived from compose-miuix-ui/miuix and Kyant0/AndroidLiquidGlass, Apache-2.0. Original copyrights and licenses continue to apply; the combined template remains GPL-3.0-only.
+
+- LeiFetch: https://github.com/bileizhen/LeiFetch
+- SukiSU-Ultra: https://github.com/SukiSU-Ultra/SukiSU-Ultra/tree/v4.1.3
+- MIUIX examples: https://github.com/compose-miuix-ui/miuix
+- Liquid glass helpers: https://github.com/Kyant0/AndroidLiquidGlass
+
+The quantized sensor-light adapter was adapted from 123PanX's `ui/util/TiltLightDirection.kt`, GPL-3.0. It avoids recomposition for insignificant sensor changes.
+
+The Gradle Wrapper is distributed under Apache-2.0. Its generated launch scripts retain their upstream copyright notices.
+
+Full GPL-3.0 and Apache-2.0 texts are packaged in `app/src/main/assets/legal/` and accessible offline from the About page. APK recipients can obtain the corresponding application source and build instructions from the configured GitHub project link.
+
+## Shared settings, About, diagnostic and update UI
+
+The saveable page stack, MIUIX NavDisplay navigation and non-predictive NavigationBackHandler fallback in `ui/LeiTemplateApp.kt` are adapted from local XBlocker `ui/MainActivity.kt`, whose navigation pattern derives from SukiSU-Ultra v4.1.3 (`0ca744a`), GPL-3.0-only. MIUIX owns gesture seeking, cancellation, settling, corner clipping and dimming. Dialogs are hosted once outside navigation entries and retain back-event priority.
+
+The phone theme preview, icon paths, appearance layout, LeiFetch About logo/fade layout, grouped member layout, QQ avatar rows, member dialogs, AnimatedList entry motion and blurred bars, animated About background shaders, bottom dialogs and update Markdown renderer are adapted from the local 123PanX / LeiFetch / XBlocker / SukiSU-Ultra source chain. GPL-3.0-only attribution headers are retained. Template branding and product configuration replace application-specific data.
+
+The cancellable HTTPS download and verification helper is adapted from 123PanX `UpdateDownloader.kt`, originally XBlocker `data/AppUpdates.kt`. OkHttp and Okio are used under Apache-2.0. The upstream helper's MIT permission follows:
+
+MIT License
+
+Copyright (c) 2026 XBlocker contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## CurrentMusic legacy behavior and API contracts
+
+MIT License
+
+Copyright (c) 2026 Rcst20
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
