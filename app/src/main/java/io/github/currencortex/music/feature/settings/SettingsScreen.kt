@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.settings
 
+import io.github.currencortex.music.ui.component.musicScrollPadding
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.*
@@ -20,7 +21,7 @@ fun SettingsScreen(updateViewModel: UpdateSettingsViewModel, onAppearance: () ->
                    onLogs: () -> Unit, onAbout: () -> Unit, onUpdates: () -> Unit) {
     val settings by updateViewModel.settings.collectAsStateWithLifecycle()
     LazyColumn(Modifier.fillMaxSize().testTag("settings_screen"),
-        contentPadding = PaddingValues(12.dp, 30.dp, 12.dp, 32.dp),
+        contentPadding = musicScrollPadding(PaddingValues(12.dp, 30.dp, 12.dp, 32.dp)),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Text("设置", fontSize = 32.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
         item {

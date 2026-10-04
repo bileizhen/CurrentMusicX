@@ -79,7 +79,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     var description by rememberSaveable { mutableStateOf("") }
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     MusicPullToRefresh(home.loading, vm::refresh, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-        LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(Modifier.fillMaxSize().testTag("playlist_index"), contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { TextButton("返回", onClick = onBack); Text("我的歌单", fontSize = 30.sp) }
             if (account.account == null) item { Text("登录后可以查看和管理歌单") }
             else item { TextButton("新建歌单", onClick = { create = true }, modifier = Modifier.testTag("create_playlist")) }
@@ -121,7 +121,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
     PreloadMusicCovers(state.songs.take(12).map { it.cover })
     MusicPullToRefresh(state.loading, { vm.reload(force = true) }, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-        LazyColumn(Modifier.testTag("library_detail"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(Modifier.fillMaxSize().testTag("library_detail"), contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { TextButton("返回", onClick = onBack); Text(state.title, fontSize = 28.sp) }
             if (state.loading && state.songs.isEmpty() && state.mv == null) item { LoadingSongList(4) }
             if (state.cover.isNotBlank()) item { MusicCover(state.cover, Modifier.size(180.dp), 500) }
@@ -180,7 +180,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     fun submit() { keyboard?.hide(); focus.clearFocus(); vm.search() }
-    LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().testTag("catalog_screen"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().testTag("catalog_screen"), contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             TextButton("返回", onClick = onBack); Text(if (state.albums) "专辑" else "歌手", fontSize = 30.sp)
             TextField(state.query, vm::input, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("catalog_query"),

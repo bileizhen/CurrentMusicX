@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -23,8 +24,14 @@ import androidx.compose.ui.semantics.disabled
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/** End-of-list clearance for controls drawn over scrolling root content. */
+/** End-of-list clearance for controls drawn over scrolling page content. */
 val LocalMusicBottomInset = staticCompositionLocalOf { 0.dp }
+
+@Composable fun musicScrollPadding(padding: PaddingValues = PaddingValues(20.dp)): PaddingValues {
+    val direction = LocalLayoutDirection.current
+    return PaddingValues(start = padding.calculateStartPadding(direction), top = padding.calculateTopPadding(),
+        end = padding.calculateEndPadding(direction), bottom = padding.calculateBottomPadding() + LocalMusicBottomInset.current)
+}
 
 @Composable fun MusicTextAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
     Text(label, modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick).heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 12.dp),

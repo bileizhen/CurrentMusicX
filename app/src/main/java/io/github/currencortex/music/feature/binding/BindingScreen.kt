@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.binding
 
+import io.github.currencortex.music.ui.component.musicScrollPadding
 import android.graphics.Bitmap
 import android.os.SystemClock
 import androidx.compose.foundation.Image
@@ -68,7 +69,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
             Bitmap.createBitmap(qrPixels(url), 512, 512, Bitmap.Config.ARGB_8888)
         }
     }
-    LazyColumn(Modifier.fillMaxSize().testTag("binding_screen"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(Modifier.fillMaxSize().testTag("binding_screen"), contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { TextButton("返回", onClick = onBack); Text("网易云账号", fontSize = 30.sp) }
         if (state.loading) item { Text("正在检查绑定…", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f)) }
         state.error?.let { item { Text(it); TextButton("重试", onClick = vm::reload) } }

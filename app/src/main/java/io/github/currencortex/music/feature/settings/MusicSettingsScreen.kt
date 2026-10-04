@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.settings
 
+import io.github.currencortex.music.ui.component.musicScrollPadding
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.*
@@ -29,7 +30,7 @@ import io.github.currencortex.music.data.settings.AudioProvider
     LaunchedEffect(vm) { vm.refreshCache() }
     var server by rememberSaveable(settings.server) { mutableStateOf(settings.server) }
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().testTag("network_settings"),
-        contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { TextButton("返回", onClick = onBack, modifier = Modifier.testTag("navigate_back")); Text("网络与播放") }
         item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("音乐音源")

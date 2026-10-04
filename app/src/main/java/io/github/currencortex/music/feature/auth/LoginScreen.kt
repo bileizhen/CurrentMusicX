@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.auth
 
+import io.github.currencortex.music.ui.component.musicScrollPadding
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -31,7 +32,7 @@ import io.github.currencortex.music.data.auth.RegistrationInput
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     LaunchedEffect(deadline) { while (now < deadline) { delay(1000); now = SystemClock.elapsedRealtime() } }
     LaunchedEffect(state.message) { if (addingAccount && state.message in listOf("登录成功", "注册成功")) onDone() }
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp).testTag("login_screen"),
+    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(musicScrollPadding()).testTag("login_screen"),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text("我的", fontSize = 32.sp)
         account.account?.takeIf { !addingAccount }?.let {

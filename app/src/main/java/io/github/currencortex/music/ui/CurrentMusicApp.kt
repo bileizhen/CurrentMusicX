@@ -239,8 +239,11 @@ fun CurrentMusicApp(container: AppContainer) {
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
                 Box(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)
                     .testTag("music_scene_${entry.contentKey}")
-                    .then(if (entry.contentKey in setOf(PLAYER.toString(), "lib/video")) Modifier else Modifier.navigationBarsPadding())
-                    .padding(bottom = miniSpace)) { entry.Content() }
+                    .then(if (entry.contentKey in setOf(PLAYER.toString(), "lib/video")) Modifier else Modifier.navigationBarsPadding())) {
+                    // Keep the scene viewport full size so the glass samples page content.
+                    // Clearance belongs to the end of each scrollable list, not to its bounds.
+                    CompositionLocalProvider(LocalMusicBottomInset provides miniSpace) { entry.Content() }
+                }
             }
         }
         val page: @Composable () -> Unit = {

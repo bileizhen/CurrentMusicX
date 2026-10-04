@@ -2,6 +2,7 @@
 // Reusable branding and links; preserves the original hero, fade stages and blur layout.
 package io.github.currencortex.music.feature.about
 
+import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import android.os.Build
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -438,6 +439,7 @@ private fun AboutContent(
                 top = scrollPadding.calculateTopPadding(),
                 start = scrollPadding.calculateStartPadding(layoutDirection),
                 end = scrollPadding.calculateEndPadding(layoutDirection),
+                bottom = LocalMusicBottomInset.current,
             ),
             overscrollEffect = null,
         ) {

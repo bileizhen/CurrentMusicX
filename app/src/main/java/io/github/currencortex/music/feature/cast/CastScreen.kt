@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.cast
 
+import io.github.currencortex.music.ui.component.musicScrollPadding
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.currencortex.music.AppContainer
@@ -41,7 +42,7 @@ class CastViewModel(val container: AppContainer) : ViewModel() {
     var volume by remember { mutableStateOf<Float?>(null) }
     DisposableEffect(vm) { onDispose { vm.cancelScan(); onDialogActive(false) } }
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().testTag("cast_screen"),
-        contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { TextButton("返回", onClick = onBack); Text("DLNA 投屏", fontSize = 28.sp) }
         item { Text("手机与设备需要连接同一 Wi-Fi。投屏后，手机暂停发声，由设备播放音乐。") }
         cast.device?.let { device -> item {

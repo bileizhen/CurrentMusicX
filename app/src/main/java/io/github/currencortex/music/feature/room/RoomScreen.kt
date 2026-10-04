@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.room
 
+import io.github.currencortex.music.ui.component.musicScrollPadding
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.rememberScrollState
@@ -48,7 +49,7 @@ import top.yukonga.miuix.kmp.basic.*
             if (browser.loading) Text("正在加载房间…")
             browser.error?.let { Text(it); TextButton("重试", onClick = { vm.load() }) }
             live.error?.let { Text(it) }
-            LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            LazyColumn(Modifier.weight(1f), contentPadding = musicScrollPadding(PaddingValues(0.dp)), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 items(browser.rooms, key = { it.id }) { room ->
                     Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp)) {
                         Text(room.name, fontSize = 22.sp); Text("#${room.code} · ${room.online} 人 · ${room.ownerName}")
@@ -108,7 +109,7 @@ import top.yukonga.miuix.kmp.basic.*
     }
 }
 @Composable private fun RoomQueue(detail: RoomDetail, role: RoomRole?, vm: RoomViewModel, modifier: Modifier) {
-    LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    LazyColumn(modifier, contentPadding = musicScrollPadding(PaddingValues(0.dp)), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         items(detail.queue, key = { it.id }) { item -> Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {
             Text(item.name); Text("${item.artists} · ${item.requester}")
             Text(when(item.status) { "pending" -> "待审批"; "playing" -> "正在播放"; "rejected" -> "已拒绝"; else -> "已加入队列" })
@@ -130,7 +131,7 @@ import top.yukonga.miuix.kmp.basic.*
     var settings by remember { mutableStateOf(false) }
     LaunchedEffect(target != null || settings) { onDialogActive(target != null || settings) }
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
-    LazyColumn(modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(modifier, contentPadding = musicScrollPadding(PaddingValues(0.dp)), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (role == RoomRole.OWNER) item {
             TextButton("房间设置", onClick = { settings = true })
             TextButton(if (detail.room.joinLocked) "允许加入" else "锁定加入", onClick = {

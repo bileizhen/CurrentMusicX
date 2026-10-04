@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.about
 
+import io.github.currencortex.music.ui.component.musicScrollPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -60,7 +61,7 @@ fun LegalDocumentScreen(document: LegalDocument, onBack: () -> Unit, onOpenDocum
             }
         })
     }, popupHost = {}) { padding ->
-    LazyColumn(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).testTag("legal_document"), contentPadding = PaddingValues(16.dp, 24.dp, 16.dp, 48.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).testTag("legal_document"), contentPadding = musicScrollPadding(PaddingValues(16.dp, 24.dp, 16.dp, 48.dp))) {
         if (document == LegalDocument.LICENSE) item {
             top.yukonga.miuix.kmp.preference.ArrowPreference(title = "Apache License 2.0",
                 summary = "MIUIX、AndroidX 等组件的许可", onClick = { onOpenDocument(LegalDocument.APACHE) })

@@ -268,7 +268,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
             TextField(state.query, vm::query, singleLine = true, modifier = Modifier.testTag("decoration_query"))
             Text("搜索名称或 ID，可预览挂件。")
             TextButton("取消佩戴", onClick = { vm.set("") }, enabled = catalog.current.isNotEmpty() && !busy)
-            LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.weight(1f), contentPadding = musicScrollPadding(PaddingValues(0.dp)), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(catalog.decorations.filter { it.name.contains(state.query, true) || it.id.contains(state.query, true) }, key = { it.id }) { item ->
                     Column(Modifier.clickable { vm.preview(item) }.testTag("decoration_${item.id}"), horizontalAlignment = Alignment.CenterHorizontally) {
                         UserAvatar(user, vm.container, 38.dp, item.id)
@@ -292,7 +292,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     val account by container.accountRepository.state.collectAsStateWithLifecycle()
     val state by auth.state.collectAsStateWithLifecycle()
     var removing by remember { mutableStateOf<io.github.currencortex.music.data.auth.SavedAccount?>(null) }
-    LazyColumn(Modifier.fillMaxSize().padding(20.dp).testTag("account_screen"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(Modifier.fillMaxSize().testTag("account_screen"), contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { TextButton("返回", onClick = onBack); Text("账户管理", fontSize = 28.sp); TextButton("添加账号", onClick = add, enabled = !state.loading) }
         items(accounts, key = { it.key }) { saved ->
             val active = saved.id == account.account?.id && saved.server == container.accountRepository.server

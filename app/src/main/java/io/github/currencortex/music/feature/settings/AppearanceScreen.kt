@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-only.
 package io.github.currencortex.music.feature.settings
 
+import io.github.currencortex.music.ui.component.musicScrollPadding
 import android.os.Build
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,7 +42,7 @@ fun AppearanceScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSca
             }
         }) }, popupHost = {},
     ) { padding ->
-    LazyColumn(modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).testTag("appearance_screen"), contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp)) {
+    LazyColumn(modifier = Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).testTag("appearance_screen"), contentPadding = musicScrollPadding(PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp))) {
         item {
             Spacer(Modifier.height(12.dp))
             ThemePreviewCardMiuix(LocalDarkTheme.current, config.monet, config.floatingBar, config.liquidGlass && config.blur && Build.VERSION.SDK_INT >= 33)
