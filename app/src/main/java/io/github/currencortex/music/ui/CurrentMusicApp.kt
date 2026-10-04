@@ -235,7 +235,10 @@ fun CurrentMusicApp(container: AppContainer) {
         val sceneInsets = remember(miniAvailable, miniHeight) {
             NavEntryDecorator<String> { entry ->
                 val miniSpace = if (miniAvailable && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video")) miniHeight else 0.dp
-                Box(Modifier.fillMaxSize().padding(bottom = miniSpace)) { entry.Content() }
+                // Each moving scene must cover the outgoing page and its dim scrim, including
+                // its inset areas. A background on NavDisplay alone sits behind both scenes.
+                Box(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)
+                    .testTag("music_scene_${entry.contentKey}").padding(bottom = miniSpace)) { entry.Content() }
             }
         }
         val page: @Composable () -> Unit = {

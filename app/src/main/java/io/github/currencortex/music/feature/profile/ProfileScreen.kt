@@ -74,8 +74,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     val user = state.profile?.user
     val own = user != null && user.id == account.account?.id
     val bottomInset = LocalMusicBottomInset.current
-    // isRefreshing locks all scroll; keep it only for the empty initial load.
-    PullToRefresh(state.loading && user == null, vm::reload, Modifier.fillMaxSize()) {
+    MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item { Row(verticalAlignment = Alignment.CenterVertically) {

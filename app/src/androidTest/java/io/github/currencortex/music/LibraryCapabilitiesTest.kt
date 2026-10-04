@@ -4,6 +4,10 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.test.core.app.ApplicationProvider
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toPixelMap
+import io.github.currencortex.music.data.settings.ThemeMode
 import io.github.currencortex.music.data.auth.UserDto
 import io.github.currencortex.music.ui.CurrentMusicApp
 import kotlinx.coroutines.*
@@ -64,6 +68,92 @@ class LibraryCapabilitiesTest {
     private fun dismissMessage() { compose.onAllNodesWithText("关闭").fetchSemanticsNodes().takeIf { it.isNotEmpty() }?.let { compose.onNodeWithText("关闭").performClick() } }
     @Test fun predictiveBackKeepsViewportAndCancelsWithoutPopping() = verifyPredictiveNavigation(floating = true)
     @Test fun predictiveBackWithFixedTabsKeepsViewportAndCompletes() = verifyPredictiveNavigation(floating = false)
+
+    @Test fun enteringPagesCoverOutgoingScrimInLightTheme() = verifySceneSurface(ThemeMode.LIGHT, Color(0xFFF5F6F8))
+    @Test fun enteringPagesCoverOutgoingScrimInDarkTheme() = verifySceneSurface(ThemeMode.DARK, Color(0xFF111214))
+
+    private fun verifySceneSurface(theme: ThemeMode, expected: Color) {
+        runBlocking { container.settings.edit { it.copy(themeMode = theme) } }
+        container.playerController.queue.replace(listOf(io.github.currencortex.music.data.song.Song(55, "Paused surface fixture")), 0)
+        compose.setContent { CurrentMusicApp(container) }
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("open_playlists").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+
+        fun assertSurface(route: String, previous: String, frame: Int) {
+            val viewport = compose.onNodeWithTag("music_navigation").fetchSemanticsNode().boundsInRoot
+            val incoming = compose.onNodeWithTag("music_scene_$route").fetchSemanticsNode().boundsInRoot
+            val outgoing = compose.onNodeWithTag("music_scene_$previous").fetchSemanticsNode().boundsInRoot
+            assertTrue("Capture must be during entry, not after settling: $incoming", incoming.left > viewport.left)
+            val overlapLeft = maxOf(incoming.left, outgoing.left)
+            val overlapRight = minOf(incoming.right, outgoing.right)
+            assertTrue("Both moving scenes must overlap", overlapRight - overlapLeft > 20f)
+            val image = compose.onNodeWithTag("music_navigation").captureToImage()
+            val pixels = image.toPixelMap()
+            val x = ((overlapLeft + overlapRight) / 2 - viewport.left).toInt()
+            // Blank status-bar inset and blank player inset must be painted by the scene too.
+            val ys = listOf((viewport.height * .012f).toInt(), (viewport.height - 8).toInt())
+            val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+            java.io.File(context.externalCacheDir, "scene-$theme-$route-$frame.png").outputStream().use {
+                image.asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            ys.forEach { y ->
+                for (dx in -2..2) for (dy in -2..2) {
+                    val actual = pixels[x + dx, y + dy]
+                    assertEquals("Scene $route frame $frame at ($x,$y) red; outgoing scrim must be covered", expected.red, actual.red, 2f / 255)
+                    assertEquals("Scene $route frame $frame green", expected.green, actual.green, 2f / 255)
+                    assertEquals("Scene $route frame $frame blue", expected.blue, actual.blue, 2f / 255)
+                }
+            }
+        }
+
+        compose.onNodeWithText("设置").performClick()
+        compose.mainClock.advanceTimeBy(160)
+        assertSurface("20", "0", 160)
+        compose.mainClock.advanceTimeBy(160)
+        assertSurface("20", "0", 320)
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithText("网络与播放").performClick()
+        compose.mainClock.advanceTimeBy(160)
+        assertSurface("21", "20", 160)
+        compose.mainClock.advanceTimeBy(160)
+        assertSurface("21", "20", 320)
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("network_settings").assertExists()
+        compose.mainClock.autoAdvance = true
+        assertEquals(listOf(55L), container.playerController.queue.state.value.songs.map { it.id })
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun predictiveBackCanInterruptForwardEntryAndCancelOrComplete() {
+        lateinit var dispatcher: androidx.activity.OnBackPressedDispatcher
+        compose.setContent {
+            dispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
+            CurrentMusicApp(container)
+        }
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("open_playlists").fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.autoAdvance = false
+        fun gesture(commit: Boolean) {
+            compose.onNodeWithTag("open_playlists").performClick()
+            compose.mainClock.advanceTimeBy(96)
+            compose.runOnUiThread {
+                dispatcher.dispatchOnBackStarted(androidx.activity.BackEventCompat(0f, 500f, 0f, androidx.activity.BackEventCompat.EDGE_LEFT))
+                dispatcher.dispatchOnBackProgressed(androidx.activity.BackEventCompat(250f, 500f, .4f, androidx.activity.BackEventCompat.EDGE_LEFT))
+            }
+            compose.mainClock.advanceTimeBy(32)
+            compose.runOnUiThread { if (commit) dispatcher.onBackPressed() else dispatcher.dispatchOnBackCancelled() }
+            compose.mainClock.advanceTimeBy(1500)
+        }
+        gesture(commit = false)
+        compose.onNodeWithText("我的歌单").assertExists()
+        compose.onNodeWithText("返回").performClick()
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onNodeWithTag("open_playlists").assertExists()
+        gesture(commit = true)
+        compose.onNodeWithTag("open_playlists").assertExists()
+        compose.onNodeWithText("我的歌单").assertDoesNotExist()
+        compose.mainClock.autoAdvance = true
+    }
 
     private fun verifyPredictiveNavigation(floating: Boolean) {
         runBlocking { container.settings.edit { it.copy(floatingBar = floating, predictiveBack = true) } }

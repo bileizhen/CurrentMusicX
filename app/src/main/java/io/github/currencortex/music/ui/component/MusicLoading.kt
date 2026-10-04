@@ -23,19 +23,22 @@ import kotlinx.coroutines.sync.withPermit
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 private val coverPrefetchPermits = Semaphore(3)
+private val LocalPlaceholderPulse = staticCompositionLocalOf<State<Float>?> { null }
+
+@Composable private fun rememberPlaceholderPulse(): State<Float> =
+    rememberInfiniteTransition(label = "loading").animateFloat(.45f, 1f,
+        infiniteRepeatable(tween(850), RepeatMode.Reverse), label = "placeholder opacity")
 
 @Composable fun MusicPlaceholder(modifier: Modifier, animated: Boolean = true) {
-    val pulse = if (animated) {
-        val transition = rememberInfiniteTransition(label = "loading")
-        val alpha by transition.animateFloat(.45f, 1f,
-            infiniteRepeatable(tween(850), RepeatMode.Reverse), label = "placeholder opacity")
-        alpha
-    } else 1f
-    Box(modifier.clip(RoundedCornerShape(12.dp)).graphicsLayer { alpha = pulse }
+    val pulse = if (animated) LocalPlaceholderPulse.current ?: rememberPlaceholderPulse() else null
+    // Read opacity only in the layer, so each frame doesn't recompose the placeholder.
+    Box(modifier.clip(RoundedCornerShape(12.dp)).graphicsLayer { alpha = pulse?.value ?: 1f }
         .background(MiuixTheme.colorScheme.onSurface.copy(alpha = .09f)))
 }
 
 @Composable fun LoadingSongList(count: Int = 3, modifier: Modifier = Modifier) {
+    val pulse = rememberPlaceholderPulse()
+    CompositionLocalProvider(LocalPlaceholderPulse provides pulse) {
     Column(modifier.fillMaxWidth().testTag("music_loading").clearAndSetSemantics { contentDescription = "正在加载歌曲" },
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         repeat(count) { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -45,6 +48,7 @@ private val coverPrefetchPermits = Semaphore(3)
                 MusicPlaceholder(Modifier.fillMaxWidth(.48f).height(11.dp))
             }
         } }
+    }
     }
 }
 

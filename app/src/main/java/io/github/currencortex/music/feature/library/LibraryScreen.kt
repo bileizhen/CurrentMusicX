@@ -78,8 +78,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     var name by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
-    // isRefreshing locks all scroll; keep it only for the empty initial load.
-    PullToRefresh(home.loading && home.playlists.isEmpty(), vm::refresh, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+    MusicPullToRefresh(home.loading, vm::refresh, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { TextButton("返回", onClick = onBack); Text("我的歌单", fontSize = 30.sp) }
             if (account.account == null) item { Text("登录后可以查看和管理歌单") }
@@ -121,8 +120,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     val editable = state.playlist?.editable(account.account?.id ?: 0) == true
     LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
     PreloadMusicCovers(state.songs.take(12).map { it.cover })
-    // isRefreshing locks all scroll; keep it only for the empty initial load.
-    PullToRefresh(state.loading && state.songs.isEmpty() && state.mv == null, { vm.reload(force = true) }, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+    MusicPullToRefresh(state.loading, { vm.reload(force = true) }, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         LazyColumn(Modifier.testTag("library_detail"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { TextButton("返回", onClick = onBack); Text(state.title, fontSize = 28.sp) }
             if (state.loading && state.songs.isEmpty() && state.mv == null) item { LoadingSongList(4) }
