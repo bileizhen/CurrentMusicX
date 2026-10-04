@@ -10,9 +10,29 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 data class NetworkSettingsState(val busy: Boolean = false, val message: String? = null)
+data class AudioCacheSettingsState(val busy: Boolean = false, val message: String? = null)
 class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() {
     val settings = container.musicSettings.state
     val state = MutableStateFlow(NetworkSettingsState())
+    val cacheBytes = container.audioCache.bytes
+    val cacheState = MutableStateFlow(AudioCacheSettingsState())
+    fun refreshCache() = viewModelScope.launch(Dispatchers.IO) {
+        runCatching { container.audioCache.refreshUsage() }.onFailure {
+            cacheState.value = AudioCacheSettingsState(message = "歌曲缓存暂不可用")
+        }
+    }
+    fun preload(value: Boolean) = viewModelScope.launch { container.musicSettings.setPreload(value) }
+    fun preloadMetered(value: Boolean) = viewModelScope.launch { container.musicSettings.setPreloadMetered(value) }
+    fun clearCache() = viewModelScope.launch {
+        if (cacheState.value.busy) return@launch
+        cacheState.value = AudioCacheSettingsState(busy = true)
+        try {
+            container.audioSources.invalidate()
+            container.audioCache.clear()
+            cacheState.value = AudioCacheSettingsState(message = "歌曲缓存已清理")
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { cacheState.value = AudioCacheSettingsState(message = "缓存清理失败，请重试") }
+    }
     fun server(value: String) = viewModelScope.launch {
         if (state.value.busy) return@launch
         val normalized = try { ServerUrl.normalize(value) } catch (e: IllegalArgumentException) {

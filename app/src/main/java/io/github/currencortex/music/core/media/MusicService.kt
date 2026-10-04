@@ -12,7 +12,6 @@ import kotlinx.coroutines.channels.Channel
 import androidx.media3.common.*
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
-import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.session.*
 import androidx.media3.common.util.UnstableApi
 import com.google.common.util.concurrent.ListenableFuture
@@ -23,6 +22,9 @@ import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.local.QueueSnapshotEntity
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.guava.future
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
@@ -43,9 +45,13 @@ class MusicService : MediaSessionService() {
     private var recorded = false
     private var lastFlush = 0L
     private var videoView: PlayerView? = null
+    private val readyForPreload = MutableStateFlow(false)
+    private data class PreloadPlan(val request: AudioRequest, val warn: Boolean, val metered: Boolean)
     private data class Report(val song: Song, val session: RequestSession, val ms: Long? = null)
     private val reports = Channel<Report>(Channel.UNLIMITED)
     private fun currentSession() = RequestSession(container.accountRepository.server, container.accountRepository.token)
+    private fun audioRequest(id: Long, quality: AudioQuality) = AudioRequest(id, quality,
+        container.accountRepository.state.value.account?.id ?: 0L, currentSession())
     private fun flushListening() {
         val ms = listening.drain(SystemClock.elapsedRealtime())
         trackedSong?.takeIf { recorded && ms > 0 && !it.video }?.let { reports.trySend(Report(it, trackedSession, ms)) }
@@ -61,7 +67,7 @@ class MusicService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         player = ExoPlayer.Builder(this)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(OkHttpDataSource.Factory(okhttp3.OkHttpClient())))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory))
             .build().apply {
             setAudioAttributes(AudioAttributes.Builder().setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).setUsage(C.USAGE_MEDIA).build(), true)
             setHandleAudioBecomingNoisy(true)
@@ -158,6 +164,7 @@ class MusicService : MediaSessionService() {
                 if (!isPlaying) flushListening()
             }
             override fun onPlaybackStateChanged(state: Int) {
+                readyForPreload.value = state == Player.STATE_READY
                 if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.ROOM) container.playerController.external?.ended()
                 if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.LOCAL) { container.playbackQueue.next(automatic = true); prepareSong(true, 0) }
             }
@@ -189,6 +196,28 @@ class MusicService : MediaSessionService() {
             }
         }
         scope.launch { container.playbackQueue.state.collectLatest { persistQueue() } }
+        scope.launch {
+            combine(container.playbackQueue.state, container.musicSettings.state, container.accountRepository.state) { _, settings, account ->
+                settings to account.account
+            }.combine(container.playerController.state) { (settings, account), state ->
+                val next = if (settings.preloadAudio && account != null && state.mode == PlayerMode.LOCAL && state.playing &&
+                    !state.loading && !state.resolving && state.warning == null &&
+                    player.currentMediaItem?.mediaId == container.playbackQueue.state.value.current?.id?.toString()) container.playbackQueue.previewNext() else null
+                next?.let { PreloadPlan(audioRequest(it.id, settings.quality), settings.warnHighSpec, settings.preloadMetered) }
+            }.combine(readyForPreload) { plan, ready -> plan.takeIf { ready } }
+                .combine(preloadNetwork(this@MusicService)) { plan, network -> plan.takeIf { network == 2 || network == 1 && it?.metered == true } }
+                .combine(container.audioCache.clearing) { plan, clearing -> plan.takeUnless { clearing } }
+                .distinctUntilChanged().collectLatest { plan ->
+                    if (plan == null) return@collectLatest
+                    delay(800)
+                    try {
+                        val resolved = container.audioSources.resolve(plan.request)
+                        if (resolved.source.highSpec && plan.warn) return@collectLatest
+                        container.audioCache.preload(resolved.key, resolved.source)
+                    } catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { container.logger.info("Player", "Next audio preload unavailable; foreground playback is unaffected") }
+                }
+        }
     }
     private suspend fun persistQueue() {
         container.database.music().saveQueue(QueueSnapshotEntity(payload = ApiJson.encodeToString(container.playerController.queueForPersistence())))
@@ -206,20 +235,20 @@ class MusicService : MediaSessionService() {
         container.playerController.state.value = PlayerState(song = song, loading = true, resolving = true, positionMs = position, durationMs = song.durationMs)
         loading = scope.launch {
             when (val result = appResult { withContext(Dispatchers.IO) {
-                if (song.video) io.github.currencortex.music.data.song.AudioSource(container.libraryRepository.mvSource(song.mv), "video", 0, 0)
-                else container.musicRepository.source(song.id, container.musicSettings.snapshot().quality)
+                if (song.video) ResolvedAudio(io.github.currencortex.music.data.song.AudioSource(container.libraryRepository.mvSource(song.mv), "video", 0, 0), "")
+                else container.audioSources.resolve(audioRequest(song.id, container.musicSettings.snapshot().quality))
             } }) {
                 is AppResult.Failure -> container.playerController.state.value = container.playerController.state.value.copy(loading = false, resolving = false, error = result.kind.message)
                 is AppResult.Success -> {
                     if (container.playbackQueue.state.value.current?.id != song.id) return@launch
-                    val source = result.value
+                    val source = result.value.source
                     if (source.highSpec && container.musicSettings.snapshot().warnHighSpec && approvedSong != song.id) {
                         pendingPlay = play; pendingPosition = position
                         container.playerController.state.value = container.playerController.state.value.copy(loading = false, resolving = false, warning = HighSpecWarning(song.id, source))
                         return@launch
                     }
                     container.playerController.state.value = container.playerController.state.value.copy(resolving = false, warning = null, error = null)
-                    player.setMediaItem(MediaItemFactory.create(song, source.url), position)
+                    player.setMediaItem(MediaItemFactory.create(song, source.url, result.value.key.takeIf(String::isNotBlank)), position)
                     player.prepare(); player.playWhenReady = play
                 }
             }

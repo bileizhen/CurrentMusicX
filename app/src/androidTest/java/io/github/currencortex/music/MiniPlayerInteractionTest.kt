@@ -2,6 +2,8 @@ package io.github.currencortex.music
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.currencortex.music.core.media.*
@@ -9,6 +11,8 @@ import io.github.currencortex.music.data.auth.UserDto
 import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.player.*
+import io.github.currencortex.music.feature.settings.MusicSettingsViewModel
+import io.github.currencortex.music.feature.settings.MusicSettingsScreen
 import io.github.currencortex.music.ui.CurrentMusicApp
 import io.github.currencortex.music.ui.theme.LeiTheme
 import kotlinx.coroutines.runBlocking
@@ -79,6 +83,48 @@ class MiniPlayerInteractionTest {
         compose.onNodeWithTag("mini_toggle").assertIsEnabled()
         compose.onNodeWithTag("mini_song_gesture").performTouchInput { swipeLeft(durationMillis = 300) }
         assertEquals(1, next)
+    }
+    @Test fun progressRingFollowsPositionAndResetsWhenTrackChanges() {
+        component()
+        compose.runOnIdle {
+            container.playerController.state.value = PlayerState(song = container.playbackQueue.state.value.current,
+                positionMs = 2500, durationMs = 10000)
+        }
+        compose.onNodeWithTag("mini_toggle").assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(.25f, 0f..1f)))
+        compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(positionMs = 7500, playing = true) }
+        compose.onNodeWithTag("mini_toggle").assertContentDescriptionEquals("暂停")
+            .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(.75f, 0f..1f)))
+        compose.runOnIdle { container.playbackQueue.next() }
+        compose.onNodeWithTag("mini_toggle").assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(0f, 0f..1f)))
+        compose.runOnIdle {
+            container.playbackQueue.restore(QueueSnapshot(listOf(Song(5, "Restored song", durationMs = 10000)), 0, positionMs = 5000))
+            container.playerController.state.value = PlayerState()
+        }
+        compose.onNodeWithTag("mini_toggle").assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(.5f, 0f..1f)))
+    }
+    @Test fun audioCacheSettingsPersistPolicyAndClearOnlyFixtureCache() = runBlocking<Unit> {
+        val source = io.github.currencortex.music.data.song.AudioSource(server.url("/fixture-bytes").toString(), "standard", 44100, 2, "mp3")
+        val key = AudioCache.key(server.url("/cm/").toString(), 7, 1, AudioQuality.STANDARD)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            container.audioCache.rememberSource(key, source); container.audioCache.preload(key, source, 2)
+        }
+        assertTrue(container.audioCache.bytes.value > 0)
+        val vm = MusicSettingsViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings()) { MusicSettingsScreen(vm) {} } }
+        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("preload_audio"))
+        compose.onNodeWithTag("preload_audio").performClick()
+        compose.waitUntil(3000) { !vm.settings.value.preloadAudio }
+        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("preload_metered"))
+        compose.onNodeWithTag("preload_metered").performClick()
+        compose.waitUntil(3000) { vm.settings.value.preloadMetered }
+        assertFalse(container.musicSettings.snapshot().preloadAudio)
+        assertTrue(container.musicSettings.snapshot().preloadMetered)
+        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("clear_audio_cache"))
+        compose.onNodeWithTag("clear_audio_cache").performClick()
+        compose.waitUntil(3000) { vm.cacheState.value.message == "歌曲缓存已清理" }
+        assertEquals(0L, container.audioCache.bytes.value)
+        assertEquals(3, container.playbackQueue.state.value.songs.size)
+        assertEquals(1, container.playbackQueue.state.value.index)
     }
     @Test fun rootSharesGlassMaterialAndQueueDismissKeepsCurrentPageAndPausedQueue() = runBlocking {
         container.settings.edit { AppearanceSettings(blur = true, liquidGlass = true) }

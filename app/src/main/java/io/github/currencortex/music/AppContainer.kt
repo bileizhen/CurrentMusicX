@@ -51,6 +51,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val authRepository = AuthRepository(apiClient, accountRepository, "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
         persistServer = musicSettings::setServer, persistAccount = musicSettings::setAccount)
     val musicRepository = MusicRepository(apiClient)
+    val audioCache = AudioCache(context.applicationContext, java.io.File(context.cacheDir, "audio$storageSuffix"))
+    val audioSources = AudioSourceResolver(audioCache,
+        { RequestSession(accountRepository.server, accountRepository.token) }, load = musicRepository::source)
     val libraryRepository = io.github.currencortex.music.data.library.LibraryRepository(apiClient,
         { accountRepository.state.value.account?.id ?: 0L }, { RequestSession(accountRepository.server, accountRepository.token) })
     val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
@@ -74,7 +77,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val sessionRestored = CompletableDeferred<Unit>()
     init {
         playerScope.launch {
-            accountRepository.sessionRevision.collect { roomSession.disconnect(); dlnaController.stop() }
+            accountRepository.sessionRevision.collect { audioSources.invalidate(); roomSession.disconnect(); dlnaController.stop() }
         }
         appScope.launch {
             kotlinx.coroutines.flow.combine(accountRepository.state, musicSettings.state) { account, preferences ->
@@ -116,5 +119,6 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         appScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         playerScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         database.close()
+        audioCache.close()
     }
 }

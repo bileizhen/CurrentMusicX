@@ -16,6 +16,9 @@ import top.yukonga.miuix.kmp.basic.*
 @Composable fun MusicSettingsScreen(vm: MusicSettingsViewModel, onBack: () -> Unit) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
+    val cacheBytes by vm.cacheBytes.collectAsStateWithLifecycle()
+    val cacheState by vm.cacheState.collectAsStateWithLifecycle()
+    LaunchedEffect(vm) { vm.refreshCache() }
     var server by rememberSaveable(settings.server) { mutableStateOf(settings.server) }
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().testTag("network_settings"),
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -31,6 +34,18 @@ import top.yukonga.miuix.kmp.basic.*
                 state.message?.let { Text(it) }
             } }
         }
+        item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("歌曲缓存与预加载")
+            Text("已缓存 ${String.format(java.util.Locale.ROOT, "%.1f", cacheBytes / 1048576.0)} MB / 256 MB")
+            Text("播放时自动缓存，容量满后清理较早使用的音频。下一首预加载前 2 MB，完整缓存的歌曲可在网络不可用时重播。")
+            SettingsSwitch("预加载下一首", settings.preloadAudio, vm::preload,
+                summary = "当前歌曲正常播放后，在非计费网络提前加载", modifier = Modifier.testTag("preload_audio"))
+            SettingsSwitch("允许计费网络预加载", settings.preloadMetered, vm::preloadMetered,
+                summary = "包括移动网络，会额外消耗流量", modifier = Modifier.testTag("preload_metered"))
+            TextButton(if (cacheState.busy) "正在清理…" else "清理歌曲缓存", onClick = { vm.clearCache() },
+                enabled = !cacheState.busy, modifier = Modifier.testTag("clear_audio_cache"))
+            cacheState.message?.let { Text(it) }
+        } } }
         item { Text("默认音质") }
         AudioQuality.entries.forEach { quality -> item {
             TextButton((if (settings.quality == quality) "✓ " else "") + quality.label, onClick = { vm.quality(quality) })

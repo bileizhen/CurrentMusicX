@@ -12,6 +12,24 @@ import kotlin.random.Random
 }
 class PlaybackQueue {
     val state = MutableStateFlow(QueueSnapshot())
+    private data class NextChoice(val songs: List<Song>, val index: Int, val target: Int)
+    private var plannedShuffle: NextChoice? = null
+    private fun nextIndex(s: QueueSnapshot, automatic: Boolean, random: Random): Int = when {
+        s.songs.isEmpty() -> -1
+        automatic && s.mode == PlaybackMode.ONE -> s.index
+        s.mode == PlaybackMode.SHUFFLE && s.songs.size > 1 -> {
+            plannedShuffle?.takeIf { it.songs == s.songs && it.index == s.index }?.target
+                ?: ((s.index + random.nextInt(1, s.songs.size)) % s.songs.size).also {
+                    plannedShuffle = NextChoice(s.songs, s.index, it)
+                }
+        }
+        else -> (s.index + 1) % s.songs.size
+    }
+    /** Planning must use the same shuffle choice as the eventual transport command. */
+    fun previewNext(random: Random = Random.Default): Song? {
+        val s = state.value
+        return s.songs.getOrNull(nextIndex(s, automatic = true, random = random))?.takeIf { it.id != s.current?.id && !it.video }
+    }
     fun replace(songs: List<Song>, index: Int) {
         state.value = state.value.copy(songs = songs.toList(), index = if (songs.isEmpty()) -1 else index.coerceIn(songs.indices), positionMs = 0)
     }
@@ -21,11 +39,8 @@ class PlaybackQueue {
     fun next(automatic: Boolean = false, random: Random = Random.Default) {
         val s = state.value
         if (s.songs.isEmpty()) return
-        val next = when {
-            automatic && s.mode == PlaybackMode.ONE -> s.index
-            s.mode == PlaybackMode.SHUFFLE && s.songs.size > 1 -> (s.index + random.nextInt(1, s.songs.size)) % s.songs.size
-            else -> (s.index + 1) % s.songs.size
-        }
+        val next = nextIndex(s, automatic, random)
+        plannedShuffle = null
         state.value = s.copy(index = next, positionMs = 0)
     }
     fun previous() { val s = state.value; if (s.songs.isNotEmpty()) state.value = s.copy(index = (s.index - 1 + s.songs.size) % s.songs.size, positionMs = 0) }

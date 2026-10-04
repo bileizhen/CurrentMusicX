@@ -45,6 +45,10 @@ import kotlin.math.abs
     val previous by rememberUpdatedState(onPrevious)
     val allowed by rememberUpdatedState(enabled)
     val threshold = with(LocalDensity.current) { 48.dp.toPx() }
+    val currentMatches = state.song?.id == song?.id
+    val duration = (if (currentMatches) state.durationMs.takeIf { it > 0 } else null) ?: song?.durationMs ?: 0L
+    val position = if (currentMatches) state.positionMs else queue.positionMs
+    val progress = if (duration > 0) (position.toDouble() / duration).toFloat().coerceIn(0f, 1f) else 0f
     var dragged by remember { mutableFloatStateOf(0f) }
     val subtitle = when (state.mode) {
         PlayerMode.ROOM -> if (state.canControlPlayback) "房间控制" else "跟随房间"
@@ -78,9 +82,14 @@ import kotlin.math.abs
                     translationX = dragged.coerceIn(-threshold * 2, threshold * 2) * .15f
                 }, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            MiniControl(if (state.playing) "暂停" else "播放", onToggle, Modifier.testTag("mini_toggle"), enabled) { ink ->
+            MiniControl(if (state.playing) "暂停" else "播放", onToggle, Modifier.testTag("mini_toggle").semantics {
+                progressBarRangeInfo = ProgressBarRangeInfo(progress, 0f..1f)
+            }, enabled) { ink ->
                 val stroke = Stroke(1.6.dp.toPx())
-                drawCircle(ink.copy(alpha = .45f), radius = size.minDimension * .45f, style = stroke)
+                drawCircle(ink.copy(alpha = .2f), radius = size.minDimension * .45f, style = stroke)
+                if (progress > 0f) drawArc(ink, startAngle = -90f, sweepAngle = 360f * progress, useCenter = false,
+                    topLeft = Offset(size.width * .05f, size.height * .05f), size = Size(size.width * .9f, size.height * .9f),
+                    style = Stroke(1.6.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
                 if (state.playing) {
                     drawRect(ink, Offset(size.width * .34f, size.height * .29f), Size(size.width * .1f, size.height * .42f))
                     drawRect(ink, Offset(size.width * .56f, size.height * .29f), Size(size.width * .1f, size.height * .42f))

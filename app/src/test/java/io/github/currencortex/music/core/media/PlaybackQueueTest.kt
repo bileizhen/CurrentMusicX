@@ -6,6 +6,32 @@ import kotlinx.serialization.decodeFromString
 import org.junit.Assert.*
 import org.junit.Test
 class PlaybackQueueTest {
+    @Test fun preloadPreviewDoesNotMoveQueueAndUsesActualShuffleTargetAfterPositionUpdates() {
+        val queue = PlaybackQueue()
+        queue.replace((1L..10L).map { Song(it, "$it") }, 8)
+        queue.state.value = queue.state.value.copy(mode = PlaybackMode.SHUFFLE)
+        val before = queue.state.value
+        val next = queue.previewNext(kotlin.random.Random(7))!!
+        assertEquals(before, queue.state.value)
+        queue.state.value = queue.state.value.copy(positionMs = 1500)
+        assertEquals(next, queue.previewNext(kotlin.random.Random(9)))
+        queue.next(random = kotlin.random.Random(11))
+        assertEquals(next, queue.state.value.current)
+        assertEquals(0L, queue.state.value.positionMs)
+    }
+    @Test fun preloadPreviewRespectsRepeatAndChangedQueue() {
+        val queue = PlaybackQueue()
+        queue.replace(listOf(Song(1, "one"), Song(2, "two"), Song(3, "video", video = true)), 0)
+        assertEquals(2L, queue.previewNext()!!.id)
+        queue.state.value = queue.state.value.copy(mode = PlaybackMode.ONE)
+        assertNull(queue.previewNext())
+        queue.next(); assertEquals(2L, queue.state.value.current!!.id)
+        queue.state.value = queue.state.value.copy(mode = PlaybackMode.LIST)
+        assertNull(queue.previewNext())
+        queue.replace(listOf(Song(9, "nine"), Song(10, "ten")), 1)
+        assertEquals(9L, queue.previewNext()!!.id)
+        queue.next(); assertEquals(9L, queue.state.value.current!!.id)
+    }
     @Test fun preservesCurrentSongWhenRemovingEarlierTrackAndKeepsPlayNextOrder() {
         val queue = PlaybackQueue()
         val songs = (1L..3L).map { Song(it, "$it") }
