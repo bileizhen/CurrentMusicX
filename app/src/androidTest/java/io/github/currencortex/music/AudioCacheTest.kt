@@ -36,6 +36,7 @@ class AudioCacheTest {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 requests++
                 assertNull(request.getHeader("Token"))
+                assertNull(request.getHeader("x-api-key"))
                 val match = Regex("bytes=(\\d+)-(\\d*)").find(request.getHeader("Range").orEmpty())
                 val start = match?.groupValues?.get(1)?.toInt() ?: 0
                 if (start >= payload.size) return MockResponse().setResponseCode(416).setHeader("Content-Range", "bytes */${payload.size}")
@@ -123,6 +124,30 @@ class AudioCacheTest {
         assertEquals(0L, cache.cachedBytes(key, payload.size.toLong()))
         cache.clear()
         assertEquals(0L, cache.bytes.value); assertNull(cache.cachedSource(newer))
+    }
+    @Test fun audioProvidersAndKeysCannotReuseEachOthersBytesOrInFlightSources() = runBlocking(Dispatchers.IO) {
+        val session = RequestSession("https://fixture/cm", "fixture-token")
+        var provider = "leiz:fixture-first"
+        val request = AudioRequest(1, AudioQuality.STANDARD, 7, session, provider)
+        assertNotEquals(key, request.key)
+        cache.rememberSource(key, source()); read(key, source())
+        val resolver = AudioSourceResolver(cache, { session }, currentProvider = { provider }) { _, _, _ -> source() }
+        val resolved = resolver.resolve(request)
+        assertEquals(0L, cache.cachedBytes(resolved.key, payload.size.toLong()))
+        cache.preload(resolved.key, resolved.source, 64 * 1024L)
+        assertEquals(64 * 1024L, cache.cachedBytes(resolved.key, payload.size.toLong()))
+        provider = "leiz:fixture-second"
+        val changed = request.copy(providerIdentity = provider)
+        assertNotEquals(request.key, changed.key)
+        assertEquals(0L, cache.cachedBytes(changed.key, payload.size.toLong()))
+        try { resolver.resolve(request); fail("Stale key identity must be rejected even on memo hit") }
+        catch (e: ApiException) { assertEquals(ErrorKind.AudioSourceChanged, e.kind) }
+        val inFlight = AudioSourceResolver(cache, { session }, currentProvider = { provider }) { _, _, _ ->
+            provider = "currentmusic"; source()
+        }
+        try { inFlight.resolve(changed); fail("Provider change must reject old result") }
+        catch (e: ApiException) { assertEquals(ErrorKind.AudioSourceChanged, e.kind) }
+        assertNull(cache.cachedSource(changed.key))
     }
     @Test fun cancelledPreloadStopsAndIncompleteAudioCannotResolveOffline() = runBlocking(Dispatchers.IO) {
         throttled = true

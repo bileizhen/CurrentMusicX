@@ -7,14 +7,16 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.IOException
 
-data class AudioRequest(val songId: Long, val quality: AudioQuality, val accountId: Long, val session: RequestSession) {
-    val key get() = AudioCache.key(session.server, accountId, songId, quality)
+data class AudioRequest(val songId: Long, val quality: AudioQuality, val accountId: Long, val session: RequestSession,
+    val providerIdentity: String = "currentmusic") {
+    val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity)
 }
 data class ResolvedAudio(val source: AudioSource, val key: String)
 
 /** Short-lived URL reuse for prefetched tracks; persisted bytes have a separate lifetime. */
 class AudioSourceResolver(private val cache: AudioCache, private val currentSession: () -> RequestSession,
     private val now: () -> Long = System::nanoTime,
+    private val currentProvider: () -> String = { "currentmusic" },
     private val load: suspend (Long, AudioQuality, RequestSession) -> AudioSource) {
     private data class Entry(val request: AudioRequest, val source: AudioSource, val until: Long)
     private val memo = java.util.concurrent.ConcurrentHashMap<String, Entry>()
@@ -24,6 +26,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
         val key = request.key
         locks[(key.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
             if (request.session != currentSession()) throw ApiException(ErrorKind.Unauthorized)
+            if (request.providerIdentity != currentProvider()) throw ApiException(ErrorKind.AudioSourceChanged)
             val saved = memo[key]?.takeIf { it.request == request && it.until > now() }
             val source = saved?.source ?: try { load(request.songId, request.quality, request.session) }
             catch (e: CancellationException) { throw e }
@@ -34,6 +37,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
                 cache.completeSource(key) ?: throw e
             }
             if (request.session != currentSession()) throw ApiException(ErrorKind.Unauthorized)
+            if (request.providerIdentity != currentProvider()) throw ApiException(ErrorKind.AudioSourceChanged)
             // Disk cache failure must not turn a valid network source into playback failure.
             runCatching { cache.rememberSource(key, source) }
             // Reusing an entry must not slide the expiry of its original signed URL.

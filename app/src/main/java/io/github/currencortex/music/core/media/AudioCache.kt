@@ -132,8 +132,9 @@ class AudioCache(context: Context, directory: File, maxBytes: Long = MAX_BYTES,
         const val PRELOAD_BYTES = 2L * 1024 * 1024
         private const val PREFIX = "cm-audio-v1:"
         private const val SOURCE = "cm.audio.source"
-        fun key(server: String, accountId: Long, songId: Long, quality: AudioQuality): String {
-            val scope = MessageDigest.getInstance("SHA-256").digest("${server.trimEnd('/')}|$accountId".toByteArray())
+        fun key(server: String, accountId: Long, songId: Long, quality: AudioQuality, providerIdentity: String = "currentmusic"): String {
+            val provider = if (providerIdentity == "currentmusic") "" else "|$providerIdentity"
+            val scope = MessageDigest.getInstance("SHA-256").digest("${server.trimEnd('/')}|$accountId$provider".toByteArray())
                 .joinToString("") { "%02x".format(it) }
             return "$PREFIX$scope:$songId:${quality.value}"
         }
