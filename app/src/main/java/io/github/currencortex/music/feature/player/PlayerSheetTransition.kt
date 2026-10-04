@@ -36,6 +36,7 @@ import kotlin.math.pow
 internal const val PLAYER_SHEET_DURATION = 450
 internal enum class PlayerSheetMotion { NONE, OPEN, CLOSE }
 private val sheetEasing = CubicBezierEasing(.2f, 0f, 0f, 1f)
+private val collapseEasing = CubicBezierEasing(.4f, 0f, .2f, 1f)
 
 /** Keep both navigation scenes still; the player layer supplies the actual container motion. */
 internal val playerSheetTransitions =
@@ -45,19 +46,20 @@ internal val playerSheetTransitions =
 
 internal data class PlayerSheetFrame(val progress: Float, val bounds: Rect, val radius: Float)
 internal val PlayerSheetGeometry = SemanticsPropertyKey<PlayerSheetFrame>("PlayerSheetGeometry")
-internal val LocalPlayerRevealProgress = staticCompositionLocalOf<State<Float>?> { null }
 
 private data class SheetClip(val width: Float, val height: Float, val radius: Float) : Shape {
     override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density) =
         Outline.Rounded(RoundRect(Rect(0f, 0f, width, height), CornerRadius(radius)))
 }
 
-/** Full-size content is laid out once. Only the layer's clip, position and content alpha animate. */
+/** Full-size content is laid out once. Only the layer's clip, position and surface alpha animate. */
 @OptIn(ExperimentalAnimationApi::class)
 @Composable internal fun PlayerSheetExpansion(origin: Rect?, viewport: Rect?, motion: PlayerSheetMotion,
-    onTop: Boolean, onProgress: (State<Float>) -> Unit, content: @Composable (State<Float>) -> Unit) {
+    onTop: Boolean, onSettled: () -> Unit, content: @Composable () -> Unit) {
     val transition = LocalNavAnimatedContentScope.current.transition
-    val animated = transition.animateFloat(transitionSpec = { tween(PLAYER_SHEET_DURATION, easing = sheetEasing) }, label = "player sheet expansion") {
+    val animated = transition.animateFloat(transitionSpec = {
+        tween(PLAYER_SHEET_DURATION, easing = if (targetState == EnterExitState.PostExit) collapseEasing else sheetEasing)
+    }, label = "player sheet expansion") {
         if (it == EnterExitState.Visible) 1f else 0f
     }
     // A predictive gesture starts before onBack is committed. Let Nav3 seek this same animation.
@@ -65,7 +67,12 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
     val progress = remember(animated, motion, predictiveClosing) {
         derivedStateOf { if (motion != PlayerSheetMotion.NONE || predictiveClosing) animated.value else 1f }
     }
-    SideEffect { onProgress(progress) }
+    val settled by rememberUpdatedState(onSettled)
+    LaunchedEffect(transition.currentState, transition.targetState, transition.isRunning, motion) {
+        if (motion == PlayerSheetMotion.OPEN && transition.currentState == EnterExitState.Visible &&
+            transition.targetState == EnterExitState.Visible && !transition.isRunning) settled()
+    }
+    DisposableEffect(Unit) { onDispose { settled() } }
     var layerSize by remember { mutableStateOf(Size.Zero) }
     val density = LocalDensity.current
     val frame by remember(progress, origin, viewport, density) { derivedStateOf {
@@ -95,7 +102,8 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
             }
         }
         .graphicsLayer {
+            alpha = frame.progress
             translationX = frame.bounds.left; translationY = frame.bounds.top
             shape = SheetClip(frame.bounds.width, frame.bounds.height, frame.radius); clip = true
-        }) { content(progress) }
+        }) { content() }
 }

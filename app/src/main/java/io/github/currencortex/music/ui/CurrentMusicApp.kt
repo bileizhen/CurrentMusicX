@@ -27,9 +27,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.runtime.State
 import androidx.navigation3.ui.NavDisplayTransitionEffects
-import kotlinx.coroutines.delay
 import androidx.compose.ui.platform.LocalDensity
 import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.core.network.AppResult
@@ -161,18 +159,12 @@ fun CurrentMusicApp(container: AppContainer) {
         var playerOrigin by remember { mutableStateOf<Rect?>(null) }
         var navigationBounds by remember { mutableStateOf<Rect?>(null) }
         var playerSheetMotion by remember { mutableStateOf(PlayerSheetMotion.NONE) }
-        var playerProgress by remember { mutableStateOf<State<Float>?>(null) }
-        LaunchedEffect(backStack, playerSheetMotion) {
-            if (playerSheetMotion != PlayerSheetMotion.NONE) {
-                delay(PLAYER_SHEET_DURATION + 100L)
-                playerSheetMotion = PlayerSheetMotion.NONE
-            }
-        }
+
         val density = LocalDensity.current
         val rootPage = backStack.last() == ROOT.toString()
         val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
         val miniAvailable = !keyboardOpen && (currentSong != null || playerState.mode == PlayerMode.ROOM)
-        val showMini = miniAvailable && backStack.last() !in setOf(PLAYER.toString(), "lib/video")
+        val showMini = miniAvailable && playerSheetMotion != PlayerSheetMotion.CLOSE && backStack.last() !in setOf(PLAYER.toString(), "lib/video")
         PreloadMusicCovers(listOf(currentSong?.cover.orEmpty()), 800)
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
         var roomDialogOpen by remember { mutableStateOf(false) }
@@ -250,6 +242,7 @@ fun CurrentMusicApp(container: AppContainer) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
         val wideLayout = maxWidth >= 700.dp
         val rootWide = rootPage && wideLayout
+        val showRootNavigation = rootPage && playerSheetMotion != PlayerSheetMotion.CLOSE
         // Reserve page space once. Animate only the overlay's GPU translation, never the page height.
         val navigationSpace = if (rootPage && !rootWide && !keyboardOpen) 92.dp else 0.dp
         val miniLift = animateDpAsState(navigationSpace, tween(180), label = "mini player lift")
@@ -263,8 +256,8 @@ fun CurrentMusicApp(container: AppContainer) {
                 // Each moving scene must cover the outgoing page and its dim scrim, including
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
                 if (entry.contentKey == PLAYER.toString()) PlayerSheetExpansion(playerOrigin, navigationBounds,
-                    playerSheetMotion, backStack.last() == PLAYER.toString(), { playerProgress = it }) { progress ->
-                    CompositionLocalProvider(LocalPlayerRevealProgress provides progress) { entry.Content() }
+                    playerSheetMotion, backStack.last() == PLAYER.toString(), { playerSheetMotion = PlayerSheetMotion.NONE }) {
+                    entry.Content()
                 } else Box(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)
                     .testTag("music_scene_${entry.contentKey}")
                     .then(if (entry.contentKey in setOf(PLAYER.toString(), "lib/video")) Modifier else Modifier.navigationBarsPadding())) {
@@ -317,7 +310,7 @@ fun CurrentMusicApp(container: AppContainer) {
                 entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, ::navigateBack) }
                 entry(PLAYER.toString(), metadata = playerSheetTransitions) { PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
                     actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
-                    onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") }, onDialogActive = { playerDialogOpen = it }, revealProgress = LocalPlayerRevealProgress.current) }
+                    onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") }, onDialogActive = { playerDialogOpen = it }) }
                 entry("cast/devices") {
                     val vm: io.github.currencortex.music.feature.cast.CastViewModel = viewModel(factory = viewModelFactory { io.github.currencortex.music.feature.cast.CastViewModel(container) })
                     io.github.currencortex.music.feature.cast.CastScreen(vm, ::navigateBack, { castDialogOpen = it })
@@ -416,32 +409,31 @@ fun CurrentMusicApp(container: AppContainer) {
             { playWithPermission { container.playerController.toggle() } },
             Modifier.align(Alignment.BottomCenter).navigationBarsPadding().graphicsLayer {
                     translationY = -miniLift.value.toPx()
-                    alpha = if (playerSheetMotion == PlayerSheetMotion.CLOSE) 1f - (playerProgress?.value ?: 0f) else 1f
                 }
                 .padding(start = if (rootWide) 104.dp else 0.dp)
                 .onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp),
             onNext = { container.playerController.next(container.playerController.state.value.showPause) },
             onPrevious = { container.playerController.previous(container.playerController.state.value.showPause) },
             onQueue = { if (playerState.mode == PlayerMode.ROOM) navigateLibrary("room/list") else miniQueueOpen = true }, onSurfaceBounds = { miniBounds = it })
-        if (rootPage && !rootWide && !keyboardOpen && !settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
+        if (showRootNavigation && !rootWide && !keyboardOpen && !settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
             StandardNavigationBar(selected, labels, icons) { selected = it }
         }
         }
         if (settings.blur && Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) {
             HighApiFloatingNavigation(selected, labels, icons, { selected = it }, settings.blur, settings.liquidGlass,
-                visible = settings.floatingBar && rootPage && !rootWide && !keyboardOpen, content = page, overlay = miniOverlay)
+                visible = settings.floatingBar && showRootNavigation && !rootWide && !keyboardOpen, content = page, overlay = miniOverlay)
         } else {
             Box(Modifier.fillMaxSize()) {
                 page()
                 miniOverlay()
-                if (rootPage && !rootWide && !keyboardOpen && settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
+                if (showRootNavigation && !rootWide && !keyboardOpen && settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
                     .padding(horizontal = if (settings.floatingBar) 26.dp else 0.dp, vertical = if (settings.floatingBar) 12.dp else 0.dp).widthIn(max = 480.dp)) {
                     if (settings.floatingBar) PlainFloatingBar(selected, labels, icons) { selected = it }
                     else StandardNavigationBar(selected, labels, icons) { selected = it }
                 }
             }
         }
-        if (rootWide) Column(Modifier.width(100.dp).fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(8.dp)
+        if (rootWide && showRootNavigation) Column(Modifier.width(100.dp).fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(8.dp)
             .testTag("wide_navigation"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             labels.forEachIndexed { index, label -> MusicTextAction(if (selected == index) "● $label" else label, { selected = index }) }
         }

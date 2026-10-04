@@ -85,10 +85,16 @@ class PlayerSheetCapabilitiesTest {
         compose.waitForIdle()
         val original = viewport()
         val mini = compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot
+        val underlay = compose.onNodeWithTag("music_navigation").captureToImage().toPixelMap()
+        fun sampleSurface(frame: PlayerSheetFrame): androidx.compose.ui.graphics.Color {
+            val pixels = compose.onNodeWithTag("music_navigation").captureToImage().toPixelMap()
+            return pixels[pixels.width / 2, (frame.bounds.top + 16).toInt()]
+        }
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("mini_cover").performClick()
         compose.mainClock.advanceTimeBy(64)
         val first = frame()
+        val firstSurface = sampleSurface(first)
         assertTrue("The first captured frame must still be expanding", first.progress > 0 && first.progress < .95f)
         assertTrue("The player starts at the bottom mini player, then grows upward", first.bounds.top > original.height * .25f && first.bounds.top < mini.top)
         assertEquals("The underlying scene must not slide sideways", original,
@@ -97,6 +103,7 @@ class PlayerSheetCapabilitiesTest {
         save("player-sheet-open-064.png")
         compose.mainClock.advanceTimeBy(112)
         val middle = frame()
+        val middleSurface = sampleSurface(middle)
         assertTrue(middle.bounds.top < first.bounds.top)
         assertTrue(middle.bounds.height > first.bounds.height)
         assertTrue(middle.radius > 0)
@@ -114,11 +121,26 @@ class PlayerSheetCapabilitiesTest {
         assertEquals(0f, frame().radius, .01f)
         assertEquals(0f, frame().bounds.top, .01f)
         compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        val fullSurface = sampleSurface(frame())
+        fun assertSurfaceFade(frame: PlayerSheetFrame, color: androidx.compose.ui.graphics.Color) {
+            val behind = underlay[underlay.width / 2, (frame.bounds.top + 16).toInt()]
+            val expected = behind.red * (1 - frame.progress) + fullSurface.red * frame.progress
+            assertEquals("The card background must fade too, not just its text", expected, color.red, .04f)
+        }
+        assertSurfaceFade(first, firstSurface)
+        assertSurfaceFade(middle, middleSurface)
         compose.onNodeWithTag("navigate_back").performClick()
         compose.mainClock.advanceTimeBy(96)
         val closing = frame()
+        assertSurfaceFade(closing, sampleSurface(closing))
         assertTrue("Closing reverses the same upward expansion", closing.progress < .99f && closing.bounds.top > 0)
+        compose.onNodeWithTag("mini_cover").assertDoesNotExist()
         save("player-sheet-close-096.png")
+        compose.mainClock.advanceTimeBy(96)
+        val laterClosing = frame()
+        assertTrue("Collapse must keep moving and fading rather than switch state early", laterClosing.progress < closing.progress)
+        assertSurfaceFade(laterClosing, sampleSurface(laterClosing))
+        save("player-sheet-close-192.png")
         compose.mainClock.advanceTimeBy(1500)
         compose.onNodeWithTag("player_sheet").assertDoesNotExist()
         compose.onNodeWithTag("network_settings").assertIsDisplayed()
