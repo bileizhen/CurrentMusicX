@@ -38,6 +38,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -130,8 +131,9 @@ fun CurrentMusicApp(container: AppContainer) {
     LaunchedEffect(sessionRevision) { profileVm.dialog.value = null; profileVm.avatar.value = null; profileVm.message.value = null }
     val libraryMessage by libraryVm.message.collectAsStateWithLifecycle()
     val libraryDialogSong by libraryVm.selectedSong.collectAsStateWithLifecycle()
-    val playerState by playerVm.state.collectAsStateWithLifecycle()
-    val queue by playerVm.queue.collectAsStateWithLifecycle()
+    // Position and loading updates belong to the player, not the entire navigation tree.
+    val playerState by playerVm.navigation.collectAsStateWithLifecycle()
+    val currentSong by playerVm.currentSong.collectAsStateWithLifecycle()
     val roomLive by container.roomSession.state.collectAsStateWithLifecycle()
     val tabsState = rememberSaveableStateHolder()
     LeiTheme(settings) {
@@ -151,8 +153,8 @@ fun CurrentMusicApp(container: AppContainer) {
         val density = LocalDensity.current
         val rootPage = backStack.last() == ROOT.toString()
         val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
-        val showMini = !keyboardOpen && (queue.current != null || playerState.mode == PlayerMode.ROOM) && backStack.last() !in setOf(PLAYER.toString(), "lib/video")
-        PreloadMusicCovers(listOf(queue.current?.cover.orEmpty()), 800)
+        val showMini = !keyboardOpen && (currentSong != null || playerState.mode == PlayerMode.ROOM) && backStack.last() !in setOf(PLAYER.toString(), "lib/video")
+        PreloadMusicCovers(listOf(currentSong?.cover.orEmpty()), 800)
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
         var roomDialogOpen by remember { mutableStateOf(false) }
         var playerDialogOpen by remember { mutableStateOf(false) }
@@ -220,7 +222,9 @@ fun CurrentMusicApp(container: AppContainer) {
         CompositionLocalProvider(LocalSongMenu provides { songMenu = it }, LocalRoomSongRequest provides roomRequest) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
         val rootWide = rootPage && maxWidth >= 700.dp
-        val navigationSpace by animateDpAsState(if (rootPage && !rootWide && !keyboardOpen) 92.dp else 0.dp, tween(180), label = "navigation space")
+        // Reserve page space once. Animate only the overlay's GPU translation, never the page height.
+        val navigationSpace = if (rootPage && !rootWide && !keyboardOpen) 92.dp else 0.dp
+        val miniLift = animateDpAsState(navigationSpace, tween(180), label = "mini player lift")
         val floatingRoot = rootPage && settings.floatingBar && !rootWide && !keyboardOpen
         val page: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize()) {
@@ -330,7 +334,7 @@ fun CurrentMusicApp(container: AppContainer) {
                     entry(route) {
                         when {
                             route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateBack, ::navigateLibrary)
-                            route == "lib/video" -> if (queue.current?.video == true) io.github.currencortex.music.feature.mv.MvPlayerScreen(container, ::navigateBack)
+                            route == "lib/video" -> if (currentSong?.video == true) io.github.currencortex.music.feature.mv.MvPlayerScreen(container, ::navigateBack)
                                 else PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } })
                             route.startsWith("lib/browse/") -> {
                                 val parts = route.split('/')
@@ -358,12 +362,13 @@ fun CurrentMusicApp(container: AppContainer) {
         }
         }
         val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
-        if (showMini) MiniPlayer(playerVm, { if (queue.current?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
+        if (showMini) MiniPlayer(playerVm, { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
             { playWithPermission { container.playerController.toggle() } },
-            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = if (rootPage && !rootWide) navigationSpace else 0.dp)
+            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().graphicsLayer { translationY = -miniLift.value.toPx() }
                 .padding(start = if (rootWide) 104.dp else 0.dp)
                 .onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp),
-            onNext = { container.playerController.next(playerState.playing) }, onPrevious = { container.playerController.previous(playerState.playing) },
+            onNext = { container.playerController.next(container.playerController.state.value.showPause) },
+            onPrevious = { container.playerController.previous(container.playerController.state.value.showPause) },
             onQueue = { if (playerState.mode == PlayerMode.ROOM) navigateLibrary("room/list") else miniQueueOpen = true })
         if (rootPage && !rootWide && !keyboardOpen && !settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
             StandardNavigationBar(selected, labels, icons) { selected = it }
@@ -428,7 +433,10 @@ fun CurrentMusicApp(container: AppContainer) {
             })
             TextButton("继续播放", onClick = { explained = true; val action = pendingPlay; pendingPlay = null; action?.invoke() })
         }
-        if (playerState.warning != null) MusicDialog("高规格音频", onDismiss = { container.playerController.state.value = playerState.copy(warning = null) }) {
+        if (playerState.warning != null) MusicDialog("高规格音频", onDismiss = {
+            container.playerController.pause()
+            container.playerController.state.value = container.playerController.state.value.copy(warning = null)
+        }) {
             Text("当前音频为高规格音频，部分设备可能出现断音、爆音或兼容问题。")
             TextButton("继续播放", onClick = { container.playerController.acceptHighSpec() })
             TextButton("切换无损", onClick = { playerVm.quality(AudioQuality.LOSSLESS) })

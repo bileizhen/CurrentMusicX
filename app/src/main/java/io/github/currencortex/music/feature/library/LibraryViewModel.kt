@@ -112,7 +112,7 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
     fun reload(more: Boolean = false, force: Boolean = false) {
         if (force) container.libraryRepository.clearReads()
         task?.cancel()
-        task = viewModelScope.launch {
+        task = viewModelScope.launch(Dispatchers.Default) {
             state.update { it.copy(loading = true, error = null) }
             val previous = state.value
             when (val result = appResult {
@@ -131,8 +131,8 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                     else -> throw ApiException(ErrorKind.NotFound)
                 }
             }) {
-                is AppResult.Success -> state.value = result.value.copy(loading = false)
-                is AppResult.Failure -> state.update { it.copy(loading = false, error = result.kind.message) }
+                is AppResult.Success -> { ensureActive(); state.value = result.value.copy(loading = false) }
+                is AppResult.Failure -> { ensureActive(); state.update { it.copy(loading = false, error = result.kind.message) } }
             }
         }
     }

@@ -10,12 +10,20 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
+import io.github.currencortex.music.core.media.HighSpecWarning
+import io.github.currencortex.music.core.media.PlayerMode
 
 data class LyricsUiState(val lines: List<LyricLine> = emptyList(), val loading: Boolean = false, val error: String? = null)
+data class NavigationPlayback(val mode: PlayerMode, val error: String?, val warning: HighSpecWarning?)
 class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val player = container.playerController
     val state = player.state
     val queue = player.queue.state
+    // The navigation host needs only low-frequency state, never the playback position.
+    val navigation = state.map { NavigationPlayback(it.mode, it.error, it.warning) }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NavigationPlayback(state.value.mode, state.value.error, state.value.warning))
+    val currentSong = queue.map { it.current }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), queue.value.current)
     val settings = container.musicSettings.state
     val lyrics = MutableStateFlow(LyricsUiState())
     init { viewModelScope.launch {
