@@ -36,4 +36,5 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
         player.qualityChanged()
     }
     fun suppressWarning() = viewModelScope.launch { container.musicSettings.setWarning(false); player.acceptHighSpec() }
+    fun lyricsFontSize(value: Float) = viewModelScope.launch { container.musicSettings.setLyricsFontSize(value) }
 }

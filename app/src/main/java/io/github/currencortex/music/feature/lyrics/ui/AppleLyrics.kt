@@ -28,6 +28,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import io.github.currencortex.music.core.media.PlayerState
+import io.github.currencortex.music.data.settings.LyricsTypography
 import io.github.currencortex.music.feature.lyrics.model.*
 import io.github.currencortex.music.feature.lyrics.timeline.*
 import kotlinx.coroutines.delay
@@ -55,7 +56,9 @@ enum class LyricsScrollMode { FOLLOWING, BROWSING }
 /** Foundation-only lyric viewport; playback and network ownership stay outside the renderer. */
 @Composable fun AppleLyrics(document: LyricsDocument, position: State<Long>, onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier, canSeek: Boolean = true, translation: Boolean = true,
-    romanization: Boolean = false, wordAnimation: Boolean = true, effects: Boolean = true) {
+    romanization: Boolean = false, wordAnimation: Boolean = true, effects: Boolean = true,
+    fontSize: Float = LyricsTypography.DEFAULT_SIZE) {
+    val size = LyricsTypography.normalize(fontSize)
     val timeline = remember(document) { LyricsTimeline(document) }
     val active by remember(timeline, position) { derivedStateOf { timeline.lineAt(position.value) } }
     val list = rememberLazyListState()
@@ -71,9 +74,11 @@ enum class LyricsScrollMode { FOLLOWING, BROWSING }
             mode = LyricsScrollMode.FOLLOWING
         }
     }
-    LaunchedEffect(active, mode, document) {
+    LaunchedEffect(active, mode, document, size, translation, romanization) {
         if (mode != LyricsScrollMode.FOLLOWING || document.lines.isEmpty()) return@LaunchedEffect
         val target = active.coerceAtLeast(0)
+        // Allow a changed font or auxiliary line to reflow before calculating the anchor.
+        withFrameNanos { }; withFrameNanos { }
         val visible = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }
         if (visible == null) list.animateScrollToItem(target)
         else list.scroll {
@@ -93,7 +98,7 @@ enum class LyricsScrollMode { FOLLOWING, BROWSING }
                 drawRect(Brush.verticalGradient(0f to Color.Transparent, .10f to Color.Black,
                     .87f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
             }, contentPadding = PaddingValues(top = anchorPadding, bottom = maxHeight * .6f,
-                start = 28.dp, end = 28.dp), verticalArrangement = Arrangement.spacedBy(30.dp)) {
+                start = 8.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             itemsIndexed(document.lines, key = { index, line -> "$index:${line.startTimeMs}" }) { index, line ->
                 val focused = index == active
                 val distance = if (mode == LyricsScrollMode.BROWSING) 1 else abs(index - active)
@@ -106,11 +111,11 @@ enum class LyricsScrollMode { FOLLOWING, BROWSING }
                     .clickable(enabled = canSeek, role = Role.Button) { onSeek(line.startTimeMs); mode = LyricsScrollMode.FOLLOWING }
                     .graphicsLayer { alpha = opacity.value; scaleX = scale.value; scaleY = scale.value; transformOrigin = TransformOrigin(0f, .5f) }
                     .then(blur)) {
-                    KaraokeText(line, position, focused && wordAnimation, Modifier.fillMaxWidth())
+                    KaraokeText(line, position, focused && wordAnimation, Modifier.fillMaxWidth(), size)
                     if (romanization && line.romanization.isNotBlank()) BasicText(line.romanization,
-                        Modifier.padding(top = 8.dp), style = TextStyle(color = Color.White.copy(alpha = .5f), fontSize = 18.sp, lineHeight = 25.sp))
+                        Modifier.padding(top = 6.dp), style = TextStyle(fontFamily = LyricsFontFamily, color = Color.White.copy(alpha = .5f), fontSize = (size * .53f).sp, lineHeight = (size * .75f).sp))
                     if (translation && line.translation.isNotBlank()) BasicText(line.translation,
-                        Modifier.padding(top = 8.dp), style = TextStyle(color = Color.White.copy(alpha = .65f), fontSize = 20.sp, lineHeight = 28.sp, fontWeight = FontWeight.Medium))
+                        Modifier.padding(top = 6.dp), style = TextStyle(fontFamily = LyricsFontFamily, color = Color.White.copy(alpha = .65f), fontSize = (size * .6f).sp, lineHeight = (size * .85f).sp))
                 }
             }
         }

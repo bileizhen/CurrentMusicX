@@ -30,7 +30,7 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 
 private enum class PlayerContent { COVER, LYRICS }
-private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE }
+private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS }
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
     actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null,
@@ -73,7 +73,7 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE 
                         CoverContent(vm, Modifier.weight(1f))
                         PlayerTransport(vm, onToggle)
                     }
-                    LyricsPanel(vm, Modifier.weight(1.15f).fillMaxHeight(), translation, romanization, wordAnimation, effects)
+                    LyricsPanel(vm, Modifier.weight(1.15f).fillMaxHeight(), translation, romanization, wordAnimation, effects, settings.lyricsFontSize)
                 } else Column(Modifier.fillMaxSize()) {
                     AnimatedContent(content, Modifier.weight(1f).fillMaxWidth(), transitionSpec = {
                         fadeIn(tween(240)) togetherWith fadeOut(tween(160))
@@ -87,7 +87,7 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE 
                                     Text(queue.current?.artists.orEmpty(), fontSize = 13.sp, color = Color.White.copy(alpha = .55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
-                            LyricsPanel(vm, Modifier.weight(1f).fillMaxWidth(), translation, romanization, wordAnimation, effects)
+                            LyricsPanel(vm, Modifier.weight(1f).fillMaxWidth(), translation, romanization, wordAnimation, effects, settings.lyricsFontSize)
                         } else CoverContent(vm, Modifier.fillMaxSize())
                     }
                     PlayerTransport(vm, onToggle)
@@ -130,18 +130,23 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE 
             }
             PlayerOverlay.ACTIONS -> if (queue.current != null) MusicDialog("歌曲操作", dismiss) { actions?.invoke(queue.current!!) }
             PlayerOverlay.OPTIONS -> MusicDialog("播放与歌词", dismiss) {
-                if (actions != null && queue.current != null) TextButton("歌曲操作", onClick = {
-                    val song = queue.current ?: return@TextButton
+                Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                if (actions != null && queue.current != null) MusicDestinationRow("歌曲操作", onClick = {
+                    val song = queue.current ?: return@MusicDestinationRow
                     if (menuHost == null) overlay = PlayerOverlay.ACTIONS
                     else { dismiss(); menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false)) }
                 })
-                TextButton("播放音质 · ${settings.quality.label}", onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL)
-                TextButton("播放模式 · ${queue.mode.label}", onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL)
-                if (onRoom != null) TextButton(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
-                SettingsSwitch("翻译歌词", translation, { translation = it })
-                SettingsSwitch("罗马音", romanization, { romanization = it })
-                SettingsSwitch("逐字动画", wordAnimation, { wordAnimation = it })
-                SettingsSwitch("歌词景深", effects, { effects = it })
+                MusicDestinationRow("播放音质", summary = settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL)
+                MusicDestinationRow("播放模式", summary = queue.mode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL)
+                MusicDestinationRow("歌词显示", summary = "霞鹜文楷 · 字号 ${settings.lyricsFontSize.toInt()}",
+                    modifier = Modifier.testTag("open_lyrics_display"), onClick = { overlay = PlayerOverlay.LYRICS })
+                if (onRoom != null) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
+                }
+            }
+            PlayerOverlay.LYRICS -> MusicDialog("歌词显示", dismiss) {
+                LyricsDisplaySettings(settings.lyricsFontSize, vm::lyricsFontSize,
+                    translation, { translation = it }, romanization, { romanization = it },
+                    wordAnimation, { wordAnimation = it }, effects, { effects = it })
             }
         }
     }
@@ -166,13 +171,13 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE 
 }
 
 @Composable private fun LyricsPanel(vm: PlayerViewModel, modifier: Modifier, translation: Boolean,
-    romanization: Boolean, wordAnimation: Boolean, effects: Boolean) {
+    romanization: Boolean, wordAnimation: Boolean, effects: Boolean, fontSize: Float) {
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
     val player by vm.state.collectAsStateWithLifecycle()
     val position = rememberLyricsPosition(player)
     if (lyrics.document.lines.isNotEmpty()) key(player.song?.id, lyrics.document) {
         AppleLyrics(lyrics.document, position, vm.player::seek, modifier, player.canControlPlayback,
-            translation, romanization, wordAnimation, effects)
+            translation, romanization, wordAnimation, effects, fontSize)
     } else Box(modifier.testTag("lyrics_panel"), contentAlignment = Alignment.Center) {
         if (lyrics.loading) Column(Modifier.fillMaxWidth().padding(28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             MusicPlaceholder(Modifier.fillMaxWidth(.8f).height(30.dp))

@@ -126,6 +126,53 @@ class LyricsCapabilitiesTest {
             compose.onNodeWithTag("player_toggle").assertIsDisplayed().assertIsEnabled()
             compose.onNodeWithTag("player_seek").assertIsDisplayed()
             compose.onNodeWithTag("open_player_queue").assertIsDisplayed()
+            fun lyricLayout(): androidx.compose.ui.text.TextLayoutResult {
+                val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+                compose.onNodeWithText("我们沿着夜色 慢慢走向明天", useUnmergedTree = true)
+                    .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                return layouts.single()
+            }
+            val originalHeight = lyricLayout().size.height
+            assertEquals(30f, lyricLayout().layoutInput.style.fontSize.value, 0f)
+            assertEquals(io.github.currencortex.music.feature.lyrics.ui.LyricsFontFamily, lyricLayout().layoutInput.style.fontFamily)
+            compose.onNodeWithTag("lyrics_options").performClick()
+            compose.onNodeWithTag("open_lyrics_display").assertIsDisplayed()
+            compose.mainClock.advanceTimeBy(800); compose.waitForIdle()
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()?.let { bitmap ->
+                java.io.File(context.externalCacheDir, "player-options-preview.png").outputStream().use {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+            }
+            compose.onNodeWithTag("open_lyrics_display").performClick()
+            compose.onNodeWithTag("lyrics_font_size").performTouchInput {
+                swipe(start = androidx.compose.ui.geometry.Offset(width * .4f, height / 2f),
+                    end = androidx.compose.ui.geometry.Offset(width - 1f, height / 2f), durationMillis = 500)
+            }
+            compose.waitUntil(5000) { container.musicSettings.state.value.lyricsFontSize == 40f }
+            compose.onNodeWithTag("lyrics_font_size").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(22f) }
+            compose.waitUntil(5000) { container.musicSettings.state.value.lyricsFontSize == 22f }
+            compose.onNodeWithTag("lyrics_font_size").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(40f) }
+            compose.waitUntil(5000) { container.musicSettings.state.value.lyricsFontSize == 40f }
+            assertEquals(40f, container.musicSettings.snapshot().lyricsFontSize, 0f)
+            compose.onNodeWithText("字号 40").assertIsDisplayed()
+            compose.mainClock.advanceTimeBy(800); compose.waitForIdle()
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()?.let { bitmap ->
+                java.io.File(context.externalCacheDir, "lyrics-font-settings-preview.png").outputStream().use {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+            }
+            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("lyrics_display_settings").assertDoesNotExist()
+            assertEquals(40f, lyricLayout().layoutInput.style.fontSize.value, 0f)
+            assertTrue("Changing the font size must remeasure cached word geometry", lyricLayout().size.height > originalHeight)
+            compose.onNodeWithTag("lyric_line_1").assertIsSelected().assertIsDisplayed()
+            compose.onNodeWithTag("player_toggle").assertIsDisplayed()
+            compose.onNodeWithTag("lyrics_options").performClick()
+            compose.onNodeWithTag("open_lyrics_display").performClick()
+            compose.onNodeWithTag("lyrics_font_reset").performClick()
+            compose.waitUntil(5000) { container.musicSettings.state.value.lyricsFontSize == 30f }
+            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            assertEquals(30f, lyricLayout().layoutInput.style.fontSize.value, 0f)
             compose.onNodeWithTag("open_player_queue").performClick()
             compose.onNodeWithTag("player_queue_sheet").assertExists()
             val rowLayouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
