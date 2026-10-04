@@ -126,7 +126,7 @@ class MusicService : MediaSessionService() {
                 if (!playWhenReady) {
                     pendingPlay = false
                     loading?.cancel()
-                    container.playerController.state.value = container.playerController.state.value.copy(loading = false, resolving = false)
+                    container.playerController.state.value = container.playerController.state.value.copy(playing = false, playRequested = false, loading = false, resolving = false)
                 } else if (container.playerController.state.value.warning != null) {
                     pendingPlay = true
                     return Futures.immediateVoidFuture()
@@ -169,7 +169,9 @@ class MusicService : MediaSessionService() {
                 if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.LOCAL) { container.playbackQueue.next(automatic = true); prepareSong(true, 0) }
             }
             override fun onPlayerError(error: PlaybackException) {
-                container.playerController.state.value = container.playerController.state.value.copy(error = "音频播放失败，请重试或降低音质")
+                player.playWhenReady = false
+                container.playerController.state.value = container.playerController.state.value.copy(playing = false, playRequested = false,
+                    loading = false, resolving = false, error = "音频播放失败，请重试或降低音质")
                 container.logger.warn("Player", "Playback failed code=${error.errorCode}")
                 if (container.playerController.state.value.mode == PlayerMode.ROOM) container.playerController.external?.failed()
             }
@@ -232,13 +234,15 @@ class MusicService : MediaSessionService() {
         if (trackedSong?.id != song.id || trackedSession != currentSession()) {
             flushListening(); trackedSong = song; trackedSession = currentSession(); recorded = false
         }
-        container.playerController.state.value = PlayerState(song = song, loading = true, resolving = true, positionMs = position, durationMs = song.durationMs)
+        container.playerController.state.value = PlayerState(song = song, loading = true, resolving = true,
+            playRequested = play, positionMs = position, durationMs = song.durationMs)
         loading = scope.launch {
             when (val result = appResult { withContext(Dispatchers.IO) {
                 if (song.video) ResolvedAudio(io.github.currencortex.music.data.song.AudioSource(container.libraryRepository.mvSource(song.mv), "video", 0, 0), "")
                 else container.audioSources.resolve(audioRequest(song.id, container.musicSettings.snapshot().quality))
             } }) {
-                is AppResult.Failure -> container.playerController.state.value = container.playerController.state.value.copy(loading = false, resolving = false, error = result.kind.message)
+                is AppResult.Failure -> container.playerController.state.value = container.playerController.state.value.copy(playing = false,
+                    playRequested = false, loading = false, resolving = false, error = result.kind.message)
                 is AppResult.Success -> {
                     if (container.playbackQueue.state.value.current?.id != song.id) return@launch
                     val source = result.value.source

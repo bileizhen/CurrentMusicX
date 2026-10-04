@@ -8,4 +8,6 @@ data class PlayerState(val song: Song? = null, val playing: Boolean = false, val
                        val resolving: Boolean = false,
                        val positionMs: Long = 0, val durationMs: Long = 0, val error: String? = null,
                        val warning: HighSpecWarning? = null, val mode: PlayerMode = PlayerMode.LOCAL,
-                       val canControlPlayback: Boolean = true)
+                       val canControlPlayback: Boolean = true, val playRequested: Boolean = false) {
+    val showPause get() = playing || playRequested
+}

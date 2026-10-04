@@ -110,7 +110,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
             MusicTransportButton("上一首", { vm.player.previous() }, enabled = song != null && state.canControlPlayback, direction = -1)
-            MusicTransportButton(if (state.playing) "暂停" else "播放", onToggle, Modifier.testTag("player_toggle"), enabled = song != null && state.canControlPlayback, playing = state.playing, prominent = true)
+            MusicTransportButton(if (state.showPause) "暂停" else "播放", onToggle, Modifier.testTag("player_toggle"), enabled = song != null && state.canControlPlayback, playing = state.showPause, prominent = true)
             MusicTransportButton("下一首", { vm.player.next() }, enabled = song != null && state.canControlPlayback, direction = 1)
         }
     }

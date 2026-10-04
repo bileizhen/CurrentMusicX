@@ -12,7 +12,10 @@ import kotlinx.coroutines.guava.await
 import io.github.currencortex.music.core.network.ApiJson
 import kotlinx.serialization.encodeToString
 
-class PlayerController(private val context: Context, override val queue: PlaybackQueue, private val scope: CoroutineScope) : ExternalPlayer {
+class PlayerController(private val context: Context, override val queue: PlaybackQueue, private val scope: CoroutineScope,
+    private val createController: suspend () -> MediaController = {
+        MediaController.Builder(context, SessionToken(context, ComponentName(context, MusicService::class.java))).buildAsync().await()
+    }) : ExternalPlayer {
     override val state = MutableStateFlow(PlayerState())
     private var controller: MediaController? = null
     private var connecting: Deferred<MediaController>? = null
@@ -21,14 +24,17 @@ class PlayerController(private val context: Context, override val queue: Playbac
     override var external: ExternalPlayback? = null
         private set
     private var generation = 0L
+    private var transportGeneration = 0L
+    private var commandIntent: Boolean? = null
     fun queueForPersistence() = beforeExternal ?: beforeVideo ?: queue.state.value
     override suspend fun beginExternal(mode: PlayerMode, controls: ExternalPlayback): Boolean {
         if (state.value.mode != PlayerMode.LOCAL || queue.state.value.current?.video == true) return false
         val snapshot = queue.state.value
         val saved = snapshot.copy(positionMs = if (state.value.song?.id == snapshot.current?.id) state.value.positionMs else snapshot.positionMs)
         val epoch = ++generation
+        ++transportGeneration; commandIntent = null
         beforeExternal = saved; external = controls
-        state.value = state.value.copy(mode = mode, playing = false, resolving = false, loading = false, warning = null,
+        state.value = state.value.copy(mode = mode, playing = false, playRequested = false, resolving = false, loading = false, warning = null,
             canControlPlayback = mode != PlayerMode.ROOM)
         // Await this command before telling a TV to play: it cancels pending source resolution too.
         try { connect().sendCustomCommand(SessionCommand(MusicService.QUIESCE, Bundle.EMPTY), Bundle.EMPTY).await() }
@@ -83,7 +89,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
     suspend fun connect(): MediaController {
         controller?.let { return it }
         val pending = connecting ?: scope.async(Dispatchers.Main.immediate) {
-            MediaController.Builder(context, SessionToken(context, ComponentName(context, MusicService::class.java))).buildAsync().await().also {
+            createController().also {
                 controller = it
                 it.addListener(object : Player.Listener {
                     override fun onEvents(player: Player, events: Player.Events) { publish(player) }
@@ -96,7 +102,8 @@ class PlayerController(private val context: Context, override val queue: Playbac
     private fun publish(player: Player) {
         if (state.value.mode == PlayerMode.CAST) return
         val matches = player.currentMediaItem?.mediaId == queue.state.value.current?.id?.toString()
-        state.value = state.value.copy(song = queue.state.value.current, playing = player.isPlaying,
+        state.value = state.value.copy(song = queue.state.value.current, playing = player.isPlaying && commandIntent != false,
+            playRequested = commandIntent ?: if (state.value.resolving || state.value.warning != null) state.value.playRequested else player.playWhenReady,
             loading = state.value.resolving || player.playbackState == Player.STATE_BUFFERING,
             positionMs = if (matches && !state.value.resolving) player.currentPosition.coerceAtLeast(0)
                 else if (state.value.song?.id == queue.state.value.current?.id) state.value.positionMs else queue.state.value.positionMs,
@@ -105,41 +112,69 @@ class PlayerController(private val context: Context, override val queue: Playbac
     }
     fun load(play: Boolean = true, position: Long = queue.state.value.positionMs) = scope.launch(Dispatchers.Main.immediate) {
         val epoch = generation
+        if (queue.state.value.current == null) return@launch
+        val action = ++transportGeneration
+        commandIntent = play
+        state.value = state.value.copy(song = queue.state.value.current, playing = false, playRequested = play,
+            loading = true, resolving = true, positionMs = position, error = null, warning = null)
         try {
             val connected = connect()
-            if (epoch != generation || state.value.mode != PlayerMode.LOCAL) return@launch
+            if (epoch != generation || action != transportGeneration || state.value.mode != PlayerMode.LOCAL) return@launch
             connected.sendCustomCommand(SessionCommand(MusicService.LOAD, Bundle.EMPTY), Bundle().apply {
                 putBoolean("play", play); putLong("position", position)
             }).await()
-        } catch (e: CancellationException) { throw e } catch (_: Exception) { state.value = state.value.copy(error = "无法连接播放器") }
+        } catch (e: CancellationException) { throw e } catch (_: Exception) {
+            if (action == transportGeneration) state.value = state.value.copy(playRequested = false, loading = false, resolving = false, error = "无法连接播放器")
+        } finally { if (action == transportGeneration) commandIntent = null }
     }
     fun playList(songs: List<Song>, index: Int) { if (!localOnly()) return; beforeVideo = null; queue.replace(songs, index); load() }
     fun toggle() = scope.launch(Dispatchers.Main.immediate) {
         if (!transportAllowed()) return@launch
         external?.let { it.play(!state.value.playing); return@launch }
-        val player = connect()
-        if (state.value.playing || state.value.loading || player.playWhenReady) player.pause()
-        else if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) load()
-        else player.play()
+        if (queue.state.value.current == null) return@launch
+        val play = !state.value.showPause
+        val needsSource = controller == null || controller?.playbackState in listOf(Player.STATE_IDLE, Player.STATE_ENDED) ||
+            controller?.currentMediaItem?.mediaId != queue.state.value.current?.id?.toString()
+        val action = ++transportGeneration
+        commandIntent = play
+        state.value = state.value.copy(playRequested = play, playing = if (play) state.value.playing else false,
+            error = null, loading = play && (state.value.loading || needsSource), resolving = play && (state.value.resolving || needsSource))
+        try {
+            val player = connect()
+            if (action != transportGeneration) return@launch
+            if (!play) player.pause()
+            else if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) load()
+            else player.play()
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { if (action == transportGeneration) state.value = state.value.copy(playing = false,
+            playRequested = false, loading = false, resolving = false, error = "无法连接播放器") }
+        finally { if (action == transportGeneration) commandIntent = null }
     }
     private fun transportAllowed(): Boolean {
         if (state.value.canControlPlayback) return true
         state.value = state.value.copy(error = "播放由房主或管理员控制")
         return false
     }
-    fun pause() { if (!transportAllowed()) return; external?.let { it.play(false); return }; controller?.pause() }
+    fun pause() {
+        if (!transportAllowed()) return
+        external?.let { it.play(false); return }
+        ++transportGeneration; commandIntent = false
+        state.value = state.value.copy(playing = false, playRequested = false, loading = false, resolving = false)
+        controller?.let { it.pause(); commandIntent = null }
+    }
     fun next(play: Boolean = true) { if (!transportAllowed()) return; external?.let { it.next(); return }; queue.next(); load(play) }
     fun previous(play: Boolean = true) { if (!transportAllowed()) return; external?.let { it.previous(); return }; queue.previous(); load(play) }
     fun seek(position: Long) { if (!transportAllowed()) return; external?.let { it.seek(position.coerceAtLeast(0)); return }; controller?.seekTo(position.coerceAtLeast(0)) }
     fun add(song: Song, next: Boolean = false) { if (state.value.mode == PlayerMode.ROOM) { external?.request(song); return }; queue.add(song, next) }
     fun remove(index: Int) { if (!localOnly()) return; if (queue.remove(index)) { if (queue.state.value.current == null) clear() else load(state.value.playing) } }
-    fun clear() { if (!localOnly()) return; beforeVideo = null; queue.clear(); controller?.stop(); controller?.clearMediaItems(); state.value = PlayerState() }
+    fun clear() { if (!localOnly()) return; ++transportGeneration; commandIntent = null; beforeVideo = null; queue.clear(); controller?.stop(); controller?.clearMediaItems(); state.value = PlayerState() }
     fun select(index: Int) { if (!localOnly()) return; queue.select(index); load() }
     fun setMode(mode: PlaybackMode) { if (!localOnly()) return; queue.state.value = queue.state.value.copy(mode = mode) }
-    fun qualityChanged() { if (localOnly()) load(state.value.playing || state.value.warning != null, state.value.positionMs) }
+    fun qualityChanged() { if (localOnly()) load(state.value.showPause,
+        if (state.value.song?.id == queue.state.value.current?.id) state.value.positionMs else queue.state.value.positionMs) }
     fun acceptHighSpec() = scope.launch {
         connect().sendCustomCommand(SessionCommand(MusicService.ACCEPT_SPEC, Bundle.EMPTY), Bundle.EMPTY).await()
     }
     fun dismissError() { state.value = state.value.copy(error = null) }
-    fun disconnect() { controller?.release(); controller = null; connecting?.cancel(); connecting = null }
+    fun disconnect() { ++transportGeneration; commandIntent = null; controller?.release(); controller = null; connecting?.cancel(); connecting = null }
 }
