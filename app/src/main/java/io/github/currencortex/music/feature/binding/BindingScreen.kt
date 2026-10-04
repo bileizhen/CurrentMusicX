@@ -5,11 +5,17 @@ import android.os.SystemClock
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -29,6 +35,9 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
     return IntArray(size * size) { index -> if (matrix[index % size, index / size]) android.graphics.Color.BLACK else android.graphics.Color.WHITE }
 }
 @Composable fun BindingScreen(vm: BindingViewModel, onBack: () -> Unit) {
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    fun finishInput() { focus.clearFocus(); keyboard?.hide() }
     val state by vm.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
@@ -80,14 +89,22 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                 TextButton("刷新二维码", onClick = { generation++ }, enabled = !busy) }
         } else {
             item {
-                Text("区号"); TextField(country, { country = it.filter(Char::isDigit).take(4) }, singleLine = true)
-                Text("手机号"); TextField(phone, { phone = it.filter(Char::isDigit).take(15) }, singleLine = true, modifier = Modifier.testTag("binding_phone"))
-                Text("验证码"); TextField(captcha, { captcha = it }, singleLine = true, modifier = Modifier.testTag("binding_code"))
+                Text("区号"); TextField(country, { country = it.filter(Char::isDigit).take(4) }, singleLine = true,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+            }
+            item {
+                Text("手机号"); TextField(phone, { phone = it.filter(Char::isDigit).take(15) }, singleLine = true, modifier = Modifier.testTag("binding_phone"),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone))
+            }
+            item {
+                Text("验证码"); TextField(captcha, { captcha = it }, singleLine = true, modifier = Modifier.testTag("binding_code"),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                    keyboardActions = KeyboardActions(onDone = { finishInput() }))
             }
             item { Text("获取验证码会向该手机号发送网易云登录短信。绑定成功后自动同步歌单。") }
             item { TextButton(if (now < state.codeUntil) "${(state.codeUntil - now + 999) / 1000}s 后重发" else "获取验证码",
                 onClick = { vm.code(phone, country) }, enabled = phone.length >= 5 && country.isNotBlank() && !busy && now >= state.codeUntil) }
-            item { TextButton("确认绑定", onClick = { vm.phone(phone, captcha, country); captcha = "" }, enabled = phone.length >= 5 && captcha.isNotBlank() && country.isNotBlank() && !busy,
+            item { TextButton("确认绑定", onClick = { finishInput(); vm.phone(phone, captcha, country); captcha = "" }, enabled = phone.length >= 5 && captcha.isNotBlank() && country.isNotBlank() && !busy,
                 modifier = Modifier.testTag("confirm_phone_binding")) }
         }
         if (busy) item { Text("正在处理，请稍候…") }

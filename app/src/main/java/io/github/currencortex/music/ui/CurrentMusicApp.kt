@@ -14,10 +14,20 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.ui.platform.testTag
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
+import io.github.currencortex.music.core.media.PlayerMode
+import io.github.currencortex.music.core.network.AppResult
+import io.github.currencortex.music.ui.component.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -30,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
@@ -121,6 +132,7 @@ fun CurrentMusicApp(container: AppContainer) {
     val libraryDialogSong by libraryVm.selectedSong.collectAsStateWithLifecycle()
     val playerState by playerVm.state.collectAsStateWithLifecycle()
     val queue by playerVm.queue.collectAsStateWithLifecycle()
+    val roomLive by container.roomSession.state.collectAsStateWithLifecycle()
     val tabsState = rememberSaveableStateHolder()
     LeiTheme(settings) {
         var selected by rememberSaveable { mutableIntStateOf(0) }
@@ -133,10 +145,20 @@ fun CurrentMusicApp(container: AppContainer) {
             }
         }
         var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
+        var songMenu by remember { mutableStateOf<SongMenu?>(null) }
+        var roomPending by remember { mutableStateOf(setOf<Long>()) }
+        var miniHeight by remember { mutableStateOf(72.dp) }
+        val density = LocalDensity.current
+        val rootPage = backStack.last() == ROOT.toString()
+        val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
+        val showMini = !keyboardOpen && (queue.current != null || playerState.mode == PlayerMode.ROOM) && backStack.last() !in setOf(PLAYER.toString(), "lib/video")
+        PreloadMusicCovers(listOf(queue.current?.cover.orEmpty()), 800)
+        LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
         var roomDialogOpen by remember { mutableStateOf(false) }
+        var playerDialogOpen by remember { mutableStateOf(false) }
         var castDialogOpen by remember { mutableStateOf(false) }
         fun navigateBack() {
-            if (roomDialogOpen || castDialogOpen) return
+            if (roomDialogOpen || castDialogOpen || playerDialogOpen || songMenu != null) return
             if (backStack.size > 1) {
                 if (backStack.last() == "lib/video") container.playerController.closeVideo()
                 backStack = backStack.dropLast(1)
@@ -166,67 +188,64 @@ fun CurrentMusicApp(container: AppContainer) {
                 pendingPlay = action
             else action()
         }
+        fun requestSong(song: Song) {
+            if (!container.roomSession.active || song.id in roomPending) return
+            val revision = container.accountRepository.sessionRevision.value
+            val roomId = roomLive.detail?.room?.id
+            roomPending = roomPending + song.id
+            scope.launch {
+                try {
+                    val result = container.roomSession.submit(song)
+                    if (revision == container.accountRepository.sessionRevision.value && roomId == container.roomSession.state.value.detail?.room?.id) {
+                        libraryVm.message.value = when (result) {
+                            is AppResult.Success -> "已提交点歌：${song.name}，可返回房间查看队列"
+                            is AppResult.Failure -> "点歌失败：${result.kind.message}"
+                        }
+                    }
+                } finally { if (revision == container.accountRepository.sessionRevision.value) roomPending = roomPending - song.id }
+            }
+        }
+        LaunchedEffect(roomLive.detail?.room?.id, playerState.mode) {
+            if (backStack.last() == "room/search" && !container.roomSession.active) navigateBack()
+        }
+        val roomRequest = if (container.roomSession.active && roomLive.detail != null)
+            RoomSongRequest(::requestSong) { it in roomPending } else null
         val predictiveBack = settings.predictiveBack && Build.VERSION.SDK_INT >= 34
         val labels = listOf("首页", "发现", "搜索", "我的")
         val icons = listOf(Icons.Default.Home, Icons.Default.Star, Icons.Default.Search, Icons.Default.Person)
 
         top.yukonga.miuix.kmp.basic.Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = MiuixTheme.colorScheme.background) {
+        CompositionLocalProvider(LocalSongMenu provides { songMenu = it }, LocalRoomSongRequest provides roomRequest) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+        val rootWide = rootPage && maxWidth >= 700.dp
+        val navigationSpace by animateDpAsState(if (rootPage && !rootWide && !keyboardOpen) 92.dp else 0.dp, tween(180), label = "navigation space")
+        val floatingRoot = rootPage && settings.floatingBar && !rootWide && !keyboardOpen
+        val page: @Composable () -> Unit = {
+        Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().imePadding().navigationBarsPadding().padding(start = if (rootWide) 104.dp else 0.dp, bottom = if (floatingRoot) 0.dp else navigationSpace)) {
         NavDisplay(
             backStack = backStack,
-            modifier = Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background),
+            modifier = Modifier.weight(1f).fillMaxSize().background(MiuixTheme.colorScheme.background),
             entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator()),
             onBack = ::navigateBack,
             entryProvider = entryProvider {
                 entry(ROOT.toString()) {
-                    BoxWithConstraints(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)) {
-                        val wide = maxWidth >= 700.dp
-                        val page: @Composable () -> Unit = {
-                            Column(Modifier.fillMaxSize().navigationBarsPadding().padding(start = if (wide) 104.dp else 0.dp, bottom = if (wide) 16.dp else 92.dp).statusBarsPadding()) {
-                                Box(Modifier.weight(1f)) {
-                                    tabsState.SaveableStateProvider(selected) {
-                                        when (selected) {
-                                            0 -> MusicHomeScreen(libraryVm, onSearch = { selected = 2 }, onSettings = { navigateTo(SETTINGS) },
-                                                navigate = ::navigateLibrary, play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
-                                            1 -> DiscoverScreen(discoverVm, ::navigateLibrary)
-                                            2 -> SearchScreen(searchVm, container.playerController, actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) }) { songs, index ->
-                                                playWithPermission { container.playerController.playList(songs, index) }
-                                            }
-                                            3 -> MeScreen(profileVm, authVm, ::navigateLibrary, { navigateTo(SETTINGS) },
-                                                play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
-                                        }
-                                    }
+                    Box(Modifier.fillMaxSize().statusBarsPadding()) {
+                        CompositionLocalProvider(LocalMusicBottomInset provides if (floatingRoot) navigationSpace + if (showMini) miniHeight else 0.dp else 0.dp) {
+                        tabsState.SaveableStateProvider(selected) {
+                            when (selected) {
+                                0 -> MusicHomeScreen(libraryVm, onSearch = { selected = 2 }, onSettings = { navigateTo(SETTINGS) },
+                                    navigate = ::navigateLibrary, play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
+                                1 -> DiscoverScreen(discoverVm, ::navigateLibrary)
+                                2 -> SearchScreen(searchVm, container.playerController, actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) },
+                                    roomName = roomLive.detail?.room?.name, onBack = if (roomLive.detail != null) ({ navigateLibrary("room/list") }) else null) { songs, index ->
+                                    playWithPermission { container.playerController.playList(songs, index) }
                                 }
-                                MiniPlayer(playerVm, { if (queue.current?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) }, { playWithPermission { container.playerController.toggle() } },
-                                    Modifier.padding(horizontal = 12.dp))
+                                3 -> MeScreen(profileVm, authVm, ::navigateLibrary, { navigateTo(SETTINGS) },
+                                    play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
                             }
                         }
-                        if (wide) {
-                            page()
-                            Column(Modifier.width(100.dp).fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(8.dp)
-                                .testTag("wide_navigation"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                                labels.forEachIndexed { index, label -> TextButton(if (selected == index) "● $label" else label, onClick = { selected = index }) }
-                            }
-                        } else if (settings.floatingBar && settings.blur && Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) {
-                            HighApiFloatingNavigation(
-                                selectedIndex = selected, labels = labels, icons = icons, onSelect = { selected = it },
-                                blur = settings.blur, glass = settings.liquidGlass, visible = true,
-                                content = page,
-                            )
-                        } else {
-                            page()
-                            if (settings.floatingBar) {
-                                Box(
-                                    Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
-                                        .padding(horizontal = 26.dp, vertical = 12.dp).widthIn(max = 480.dp),
-                                ) {
-                                    PlainFloatingBar(selected, labels, icons) { selected = it }
-                                }
-                            } else {
-                                Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding()) {
-                                    StandardNavigationBar(selected, labels, icons) { selected = it }
-                                }
-                            }
                         }
                     }
                 }
@@ -242,14 +261,20 @@ fun CurrentMusicApp(container: AppContainer) {
                 entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, ::navigateBack) }
                 entry(PLAYER.toString()) { PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
                     actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
-                    onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") }) }
+                    onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") }, onDialogActive = { playerDialogOpen = it }) }
                 entry("cast/devices") {
                     val vm: io.github.currencortex.music.feature.cast.CastViewModel = viewModel(factory = viewModelFactory { io.github.currencortex.music.feature.cast.CastViewModel(container) })
                     io.github.currencortex.music.feature.cast.CastScreen(vm, ::navigateBack, { castDialogOpen = it })
                 }
+                entry("room/search") {
+                    Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                        SearchScreen(searchVm, container.playerController, actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) },
+                            roomName = roomLive.detail?.room?.name.orEmpty(), onBack = ::navigateBack) { songs, index -> requestSong(songs[index]) }
+                    }
+                }
                 entry("room/list") {
                     val vm: RoomViewModel = viewModel(factory = viewModelFactory { RoomViewModel(container) })
-                    RoomScreen(vm, ::navigateBack, { selected = 2; backStack = listOf(ROOT.toString()) }, { navigateTo(PLAYER) }, { roomDialogOpen = it })
+                    RoomScreen(vm, ::navigateBack, { navigateLibrary("room/search") }, { navigateTo(PLAYER) }, { roomDialogOpen = it })
                 }
                 entry(APPEARANCE.toString()) {
                     Box(Modifier.fillMaxSize().navigationBarsPadding()) {
@@ -273,6 +298,7 @@ fun CurrentMusicApp(container: AppContainer) {
                     entry(route) {
                         Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                             when {
+                                route == "user/security" -> AccountSecurityScreen(profileVm, ::navigateBack)
                                 route == "user/accounts" -> AccountScreen(container, authVm, ::navigateBack) {
                                     authVm.begin(); navigateLibrary("user/login")
                                 }
@@ -326,13 +352,43 @@ fun CurrentMusicApp(container: AppContainer) {
                 }
             },
         )
+        if (showMini && !floatingRoot) MiniPlayer(playerVm, { if (queue.current?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
+            { playWithPermission { container.playerController.toggle() } },
+            Modifier.onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp))
+        }
+        if (showMini && floatingRoot) MiniPlayer(playerVm, { if (queue.current?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
+            { playWithPermission { container.playerController.toggle() } },
+            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = navigationSpace)
+                .onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp))
+        }
+        }
+        if (settings.floatingBar && settings.blur && Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) {
+            HighApiFloatingNavigation(selected, labels, icons, { selected = it }, settings.blur, settings.liquidGlass,
+                visible = rootPage && !rootWide && !keyboardOpen, content = page)
+        } else {
+            Box(Modifier.fillMaxSize()) {
+                page()
+                if (rootPage && !rootWide && !keyboardOpen) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
+                    .padding(horizontal = if (settings.floatingBar) 26.dp else 0.dp, vertical = if (settings.floatingBar) 12.dp else 0.dp).widthIn(max = 480.dp)) {
+                    if (settings.floatingBar) PlainFloatingBar(selected, labels, icons) { selected = it }
+                    else StandardNavigationBar(selected, labels, icons) { selected = it }
+                }
+            }
+        }
+        if (rootWide) Column(Modifier.width(100.dp).fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(8.dp)
+            .testTag("wide_navigation"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            labels.forEachIndexed { index, label -> MusicTextAction(if (selected == index) "● $label" else label, { selected = index }) }
+        }
+        }
+        }
+        songMenu?.let { SongActionsSheet(it) { songMenu = null } }
         // XBlocker pattern: intercept completion when prediction is disabled. MIUIX
         // owns seeking, cancellation and settling otherwise. Popups are hosted after
         // navigation, once, and take precedence over returning to the parent page.
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !predictiveBack && !showLogs &&
-                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen,
+                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }
@@ -344,15 +400,17 @@ fun CurrentMusicApp(container: AppContainer) {
         if (profileMessage != null) MusicDialog("账号操作", onDismiss = { profileVm.message.value = null }) {
             Text(profileMessage.orEmpty()); TextButton("关闭", onClick = { profileVm.message.value = null })
         }
-        if (libraryMessage != null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
-            androidx.compose.foundation.layout.Row(Modifier.navigationBarsPadding().padding(12.dp)
+        val playbackMessage = libraryMessage ?: playerState.error
+        if (playbackMessage != null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
+            androidx.compose.foundation.layout.Row(Modifier.imePadding().navigationBarsPadding().padding(12.dp)
+                .padding(bottom = (if (rootPage && !keyboardOpen) 92.dp else 0.dp) + if (showMini) miniHeight else 0.dp)
                 .background(MiuixTheme.colorScheme.surface, androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text(libraryMessage.orEmpty(), Modifier.weight(1f)); TextButton("关闭", onClick = { libraryVm.message.value = null })
+                Text(playbackMessage.orEmpty(), Modifier.weight(1f), fontSize = 13.sp); MusicTextAction("关闭", { libraryVm.message.value = null; container.playerController.dismissError() })
             }
         }
         if (pendingPlay != null) MusicDialog("后台播放通知", onDismiss = {
-            explained = true; val action = pendingPlay; pendingPlay = null; action?.invoke()
+            pendingPlay = null
         }) {
             Text("允许通知后，可从通知栏控制播放；锁屏和蓝牙媒体控制也由播放服务提供。")
             TextButton("允许通知并播放", onClick = {

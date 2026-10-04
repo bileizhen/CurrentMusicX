@@ -201,8 +201,10 @@ class UserCapabilitiesTest {
         compose.onNodeWithText("手机验证码").performScrollTo().performClick()
         compose.onNodeWithTag("binding_phone").performScrollTo().performTextInput("123456789")
         compose.onNodeWithTag("binding_code").performScrollTo().performTextInput("1234")
+        compose.onNodeWithTag("binding_code").performImeAction()
         failNextPhoneLogin = true
-        compose.onNodeWithTag("confirm_phone_binding").performScrollTo().performClick()
+        compose.onNodeWithTag("binding_screen").performScrollToNode(hasTestTag("confirm_phone_binding"))
+        compose.onNodeWithTag("confirm_phone_binding").performClick()
         val failure = "网易云手机验证码登录暂时失败（HTTP 502），请稍后重试，或改用扫码登录。"
         compose.waitUntil(10000) { bindingVm.message.value == failure }
         compose.onNodeWithTag("binding_screen").performScrollToNode(hasText(failure))
@@ -210,7 +212,9 @@ class UserCapabilitiesTest {
         assertEquals(7L, container.accountRepository.state.value.account?.id)
         assertFalse(bound); assertEquals(0, syncRequests.get())
         compose.onNodeWithTag("binding_code").performScrollTo().performTextInput("1234")
-        compose.onNodeWithTag("confirm_phone_binding").performScrollTo().performClick()
+        compose.onNodeWithTag("binding_code").performImeAction()
+        compose.onNodeWithTag("binding_screen").performScrollToNode(hasTestTag("confirm_phone_binding"))
+        compose.onNodeWithTag("confirm_phone_binding").performClick()
         val success = "绑定成功；已同步 2 个歌单 / 10 首歌曲，1 个待续传"
         compose.waitUntil(10000) { bindingVm.message.value == success }
         compose.onNodeWithTag("binding_screen").performScrollToNode(hasText(success))

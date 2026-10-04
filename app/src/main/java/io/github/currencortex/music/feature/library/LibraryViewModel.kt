@@ -20,16 +20,28 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
     val availablePlaylists = MutableStateFlow<List<Playlist>>(emptyList())
     val statuses = container.libraryRepository.statuses
     private val refreshRequest = MutableStateFlow(0)
+    private var prefetchJob: Job? = null
     init {
         viewModelScope.launch {
             container.sessionRestored.await()
+            var identity: List<Any?>? = null
             combine(container.accountRepository.state.map { it.account?.id }.distinctUntilChanged(),
                 container.musicSettings.state.map { it.server }.distinctUntilChanged(), container.libraryRepository.revision,
                 refreshRequest) { id, server, revision, refresh -> listOf(id, server, revision, refresh) }
-                .collectLatest { home.value = LibraryHomeState(loading = true); loadHome() }
+                .collectLatest { keys ->
+                    prefetchJob?.cancel()
+                    val sameAccount = identity == keys.take(2)
+                    identity = keys.take(2)
+                    home.value = if (sameAccount) home.value.copy(loading = true, errors = emptyMap()) else LibraryHomeState(loading = true)
+                    loadHome()
+                    if (container.accountRepository.token != null) prefetchJob = viewModelScope.launch {
+                        launch { appResult { container.libraryRepository.likedSongs() } }
+                        home.value.playlists.firstOrNull()?.let { playlist -> launch { appResult { container.libraryRepository.playlist(playlist.id) } } }
+                    }
+                }
         }
     }
-    fun refresh() { refreshRequest.update { it + 1 } }
+    fun refresh() { container.libraryRepository.clearReads(); refreshRequest.update { it + 1 } }
     private suspend fun loadHome() = coroutineScope {
         if (container.accountRepository.token == null) { home.value = LibraryHomeState(); return@coroutineScope }
         suspend fun <T> section(name: String, request: suspend () -> T, update: (LibraryHomeState, T) -> LibraryHomeState) {
@@ -80,7 +92,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
     fun refreshStatuses(songs: List<Song>) = viewModelScope.launch { appResult { container.libraryRepository.refreshStatus(songs.filterNot { it.video }.map { it.id }) } }
 }
 
-data class LibraryDetailState(val loading: Boolean = false, val title: String = "", val description: String = "", val cover: String = "",
+data class LibraryDetailState(val loading: Boolean = true, val title: String = "", val description: String = "", val cover: String = "",
     val songs: List<Song> = emptyList(), val playlist: Playlist? = null, val albums: List<Album> = emptyList(),
     val more: Boolean = false, val moreAlbums: Boolean = false, val mv: MvDto? = null, val error: String? = null)
 
@@ -97,7 +109,8 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                 .collectLatest { state.value = LibraryDetailState(); reload() }
         }
     }
-    fun reload(more: Boolean = false) {
+    fun reload(more: Boolean = false, force: Boolean = false) {
+        if (force) container.libraryRepository.clearReads()
         task?.cancel()
         task = viewModelScope.launch {
             state.update { it.copy(loading = true, error = null) }

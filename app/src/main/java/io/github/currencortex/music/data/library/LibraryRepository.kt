@@ -15,15 +15,19 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     val statuses = MutableStateFlow<Map<Long, SongStatus>>(emptyMap())
     val revision = MutableStateFlow(0L)
     private val mutationMutex = Mutex()
-    fun clearSession() { statuses.value = emptyMap(); revision.update { it + 1 } }
-    suspend fun daily(): Daily {
-        val d = api.get<DailyDto>("daily", authenticated = true)
-        return Daily(d.daily.map(SongDto::toDomain), d.forYou.map(SongDto::toDomain), d.artists)
+    private val reads = SessionReadCache(session, { revision.value })
+    fun clearReads() = reads.clear()
+    fun clearSession() { reads.clear(); statuses.value = emptyMap(); revision.update { it + 1 } }
+    private suspend inline fun <reified T> read(path: String, expected: RequestSession, query: Map<String, String> = emptyMap()): T =
+        ApiJson.decodeFromJsonElement(api.request("GET", path, query, authenticated = true, expectedSession = expected))
+    suspend fun daily(): Daily = reads.read("daily") { expected ->
+        val d = read<DailyDto>("daily", expected)
+        Daily(d.daily.map(SongDto::toDomain), d.forYou.map(SongDto::toDomain), d.artists)
     }
-    suspend fun recent(): List<Song> = api.get<SongListDto>("plays/recent", mapOf("limit" to "50"), true).songs.map(SongDto::toDomain)
-    suspend fun likedSongs(): List<Song> = api.get<SongListDto>("likes/mine", authenticated = true).songs.map(SongDto::toDomain)
-    suspend fun playlists(): List<Playlist> = api.get<PlaylistsDto>("playlists", authenticated = true).playlists.map(PlaylistDto::domain)
-    suspend fun playlist(id: Long): Playlist = api.get<PlaylistDto>("playlists/$id", authenticated = true).domain()
+    suspend fun recent(): List<Song> = reads.read("recent") { read<SongListDto>("plays/recent", it, mapOf("limit" to "50")).songs.map(SongDto::toDomain) }
+    suspend fun likedSongs(): List<Song> = reads.read("likes") { read<SongListDto>("likes/mine", it).songs.map(SongDto::toDomain) }
+    suspend fun playlists(): List<Playlist> = reads.read("playlists") { read<PlaylistsDto>("playlists", it).playlists.map(PlaylistDto::domain) }
+    suspend fun playlist(id: Long, fresh: Boolean = false): Playlist = reads.read("playlist/$id", fresh) { read<PlaylistDto>("playlists/$id", it).domain() }
     suspend fun refreshStatus(ids: List<Long>) {
         if (accountId() == 0L) return
         val expected = session()
@@ -63,7 +67,7 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
         revision.update { it + 1 }
     }
     private suspend fun editable(id: Long, expected: RequestSession) {
-        if (expected != session() || !playlist(id).editable(accountId()) || expected != session()) throw ApiException(ErrorKind.Forbidden)
+        if (expected != session() || !playlist(id, fresh = true).editable(accountId()) || expected != session()) throw ApiException(ErrorKind.Forbidden)
     }
     suspend fun rename(id: Long, name: String) {
         require(name.trim().isNotEmpty()); val expected = session(); editable(id, expected)

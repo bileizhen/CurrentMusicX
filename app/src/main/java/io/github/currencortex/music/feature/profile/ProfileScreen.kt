@@ -58,8 +58,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 @Composable fun ProfileScreen(vm: ProfileViewModel, navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit,
     onBack: (() -> Unit)? = null, onSettings: (() -> Unit)? = null) {
-    // Lazy content can be evaluated after a refresh starts. Capture one immutable
-    // snapshot so its user, statistics and lists always belong to the same result.
     val state = vm.state.collectAsStateWithLifecycle().value
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
@@ -68,22 +66,32 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     }
     val user = state.profile?.user
     val own = user != null && user.id == account.account?.id
-    LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Row {
-            onBack?.let { TextButton("返回", onClick = it) }
-            onSettings?.let { TextButton("设置", onClick = it) }
-            TextButton("刷新", onClick = vm::reload, enabled = !state.loading)
+    val bottomInset = LocalMusicBottomInset.current
+    PullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize()) {
+    LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
+        verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        item { Row(verticalAlignment = Alignment.CenterVertically) {
+            onBack?.let { MusicTextAction("返回", it) }
+            Text(if (onBack == null) "我的" else "用户主页", Modifier.weight(1f), fontSize = 28.sp,
+                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+            onSettings?.let { MusicTextAction("设置", it) }
+            MusicTextAction("刷新", vm::reload, enabled = !state.loading)
         } }
-        if (state.loading) item { Text("正在加载用户资料…") }
-        state.error?.let { item { Text(it); TextButton("重试", onClick = vm::reload) } }
+        if ((state.loading || account.loading) && user == null) item { LoadingSongList(2) }
+        state.error?.let { item { Text(it); MusicTextAction("重试", vm::reload) } }
         if (user != null) {
             item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    UserAvatar(user, vm.container, 44.dp)
-                    Column(Modifier.weight(1f)) {
-                        Text(user.nickname.ifBlank { user.username }, fontSize = 26.sp)
-                        Text(user.bio.ifBlank { "还没有填写简介" })
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    UserAvatar(user, vm.container, 64.dp)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(user.nickname.ifBlank { user.username }, fontSize = 23.sp,
+                            fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                        Text(user.bio.ifBlank { "还没有填写简介" }, fontSize = 13.sp, maxLines = 2,
+                            color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                        if (own) Row {
+                            MusicTextAction("编辑资料", { vm.dialog.value = "edit" }, Modifier.testTag("edit_profile"), !busy)
+                            MusicTextAction("更换头像", { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !busy)
+                        }
                     }
                 }
             }
@@ -91,41 +99,57 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                     items(listOf("点赞" to "${stat.likes}", "收藏" to "${stat.favs}", "歌单" to "${stat.playlists}",
                         "听歌天数" to "${stat.playDays}", "听歌时长" to listeningDuration(stat.listenMs))) { (label, value) ->
-                        Column { Text(value); Text(label) }
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(value, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
+                            Text(label, fontSize = 11.sp, color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                        }
                     }
                 }
             }
             if (own) {
-                item { LibraryLinks(navigate) }
-                item { Row {
-                    TextButton("编辑资料", onClick = { vm.dialog.value = "edit" }, enabled = !busy, modifier = Modifier.testTag("edit_profile"))
-                    TextButton("更换头像", onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !busy)
+                item { MusicSectionHeader("我的音乐"); LibraryLinks(navigate) }
+                item { Card(Modifier.fillMaxWidth()) {
+                    MusicDestinationRow("网易云账号", { navigate("user/binding") }, Modifier.testTag("open_binding"), "绑定与同步歌单")
+                    MusicDestinationRow("头像挂件", { navigate("user/decorations") }, Modifier.testTag("open_decorations"))
+                    MusicDestinationRow("账户管理", { navigate("user/accounts") }, Modifier.testTag("open_accounts"), "添加或切换账号")
+                    MusicDestinationRow("账号与安全", { navigate("user/security") }, Modifier.testTag("open_security"))
                 } }
-                item { TextButton("头像挂件", onClick = { navigate("user/decorations") }, modifier = Modifier.testTag("open_decorations")) }
-                item { TextButton("网易云账号", onClick = { navigate("user/binding") }, modifier = Modifier.testTag("open_binding")) }
-                item { TextButton("账户管理", onClick = { navigate("user/accounts") }, modifier = Modifier.testTag("open_accounts")) }
-                item { TextButton("修改密码", onClick = { vm.dialog.value = "password" }, enabled = !busy) }
-                item { TextButton("退出登录", onClick = { vm.dialog.value = "logout" }, enabled = !busy) }
             }
-            state.profile?.current?.let { song -> item { Text("当前在听"); Row(verticalAlignment = Alignment.CenterVertically) {
-                MusicCover(song.pic, Modifier.size(48.dp)); Column { TextButton(song.name, onClick = { play(listOf(song.toDomain()), 0) }); Text(song.artists) }
-            } } }
+            state.profile?.current?.let { song -> item { MusicSectionHeader("当前在听")
+                SongRow(SongRowUi(song.toDomain()), { play(listOf(song.toDomain()), 0) },
+                    { vm.container.playerController.add(song.toDomain(), true) }, { vm.container.playerController.add(song.toDomain()) })
+            } }
             val recent = state.profile!!.recent.map { it.toDomain() }
-            if (recent.isNotEmpty()) item { Text("最近听过") }
+            if (recent.isNotEmpty()) item { MusicSectionHeader("最近听过") }
             itemsIndexed(recent, key = { _, song -> "recent-${song.id}" }) { index, song ->
                 SongRow(SongRowUi(song), { play(recent, index) }, { vm.container.playerController.add(song, true) }, { vm.container.playerController.add(song) })
             }
             val lists = state.profile!!.playlists
-            if (lists.isNotEmpty()) item { Text(if (own) "我的歌单" else "公开歌单") }
+            if (lists.isNotEmpty()) item { MusicSectionHeader(if (own) "我的歌单" else "公开歌单") }
             items(lists, key = { "playlist-${it.id}" }) { list ->
-                Row(Modifier.fillMaxWidth().clickable { navigate("lib/playlist/${list.id}") }.padding(8.dp)) {
-                    MusicCover(list.cover, Modifier.size(48.dp)); Column(Modifier.padding(12.dp)) {
-                        Text(list.name); Text("${list.count} 首" + if (list.source == "ncm") " · 网易云" else "")
+                Row(Modifier.fillMaxWidth().clickable { navigate("lib/playlist/${list.id}") }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    MusicCover(list.cover, Modifier.size(56.dp)); Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                        Text(list.name, fontSize = 16.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text("${list.count} 首" + if (list.source == "ncm") " · 网易云" else "", fontSize = 12.sp,
+                            color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
                     }
                 }
             }
         }
-        state.sectionErrors.forEach { item { Text(it) } }
+        state.sectionErrors.forEach { item { Text(it, fontSize = 13.sp) } }
+    }
+    }
+}
+
+@Composable fun AccountSecurityScreen(vm: ProfileViewModel, onBack: () -> Unit) {
+    val busy by vm.busy.collectAsStateWithLifecycle()
+    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        MusicTextAction("返回", onBack)
+        Text("账号与安全", fontSize = 28.sp)
+        Card(Modifier.fillMaxWidth()) {
+            MusicDestinationRow("修改密码", { vm.dialog.value = "password" }, enabled = !busy)
+            MusicDestinationRow("退出登录", { vm.dialog.value = "logout" }, enabled = !busy)
+        }
     }
 }
 
@@ -174,9 +198,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 @Composable fun DiscoverScreen(vm: DiscoverViewModel, navigate: (String) -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val bottomInset = LocalMusicBottomInset.current
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(vm, owner) { owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.pollStats() } }
-    LazyColumn(Modifier.fillMaxSize().testTag("discover_screen"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(Modifier.fillMaxSize().testTag("discover_screen"), contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("发现", fontSize = 30.sp); Text("${state.stats.users} 位用户 · ${state.stats.listening} 人正在听歌") }
         item { TextField(state.query, vm::query, singleLine = true, modifier = Modifier.testTag("discover_query")); TextButton("搜索用户", onClick = { vm.submit() }, modifier = Modifier.testTag("discover_submit")) }
         item { SettingsSwitch("仅显示正在听歌", state.listening, vm::filter) }
@@ -186,6 +211,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
             }
         } }
         item { TextButton("刷新用户", onClick = { vm.submit() }, enabled = !state.loading) }
+        if (state.loading && state.users.isEmpty()) item { LoadingSongList(4) }
         if (state.loading) item { Text("正在加载用户…") }
         state.error?.let { item { Text(it); TextButton("重试", onClick = { vm.submit() }) } }
         if (!state.loading && state.users.isEmpty() && state.error == null) item { Text(if (state.listening) "当前没有正在听歌的用户" else "没有匹配的用户") }

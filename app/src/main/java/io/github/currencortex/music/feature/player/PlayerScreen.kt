@@ -27,7 +27,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
     actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null,
-    onCast: (() -> Unit)? = null, onRoom: (() -> Unit)? = null) {
+    onCast: (() -> Unit)? = null, onRoom: (() -> Unit)? = null, onDialogActive: (Boolean) -> Unit = {}) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -35,15 +35,18 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var showQueue by rememberSaveable { mutableStateOf(false) }
     var showQuality by rememberSaveable { mutableStateOf(false) }
     var showActions by rememberSaveable { mutableStateOf(false) }
+    val menuHost = LocalSongMenu.current
+    LaunchedEffect(showQueue, showActions) { onDialogActive(showQueue || showActions) }
+    DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(16.dp).testTag("player_screen")) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            TextButton("返回", onClick = onBack, modifier = Modifier.testTag("navigate_back"))
+            MusicTextAction("返回", onBack, Modifier.testTag("navigate_back"))
             Text("正在播放", Modifier.weight(1f))
-            TextButton(settings.quality.label, onClick = { showQuality = !showQuality }, enabled = state.mode == PlayerMode.LOCAL)
+            MusicTextAction(settings.quality.label, { showQuality = !showQuality }, enabled = state.mode == PlayerMode.LOCAL)
         }
         Row {
-            if (onCast != null) TextButton(if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏", onClick = onCast)
-            if (onRoom != null) TextButton(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = onRoom)
+            if (onCast != null) MusicTextAction(if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏", onCast)
+            if (onRoom != null) MusicTextAction(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onRoom)
         }
         if (showQuality) LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             items(AudioQuality.entries) { quality -> TextButton(quality.label, onClick = { vm.quality(quality); showQuality = false }) }
@@ -56,10 +59,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             else PlayerControls(vm, onToggle, Modifier.fillMaxSize())
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            TextButton(queue.mode.label, onClick = { vm.player.setMode(PlaybackMode.entries[(queue.mode.ordinal + 1) % PlaybackMode.entries.size]) }, enabled = state.mode == PlayerMode.LOCAL)
-            TextButton(if (showLyrics) "封面" else "歌词", onClick = { showLyrics = !showLyrics }, modifier = Modifier.testTag("open_lyrics"))
-            TextButton("队列 ${queue.songs.size}", onClick = { showQueue = !showQueue })
-            if (actions != null && queue.current != null) TextButton("更多", onClick = { showActions = true })
+            MusicTextAction(queue.mode.label, onClick = { vm.player.setMode(PlaybackMode.entries[(queue.mode.ordinal + 1) % PlaybackMode.entries.size]) }, enabled = state.mode == PlayerMode.LOCAL)
+            MusicTextAction(if (showLyrics) "封面" else "歌词", onClick = { showLyrics = !showLyrics }, modifier = Modifier.testTag("open_lyrics"))
+            MusicTextAction("队列 ${queue.songs.size}", onClick = { showQueue = !showQueue })
+            if (actions != null && queue.current != null) MusicTextAction("更多", onClick = {
+                val selected = queue.current ?: return@MusicTextAction
+                if (menuHost == null) showActions = true
+                else menuHost(SongMenu(selected, {}, {}, {}, extra = { actions(selected) }, transport = false))
+            })
         }
         if (showActions && queue.current != null) MusicDialog("歌曲操作", onDismiss = { showActions = false }) {
             actions?.invoke(queue.current!!)
@@ -84,10 +91,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val song = queue.current
     var drag by remember { mutableStateOf<Float?>(null) }
     Column(modifier.verticalScroll(rememberScrollState()).padding(vertical = 12.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        MusicCover(song?.cover.orEmpty(), Modifier.widthIn(max = 340.dp).fillMaxWidth(.85f).aspectRatio(1f), pixels = 800)
-        Text(song?.name ?: "还没有选择歌曲", fontSize = 24.sp)
-        Text(song?.artists.orEmpty())
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        MusicCover(song?.cover.orEmpty(), Modifier.widthIn(max = 300.dp).fillMaxWidth(.78f).aspectRatio(1f), pixels = 800)
+        Text(song?.name ?: "还没有选择歌曲", fontSize = 22.sp, maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+        Text(song?.artists.orEmpty(), fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
         if (state.loading) Text("正在加载音源…")
         if (!state.canControlPlayback) Text("播放由房主或管理员控制")
         val duration = state.durationMs.coerceAtLeast(1)
@@ -102,9 +109,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             Text(formatTime(state.positionMs)); Text(formatTime(state.durationMs))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            TextButton("上一首", onClick = { vm.player.previous() }, enabled = song != null && state.canControlPlayback)
-            TextButton(if (state.playing) "暂停" else "播放", onClick = onToggle, enabled = song != null && state.canControlPlayback, modifier = Modifier.testTag("player_toggle"))
-            TextButton("下一首", onClick = { vm.player.next() }, enabled = song != null && state.canControlPlayback)
+            MusicTransportButton("上一首", { vm.player.previous() }, enabled = song != null && state.canControlPlayback, direction = -1)
+            MusicTransportButton(if (state.playing) "暂停" else "播放", onToggle, Modifier.testTag("player_toggle"), enabled = song != null && state.canControlPlayback, playing = state.playing, prominent = true)
+            MusicTransportButton("下一首", { vm.player.next() }, enabled = song != null && state.canControlPlayback, direction = 1)
         }
     }
 }

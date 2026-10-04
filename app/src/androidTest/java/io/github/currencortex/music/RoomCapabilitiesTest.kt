@@ -35,6 +35,7 @@ class RoomCapabilitiesTest {
     @Volatile private var approved = false
     private val approvals = AtomicInteger()
     private val playRequests = AtomicInteger()
+    private val songRequests = AtomicInteger()
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
     @Before fun prepare() = runBlocking {
         player = SilentDevicePlayer().apply { queue.replace(listOf(Song(55, "Original local queue")), 0) }
@@ -50,6 +51,8 @@ class RoomCapabilitiesTest {
                     path == "/cm/rooms/1" -> json("""{"room":{"id":1,"code":"001234","name":"Fixture room"},"members":[{"userId":7,"nickname":"Fixture user","role":"${if(owner) "owner" else "member"}"}],"queue":[{"id":12,"name":"Requested song","status":"${if(approved) "approved" else "pending"}","mine":false}],"latestSeq":0}""")
                     path == "/cm/rooms/1/queue/12/approve" -> { approvals.incrementAndGet(); approved = true; json("{}") }
                     path == "/cm/rooms/1/play" -> { playRequests.incrementAndGet(); json("{}") }
+                    path == "/cm/rooms/1/queue" -> { songRequests.incrementAndGet(); json("{}").setBodyDelay(350, java.util.concurrent.TimeUnit.MILLISECONDS) }
+                    path == "/cm/ncm/search" -> json("""{"songs":[{"ncm_id":95,"name":"Search request song","artists":"Fixture artist"}],"totals":{"song":1},"hasMore":{"song":false}}""")
                     path == "/cm/rooms/1/sync" -> json("""{"serverNow":${System.currentTimeMillis()}}""")
                     path == "/cm/live/1/events" -> MockResponse().setHeader("Content-Type", "text/event-stream").setBody(": ping\n\n")
                     path == "/cm/auth/me" -> json("""{"id":7,"username":"fixture","nickname":"Fixture user"}""")
@@ -145,6 +148,29 @@ class RoomCapabilitiesTest {
         compose.onNodeWithTag("room_two_panes").assertExists()
         compose.onNodeWithText("Requested song").assertExists()
         compose.onNodeWithText("Fixture user · 房主").assertExists()
+    }
+    @Test fun roomSongSearchSubmitsOnceAndReturnsToSameRoomWithoutLocalPlayback() {
+        owner = false
+        compose.setContent { CurrentMusicApp(container) }
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("open_rooms").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("open_rooms").performScrollTo().performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithText("加入").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("加入").performClick()
+        compose.waitUntil(10000) { container.roomSession.active }
+        compose.onNodeWithText("点歌").performClick()
+        compose.onNodeWithText("为房间点歌").assertExists()
+        compose.onNodeWithTag("search_input").performTextInput("Fixture")
+        compose.onNodeWithTag("submit_search").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithText("Search request song").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Search request song").performClick()
+        compose.waitUntil(10000) { compose.onAllNodes(hasText("已提交点歌", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(1, songRequests.get()); assertEquals(0, playRequests.get())
+        assertFalse(player.state.value.playing)
+        compose.onNodeWithText("关闭").performClick()
+        compose.onNodeWithTag("room_search_back").performClick()
+        compose.onNodeWithTag("room_screen").assertExists()
+        assertEquals("1", container.roomSession.state.value.detail!!.room.id)
+        assertTrue(container.roomSession.active)
     }
     @Test fun wideRootUsesPermanentNavigationAndRestoresSelectedTab() {
         val restoration = StateRestorationTester(compose)

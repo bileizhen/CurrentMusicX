@@ -41,7 +41,11 @@ fun LeiTheme(settings: AppearanceSettings, content: @Composable () -> Unit) {
         ThemeController(
             colorSchemeMode = mode,
             isDark = dark,
-            lightColors = lightColorScheme(),
+            lightColors = lightColorScheme(
+                background = Color(0xFFF5F6F8),
+                surface = Color(0xFFF5F6F8),
+                surfaceContainer = Color.White,
+            ),
             darkColors = darkColorScheme(
                 background = Color(0xFF111214),
                 surface = Color(0xFF111214),

@@ -11,6 +11,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.library.*
 import io.github.currencortex.music.data.song.Song
@@ -22,27 +24,38 @@ import java.nio.charset.StandardCharsets
 fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) "album" else "artist"}/${URLEncoder.encode(query, StandardCharsets.UTF_8.name())}"
 
 @Composable fun LibraryLinks(navigate: (String) -> Unit) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        item { TextButton("我喜欢", onClick = { navigate("lib/likes") }, modifier = Modifier.testTag("open_likes")) }
-        item { TextButton("歌单", onClick = { navigate("lib/playlists") }, modifier = Modifier.testTag("open_playlists")) }
-        item { TextButton("最近播放", onClick = { navigate("lib/recent") }) }
-        item { TextButton("歌手", onClick = { navigate(catalogRoute(false)) }) }
-        item { TextButton("专辑", onClick = { navigate(catalogRoute(true)) }) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf(Triple("我喜欢", "lib/likes", "open_likes"), Triple("歌单", "lib/playlists", "open_playlists"),
+                Triple("最近播放", "lib/recent", "open_recent")).forEach { (title, route, tag) ->
+                Card(Modifier.weight(1f).testTag(tag), onClick = { navigate(route) }, showIndication = true) {
+                    Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text("打开音乐库", fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+                    }
+                }
+            }
+        }
+        Row {
+            MusicTextAction("歌手", { navigate(catalogRoute(false)) })
+            MusicTextAction("专辑", { navigate(catalogRoute(true)) })
+        }
     }
 }
 
 @Composable fun LibrarySongActions(vm: LibraryViewModel, song: Song, navigate: (String) -> Unit) {
     val statuses by vm.statuses.collectAsStateWithLifecycle()
     val status = statuses[song.id] ?: SongStatus()
+    val dismiss = LocalDismissSongMenu.current
     LaunchedEffect(song.id) { vm.refreshStatuses(listOf(song)) }
-    TextButton(if (status.liked) "取消点赞" else "点赞", onClick = { vm.toggle(song) }, enabled = !status.pending,
-        modifier = Modifier.testTag("song_like_${song.id}"))
-    TextButton("加入歌单", onClick = { vm.choosePlaylist(song) }, modifier = Modifier.testTag("song_playlist_${song.id}"))
+    MusicDestinationRow(if (status.liked) "取消点赞" else "点赞", onClick = { dismiss(); vm.toggle(song) }, enabled = !status.pending,
+        modifier = Modifier.testTag("song_like_${song.id}"), chevron = false)
+    MusicDestinationRow("加入歌单", onClick = { dismiss(); vm.choosePlaylist(song) }, modifier = Modifier.testTag("song_playlist_${song.id}"), chevron = false)
     if (song.artistIds.isNotEmpty()) song.artistIds.forEachIndexed { index, id ->
-        TextButton("歌手 · ${song.artists.split(" / ").getOrNull(index).orEmpty()}", onClick = { navigate("lib/artist/$id") })
-    } else if (song.artists.isNotBlank()) TextButton("查看歌手", onClick = { navigate(catalogRoute(false, song.artists)) })
-    if (song.album.isNotBlank()) TextButton("查看专辑", onClick = { navigate(catalogRoute(true, song.album)) })
-    if (song.mv > 0) TextButton("播放 MV", onClick = { navigate("lib/mv/${song.mv}") }, modifier = Modifier.testTag("song_mv_${song.id}"))
+        MusicDestinationRow("歌手 · ${song.artists.split(" / ").getOrNull(index).orEmpty()}", onClick = { dismiss(); navigate("lib/artist/$id") })
+    } else if (song.artists.isNotBlank()) MusicDestinationRow("查看歌手", onClick = { dismiss(); navigate(catalogRoute(false, song.artists)) })
+    if (song.album.isNotBlank()) MusicDestinationRow("查看专辑", onClick = { dismiss(); navigate(catalogRoute(true, song.album)) })
+    if (song.mv > 0) MusicDestinationRow("播放 MV", onClick = { dismiss(); navigate("lib/mv/${song.mv}") }, modifier = Modifier.testTag("song_mv_${song.id}"))
 }
 
 @Composable fun LibraryDialogs(vm: LibraryViewModel) {
@@ -70,7 +83,8 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
             if (account.account == null) item { Text("登录后可以查看和管理歌单") }
             else item { TextButton("新建歌单", onClick = { create = true }, modifier = Modifier.testTag("create_playlist")) }
             home.errors["我的歌单"]?.let { error -> item { Text(error); TextButton("重试", onClick = vm::refresh) } }
-            if (!home.loading && home.playlists.isEmpty() && home.errors["我的歌单"] == null) item { Text("还没有歌单") }
+            if ((account.loading || home.loading) && home.playlists.isEmpty()) item { LoadingSongList(4) }
+            if (!account.loading && !home.loading && home.playlists.isEmpty() && home.errors["我的歌单"] == null) item { Text("还没有歌单") }
             items(home.playlists, key = Playlist::id) { playlist -> PlaylistCard(playlist) { navigate("lib/playlist/${playlist.id}") } }
         }
     }
@@ -97,14 +111,18 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     val state by vm.state.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val busy by library.busy.collectAsStateWithLifecycle()
+    val playerState by vm.container.playerController.state.collectAsStateWithLifecycle()
+    val roomRequest = LocalRoomSongRequest.current
     var rename by rememberSaveable { mutableStateOf(false) }
     var delete by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
     val editable = state.playlist?.editable(account.account?.id ?: 0) == true
     LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
-    PullToRefresh(state.loading, { vm.reload() }, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+    PreloadMusicCovers(state.songs.take(12).map { it.cover })
+    PullToRefresh(state.loading, { vm.reload(force = true) }, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         LazyColumn(Modifier.testTag("library_detail"), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { TextButton("返回", onClick = onBack); Text(state.title, fontSize = 28.sp) }
+            if (state.loading && state.songs.isEmpty() && state.mv == null) item { LoadingSongList(4) }
             if (state.cover.isNotBlank()) item { MusicCover(state.cover, Modifier.size(180.dp), 500) }
             if (state.description.isNotBlank()) item { Text(state.description) }
             if (state.playlist?.source == "ncm") item { Text("网易云音乐 · 同步歌单只读") }
@@ -112,10 +130,13 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
             state.mv?.let { mv -> item { TextButton("播放 MV", onClick = { playMv(mv) }, modifier = Modifier.testTag("play_mv")) } }
             if (state.songs.isNotEmpty()) item {
                 LazyRow {
-                    item { TextButton("播放全部", onClick = { vm.container.playerController.setMode(io.github.currencortex.music.core.media.PlaybackMode.LIST); play(state.songs, 0) }, modifier = Modifier.testTag("play_library_all")) }
-                    item { TextButton("随机播放", onClick = { vm.container.playerController.setMode(io.github.currencortex.music.core.media.PlaybackMode.SHUFFLE); play(state.songs.shuffled(), 0) }) }
+                    item { TextButton("播放全部", enabled = roomRequest == null && playerState.mode == io.github.currencortex.music.core.media.PlayerMode.LOCAL,
+                        onClick = { vm.container.playerController.setMode(io.github.currencortex.music.core.media.PlaybackMode.LIST); play(state.songs, 0) }, modifier = Modifier.testTag("play_library_all")) }
+                    item { MusicTextAction("随机播放", enabled = roomRequest == null && playerState.mode == io.github.currencortex.music.core.media.PlayerMode.LOCAL,
+                        onClick = { vm.container.playerController.setMode(io.github.currencortex.music.core.media.PlaybackMode.SHUFFLE); play(state.songs.shuffled(), 0) }) }
                 }
             }
+            if (roomRequest != null) item { Text("点击歌曲，为当前房间点歌", fontSize = 13.sp) }
             if (editable) item { Row {
                 TextButton("重命名", onClick = { name = state.title; rename = true }, modifier = Modifier.testTag("rename_playlist"))
                 TextButton("删除歌单", onClick = { delete = true }, modifier = Modifier.testTag("delete_playlist"))
@@ -136,7 +157,8 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
             itemsIndexed(state.songs, key = { index, song -> "${song.id}-$index" }) { index, song ->
                 SongRow(SongRowUi(song), { play(state.songs, index) }, { vm.container.playerController.add(song, true) }, { vm.container.playerController.add(song) }) {
                     LibrarySongActions(library, song, navigate)
-                    if (editable) TextButton("移出歌单", onClick = { library.action("已移出歌单") { vm.container.libraryRepository.remove(vm.id, song) } }, enabled = !busy)
+                    val dismiss = LocalDismissSongMenu.current
+                    if (editable) MusicDestinationRow("移出歌单", onClick = { dismiss(); library.action("已移出歌单") { vm.container.libraryRepository.remove(vm.id, song) } }, enabled = !busy, chevron = false)
                 }
             }
             if (state.more) item { TextButton("加载更多歌曲", onClick = { vm.reload(true) }, enabled = !state.loading) }
