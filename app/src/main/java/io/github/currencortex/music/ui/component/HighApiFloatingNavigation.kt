@@ -1,8 +1,5 @@
 package io.github.currencortex.music.ui.component
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.tween
-
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -41,7 +38,7 @@ fun HighApiFloatingNavigation(
         Box(Modifier.fillMaxSize()) {
             content()
             overlay()
-            AnimatedVisibility(visible, modifier = Modifier.align(Alignment.BottomCenter), enter = fadeIn(tween(160)) + slideInVertically(tween(180)) { it }, exit = fadeOut(tween(100)) + slideOutVertically(tween(160)) { it }) {
+            RetainedOverlay(visible, Modifier.align(Alignment.BottomCenter)) {
             Box(Modifier.navigationBarsPadding().padding(horizontal = 26.dp, vertical = 12.dp).widthIn(max = 480.dp)) {
                 PlainFloatingBar(selectedIndex, labels, icons, onSelect)
             }
@@ -56,7 +53,7 @@ fun HighApiFloatingNavigation(
         CompositionLocalProvider(LocalMusicGlassSurface provides { modifier, body -> MusicGlassCapsule(backdrop, modifier, blur, glass, body) }) {
             overlay()
         }
-        AnimatedVisibility(visible, modifier = Modifier.align(Alignment.BottomCenter), enter = fadeIn(tween(160)) + slideInVertically(tween(180)) { it }, exit = fadeOut(tween(100)) + slideOutVertically(tween(160)) { it }) {
+        RetainedOverlay(visible, Modifier.align(Alignment.BottomCenter)) {
         FloatingBottomBar(
             modifier = Modifier.navigationBarsPadding().padding(horizontal = 26.dp, vertical = 12.dp).widthIn(max = 480.dp).fillMaxWidth()
                 .testTag(if (glass && blur) "glass_floating_bar" else if (blur) "blur_floating_bar" else "solid_floating_bar"),

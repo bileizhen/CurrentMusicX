@@ -58,7 +58,7 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
 @Composable fun MiniPlayer(vm: PlayerViewModel, onOpen: () -> Unit, onToggle: () -> Unit, modifier: Modifier = Modifier,
     onNext: () -> Unit = { vm.player.next(vm.state.value.showPause) },
     onPrevious: () -> Unit = { vm.player.previous(vm.state.value.showPause) }, onQueue: () -> Unit = onOpen,
-    onSurfaceBounds: (Rect) -> Unit = {}) {
+    onSurfaceBounds: (Rect) -> Unit = {}, active: Boolean = true) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
@@ -74,9 +74,9 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
     val duration = (if (currentMatches) state.durationMs.takeIf { it > 0 } else null) ?: song?.durationMs ?: 0L
     val position = if (currentMatches) state.positionMs else queue.positionMs
     val progress = if (duration > 0) (position.toDouble() / duration).toFloat().coerceIn(0f, 1f) else 0f
-    val rotation = rememberCoverRotation(song?.id, state.playing && song?.video != true)
+    val rotation = rememberCoverRotation(song?.id, active && state.playing && song?.video != true)
     val loading = state.loading || state.resolving
-    val loadingAngle = if (loading) {
+    val loadingAngle = if (loading && active) {
         val transition = rememberInfiniteTransition(label = "mini audio loading")
         transition.animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "loading ring")
     } else remember { mutableFloatStateOf(0f) }
@@ -86,7 +86,7 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
         PlayerMode.CAST -> "正在投屏"
         else -> song?.artists.orEmpty()
     }
-    val lyricPosition = rememberLyricsPosition(state)
+    val lyricPosition = rememberLyricsPosition(if (active) state else state.copy(playing = false))
     val timeline = remember(lyrics.document) { LyricsSynchronizer(lyrics.document) }
     val lyric by remember(timeline, lyricPosition, lyrics.songId, song?.id, currentMatches, settings.lyricsOffsetMs) {
         derivedStateOf {
@@ -120,10 +120,12 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
                     if (enabled) customActions = listOf(CustomAccessibilityAction("上一首") { previous(); true }, CustomAccessibilityAction("下一首") { next(); true })
                 }, verticalArrangement = Arrangement.Center) {
                 val artistColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f)
-                Text(song?.name ?: "等待房间点歌", Modifier.fillMaxWidth().testTag("mini_title").graphicsLayer {
+                Text(song?.name ?: "等待房间点歌", Modifier.fillMaxWidth().testTag("mini_title")
+                    .then(if (active) Modifier else Modifier.clearAndSetSemantics {}).graphicsLayer {
                     translationX = dragged.coerceIn(-threshold * 2, threshold * 2) * .15f
                 }, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(lyric.ifBlank { subtitle }, Modifier.fillMaxWidth().testTag("mini_lyric").graphicsLayer {
+                Text(lyric.ifBlank { subtitle }, Modifier.fillMaxWidth().testTag("mini_lyric")
+                    .then(if (active) Modifier else Modifier.clearAndSetSemantics {}).graphicsLayer {
                     translationX = dragged.coerceIn(-threshold * 2, threshold * 2) * .15f
                 }, color = artistColor, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }

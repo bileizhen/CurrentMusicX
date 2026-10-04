@@ -26,6 +26,7 @@ class PlayerSheetCapabilitiesTest {
     private lateinit var container: AppContainer
     private lateinit var server: MockWebServer
     private lateinit var dispatcher: androidx.activity.OnBackPressedDispatcher
+    private lateinit var activity: androidx.activity.ComponentActivity
 
     @Before fun setup() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
@@ -61,6 +62,7 @@ class PlayerSheetCapabilitiesTest {
 
     private fun start() {
         compose.setContent {
+            activity = androidx.activity.compose.LocalActivity.current as androidx.activity.ComponentActivity
             dispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
             CurrentMusicApp(container)
         }
@@ -77,6 +79,52 @@ class PlayerSheetCapabilitiesTest {
         }
     }
 
+    @Test fun profileCollapseIncludingMiniPlayerRestoration() {
+        start()
+        val handlerThread = android.os.HandlerThread("collapse-frame-metrics").apply { start() }
+        val records = java.util.Collections.synchronizedList(mutableListOf<org.json.JSONObject>())
+        val phase = java.util.concurrent.atomic.AtomicReference("idle")
+        val listener = android.view.Window.OnFrameMetricsAvailableListener { _, metrics, dropped ->
+            if (phase.get() != "idle") records.add(org.json.JSONObject().apply {
+                put("phase", phase.get())
+                put("totalMs", metrics.getMetric(android.view.FrameMetrics.TOTAL_DURATION) / 1_000_000.0)
+                put("layoutMs", metrics.getMetric(android.view.FrameMetrics.LAYOUT_MEASURE_DURATION) / 1_000_000.0)
+                put("drawMs", metrics.getMetric(android.view.FrameMetrics.DRAW_DURATION) / 1_000_000.0)
+                put("syncMs", metrics.getMetric(android.view.FrameMetrics.SYNC_DURATION) / 1_000_000.0)
+                put("commandMs", metrics.getMetric(android.view.FrameMetrics.COMMAND_ISSUE_DURATION) / 1_000_000.0)
+                put("droppedReports", dropped)
+            })
+        }
+        compose.runOnUiThread { activity.window.addOnFrameMetricsAvailableListener(listener, android.os.Handler(handlerThread.looper)) }
+        try {
+            repeat(2) { index ->
+                compose.onNodeWithTag("mini_cover").performClick()
+                compose.waitForIdle()
+                compose.mainClock.autoAdvance = false
+                phase.set("collapse-${index + 1}")
+                compose.onNodeWithTag("navigate_back").performClick()
+                repeat(50) {
+                    val begin = android.os.SystemClock.elapsedRealtime()
+                    compose.mainClock.advanceTimeByFrame()
+                    compose.waitForIdle()
+                    val remaining = 16 - (android.os.SystemClock.elapsedRealtime() - begin)
+                    if (remaining > 0) android.os.SystemClock.sleep(remaining)
+                }
+                phase.set("idle")
+                compose.mainClock.autoAdvance = true
+                compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+            }
+            assertTrue("Real window frames must be captured", records.isNotEmpty())
+            val label = androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("profileLabel", "latest")
+            val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+            val snapshot = synchronized(records) { records.toList() }
+            java.io.File(context.externalCacheDir, "player-collapse-profile-$label.json").writeText(org.json.JSONArray(snapshot).toString(2))
+        } finally {
+            compose.runOnUiThread { activity.window.removeOnFrameMetricsAvailableListener(listener) }
+            handlerThread.quitSafely()
+        }
+    }
+
     @Test fun miniExpandsVerticallyAndCollapsesBackToTheSameSecondaryPage() {
         start()
         compose.onNodeWithText("设置").performClick()
@@ -85,6 +133,7 @@ class PlayerSheetCapabilitiesTest {
         compose.waitForIdle()
         val original = viewport()
         val mini = compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot
+        val miniIdentity = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().id
         val underlay = compose.onNodeWithTag("music_navigation").captureToImage().toPixelMap()
         fun sampleSurface(frame: PlayerSheetFrame): androidx.compose.ui.graphics.Color {
             val pixels = compose.onNodeWithTag("music_navigation").captureToImage().toPixelMap()
@@ -145,6 +194,8 @@ class PlayerSheetCapabilitiesTest {
         compose.onNodeWithTag("player_sheet").assertDoesNotExist()
         compose.onNodeWithTag("network_settings").assertIsDisplayed()
         compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+        assertEquals("Docking must reuse the cover node", miniIdentity, compose.onNodeWithTag("mini_cover").fetchSemanticsNode().id)
+        assertEquals("Docking must retain the original capsule position", mini, compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot)
         assertEquals(original, viewport())
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
         assertFalse(container.playerController.state.value.playing)
@@ -152,6 +203,8 @@ class PlayerSheetCapabilitiesTest {
 
     @Test fun predictiveCollapseReversesCancelsAndCommitsWhileDialogsTakePriority() {
         start()
+        val miniIdentity = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().id
+        val barIdentity = compose.onNodeWithTag("glass_floating_bar").fetchSemanticsNode().id
         compose.onNodeWithTag("mini_cover").performClick()
         compose.onNodeWithTag("player_transport").assertIsDisplayed()
         compose.waitForIdle()
@@ -185,6 +238,8 @@ class PlayerSheetCapabilitiesTest {
         compose.waitForIdle()
         compose.onNodeWithTag("player_sheet").assertDoesNotExist()
         compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+        assertEquals(miniIdentity, compose.onNodeWithTag("mini_cover").fetchSemanticsNode().id)
+        assertEquals("Docking must reuse the glass bar", barIdentity, compose.onNodeWithTag("glass_floating_bar").fetchSemanticsNode().id)
         assertEquals(original, viewport())
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
         assertFalse(container.playerController.state.value.playing)

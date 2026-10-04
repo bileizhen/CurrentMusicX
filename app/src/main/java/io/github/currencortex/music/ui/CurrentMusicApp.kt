@@ -244,7 +244,8 @@ fun CurrentMusicApp(container: AppContainer) {
         val rootWide = rootPage && wideLayout
         val showRootNavigation = rootPage && playerSheetMotion != PlayerSheetMotion.CLOSE
         // Reserve page space once. Animate only the overlay's GPU translation, never the page height.
-        val navigationSpace = if (rootPage && !rootWide && !keyboardOpen) 92.dp else 0.dp
+        val miniRoot = backStack.lastOrNull { it != PLAYER.toString() } == ROOT.toString()
+        val navigationSpace = if (miniRoot && !wideLayout && !keyboardOpen) 92.dp else 0.dp
         val miniLift = animateDpAsState(navigationSpace, tween(180), label = "mini player lift")
         // A scene's insets must not depend on which route is currently on top. Predictive back
         // renders both scenes before committing; changing the shared viewport makes them jump.
@@ -405,16 +406,18 @@ fun CurrentMusicApp(container: AppContainer) {
         }
         }
         val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
-        if (showMini) MiniPlayer(playerVm, { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
+        if (miniAvailable) RetainedOverlay(showMini, Modifier.align(Alignment.BottomCenter)) {
+        MiniPlayer(playerVm, { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
             { playWithPermission { container.playerController.toggle() } },
-            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().graphicsLayer {
+            Modifier.navigationBarsPadding().graphicsLayer {
                     translationY = -miniLift.value.toPx()
                 }
-                .padding(start = if (rootWide) 104.dp else 0.dp)
+                .padding(start = if (miniRoot && wideLayout) 104.dp else 0.dp)
                 .onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp),
             onNext = { container.playerController.next(container.playerController.state.value.showPause) },
             onPrevious = { container.playerController.previous(container.playerController.state.value.showPause) },
-            onQueue = { if (playerState.mode == PlayerMode.ROOM) navigateLibrary("room/list") else miniQueueOpen = true }, onSurfaceBounds = { miniBounds = it })
+            onQueue = { if (playerState.mode == PlayerMode.ROOM) navigateLibrary("room/list") else miniQueueOpen = true }, onSurfaceBounds = { miniBounds = it }, active = showMini)
+        }
         if (showRootNavigation && !rootWide && !keyboardOpen && !settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
             StandardNavigationBar(selected, labels, icons) { selected = it }
         }
