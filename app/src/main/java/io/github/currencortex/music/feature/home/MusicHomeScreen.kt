@@ -29,7 +29,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     PreloadMusicCovers(home.daily.take(3).map { it.cover })
     PreloadMusicCovers(home.forYou.take(8).map { it.cover }, 320)
     PreloadMusicCovers(home.playlists.take(4).map { it.cover }, 320)
-    PullToRefresh(home.loading, vm::refresh, Modifier.fillMaxSize()) {
+    // isRefreshing locks all scroll; keep it only for the empty initial load.
+    PullToRefresh(home.loading && home.daily.isEmpty(), vm::refresh, Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize().testTag("music_home"), contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
