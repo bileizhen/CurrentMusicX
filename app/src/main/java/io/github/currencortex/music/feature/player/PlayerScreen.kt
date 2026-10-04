@@ -2,7 +2,7 @@ package io.github.currencortex.music.feature.player
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
@@ -105,7 +105,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         .semantics { this[PlayerPagePosition] = pager.currentPage + pager.currentPageOffsetFraction },
                         beyondViewportPageCount = 1,
                         userScrollEnabled = expanded && sheetDrag?.state?.dragging != true,
-                        flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = tween(120, easing = LinearEasing))) { page ->
+                        flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = tween(240, easing = LinearOutSlowInEasing))) { page ->
                         Box(Modifier.fillMaxSize().onGloballyPositioned {
                             if (page == 0) pagerArtwork.coverPage = it else pagerArtwork.lyricsPage = it
                         }) {
@@ -138,13 +138,13 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 Text("显示控制面板", color = Color.White.copy(alpha = .65f), fontSize = 12.sp,
                     modifier = Modifier.testTag("lyrics_reveal_controls").clickable(role = Role.Button) { controlsRevealed = true }
                         .padding(horizontal = 24.dp, vertical = 14.dp))
-            } else Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 18.dp), horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically) {
+            } else PlayerFunctionBar {
                 PlayerIconButton(PlayerIcon.LYRICS, if (content == PlayerContent.LYRICS) "显示封面" else "显示歌词", {
                     scope.launch { pager.animateScrollToPage(if (pager.targetPage == 0) 1 else 0,
-                        animationSpec = tween(220, easing = LinearEasing)) }
+                        animationSpec = tween(260, easing = LinearOutSlowInEasing)) }
                 }, Modifier.testTag("open_lyrics"), selected = content == PlayerContent.LYRICS)
-                if (onCast != null) PlayerIconButton(PlayerIcon.CAST, if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏", onCast)
+                if (onCast != null) PlayerIconButton(PlayerIcon.CAST, if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏", onCast,
+                    selected = state.mode == PlayerMode.CAST)
                 if (settings.lyricsDisplay.hideControls && content == PlayerContent.LYRICS)
                     Text("隐藏", color = Color.White.copy(alpha = .65f), fontSize = 12.sp,
                         modifier = Modifier.testTag("lyrics_conceal_controls").clickable(role = Role.Button) { controlsRevealed = false }

@@ -2,6 +2,12 @@ package io.github.currencortex.music.feature.player
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -14,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -21,6 +28,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.yukonga.miuix.kmp.basic.Text
+
+internal data class PlayerButtonVisual(val pressed: Boolean, val scale: Float, val glyphProgress: Float, val alpha: Float)
+internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("PlayerButtonVisuals")
+
+/** Keep 48dp touch targets while grouping the secondary actions near the center. */
+@Composable internal fun PlayerFunctionBar(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
+    Row(modifier.fillMaxWidth().height(56.dp).testTag("player_function_bar"),
+        horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically, content = content)
+}
 
 @Composable internal fun PlayerTransport(vm: PlayerViewModel, onToggle: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -87,17 +104,40 @@ import top.yukonga.miuix.kmp.basic.Text
     }
 }
 
-@Composable private fun PlayerTransportButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
+@Composable internal fun PlayerTransportButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     enabled: Boolean = true, playing: Boolean = false, direction: Int = 0) {
-    Box(modifier.size(68.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-        .semantics { contentDescription = label; if (!enabled) disabled() }, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(if (direction == 0) 40.dp else 30.dp)) {
+    val interactions = remember { MutableInteractionSource() }
+    val pressed by interactions.collectIsPressedAsState()
+    val scale = animateFloatAsState(if (pressed && enabled) .9f else 1f,
+        tween(if (pressed) 90 else 140, easing = CubicBezierEasing(.2f, 0f, 0f, 1f)), label = "transport press")
+    val glyph = animateFloatAsState(if (playing) 1f else 0f, tween(180, easing = LinearEasing), label = "play pause glyph")
+    Box(modifier.size(68.dp).clickable(enabled = enabled, role = Role.Button, interactionSource = interactions,
+        indication = null, onClick = onClick).semantics {
+            contentDescription = label; if (!enabled) disabled()
+            this[PlayerButtonVisuals] = PlayerButtonVisual(pressed, scale.value, glyph.value, if (enabled) 1f else .28f)
+        }, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(if (direction == 0) 40.dp else 30.dp).graphicsLayer {
+            scaleX = scale.value; scaleY = scaleX
+            translationX = direction * 3.dp.toPx() * ((1 - scale.value) / .1f)
+        }) {
             val ink = Color.White.copy(alpha = if (enabled) 1f else .28f)
-            if (playing && direction == 0) {
-                drawRoundRect(ink, Offset(size.width * .2f, size.height * .12f), Size(size.width * .2f, size.height * .76f), androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
-                drawRoundRect(ink, Offset(size.width * .6f, size.height * .12f), Size(size.width * .2f, size.height * .76f), androidx.compose.ui.geometry.CornerRadius(2.dp.toPx()))
-            } else if (direction == 0) {
+            if (direction == 0 && glyph.value <= .001f) {
                 drawPath(Path().apply { moveTo(size.width * .24f, size.height * .09f); lineTo(size.width * .87f, size.height * .5f); lineTo(size.width * .24f, size.height * .91f); close() }, ink)
+            } else if (direction == 0) {
+                // The two parts of a triangle open smoothly into the two pause bars.
+                val p = glyph.value
+                fun polygon(from: List<Offset>, to: List<Offset>) = Path().apply {
+                    from.indices.forEach { i ->
+                        val point = from[i] * (1 - p) + to[i] * p
+                        if (i == 0) moveTo(point.x * size.width, point.y * size.height)
+                        else lineTo(point.x * size.width, point.y * size.height)
+                    }
+                    close()
+                }
+                drawPath(polygon(listOf(Offset(.24f, .09f), Offset(.47f, .255f), Offset(.47f, .745f), Offset(.24f, .91f)),
+                    listOf(Offset(.2f, .12f), Offset(.4f, .12f), Offset(.4f, .88f), Offset(.2f, .88f))), ink)
+                drawPath(polygon(listOf(Offset(.47f, .255f), Offset(.87f, .5f), Offset(.87f, .5f), Offset(.47f, .745f)),
+                    listOf(Offset(.6f, .12f), Offset(.8f, .12f), Offset(.8f, .88f), Offset(.6f, .88f))), ink)
             } else {
                 for (part in 0..1) {
                     val x = size.width * (.08f + part * .43f)
@@ -116,10 +156,18 @@ internal enum class PlayerIcon { COLLAPSE, MORE, LYRICS, QUEUE, CAST }
 
 @Composable internal fun PlayerIconButton(icon: PlayerIcon, label: String, onClick: () -> Unit,
     modifier: Modifier = Modifier, selected: Boolean = false) {
-    Box(modifier.size(48.dp).clickable(role = Role.Button, onClick = onClick)
-        .semantics { contentDescription = label; this.selected = selected }, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(24.dp)) {
-            val ink = Color.White.copy(alpha = if (selected) 1f else .65f)
+    val interactions = remember { MutableInteractionSource() }
+    val pressed by interactions.collectIsPressedAsState()
+    val scale = animateFloatAsState(if (pressed) .88f else 1f,
+        tween(if (pressed) 90 else 140, easing = CubicBezierEasing(.2f, 0f, 0f, 1f)), label = "player action press")
+    val opacity = animateFloatAsState(if (selected) 1f else .65f, tween(160), label = "player action selection")
+    Box(modifier.size(48.dp).clickable(role = Role.Button, interactionSource = interactions,
+        indication = null, onClick = onClick).semantics {
+            contentDescription = label; this.selected = selected
+            this[PlayerButtonVisuals] = PlayerButtonVisual(pressed, scale.value, 0f, opacity.value)
+        }, contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(24.dp).graphicsLayer { scaleX = scale.value; scaleY = scaleX }) {
+            val ink = Color.White.copy(alpha = opacity.value)
             val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
             fun point(x: Float, y: Float) = Offset(size.width * x, size.height * y)
             when (icon) {

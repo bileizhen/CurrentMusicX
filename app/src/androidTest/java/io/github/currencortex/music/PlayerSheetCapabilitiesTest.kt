@@ -408,6 +408,11 @@ class PlayerSheetCapabilitiesTest {
         assertEquals("A held pager drag must remain under finger control", held, page(), .001f)
         save("player-pager-held.png")
         pager.performTouchInput { advanceEventTime(400); up() }
+        compose.mainClock.advanceTimeBy(64)
+        val settling = page()
+        assertTrue("Release eases toward the cover instead of jumping to its endpoint", settling > 0f && settling < held)
+        compose.mainClock.advanceTimeBy(64)
+        assertTrue("The buffer moves toward the cover without reversing", page() >= 0f && page() < settling)
         compose.mainClock.advanceTimeBy(1000)
         assertEquals("A short swipe returns to the cover", 0f, page(), .001f)
         pager.performTouchInput {
