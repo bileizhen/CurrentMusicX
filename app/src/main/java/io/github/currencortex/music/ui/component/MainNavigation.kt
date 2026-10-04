@@ -31,11 +31,13 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-fun PlainFloatingBar(selected: Int, labels: List<String>, icons: List<ImageVector>, onSelect: (Int) -> Unit) {
+fun PlainFloatingBar(selected: Int, labels: List<String>, icons: List<ImageVector>, onSelect: (Int) -> Unit,
+    modifier: Modifier = Modifier, embedded: Boolean = false) {
     val background = if (isInDarkTheme()) MiuixTheme.colorScheme.surfaceContainer else Color.White
     Row(
-        Modifier.fillMaxWidth().height(64.dp).testTag("plain_floating_bar").shadow(8.dp, CircleShape).clip(CircleShape)
-            .background(background).padding(4.dp).selectableGroup(),
+        modifier.fillMaxWidth().height(64.dp).testTag("plain_floating_bar")
+            .then(if (embedded) Modifier else Modifier.shadow(8.dp, CircleShape).clip(CircleShape).background(background))
+            .padding(4.dp).selectableGroup(),
     ) {
         labels.forEachIndexed { index, label ->
             val tint = if (selected == index) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface

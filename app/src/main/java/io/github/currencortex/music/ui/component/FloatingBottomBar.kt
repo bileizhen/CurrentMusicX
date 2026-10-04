@@ -193,6 +193,7 @@ fun FloatingBottomBar(
     tabsCount: Int,
     isBlurEnabled: Boolean = true,
     isGlassEnabled: Boolean = true,
+    embedded: Boolean = false,
     content: @Composable RowScope.() -> Unit
 ) {
     val isInDark = isInDarkTheme()
@@ -300,7 +301,7 @@ fun FloatingBottomBar(
 
     // Tilt is only used by the glass highlights. Leaving the feature disabled
     // must also dispose its sensor subscription, not merely hide the rendering.
-    val baseHighlight = if (isBlurEnabled && isGlassEnabled) {
+    val baseHighlight = if (!embedded && isBlurEnabled && isGlassEnabled) {
         rememberGravityRotatedHighlight(iosIndicatorSpecular, extraDegrees = -45f)
     } else iosIndicatorSpecular
     val pillHighlight = if (isBlurEnabled && isGlassEnabled) {
@@ -321,25 +322,25 @@ fun FloatingBottomBar(
                     tabWidthPx = (contentWidthPx / tabsCount).coerceAtLeast(0f)
                 }
                 .graphicsLayer { translationX = panelOffset }
-                .dropShadow(
+                .then(if (embedded) Modifier else Modifier.dropShadow(
                     shape = pillShape,
                     shadow = Shadow(
                         radius = 10.dp,
                         color = Color.Black,
                         alpha = if (isInDark) 0.2f else 0.1f,
                     ),
-                )
+                ))
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = {}
                 )
-                .musicGlassMaterial(backdrop, isBlurEnabled, isGlassEnabled, baseHighlight) {
+                .then(if (embedded) Modifier else Modifier.musicGlassMaterial(backdrop, isBlurEnabled, isGlassEnabled, baseHighlight) {
                     val width = size.width.coerceAtLeast(1f)
                     val s = lerp(1f, 1f + 16.dp.toPx() / width, dampedDragAnimation.pressProgress)
                     scaleX = s
                     scaleY = s
-                }
+                })
                 .then(if (isBlurEnabled) interactiveHighlight.modifier else Modifier)
                 .height(64.dp)
                 .padding(4.dp),

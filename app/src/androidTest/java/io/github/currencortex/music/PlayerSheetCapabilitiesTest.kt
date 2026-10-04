@@ -201,6 +201,56 @@ class PlayerSheetCapabilitiesTest {
         assertFalse(container.playerController.state.value.playing)
     }
 
+    @Test fun unifiedDockFadesNavigationAndSlidesMiniWithoutResizingThePage() {
+        start()
+        val original = viewport()
+        val firstMini = compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot
+        val miniIdentity = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().id
+        fun expansion() = compose.onNodeWithTag("music_dock").fetchSemanticsNode().config[io.github.currencortex.music.ui.component.DockExpansion]
+        assertEquals(1f, expansion(), .001f)
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithText("设置").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        val early = expansion()
+        assertTrue("Navigation must fade rather than disappear immediately", early > 0f && early < 1f)
+        val earlyMini = compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot
+        assertTrue("Mini must move down as navigation fades", earlyMini.top > firstMini.top)
+        compose.onNodeWithTag("glass_floating_bar").assertDoesNotExist() // Exiting tabs are not interactive.
+        compose.mainClock.advanceTimeBy(112)
+        assertTrue(expansion() < early)
+        val middleMini = compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot
+        assertTrue(middleMini.top > earlyMini.top)
+        save("unified-dock-secondary-176.png")
+        assertEquals(original, viewport())
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals(0f, expansion(), .001f)
+        val secondaryMini = compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot
+        assertTrue(secondaryMini.top > middleMini.top)
+        assertEquals(miniIdentity, compose.onNodeWithTag("mini_cover").fetchSemanticsNode().id)
+        save("unified-dock-secondary.png")
+        compose.onNodeWithText("返回").performClick()
+        compose.mainClock.advanceTimeBy(176)
+        assertTrue("Returning must reveal navigation gradually", expansion() > 0f && expansion() < 1f)
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals(1f, expansion(), .001f)
+        assertEquals(firstMini, compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot)
+        compose.onNodeWithTag("glass_floating_bar").assertIsDisplayed()
+        assertEquals(original, viewport())
+        save("unified-dock-root.png")
+        compose.mainClock.autoAdvance = true
+        runBlocking { container.settings.edit { it.copy(blur = false) } }
+        compose.waitForIdle()
+        compose.onNodeWithTag("plain_floating_bar").assertIsDisplayed()
+        compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+        assertEquals(1f, expansion(), .001f)
+        compose.onNodeWithText("设置").performClick()
+        compose.waitForIdle()
+        assertEquals(0f, expansion(), .001f)
+        compose.onNodeWithTag("plain_floating_bar").assertDoesNotExist()
+        compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+        assertEquals(original, viewport())
+    }
+
     @Test fun predictiveCollapseReversesCancelsAndCommitsWhileDialogsTakePriority() {
         start()
         val miniIdentity = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().id

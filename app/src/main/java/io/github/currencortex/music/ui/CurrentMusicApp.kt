@@ -156,6 +156,7 @@ fun CurrentMusicApp(container: AppContainer) {
         var roomPending by remember { mutableStateOf(setOf<Long>()) }
         var miniHeight by remember { mutableStateOf(72.dp) }
         var miniBounds by remember { mutableStateOf<Rect?>(null) }
+        var miniCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
         var playerOrigin by remember { mutableStateOf<Rect?>(null) }
         var navigationBounds by remember { mutableStateOf<Rect?>(null) }
         var playerSheetMotion by remember { mutableStateOf(PlayerSheetMotion.NONE) }
@@ -181,7 +182,10 @@ fun CurrentMusicApp(container: AppContainer) {
         }
         fun navigateTo(route: Int) {
             if (backStack.last() == route.toString()) return
-            if (route == PLAYER) { playerOrigin = miniBounds; playerSheetMotion = PlayerSheetMotion.OPEN }
+            if (route == PLAYER) {
+                playerOrigin = miniCoordinates?.takeIf { it.isAttached }?.boundsInRoot() ?: miniBounds
+                playerSheetMotion = PlayerSheetMotion.OPEN
+            }
             else playerSheetMotion = PlayerSheetMotion.NONE
             backStack = backStack + route.toString()
         }
@@ -406,34 +410,42 @@ fun CurrentMusicApp(container: AppContainer) {
         }
         }
         val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
-        if (miniAvailable) RetainedOverlay(showMini, Modifier.align(Alignment.BottomCenter)) {
+        val unifiedDock = settings.floatingBar && !wideLayout
+        val miniBody: @Composable () -> Unit = {
         MiniPlayer(playerVm, { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
             { playWithPermission { container.playerController.toggle() } },
-            Modifier.navigationBarsPadding().graphicsLayer {
+            if (unifiedDock) Modifier.onSizeChanged { miniHeight = with(density) { it.height.toDp() } + 36.dp }
+            else Modifier.navigationBarsPadding().graphicsLayer {
                     translationY = -miniLift.value.toPx()
                 }
                 .padding(start = if (miniRoot && wideLayout) 104.dp else 0.dp)
                 .onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp),
             onNext = { container.playerController.next(container.playerController.state.value.showPause) },
             onPrevious = { container.playerController.previous(container.playerController.state.value.showPause) },
-            onQueue = { if (playerState.mode == PlayerMode.ROOM) navigateLibrary("room/list") else miniQueueOpen = true }, onSurfaceBounds = { miniBounds = it }, active = showMini)
+            onQueue = { if (playerState.mode == PlayerMode.ROOM) navigateLibrary("room/list") else miniQueueOpen = true },
+            onSurfaceBounds = { miniBounds = it }, active = showMini, onSurfaceCoordinates = { miniCoordinates = it })
+        }
+        if (unifiedDock) {
+            val glassNavigation = LocalMusicDockNavigation.current
+            UnifiedMusicDock(expanded = miniRoot && !keyboardOpen,
+                visible = !keyboardOpen && playerSheetMotion != PlayerSheetMotion.CLOSE && backStack.last() !in setOf(PLAYER.toString(), "lib/video"),
+                miniPresent = miniAvailable, navigationInteractive = showRootNavigation && !keyboardOpen,
+                modifier = Modifier.align(Alignment.BottomCenter), mini = miniBody,
+                navigation = glassNavigation ?: { mod -> PlainFloatingBar(selected, labels, icons, { selected = it }, mod, embedded = true) })
+        } else if (miniAvailable) RetainedOverlay(showMini, Modifier.align(Alignment.BottomCenter)) {
+            miniBody()
         }
         if (showRootNavigation && !rootWide && !keyboardOpen && !settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
             StandardNavigationBar(selected, labels, icons) { selected = it }
         }
         }
-        if (settings.blur && Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) {
+        if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) {
             HighApiFloatingNavigation(selected, labels, icons, { selected = it }, settings.blur, settings.liquidGlass,
-                visible = settings.floatingBar && showRootNavigation && !rootWide && !keyboardOpen, content = page, overlay = miniOverlay)
+                content = page, overlay = miniOverlay)
         } else {
             Box(Modifier.fillMaxSize()) {
                 page()
                 miniOverlay()
-                if (showRootNavigation && !rootWide && !keyboardOpen && settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
-                    .padding(horizontal = if (settings.floatingBar) 26.dp else 0.dp, vertical = if (settings.floatingBar) 12.dp else 0.dp).widthIn(max = 480.dp)) {
-                    if (settings.floatingBar) PlainFloatingBar(selected, labels, icons) { selected = it }
-                    else StandardNavigationBar(selected, labels, icons) { selected = it }
-                }
             }
         }
         if (rootWide && showRootNavigation) Column(Modifier.width(100.dp).fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(8.dp)

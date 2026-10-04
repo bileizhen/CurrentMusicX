@@ -6,6 +6,7 @@
 package io.github.currencortex.music.ui.component.liquid
 
 import androidx.compose.foundation.shape.CornerBasedShape
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.util.fastCoerceAtMost
 import top.yukonga.miuix.kmp.blur.BackdropEffectScope
@@ -20,6 +21,9 @@ fun BackdropEffectScope.lens(
 ) {
     if (!isRuntimeShaderSupported()) return
     if (refractionHeight <= 0f || refractionAmount <= 0f) return
+    // Backdrop nodes attach before their first measurement. Percentage corners (including
+    // CircleShape) cannot resolve a rounded outline against a zero-sized surface.
+    if (!size.width.isFinite() || !size.height.isFinite() || size.width <= 0f || size.height <= 0f) return
 
     if (padding < refractionAmount) {
         padding = refractionAmount
@@ -37,8 +41,10 @@ fun BackdropEffectScope.lens(
     val key = if (dispersionEnabled) "LiquidGlassLensDispersion" else "LiquidGlassLens"
 
     val sf = downscaleFactor.coerceAtLeast(1).toFloat()
-    val scaledSizeW = size.width / sf
-    val scaledSizeH = size.height / sf
+    // A retained dock clips a smaller rounded outline inside its fixed layout while collapsing.
+    val rounded = (shape.createOutline(size, layoutDirection, this) as? Outline.Rounded)?.roundRect
+    val scaledSizeW = (rounded?.width ?: size.width) / sf
+    val scaledSizeH = (rounded?.height ?: size.height) / sf
     val scaledPadding = padding / sf
     val scaledRefractionHeight = refractionHeight / sf
     val scaledRefractionAmount = refractionAmount / sf
