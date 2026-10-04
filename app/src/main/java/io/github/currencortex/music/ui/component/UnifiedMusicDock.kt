@@ -29,7 +29,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 internal val DockExpansion = SemanticsPropertyKey<Float>("DockExpansion")
 internal val LocalMusicDockNavigation = staticCompositionLocalOf<(@Composable (Modifier) -> Unit)?> { null }
 internal val LocalMusicDockSurface = staticCompositionLocalOf<@Composable (Modifier, () -> Shape, @Composable () -> Unit) -> Unit> {
-    { modifier, _, body -> Box(modifier.background(MiuixTheme.colorScheme.surfaceContainer)) { body() } }
+    { modifier, shape, body -> Box(modifier.background(MiuixTheme.colorScheme.surfaceContainer, shape())) { body() } }
 }
 
 private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerSize,
@@ -62,17 +62,21 @@ private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerS
     val surface = LocalMusicDockSurface.current
     val density = androidx.compose.ui.platform.LocalDensity.current
     RetainedOverlay(drawDock, modifier.navigationBarsPadding().padding(horizontal = 26.dp, vertical = 12.dp).widthIn(max = 480.dp)) {
-        surface(Modifier.fillMaxWidth().height(miniSpace + navigationTravel).testTag("music_dock")
+        Box(Modifier.fillMaxWidth().height(miniSpace + navigationTravel).testTag("music_dock")
             .semantics { this[DockExpansion] = progress.value }
             .graphicsLayer {
                 translationY = navigationTravel.toPx() * (1 - progress.value)
                 shape = DockShape(miniSpace.toPx() + navigationTravel.toPx() * progress.value, 32.dp.toPx())
-                clip = true
-            }, {
+                // The resting indicator can stretch outside the panel. Only crop children
+                // while navigation is disappearing into the shorter secondary-page surface.
+                clip = progress.value < 1f
+            }) {
+            // Backdrop materials clip their children too, so keep the glass in a sibling layer.
+            surface(Modifier.matchParentSize(), {
                 with(density) {
                     DockShape(miniSpace.toPx() + navigationTravel.toPx() * progress.value, 32.dp.toPx())
                 }
-            }) {
+            }) {}
             Box(Modifier.fillMaxSize()) {
                 if (miniPresent) CompositionLocalProvider(LocalMusicGlassSurface provides { mod, body ->
                     Box(mod) { Box(Modifier.testTag("mini_glass_surface")) { body() } }

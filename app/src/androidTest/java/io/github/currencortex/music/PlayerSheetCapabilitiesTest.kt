@@ -201,6 +201,48 @@ class PlayerSheetCapabilitiesTest {
         assertFalse(container.playerController.state.value.playing)
     }
 
+    @Test fun heldLiquidIndicatorCanDrawOutsideDock() {
+        start()
+        val root = compose.onNodeWithTag("music_navigation")
+        val original = viewport()
+        val dock = compose.onNodeWithTag("music_dock").fetchSemanticsNode().boundsInRoot
+        val bar = compose.onNodeWithTag("glass_floating_bar")
+        val barBounds = bar.fetchSemanticsNode().boundsInRoot
+        compose.mainClock.autoAdvance = false
+        val before = root.captureToImage().toPixelMap()
+        bar.performTouchInput { down(androidx.compose.ui.geometry.Offset(center.x / 4, center.y)) }
+        try {
+            compose.mainClock.advanceTimeBy(600)
+            val pressed = root.captureToImage().toPixelMap()
+            save("dock-liquid-held.png")
+            val left = (dock.left - original.left).toInt()
+            val yStart = (barBounds.top - original.top - 40).toInt().coerceAtLeast(0)
+            val yEnd = (barBounds.bottom - original.top + 40).toInt().coerceAtMost(pressed.height)
+            var changed = 0
+            for (x in (left - 40).coerceAtLeast(0) until left - 1) for (y in yStart until yEnd) {
+                val a = before[x, y]; val b = pressed[x, y]
+                val difference = kotlin.math.abs(a.red - b.red) + kotlin.math.abs(a.green - b.green) + kotlin.math.abs(a.blue - b.blue)
+                if (difference > .025f) changed++
+            }
+            assertTrue("The held indicator must paint outside the left glass boundary (pixels=$changed)", changed > 10)
+            val right = (dock.right - original.left).toInt()
+            val bottom = (dock.bottom - original.top).toInt()
+            for (x in right - 10 until right - 2) for (y in bottom - 10 until bottom - 2) {
+                val a = before[x, y]; val b = pressed[x, y]
+                val difference = kotlin.math.abs(a.red - b.red) + kotlin.math.abs(a.green - b.green) + kotlin.math.abs(a.blue - b.blue)
+                assertTrue("Press background must leave the rounded bottom-right corner clear", difference < .01f)
+            }
+            assertEquals(original, viewport())
+            assertEquals(dock, compose.onNodeWithTag("music_dock").fetchSemanticsNode().boundsInRoot)
+        } finally {
+            bar.performTouchInput { up() }
+            compose.mainClock.advanceTimeBy(1000)
+        }
+        compose.onNodeWithTag("tab_0").assertIsSelected()
+        compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+        assertFalse(container.playerController.state.value.playing)
+    }
+
     @Test fun unifiedDockFadesNavigationAndSlidesMiniWithoutResizingThePage() {
         start()
         val original = viewport()

@@ -341,6 +341,8 @@ fun FloatingBottomBar(
                     scaleX = s
                     scaleY = s
                 })
+                // Clip only the base row's press highlight; the stretched indicator is a sibling.
+                .then(if (embedded) Modifier.clip(pillShape) else Modifier)
                 .then(if (isBlurEnabled) interactiveHighlight.modifier else Modifier)
                 .height(64.dp)
                 .padding(4.dp),
