@@ -7,7 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.test.core.app.ApplicationProvider
@@ -156,11 +156,28 @@ class LyricsCapabilitiesTest {
             assertEquals(40f, container.musicSettings.snapshot().lyricsFontSize, 0f)
             compose.onNodeWithText("字号 40").assertIsDisplayed()
             compose.mainClock.advanceTimeBy(800); compose.waitForIdle()
+            fun previewInk(): Float {
+                val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+                compose.onNodeWithTag("lyrics_font_preview")
+                    .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                return layouts.single().layoutInput.style.color.red
+            }
+            assertTrue("Lyric display settings must use dark ink in light appearance", previewInk() < .4f)
             androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()?.let { bitmap ->
                 java.io.File(context.externalCacheDir, "lyrics-font-settings-preview.png").outputStream().use {
                     bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                 }
             }
+            container.settings.edit { it.copy(themeMode = io.github.currencortex.music.data.settings.ThemeMode.DARK) }
+            compose.waitUntil(5000) { previewInk() > .8f }
+            compose.mainClock.advanceTimeBy(800); compose.waitForIdle()
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()?.let { bitmap ->
+                java.io.File(context.externalCacheDir, "lyrics-font-settings-dark-preview.png").outputStream().use {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+            }
+            container.settings.edit { it.copy(themeMode = io.github.currencortex.music.data.settings.ThemeMode.LIGHT) }
+            compose.waitUntil(5000) { previewInk() < .4f }
             compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
             compose.onNodeWithTag("lyrics_display_settings").assertDoesNotExist()
             assertEquals(40f, lyricLayout().layoutInput.style.fontSize.value, 0f)
@@ -178,7 +195,7 @@ class LyricsCapabilitiesTest {
             val rowLayouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
             compose.onNodeWithText("▶ 夜航", useUnmergedTree = true)
                 .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(rowLayouts) }
-            assertTrue("Queue rows must retain the player's light text over its dark dialog", rowLayouts.first().layoutInput.style.color.red > .8f)
+            assertTrue("Queue dialogs must follow light app appearance", rowLayouts.first().layoutInput.style.color.red < .4f)
             androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()?.let { bitmap ->
                 java.io.File(context.externalCacheDir, "player-queue-preview.png").outputStream().use {
                     bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)

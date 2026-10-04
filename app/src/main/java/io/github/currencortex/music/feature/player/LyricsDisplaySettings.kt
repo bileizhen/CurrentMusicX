@@ -7,7 +7,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.state.ToggleableState
@@ -16,6 +15,7 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.settings.LyricsTypography
 import io.github.currencortex.music.feature.lyrics.ui.LyricsFontFamily
 import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 
 @Composable internal fun LyricsDisplaySettings(fontSize: Float, onFontSize: (Float) -> Unit,
@@ -23,16 +23,17 @@ import kotlin.math.roundToInt
     romanization: Boolean, onRomanization: (Boolean) -> Unit,
     animation: Boolean, onAnimation: (Boolean) -> Unit,
     effects: Boolean, onEffects: (Boolean) -> Unit) {
+    val ink = MiuixTheme.colorScheme.onSurface
     var preview by remember(fontSize) { mutableFloatStateOf(fontSize) }
     Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
         .testTag("lyrics_display_settings")) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
             Text("让音乐说话", fontFamily = LyricsFontFamily, fontSize = preview.sp,
-                color = Color.White, modifier = Modifier.testTag("lyrics_font_preview"))
-            Text("霞鹜文楷", fontSize = 12.sp, color = Color.White.copy(alpha = .5f), modifier = Modifier.padding(top = 6.dp))
+                color = ink, modifier = Modifier.testTag("lyrics_font_preview"))
+            Text("霞鹜文楷", fontSize = 12.sp, color = ink.copy(alpha = .5f), modifier = Modifier.padding(top = 6.dp))
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("字号 ${preview.roundToInt()}", fontSize = 14.sp, color = Color.White, modifier = Modifier.weight(1f))
-                Text("恢复默认", fontSize = 13.sp, color = Color.White.copy(alpha = .65f),
+                Text("字号 ${preview.roundToInt()}", fontSize = 14.sp, color = ink, modifier = Modifier.weight(1f))
+                Text("恢复默认", fontSize = 13.sp, color = ink.copy(alpha = .65f),
                     modifier = Modifier.testTag("lyrics_font_reset").clickable(role = Role.Button) {
                         preview = LyricsTypography.DEFAULT_SIZE; onFontSize(preview)
                     }.padding(horizontal = 8.dp, vertical = 12.dp))
@@ -57,10 +58,11 @@ import kotlin.math.roundToInt
 }
 
 @Composable private fun LyricsToggle(title: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    val ink = MiuixTheme.colorScheme.onSurface
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(role = Role.Switch) { onChange(!checked) }
         .semantics { toggleableState = if (checked) ToggleableState.On else ToggleableState.Off }
         .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, Modifier.weight(1f), fontSize = 16.sp, color = Color.White)
+        Text(title, Modifier.weight(1f), fontSize = 16.sp, color = ink)
         Switch(checked = checked, onCheckedChange = onChange)
     }
 }

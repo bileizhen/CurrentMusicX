@@ -51,11 +51,11 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
     val indication = LocalIndication.current
     val colors = remember { darkColorScheme(primary = Color.White, onPrimary = Color(0xFF282629),
         background = Color(0xFF262428), surface = Color(0xFF262428)) }
-    // The controller overload also supplies the white default content color for overlay titles.
-    MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
-    CompositionLocalProvider(LocalIndication provides indication) {
     Box(Modifier.fillMaxSize().testTag("player_screen")) {
         PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize())
+        // The artwork viewport uses light ink; dialogs below inherit the app appearance.
+        MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
+        CompositionLocalProvider(LocalIndication provides indication) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             .padding(horizontal = 24.dp).testTag("player_safe_content")) {
@@ -101,6 +101,8 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
                 if (onCast != null) PlayerIconButton(PlayerIcon.CAST, if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏", onCast)
                 PlayerIconButton(PlayerIcon.QUEUE, "播放队列，${queue.songs.size} 首", { overlay = PlayerOverlay.QUEUE }, Modifier.testTag("open_player_queue"))
             }
+        }
+        }
         }
         when (overlay) {
             PlayerOverlay.NONE -> Unit
@@ -149,8 +151,6 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
                     wordAnimation, { wordAnimation = it }, effects, { effects = it })
             }
         }
-    }
-    }
     }
 }
 

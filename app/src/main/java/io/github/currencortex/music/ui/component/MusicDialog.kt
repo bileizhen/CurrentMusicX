@@ -16,8 +16,8 @@ import top.yukonga.miuix.kmp.theme.LocalContentColor
 fun MusicDialog(title: String, onDismiss: () -> Unit,
                    footer: (@Composable ColumnScope.() -> Unit)? = null,
                    content: @Composable ColumnScope.() -> Unit) {
-    // OverlayDialog relocates content to the root Scaffold. Keep the caller's palette there,
-    // including the dark player surface inside an otherwise light application.
+    // OverlayDialog relocates content to the root Scaffold. Preserve the caller's current
+    // appearance palette and typography in that host, including changes while it is open.
     val colors = MiuixTheme.colorScheme
     val textStyles = MiuixTheme.textStyles
     val indication = LocalIndication.current
