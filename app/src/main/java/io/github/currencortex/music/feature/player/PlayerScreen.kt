@@ -202,10 +202,14 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         onClick = { vm.lyricsWeight(weight); overlay = PlayerOverlay.LYRICS })
                 }
             }
-            PlayerOverlay.KARAOKE -> MusicDialog("逐字动画兼容策略", { overlay = PlayerOverlay.LYRICS }) {
+            PlayerOverlay.KARAOKE -> MusicDialog("卡拉OK（逐字）歌词动画兼容策略", { overlay = PlayerOverlay.LYRICS }) {
                 KaraokeScope.entries.forEach { scope ->
                     MusicDestinationRow((if (scope == settings.lyricsDisplay.karaokeScope) "✓ " else "") + scope.label,
-                        summary = if (scope == KaraokeScope.ALL) "所有含逐字时间的可见行跟随进度高亮" else "只对正在播放的行逐字高亮",
+                        summary = when (scope) {
+                            KaraokeScope.CURRENT -> "只对正在播放的行逐字高亮"
+                            KaraokeScope.ALL -> "所有含逐字时间的可见行跟随进度高亮"
+                            KaraokeScope.ALWAYS -> "全部行启用；普通歌词按行时长近似扫亮"
+                        },
                         modifier = Modifier.testTag("karaoke_scope_${scope.name}"), chevron = false,
                         onClick = { vm.lyricsDisplay { it.copy(karaokeScope = scope) }; overlay = PlayerOverlay.LYRICS })
                 }

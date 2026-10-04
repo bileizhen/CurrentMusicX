@@ -51,7 +51,15 @@ class LyricsTypographyTest {
                 assertEquals(40f, settings.snapshot().lyricsFontSize, 0f)
                 settings.setLyricsWeight(LyricsWeight.CURRENT)
             }
-            store { settings -> assertEquals(LyricsWeight.CURRENT, settings.snapshot().lyricsWeight) }
+            store { settings ->
+                assertEquals(LyricsWeight.CURRENT, settings.snapshot().lyricsWeight)
+                settings.editLyricsDisplay { it.copy(karaokeScope = KaraokeScope.ALWAYS) }
+            }
+            store { settings ->
+                assertEquals(KaraokeScope.ALWAYS, settings.snapshot().lyricsDisplay.karaokeScope)
+                assertFalse(settings.snapshot().lyricsDisplay.wordAnimation)
+                assertTrue(settings.snapshot().preloadMetered)
+            }
         } finally { file.delete(); directory.delete() }
     }
 }

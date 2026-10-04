@@ -85,7 +85,8 @@ internal const val ACTIVE_LYRIC_SCALE = 1.12f
     val blur = if (effects && android.os.Build.VERSION.SDK_INT >= 31 && !focused)
         Modifier.blur(if (distance <= 1) 1.4.dp else 2.2.dp) else Modifier
     Column(Modifier.fillMaxWidth().then(blur)) {
-    if (line.text.isNotBlank()) KaraokeText(line, position, wordAnimation && (focused || display.karaokeScope == KaraokeScope.ALL), Modifier.fillMaxWidth(), size, weight, align)
+    if (line.text.isNotBlank()) KaraokeText(line, position, wordAnimation && (focused || display.karaokeScope != KaraokeScope.CURRENT),
+        Modifier.fillMaxWidth(), size, weight, align, forceLineAnimation = display.karaokeScope == KaraokeScope.ALWAYS)
     if (translation && line.translation.isNotBlank()) BasicText(line.translation, Modifier.fillMaxWidth().padding(top = 6.dp),
         style = TextStyle(fontFamily = LyricsFontFamily, fontWeight = weight, fontSynthesis = lyricsFontSynthesis(weight), color = Color.White.copy(alpha = .65f),
             fontSize = (size * .6f).sp, lineHeight = (size * .85f).sp, textAlign = align))

@@ -18,7 +18,7 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val lyricsDisplay: LyricsDisplayOptions = LyricsDisplayOptions())
 
 enum class KaraokeScope(val label: String) {
-    CURRENT("仅当前行"), ALL("拓展全部行");
+    CURRENT("仅当前行"), ALL("拓展全部行"), ALWAYS("总是");
     companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: ALL }
 }
 

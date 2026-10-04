@@ -124,6 +124,52 @@ class LyricsDisplayCapabilitiesTest {
         save("lyrics_panel", "lyrics-centered-preview.png")
     }
 
+    @Test fun alwaysSweepsPlainLinesWithoutReplacingRealWordTiming() {
+        val plain = LyricLine(1000, 3000, "普通歌词近似扫亮")
+        val timed = LyricLine(4000, 6000, "真实逐字时间", words = listOf(
+            LyricWord("真实", 4000, 5800, 0, 2), LyricWord("逐字时间", 5800, 6000, 2, 6)))
+        val document = LyricsDocument(listOf(plain, timed))
+        val position = mutableLongStateOf(1500)
+        val strategy = mutableStateOf(KaraokeScope.CURRENT)
+        val enabled = mutableStateOf(true)
+        compose.setContent { LyricsScreen(document, position, {}, Modifier.fillMaxSize().background(Color.Black),
+            effects = false, wordAnimation = enabled.value, weightMode = LyricsWeight.NORMAL,
+            display = LyricsDisplayOptions(stagger = false, karaokeScope = strategy.value)) }
+        compose.mainClock.advanceTimeBy(1000); compose.waitForIdle()
+        fun brightness(text: String): Double {
+            val pixels = compose.onNodeWithText(text, useUnmergedTree = true).captureToImage().toPixelMap()
+            var total = 0.0
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width) total += pixels[x, y].red
+            return total
+        }
+        val wholeLine = brightness(plain.text)
+        compose.runOnIdle { strategy.value = KaraokeScope.ALL }
+        compose.waitForIdle()
+        assertEquals("All-line mode retains plain line display", wholeLine, brightness(plain.text), .01)
+        compose.runOnIdle { strategy.value = KaraokeScope.ALWAYS }
+        compose.waitForIdle()
+        val early = brightness(plain.text)
+        assertTrue("Always mode displays a partial sweep on an untimed line", early < wholeLine * .8)
+        compose.runOnIdle { position.longValue = 2500 }
+        compose.waitForIdle()
+        val late = brightness(plain.text)
+        assertTrue("Approximate highlighting advances with line time", late > early * 1.1)
+        compose.runOnIdle { enabled.value = false }
+        compose.waitForIdle()
+        val disabled = brightness(plain.text)
+        assertTrue("Disabling word animation restores full line brightness", disabled > late)
+        compose.runOnIdle { strategy.value = KaraokeScope.CURRENT }
+        compose.waitForIdle()
+        assertEquals("The disabled fallback matches plain text at the same playback position", disabled, brightness(plain.text), .01)
+        compose.runOnIdle { enabled.value = true; position.longValue = 4500; strategy.value = KaraokeScope.ALL }
+        compose.mainClock.advanceTimeBy(1000); compose.waitForIdle()
+        val realTiming = brightness(timed.text)
+        compose.runOnIdle { strategy.value = KaraokeScope.ALWAYS }
+        compose.waitForIdle()
+        assertEquals("Always mode must retain the original word timing", realTiming, brightness(timed.text), .01)
+        assertTrue("The source document is never rewritten", plain.words.isEmpty())
+    }
+
     @Test fun miniLyricsFollowPositionAndSettingsCanHideAndRestoreControls() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         val server = MockWebServer()
@@ -168,6 +214,11 @@ class LyricsDisplayCapabilitiesTest {
             compose.onNodeWithTag("lyrics_font_strength").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(600f) }
             compose.onNodeWithTag("lyrics_stagger").performScrollTo().performClick()
             compose.onNodeWithTag("lyrics_blur").performScrollTo().performClick()
+            compose.onNodeWithTag("open_karaoke_scope").performScrollTo().performClick()
+            compose.onNodeWithTag("karaoke_scope_CURRENT").assertIsDisplayed()
+            compose.onNodeWithTag("karaoke_scope_ALL").assertIsDisplayed()
+            compose.onNodeWithTag("karaoke_scope_ALWAYS").assertIsDisplayed().performClick()
+            compose.waitUntil(5000) { container.musicSettings.state.value.lyricsDisplay.karaokeScope == KaraokeScope.ALWAYS }
             compose.onNodeWithTag("open_karaoke_scope").performScrollTo().performClick()
             compose.onNodeWithTag("karaoke_scope_CURRENT").performClick()
             compose.onNodeWithTag("lyrics_hide_controls").performScrollTo().performClick()

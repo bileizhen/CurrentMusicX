@@ -76,7 +76,7 @@ import kotlin.math.roundToInt
         LyricsToggle("翻译歌词", display.translation, { value -> onDisplay { it.copy(translation = value) } }, "lyrics_translation")
         LyricsToggle("罗马音", display.romanization, { value -> onDisplay { it.copy(romanization = value) } }, "lyrics_romanization")
         LyricsToggle("逐字动画", display.wordAnimation, { value -> onDisplay { it.copy(wordAnimation = value) } }, "lyrics_word_animation")
-        MusicDestinationRow("逐字动画兼容策略", summary = display.karaokeScope.label, onClick = onKaraokeScope,
+        MusicDestinationRow("卡拉OK（逐字）歌词动画兼容策略", summary = display.karaokeScope.label, onClick = onKaraokeScope,
             modifier = Modifier.testTag("open_karaoke_scope"))
         LyricsToggle("隐藏歌词界面控制面板", display.hideControls, { value -> onDisplay { it.copy(hideControls = value) } },
             "lyrics_hide_controls", "歌词页底部可随时恢复控制")

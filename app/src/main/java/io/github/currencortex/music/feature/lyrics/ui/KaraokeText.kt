@@ -19,12 +19,14 @@ import io.github.currencortex.music.data.settings.LyricsTypography
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.feature.lyrics.model.LyricLine
+import io.github.currencortex.music.feature.lyrics.model.LyricWord
 import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
 import androidx.compose.ui.text.style.TextAlign
 
 /** One text layout, with timing mapped to actual glyph boxes, including wrapped words. */
 @Composable fun KaraokeText(line: LyricLine, position: State<Long>, animateWords: Boolean, modifier: Modifier = Modifier,
-    fontSize: Float = LyricsTypography.DEFAULT_SIZE, fontWeight: FontWeight = FontWeight.Normal, textAlign: TextAlign = TextAlign.Start) {
+    fontSize: Float = LyricsTypography.DEFAULT_SIZE, fontWeight: FontWeight = FontWeight.Normal, textAlign: TextAlign = TextAlign.Start,
+    forceLineAnimation: Boolean = false) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val size = if (fontSize.isFinite()) fontSize.coerceIn(12f, LyricsTypography.MAX_SIZE) else LyricsTypography.DEFAULT_SIZE
@@ -39,7 +41,14 @@ import androidx.compose.ui.text.style.TextAlign
             measurer.measure(AnnotatedString(line.text), style,
                 constraints = Constraints(minWidth = if (textAlign == TextAlign.End || textAlign == TextAlign.Center) width else 0, maxWidth = width))
         }
-        val boxes = remember(line.words, layout) { line.words.map { word ->
+        // A display-only line sweep in Always mode; real word timing and cached data remain authoritative.
+        val words = remember(line, forceLineAnimation) {
+            if (line.words.isNotEmpty()) line.words
+            else if (forceLineAnimation && line.text.isNotBlank() && line.endTimeMs > line.startTimeMs)
+                listOf(LyricWord(line.text, line.startTimeMs, line.endTimeMs, 0, line.text.length))
+            else emptyList()
+        }
+        val boxes = remember(words, layout) { words.map { word ->
             (word.startOffset until word.endOffset.coerceAtMost(line.text.length)).map { layout.getBoundingBox(it) }
                 .distinct().filter { it.width > 0 }
         } }
@@ -48,13 +57,13 @@ import androidx.compose.ui.text.style.TextAlign
                 text = AnnotatedString(line.text)
                 getTextLayoutResult { it.add(layout); true }
             }) {
-            val timed = animateWords && line.words.isNotEmpty()
+            val timed = animateWords && words.isNotEmpty()
             drawText(layout, color = Color.White.copy(alpha = if (timed) .32f else 1f))
             if (timed) {
                 val now = position.value // Draw-only subscription: no per-frame text measurement.
                 val sung = Path()
                 val glowing = Path()
-                line.words.forEachIndexed { index, word ->
+                words.forEachIndexed { index, word ->
                     val progress = LyricsSynchronizer.wordProgress(word, now)
                     var remaining = boxes[index].sumOf { it.width.toDouble() }.toFloat() * progress
                     boxes[index].forEach { box ->
