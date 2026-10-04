@@ -33,6 +33,41 @@ import java.util.UUID
 class LyricsCapabilitiesTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun activeLyricEnlargesWithoutReflowOrClippingAtLargestFont() {
+        val position = mutableLongStateOf(1500L)
+        val phrase = "沿着夜色慢慢走向明天"
+        val document = LyricsParser.lrc("[00:01.00]$phrase\n[00:03.00]$phrase\n[00:05.00]$phrase")
+        compose.setContent {
+            AppleLyrics(document, position, {}, Modifier.fillMaxSize().background(Color(0xFF29272C)), effects = false, fontSize = 40f)
+        }
+        compose.mainClock.advanceTimeBy(1000); compose.waitForIdle()
+        fun textBounds(index: Int) = compose.onAllNodesWithText(phrase, useUnmergedTree = true)[index].fetchSemanticsNode().boundsInRoot
+        fun textLayout(index: Int): androidx.compose.ui.text.TextLayoutResult {
+            val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+            compose.onAllNodesWithText(phrase, useUnmergedTree = true)[index]
+                .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+            return layouts.single()
+        }
+        val panel = compose.onNodeWithTag("lyrics_panel").fetchSemanticsNode().boundsInRoot
+        val originalLayout = textLayout(0)
+        val rowHeight = compose.onNodeWithTag("lyric_line_0").fetchSemanticsNode().boundsInRoot.height
+        assertTrue("Current lyric should be visibly larger than adjacent lines", textBounds(0).width > textBounds(1).width * 1.15f)
+        assertTrue("Enlarged text must fit inside the viewport", textBounds(0).right <= panel.right + 1f)
+        compose.runOnIdle { position.longValue = 3500L }
+        compose.mainClock.advanceTimeBy(1000); compose.waitForIdle()
+        compose.onNodeWithTag("lyric_line_1").assertIsSelected().assertIsDisplayed()
+        assertTrue(textBounds(1).width > textBounds(0).width * 1.15f)
+        assertEquals("Focus must not rewrap glyphs", originalLayout.lineCount, textLayout(0).lineCount)
+        assertEquals("Focus must not resize rows", rowHeight, compose.onNodeWithTag("lyric_line_0").fetchSemanticsNode().boundsInRoot.height, 1f)
+        assertTrue(textBounds(1).right <= panel.right + 1f)
+        compose.onNodeWithTag("lyrics_panel").captureToImage().asAndroidBitmap().let { bitmap ->
+            val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+            java.io.File(context.externalCacheDir, "lyrics-focus-preview.png").outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
+    }
+
     @Test fun timelineFollowsSeekAndBrowsingCanReturnToCurrentLine() {
         val position = mutableLongStateOf(1500L)
         var seek = -1L

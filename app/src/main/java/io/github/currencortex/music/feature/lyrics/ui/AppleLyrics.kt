@@ -18,12 +18,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.constrainHeight
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -33,8 +35,11 @@ import io.github.currencortex.music.feature.lyrics.model.*
 import io.github.currencortex.music.feature.lyrics.timeline.*
 import kotlinx.coroutines.delay
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.roundToInt
 
 enum class LyricsScrollMode { FOLLOWING, BROWSING }
+private const val ACTIVE_LYRIC_SCALE = 1.12f
 
 @Composable fun rememberLyricsPosition(player: PlayerState): State<Long> {
     val anchor = remember(player.song?.id, player.positionMs, player.playing, player.loading, player.durationMs, player.playbackSpeed) {
@@ -103,12 +108,21 @@ enum class LyricsScrollMode { FOLLOWING, BROWSING }
                 val focused = index == active
                 val distance = if (mode == LyricsScrollMode.BROWSING) 1 else abs(index - active)
                 val opacity = animateFloatAsState(if (focused) 1f else when (distance) { 1 -> .56f; 2 -> .35f; else -> .24f }, tween(350), label = "lyric focus")
-                val scale = animateFloatAsState(if (focused) 1f else if (distance == 1) .97f else .95f,
+                val scale = animateFloatAsState(if (focused) ACTIVE_LYRIC_SCALE else if (distance == 1) .96f else .94f,
                     spring(stiffness = 220f), label = "lyric scale")
                 val blur = if (effects && Build.VERSION.SDK_INT >= 31 && mode == LyricsScrollMode.FOLLOWING && distance > 1) Modifier.blur(if (distance == 2) .7.dp else 1.3.dp) else Modifier
-                Column(Modifier.fillMaxWidth().testTag("lyric_line_$index")
+                Box(Modifier.fillMaxWidth().testTag("lyric_line_$index")
                     .semantics { selected = focused }
-                    .clickable(enabled = canSeek, role = Role.Button) { onSeek(line.startTimeMs); mode = LyricsScrollMode.FOLLOWING }
+                    .clickable(enabled = canSeek, role = Role.Button) { onSeek(line.startTimeMs); mode = LyricsScrollMode.FOLLOWING }) {
+                Column(Modifier.fillMaxWidth()
+                    // Reserve the largest visual size for every row. Focus changes transform
+                    // cached glyphs without rewrapping text, moving siblings or clipping the edge.
+                    .layout { measurable, constraints ->
+                        val width = (constraints.maxWidth / ACTIVE_LYRIC_SCALE).roundToInt()
+                        val child = measurable.measure(constraints.copy(minWidth = minOf(constraints.minWidth, width), maxWidth = width))
+                        val height = constraints.constrainHeight(ceil(child.height * ACTIVE_LYRIC_SCALE).toInt())
+                        layout(constraints.maxWidth, height) { child.placeRelative(0, (height - child.height) / 2) }
+                    }
                     .graphicsLayer { alpha = opacity.value; scaleX = scale.value; scaleY = scale.value; transformOrigin = TransformOrigin(0f, .5f) }
                     .then(blur)) {
                     KaraokeText(line, position, focused && wordAnimation, Modifier.fillMaxWidth(), size)
@@ -116,6 +130,7 @@ enum class LyricsScrollMode { FOLLOWING, BROWSING }
                         Modifier.padding(top = 6.dp), style = TextStyle(fontFamily = LyricsFontFamily, color = Color.White.copy(alpha = .5f), fontSize = (size * .53f).sp, lineHeight = (size * .75f).sp))
                     if (translation && line.translation.isNotBlank()) BasicText(line.translation,
                         Modifier.padding(top = 6.dp), style = TextStyle(fontFamily = LyricsFontFamily, color = Color.White.copy(alpha = .65f), fontSize = (size * .6f).sp, lineHeight = (size * .85f).sp))
+                }
                 }
             }
         }
