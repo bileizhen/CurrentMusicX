@@ -27,6 +27,7 @@ class PlayerSheetCapabilitiesTest {
     private lateinit var server: MockWebServer
     private lateinit var dispatcher: androidx.activity.OnBackPressedDispatcher
     private lateinit var activity: androidx.activity.ComponentActivity
+    private var coverFixture: java.io.File? = null
 
     @Before fun setup() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
@@ -58,7 +59,7 @@ class PlayerSheetCapabilitiesTest {
         container.playerController.state.value = PlayerState(song = song, positionMs = 1500, durationMs = 9000)
     }
 
-    @After fun cleanup() { compose.mainClock.autoAdvance = true; container.close(); server.shutdown() }
+    @After fun cleanup() { compose.mainClock.autoAdvance = true; container.close(); server.shutdown(); coverFixture?.delete() }
 
     private fun start() {
         compose.setContent {
@@ -74,7 +75,7 @@ class PlayerSheetCapabilitiesTest {
     private fun viewport(): Rect = compose.onNodeWithTag("music_navigation").fetchSemanticsNode().boundsInRoot
     private fun save(name: String) {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
-        compose.onNodeWithTag("music_navigation").captureToImage().asAndroidBitmap().let { bitmap ->
+        compose.onNodeWithTag("music_window").captureToImage().asAndroidBitmap().let { bitmap ->
             java.io.File(context.externalCacheDir, name).outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
@@ -102,7 +103,7 @@ class PlayerSheetCapabilitiesTest {
                 compose.waitForIdle()
                 compose.mainClock.autoAdvance = false
                 phase.set("collapse-${index + 1}")
-                compose.onNodeWithTag("navigate_back").performClick()
+                compose.onNodeWithContentDescription("收起播放器").performClick()
                 repeat(50) {
                     val begin = android.os.SystemClock.elapsedRealtime()
                     compose.mainClock.advanceTimeByFrame()
@@ -132,12 +133,13 @@ class PlayerSheetCapabilitiesTest {
         compose.onNodeWithTag("network_settings").assertIsDisplayed()
         compose.waitForIdle()
         val original = viewport()
+        val sceneIdentity = compose.onNodeWithTag("music_scene_21").fetchSemanticsNode().id
         val mini = compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot
         val miniIdentity = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().id
-        val underlay = compose.onNodeWithTag("music_navigation").captureToImage().toPixelMap()
+        val underlay = compose.onNodeWithTag("music_window").captureToImage().toPixelMap()
         fun sampleSurface(frame: PlayerSheetFrame): androidx.compose.ui.graphics.Color {
-            val pixels = compose.onNodeWithTag("music_navigation").captureToImage().toPixelMap()
-            return pixels[pixels.width / 2, (frame.bounds.top + 16).toInt()]
+            val pixels = compose.onNodeWithTag("music_window").captureToImage().toPixelMap()
+            return pixels[(frame.bounds.left + 80).toInt(), (frame.bounds.bottom - 80).toInt()]
         }
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("mini_cover").performClick()
@@ -159,7 +161,7 @@ class PlayerSheetCapabilitiesTest {
         assertEquals(original, viewport())
         assertEquals("Animation must not repeatedly resize the player layout", layout,
             compose.onNodeWithTag("player_safe_content").fetchSemanticsNode().layoutInfo.let { it.width to it.height })
-        val pixels = compose.onNodeWithTag("music_navigation").captureToImage().toPixelMap()
+        val pixels = compose.onNodeWithTag("music_window").captureToImage().toPixelMap()
         val background = pixels[pixels.width / 2, 16]
         assertTrue("No opaque player background or gray scrim outside the moving card", background.red > .9f && background.green > .9f)
         save("player-sheet-open-176.png")
@@ -170,21 +172,29 @@ class PlayerSheetCapabilitiesTest {
         assertEquals(0f, frame().radius, .01f)
         assertEquals(0f, frame().bounds.top, .01f)
         compose.onNodeWithTag("player_transport").assertIsDisplayed()
-        val fullSurface = sampleSurface(frame())
+        assertEquals("The source page stays composed even while the player is fully open", sceneIdentity,
+            compose.onNodeWithTag("music_scene_21").fetchSemanticsNode().id)
+        val fullPixels = compose.onNodeWithTag("music_window").captureToImage().toPixelMap()
         fun assertSurfaceFade(frame: PlayerSheetFrame, color: androidx.compose.ui.graphics.Color) {
-            val behind = underlay[underlay.width / 2, (frame.bounds.top + 16).toInt()]
-            val expected = behind.red * (1 - frame.progress) + fullSurface.red * frame.progress
+            val x = (frame.bounds.left + 80).toInt()
+            val y = (frame.bounds.bottom - 80).toInt()
+            val behind = underlay[x, y]
+            val front = fullPixels[(x - frame.bounds.left).toInt().coerceIn(0, fullPixels.width - 1),
+                (y - frame.bounds.top).toInt().coerceIn(0, fullPixels.height - 1)]
+            val alpha = io.github.currencortex.music.feature.player.playerSheetSurfaceAlpha(frame.progress)
+            val expected = behind.red * (1 - alpha) + front.red * alpha
             assertEquals("The card background must fade too, not just its text", expected, color.red, .04f)
         }
         assertSurfaceFade(first, firstSurface)
         assertSurfaceFade(middle, middleSurface)
-        compose.onNodeWithTag("navigate_back").performClick()
+        compose.onNodeWithContentDescription("收起播放器").performClick()
         compose.mainClock.advanceTimeBy(96)
         val closing = frame()
         assertSurfaceFade(closing, sampleSurface(closing))
         assertTrue("Closing reverses the same upward expansion", closing.progress < .99f && closing.bounds.top > 0)
         compose.onNodeWithTag("mini_cover").assertDoesNotExist()
         save("player-sheet-close-096.png")
+        compose.runOnUiThread { dispatcher.onBackPressed() }
         compose.mainClock.advanceTimeBy(96)
         val laterClosing = frame()
         assertTrue("Collapse must keep moving and fading rather than switch state early", laterClosing.progress < closing.progress)
@@ -197,6 +207,8 @@ class PlayerSheetCapabilitiesTest {
         assertEquals("Docking must reuse the cover node", miniIdentity, compose.onNodeWithTag("mini_cover").fetchSemanticsNode().id)
         assertEquals("Docking must retain the original capsule position", mini, compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot)
         assertEquals(original, viewport())
+        assertEquals("Collapse must not rebuild the source page", sceneIdentity,
+            compose.onNodeWithTag("music_scene_21").fetchSemanticsNode().id)
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
         assertFalse(container.playerController.state.value.playing)
     }
@@ -293,10 +305,249 @@ class PlayerSheetCapabilitiesTest {
         assertEquals(original, viewport())
     }
 
+    @Test fun coverLyricsAndPagerFollowDragWithoutChangingPlayback() {
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.waitUntil(12000) {
+            compose.onAllNodes(hasTestTag("player_cover_lyric_current") and hasText("星光陪着你"))
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        val title = compose.onNodeWithTag("player_song_title").fetchSemanticsNode().boundsInRoot
+        val preview = compose.onNodeWithTag("player_cover_lyrics").fetchSemanticsNode().boundsInRoot
+        assertTrue("The lyric preview sits below the song title", preview.top > title.bottom)
+        compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(positionMs = 6500) }
+        compose.waitUntil(5000) {
+            compose.onAllNodes(hasTestTag("player_cover_lyric_current") and hasText("一起听音乐"))
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.waitForIdle()
+        save("player-cover-lyric-preview.png")
+        compose.mainClock.autoAdvance = false
+        val pager = compose.onNodeWithTag("player_content_pager")
+        fun page() = pager.fetchSemanticsNode().config[io.github.currencortex.music.feature.player.PlayerPagePosition]
+        pager.performTouchInput {
+            down(androidx.compose.ui.geometry.Offset(width * .85f, height * .4f))
+            moveBy(androidx.compose.ui.geometry.Offset(-width * .22f, 0f))
+        }
+        compose.mainClock.advanceTimeBy(64)
+        val held = page()
+        assertTrue("Horizontal page position follows the held drag", held > 0f && held < .5f)
+        compose.mainClock.advanceTimeBy(176)
+        assertEquals("A held pager drag must remain under finger control", held, page(), .001f)
+        save("player-pager-held.png")
+        pager.performTouchInput { advanceEventTime(400); up() }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals("A short swipe returns to the cover", 0f, page(), .001f)
+        pager.performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(width * .85f, height * .4f),
+                androidx.compose.ui.geometry.Offset(width * .15f, height * .4f), 180)
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals("Left swipe opens lyrics", 1f, page(), .001f)
+        compose.onNodeWithContentDescription("显示封面").assertIsDisplayed()
+        compose.onNodeWithTag("lyrics_panel").performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(width * .15f, height * .5f),
+                androidx.compose.ui.geometry.Offset(width * .85f, height * .5f), 180)
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals("Right swipe from lyrics returns to the cover", 0f, page(), .001f)
+        val seek = compose.onNodeWithTag("player_seek")
+        seek.performTouchInput {
+            down(androidx.compose.ui.geometry.Offset(width * .1f, centerY))
+            moveTo(androidx.compose.ui.geometry.Offset(width * .75f, centerY))
+        }
+        compose.mainClock.advanceTimeBy(64)
+        assertTrue("Horizontal seeking retains its own preview gesture",
+            seek.fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.ProgressBarRangeInfo].current > .6f)
+        assertEquals("Seeking must not drag the player sheet", 1f, frame().progress, .001f)
+        assertEquals("Seeking must not change the pager", 0f, page(), .001f)
+        seek.performTouchInput { up() }
+        assertEquals(55L, container.playerController.queue.state.value.current?.id)
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun miniTitleAndPlayerArtworkOrLyricsHeaderCanBeDragged() {
+        start()
+        compose.mainClock.autoAdvance = false
+        val title = compose.onNodeWithTag("mini_song_gesture")
+        title.performTouchInput {
+            down(center)
+            moveBy(androidx.compose.ui.geometry.Offset(0f, -160f))
+            moveBy(androidx.compose.ui.geometry.Offset(0f, -40f))
+        }
+        compose.mainClock.advanceTimeBy(64)
+        val pulled = frame()
+        assertTrue("The mini title opens a sheet that follows a held drag", pulled.progress > 0f && pulled.progress < .14f)
+        compose.mainClock.advanceTimeBy(176)
+        assertEquals("A held gesture must not auto-complete the animation", pulled.progress, frame().progress, .001f)
+        save("player-drag-mini-held.png")
+        compose.onNodeWithTag("music_window").performTouchInput { advanceEventTime(400); up() }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("player_sheet").assertDoesNotExist()
+        title.performTouchInput { swipe(center, center - androidx.compose.ui.geometry.Offset(0f, 900f), 160) }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals(1f, frame().progress, .001f)
+        val cover = compose.onNodeWithTag("player_cover")
+        cover.performTouchInput {
+            down(center)
+            moveBy(androidx.compose.ui.geometry.Offset(0f, 100f))
+            moveBy(androidx.compose.ui.geometry.Offset(0f, 40f))
+        }
+        compose.mainClock.advanceTimeBy(64)
+        assertTrue("Dragging the cover down moves the sheet", frame().progress > .82f && frame().progress < 1f)
+        assertTrue(frame().bounds.top > 0)
+        cover.performTouchInput { advanceEventTime(400); up() }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals("A short downward drag springs back to full player", 1f, frame().progress, .001f)
+        compose.onNodeWithTag("player_screen").performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(12f, height * .4f),
+                androidx.compose.ui.geometry.Offset(12f, height * .4f + 900f), 160)
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("player_sheet").assertDoesNotExist()
+        title.performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("player_transport").performTouchInput {
+            swipe(center, center + androidx.compose.ui.geometry.Offset(0f, 900f), 160)
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("player_sheet").assertDoesNotExist()
+        assertFalse("A control-area drag must not toggle playback", container.playerController.state.value.playing)
+        title.performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("open_lyrics").performClick()
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithTag("lyrics_panel").performTouchInput {
+            swipe(center, center + androidx.compose.ui.geometry.Offset(0f, 600f), 160)
+        }
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals("The entire lyric viewport is excluded even at its scroll boundary", 1f, frame().progress, .001f)
+        compose.onNodeWithTag("player_lyrics_header").performTouchInput {
+            swipe(center, center + androidx.compose.ui.geometry.Offset(0f, 900f), 160)
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("player_sheet").assertDoesNotExist()
+        compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+        assertEquals(55L, container.playerController.queue.state.value.current?.id)
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun circularArtworkMovesWithTheSheetAndReturnsToMini() {
+        val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        val file = java.io.File(context.cacheDir, "artwork-${UUID.randomUUID()}.png")
+        coverFixture = file
+        android.graphics.Bitmap.createBitmap(128, 128, android.graphics.Bitmap.Config.ARGB_8888).apply {
+            eraseColor(android.graphics.Color.MAGENTA)
+            file.outputStream().use { compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            recycle()
+        }
+        val song = container.playerController.queue.state.value.current!!.copy(cover = file.toURI().toString())
+        container.playerController.queue.replace(listOf(song), 0)
+        container.playerController.state.value = container.playerController.state.value.copy(song = song)
+        start()
+        val mini = compose.onNodeWithTag("mini_cover").fetchSemanticsNode()
+        val source = mini.boundsInRoot
+        fun artwork() = compose.onNodeWithTag("player_artwork_flight").fetchSemanticsNode()
+            .config[io.github.currencortex.music.feature.player.PlayerArtworkGeometry]
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        val first = artwork()
+        compose.mainClock.advanceTimeBy(112)
+        val middle = artwork()
+        assertTrue("Artwork grows as the player expands", middle.bounds.width > first.bounds.width)
+        assertEquals("Keep the artwork circular throughout the flight", middle.bounds.width, middle.bounds.height, .01f)
+        assertEquals("Artwork and sheet must use the same clock", frame().progress, middle.progress, .001f)
+        save("player-artwork-open-176.png")
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("player_artwork_flight").assertDoesNotExist()
+        val destination = compose.onNodeWithTag("player_cover").fetchSemanticsNode().boundsInRoot
+        fun assertPath(f: io.github.currencortex.music.feature.player.PlayerArtworkFrame) {
+            val vertical = f.progress * f.progress
+            val horizontal = 1 - (1 - f.progress) * (1 - f.progress)
+            val expectedY = source.center.y * (1 - vertical) + destination.center.y * vertical
+            assertEquals("Vertical travel matches the recorded slower initial lift", expectedY, f.bounds.center.y, .5f)
+            assertEquals("The horizontal flight lands on the measured artwork center",
+                source.center.x * (1 - horizontal) + destination.center.x * horizontal, f.bounds.center.x, .5f)
+            assertEquals("The scaled circle connects the actual two cover sizes",
+                source.width * (1 - vertical) + destination.width * vertical, f.bounds.width, .5f)
+        }
+        assertPath(first); assertPath(middle)
+        val pixels = compose.onNodeWithTag("player_cover").captureToImage().toPixelMap()
+        assertTrue("The cover image has loaded", pixels[pixels.width / 2, pixels.height / 2].red > .9f)
+        for ((x, y) in listOf(4 to 4, pixels.width - 5 to 4, 4 to pixels.height - 5, pixels.width - 5 to pixels.height - 5)) {
+            assertTrue("Square corners show the player backdrop outside the circular cover", pixels[x, y].red < .8f)
+        }
+        compose.onNodeWithContentDescription("收起播放器").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        val closing = artwork()
+        assertPath(closing)
+        assertTrue(closing.bounds.width < destination.width)
+        assertEquals(frame().progress, closing.progress, .001f)
+        save("player-artwork-close-096.png")
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("player_artwork_flight").assertDoesNotExist()
+        assertEquals("The source artwork node survives the round trip", mini.id,
+            compose.onNodeWithTag("mini_cover").fetchSemanticsNode().id)
+        assertEquals(source, compose.onNodeWithTag("mini_cover").fetchSemanticsNode().boundsInRoot)
+        assertFalse(container.playerController.state.value.playing)
+
+        // Drive an isolated playback state without starting audio or the production service.
+        fun angle(tag: String) = compose.onNodeWithTag(tag).fetchSemanticsNode()
+            .config[io.github.currencortex.music.feature.player.CoverRotation]
+        compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(playing = true) }
+        compose.mainClock.advanceTimeBy(500)
+        val miniAngle = angle("mini_cover")
+        assertTrue("Playing mini artwork rotates", miniAngle > 0f)
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.mainClock.advanceTimeBy(176)
+        val flightAngle = artwork().rotation
+        assertTrue("The shared artwork keeps rotating during expansion", flightAngle > miniAngle)
+        compose.mainClock.advanceTimeBy(1000)
+        val fullAngle = angle("player_cover")
+        assertTrue("Full player continues the same rotation", fullAngle > flightAngle)
+        compose.onNodeWithContentDescription("收起播放器").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        val closingAngle = artwork().rotation
+        assertTrue("Rotation also continues during collapse", closingAngle > fullAngle)
+        compose.mainClock.advanceTimeBy(1000)
+        val returnedAngle = angle("mini_cover")
+        assertTrue("Mini artwork resumes without resetting the angle", returnedAngle > closingAngle)
+        compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(playing = false) }
+        compose.mainClock.advanceTimeBy(100)
+        val pausedAngle = angle("mini_cover")
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals("Pausing preserves the shared angle", pausedAngle, angle("mini_cover"), .01f)
+    }
+
+    @Test fun playerCanVisitCastPageAndReturnWithSavedLyricsView() {
+        runBlocking { container.settings.edit { it.copy(predictiveBack = false) } }
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.onNodeWithTag("open_lyrics").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithContentDescription("显示封面").assertIsDisplayed()
+        compose.onNodeWithContentDescription("投屏").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("cast_screen").assertIsDisplayed()
+        compose.onNodeWithTag("player_sheet").assertDoesNotExist()
+        compose.runOnUiThread { dispatcher.onBackPressed() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("player_sheet").assertIsDisplayed()
+        compose.onNodeWithContentDescription("显示封面").assertIsDisplayed()
+        assertEquals(1f, frame().progress, .001f)
+        compose.onNodeWithContentDescription("收起播放器").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+        assertFalse(container.playerController.state.value.playing)
+    }
+
     @Test fun predictiveCollapseReversesCancelsAndCommitsWhileDialogsTakePriority() {
         start()
         val miniIdentity = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().id
         val barIdentity = compose.onNodeWithTag("glass_floating_bar").fetchSemanticsNode().id
+        val dock = compose.onNodeWithTag("music_dock").fetchSemanticsNode().boundsInRoot
+        val sourceIdentity = compose.onNodeWithTag("music_scene_0").fetchSemanticsNode().id
         compose.onNodeWithTag("mini_cover").performClick()
         compose.onNodeWithTag("player_transport").assertIsDisplayed()
         compose.waitForIdle()
@@ -310,6 +561,14 @@ class PlayerSheetCapabilitiesTest {
         val first = frame()
         progress(.6f)
         val middle = frame()
+        val p = middle.progress
+        assertEquals("Collapse targets the whole merged glass panel", dock.height * (1 - p) + original.height * p,
+            middle.bounds.height, .5f)
+        assertEquals(dock.top * (1 - p), middle.bounds.top, .5f)
+        assertEquals("Use the dock's 32dp corner instead of the inner mini row's capsule radius",
+            32f * activity.resources.displayMetrics.density * io.github.currencortex.music.feature.player.playerSheetCornerScale(p), middle.radius, .5f)
+        assertEquals("The retained home page keeps its node", sourceIdentity,
+            compose.onNodeWithTag("music_scene_0").fetchSemanticsNode().id)
         assertTrue("The sheet follows the gesture downward", middle.bounds.top > first.bounds.top)
         assertTrue(middle.bounds.height < first.bounds.height)
         progress(.1f)

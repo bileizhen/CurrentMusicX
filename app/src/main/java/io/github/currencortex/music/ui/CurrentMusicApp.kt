@@ -27,7 +27,11 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.geometry.Rect
-import androidx.navigation3.ui.NavDisplayTransitionEffects
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalDensity
 import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.core.network.AppResult
@@ -157,15 +161,24 @@ fun CurrentMusicApp(container: AppContainer) {
         var miniHeight by remember { mutableStateOf(72.dp) }
         var miniBounds by remember { mutableStateOf<Rect?>(null) }
         var miniCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
-        var playerOrigin by remember { mutableStateOf<Rect?>(null) }
+        var dockOrigin by remember { mutableStateOf<(() -> PlayerSheetOrigin?)?>(null) }
+        var playerOrigin by remember { mutableStateOf<PlayerSheetOrigin?>(null) }
+        val playerExpansion = remember { PlayerSheetState() }
+        val artworkRotation = rememberPlayerArtworkRotation(playerVm)
+        val artworkTransition = remember { PlayerArtworkTransition(playerExpansion::value) }
+        var miniArtworkOrigin by remember { mutableStateOf<(() -> PlayerArtworkOrigin?)?>(null) }
+        val playerOpen = backStack.last() == PLAYER.toString()
+        val playerPresented by remember(playerOpen) { derivedStateOf { playerOpen || playerExpansion.value > .0001f } }
+        val sceneStack = remember(backStack) { backStack.filter { it != PLAYER.toString() } }
+        val playerSavedState = rememberSaveableStateHolder()
         var navigationBounds by remember { mutableStateOf<Rect?>(null) }
         var playerSheetMotion by remember { mutableStateOf(PlayerSheetMotion.NONE) }
 
         val density = LocalDensity.current
-        val rootPage = backStack.last() == ROOT.toString()
+        val rootPage = sceneStack.last() == ROOT.toString()
         val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
         val miniAvailable = !keyboardOpen && (currentSong != null || playerState.mode == PlayerMode.ROOM)
-        val showMini = miniAvailable && playerSheetMotion != PlayerSheetMotion.CLOSE && backStack.last() !in setOf(PLAYER.toString(), "lib/video")
+        val showMini = miniAvailable && !playerPresented && sceneStack.last() != "lib/video"
         PreloadMusicCovers(listOf(currentSong?.cover.orEmpty()), 800)
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
         var roomDialogOpen by remember { mutableStateOf(false) }
@@ -175,6 +188,7 @@ fun CurrentMusicApp(container: AppContainer) {
         fun navigateBack() {
             if (roomDialogOpen || castDialogOpen || playerDialogOpen || miniQueueOpen || songMenu != null) return
             if (backStack.size > 1) {
+                if (backStack.last() == PLAYER.toString()) artworkTransition.origin = miniArtworkOrigin?.invoke() ?: artworkTransition.origin
                 playerSheetMotion = if (backStack.last() == PLAYER.toString()) PlayerSheetMotion.CLOSE else PlayerSheetMotion.NONE
                 if (backStack.last() == "lib/video") container.playerController.closeVideo()
                 backStack = backStack.dropLast(1)
@@ -183,7 +197,9 @@ fun CurrentMusicApp(container: AppContainer) {
         fun navigateTo(route: Int) {
             if (backStack.last() == route.toString()) return
             if (route == PLAYER) {
-                playerOrigin = miniCoordinates?.takeIf { it.isAttached }?.boundsInRoot() ?: miniBounds
+                val bounds = miniCoordinates?.takeIf { it.isAttached }?.boundsInRoot() ?: miniBounds
+                playerOrigin = dockOrigin?.invoke() ?: bounds?.let { PlayerSheetOrigin(it, it.height / 2f) }
+                artworkTransition.origin = miniArtworkOrigin?.invoke()
                 playerSheetMotion = PlayerSheetMotion.OPEN
             }
             else playerSheetMotion = PlayerSheetMotion.NONE
@@ -236,17 +252,27 @@ fun CurrentMusicApp(container: AppContainer) {
         }
         val roomRequest = if (container.roomSession.active && roomLive.detail != null)
             RoomSongRequest(::requestSong) { it in roomPending } else null
+        val playerDrag = remember(playerExpansion, scope) { PlayerSheetDragController(playerExpansion, scope) }
+        SideEffect {
+            playerDrag.onOpen = { navigateTo(PLAYER) }
+            playerDrag.onClose = ::navigateBack
+            playerDrag.onSettled = { playerSheetMotion = PlayerSheetMotion.NONE }
+            playerDrag.distance = { ((playerOrigin?.bounds?.top ?: navigationBounds?.height ?: 1f) - (navigationBounds?.top ?: 0f)).coerceAtLeast(1f) }
+            playerDrag.flingThreshold = with(density) { 600.dp.toPx() }
+        }
         val predictiveBack = settings.predictiveBack && Build.VERSION.SDK_INT >= 34
         val labels = listOf("首页", "发现", "搜索", "我的")
         val icons = listOf(Icons.Default.Home, Icons.Default.Star, Icons.Default.Search, Icons.Default.Person)
 
         top.yukonga.miuix.kmp.basic.Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = MiuixTheme.colorScheme.background) {
-        CompositionLocalProvider(LocalSongMenu provides { songMenu = it }, LocalRoomSongRequest provides roomRequest) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalSongMenu provides { songMenu = it }, LocalRoomSongRequest provides roomRequest,
+            LocalPlayerSheetDrag provides playerDrag, LocalPlayerArtworkRotation provides artworkRotation) {
+        BoxWithConstraints(Modifier.fillMaxSize().testTag("music_window")
+            .onGloballyPositioned { navigationBounds = it.boundsInRoot() }) {
         val wideLayout = maxWidth >= 700.dp
         val rootWide = rootPage && wideLayout
-        val showRootNavigation = rootPage && playerSheetMotion != PlayerSheetMotion.CLOSE
+        val showRootNavigation = rootPage && !playerPresented
         // Reserve page space once. Animate only the overlay's GPU translation, never the page height.
         val miniRoot = backStack.lastOrNull { it != PLAYER.toString() } == ROOT.toString()
         val navigationSpace = if (miniRoot && !wideLayout && !keyboardOpen) 92.dp else 0.dp
@@ -260,10 +286,7 @@ fun CurrentMusicApp(container: AppContainer) {
                 val miniSpace = if (miniAvailable && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video")) miniHeight else 0.dp
                 // Each moving scene must cover the outgoing page and its dim scrim, including
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
-                if (entry.contentKey == PLAYER.toString()) PlayerSheetExpansion(playerOrigin, navigationBounds,
-                    playerSheetMotion, backStack.last() == PLAYER.toString(), { playerSheetMotion = PlayerSheetMotion.NONE }) {
-                    entry.Content()
-                } else Box(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)
+                Box(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)
                     .testTag("music_scene_${entry.contentKey}")
                     .then(if (entry.contentKey in setOf(PLAYER.toString(), "lib/video")) Modifier else Modifier.navigationBarsPadding())) {
                     // Keep the scene viewport full size so the glass samples page content.
@@ -273,16 +296,13 @@ fun CurrentMusicApp(container: AppContainer) {
             }
         }
         val page: @Composable () -> Unit = {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(if (playerPresented) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
         Column(Modifier.fillMaxSize().imePadding()) {
         NavDisplay(
-            backStack = backStack,
-            modifier = Modifier.weight(1f).fillMaxSize().testTag("music_navigation").background(MiuixTheme.colorScheme.background)
-                .onGloballyPositioned { navigationBounds = it.boundsInRoot() },
+            backStack = sceneStack,
+            modifier = Modifier.weight(1f).fillMaxSize().testTag("music_navigation").background(MiuixTheme.colorScheme.background),
             entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), sceneInsets),
             onBack = ::navigateBack,
-            transitionEffects = if (backStack.last() == PLAYER.toString() || playerSheetMotion != PlayerSheetMotion.NONE)
-                NavDisplayTransitionEffects(enableCornerClip = false, dimAmount = 0f) else NavDisplayTransitionEffects.Default,
             entryProvider = entryProvider {
                 entry(ROOT.toString()) {
                     Box(Modifier.fillMaxSize().statusBarsPadding().padding(start = if (wideLayout) 104.dp else 0.dp,
@@ -313,9 +333,6 @@ fun CurrentMusicApp(container: AppContainer) {
                     }
                 }
                 entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, ::navigateBack) }
-                entry(PLAYER.toString(), metadata = playerSheetTransitions) { PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
-                    actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
-                    onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") }, onDialogActive = { playerDialogOpen = it }) }
                 entry("cast/devices") {
                     val vm: io.github.currencortex.music.feature.cast.CastViewModel = viewModel(factory = viewModelFactory { io.github.currencortex.music.feature.cast.CastViewModel(container) })
                     io.github.currencortex.music.feature.cast.CastScreen(vm, ::navigateBack, { castDialogOpen = it })
@@ -409,6 +426,9 @@ fun CurrentMusicApp(container: AppContainer) {
         }
         }
         }
+        val dockVisible by remember(keyboardOpen, sceneStack) { derivedStateOf {
+            !keyboardOpen && sceneStack.last() != "lib/video" && playerExpansion.value < .9999f
+        } }
         val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
         val unifiedDock = settings.floatingBar && !wideLayout
         val miniBody: @Composable () -> Unit = {
@@ -423,16 +443,22 @@ fun CurrentMusicApp(container: AppContainer) {
             onNext = { container.playerController.next(container.playerController.state.value.showPause) },
             onPrevious = { container.playerController.previous(container.playerController.state.value.showPause) },
             onQueue = { if (playerState.mode == PlayerMode.ROOM) navigateLibrary("room/list") else miniQueueOpen = true },
-            onSurfaceBounds = { miniBounds = it }, active = showMini, onSurfaceCoordinates = { miniCoordinates = it })
+            onSurfaceBounds = { miniBounds = it }, active = showMini, onSurfaceCoordinates = { miniCoordinates = it },
+            onArtworkOrigin = { miniArtworkOrigin = it }, artworkVisible = { !artworkTransition.moving })
         }
         if (unifiedDock) {
             val glassNavigation = LocalMusicDockNavigation.current
             UnifiedMusicDock(expanded = miniRoot && !keyboardOpen,
-                visible = !keyboardOpen && playerSheetMotion != PlayerSheetMotion.CLOSE && backStack.last() !in setOf(PLAYER.toString(), "lib/video"),
+                visible = dockVisible,
                 miniPresent = miniAvailable, navigationInteractive = showRootNavigation && !keyboardOpen,
-                modifier = Modifier.align(Alignment.BottomCenter), mini = miniBody,
+                modifier = Modifier.align(Alignment.BottomCenter)
+                    .then(if (playerPresented) Modifier.clearAndSetSemantics {} else Modifier)
+                    .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) },
+                onOrigin = { dockOrigin = it }, mini = miniBody,
                 navigation = glassNavigation ?: { mod -> PlainFloatingBar(selected, labels, icons, { selected = it }, mod, embedded = true) })
-        } else if (miniAvailable) RetainedOverlay(showMini, Modifier.align(Alignment.BottomCenter)) {
+        } else if (miniAvailable) RetainedOverlay(dockVisible, Modifier.align(Alignment.BottomCenter)
+            .then(if (playerPresented) Modifier.clearAndSetSemantics {} else Modifier)
+            .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) }) {
             miniBody()
         }
         if (showRootNavigation && !rootWide && !keyboardOpen && !settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
@@ -452,6 +478,20 @@ fun CurrentMusicApp(container: AppContainer) {
             .testTag("wide_navigation"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             labels.forEachIndexed { index, label -> MusicTextAction(if (selected == index) "● $label" else label, { selected = index }) }
         }
+        PlayerSheetHost(open = playerOpen, motion = playerSheetMotion, expansion = playerExpansion,
+            origin = playerOrigin, viewport = navigationBounds, artwork = artworkTransition,
+            artworkUrl = currentSong?.cover.orEmpty(), predictiveBack = predictiveBack,
+            backEnabled = !showLogs && pendingPlay == null && playerState.warning == null && !updateDialogVisible &&
+                !showScale && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null &&
+                !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
+            onBack = ::navigateBack, onSettled = { playerSheetMotion = PlayerSheetMotion.NONE }) {
+            playerSavedState.SaveableStateProvider(PLAYER) {
+                PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
+                    actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
+                    onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") },
+                    onDialogActive = { playerDialogOpen = it })
+            }
+        }
         }
         }
         songMenu?.let { SongActionsSheet(it) { songMenu = null } }
@@ -461,7 +501,7 @@ fun CurrentMusicApp(container: AppContainer) {
         // navigation, once, and take precedence over returning to the parent page.
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
-            isBackEnabled = backStack.size > 1 && !predictiveBack && !showLogs &&
+            isBackEnabled = backStack.size > 1 && !playerPresented && !predictiveBack && !showLogs &&
                 pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )

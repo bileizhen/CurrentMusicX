@@ -33,11 +33,23 @@ import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.abs
 import androidx.compose.animation.core.withInfiniteAnimationFrameNanos
 import androidx.compose.animation.core.*
 
 internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
+
+internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?> { null }
+
+/** One low-frequency playback subscription and one angle for mini, full and moving artwork. */
+@Composable internal fun rememberPlayerArtworkRotation(vm: PlayerViewModel): State<Float> {
+    val song by vm.currentSong.collectAsStateWithLifecycle()
+    val playback = remember(vm) { vm.state.map { it.song?.id to it.playing }.distinctUntilChanged() }
+    val status by playback.collectAsStateWithLifecycle(initialValue = null to false)
+    return rememberCoverRotation(song?.id, status.second && status.first == song?.id && song?.video != true)
+}
 
 /** Frame clock animation retains its angle while paused, and resets on a new track. */
 @Composable private fun rememberCoverRotation(songId: Long?, playing: Boolean): State<Float> {
@@ -55,11 +67,12 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
     return angle
 }
 
-@Composable fun MiniPlayer(vm: PlayerViewModel, onOpen: () -> Unit, onToggle: () -> Unit, modifier: Modifier = Modifier,
+@Composable internal fun MiniPlayer(vm: PlayerViewModel, onOpen: () -> Unit, onToggle: () -> Unit, modifier: Modifier = Modifier,
     onNext: () -> Unit = { vm.player.next(vm.state.value.showPause) },
     onPrevious: () -> Unit = { vm.player.previous(vm.state.value.showPause) }, onQueue: () -> Unit = onOpen,
     onSurfaceBounds: (Rect) -> Unit = {}, active: Boolean = true,
-    onSurfaceCoordinates: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {}) {
+    onSurfaceCoordinates: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {},
+    onArtworkOrigin: (() -> PlayerArtworkOrigin?) -> Unit = {}, artworkVisible: () -> Boolean = { true }) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
@@ -75,7 +88,10 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
     val duration = (if (currentMatches) state.durationMs.takeIf { it > 0 } else null) ?: song?.durationMs ?: 0L
     val position = if (currentMatches) state.positionMs else queue.positionMs
     val progress = if (duration > 0) (position.toDouble() / duration).toFloat().coerceIn(0f, 1f) else 0f
-    val rotation = rememberCoverRotation(song?.id, active && state.playing && song?.video != true)
+    val rotation = LocalPlayerArtworkRotation.current ?: rememberCoverRotation(song?.id, active && state.playing && song?.video != true)
+    val coverAngle by rememberUpdatedState(rotation)
+    val coverBorder = MiuixTheme.colorScheme.onSurface.copy(alpha = .85f)
+    val borderColor by rememberUpdatedState(coverBorder)
     val loading = state.loading || state.resolving
     val loadingAngle = if (loading && active) {
         val transition = rememberInfiniteTransition(label = "mini audio loading")
@@ -104,12 +120,20 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
     surface(modifier.fillMaxWidth().testTag("mini_player")) {
         Row(Modifier.heightIn(min = 52.dp).onGloballyPositioned { onSurfaceBounds(it.boundsInRoot()); onSurfaceCoordinates(it) }
             .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(42.dp).onGloballyPositioned { coordinates ->
+                onArtworkOrigin {
+                    if (!coordinates.isAttached) null else PlayerArtworkOrigin(
+                        Rect(coordinates.localToRoot(androidx.compose.ui.geometry.Offset.Zero),
+                            Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())), coverAngle.value, borderColor)
+                }
+            }) {
             MusicCover(song?.cover.orEmpty(), Modifier.size(42.dp).testTag("mini_cover")
                 .semantics { this[CoverRotation] = rotation.value }
-                .graphicsLayer { rotationZ = rotation.value }.clip(CircleShape)
-                .border(2.dp, MiuixTheme.colorScheme.onSurface.copy(alpha = .85f), CircleShape).clickable(onClick = onOpen))
+                .graphicsLayer { rotationZ = rotation.value; alpha = if (artworkVisible()) 1f else 0f }.clip(CircleShape)
+                .border(2.dp, coverBorder, CircleShape).clickable(onClick = onOpen))
+            }
             Column(Modifier.weight(1f).heightIn(min = 48.dp).padding(horizontal = 8.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
-                .testTag("mini_song_gesture")
+                .testTag("mini_song_gesture").playerSheetDrag(fromMini = true)
                 .pointerInput(enabled, threshold) {
                     detectHorizontalDragGestures(onDragStart = { dragged = 0f },
                         onHorizontalDrag = { change, dx -> change.consume(); if (allowed) dragged += dx },

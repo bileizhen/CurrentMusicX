@@ -16,6 +16,9 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import io.github.currencortex.music.feature.player.PlayerSheetOrigin
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.testTag
@@ -50,7 +53,8 @@ private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerS
 
 /** One fixed layout and one glass surface; navigation alpha, clip and translation share a clock. */
 @Composable internal fun UnifiedMusicDock(expanded: Boolean, visible: Boolean, miniPresent: Boolean,
-    navigationInteractive: Boolean, modifier: Modifier = Modifier, mini: @Composable () -> Unit,
+    navigationInteractive: Boolean, modifier: Modifier = Modifier,
+    onOrigin: (() -> PlayerSheetOrigin?) -> Unit = {}, mini: @Composable () -> Unit,
     navigation: @Composable (Modifier) -> Unit) {
     val progress = animateFloatAsState(if (expanded) 1f else 0f, tween(320), label = "music dock expansion")
     val miniSpace = if (miniPresent) 64.dp else 0.dp
@@ -61,9 +65,22 @@ private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerS
     val drawNavigation by remember { derivedStateOf { progress.value > .001f } }
     val surface = LocalMusicDockSurface.current
     val density = androidx.compose.ui.platform.LocalDensity.current
+    val reportOrigin by rememberUpdatedState(onOrigin)
+    DisposableEffect(Unit) { onDispose { reportOrigin { null } } }
     RetainedOverlay(drawDock, modifier.navigationBarsPadding().padding(horizontal = 26.dp, vertical = 12.dp).widthIn(max = 480.dp)) {
         Box(Modifier.fillMaxWidth().height(miniSpace + navigationTravel).testTag("music_dock")
             .semantics { this[DockExpansion] = progress.value }
+            .onGloballyPositioned { coordinates ->
+                // boundsInRoot includes the current GPU translation, but its layout is always
+                // 122dp. Capture the visible outline's height, including the shared nav row.
+                onOrigin {
+                    if (!coordinates.isAttached) null else with(density) {
+                        val bounds = coordinates.boundsInRoot()
+                        PlayerSheetOrigin(Rect(bounds.left, bounds.top, bounds.right,
+                            bounds.top + miniSpace.toPx() + navigationTravel.toPx() * progress.value), 32.dp.toPx())
+                    }
+                }
+            }
             .graphicsLayer {
                 translationY = navigationTravel.toPx() * (1 - progress.value)
                 shape = DockShape(miniSpace.toPx() + navigationTravel.toPx() * progress.value, 32.dp.toPx())
