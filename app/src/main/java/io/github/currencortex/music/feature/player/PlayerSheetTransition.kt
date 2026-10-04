@@ -33,6 +33,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
@@ -52,27 +53,45 @@ internal val LocalPlayerSheetProgress = staticCompositionLocalOf<() -> Float> { 
 internal data class PlayerArtworkOrigin(val bounds: Rect, val rotation: Float, val borderColor: Color)
 internal data class PlayerArtworkFrame(val progress: Float, val bounds: Rect, val rotation: Float)
 internal val PlayerArtworkGeometry = SemanticsPropertyKey<PlayerArtworkFrame>("PlayerArtworkGeometry")
+internal val PlayerArtworkVisible = SemanticsPropertyKey<Boolean>("PlayerArtworkVisible")
 
 /** Destination coordinates remain full-size; the sheet translation is removed for the flight. */
 internal class PlayerArtworkTransition(val progress: () -> Float) {
     var origin by mutableStateOf<PlayerArtworkOrigin?>(null)
     var target by mutableStateOf<LayoutCoordinates?>(null)
+    var destination by mutableStateOf<(() -> Rect?)?>(null)
     var sheet by mutableStateOf<LayoutCoordinates?>(null)
     val moving: Boolean get() = origin != null && target?.isAttached == true && sheet?.isAttached == true && progress() > 0f && progress() < 1f
 }
 internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtworkTransition?> { null }
 
 @Composable internal fun PlayerArtwork(url: String, modifier: Modifier, pixels: Int = 800,
-    transitionTarget: Boolean = true) {
+    transitionTarget: Boolean = true, pagerRole: PlayerPagerArtworkRole? = null) {
     val transfer = LocalPlayerArtworkTransition.current
+    val pager = LocalPlayerPagerArtwork.current
     val rotation = LocalPlayerArtworkRotation.current
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     DisposableEffect(transfer, transitionTarget) { onDispose { if (transfer?.target === coordinates) transfer?.target = null } }
-    SideEffect { if (transitionTarget && coordinates?.isAttached == true) transfer?.target = coordinates }
-    Box(modifier.onGloballyPositioned { coordinates = it; if (transitionTarget) transfer?.target = it }
-        .semantics { this[CoverRotation] = rotation?.value ?: 0f }) {
+    DisposableEffect(pager, pagerRole) { onDispose {
+        if (pagerRole == PlayerPagerArtworkRole.COVER && pager?.cover === coordinates) pager?.cover = null
+        if (pagerRole == PlayerPagerArtworkRole.LYRICS && pager?.lyrics === coordinates) pager?.lyrics = null
+    } }
+    SideEffect { if (pagerRole == null && transitionTarget && coordinates?.isAttached == true) transfer?.target = coordinates }
+    Box(modifier.onGloballyPositioned {
+        coordinates = it
+        when (pagerRole) {
+            PlayerPagerArtworkRole.COVER -> pager?.cover = it
+            PlayerPagerArtworkRole.LYRICS -> pager?.lyrics = it
+            null -> if (transitionTarget) transfer?.target = it
+        }
+    }
+        .semantics {
+            this[CoverRotation] = rotation?.value ?: 0f
+            this[PlayerArtworkVisible] = transfer?.moving != true && !(pagerRole != null && pager?.ready == true)
+            if (pagerRole != null && pager?.ready == true) hideFromAccessibility()
+        }) {
         MusicCover(url, Modifier.matchParentSize().graphicsLayer {
-            alpha = if (transfer?.moving == true) 0f else 1f
+            alpha = if (transfer?.moving == true || (pagerRole != null && pager?.ready == true)) 0f else 1f
             rotationZ = rotation?.value ?: 0f
         }.clip(CircleShape), pixels)
     }
@@ -192,7 +211,8 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
         // Relative coordinates cancel the sheet's moving layer transform without relying
         // on which graphics layer happened to update first in this frame.
         val destinationTop = sheet.localPositionOf(target, Offset.Zero)
-        val destination = Rect(destinationTop, Size(targetSize.width.toFloat(), targetSize.height.toFloat()))
+        val destination = transfer.destination?.invoke()
+            ?: Rect(destinationTop, Size(targetSize.width.toFloat(), targetSize.height.toFloat()))
         val start = source.bounds.translate(-window.topLeft)
         // Measured from the supplied recording: horizontal travel eases out, while the
         // vertical travel and diameter ease in. This rolls inward before lifting up.

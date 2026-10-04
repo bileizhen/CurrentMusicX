@@ -305,6 +305,78 @@ class PlayerSheetCapabilitiesTest {
         assertEquals(original, viewport())
     }
 
+    @Test fun pagerSharesOneCircularArtworkAlongReversibleArc() {
+        val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        val file = java.io.File(context.cacheDir, "pager-artwork-${UUID.randomUUID()}.png")
+        coverFixture = file
+        android.graphics.Bitmap.createBitmap(128, 128, android.graphics.Bitmap.Config.ARGB_8888).apply {
+            eraseColor(android.graphics.Color.MAGENTA)
+            file.outputStream().use { compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            recycle()
+        }
+        val song = container.playerController.queue.state.value.current!!.copy(cover = file.toURI().toString())
+        container.playerController.queue.replace(listOf(song), 0)
+        container.playerController.state.value = container.playerController.state.value.copy(song = song)
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.waitForIdle()
+        val pager = compose.onNodeWithTag("player_content_pager")
+        fun artwork() = compose.onNodeWithTag("player_pager_artwork").fetchSemanticsNode()
+            .config[io.github.currencortex.music.feature.player.PlayerPagerArtworkGeometry]
+        val start = artwork()
+        compose.mainClock.autoAdvance = false
+        pager.performTouchInput {
+            down(androidx.compose.ui.geometry.Offset(width * .9f, height * .4f))
+            moveBy(androidx.compose.ui.geometry.Offset(-width * .42f, 0f))
+        }
+        compose.mainClock.advanceTimeBy(64)
+        val held = artwork()
+        assertTrue(held.progress > .3f && held.progress < .5f)
+        assertTrue("The single artwork shrinks toward the lyric header", held.bounds.width < start.bounds.width)
+        compose.onAllNodesWithTag("player_pager_artwork").assertCountEquals(1)
+        for (tag in listOf("player_cover", "player_lyrics_cover")) {
+            assertFalse(compose.onNodeWithTag(tag).fetchSemanticsNode()
+                .config[io.github.currencortex.music.feature.player.PlayerArtworkVisible])
+        }
+        // The pure magenta fixture separates the actual image from the tinted backdrop.
+        // Both dimensions must match one circle; a second preloaded image expands this box.
+        val pixels = pager.captureToImage().toPixelMap()
+        var left = pixels.width; var top = pixels.height; var right = -1; var bottom = -1
+        for (y in 0 until pixels.height step 3) for (x in 0 until pixels.width step 3) {
+            val color = pixels[x, y]
+            if (color.red > .98f && color.blue > .98f && color.green < .02f) {
+                left = minOf(left, x); top = minOf(top, y); right = maxOf(right, x); bottom = maxOf(bottom, y)
+            }
+        }
+        assertTrue("Shared image pixels must be visible", right >= left)
+        assertEquals("Only one circular artwork is drawn horizontally", held.bounds.width, (right - left).toFloat(), 8f)
+        assertEquals("Only one circular artwork is drawn vertically", held.bounds.height, (bottom - top).toFloat(), 8f)
+        save("player-pager-single-artwork-held.png")
+        compose.mainClock.advanceTimeBy(176)
+        assertEquals("Artwork follows a stationary finger without auto animation", held.bounds, artwork().bounds)
+        pager.performTouchInput { advanceEventTime(400); up() }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals("A cancelled page drag restores the large cover exactly", start.bounds, artwork().bounds)
+        pager.performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(width * .85f, height * .4f),
+                androidx.compose.ui.geometry.Offset(width * .15f, height * .4f), 180)
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        val end = artwork()
+        assertEquals(1f, end.progress, .001f)
+        assertTrue("At the lyric page the shared artwork becomes the small cover", end.bounds.width < start.bounds.width / 2)
+        val straight = start.bounds.center * (1 - held.progress) + end.bounds.center * held.progress
+        assertTrue("The middle of the path bends gently above the straight line", held.bounds.center.y < straight.y)
+        pager.performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(width * .15f, height * .4f),
+                androidx.compose.ui.geometry.Offset(width * .85f, height * .4f), 180)
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals("Reverse page switching returns the same image to its original bounds", start.bounds, artwork().bounds)
+        assertEquals(55L, container.playerController.queue.state.value.current?.id)
+        assertFalse(container.playerController.state.value.playing)
+    }
+
     @Test fun coverLyricsAndPagerFollowDragWithoutChangingPlayback() {
         start()
         compose.onNodeWithTag("mini_cover").performClick()
@@ -473,7 +545,7 @@ class PlayerSheetCapabilitiesTest {
                 source.width * (1 - vertical) + destination.width * vertical, f.bounds.width, .5f)
         }
         assertPath(first); assertPath(middle)
-        val pixels = compose.onNodeWithTag("player_cover").captureToImage().toPixelMap()
+        val pixels = compose.onNodeWithTag("player_pager_artwork").captureToImage().toPixelMap()
         assertTrue("The cover image has loaded", pixels[pixels.width / 2, pixels.height / 2].red > .9f)
         for ((x, y) in listOf(4 to 4, pixels.width - 5 to 4, 4 to pixels.height - 5, pixels.width - 5 to pixels.height - 5)) {
             assertTrue("Square corners show the player backdrop outside the circular cover", pixels[x, y].red < .8f)
@@ -504,7 +576,7 @@ class PlayerSheetCapabilitiesTest {
         val flightAngle = artwork().rotation
         assertTrue("The shared artwork keeps rotating during expansion", flightAngle > miniAngle)
         compose.mainClock.advanceTimeBy(1000)
-        val fullAngle = angle("player_cover")
+        val fullAngle = angle("player_pager_artwork")
         assertTrue("Full player continues the same rotation", fullAngle > flightAngle)
         compose.onNodeWithContentDescription("收起播放器").performClick()
         compose.mainClock.advanceTimeBy(96)

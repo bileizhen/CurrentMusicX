@@ -2,7 +2,7 @@ package io.github.currencortex.music.feature.player
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
@@ -51,6 +51,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val settings by vm.settings.collectAsStateWithLifecycle()
     var content by rememberSaveable { mutableStateOf(PlayerContent.COVER) }
     val pager = rememberPagerState(initialPage = content.ordinal) { 2 }
+    val pagerArtwork = remember(pager) { PlayerPagerArtworkTransition { pager.currentPage + pager.currentPageOffsetFraction } }
     val scope = rememberCoroutineScope()
     LaunchedEffect(pager.settledPage) { content = PlayerContent.entries[pager.settledPage] }
     var overlay by rememberSaveable { mutableStateOf(PlayerOverlay.NONE) }
@@ -98,16 +99,21 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     }
                     LyricsPanel(vm, Modifier.weight(1.15f).fillMaxHeight().onGloballyPositioned { lyricsCoordinates = it })
                 } else Column(Modifier.fillMaxSize()) {
-                    HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().testTag("player_content_pager")
+                    CompositionLocalProvider(LocalPlayerPagerArtwork provides pagerArtwork) {
+                    Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { pagerArtwork.container = it }) {
+                    HorizontalPager(pager, Modifier.fillMaxSize().testTag("player_content_pager")
                         .semantics { this[PlayerPagePosition] = pager.currentPage + pager.currentPageOffsetFraction },
                         beyondViewportPageCount = 1,
                         userScrollEnabled = expanded && sheetDrag?.state?.dragging != true,
-                        flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = tween(380, easing = FastOutSlowInEasing))) { page ->
+                        flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = tween(120, easing = LinearEasing))) { page ->
+                        Box(Modifier.fillMaxSize().onGloballyPositioned {
+                            if (page == 0) pagerArtwork.coverPage = it else pagerArtwork.lyricsPage = it
+                        }) {
                         if (page == 1) Column(Modifier.fillMaxSize()) {
                             Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp)
                                 .testTag("player_lyrics_header"), verticalAlignment = Alignment.CenterVertically) {
-                                PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.size(46.dp), pixels = 800,
-                                    transitionTarget = pager.currentPage == 1)
+                                PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.size(46.dp).testTag("player_lyrics_cover"), pixels = 800,
+                                    pagerRole = PlayerPagerArtworkRole.LYRICS)
                                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
                                     Text(queue.current?.name ?: "还没有选择歌曲", color = Color.White,
                                         fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -118,7 +124,12 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                 active = pager.currentPage == 1 || pager.isScrollInProgress)
                         } else CoverContent(vm, Modifier.fillMaxSize(), transitionTarget = pager.currentPage == 0,
                             active = pager.currentPage == 0 || pager.isScrollInProgress,
+                            pagerRole = PlayerPagerArtworkRole.COVER,
                             onPreviewCoordinates = { previewCoordinates = it })
+                        }
+                    }
+                    PlayerPagerArtwork(pagerArtwork, queue.current?.cover.orEmpty())
+                    }
                     }
                     if (!immersive) PlayerTransport(vm, onToggle)
                 }
@@ -131,7 +142,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 verticalAlignment = Alignment.CenterVertically) {
                 PlayerIconButton(PlayerIcon.LYRICS, if (content == PlayerContent.LYRICS) "显示封面" else "显示歌词", {
                     scope.launch { pager.animateScrollToPage(if (pager.targetPage == 0) 1 else 0,
-                        animationSpec = tween(380, easing = FastOutSlowInEasing)) }
+                        animationSpec = tween(220, easing = LinearEasing)) }
                 }, Modifier.testTag("open_lyrics"), selected = content == PlayerContent.LYRICS)
                 if (onCast != null) PlayerIconButton(PlayerIcon.CAST, if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏", onCast)
                 if (settings.lyricsDisplay.hideControls && content == PlayerContent.LYRICS)
@@ -208,14 +219,16 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 }
 
 @Composable private fun CoverContent(vm: PlayerViewModel, modifier: Modifier, transitionTarget: Boolean = true,
-    active: Boolean = true, onPreviewCoordinates: (LayoutCoordinates) -> Unit = {}) {
+    active: Boolean = true, pagerRole: PlayerPagerArtworkRole? = null,
+    onPreviewCoordinates: (LayoutCoordinates) -> Unit = {}) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     val song = queue.current
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val coverSize = minOf(maxWidth * .92f, (maxHeight - 200.dp).coerceAtLeast(72.dp), 360.dp)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            PlayerArtwork(song?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"), transitionTarget = transitionTarget)
+            PlayerArtwork(song?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"),
+                transitionTarget = transitionTarget, pagerRole = pagerRole)
             Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(song?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(song?.artists.orEmpty(), fontSize = 18.sp, color = Color.White.copy(alpha = .55f), maxLines = 2, overflow = TextOverflow.Ellipsis)
