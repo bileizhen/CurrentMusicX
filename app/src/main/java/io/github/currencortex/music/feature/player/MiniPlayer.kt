@@ -23,8 +23,8 @@ import top.yukonga.miuix.kmp.basic.*
                 Text(song.name, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(song.artists, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            TextButton(if (state.playing) "暂停" else "播放", onClick = onToggle, modifier = Modifier.testTag("mini_toggle"))
-            TextButton("下一首", onClick = { vm.player.next() })
+            TextButton(if (state.playing) "暂停" else "播放", onClick = onToggle, enabled = state.canControlPlayback, modifier = Modifier.testTag("mini_toggle"))
+            TextButton("下一首", onClick = { vm.player.next() }, enabled = state.canControlPlayback)
         }
     }
 }

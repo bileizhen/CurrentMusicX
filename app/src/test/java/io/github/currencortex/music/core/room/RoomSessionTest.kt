@@ -47,11 +47,12 @@ class RoomSessionTest {
     @Test fun memberCannotSendPlaybackOrApprovalCommands() = runBlocking {
         MockWebServer().use { server ->
             val observed = CopyOnWriteArrayList<String>()
+            val memberRole = java.util.concurrent.atomic.AtomicReference("member")
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
                     val path = request.requestUrl!!.encodedPath; observed.add(path)
                     return when(path) {
-                        "/cm/rooms/r1" -> MockResponse().setBody("""{"room":{"id":"r1"},"members":[{"userId":7,"role":"member"}]}""")
+                        "/cm/rooms/r1" -> MockResponse().setBody("""{"room":{"id":"r1"},"members":[{"userId":7,"role":"${memberRole.get()}"}]}""")
                         "/cm/rooms/r1/sync" -> MockResponse().setBody("""{"serverNow":${System.currentTimeMillis()}}""")
                         "/cm/live/r1/events" -> MockResponse().setHeader("Content-Type", "text/event-stream").setBody(": ping\n\n")
                         else -> MockResponse().setBody("{}")
@@ -61,12 +62,16 @@ class RoomSessionTest {
             val expected = RequestSession(server.url("/cm/").toString(), "member-token")
             val repo = RoomRepository(ApiClient({ expected.server }, { expected.token }, {})) { expected }
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-            val session = RoomSession(repo, RoomSseClient(), SilentExternalPlayer(), scope, { 7 }, {}, { System.nanoTime() / 1_000_000 })
+            val player = SilentExternalPlayer()
+            val session = RoomSession(repo, RoomSseClient(), player, scope, { 7 }, {}, { System.nanoTime() / 1_000_000 })
             try {
                 session.join(RoomInfo("r1")); session.play(true); session.next(); session.queueAction(RoomQueueItem("q1"), "approve")
                 delay(150)
                 assertFalse(observed.any { it.endsWith("/play") || it.endsWith("/next") || it.endsWith("/approve") })
-                session.leave(); assertFalse(session.active)
+                assertFalse(player.state.value.canControlPlayback)
+                memberRole.set("admin"); session.refresh(); assertTrue(player.state.value.canControlPlayback)
+                memberRole.set("member"); session.refresh(); assertFalse(player.state.value.canControlPlayback)
+                session.leave(); assertFalse(session.active); assertTrue(player.state.value.canControlPlayback)
             } finally { session.disconnect(); scope.cancel() }
         }
     }

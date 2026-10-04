@@ -41,7 +41,7 @@ class LiveRoomContractTest {
         assertEquals(account, container.accountRepository.state.value.account?.id)
     }
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-    @Test fun castingMediaSessionRoutesCommandsAndKeepsActualExoPlayerSilent() = runBlocking {
+    @Test fun externalMediaSessionRoutesCommandsAndUpdatesRoomPermissionsWithoutLocalPlayback() = runBlocking {
         assumeTrue(InstrumentationRegistry.getArguments().getString("m4Live") == "1")
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         val container = context.container; container.ready.await(); container.sessionRestored.await()
@@ -85,6 +85,25 @@ class LiveRoomContractTest {
             withContext(Dispatchers.Main) { facade.seekTo(30000) }
             withTimeout(3000) { while (seek.get() != 30000L) delay(20) }
             withContext(Dispatchers.Main) { assertFalse(view!!.player!!.isPlaying) }
+            withContext(Dispatchers.Main) {
+                player.endExternal(controls)
+                assertTrue(player.beginExternal(PlayerMode.ROOM, controls))
+            }
+            val playPause = androidx.media3.common.Player.COMMAND_PLAY_PAUSE
+            val next = androidx.media3.common.Player.COMMAND_SEEK_TO_NEXT
+            withTimeout(3000) { while (withContext(Dispatchers.Main) { facade.isCommandAvailable(playPause) || facade.isCommandAvailable(next) }) delay(20) }
+            val before = commands.get()
+            withContext(Dispatchers.Main) {
+                player.next(); player.pause()
+                assertFalse(view!!.player!!.isPlaying)
+                player.state.value = player.state.value.copy(canControlPlayback = true)
+            }
+            assertEquals("A member must not dispatch transport controls", before, commands.get())
+            withTimeout(3000) { while (!withContext(Dispatchers.Main) { facade.isCommandAvailable(playPause) && facade.isCommandAvailable(next) }) delay(20) }
+            withContext(Dispatchers.Main) { facade.seekToNext() }
+            withTimeout(3000) { while (commands.get() == before) delay(20) }
+            withContext(Dispatchers.Main) { player.state.value = player.state.value.copy(canControlPlayback = false) }
+            withTimeout(3000) { while (withContext(Dispatchers.Main) { facade.isCommandAvailable(playPause) || facade.isCommandAvailable(next) }) delay(20) }
         } finally {
             withContext(NonCancellable + Dispatchers.Main) {
                 if (view != null && binder != null) binder!!.detach(view!!)

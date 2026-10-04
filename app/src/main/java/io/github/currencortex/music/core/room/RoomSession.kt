@@ -40,6 +40,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
             state.value = RoomSessionState(detail, connecting = true)
             check(player.beginExternal(PlayerMode.ROOM, this)) { "无法切换播放器模式" }
             player.roomTrack(null, null, 0, false)
+            publishPermission()
             job = scope.launch {
                 try {
                 coroutineScope {
@@ -116,6 +117,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
         state.update { it.copy(detail = detail) }; applyTimeline()
     }
     private suspend fun applyTimeline() {
+        publishPermission()
         val timeline = state.value.detail?.timeline
         val url = timeline?.stream?.url?.takeIf { it.toHttpUrlOrNull() != null }
         val key = if (timeline != null && timeline.trackNcmId > 0 && url != null) timeline.trackNcmId to url else null
@@ -123,8 +125,13 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
             loaded = key
             player.roomTrack(key?.let { timeline!!.trackMeta?.song(it.first) ?: Song(it.first, "房间歌曲") }, key?.second,
                 timeline?.let { target(it) } ?: 0, timeline?.playing == true)
+            publishPermission()
         }
         align()
+    }
+    private fun publishPermission() {
+        if (player.state.value.mode != PlayerMode.ROOM || player.external !== this) return
+        player.state.update { it.copy(canControlPlayback = role?.controls == true) }
     }
     private fun target(tl: RoomTimeline) = if (clock.ready) clock.position(tl, monotonic()) else tl.basePosition
     private suspend fun align() {

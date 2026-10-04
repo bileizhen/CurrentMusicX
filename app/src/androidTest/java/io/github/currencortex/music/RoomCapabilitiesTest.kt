@@ -1,6 +1,8 @@
 package io.github.currencortex.music
 
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.*
@@ -99,6 +101,44 @@ class RoomCapabilitiesTest {
         compose.onNodeWithText("播放").assertDoesNotExist()
         compose.runOnIdle { vm.session.play(true); vm.session.queueAction(vm.session.state.value.detail!!.queue.first(), "approve") }
         compose.waitForIdle(); assertEquals(0, playRequests.get()); assertEquals(0, approvals.get())
+        assertFalse(player.state.value.canControlPlayback)
+    }
+    @Test fun memberPlayerControlsAreDisabledAndRecoverAfterPromotion() {
+        val controller = container.playerController
+        controller.queue.replace(listOf(Song(55, "Fixture song", durationMs = 180000)), 0)
+        controller.state.value = PlayerState(song = controller.queue.state.value.current, mode = PlayerMode.ROOM, canControlPlayback = false)
+        val vm = io.github.currencortex.music.feature.player.PlayerViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
+            androidx.compose.foundation.layout.Column {
+                io.github.currencortex.music.feature.player.MiniPlayer(vm, {}, {})
+                io.github.currencortex.music.feature.player.PlayerScreen(vm, {}, {})
+            }
+        } }
+        compose.onNodeWithTag("mini_toggle").assertIsNotEnabled()
+        compose.onNodeWithTag("player_toggle").assertIsNotEnabled()
+        compose.onNodeWithTag("player_seek").assertIsNotEnabled()
+        compose.onNodeWithTag("player_seek").assert(SemanticsMatcher.keyNotDefined(androidx.compose.ui.semantics.SemanticsActions.SetProgress))
+        compose.onNodeWithText("播放由房主或管理员控制").assertExists()
+        compose.runOnIdle { controller.state.value = controller.state.value.copy(canControlPlayback = true) }
+        compose.onNodeWithTag("mini_toggle").assertIsEnabled()
+        compose.onNodeWithTag("player_toggle").assertIsEnabled()
+        compose.onNodeWithTag("player_seek").assertIsEnabled()
+    }
+    @Test fun createFormSaveRemainsReachableWithKeyboardOpen() {
+        val vm = RoomViewModel(container)
+        val keyboardHeight = AtomicInteger()
+        compose.setContent {
+            val imeHeight = WindowInsets.ime.getBottom(androidx.compose.ui.platform.LocalDensity.current)
+            androidx.compose.runtime.SideEffect { keyboardHeight.set(imeHeight) }
+            LeiTheme(AppearanceSettings(blur = false)) {
+            top.yukonga.miuix.kmp.basic.Scaffold { RoomScreen(vm, {}, {}, {}) }
+        } }
+        compose.waitUntil(10000) { compose.onAllNodesWithText("创建房间").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("创建房间").performClick()
+        compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("room_form")) and hasText("房间名称"))
+            .performClick().performTextInput("Fixture form")
+        compose.waitUntil(5000) { keyboardHeight.get() > 0 }
+        compose.onNodeWithText("保存").performScrollTo().assertIsDisplayed().assertIsEnabled()
     }
     @Test fun wideRoomShowsQueueAndMembersTogether() {
         show(wide = true)

@@ -2,6 +2,8 @@ package io.github.currencortex.music.feature.room
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -162,11 +164,14 @@ import top.yukonga.miuix.kmp.basic.*
     var public by remember { mutableStateOf(initial?.isPublic ?: true) }; var free by remember { mutableStateOf(initial?.freeMode ?: false) }
     var changePassword by remember { mutableStateOf(initial == null) }
     MusicDialog(title, onDismiss = onDismiss) {
-        TextField(name, { name = it }, label = "房间名称")
-        if (initial != null) Row { Text("修改密码（留空解除密码）", Modifier.weight(1f)); Switch(changePassword, { changePassword = it }) }
-        if (changePassword) TextField(password, { password = it }, label = "房间密码", visualTransformation = PasswordVisualTransformation())
-        Row { Text("公开房间", Modifier.weight(1f)); Switch(public, { public = it }) }
-        Row { Text("自由点歌", Modifier.weight(1f)); Switch(free, { free = it }) }
-        TextButton("保存", enabled = name.isNotBlank(), onClick = { onSave(name, if (changePassword) password else null, public, free); password = "" })
+        Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()).testTag("room_form"),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            TextField(name, { name = it }, label = "房间名称")
+            if (initial != null) Row { Text("修改密码（留空解除密码）", Modifier.weight(1f)); Switch(changePassword, { changePassword = it }) }
+            if (changePassword) TextField(password, { password = it }, label = "房间密码", visualTransformation = PasswordVisualTransformation())
+            Row { Text("公开房间", Modifier.weight(1f)); Switch(public, { public = it }) }
+            Row { Text("自由点歌", Modifier.weight(1f)); Switch(free, { free = it }) }
+            TextButton("保存", enabled = name.isNotBlank(), onClick = { onSave(name, if (changePassword) password else null, public, free); password = "" })
+        }
     }
 }

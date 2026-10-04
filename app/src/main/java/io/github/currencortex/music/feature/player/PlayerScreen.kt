@@ -11,7 +11,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -86,19 +89,22 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         Text(song?.name ?: "还没有选择歌曲", fontSize = 24.sp)
         Text(song?.artists.orEmpty())
         if (state.loading) Text("正在加载音源…")
+        if (!state.canControlPlayback) Text("播放由房主或管理员控制")
         val duration = state.durationMs.coerceAtLeast(1)
         Slider(value = drag ?: (state.positionMs.toFloat() / duration).coerceIn(0f, 1f),
             onValueChange = { drag = it }, onValueChangeFinished = { drag?.let { vm.player.seek((it * duration).toLong()) }; drag = null },
-            valueRange = 0f..1f, modifier = Modifier.fillMaxWidth().testTag("player_seek").semantics {
-                setProgress { progress -> vm.player.seek((progress.coerceIn(0f, 1f) * duration).toLong()); true }
+            enabled = state.canControlPlayback, valueRange = 0f..1f, modifier = Modifier.fillMaxWidth().testTag("player_seek").clearAndSetSemantics {
+                progressBarRangeInfo = ProgressBarRangeInfo(drag ?: (state.positionMs.toFloat() / duration).coerceIn(0f, 1f), 0f..1f)
+                if (state.canControlPlayback) setProgress { progress -> vm.player.seek((progress.coerceIn(0f, 1f) * duration).toLong()); true }
+                else disabled()
             })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
             Text(formatTime(state.positionMs)); Text(formatTime(state.durationMs))
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-            TextButton("上一首", onClick = { vm.player.previous() }, enabled = song != null)
-            TextButton(if (state.playing) "暂停" else "播放", onClick = onToggle, enabled = song != null, modifier = Modifier.testTag("player_toggle"))
-            TextButton("下一首", onClick = { vm.player.next() }, enabled = song != null)
+            TextButton("上一首", onClick = { vm.player.previous() }, enabled = song != null && state.canControlPlayback)
+            TextButton(if (state.playing) "暂停" else "播放", onClick = onToggle, enabled = song != null && state.canControlPlayback, modifier = Modifier.testTag("player_toggle"))
+            TextButton("下一首", onClick = { vm.player.next() }, enabled = song != null && state.canControlPlayback)
         }
     }
 }
@@ -128,7 +134,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         LazyColumn(Modifier.fillMaxSize(), state = list, contentPadding = PaddingValues(vertical = 80.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)) {
             itemsIndexed(lyrics.lines) { index, line ->
-                Column(Modifier.fillMaxWidth().clickable { vm.player.seek(line.t) }.padding(8.dp)) {
+                Column(Modifier.fillMaxWidth().clickable(enabled = player.canControlPlayback) { vm.player.seek(line.t) }.padding(8.dp)) {
                     Text(line.txt, fontSize = if (index == active) 24.sp else 19.sp,
                         color = if (index == active) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface)
                     if (line.trans.isNotBlank()) Text(line.trans)

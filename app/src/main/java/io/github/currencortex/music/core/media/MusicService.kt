@@ -87,6 +87,15 @@ class MusicService : MediaSessionService() {
                             .add(Player.COMMAND_STOP).add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
                             .add(Player.COMMAND_SEEK_TO_NEXT).add(Player.COMMAND_SEEK_TO_PREVIOUS).build())
                 }
+                if (remote.mode == PlayerMode.ROOM && !remote.canControlPlayback) {
+                    builder.setAvailableCommands(builder.build().availableCommands.buildUpon().removeAll(
+                        Player.COMMAND_PLAY_PAUSE, Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
+                        Player.COMMAND_SEEK_TO_DEFAULT_POSITION, Player.COMMAND_SEEK_TO_MEDIA_ITEM,
+                        Player.COMMAND_SEEK_BACK, Player.COMMAND_SEEK_FORWARD,
+                        Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_PREVIOUS,
+                        Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
+                    ).build())
+                }
                 return builder.build()
             }
             fun remoteChanged() { invalidateState() }
@@ -131,10 +140,11 @@ class MusicService : MediaSessionService() {
             PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         ).setCallback(MusicSessionCallback()).build()
         scope.launch {
-            var wasCasting = false
+            var wasExternal = false
             container.playerController.state.collect { state ->
-                if (state.mode == PlayerMode.CAST || wasCasting) forwarding.remoteChanged()
-                wasCasting = state.mode == PlayerMode.CAST
+                val external = state.mode != PlayerMode.LOCAL
+                if (external || wasExternal) forwarding.remoteChanged()
+                wasExternal = external
             }
         }
         player.addListener(object : Player.Listener {

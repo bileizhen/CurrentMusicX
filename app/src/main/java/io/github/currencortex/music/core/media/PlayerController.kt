@@ -28,7 +28,8 @@ class PlayerController(private val context: Context, override val queue: Playbac
         val saved = snapshot.copy(positionMs = if (state.value.song?.id == snapshot.current?.id) state.value.positionMs else snapshot.positionMs)
         val epoch = ++generation
         beforeExternal = saved; external = controls
-        state.value = state.value.copy(mode = mode, playing = false, resolving = false, loading = false, warning = null)
+        state.value = state.value.copy(mode = mode, playing = false, resolving = false, loading = false, warning = null,
+            canControlPlayback = mode != PlayerMode.ROOM)
         // Await this command before telling a TV to play: it cancels pending source resolution too.
         try { connect().sendCustomCommand(SessionCommand(MusicService.QUIESCE, Bundle.EMPTY), Bundle.EMPTY).await() }
         catch (e: Exception) { endExternal(controls); throw e }
@@ -46,10 +47,11 @@ class PlayerController(private val context: Context, override val queue: Playbac
         if (state.value.mode != PlayerMode.ROOM) return
         if (song == null || url == null) {
             connect().sendCustomCommand(SessionCommand(MusicService.QUIESCE, Bundle.EMPTY), Bundle.EMPTY).await()
-            queue.clear(); state.value = PlayerState(mode = PlayerMode.ROOM); return
+            queue.clear(); state.value = PlayerState(mode = PlayerMode.ROOM, canControlPlayback = state.value.canControlPlayback); return
         }
         queue.replace(listOf(song), 0)
-        state.value = PlayerState(song = song, loading = true, mode = PlayerMode.ROOM, positionMs = position, durationMs = song.durationMs)
+        state.value = PlayerState(song = song, loading = true, mode = PlayerMode.ROOM, positionMs = position, durationMs = song.durationMs,
+            canControlPlayback = state.value.canControlPlayback)
         connect().sendCustomCommand(SessionCommand(MusicService.ROOM_TRACK, Bundle.EMPTY), Bundle().apply {
             putString("song", ApiJson.encodeToString(song)); putString("url", url); putLong("position", position); putBoolean("play", playing)
         }).await()
@@ -113,16 +115,22 @@ class PlayerController(private val context: Context, override val queue: Playbac
     }
     fun playList(songs: List<Song>, index: Int) { if (!localOnly()) return; beforeVideo = null; queue.replace(songs, index); load() }
     fun toggle() = scope.launch(Dispatchers.Main.immediate) {
+        if (!transportAllowed()) return@launch
         external?.let { it.play(!state.value.playing); return@launch }
         val player = connect()
         if (state.value.playing || state.value.loading || player.playWhenReady) player.pause()
         else if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) load()
         else player.play()
     }
-    fun pause() { external?.let { it.play(false); return }; controller?.pause() }
-    fun next() { external?.let { it.next(); return }; queue.next(); load() }
-    fun previous() { external?.let { it.previous(); return }; queue.previous(); load() }
-    fun seek(position: Long) { external?.let { it.seek(position.coerceAtLeast(0)); return }; controller?.seekTo(position.coerceAtLeast(0)) }
+    private fun transportAllowed(): Boolean {
+        if (state.value.canControlPlayback) return true
+        state.value = state.value.copy(error = "播放由房主或管理员控制")
+        return false
+    }
+    fun pause() { if (!transportAllowed()) return; external?.let { it.play(false); return }; controller?.pause() }
+    fun next() { if (!transportAllowed()) return; external?.let { it.next(); return }; queue.next(); load() }
+    fun previous() { if (!transportAllowed()) return; external?.let { it.previous(); return }; queue.previous(); load() }
+    fun seek(position: Long) { if (!transportAllowed()) return; external?.let { it.seek(position.coerceAtLeast(0)); return }; controller?.seekTo(position.coerceAtLeast(0)) }
     fun add(song: Song, next: Boolean = false) { if (state.value.mode == PlayerMode.ROOM) { external?.request(song); return }; queue.add(song, next) }
     fun remove(index: Int) { if (!localOnly()) return; if (queue.remove(index)) { if (queue.state.value.current == null) clear() else load(state.value.playing) } }
     fun clear() { if (!localOnly()) return; beforeVideo = null; queue.clear(); controller?.stop(); controller?.clearMediaItems(); state.value = PlayerState() }
