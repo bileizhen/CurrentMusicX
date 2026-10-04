@@ -19,11 +19,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
+import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
+import io.github.currencortex.music.feature.lyrics.ui.rememberLyricsPosition
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -58,6 +57,8 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
     onPrevious: () -> Unit = { vm.player.previous(vm.state.value.showPause) }, onQueue: () -> Unit = onOpen) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
+    val lyrics by vm.lyrics.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
     val song = queue.current
     if (song == null && state.mode == PlayerMode.LOCAL) return
     val enabled = state.canControlPlayback && song != null
@@ -81,6 +82,19 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
         PlayerMode.CAST -> "正在投屏"
         else -> song?.artists.orEmpty()
     }
+    val lyricPosition = rememberLyricsPosition(state)
+    val timeline = remember(lyrics.document) { LyricsSynchronizer(lyrics.document) }
+    val lyric by remember(timeline, lyricPosition, lyrics.songId, song?.id, currentMatches, settings.lyricsOffsetMs) {
+        derivedStateOf {
+            if (!currentMatches || lyrics.songId != song?.id) ""
+            else {
+                val now = LyricsSynchronizer.effectivePosition(lyricPosition.value, settings.lyricsOffsetMs)
+                val line = lyrics.document.lines.getOrNull(timeline.findCurrentLine(now))
+                line?.text?.takeIf { it.isNotBlank() }
+                    ?: line?.backgroundVocals?.firstOrNull { now in it.startTimeMs until it.endTimeMs }?.text.orEmpty()
+            }
+        }
+    }
     val surface = LocalMusicGlassSurface.current
     surface(modifier.fillMaxWidth().testTag("mini_player")) {
         Row(Modifier.heightIn(min = 52.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -88,7 +102,7 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
                 .semantics { this[CoverRotation] = rotation.value }
                 .graphicsLayer { rotationZ = rotation.value }.clip(CircleShape)
                 .border(2.dp, MiuixTheme.colorScheme.onSurface.copy(alpha = .85f), CircleShape).clickable(onClick = onOpen))
-            Row(Modifier.weight(1f).heightIn(min = 48.dp).padding(horizontal = 8.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+            Column(Modifier.weight(1f).heightIn(min = 48.dp).padding(horizontal = 8.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
                 .testTag("mini_song_gesture")
                 .pointerInput(enabled, threshold) {
                     detectHorizontalDragGestures(onDragStart = { dragged = 0f },
@@ -99,16 +113,14 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
                         })
                 }.clickable(onClick = onOpen).semantics {
                     if (enabled) customActions = listOf(CustomAccessibilityAction("上一首") { previous(); true }, CustomAccessibilityAction("下一首") { next(); true })
-                }, verticalAlignment = Alignment.CenterVertically) {
+                }, verticalArrangement = Arrangement.Center) {
                 val artistColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f)
-                Text(buildAnnotatedString {
-                    append(song?.name ?: "等待房间点歌")
-                    if (subtitle.isNotBlank()) withStyle(SpanStyle(color = artistColor, fontSize = 12.sp, fontWeight = FontWeight.Normal)) {
-                        append(" - $subtitle")
-                    }
-                }, Modifier.fillMaxWidth().graphicsLayer {
+                Text(song?.name ?: "等待房间点歌", Modifier.fillMaxWidth().testTag("mini_title").graphicsLayer {
                     translationX = dragged.coerceIn(-threshold * 2, threshold * 2) * .15f
                 }, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(lyric.ifBlank { subtitle }, Modifier.fillMaxWidth().testTag("mini_lyric").graphicsLayer {
+                    translationX = dragged.coerceIn(-threshold * 2, threshold * 2) * .15f
+                }, color = artistColor, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             MiniControl(if (state.showPause) "暂停" else "播放", onToggle, Modifier.testTag("mini_toggle").semantics {
                 progressBarRangeInfo = if (loading) ProgressBarRangeInfo.Indeterminate else ProgressBarRangeInfo(progress, 0f..1f)

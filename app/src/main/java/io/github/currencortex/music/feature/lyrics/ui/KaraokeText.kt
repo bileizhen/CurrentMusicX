@@ -29,14 +29,15 @@ import androidx.compose.ui.text.style.TextAlign
     val density = LocalDensity.current
     val size = if (fontSize.isFinite()) fontSize.coerceIn(12f, LyricsTypography.MAX_SIZE) else LyricsTypography.DEFAULT_SIZE
     // Async resource resolution must invalidate the cached glyph geometry once the font loads.
-    val typeface by LocalFontFamilyResolver.current.resolve(LyricsFontFamily, fontWeight = fontWeight, fontSynthesis = FontSynthesis.None)
+    val synthesis = lyricsFontSynthesis(fontWeight)
+    val typeface by LocalFontFamilyResolver.current.resolve(LyricsFontFamily, fontWeight = fontWeight, fontSynthesis = synthesis)
     BoxWithConstraints(modifier) {
         val width = with(density) { maxWidth.roundToPx() }
-        val style = TextStyle(fontFamily = LyricsFontFamily, fontSynthesis = FontSynthesis.None,
+        val style = TextStyle(fontFamily = LyricsFontFamily, fontSynthesis = synthesis,
             fontSize = size.sp, lineHeight = (size * 1.3f).sp, fontWeight = fontWeight, textAlign = textAlign)
         val layout = remember(line.text, width, density.density, density.fontScale, size, fontWeight, typeface, textAlign) {
             measurer.measure(AnnotatedString(line.text), style,
-                constraints = Constraints(minWidth = if (textAlign == TextAlign.End) width else 0, maxWidth = width))
+                constraints = Constraints(minWidth = if (textAlign == TextAlign.End || textAlign == TextAlign.Center) width else 0, maxWidth = width))
         }
         val boxes = remember(line.words, layout) { line.words.map { word ->
             (word.startOffset until word.endOffset.coerceAtMost(line.text.length)).map { layout.getBoundingBox(it) }

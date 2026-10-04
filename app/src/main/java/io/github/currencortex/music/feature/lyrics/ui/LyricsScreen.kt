@@ -27,6 +27,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.data.settings.LyricsTypography
 import io.github.currencortex.music.data.settings.LyricsWeight
+import io.github.currencortex.music.data.settings.LyricsDisplayOptions
 import io.github.currencortex.music.feature.lyrics.model.*
 import io.github.currencortex.music.feature.lyrics.timeline.*
 import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
@@ -56,7 +57,8 @@ enum class LyricsScrollMode { FOLLOWING, BROWSING }
 @Composable fun LyricsScreen(document: LyricsDocument, position: State<Long>, onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier, canSeek: Boolean = true, translation: Boolean = true,
     romanization: Boolean = false, wordAnimation: Boolean = true, effects: Boolean = true,
-    fontSize: Float = LyricsTypography.DEFAULT_SIZE, weightMode: LyricsWeight = LyricsWeight.CURRENT, lyricsOffsetMs: Long = 0) {
+    fontSize: Float = LyricsTypography.DEFAULT_SIZE, weightMode: LyricsWeight = LyricsWeight.CURRENT, lyricsOffsetMs: Long = 0,
+    display: LyricsDisplayOptions = LyricsDisplayOptions()) {
     val size = LyricsTypography.normalize(fontSize)
     val timeline = remember(document) { LyricsSynchronizer(document) }
     val effectivePosition = remember(position, lyricsOffsetMs) { derivedStateOf { LyricsSynchronizer.effectivePosition(position.value, lyricsOffsetMs) } }
@@ -76,7 +78,7 @@ enum class LyricsScrollMode { FOLLOWING, BROWSING }
             mode = LyricsScrollMode.FOLLOWING
         }
     }
-    LaunchedEffect(target, mode, document, size, translation, romanization, weightMode, lyricsOffsetMs) {
+    LaunchedEffect(target, mode, document, size, translation, romanization, weightMode, lyricsOffsetMs, display.centered, display.fontWeight) {
         if (mode != LyricsScrollMode.FOLLOWING || document.lines.isEmpty()) return@LaunchedEffect
         // Allow a changed font or auxiliary line to reflow before calculating the anchor.
         withFrameNanos { }; withFrameNanos { }
@@ -105,7 +107,7 @@ enum class LyricsScrollMode { FOLLOWING, BROWSING }
                 LyricsLineView(line, index, effectivePosition, index in activeLines, distance,
                     mode == LyricsScrollMode.BROWSING, canSeek, {
                         onSeek(LyricsSynchronizer.seekPosition(it, lyricsOffsetMs)); mode = LyricsScrollMode.FOLLOWING
-                    }, translation, romanization, wordAnimation, effects, size, weightMode)
+                    }, translation, romanization, wordAnimation, effects, size, weightMode, display, target)
             }
         }
         if (interlude != null && mode == LyricsScrollMode.FOLLOWING)

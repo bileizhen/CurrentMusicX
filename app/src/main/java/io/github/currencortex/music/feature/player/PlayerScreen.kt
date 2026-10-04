@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.media.*
 import io.github.currencortex.music.feature.lyrics.ui.*
 import io.github.currencortex.music.data.settings.LyricsWeight
+import io.github.currencortex.music.data.settings.KaraokeScope
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -31,7 +32,7 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 
 private enum class PlayerContent { COVER, LYRICS }
-private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT }
+private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE }
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
     actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null,
@@ -41,10 +42,8 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
     val settings by vm.settings.collectAsStateWithLifecycle()
     var content by rememberSaveable { mutableStateOf(PlayerContent.COVER) }
     var overlay by rememberSaveable { mutableStateOf(PlayerOverlay.NONE) }
-    var translation by rememberSaveable { mutableStateOf(true) }
-    var romanization by rememberSaveable { mutableStateOf(false) }
-    var wordAnimation by rememberSaveable { mutableStateOf(true) }
-    var effects by rememberSaveable { mutableStateOf(true) }
+    var controlsRevealed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(settings.lyricsDisplay.hideControls) { controlsRevealed = false }
     val menuHost = LocalSongMenu.current
     val dismiss = { overlay = PlayerOverlay.NONE }
     LaunchedEffect(overlay) { onDialogActive(overlay != PlayerOverlay.NONE) }
@@ -52,7 +51,9 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
     val indication = LocalIndication.current
     val colors = remember { darkColorScheme(primary = Color.White, onPrimary = Color(0xFF282629),
         background = Color(0xFF262428), surface = Color(0xFF262428)) }
-    Box(Modifier.fillMaxSize().testTag("player_screen")) {
+    BoxWithConstraints(Modifier.fillMaxSize().testTag("player_screen")) {
+        val immersive = settings.lyricsDisplay.hideControls && !controlsRevealed &&
+            (content == PlayerContent.LYRICS || maxWidth >= 648.dp)
         PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize())
         // The artwork viewport uses light ink; dialogs below inherit the app appearance.
         MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
@@ -72,9 +73,9 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
                 if (maxWidth >= 600.dp) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
                     Column(Modifier.weight(1f).fillMaxHeight()) {
                         CoverContent(vm, Modifier.weight(1f))
-                        PlayerTransport(vm, onToggle)
+                        if (!immersive) PlayerTransport(vm, onToggle)
                     }
-                    LyricsPanel(vm, Modifier.weight(1.15f).fillMaxHeight(), translation, romanization, wordAnimation, effects, settings.lyricsFontSize, settings.lyricsWeight)
+                    LyricsPanel(vm, Modifier.weight(1.15f).fillMaxHeight())
                 } else Column(Modifier.fillMaxSize()) {
                     AnimatedContent(content, Modifier.weight(1f).fillMaxWidth(), transitionSpec = {
                         fadeIn(tween(240)) togetherWith fadeOut(tween(160))
@@ -88,18 +89,26 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
                                     Text(queue.current?.artists.orEmpty(), fontSize = 13.sp, color = Color.White.copy(alpha = .55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
-                            LyricsPanel(vm, Modifier.weight(1f).fillMaxWidth(), translation, romanization, wordAnimation, effects, settings.lyricsFontSize, settings.lyricsWeight)
+                            LyricsPanel(vm, Modifier.weight(1f).fillMaxWidth())
                         } else CoverContent(vm, Modifier.fillMaxSize())
                     }
-                    PlayerTransport(vm, onToggle)
+                    if (!immersive) PlayerTransport(vm, onToggle)
                 }
             }
-            Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 18.dp), horizontalArrangement = Arrangement.SpaceBetween,
+            if (immersive) Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
+                Text("显示控制面板", color = Color.White.copy(alpha = .65f), fontSize = 12.sp,
+                    modifier = Modifier.testTag("lyrics_reveal_controls").clickable(role = Role.Button) { controlsRevealed = true }
+                        .padding(horizontal = 24.dp, vertical = 14.dp))
+            } else Row(Modifier.fillMaxWidth().height(56.dp).padding(horizontal = 18.dp), horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically) {
                 PlayerIconButton(PlayerIcon.LYRICS, if (content == PlayerContent.LYRICS) "显示封面" else "显示歌词", {
                     content = if (content == PlayerContent.LYRICS) PlayerContent.COVER else PlayerContent.LYRICS
                 }, Modifier.testTag("open_lyrics"), selected = content == PlayerContent.LYRICS)
                 if (onCast != null) PlayerIconButton(PlayerIcon.CAST, if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏", onCast)
+                if (settings.lyricsDisplay.hideControls && content == PlayerContent.LYRICS)
+                    Text("隐藏", color = Color.White.copy(alpha = .65f), fontSize = 12.sp,
+                        modifier = Modifier.testTag("lyrics_conceal_controls").clickable(role = Role.Button) { controlsRevealed = false }
+                            .padding(horizontal = 12.dp, vertical = 14.dp))
                 PlayerIconButton(PlayerIcon.QUEUE, "播放队列，${queue.songs.size} 首", { overlay = PlayerOverlay.QUEUE }, Modifier.testTag("open_player_queue"))
             }
         }
@@ -153,10 +162,17 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
                         onClick = { vm.lyricsWeight(weight); overlay = PlayerOverlay.LYRICS })
                 }
             }
+            PlayerOverlay.KARAOKE -> MusicDialog("逐字动画兼容策略", { overlay = PlayerOverlay.LYRICS }) {
+                KaraokeScope.entries.forEach { scope ->
+                    MusicDestinationRow((if (scope == settings.lyricsDisplay.karaokeScope) "✓ " else "") + scope.label,
+                        summary = if (scope == KaraokeScope.ALL) "所有含逐字时间的可见行跟随进度高亮" else "只对正在播放的行逐字高亮",
+                        modifier = Modifier.testTag("karaoke_scope_${scope.name}"), chevron = false,
+                        onClick = { vm.lyricsDisplay { it.copy(karaokeScope = scope) }; overlay = PlayerOverlay.LYRICS })
+                }
+            }
             PlayerOverlay.LYRICS -> MusicDialog("歌词显示", dismiss) {
                 LyricsDisplaySettings(settings.lyricsFontSize, vm::lyricsFontSize, settings.lyricsWeight, { overlay = PlayerOverlay.WEIGHT },
-                    translation, { translation = it }, romanization, { romanization = it },
-                    wordAnimation, { wordAnimation = it }, effects, { effects = it })
+                    settings.lyricsDisplay, vm::lyricsDisplay, { overlay = PlayerOverlay.KARAOKE })
             }
         }
     }
@@ -178,15 +194,15 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
     }
 }
 
-@Composable private fun LyricsPanel(vm: PlayerViewModel, modifier: Modifier, translation: Boolean,
-    romanization: Boolean, wordAnimation: Boolean, effects: Boolean, fontSize: Float, weightMode: LyricsWeight) {
+@Composable private fun LyricsPanel(vm: PlayerViewModel, modifier: Modifier) {
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
     val player by vm.state.collectAsStateWithLifecycle()
     val position = rememberLyricsPosition(player)
     if (lyrics.document.lines.isNotEmpty()) key(player.song?.id, lyrics.document) {
         val settings by vm.settings.collectAsStateWithLifecycle()
         LyricsScreen(lyrics.document, position, vm.player::seek, modifier, player.canControlPlayback,
-            translation, romanization, wordAnimation, effects, fontSize, weightMode, settings.lyricsOffsetMs)
+            settings.lyricsDisplay.translation, settings.lyricsDisplay.romanization, settings.lyricsDisplay.wordAnimation,
+            settings.lyricsDisplay.blur, settings.lyricsFontSize, settings.lyricsWeight, settings.lyricsOffsetMs, settings.lyricsDisplay)
     } else Box(modifier.testTag("lyrics_panel"), contentAlignment = Alignment.Center) {
         if (lyrics.loading) Column(Modifier.fillMaxWidth().padding(28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             MusicPlaceholder(Modifier.fillMaxWidth(.8f).height(30.dp))

@@ -10,7 +10,7 @@ import io.github.currencortex.music.core.media.HighSpecWarning
 import io.github.currencortex.music.core.media.PlayerMode
 
 data class LyricsUiState(val document: LyricsDocument = LyricsDocument(), val loading: Boolean = false, val error: String? = null,
-    val issues: List<io.github.currencortex.music.feature.lyrics.data.LyricsIssue> = emptyList())
+    val issues: List<io.github.currencortex.music.feature.lyrics.data.LyricsIssue> = emptyList(), val songId: Long? = null)
 data class NavigationPlayback(val mode: PlayerMode, val error: String?, val warning: HighSpecWarning?)
 class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val player = container.playerController
@@ -27,9 +27,9 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     init { viewModelScope.launch {
         queue.map { it.current?.takeUnless { song -> song.video } }.distinctUntilChanged().collectLatest { song ->
             if (song == null) { _lyrics.value = LyricsUiState(); return@collectLatest }
-            _lyrics.value = LyricsUiState(loading = true)
+            _lyrics.value = LyricsUiState(loading = true, songId = song.id)
             val result = container.lyricsRepository.load(song)
-            _lyrics.value = LyricsUiState(result.document, error = result.error, issues = result.issues)
+            _lyrics.value = LyricsUiState(result.document, error = result.error, issues = result.issues, songId = song.id)
         }
     } }
     fun quality(value: io.github.currencortex.music.core.media.AudioQuality) = viewModelScope.launch {
@@ -39,4 +39,6 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     fun suppressWarning() = viewModelScope.launch { container.musicSettings.setWarning(false); player.acceptHighSpec() }
     fun lyricsFontSize(value: Float) = viewModelScope.launch { container.musicSettings.setLyricsFontSize(value) }
     fun lyricsWeight(value: io.github.currencortex.music.data.settings.LyricsWeight) = viewModelScope.launch { container.musicSettings.setLyricsWeight(value) }
+    fun lyricsDisplay(transform: (io.github.currencortex.music.data.settings.LyricsDisplayOptions) -> io.github.currencortex.music.data.settings.LyricsDisplayOptions) =
+        viewModelScope.launch { container.musicSettings.editLyricsDisplay(transform) }
 }
