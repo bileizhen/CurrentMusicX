@@ -25,7 +25,8 @@ import androidx.room.Room
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-class AppContainer(context: Context, storageNamespace: String = "", externalPlayer: ExternalPlayer? = null) : java.io.Closeable {
+class AppContainer(context: Context, storageNamespace: String = "", externalPlayer: ExternalPlayer? = null,
+    ttmlProvider: io.github.currencortex.music.feature.lyrics.data.LyricsProvider? = null) : java.io.Closeable {
     private val storageSuffix = if (storageNamespace.isEmpty()) "" else ".$storageNamespace".also {
         require(storageNamespace.matches(Regex("[a-zA-Z0-9-]+")))
     }
@@ -63,6 +64,15 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val bindingRepository = io.github.currencortex.music.data.binding.BindingRepository(apiClient,
         { RequestSession(accountRepository.server, accountRepository.token) }) { libraryRepository.revision.value += 1 }
     val database = Room.databaseBuilder(context.applicationContext, MusicDatabase::class.java, "music$storageSuffix.db").build()
+    // Isolated containers use only explicitly injected external providers, never live GitHub.
+    val lyricsRepository = io.github.currencortex.music.feature.lyrics.data.LyricsRepository(
+        ttmlProvider ?: if (storageNamespace.isEmpty()) io.github.currencortex.music.feature.lyrics.data.AmllLyricsProvider()
+        else io.github.currencortex.music.feature.lyrics.data.LyricsProvider {
+            io.github.currencortex.music.feature.lyrics.data.LyricsProviderResult.Failure(io.github.currencortex.music.feature.lyrics.model.LyricsErrorCode.NO_LYRICS, "Isolated external provider")
+        },
+        io.github.currencortex.music.feature.lyrics.data.CurrentMusicLyricsProvider(musicRepository, database.music()) { logger.debug("Lyrics", it) },
+        io.github.currencortex.music.feature.lyrics.data.LyricsCache(java.io.File(context.cacheDir, "lyrics$storageSuffix")),
+        { logger.debug("Lyrics", it) })
     val playbackQueue = PlaybackQueue()
     val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)
     val roomRepository = io.github.currencortex.music.data.room.RoomRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }

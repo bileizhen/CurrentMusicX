@@ -5,7 +5,12 @@ import kotlinx.serialization.SerialName
 
 @Serializable data class Song(val id: Long, val name: String, val artists: String = "",
                              val album: String = "", val cover: String = "", val durationMs: Long = 0, val mv: Long = 0,
-                             val artistIds: List<Long> = emptyList(), val video: Boolean = false)
+                             val artistIds: List<Long> = emptyList(), val video: Boolean = false,
+                             val musicSource: MusicSource = MusicSource.NETEASE,
+                             val externalIds: SongExternalIds = SongExternalIds())
+@Serializable enum class MusicSource { NETEASE, QQ_MUSIC, APPLE_MUSIC, SPOTIFY }
+@Serializable data class SongExternalIds(val neteaseId: String? = null, val qqMusicId: String? = null,
+    val appleMusicId: String? = null, val spotifyId: String? = null)
 @Serializable data class SongDto(@SerialName("ncm_id") val id: Long, val name: String, val artists: String = "",
                                 val album: String = "", val pic: String = "", val duration: Long = 0, val mv: Long = 0,
                                 @SerialName("artist_ids") val artistIds: List<Long> = emptyList()) {

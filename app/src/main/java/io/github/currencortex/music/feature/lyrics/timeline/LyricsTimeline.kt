@@ -3,16 +3,9 @@ package io.github.currencortex.music.feature.lyrics.timeline
 import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
 
 class LyricsTimeline(private val document: LyricsDocument) {
-    /** -1 before the first lyric, including instrumental introductions. */
-    fun lineAt(positionMs: Long): Int {
-        var low = 0
-        var high = document.lines.lastIndex
-        while (low <= high) {
-            val mid = (low + high) ushr 1
-            if (document.lines[mid].startTimeMs <= positionMs) low = mid + 1 else high = mid - 1
-        }
-        return high
-    }
+    private val synchronizer = io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer(document)
+    /** -1 in instrumental gaps; end time is meaningful for TTML and YRC. */
+    fun lineAt(positionMs: Long): Int = synchronizer.findCurrentLine(positionMs)
 }
 
 /** Monotonic UI interpolation only; Media3 remains the authoritative clock. */

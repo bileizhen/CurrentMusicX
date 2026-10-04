@@ -184,14 +184,15 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
     val player by vm.state.collectAsStateWithLifecycle()
     val position = rememberLyricsPosition(player)
     if (lyrics.document.lines.isNotEmpty()) key(player.song?.id, lyrics.document) {
-        AppleLyrics(lyrics.document, position, vm.player::seek, modifier, player.canControlPlayback,
-            translation, romanization, wordAnimation, effects, fontSize, weightMode)
+        val settings by vm.settings.collectAsStateWithLifecycle()
+        LyricsScreen(lyrics.document, position, vm.player::seek, modifier, player.canControlPlayback,
+            translation, romanization, wordAnimation, effects, fontSize, weightMode, settings.lyricsOffsetMs)
     } else Box(modifier.testTag("lyrics_panel"), contentAlignment = Alignment.Center) {
         if (lyrics.loading) Column(Modifier.fillMaxWidth().padding(28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             MusicPlaceholder(Modifier.fillMaxWidth(.8f).height(30.dp))
             MusicPlaceholder(Modifier.fillMaxWidth().height(30.dp))
             MusicPlaceholder(Modifier.fillMaxWidth(.6f).height(30.dp))
             Text("正在加载歌词", fontSize = 13.sp, color = Color.White.copy(alpha = .45f))
-        } else Text(lyrics.error ?: "此刻，让音乐说话", Modifier.padding(28.dp), color = Color.White.copy(alpha = .5f), fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+        } else Text(lyrics.error ?: "暂无歌词", Modifier.padding(28.dp), color = Color.White.copy(alpha = .5f), fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
     }
 }

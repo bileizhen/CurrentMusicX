@@ -183,3 +183,12 @@ INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
+
+
+## AMLL TTML DB lyric data source
+
+The native lyrics engine fetches individual TTML files from AMLL TTML DB,
+https://github.com/amll-dev/amll-ttml-db (repository data license: CC0-1.0).
+The database is not bundled in the app. Song platform ids, lyric author metadata,
+translations, romanization and vocal agents are preserved when parsing.
+No AMLL Web Renderer code is included.

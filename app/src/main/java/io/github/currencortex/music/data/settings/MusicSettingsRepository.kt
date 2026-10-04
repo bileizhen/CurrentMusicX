@@ -13,7 +13,8 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val nickname: String = "", val accountId: Long = 0,
                          val preloadAudio: Boolean = true, val preloadMetered: Boolean = false,
                          val lyricsFontSize: Float = LyricsTypography.DEFAULT_SIZE,
-                         val lyricsWeight: LyricsWeight = LyricsWeight.CURRENT)
+                         val lyricsWeight: LyricsWeight = LyricsWeight.CURRENT,
+                         val lyricsOffsetMs: Long = 0)
 
 enum class LyricsWeight(val label: String) {
     NORMAL("常规"), ALL("全部粗体"), CURRENT("仅当前行粗体");
@@ -40,10 +41,11 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val metered = booleanPreferencesKey("music.preloadMetered")
     private val lyricsSize = floatPreferencesKey("lyrics.fontSize")
     private val lyricsWeight = stringPreferencesKey("lyrics.weight")
+    private val lyricsOffset = longPreferencesKey("lyrics.offsetMs")
     private fun decode(p: Preferences) = MusicSettings(p[server] ?: ServerDefaults.URL, AudioQuality.from(p[quality].orEmpty()),
         p[warning] ?: true, p[restore] ?: true, p[nickname].orEmpty(), p[account] ?: 0,
         p[preload] ?: true, p[metered] ?: false, LyricsTypography.normalize(p[lyricsSize] ?: LyricsTypography.DEFAULT_SIZE),
-        LyricsWeight.from(p[lyricsWeight]))
+        LyricsWeight.from(p[lyricsWeight]), p[lyricsOffset] ?: 0)
     val state = store.data.map(::decode)
         .stateIn(scope, SharingStarted.Eagerly, MusicSettings())
     suspend fun snapshot(): MusicSettings {
@@ -58,5 +60,6 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     suspend fun setPreloadMetered(value: Boolean) { store.edit { it[metered] = value } }
     suspend fun setLyricsFontSize(value: Float) { store.edit { it[lyricsSize] = LyricsTypography.normalize(value) } }
     suspend fun setLyricsWeight(value: LyricsWeight) { store.edit { it[lyricsWeight] = value.name } }
+    suspend fun setLyricsOffset(value: Long) { store.edit { it[lyricsOffset] = value.coerceIn(-60000, 60000) } }
     suspend fun setAccount(id: Long, name: String) { store.edit { it[account] = id; it[nickname] = name } }
 }
