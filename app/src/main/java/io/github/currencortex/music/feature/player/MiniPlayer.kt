@@ -32,10 +32,30 @@ import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.abs
+import androidx.compose.animation.core.withInfiniteAnimationFrameNanos
+import androidx.compose.animation.core.*
+
+internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
+
+/** Frame clock animation retains its angle while paused, and resets on a new track. */
+@Composable private fun rememberCoverRotation(songId: Long?, playing: Boolean): State<Float> {
+    val angle = remember(songId) { mutableFloatStateOf(0f) }
+    LaunchedEffect(songId, playing) {
+        if (playing && songId != null) {
+            var last = withInfiniteAnimationFrameNanos { it }
+            while (true) {
+                val frame = withInfiniteAnimationFrameNanos { it }
+                angle.floatValue = (angle.floatValue + (frame - last).coerceAtMost(250_000_000L) / 1_000_000_000f * 30f) % 360f
+                last = frame
+            }
+        }
+    }
+    return angle
+}
 
 @Composable fun MiniPlayer(vm: PlayerViewModel, onOpen: () -> Unit, onToggle: () -> Unit, modifier: Modifier = Modifier,
-    onNext: () -> Unit = { vm.player.next(vm.state.value.playing) },
-    onPrevious: () -> Unit = { vm.player.previous(vm.state.value.playing) }, onQueue: () -> Unit = onOpen) {
+    onNext: () -> Unit = { vm.player.next(vm.state.value.showPause) },
+    onPrevious: () -> Unit = { vm.player.previous(vm.state.value.showPause) }, onQueue: () -> Unit = onOpen) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val song = queue.current
@@ -49,6 +69,12 @@ import kotlin.math.abs
     val duration = (if (currentMatches) state.durationMs.takeIf { it > 0 } else null) ?: song?.durationMs ?: 0L
     val position = if (currentMatches) state.positionMs else queue.positionMs
     val progress = if (duration > 0) (position.toDouble() / duration).toFloat().coerceIn(0f, 1f) else 0f
+    val rotation = rememberCoverRotation(song?.id, state.playing && song?.video != true)
+    val loading = state.loading || state.resolving
+    val loadingAngle = if (loading) {
+        val transition = rememberInfiniteTransition(label = "mini audio loading")
+        transition.animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "loading ring")
+    } else remember { mutableFloatStateOf(0f) }
     var dragged by remember { mutableFloatStateOf(0f) }
     val subtitle = when (state.mode) {
         PlayerMode.ROOM -> if (state.canControlPlayback) "房间控制" else "跟随房间"
@@ -58,7 +84,9 @@ import kotlin.math.abs
     val surface = LocalMusicGlassSurface.current
     surface(modifier.fillMaxWidth().testTag("mini_player")) {
         Row(Modifier.heightIn(min = 52.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            MusicCover(song?.cover.orEmpty(), Modifier.size(42.dp).clip(CircleShape)
+            MusicCover(song?.cover.orEmpty(), Modifier.size(42.dp).testTag("mini_cover")
+                .semantics { this[CoverRotation] = rotation.value }
+                .graphicsLayer { rotationZ = rotation.value }.clip(CircleShape)
                 .border(2.dp, MiuixTheme.colorScheme.onSurface.copy(alpha = .85f), CircleShape).clickable(onClick = onOpen))
             Row(Modifier.weight(1f).heightIn(min = 48.dp).padding(horizontal = 8.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
                 .testTag("mini_song_gesture")
@@ -82,15 +110,17 @@ import kotlin.math.abs
                     translationX = dragged.coerceIn(-threshold * 2, threshold * 2) * .15f
                 }, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
-            MiniControl(if (state.playing) "暂停" else "播放", onToggle, Modifier.testTag("mini_toggle").semantics {
-                progressBarRangeInfo = ProgressBarRangeInfo(progress, 0f..1f)
+            MiniControl(if (state.showPause) "暂停" else "播放", onToggle, Modifier.testTag("mini_toggle").semantics {
+                progressBarRangeInfo = if (loading) ProgressBarRangeInfo.Indeterminate else ProgressBarRangeInfo(progress, 0f..1f)
+                stateDescription = if (loading) "正在加载音乐" else "播放进度"
             }, enabled) { ink ->
                 val stroke = Stroke(1.6.dp.toPx())
                 drawCircle(ink.copy(alpha = .2f), radius = size.minDimension * .45f, style = stroke)
-                if (progress > 0f) drawArc(ink, startAngle = -90f, sweepAngle = 360f * progress, useCenter = false,
+                if (loading || progress > 0f) drawArc(ink, startAngle = if (loading) loadingAngle.value - 90f else -90f,
+                    sweepAngle = if (loading) 100f else 360f * progress, useCenter = false,
                     topLeft = Offset(size.width * .05f, size.height * .05f), size = Size(size.width * .9f, size.height * .9f),
                     style = Stroke(1.6.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
-                if (state.playing) {
+                if (state.showPause) {
                     drawRect(ink, Offset(size.width * .34f, size.height * .29f), Size(size.width * .1f, size.height * .42f))
                     drawRect(ink, Offset(size.width * .56f, size.height * .29f), Size(size.width * .1f, size.height * .42f))
                 } else drawPath(Path().apply { moveTo(size.width * .4f, size.height * .28f); lineTo(size.width * .7f, size.height * .5f); lineTo(size.width * .4f, size.height * .72f); close() }, ink)
