@@ -62,6 +62,60 @@ class LibraryCapabilitiesTest {
         if (::server.isInitialized) server.shutdown()
     }
     private fun dismissMessage() { compose.onAllNodesWithText("关闭").fetchSemanticsNodes().takeIf { it.isNotEmpty() }?.let { compose.onNodeWithText("关闭").performClick() } }
+    @Test fun predictiveBackKeepsViewportAndCancelsWithoutPopping() = verifyPredictiveNavigation(floating = true)
+    @Test fun predictiveBackWithFixedTabsKeepsViewportAndCompletes() = verifyPredictiveNavigation(floating = false)
+
+    private fun verifyPredictiveNavigation(floating: Boolean) {
+        runBlocking { container.settings.edit { it.copy(floatingBar = floating, predictiveBack = true) } }
+        container.playerController.queue.replace(listOf(io.github.currencortex.music.data.song.Song(55, "Paused navigation fixture")), 0)
+        lateinit var dispatcher: androidx.activity.OnBackPressedDispatcher
+        compose.setContent {
+            dispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
+            CurrentMusicApp(container)
+        }
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("open_playlists").fetchSemanticsNodes().isNotEmpty() }
+        val viewport = compose.onNodeWithTag("music_navigation").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("open_playlists").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithText("Cloud read-only").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals("Pushing must not resize the animated viewport", viewport,
+            compose.onNodeWithTag("music_navigation").fetchSemanticsNode().boundsInRoot)
+        compose.onNodeWithText("Cloud read-only").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("library_detail").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+        val original = compose.onNodeWithTag("library_detail").fetchSemanticsNode().boundsInRoot
+        fun progress(value: Float, edge: Int = androidx.activity.BackEventCompat.EDGE_LEFT) {
+            compose.runOnUiThread { dispatcher.dispatchOnBackProgressed(androidx.activity.BackEventCompat(value * viewport.width, 500f, value, edge)) }
+            compose.waitForIdle()
+        }
+        compose.runOnUiThread { dispatcher.dispatchOnBackStarted(androidx.activity.BackEventCompat(0f, 500f, 0f, androidx.activity.BackEventCompat.EDGE_LEFT)) }
+        progress(.2f)
+        val first = compose.onNodeWithTag("library_detail").fetchSemanticsNode().boundsInRoot
+        progress(.5f)
+        val middle = compose.onNodeWithTag("library_detail").fetchSemanticsNode().boundsInRoot
+        assertTrue("Page must follow predictive progress", middle.left > first.left)
+        assertEquals(viewport, compose.onNodeWithTag("music_navigation").fetchSemanticsNode().boundsInRoot)
+        progress(.1f)
+        assertTrue("Reversing the gesture must reverse the page", compose.onNodeWithTag("library_detail").fetchSemanticsNode().boundsInRoot.left < middle.left)
+        compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
+        compose.waitForIdle()
+        compose.onNodeWithText("网易云音乐 · 同步歌单只读").assertExists()
+        assertEquals("Cancellation must restore the same page geometry", original,
+            compose.onNodeWithTag("library_detail").fetchSemanticsNode().boundsInRoot)
+        compose.runOnUiThread { dispatcher.dispatchOnBackStarted(androidx.activity.BackEventCompat(0f, 500f, 0f, androidx.activity.BackEventCompat.EDGE_RIGHT)) }
+        progress(.6f, androidx.activity.BackEventCompat.EDGE_RIGHT)
+        compose.runOnUiThread { dispatcher.onBackPressed() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("library_detail").assertDoesNotExist()
+        compose.onNodeWithText("我的歌单").assertExists()
+        assertEquals(viewport, compose.onNodeWithTag("music_navigation").fetchSemanticsNode().boundsInRoot)
+        compose.onNodeWithText("返回").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("open_playlists").assertExists()
+        assertEquals("Returning to root must keep the animated viewport", viewport,
+            compose.onNodeWithTag("music_navigation").fetchSemanticsNode().boundsInRoot)
+        assertEquals(listOf(55L), container.playerController.queue.state.value.songs.map { it.id })
+        assertFalse(container.playerController.state.value.playing)
+    }
     @Test fun loadingPlaceholderGivesWayToRealContent() {
         dailyDelay = 1500
         compose.setContent { CurrentMusicApp(container) }

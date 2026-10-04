@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import androidx.navigationevent.NavigationEventInfo
@@ -153,7 +154,8 @@ fun CurrentMusicApp(container: AppContainer) {
         val density = LocalDensity.current
         val rootPage = backStack.last() == ROOT.toString()
         val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
-        val showMini = !keyboardOpen && (currentSong != null || playerState.mode == PlayerMode.ROOM) && backStack.last() !in setOf(PLAYER.toString(), "lib/video")
+        val miniAvailable = !keyboardOpen && (currentSong != null || playerState.mode == PlayerMode.ROOM)
+        val showMini = miniAvailable && backStack.last() !in setOf(PLAYER.toString(), "lib/video")
         PreloadMusicCovers(listOf(currentSong?.cover.orEmpty()), 800)
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
         var roomDialogOpen by remember { mutableStateOf(false) }
@@ -221,24 +223,34 @@ fun CurrentMusicApp(container: AppContainer) {
             containerColor = MiuixTheme.colorScheme.background) {
         CompositionLocalProvider(LocalSongMenu provides { songMenu = it }, LocalRoomSongRequest provides roomRequest) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
-        val rootWide = rootPage && maxWidth >= 700.dp
+        val wideLayout = maxWidth >= 700.dp
+        val rootWide = rootPage && wideLayout
         // Reserve page space once. Animate only the overlay's GPU translation, never the page height.
         val navigationSpace = if (rootPage && !rootWide && !keyboardOpen) 92.dp else 0.dp
         val miniLift = animateDpAsState(navigationSpace, tween(180), label = "mini player lift")
-        val floatingRoot = rootPage && settings.floatingBar && !rootWide && !keyboardOpen
+        // A scene's insets must not depend on which route is currently on top. Predictive back
+        // renders both scenes before committing; changing the shared viewport makes them jump.
+        val rootFloating = settings.floatingBar && !wideLayout && !keyboardOpen
+        val rootTabSpace = if (!wideLayout && !keyboardOpen && !settings.floatingBar) 92.dp else 0.dp
+        val sceneInsets = remember(miniAvailable, miniHeight) {
+            NavEntryDecorator<String> { entry ->
+                val miniSpace = if (miniAvailable && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video")) miniHeight else 0.dp
+                Box(Modifier.fillMaxSize().padding(bottom = miniSpace)) { entry.Content() }
+            }
+        }
         val page: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().imePadding().navigationBarsPadding().padding(start = if (rootWide) 104.dp else 0.dp,
-            bottom = if (floatingRoot) 0.dp else navigationSpace + if (showMini) miniHeight else 0.dp)) {
+        Column(Modifier.fillMaxSize().imePadding().navigationBarsPadding()) {
         NavDisplay(
             backStack = backStack,
-            modifier = Modifier.weight(1f).fillMaxSize().background(MiuixTheme.colorScheme.background),
-            entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator()),
+            modifier = Modifier.weight(1f).fillMaxSize().testTag("music_navigation").background(MiuixTheme.colorScheme.background),
+            entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), sceneInsets),
             onBack = ::navigateBack,
             entryProvider = entryProvider {
                 entry(ROOT.toString()) {
-                    Box(Modifier.fillMaxSize().statusBarsPadding()) {
-                        CompositionLocalProvider(LocalMusicBottomInset provides if (floatingRoot) navigationSpace + if (showMini) miniHeight else 0.dp else 0.dp) {
+                    Box(Modifier.fillMaxSize().statusBarsPadding().padding(start = if (wideLayout) 104.dp else 0.dp,
+                        bottom = if (rootFloating) 0.dp else rootTabSpace + if (miniAvailable) miniHeight else 0.dp)) {
+                        CompositionLocalProvider(LocalMusicBottomInset provides if (rootFloating) 92.dp + if (miniAvailable) miniHeight else 0.dp else 0.dp) {
                         tabsState.SaveableStateProvider(selected) {
                             when (selected) {
                                 0 -> MusicHomeScreen(libraryVm, onSearch = { selected = 2 }, onSettings = { navigateTo(SETTINGS) },
