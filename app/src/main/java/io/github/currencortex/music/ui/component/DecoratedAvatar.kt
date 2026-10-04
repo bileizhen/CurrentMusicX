@@ -18,10 +18,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** The overlay has its own bounds so scaled server decorations never crop the avatar. */
 @Composable fun DecoratedAvatar(avatarUrl: String?, decorationUrl: String?, modifier: Modifier = Modifier,
-    scale: Double = 1.0, size: Dp = 64.dp, onImageError: (Throwable) -> Unit = {}) {
+    scale: Double = 1.0, size: Dp = 64.dp, onImageError: (Throwable) -> Unit = {},
+    reserveOverlay: Boolean = true) {
     val bounded = scale.takeIf { it.isFinite() }?.coerceIn(1.0, 2.5)?.toFloat() ?: 1f
     val overlaySize = size * bounded
-    Box(modifier.size(if (decorationUrl == null) size else overlaySize), contentAlignment = Alignment.Center) {
+    // Row layouts need a constant footprint; the ring then overflows unclipped via requiredSize.
+    Box(modifier.size(if (reserveOverlay && decorationUrl != null) overlaySize else size), contentAlignment = Alignment.Center) {
         Box(Modifier.size(size).clip(CircleShape).background(MiuixTheme.colorScheme.surface), contentAlignment = Alignment.Center) {
             Text("♪")
             if (avatarUrl != null) AsyncImage(ImageRequest.Builder(LocalContext.current).data(avatarUrl).size(256).build(),
@@ -29,7 +31,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 onError = { onImageError(it.result.throwable) })
         }
         if (decorationUrl != null) AsyncImage(ImageRequest.Builder(LocalContext.current).data(decorationUrl).size(512).build(),
-            contentDescription = "头像挂件", contentScale = ContentScale.Fit, modifier = Modifier.size(overlaySize),
+            contentDescription = "头像挂件", contentScale = ContentScale.Fit, modifier = Modifier.requiredSize(overlaySize),
             onError = { onImageError(it.result.throwable) })
     }
 }

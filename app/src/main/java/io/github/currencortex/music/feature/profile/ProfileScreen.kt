@@ -38,7 +38,7 @@ import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 @Composable fun UserAvatar(user: ProfileUser, container: AppContainer, size: androidx.compose.ui.unit.Dp = 64.dp,
-    decoration: String = user.decoration) {
+    decoration: String = user.decoration, reserveOverlay: Boolean = true) {
     val preferences by container.musicSettings.state.collectAsStateWithLifecycle()
     val scales by container.profileRepository.scales.collectAsStateWithLifecycle()
     val versions by container.profileRepository.avatarVersions.collectAsStateWithLifecycle()
@@ -47,7 +47,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     if (!user.avatar.startsWith("http") && versions[user.id] != null)
         avatarUrl = avatarUrl?.toHttpUrlOrNull()?.newBuilder()?.setQueryParameter("v", versions[user.id].toString())?.build()?.toString()
     DecoratedAvatar(avatarUrl, repository.decorationUrl(preferences.server, decoration),
-        scale = scales[decoration] ?: 1.0, size = size, onImageError = {
+        scale = scales[decoration] ?: 1.0, size = size, reserveOverlay = reserveOverlay, onImageError = {
             // Report the failure category only; image URLs can contain signed credentials.
             container.logger.warn("Image", "User image failed: ${it.javaClass.simpleName}", null)
         })
@@ -237,7 +237,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
         items(state.users, key = { it.id }) { user ->
             Card(Modifier.fillMaxWidth().clickable { navigate("user/profile/${user.id}") }.testTag("discover_user_${user.id}")) {
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    UserAvatar(user.profileUser(), vm.container, 44.dp)
+                    UserAvatar(user.profileUser(), vm.container, 44.dp, reserveOverlay = false)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(user.nickname, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         if (user.bio.isNotBlank()) Text(user.bio, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
