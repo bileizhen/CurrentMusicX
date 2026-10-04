@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.currencortex.music.ui.util.collectAsPageState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.library.*
 import io.github.currencortex.music.data.song.Song
@@ -109,10 +110,10 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 
 @Composable fun LibraryDetailScreen(vm: LibraryDetailViewModel, library: LibraryViewModel, onBack: () -> Unit,
     navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit, playMv: (MvDto) -> Unit, deleted: () -> Unit) {
-    val state by vm.state.collectAsStateWithLifecycle()
+    val state by vm.state.collectAsPageState()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val busy by library.busy.collectAsStateWithLifecycle()
-    val playerState by vm.container.playerController.state.collectAsStateWithLifecycle()
+    val playbackMode by vm.playbackMode.collectAsStateWithLifecycle()
     val roomRequest = LocalRoomSongRequest.current
     var rename by rememberSaveable { mutableStateOf(false) }
     var delete by rememberSaveable { mutableStateOf(false) }
@@ -132,9 +133,9 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
             state.mv?.let { mv -> item { TextButton("播放 MV", onClick = { playMv(mv) }, modifier = Modifier.testTag("play_mv")) } }
             if (state.songs.isNotEmpty()) item {
                 LazyRow {
-                    item { TextButton("播放全部", enabled = roomRequest == null && playerState.mode == io.github.currencortex.music.core.media.PlayerMode.LOCAL,
+                    item { TextButton("播放全部", enabled = roomRequest == null && playbackMode == io.github.currencortex.music.core.media.PlayerMode.LOCAL,
                         onClick = { vm.container.playerController.setMode(io.github.currencortex.music.core.media.PlaybackMode.LIST); play(state.songs, 0) }, modifier = Modifier.testTag("play_library_all")) }
-                    item { MusicTextAction("随机播放", enabled = roomRequest == null && playerState.mode == io.github.currencortex.music.core.media.PlayerMode.LOCAL,
+                    item { MusicTextAction("随机播放", enabled = roomRequest == null && playbackMode == io.github.currencortex.music.core.media.PlayerMode.LOCAL,
                         onClick = { vm.container.playerController.setMode(io.github.currencortex.music.core.media.PlaybackMode.SHUFFLE); play(state.songs.shuffled(), 0) }) }
                 }
             }
@@ -177,7 +178,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 }
 
 @Composable fun CatalogScreen(vm: CatalogViewModel, onBack: () -> Unit, navigate: (String) -> Unit) {
-    val state by vm.state.collectAsStateWithLifecycle()
+    val state by vm.state.collectAsPageState()
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     fun submit() { keyboard?.hide(); focus.clearFocus(); vm.search() }

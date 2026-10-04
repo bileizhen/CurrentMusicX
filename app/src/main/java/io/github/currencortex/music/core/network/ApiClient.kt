@@ -58,6 +58,9 @@ class ApiClient(
             if (raw.isBlank()) JsonNull else ApiJson.parseToJsonElement(raw)
         }
     }
+    suspend inline fun <reified T> decode(value: JsonElement): T = withContext(Dispatchers.Default) {
+        ApiJson.decodeFromJsonElement(value)
+    }
     suspend inline fun <reified T> get(path: String, query: Map<String, String> = emptyMap(), authenticated: Boolean = false): T =
-        ApiJson.decodeFromJsonElement(request("GET", path, query, authenticated = authenticated))
+        decode(request("GET", path, query, authenticated = authenticated))
 }

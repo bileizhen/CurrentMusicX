@@ -98,6 +98,8 @@ data class LibraryDetailState(val loading: Boolean = true, val title: String = "
 
 class LibraryDetailViewModel(val container: AppContainer, val route: String) : ViewModel() {
     val state = MutableStateFlow(LibraryDetailState())
+    val playbackMode = container.playerController.state.map { it.mode }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), container.playerController.state.value.mode)
     private var task: Job? = null
     private val kind = route.split('/')[1]
     val id = route.substringAfterLast('/').toLongOrNull() ?: 0

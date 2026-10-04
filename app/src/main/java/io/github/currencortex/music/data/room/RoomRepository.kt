@@ -8,14 +8,14 @@ class RoomRepository(private val api: ApiClient, val session: () -> RequestSessi
     private suspend fun request(method: String, path: String, body: JsonObject? = null,
         query: Map<String, String> = emptyMap(), expected: RequestSession = session()) =
         api.request(method, path, query, body, authenticated = true, expectedSession = expected)
-    suspend fun list(query: String, offset: Int) = ApiJson.decodeFromJsonElement<RoomsDto>(request("GET", "rooms",
+    suspend fun list(query: String, offset: Int) = api.decode<RoomsDto>(request("GET", "rooms",
         query = mapOf("query" to query, "limit" to "20", "offset" to offset.toString())))
     suspend fun find(code: String): RoomInfo {
         require(code.matches(Regex("\\d{6}")))
-        return ApiJson.decodeFromJsonElement(request("GET", "rooms/search", query = mapOf("code" to code)).jsonObject.getValue("room"))
+        return api.decode(request("GET", "rooms/search", query = mapOf("code" to code)).jsonObject.getValue("room"))
     }
     suspend fun detail(id: String, expected: RequestSession = session()): RoomDetail =
-        ApiJson.decodeFromJsonElement(request("GET", "rooms/$id", expected = expected))
+        api.decode(request("GET", "rooms/$id", expected = expected))
     suspend fun create(name: String, password: String, public: Boolean, free: Boolean, expected: RequestSession): RoomInfo {
         require(name.isNotBlank())
         return ApiJson.decodeFromJsonElement(request("POST", "rooms", buildJsonObject {

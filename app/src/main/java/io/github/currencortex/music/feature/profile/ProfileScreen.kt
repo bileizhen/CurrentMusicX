@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import io.github.currencortex.music.ui.util.collectAsPageState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import io.github.currencortex.music.AppContainer
@@ -64,7 +65,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 @Composable fun ProfileScreen(vm: ProfileViewModel, navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit,
     onBack: (() -> Unit)? = null, onSettings: (() -> Unit)? = null) {
-    val state = vm.state.collectAsStateWithLifecycle().value
+    val state = vm.state.collectAsPageState().value
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -162,7 +163,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 @Composable fun ProfileDialogs(vm: ProfileViewModel, auth: AuthViewModel) {
     val dialog by vm.dialog.collectAsStateWithLifecycle()
-    val state by vm.state.collectAsStateWithLifecycle()
+    val state by vm.state.collectAsPageState()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val avatar by vm.avatar.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -204,7 +205,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 }
 
 @Composable fun DiscoverScreen(vm: DiscoverViewModel, navigate: (String) -> Unit) {
-    val state by vm.state.collectAsStateWithLifecycle()
+    val state by vm.state.collectAsPageState()
     val bottomInset = LocalMusicBottomInset.current
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(vm, owner) { owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.pollStats() } }
@@ -254,7 +255,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 }
 
 @Composable fun DecorationScreen(vm: DecorationViewModel, onBack: () -> Unit) {
-    val state by vm.state.collectAsStateWithLifecycle()
+    val state by vm.state.collectAsPageState()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val catalog = state.catalog

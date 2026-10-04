@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import io.github.currencortex.music.ui.util.collectAsPageState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -41,7 +42,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     fun finishInput() { focus.clearFocus(); keyboard?.hide() }
-    val state by vm.state.collectAsStateWithLifecycle()
+    val state by vm.state.collectAsPageState()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()

@@ -33,8 +33,8 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         }
     }
     fun reload() { refresh.update { it + 1 } }
-    private suspend fun load() = coroutineScope {
-        if (userId == null && container.accountRepository.token == null) return@coroutineScope
+    private suspend fun load() = withContext(Dispatchers.Default) {
+        if (userId == null && container.accountRepository.token == null) return@withContext
         state.value = ProfileState(loading = true)
         launch { appResult { container.profileRepository.loadScales() } }
         when (val result = appResult {
@@ -54,8 +54,8 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
                     })
             }
         }) {
-            is AppResult.Success -> state.update { it.copy(loading = false, profile = result.value) }
-            is AppResult.Failure -> state.update { it.copy(loading = false, error = result.kind.message) }
+            is AppResult.Success -> { ensureActive(); state.update { it.copy(loading = false, profile = result.value) } }
+            is AppResult.Failure -> { ensureActive(); state.update { it.copy(loading = false, error = result.kind.message) } }
         }
     }
     private fun io.github.currencortex.music.data.song.Song.dto() = io.github.currencortex.music.data.song.SongDto(

@@ -14,6 +14,7 @@ import android.content.ClipData
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.currencortex.music.ui.util.collectAsPageState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.room.*
 import io.github.currencortex.music.ui.component.MusicDialog
@@ -23,7 +24,7 @@ import top.yukonga.miuix.kmp.basic.*
 
 @Composable fun RoomScreen(vm: RoomViewModel, onBack: () -> Unit, onSearch: () -> Unit, onPlayer: () -> Unit,
     onDialogActive: (Boolean) -> Unit = {}) {
-    val browser by vm.browser.collectAsStateWithLifecycle()
+    val browser by vm.browser.collectAsPageState()
     val live by vm.session.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val passwordRoom by vm.passwordRoom.collectAsStateWithLifecycle()

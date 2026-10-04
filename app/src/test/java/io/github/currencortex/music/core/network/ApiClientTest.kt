@@ -9,8 +9,44 @@ import org.junit.Test
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.descriptors.PrimitiveKind
+import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 class ApiClientTest {
+    @Serializable(with = SlowValueSerializer::class) data class SlowValue(val uiResponded: Boolean)
+    object SlowValueSerializer : KSerializer<SlowValue> {
+        val decoding = AtomicBoolean(false)
+        var heartbeat = CountDownLatch(1)
+        override val descriptor = PrimitiveSerialDescriptor("SlowValue", PrimitiveKind.STRING)
+        override fun serialize(encoder: Encoder, value: SlowValue) = encoder.encodeString("ok")
+        override fun deserialize(decoder: Decoder): SlowValue {
+            decoder.decodeString()
+            decoding.set(true)
+            return try { SlowValue(heartbeat.await(2, TimeUnit.SECONDS)) } finally { decoding.set(false) }
+        }
+    }
+    @Test fun uiCanProcessEventsWhileResponseIsBeingDeserialized() {
+        Executors.newSingleThreadExecutor { Thread(it, "fixture-ui") }.asCoroutineDispatcher().use { ui -> runBlocking(ui) {
+            MockWebServer().use { server ->
+                SlowValueSerializer.heartbeat = CountDownLatch(1)
+                server.enqueue(MockResponse().setBody("\"ok\""))
+                val api = ApiClient({ server.url("/cm/").toString() }, { null }, {})
+                val tick = launch { while (isActive) {
+                    if (SlowValueSerializer.decoding.get()) SlowValueSerializer.heartbeat.countDown()
+                    delay(1)
+                } }
+                try { assertTrue("UI event loop must stay responsive during DTO decoding", api.get<SlowValue>("large").uiResponded) }
+                finally { tick.cancelAndJoin() }
+            }
+        } }
+    }
     @Serializable data class Value(val ok: Boolean)
     @Test fun serverFailuresRetainHttpStatusWithoutExposingResponseBodyOrExpiringSession() = runBlocking {
         MockWebServer().use { server ->

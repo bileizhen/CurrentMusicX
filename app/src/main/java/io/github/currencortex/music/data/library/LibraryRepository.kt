@@ -8,6 +8,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /** Server data is authoritative. Like toggles are serialized and rollback on failure. */
 class LibraryRepository(private val api: ApiClient, private val accountId: () -> Long,
@@ -19,15 +21,17 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     fun clearReads() = reads.clear()
     fun clearSession() { reads.clear(); statuses.value = emptyMap(); revision.update { it + 1 } }
     private suspend inline fun <reified T> read(path: String, expected: RequestSession, query: Map<String, String> = emptyMap()): T =
-        ApiJson.decodeFromJsonElement(api.request("GET", path, query, authenticated = true, expectedSession = expected))
-    suspend fun daily(): Daily = reads.read("daily") { expected ->
+        api.decode(api.request("GET", path, query, authenticated = true, expectedSession = expected))
+    private suspend fun <T : Any> backgroundRead(key: String, fresh: Boolean = false, load: suspend (RequestSession) -> T): T =
+        withContext(Dispatchers.Default) { reads.read(key, fresh, load) }
+    suspend fun daily(): Daily = backgroundRead("daily") { expected ->
         val d = read<DailyDto>("daily", expected)
         Daily(d.daily.map(SongDto::toDomain), d.forYou.map(SongDto::toDomain), d.artists)
     }
-    suspend fun recent(): List<Song> = reads.read("recent") { read<SongListDto>("plays/recent", it, mapOf("limit" to "50")).songs.map(SongDto::toDomain) }
-    suspend fun likedSongs(): List<Song> = reads.read("likes") { read<SongListDto>("likes/mine", it).songs.map(SongDto::toDomain) }
-    suspend fun playlists(): List<Playlist> = reads.read("playlists") { read<PlaylistsDto>("playlists", it).playlists.map(PlaylistDto::domain) }
-    suspend fun playlist(id: Long, fresh: Boolean = false): Playlist = reads.read("playlist/$id", fresh) { read<PlaylistDto>("playlists/$id", it).domain() }
+    suspend fun recent(): List<Song> = backgroundRead("recent") { read<SongListDto>("plays/recent", it, mapOf("limit" to "50")).songs.map(SongDto::toDomain) }
+    suspend fun likedSongs(): List<Song> = backgroundRead("likes") { read<SongListDto>("likes/mine", it).songs.map(SongDto::toDomain) }
+    suspend fun playlists(): List<Playlist> = backgroundRead("playlists") { read<PlaylistsDto>("playlists", it).playlists.map(PlaylistDto::domain) }
+    suspend fun playlist(id: Long, fresh: Boolean = false): Playlist = backgroundRead("playlist/$id", fresh) { read<PlaylistDto>("playlists/$id", it).domain() }
     suspend fun refreshStatus(ids: List<Long>) {
         if (accountId() == 0L) return
         val expected = session()

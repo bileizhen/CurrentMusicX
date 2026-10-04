@@ -11,7 +11,7 @@ class ProfileRepository(private val api: ApiClient, private val session: () -> R
     val revision = MutableStateFlow(0L)
     val scales = MutableStateFlow<Map<String, Double>>(emptyMap())
     val avatarVersions = MutableStateFlow<Map<Long, Long>>(emptyMap())
-    private suspend fun own(expected: RequestSession) = ApiJson.decodeFromJsonElement<ProfileUser>(
+    private suspend fun own(expected: RequestSession) = api.decode<ProfileUser>(
         api.request("GET", "auth/me", authenticated = true, expectedSession = expected))
     suspend fun me() = own(session())
     suspend fun profile(id: Long) = api.get<ProfileDto>("users/$id/profile")
