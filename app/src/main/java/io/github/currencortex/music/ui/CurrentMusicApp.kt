@@ -257,11 +257,10 @@ fun CurrentMusicApp(container: AppContainer) {
                 }
                 entry(SETTINGS.toString()) {
                     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                        TextButton("返回", onClick = ::navigateBack, modifier = Modifier.then(androidx.compose.ui.Modifier))
-                        TextButton("网络与播放", onClick = { navigateTo(NETWORK) })
+                        TextButton("返回", onClick = ::navigateBack)
                         Box(Modifier.weight(1f)) { SettingsScreen(updateViewModel = updateVm,
-                            onAppearance = { navigateTo(APPEARANCE) }, onLogs = { showLogs = true },
-                            onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates) }
+                            onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
+                            onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates) }
                     }
                 }
                 entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, ::navigateBack) }
