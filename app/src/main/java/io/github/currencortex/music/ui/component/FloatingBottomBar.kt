@@ -90,7 +90,7 @@ import kotlin.math.sin
 
 val LocalFloatingBottomBarTabScale = staticCompositionLocalOf { { 1f } }
 
-private val iosIndicatorSpecular: Highlight = Highlight(
+internal val iosIndicatorSpecular: Highlight = Highlight(
     width = 1.dp,
     alpha = 1f,
     style = BloomStroke(
@@ -124,7 +124,7 @@ private const val LIGHT_REF_Y = 0.7f
  * instrumentation tests until their idling timeout.
  */
 @Composable
-private fun rememberGravityRotatedHighlight(
+internal fun rememberGravityRotatedHighlight(
     base: Highlight,
     extraDegrees: Float = 0f,
 ): Highlight {
@@ -334,32 +334,12 @@ fun FloatingBottomBar(
                     indication = null,
                     onClick = {}
                 )
-                .then(
-                    if (isBlurEnabled) {
-                        Modifier.drawBackdrop(
-                            backdrop = backdrop,
-                            shape = { pillShape },
-                            effects = {
-                                vibrancy()
-                                blur(4.dp.toPx(), 4.dp.toPx())
-                                if (isGlassEnabled) lens(
-                                    refractionHeight = 24.dp.toPx(),
-                                    refractionAmount = 24.dp.toPx(),
-                                )
-                            },
-                            highlight = { if (isGlassEnabled) baseHighlight.copy(alpha = 0.75f) else null },
-                            layerBlock = {
-                                val width = size.width.coerceAtLeast(1f)
-                                val s = lerp(1f, 1f + 16.dp.toPx() / width, dampedDragAnimation.pressProgress)
-                                scaleX = s
-                                scaleY = s
-                            },
-                            onDrawSurface = { drawRect(containerColor) },
-                        )
-                    } else {
-                        Modifier.background(containerColor, pillShape)
-                    }
-                )
+                .musicGlassMaterial(backdrop, isBlurEnabled, isGlassEnabled, baseHighlight) {
+                    val width = size.width.coerceAtLeast(1f)
+                    val s = lerp(1f, 1f + 16.dp.toPx() / width, dampedDragAnimation.pressProgress)
+                    scaleX = s
+                    scaleY = s
+                }
                 .then(if (isBlurEnabled) interactiveHighlight.modifier else Modifier)
                 .height(64.dp)
                 .padding(4.dp),

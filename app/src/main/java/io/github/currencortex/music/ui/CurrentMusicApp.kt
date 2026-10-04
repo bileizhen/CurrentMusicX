@@ -156,9 +156,10 @@ fun CurrentMusicApp(container: AppContainer) {
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
         var roomDialogOpen by remember { mutableStateOf(false) }
         var playerDialogOpen by remember { mutableStateOf(false) }
+        var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
         var castDialogOpen by remember { mutableStateOf(false) }
         fun navigateBack() {
-            if (roomDialogOpen || castDialogOpen || playerDialogOpen || songMenu != null) return
+            if (roomDialogOpen || castDialogOpen || playerDialogOpen || miniQueueOpen || songMenu != null) return
             if (backStack.size > 1) {
                 if (backStack.last() == "lib/video") container.playerController.closeVideo()
                 backStack = backStack.dropLast(1)
@@ -223,7 +224,8 @@ fun CurrentMusicApp(container: AppContainer) {
         val floatingRoot = rootPage && settings.floatingBar && !rootWide && !keyboardOpen
         val page: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().imePadding().navigationBarsPadding().padding(start = if (rootWide) 104.dp else 0.dp, bottom = if (floatingRoot) 0.dp else navigationSpace)) {
+        Column(Modifier.fillMaxSize().imePadding().navigationBarsPadding().padding(start = if (rootWide) 104.dp else 0.dp,
+            bottom = if (floatingRoot) 0.dp else navigationSpace + if (showMini) miniHeight else 0.dp)) {
         NavDisplay(
             backStack = backStack,
             modifier = Modifier.weight(1f).fillMaxSize().background(MiuixTheme.colorScheme.background),
@@ -352,23 +354,29 @@ fun CurrentMusicApp(container: AppContainer) {
                 }
             },
         )
-        if (showMini && !floatingRoot) MiniPlayer(playerVm, { if (queue.current?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
+        }
+        }
+        }
+        val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
+        if (showMini) MiniPlayer(playerVm, { if (queue.current?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
             { playWithPermission { container.playerController.toggle() } },
-            Modifier.onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp))
+            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = if (rootPage && !rootWide) navigationSpace else 0.dp)
+                .padding(start = if (rootWide) 104.dp else 0.dp)
+                .onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp),
+            onNext = { container.playerController.next(playerState.playing) }, onPrevious = { container.playerController.previous(playerState.playing) },
+            onQueue = { if (playerState.mode == PlayerMode.ROOM) navigateLibrary("room/list") else miniQueueOpen = true })
+        if (rootPage && !rootWide && !keyboardOpen && !settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
+            StandardNavigationBar(selected, labels, icons) { selected = it }
         }
-        if (showMini && floatingRoot) MiniPlayer(playerVm, { if (queue.current?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
-            { playWithPermission { container.playerController.toggle() } },
-            Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(bottom = navigationSpace)
-                .onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp))
         }
-        }
-        if (settings.floatingBar && settings.blur && Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) {
+        if (settings.blur && Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) {
             HighApiFloatingNavigation(selected, labels, icons, { selected = it }, settings.blur, settings.liquidGlass,
-                visible = rootPage && !rootWide && !keyboardOpen, content = page)
+                visible = settings.floatingBar && rootPage && !rootWide && !keyboardOpen, content = page, overlay = miniOverlay)
         } else {
             Box(Modifier.fillMaxSize()) {
                 page()
-                if (rootPage && !rootWide && !keyboardOpen) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
+                miniOverlay()
+                if (rootPage && !rootWide && !keyboardOpen && settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding()
                     .padding(horizontal = if (settings.floatingBar) 26.dp else 0.dp, vertical = if (settings.floatingBar) 12.dp else 0.dp).widthIn(max = 480.dp)) {
                     if (settings.floatingBar) PlainFloatingBar(selected, labels, icons) { selected = it }
                     else StandardNavigationBar(selected, labels, icons) { selected = it }
@@ -382,13 +390,14 @@ fun CurrentMusicApp(container: AppContainer) {
         }
         }
         songMenu?.let { SongActionsSheet(it) { songMenu = null } }
+        if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm) { miniQueueOpen = false }
         // XBlocker pattern: intercept completion when prediction is disabled. MIUIX
         // owns seeking, cancellation and settling otherwise. Popups are hosted after
         // navigation, once, and take precedence over returning to the parent page.
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !predictiveBack && !showLogs &&
-                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen,
+                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }

@@ -128,8 +128,8 @@ class PlayerController(private val context: Context, override val queue: Playbac
         return false
     }
     fun pause() { if (!transportAllowed()) return; external?.let { it.play(false); return }; controller?.pause() }
-    fun next() { if (!transportAllowed()) return; external?.let { it.next(); return }; queue.next(); load() }
-    fun previous() { if (!transportAllowed()) return; external?.let { it.previous(); return }; queue.previous(); load() }
+    fun next(play: Boolean = true) { if (!transportAllowed()) return; external?.let { it.next(); return }; queue.next(); load(play) }
+    fun previous(play: Boolean = true) { if (!transportAllowed()) return; external?.let { it.previous(); return }; queue.previous(); load(play) }
     fun seek(position: Long) { if (!transportAllowed()) return; external?.let { it.seek(position.coerceAtLeast(0)); return }; controller?.seekTo(position.coerceAtLeast(0)) }
     fun add(song: Song, next: Boolean = false) { if (state.value.mode == PlayerMode.ROOM) { external?.request(song); return }; queue.add(song, next) }
     fun remove(index: Int) { if (!localOnly()) return; if (queue.remove(index)) { if (queue.state.value.current == null) clear() else load(state.value.playing) } }

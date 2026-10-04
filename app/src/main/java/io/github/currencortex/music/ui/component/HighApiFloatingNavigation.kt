@@ -5,12 +5,14 @@ import androidx.compose.animation.core.tween
 
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -32,11 +34,13 @@ import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
 fun HighApiFloatingNavigation(
     selectedIndex: Int, labels: List<String>, icons: List<ImageVector>, onSelect: (Int) -> Unit,
     blur: Boolean, glass: Boolean, visible: Boolean = true, content: @Composable () -> Unit,
+    overlay: @Composable BoxScope.() -> Unit = {},
 ) {
     // Support detection precedes FloatingBottomBar, which owns an AGSL highlight.
     if (!isRuntimeShaderSupported()) {
         Box(Modifier.fillMaxSize()) {
             content()
+            overlay()
             AnimatedVisibility(visible, modifier = Modifier.align(Alignment.BottomCenter), enter = fadeIn(tween(160)) + slideInVertically(tween(180)) { it }, exit = fadeOut(tween(100)) + slideOutVertically(tween(160)) { it }) {
             Box(Modifier.navigationBarsPadding().padding(horizontal = 26.dp, vertical = 12.dp).widthIn(max = 480.dp)) {
                 PlainFloatingBar(selectedIndex, labels, icons, onSelect)
@@ -49,6 +53,9 @@ fun HighApiFloatingNavigation(
     val backdrop = rememberLayerBackdrop { drawRect(surface); drawContent() }
     Box(Modifier.fillMaxSize()) {
         Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) { content() }
+        CompositionLocalProvider(LocalMusicGlassSurface provides { modifier, body -> MusicGlassCapsule(backdrop, modifier, blur, glass, body) }) {
+            overlay()
+        }
         AnimatedVisibility(visible, modifier = Modifier.align(Alignment.BottomCenter), enter = fadeIn(tween(160)) + slideInVertically(tween(180)) { it }, exit = fadeOut(tween(100)) + slideOutVertically(tween(160)) { it }) {
         FloatingBottomBar(
             modifier = Modifier.navigationBarsPadding().padding(horizontal = 26.dp, vertical = 12.dp).widthIn(max = 480.dp).fillMaxWidth()
