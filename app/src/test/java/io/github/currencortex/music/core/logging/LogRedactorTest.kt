@@ -9,7 +9,8 @@ class LogRedactorTest {
         listOf("Authorization: Bearer $secret", "Cookie: session=$secret; other=$secret",
             "https://example.com/?token=$secret&password=$secret",
             "{\"access_token\":\"$secret\",\"password\":\"$secret\"}",
-            "request failed with Bearer $secret").forEach {
+            "request failed with Bearer $secret", "x-api-key: $secret",
+            "https://example.com/api/netease?key=$secret&id=1", "{\"apiKey\":\"$secret\"}").forEach {
             val safe = LogRedactor.redact(it)
             assertFalse(safe, safe.contains(secret))
             assertTrue(safe, safe.contains("[REDACTED]"))
