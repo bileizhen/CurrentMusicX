@@ -7,6 +7,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.grid.*
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -14,6 +16,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -28,6 +33,7 @@ import io.github.currencortex.music.feature.auth.LoginScreen
 import io.github.currencortex.music.feature.library.LibraryLinks
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
@@ -203,25 +209,43 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(vm, owner) { owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.pollStats() } }
     LazyColumn(Modifier.fillMaxSize().testTag("discover_screen"), contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("发现", fontSize = 30.sp); Text("${state.stats.users} 位用户 · ${state.stats.listening} 人正在听歌") }
-        item { TextField(state.query, vm::query, singleLine = true, modifier = Modifier.testTag("discover_query")); TextButton("搜索用户", onClick = { vm.submit() }, modifier = Modifier.testTag("discover_submit")) }
-        item { SettingsSwitch("仅显示正在听歌", state.listening, vm::filter) }
+        item {
+            Text("发现", fontSize = 30.sp)
+            Text("${state.stats.users} 位用户 · ${state.stats.listening} 人正在听歌", fontSize = 13.sp,
+                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+        }
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextField(state.query, vm::query, singleLine = true, modifier = Modifier.weight(1f).testTag("discover_query"),
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { vm.submit() }))
+                MusicTextAction("搜索", { vm.submit() }, Modifier.testTag("discover_submit"), enabled = !state.loading)
+            }
+        }
+        item { Card(Modifier.fillMaxWidth()) { SettingsSwitch("仅显示正在听歌", state.listening, vm::filter) } }
         item { LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             items(listOf("reg" to "最新注册", "reg_asc" to "最早注册", "name" to "昵称", "days" to "听歌天数", "listen" to "听歌时长", "likes" to "点赞数")) { (key, label) ->
                 TextButton((if (state.sort == key) "✓ " else "") + label, onClick = { vm.sort(key) })
             }
         } }
-        item { TextButton("刷新用户", onClick = { vm.submit() }, enabled = !state.loading) }
         if (state.loading && state.users.isEmpty()) item { LoadingSongList(4) }
-        if (state.loading) item { Text("正在加载用户…") }
-        state.error?.let { item { Text(it); TextButton("重试", onClick = { vm.submit() }) } }
-        if (!state.loading && state.users.isEmpty() && state.error == null) item { Text(if (state.listening) "当前没有正在听歌的用户" else "没有匹配的用户") }
+        state.error?.let { item { Text(it, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f)); TextButton("重试", onClick = { vm.submit() }) } }
+        if (!state.loading && state.users.isEmpty() && state.error == null) item {
+            Text(if (state.listening) "当前没有正在听歌的用户" else "没有匹配的用户", fontSize = 14.sp,
+                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+        }
         items(state.users, key = { it.id }) { user ->
-            Row(Modifier.fillMaxWidth().clickable { navigate("user/profile/${user.id}") }.testTag("discover_user_${user.id}"), verticalAlignment = Alignment.CenterVertically) {
-                UserAvatar(user.profileUser(), vm.container, 32.dp)
-                Column(Modifier.weight(1f)) {
-                    Text(user.nickname); Text(user.bio); Text("${user.days} 天 · ${listeningDuration(user.listenMs)}")
-                    user.current?.let { Text("正在听：${it.name}") }
+            Card(Modifier.fillMaxWidth().clickable { navigate("user/profile/${user.id}") }.testTag("discover_user_${user.id}")) {
+                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    UserAvatar(user.profileUser(), vm.container, 44.dp)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(user.nickname, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (user.bio.isNotBlank()) Text(user.bio, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                        Text("${user.days} 天 · ${listeningDuration(user.listenMs)}", fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+                        user.current?.let { Text("正在听：${it.name}", fontSize = 12.sp, color = MiuixTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    }
                 }
             }
         }
