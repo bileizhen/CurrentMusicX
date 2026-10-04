@@ -18,6 +18,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,7 +57,8 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
 
 @Composable fun MiniPlayer(vm: PlayerViewModel, onOpen: () -> Unit, onToggle: () -> Unit, modifier: Modifier = Modifier,
     onNext: () -> Unit = { vm.player.next(vm.state.value.showPause) },
-    onPrevious: () -> Unit = { vm.player.previous(vm.state.value.showPause) }, onQueue: () -> Unit = onOpen) {
+    onPrevious: () -> Unit = { vm.player.previous(vm.state.value.showPause) }, onQueue: () -> Unit = onOpen,
+    onSurfaceBounds: (Rect) -> Unit = {}) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
@@ -97,7 +101,8 @@ internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
     }
     val surface = LocalMusicGlassSurface.current
     surface(modifier.fillMaxWidth().testTag("mini_player")) {
-        Row(Modifier.heightIn(min = 52.dp).padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.heightIn(min = 52.dp).onGloballyPositioned { onSurfaceBounds(it.boundsInRoot()) }
+            .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             MusicCover(song?.cover.orEmpty(), Modifier.size(42.dp).testTag("mini_cover")
                 .semantics { this[CoverRotation] = rotation.value }
                 .graphicsLayer { rotationZ = rotation.value }.clip(CircleShape)
