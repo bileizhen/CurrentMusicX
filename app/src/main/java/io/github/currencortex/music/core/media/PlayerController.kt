@@ -103,6 +103,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         if (state.value.mode == PlayerMode.CAST) return
         val matches = player.currentMediaItem?.mediaId == queue.state.value.current?.id?.toString()
         state.value = state.value.copy(song = queue.state.value.current, playing = player.isPlaying && commandIntent != false,
+            playbackSpeed = player.playbackParameters.speed,
             playRequested = commandIntent ?: if (state.value.resolving || state.value.warning != null) state.value.playRequested else player.playWhenReady,
             loading = state.value.resolving || player.playbackState == Player.STATE_BUFFERING,
             positionMs = if (matches && !state.value.resolving) player.currentPosition.coerceAtLeast(0)

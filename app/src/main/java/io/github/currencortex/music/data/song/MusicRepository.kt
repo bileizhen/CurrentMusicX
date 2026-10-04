@@ -18,6 +18,10 @@ class MusicRepository(private val api: ApiClient,
     suspend fun lyrics(id: Long): AppResult<List<LyricLine>> = appResult {
         api.get<LyricDto>("ncm/lyric", mapOf("id" to "$id")).lines.filter { it.txt.isNotBlank() }.sortedBy { it.t }
     }
+    suspend fun lyricsDocument(id: Long) = appResult {
+        io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(
+            api.get<JsonObject>("ncm/lyric", mapOf("id" to "$id")))
+    }
     suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null): AudioSource {
         val access = audioAccess()
         if (access.provider == AudioProvider.LEIZ) {

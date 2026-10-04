@@ -28,7 +28,7 @@ private val clearClickIndication = MiuixIndication(color = Color.Transparent)
 @Composable fun isInDarkTheme() = LocalDarkTheme.current
 
 @Composable
-fun LeiTheme(settings: AppearanceSettings, content: @Composable () -> Unit) {
+fun LeiTheme(settings: AppearanceSettings, darkSystemBars: Boolean? = null, content: @Composable () -> Unit) {
     val dark = when (settings.themeMode) {
         ThemeMode.SYSTEM -> isSystemInDarkTheme()
         ThemeMode.LIGHT -> false
@@ -57,11 +57,12 @@ fun LeiTheme(settings: AppearanceSettings, content: @Composable () -> Unit) {
         )
     }
     val context = LocalContext.current
-    LaunchedEffect(dark) {
+    val darkBars = darkSystemBars ?: dark
+    LaunchedEffect(darkBars) {
         (context as? ComponentActivity)?.window?.let { window ->
             WindowCompat.getInsetsController(window, window.decorView).apply {
-                isAppearanceLightStatusBars = !dark
-                isAppearanceLightNavigationBars = !dark
+                isAppearanceLightStatusBars = !darkBars
+                isAppearanceLightNavigationBars = !darkBars
             }
         }
     }

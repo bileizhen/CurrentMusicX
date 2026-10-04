@@ -3,17 +3,14 @@ package io.github.currencortex.music.feature.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.currencortex.music.AppContainer
-import io.github.currencortex.music.core.network.*
-import io.github.currencortex.music.data.local.CachedLyrics
-import io.github.currencortex.music.data.song.LyricLine
+import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
+import io.github.currencortex.music.feature.lyrics.data.LyricsRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.decodeFromString
 import io.github.currencortex.music.core.media.HighSpecWarning
 import io.github.currencortex.music.core.media.PlayerMode
 
-data class LyricsUiState(val lines: List<LyricLine> = emptyList(), val loading: Boolean = false, val error: String? = null)
+data class LyricsUiState(val document: LyricsDocument = LyricsDocument(), val loading: Boolean = false, val error: String? = null)
 data class NavigationPlayback(val mode: PlayerMode, val error: String?, val warning: HighSpecWarning?)
 class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val player = container.playerController
@@ -30,16 +27,8 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
         queue.map { it.current?.takeUnless { song -> song.video }?.id }.distinctUntilChanged().collectLatest { id ->
             if (id == null) { lyrics.value = LyricsUiState(); return@collectLatest }
             lyrics.value = LyricsUiState(loading = true)
-            when (val result = container.musicRepository.lyrics(id)) {
-                is AppResult.Success -> {
-                    lyrics.value = LyricsUiState(result.value)
-                    container.database.music().cacheLyrics(CachedLyrics(id, ApiJson.encodeToString(result.value)))
-                }
-                is AppResult.Failure -> {
-                    val cached = container.database.music().lyrics(id)?.let { ApiJson.decodeFromString<List<LyricLine>>(it.payload) }.orEmpty()
-                    lyrics.value = LyricsUiState(cached, error = if (cached.isEmpty()) result.kind.message else null)
-                }
-            }
+            val result = LyricsRepository(container.musicRepository, container.database.music()).load(id)
+            lyrics.value = LyricsUiState(result.document, error = result.error)
         }
     } }
     fun quality(value: io.github.currencortex.music.core.media.AudioQuality) = viewModelScope.launch {

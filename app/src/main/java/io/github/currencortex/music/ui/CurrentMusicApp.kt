@@ -137,7 +137,8 @@ fun CurrentMusicApp(container: AppContainer) {
     val currentSong by playerVm.currentSong.collectAsStateWithLifecycle()
     val roomLive by container.roomSession.state.collectAsStateWithLifecycle()
     val tabsState = rememberSaveableStateHolder()
-    LeiTheme(settings) {
+    var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
+    LeiTheme(settings, darkSystemBars = if (backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null) {
         var selected by rememberSaveable { mutableIntStateOf(0) }
         var startupRouted by rememberSaveable { mutableStateOf(false) }
         LaunchedEffect(container) {
@@ -147,7 +148,6 @@ fun CurrentMusicApp(container: AppContainer) {
                 startupRouted = true
             }
         }
-        var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
         var songMenu by remember { mutableStateOf<SongMenu?>(null) }
         var roomPending by remember { mutableStateOf(setOf<Long>()) }
         var miniHeight by remember { mutableStateOf(72.dp) }
@@ -238,12 +238,14 @@ fun CurrentMusicApp(container: AppContainer) {
                 // Each moving scene must cover the outgoing page and its dim scrim, including
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
                 Box(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)
-                    .testTag("music_scene_${entry.contentKey}").padding(bottom = miniSpace)) { entry.Content() }
+                    .testTag("music_scene_${entry.contentKey}")
+                    .then(if (entry.contentKey in setOf(PLAYER.toString(), "lib/video")) Modifier else Modifier.navigationBarsPadding())
+                    .padding(bottom = miniSpace)) { entry.Content() }
             }
         }
         val page: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize()) {
-        Column(Modifier.fillMaxSize().imePadding().navigationBarsPadding()) {
+        Column(Modifier.fillMaxSize().imePadding()) {
         NavDisplay(
             backStack = backStack,
             modifier = Modifier.weight(1f).fillMaxSize().testTag("music_navigation").background(MiuixTheme.colorScheme.background),
