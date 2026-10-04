@@ -13,6 +13,35 @@ class LeizAudioClientTest {
     private fun response(level: String = "lossless") = MockResponse().setBody(
         """{"success":true,"data":{"url":"https://cdn.example/song.flac","level":"$level","type":"flac","name":"ignored metadata"}}""")
 
+    @Test fun onlyAudioUsesLeizAndProjectCredentialsNeverReachIt() = runBlocking {
+        MockWebServer().use { cm -> MockWebServer().use { leiz ->
+            var access = AudioSourceAccess(AudioProvider.LEIZ, "fixture-secret-key")
+            val repo = MusicRepository(ApiClient({ cm.url("/cm/").toString() }, { "project-token" }, {}),
+                { access }, LeizAudioClient(leiz.url("/api/netease").toString()))
+            leiz.enqueue(response("jyeffect"))
+            val source = repo.source(347230, AudioQuality.AUTO)
+            assertEquals("jyeffect", source.level); assertTrue(source.highSpec)
+            val request = leiz.takeRequest()
+            assertEquals("jymaster", request.requestUrl!!.queryParameter("level"))
+            assertEquals("347230", request.requestUrl!!.queryParameter("id"))
+            assertEquals("fixture-secret-key", request.getHeader("x-api-key"))
+            assertNull(request.getHeader("Token")); assertNull(request.getHeader("Authorization"))
+            assertNull(request.requestUrl!!.queryParameter("key")); assertEquals(0, cm.requestCount)
+            cm.enqueue(MockResponse().setBody("""{"songs":[],"totals":{"song":0}}"""))
+            cm.enqueue(MockResponse().setBody("""{"lines":[]}"""))
+            cm.enqueue(MockResponse().setBody("""{"songs":[{"ncm_id":347230,"name":"CurrentMusic metadata"}]}"""))
+            repo.search("song"); repo.lyrics(347230); assertEquals("CurrentMusic metadata", repo.detail(347230).name)
+            repeat(3) { assertNull(cm.takeRequest().getHeader("x-api-key")) }
+            assertEquals(1, leiz.requestCount)
+            access = AudioSourceAccess(AudioProvider.CURRENT_MUSIC, "fixture-secret-key")
+            cm.enqueue(MockResponse().setBody("""{"url":"https://cdn.example/cm.mp3","level":"standard"}"""))
+            repo.source(347230, AudioQuality.STANDARD, RequestSession(cm.url("/cm/").toString(), "project-token"))
+            val original = cm.takeRequest()
+            assertEquals("/cm/ncm/song/url", original.requestUrl!!.encodedPath)
+            assertNull(original.getHeader("x-api-key")); assertEquals(1, leiz.requestCount)
+        } }
+    }
+
     @Test fun explicitQualityErrorsAndMissingKeyHaveSafeMessagesWithoutExpiringProjectSession() = runBlocking {
         MockWebServer().use { server ->
             val client = LeizAudioClient(server.url("/api/netease").toString())
@@ -47,4 +76,20 @@ class LeizAudioClientTest {
         } }
     }
 
+    @Test fun changingProviderDuringResolutionRejectsOldSource() = runBlocking {
+        MockWebServer().use { server ->
+            var access = AudioSourceAccess(AudioProvider.LEIZ, "fixture-old")
+            val repo = MusicRepository(ApiClient({ server.url("/cm/").toString() }, { null }, {}), { access },
+                LeizAudioClient(server.url("/api/netease").toString()))
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    access = AudioSourceAccess(AudioProvider.LEIZ, "fixture-new")
+                    return response()
+                }
+            }
+            try { repo.source(1, AudioQuality.STANDARD); fail("Old key response must be rejected") }
+            catch (e: ApiException) { assertEquals(ErrorKind.AudioSourceChanged, e.kind) }
+            assertFalse(access.toString().contains("fixture-new"))
+        }
+    }
 }
