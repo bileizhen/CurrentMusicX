@@ -6,6 +6,7 @@ import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.auth.UserDto
+import io.github.currencortex.music.data.settings.AudioProvider
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -16,6 +17,31 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
     val state = MutableStateFlow(NetworkSettingsState())
     val cacheBytes = container.audioCache.bytes
     val cacheState = MutableStateFlow(AudioCacheSettingsState())
+    val audioProvider = container.audioSettings.state
+    val audioState = MutableStateFlow(NetworkSettingsState())
+    private fun audioEdit(change: suspend () -> Unit) = viewModelScope.launch {
+        if (audioState.value.busy) return@launch
+        val previous = container.audioSettings.access().identity
+        audioState.value = NetworkSettingsState(busy = true)
+        try {
+            change()
+            container.audioSources.invalidate()
+            if (previous != container.audioSettings.access().identity &&
+                container.playerController.state.value.mode == io.github.currencortex.music.core.media.PlayerMode.LOCAL &&
+                container.playbackQueue.state.value.current?.video == false) {
+                val playback = container.playerController.state.value
+                val queue = container.playbackQueue.state.value
+                container.playerController.load(playback.showPause,
+                    if (playback.song?.id == queue.current?.id) playback.positionMs else queue.positionMs)
+            }
+            audioState.value = NetworkSettingsState(message = "音源设置已保存")
+        } catch (e: CancellationException) { throw e }
+        catch (_: IllegalArgumentException) { audioState.value = NetworkSettingsState(message = "请输入有效的 API Key") }
+        catch (_: Exception) { audioState.value = NetworkSettingsState(message = "音源设置保存失败，请重试") }
+    }
+    fun audioProvider(value: AudioProvider) = audioEdit { container.audioSettings.select(value) }
+    fun audioKey(value: String) = audioEdit { container.audioSettings.saveKey(value) }
+    fun clearAudioKey() = audioEdit { container.audioSettings.clearKey() }
     fun refreshCache() = viewModelScope.launch(Dispatchers.IO) {
         runCatching { container.audioCache.refreshUsage() }.onFailure {
             cacheState.value = AudioCacheSettingsState(message = "歌曲缓存暂不可用")

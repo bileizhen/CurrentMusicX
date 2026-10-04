@@ -12,17 +12,44 @@ import io.github.currencortex.music.core.config.ServerDefaults
 import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.ui.component.SettingsSwitch
 import top.yukonga.miuix.kmp.basic.*
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import io.github.currencortex.music.data.settings.AudioProvider
 
 @Composable fun MusicSettingsScreen(vm: MusicSettingsViewModel, onBack: () -> Unit) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
     val cacheBytes by vm.cacheBytes.collectAsStateWithLifecycle()
     val cacheState by vm.cacheState.collectAsStateWithLifecycle()
+    val provider by vm.audioProvider.collectAsStateWithLifecycle()
+    val audioState by vm.audioState.collectAsStateWithLifecycle()
+    // Credentials must not be saved in Bundle/saved instance state.
+    var audioKey by remember { mutableStateOf("") }
     LaunchedEffect(vm) { vm.refreshCache() }
     var server by rememberSaveable(settings.server) { mutableStateOf(settings.server) }
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().testTag("network_settings"),
         contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { TextButton("返回", onClick = onBack, modifier = Modifier.testTag("navigate_back")); Text("网络与播放") }
+        item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("音乐音源")
+            Text("只切换歌曲播放和投屏音源。搜索、歌词、歌单、账户、MV 与一起听仍使用 CurrentMusic。")
+            AudioProvider.entries.forEach { entry ->
+                TextButton((if (provider.provider == entry) "✓ " else "") + entry.label,
+                    onClick = { vm.audioProvider(entry) }, enabled = !audioState.busy,
+                    modifier = Modifier.testTag("audio_provider_${entry.name.lowercase()}"))
+            }
+            Text(if (provider.keyConfigured) "LeiZ API Key 已保存（加密）" else "LeiZ API Key 尚未设置")
+            TextField(audioKey, { audioKey = it }, label = if (provider.keyConfigured) "替换 API Key" else "API Key",
+                singleLine = true, visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password), modifier = Modifier.testTag("audio_key_input"))
+            TextButton("保存 Key", onClick = { vm.audioKey(audioKey); audioKey = "" },
+                enabled = audioKey.isNotBlank() && !audioState.busy, modifier = Modifier.testTag("audio_key_save"))
+            if (provider.keyConfigured) TextButton("移除 Key", onClick = { vm.clearAudioKey(); audioKey = "" },
+                enabled = !audioState.busy, modifier = Modifier.testTag("audio_key_clear"))
+            Text("LeiZ 自动音质请求超清母带，实际音质以接口返回为准。")
+            audioState.message?.let { Text(it) }
+        } } }
         item {
             Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("CurrentMusic Server")
