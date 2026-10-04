@@ -12,6 +12,32 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
 class RoomSessionTest {
+    @Test fun acceptedSongRequestIsNotRetriedWhenQueueRefreshFails() = runBlocking {
+        MockWebServer().use { server ->
+            val refreshFail = java.util.concurrent.atomic.AtomicBoolean()
+            val writes = AtomicInteger()
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
+                    "/cm/rooms/r1" -> if (refreshFail.get()) MockResponse().setResponseCode(500) else
+                        MockResponse().setBody("""{"room":{"id":"r1"},"members":[{"userId":7,"role":"member"}]}""")
+                    "/cm/rooms/r1/queue" -> { writes.incrementAndGet(); refreshFail.set(true); MockResponse().setBody("{}") }
+                    "/cm/rooms/r1/sync" -> MockResponse().setBody("""{"serverNow":${System.currentTimeMillis()}}""")
+                    "/cm/live/r1/events" -> MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+            val expected = RequestSession(server.url("/cm/").toString(), "request-fixture-token")
+            val repo = RoomRepository(ApiClient({ expected.server }, { expected.token }, {})) { expected }
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val session = RoomSession(repo, RoomSseClient(), SilentExternalPlayer(), scope, { 7 }, {}, { System.nanoTime() / 1_000_000 })
+            try {
+                session.join(RoomInfo("r1"))
+                assertTrue(session.submit(Song(95, "Requested")) is AppResult.Success)
+                withTimeout(2000) { while (session.state.value.error?.startsWith("点歌已提交") != true) delay(10) }
+                assertEquals(1, writes.get()); assertTrue(session.active)
+            } finally { session.disconnect(); scope.cancel() }
+        }
+    }
     @Test fun disconnectReconnectReplayAndCloseRestoreSilentLocalQueue() = runBlocking {
         MockWebServer().use { server ->
             val connections = AtomicInteger(); val observed = CopyOnWriteArrayList<RecordedRequest>()

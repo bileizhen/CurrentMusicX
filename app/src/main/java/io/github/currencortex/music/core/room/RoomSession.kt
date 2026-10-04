@@ -158,11 +158,22 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
         scope.launch { when (val result = appResult { repo.queueAction(id, item.id, action, expected); refresh() }) {
             is AppResult.Failure -> state.update { it.copy(error = result.kind.message) }; else -> Unit } }
     }
-    override fun request(song: Song) {
-        val id = activeId ?: return; val expected = session ?: return
-        scope.launch { when (val result = appResult { repo.add(id, song, expected); refresh() }) {
-            is AppResult.Failure -> state.update { it.copy(error = result.kind.message) }; else -> Unit } }
+    suspend fun submit(song: Song): AppResult<Unit> {
+        val id = activeId ?: return AppResult.Failure(ErrorKind.Forbidden)
+        val expected = session ?: return AppResult.Failure(ErrorKind.Unauthorized)
+        val result = appResult { repo.add(id, song, expected) }
+        if (result is AppResult.Failure && activeId == id && expected == session) state.update { it.copy(error = result.kind.message) }
+        // A successful write stays successful even if fetching the new queue fails.
+        if (result is AppResult.Success && activeId == id && expected == session) {
+            scope.launch {
+                val updated = appResult { refresh() }
+                if (updated is AppResult.Failure && activeId == id && expected == session)
+                    state.update { it.copy(error = "点歌已提交，队列刷新失败：${updated.kind.message}") }
+            }
+        }
+        return result
     }
+    override fun request(song: Song) { scope.launch { submit(song) } }
     override fun play(playing: Boolean) = action(if (playing) "play" else "pause", buildJsonObject { if (playing) put("position", player.state.value.positionMs) })
     override fun seek(position: Long) = action("seek", buildJsonObject { put("position", position) })
     override fun next() = action("next")
