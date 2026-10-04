@@ -1,6 +1,7 @@
 package io.github.currencortex.music
 
 import io.github.currencortex.music.data.settings.MusicSettingsRepository
+import io.github.currencortex.music.data.settings.LyricsWeight
 import androidx.test.core.app.ApplicationProvider
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -24,17 +25,22 @@ class LyricsTypographyTest {
         try {
             store { settings ->
                 assertEquals(30f, settings.snapshot().lyricsFontSize, 0f)
+                assertEquals(LyricsWeight.CURRENT, settings.snapshot().lyricsWeight)
                 settings.setPreloadMetered(true)
                 settings.setLyricsFontSize(38f)
+                settings.setLyricsWeight(LyricsWeight.ALL)
             }
             store { settings ->
                 assertEquals(38f, settings.snapshot().lyricsFontSize, 0f)
+                assertEquals(LyricsWeight.ALL, settings.snapshot().lyricsWeight)
                 assertTrue(settings.snapshot().preloadMetered)
                 settings.setLyricsFontSize(Float.NaN)
                 assertEquals(30f, settings.snapshot().lyricsFontSize, 0f)
                 settings.setLyricsFontSize(100f)
                 assertEquals(40f, settings.snapshot().lyricsFontSize, 0f)
+                settings.setLyricsWeight(LyricsWeight.CURRENT)
             }
+            store { settings -> assertEquals(LyricsWeight.CURRENT, settings.snapshot().lyricsWeight) }
         } finally { file.delete(); directory.delete() }
     }
 }

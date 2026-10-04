@@ -83,10 +83,11 @@ SOFTWARE.
 
 ## LXGW WenKai lyric font
 
-Unmodified LXGW WenKai Regular v1.522 by LXGW and The Klee Project Authors.
+Unmodified LXGW WenKai Regular and Medium v1.522 by LXGW and The Klee Project Authors.
 Source: https://github.com/lxgw/LxgwWenKai/releases/tag/v1.522
 Bundled offline for lyric original text, translation and romanization under SIL OFL 1.1.
-SHA-256: 39ad71264b588165b469e35e6afb162a378dacd1f95348160240ba9038ac3009
+Regular SHA-256: 39ad71264b588165b469e35e6afb162a378dacd1f95348160240ba9038ac3009
+Medium SHA-256: d4bdeb38a39151d74d084cba5090f8cb7d20bf83eedb78c35939ae70b9f4e3f6
 
 Copyright 2021-2026 LXGW (https://github.com/lxgw/LxgwWenKai)
 Copyright 2020 The Klee Project Authors (https://github.com/fontworks-fonts/Klee)

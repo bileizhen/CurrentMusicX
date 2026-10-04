@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.media.*
 import io.github.currencortex.music.feature.lyrics.ui.*
+import io.github.currencortex.music.data.settings.LyricsWeight
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -30,7 +31,7 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 
 private enum class PlayerContent { COVER, LYRICS }
-private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS }
+private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT }
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
     actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null,
@@ -73,7 +74,7 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
                         CoverContent(vm, Modifier.weight(1f))
                         PlayerTransport(vm, onToggle)
                     }
-                    LyricsPanel(vm, Modifier.weight(1.15f).fillMaxHeight(), translation, romanization, wordAnimation, effects, settings.lyricsFontSize)
+                    LyricsPanel(vm, Modifier.weight(1.15f).fillMaxHeight(), translation, romanization, wordAnimation, effects, settings.lyricsFontSize, settings.lyricsWeight)
                 } else Column(Modifier.fillMaxSize()) {
                     AnimatedContent(content, Modifier.weight(1f).fillMaxWidth(), transitionSpec = {
                         fadeIn(tween(240)) togetherWith fadeOut(tween(160))
@@ -87,7 +88,7 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
                                     Text(queue.current?.artists.orEmpty(), fontSize = 13.sp, color = Color.White.copy(alpha = .55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
-                            LyricsPanel(vm, Modifier.weight(1f).fillMaxWidth(), translation, romanization, wordAnimation, effects, settings.lyricsFontSize)
+                            LyricsPanel(vm, Modifier.weight(1f).fillMaxWidth(), translation, romanization, wordAnimation, effects, settings.lyricsFontSize, settings.lyricsWeight)
                         } else CoverContent(vm, Modifier.fillMaxSize())
                     }
                     PlayerTransport(vm, onToggle)
@@ -145,8 +146,15 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
                 if (onRoom != null) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
                 }
             }
+            PlayerOverlay.WEIGHT -> MusicDialog("歌词字重", { overlay = PlayerOverlay.LYRICS }) {
+                LyricsWeight.entries.forEach { weight ->
+                    MusicDestinationRow((if (weight == settings.lyricsWeight) "✓ " else "") + weight.label,
+                        modifier = Modifier.testTag("lyrics_weight_${weight.name}"), chevron = false,
+                        onClick = { vm.lyricsWeight(weight); overlay = PlayerOverlay.LYRICS })
+                }
+            }
             PlayerOverlay.LYRICS -> MusicDialog("歌词显示", dismiss) {
-                LyricsDisplaySettings(settings.lyricsFontSize, vm::lyricsFontSize,
+                LyricsDisplaySettings(settings.lyricsFontSize, vm::lyricsFontSize, settings.lyricsWeight, { overlay = PlayerOverlay.WEIGHT },
                     translation, { translation = it }, romanization, { romanization = it },
                     wordAnimation, { wordAnimation = it }, effects, { effects = it })
             }
@@ -171,13 +179,13 @@ private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE,
 }
 
 @Composable private fun LyricsPanel(vm: PlayerViewModel, modifier: Modifier, translation: Boolean,
-    romanization: Boolean, wordAnimation: Boolean, effects: Boolean, fontSize: Float) {
+    romanization: Boolean, wordAnimation: Boolean, effects: Boolean, fontSize: Float, weightMode: LyricsWeight) {
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
     val player by vm.state.collectAsStateWithLifecycle()
     val position = rememberLyricsPosition(player)
     if (lyrics.document.lines.isNotEmpty()) key(player.song?.id, lyrics.document) {
         AppleLyrics(lyrics.document, position, vm.player::seek, modifier, player.canControlPlayback,
-            translation, romanization, wordAnimation, effects, fontSize)
+            translation, romanization, wordAnimation, effects, fontSize, weightMode)
     } else Box(modifier.testTag("lyrics_panel"), contentAlignment = Alignment.Center) {
         if (lyrics.loading) Column(Modifier.fillMaxWidth().padding(28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             MusicPlaceholder(Modifier.fillMaxWidth(.8f).height(30.dp))

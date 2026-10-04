@@ -13,12 +13,15 @@ import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.settings.LyricsTypography
+import io.github.currencortex.music.data.settings.LyricsWeight
+import io.github.currencortex.music.feature.lyrics.ui.lyricsFontWeight
+import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.feature.lyrics.ui.LyricsFontFamily
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 
-@Composable internal fun LyricsDisplaySettings(fontSize: Float, onFontSize: (Float) -> Unit,
+@Composable internal fun LyricsDisplaySettings(fontSize: Float, onFontSize: (Float) -> Unit, weightMode: LyricsWeight, onWeight: () -> Unit,
     translation: Boolean, onTranslation: (Boolean) -> Unit,
     romanization: Boolean, onRomanization: (Boolean) -> Unit,
     animation: Boolean, onAnimation: (Boolean) -> Unit,
@@ -28,7 +31,7 @@ import kotlin.math.roundToInt
     Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
         .testTag("lyrics_display_settings")) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text("让音乐说话", fontFamily = LyricsFontFamily, fontSize = preview.sp,
+            Text("让音乐说话", fontFamily = LyricsFontFamily, fontSize = preview.sp, fontWeight = lyricsFontWeight(weightMode, true),
                 color = ink, modifier = Modifier.testTag("lyrics_font_preview"))
             Text("霞鹜文楷", fontSize = 12.sp, color = ink.copy(alpha = .5f), modifier = Modifier.padding(top = 6.dp))
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -50,6 +53,7 @@ import kotlin.math.roundToInt
                     }
                 })
         }
+        MusicDestinationRow("歌词字重", summary = weightMode.label, onClick = onWeight, modifier = Modifier.testTag("open_lyrics_weight"))
         LyricsToggle("翻译歌词", translation, onTranslation)
         LyricsToggle("罗马音", romanization, onRomanization)
         LyricsToggle("逐字动画", animation, onAnimation)

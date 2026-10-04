@@ -31,6 +31,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.data.settings.LyricsTypography
+import io.github.currencortex.music.data.settings.LyricsWeight
 import io.github.currencortex.music.feature.lyrics.model.*
 import io.github.currencortex.music.feature.lyrics.timeline.*
 import kotlinx.coroutines.delay
@@ -62,7 +63,7 @@ private const val ACTIVE_LYRIC_SCALE = 1.12f
 @Composable fun AppleLyrics(document: LyricsDocument, position: State<Long>, onSeek: (Long) -> Unit,
     modifier: Modifier = Modifier, canSeek: Boolean = true, translation: Boolean = true,
     romanization: Boolean = false, wordAnimation: Boolean = true, effects: Boolean = true,
-    fontSize: Float = LyricsTypography.DEFAULT_SIZE) {
+    fontSize: Float = LyricsTypography.DEFAULT_SIZE, weightMode: LyricsWeight = LyricsWeight.CURRENT) {
     val size = LyricsTypography.normalize(fontSize)
     val timeline = remember(document) { LyricsTimeline(document) }
     val active by remember(timeline, position) { derivedStateOf { timeline.lineAt(position.value) } }
@@ -79,7 +80,7 @@ private const val ACTIVE_LYRIC_SCALE = 1.12f
             mode = LyricsScrollMode.FOLLOWING
         }
     }
-    LaunchedEffect(active, mode, document, size, translation, romanization) {
+    LaunchedEffect(active, mode, document, size, translation, romanization, weightMode) {
         if (mode != LyricsScrollMode.FOLLOWING || document.lines.isEmpty()) return@LaunchedEffect
         val target = active.coerceAtLeast(0)
         // Allow a changed font or auxiliary line to reflow before calculating the anchor.
@@ -106,6 +107,7 @@ private const val ACTIVE_LYRIC_SCALE = 1.12f
                 start = 8.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             itemsIndexed(document.lines, key = { index, line -> "$index:${line.startTimeMs}" }) { index, line ->
                 val focused = index == active
+                val weight = lyricsFontWeight(weightMode, focused)
                 val distance = if (mode == LyricsScrollMode.BROWSING) 1 else abs(index - active)
                 val opacity = animateFloatAsState(if (focused) 1f else when (distance) { 1 -> .56f; 2 -> .35f; else -> .24f }, tween(350), label = "lyric focus")
                 val scale = animateFloatAsState(if (focused) ACTIVE_LYRIC_SCALE else if (distance == 1) .96f else .94f,
@@ -125,11 +127,11 @@ private const val ACTIVE_LYRIC_SCALE = 1.12f
                     }
                     .graphicsLayer { alpha = opacity.value; scaleX = scale.value; scaleY = scale.value; transformOrigin = TransformOrigin(0f, .5f) }
                     .then(blur)) {
-                    KaraokeText(line, position, focused && wordAnimation, Modifier.fillMaxWidth(), size)
+                    KaraokeText(line, position, focused && wordAnimation, Modifier.fillMaxWidth(), size, weight)
                     if (romanization && line.romanization.isNotBlank()) BasicText(line.romanization,
-                        Modifier.padding(top = 6.dp), style = TextStyle(fontFamily = LyricsFontFamily, color = Color.White.copy(alpha = .5f), fontSize = (size * .53f).sp, lineHeight = (size * .75f).sp))
+                        Modifier.padding(top = 6.dp), style = TextStyle(fontFamily = LyricsFontFamily, fontWeight = weight, color = Color.White.copy(alpha = .5f), fontSize = (size * .53f).sp, lineHeight = (size * .75f).sp))
                     if (translation && line.translation.isNotBlank()) BasicText(line.translation,
-                        Modifier.padding(top = 6.dp), style = TextStyle(fontFamily = LyricsFontFamily, color = Color.White.copy(alpha = .65f), fontSize = (size * .6f).sp, lineHeight = (size * .85f).sp))
+                        Modifier.padding(top = 6.dp), style = TextStyle(fontFamily = LyricsFontFamily, fontWeight = weight, color = Color.White.copy(alpha = .65f), fontSize = (size * .6f).sp, lineHeight = (size * .85f).sp))
                 }
                 }
             }
