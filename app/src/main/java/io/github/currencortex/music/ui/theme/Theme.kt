@@ -3,6 +3,7 @@ package io.github.currencortex.music.ui.theme
 import android.os.Build
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -20,8 +21,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.lightColorScheme
+import top.yukonga.miuix.kmp.utils.MiuixIndication
 
 val LocalDarkTheme = staticCompositionLocalOf { false }
+private val clearClickIndication = MiuixIndication(color = Color.Transparent)
 @Composable fun isInDarkTheme() = LocalDarkTheme.current
 
 @Composable
@@ -67,6 +70,9 @@ fun LeiTheme(settings: AppearanceSettings, content: @Composable () -> Unit) {
         Density(density.density * settings.uiScale, density.fontScale)
     }
     CompositionLocalProvider(LocalDarkTheme provides dark, LocalDensity provides scaled) {
-        MiuixTheme(controller = controller, content = content)
+        MiuixTheme(controller = controller) {
+            // Override here because MiuixTheme installs its own default press overlay.
+            CompositionLocalProvider(LocalIndication provides clearClickIndication, content = content)
+        }
     }
 }
