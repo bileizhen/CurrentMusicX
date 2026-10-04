@@ -31,8 +31,9 @@ internal const val ACTIVE_LYRIC_SCALE = 1.12f
     val opacity = animateFloatAsState(if (focused) 1f else when (distance) { 1 -> .56f; 2 -> .35f; else -> .24f }, tween(350), label = "lyric focus")
     val scale = animateFloatAsState(if (focused) ACTIVE_LYRIC_SCALE else if (distance == 1) .96f else .94f,
         spring(stiffness = 220f), label = "lyric scale")
-    val blur = if (effects && android.os.Build.VERSION.SDK_INT >= 31 && !browsing && distance > 1)
-        Modifier.blur(if (distance == 2) .7.dp else 1.3.dp) else Modifier
+    val mainFocused by remember(line, position) {
+        derivedStateOf { position.value >= line.startTimeMs && position.value < line.endTimeMs }
+    }
     val lag = remember { Animatable(0f) }
     var previousTarget by remember { mutableIntStateOf(scrollTarget) }
     val lagDistance = with(LocalDensity.current) { 18.dp.toPx() }
@@ -59,16 +60,16 @@ internal const val ACTIVE_LYRIC_SCALE = 1.12f
             alpha = opacity.value; scaleX = scale.value; scaleY = scale.value
             translationY = lag.value
             transformOrigin = TransformOrigin(if (display.centered) .5f else if (line.isDuet) 1f else 0f, .5f)
-        }.then(blur)) {
-            LyricsVocalView(line, position, focused, translation, romanization, wordAnimation,
-                if (line.isBackground) fontSize * .75f else fontSize, weightMode, display)
+        }) {
+            LyricsVocalView(line, position, mainFocused, translation, romanization, wordAnimation,
+                if (line.isBackground) fontSize * .75f else fontSize, weightMode, display, effects, distance)
             line.backgroundVocals.forEachIndexed { bgIndex, bg ->
                 val bgFocused by remember(bg, position) { derivedStateOf { position.value >= bg.startTimeMs && position.value < bg.endTimeMs } }
                 Column(Modifier.padding(top = 10.dp).testTag("lyric_bg_${index}_$bgIndex")
                     .semantics { selected = bgFocused }
                     .clickable(enabled = canSeek, role = Role.Button) { onSeek(bg.startTimeMs) }
                     .graphicsLayer { alpha = if (bgFocused) 1f else .55f }) {
-                    LyricsVocalView(bg, position, bgFocused, translation, romanization, wordAnimation, fontSize * .75f, weightMode, display)
+                    LyricsVocalView(bg, position, bgFocused, translation, romanization, wordAnimation, fontSize * .75f, weightMode, display, effects, distance)
                 }
             }
         }
@@ -77,9 +78,13 @@ internal const val ACTIVE_LYRIC_SCALE = 1.12f
 
 @Composable private fun LyricsVocalView(line: LyricLine, position: State<Long>, focused: Boolean,
     translation: Boolean, romanization: Boolean, wordAnimation: Boolean, size: Float, weightMode: LyricsWeight,
-    display: LyricsDisplayOptions) {
+    display: LyricsDisplayOptions, effects: Boolean, distance: Int) {
     val weight = lyricsFontWeight(weightMode, focused, display.fontWeight)
     val align = if (display.centered) TextAlign.Center else if (line.isDuet) TextAlign.End else TextAlign.Start
+    // Blur each vocal independently so an active background vocal never inherits main-vocal blur.
+    val blur = if (effects && android.os.Build.VERSION.SDK_INT >= 31 && !focused)
+        Modifier.blur(if (distance <= 1) 1.4.dp else 2.2.dp) else Modifier
+    Column(Modifier.fillMaxWidth().then(blur)) {
     if (line.text.isNotBlank()) KaraokeText(line, position, wordAnimation && (focused || display.karaokeScope == KaraokeScope.ALL), Modifier.fillMaxWidth(), size, weight, align)
     if (translation && line.translation.isNotBlank()) BasicText(line.translation, Modifier.fillMaxWidth().padding(top = 6.dp),
         style = TextStyle(fontFamily = LyricsFontFamily, fontWeight = weight, fontSynthesis = lyricsFontSynthesis(weight), color = Color.White.copy(alpha = .65f),
@@ -87,4 +92,5 @@ internal const val ACTIVE_LYRIC_SCALE = 1.12f
     if (romanization && line.romanization.isNotBlank()) BasicText(line.romanization, Modifier.fillMaxWidth().padding(top = 6.dp),
         style = TextStyle(fontFamily = LyricsFontFamily, fontWeight = weight, fontSynthesis = lyricsFontSynthesis(weight), color = Color.White.copy(alpha = .5f),
             fontSize = (size * .53f).sp, lineHeight = (size * .75f).sp, textAlign = align))
+    }
 }

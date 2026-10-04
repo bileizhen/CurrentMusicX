@@ -22,6 +22,7 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.lyrics.data.*
 import io.github.currencortex.music.feature.lyrics.ttml.TtmlParser
 import io.github.currencortex.music.feature.lyrics.ui.LyricsScreen
+import io.github.currencortex.music.feature.lyrics.model.*
 import io.github.currencortex.music.ui.CurrentMusicApp
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.*
@@ -45,6 +46,50 @@ class LyricsDisplayCapabilitiesTest {
         compose.onNodeWithTag(tag).captureToImage().asAndroidBitmap().let { bitmap ->
             java.io.File(context.externalCacheDir, name).outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         }
+    }
+
+    @Test fun blurKeepsOnlyCurrentlySungVocalsClear() {
+        val document = LyricsDocument(listOf(
+            LyricLine(1000, 2000, "当前主唱清晰", backgroundVocals = listOf(LyricLine(2000, 3500, "背景人声清晰", isBackground = true))),
+            LyricLine(4000, 6500, "下一句也要模糊"),
+            LyricLine(7000, 10000, "远处歌词模糊"),
+        ))
+        val position = mutableLongStateOf(1500)
+        val effects = mutableStateOf(false)
+        compose.setContent { LyricsScreen(document, position, {}, Modifier.fillMaxSize().background(Color(0xFF29272C)),
+            effects = effects.value, display = LyricsDisplayOptions(stagger = false)) }
+        compose.mainClock.advanceTimeBy(1000); compose.waitForIdle()
+        fun edgeEnergy(text: String): Double {
+            val pixels = compose.onNodeWithText(text, useUnmergedTree = true).captureToImage().toPixelMap()
+            var energy = 0.0
+            for (y in 0 until pixels.height) for (x in 1 until pixels.width)
+                energy += kotlin.math.abs(pixels[x, y].red - pixels[x - 1, y].red)
+            return energy
+        }
+        val clearMain = edgeEnergy("当前主唱清晰")
+        val clearNext = edgeEnergy("下一句也要模糊")
+        val clearBg = edgeEnergy("背景人声清晰")
+        compose.runOnIdle { effects.value = true }
+        compose.waitForIdle()
+        assertEquals("Current vocals must remain sharp", clearMain, edgeEnergy("当前主唱清晰"), .01)
+        assertTrue("Even the immediate next row must be blurred", edgeEnergy("下一句也要模糊") < clearNext * .8)
+        assertTrue("Inactive background vocals must be blurred too", edgeEnergy("背景人声清晰") < clearBg * .8)
+        compose.runOnIdle { position.longValue = 2500; effects.value = false }
+        compose.mainClock.advanceTimeBy(1000); compose.waitForIdle()
+        val activeBg = edgeEnergy("背景人声清晰")
+        val endedMain = edgeEnergy("当前主唱清晰")
+        compose.runOnIdle { effects.value = true }
+        compose.waitForIdle()
+        assertEquals("Active background vocals cannot inherit main-vocal blur", activeBg, edgeEnergy("背景人声清晰"), .01)
+        assertTrue("Ended main vocals are blurred while their background vocals sing", edgeEnergy("当前主唱清晰") < endedMain * .8)
+        compose.runOnIdle { position.longValue = 4500 }
+        compose.mainClock.advanceTimeBy(1000); compose.waitForIdle()
+        compose.onNodeWithTag("lyric_line_1").assertIsSelected()
+        save("lyrics_panel", "lyrics-blur-preview.png")
+        val activeNext = edgeEnergy("下一句也要模糊")
+        compose.runOnIdle { effects.value = false }
+        compose.waitForIdle()
+        assertEquals("Focus changes must remove blur from the new current row", activeNext, edgeEnergy("下一句也要模糊"), .01)
     }
 
     @Test fun centeredWeightAndAllLineKaraokeRenderActualGlyphs() {
