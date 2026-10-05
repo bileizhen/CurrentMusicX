@@ -10,6 +10,40 @@ import org.junit.Test
 import java.util.concurrent.atomic.AtomicBoolean
 
 class SongLikeControllerTest {
+    @Test fun removingUsesDisplayedIntentEvenWhenTheLikelistLags(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            val writes=java.util.concurrent.CopyOnWriteArrayList<Boolean>()
+            server.dispatcher=object:Dispatcher(){
+                override fun dispatch(request:RecordedRequest):MockResponse=MockResponse().setBody(when(request.requestUrl!!.encodedPath){
+                    "/cm/ncmbind" -> """{"bound":true,"profile":{"uid":7}}"""
+                    "/cm/songs/status" -> "{}"
+                    "/cm/ncmbind/likelist" -> """{"ids":[]}""" // Delayed snapshot never sees the addition.
+                    "/cm/ncmbind/like/11" -> {
+                        val desired=ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject["like"]!!.jsonPrimitive.boolean
+                        writes.add(desired); """{"code":200,"like":$desired}"""
+                    }
+                    else -> error("Unexpected endpoint")
+                })
+            }
+            val s=RequestSession(server.url("/cm/").toString(),"personal")
+            val api=ApiClient({s.server},{s.token},{})
+            val scope=CoroutineScope(SupervisorJob()+Dispatchers.Default)
+            val repo=NeteaseSongActionsRepository(api){s}
+            val controller=SongLikeController(LibraryRepository(api,{7},{s}),repo,scope){s}
+            try {
+                controller.open(Song(11,"Track"));ready(controller)
+                controller.toggle(LikeDestination.NETEASE);ready(controller)
+                assertEquals(true,controller.state.value.netease.liked)
+                controller.dismiss();controller.open(Song(11,"Track"));ready(controller)
+                assertEquals(true,controller.state.value.netease.liked)
+                controller.toggle(LikeDestination.NETEASE);ready(controller)
+                assertEquals(false,controller.state.value.netease.liked)
+                assertEquals(listOf(true,false),writes.toList())
+                controller.dismiss();controller.open(Song(11,"Track"));ready(controller)
+                assertEquals(false,controller.state.value.netease.liked)
+            }finally{scope.cancel()}
+        }
+    }
     private suspend fun ready(controller: SongLikeController) = withTimeout(5000) {
         while (controller.state.value.currentMusic.busy || controller.state.value.netease.busy) delay(5)
     }

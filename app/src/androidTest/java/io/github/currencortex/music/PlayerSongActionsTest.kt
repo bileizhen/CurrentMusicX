@@ -37,7 +37,7 @@ class PlayerSongActionsTest {
                     "/cm/ncmbind" -> """{"bound":true,"profile":{"uid":7},"ncmLikedPlId":42}"""
                     "/cm/ncm/user/playlist" -> """{"code":200,"playlist":[{"id":9918106457,"specialType":5,"creator":{"userId":7}}]}"""
                     "/cm/ncm/song/red/count" -> """{"code":200,"data":{"count":${if (liked.get()) 10002 else 10001}}}"""
-                    "/cm/ncmbind/likelist" -> """{"ids":${if (liked.get()) "[11]" else "[]"}}"""
+                    "/cm/ncmbind/likelist" -> """{"ids":[]}""" // Upstream list deliberately lags acknowledged writes.
                     "/cm/ncmbind/like/11" -> {
                         mutations.incrementAndGet()
                         liked.set(io.github.currencortex.music.core.network.ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject["like"]!!.jsonPrimitive.boolean)
@@ -106,8 +106,18 @@ class PlayerSongActionsTest {
             assertTrue(liked.get())
             compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
             compose.onNodeWithTag("song_like_sheet").assertDoesNotExist()
+            compose.onNodeWithTag("player_like").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithText("已收录，点击移出 · 红心同步到网易云 APP").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("like_destination_NETEASE").assertIsSelected().performClick()
+            compose.waitUntil(5000) { !liked.get() && compose.onAllNodesWithText("未收录，点击加入 · 红心同步到网易云 APP").fetchSemanticsNodes().isNotEmpty() }
+            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("player_like").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithText("未收录，点击加入 · 红心同步到网易云 APP").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("like_destination_NETEASE").assertIsNotSelected().performClick()
+            compose.waitUntil(5000) { liked.get() && compose.onAllNodesWithText("已收录，点击移出 · 红心同步到网易云 APP").fetchSemanticsNodes().isNotEmpty() }
+            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
             compose.waitUntil(5000) { compose.onNodeWithTag("player_like").fetchSemanticsNode().config[SemanticsProperties.Selected] }
-            assertEquals(1, mutations.get())
+            assertEquals(3, mutations.get())
             compose.onNodeWithTag("player_comments").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("网易云热门评论").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithText("网易云最新评论").assertIsDisplayed()

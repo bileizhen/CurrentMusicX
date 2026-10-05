@@ -8,6 +8,47 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NeteaseSongActionsRepositoryTest {
+    @Test fun delayedListsCannotUndoConfirmedRemovalAndOverridesAreScopedAndExpire()=runBlocking {
+        MockWebServer().use { server ->
+            var uid=7L; var clock=0L
+            server.dispatcher=object:Dispatcher(){
+                override fun dispatch(request:RecordedRequest)=MockResponse().setBody(when(request.requestUrl!!.encodedPath){
+                    "/cm/ncmbind" -> """{"bound":true,"profile":{"uid":$uid}}"""
+                    "/cm/ncmbind/likelist" -> {
+                        assertNotNull(request.requestUrl!!.queryParameter("timestamp")); """{"ids":[11]}"""
+                    }
+                    "/cm/ncmbind/like/11" -> {
+                        assertFalse(ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject["like"]!!.jsonPrimitive.boolean)
+                        """{"code":200,"like":false}"""
+                    }
+                    else -> error("Unexpected endpoint")
+                })
+            }
+            val s=RequestSession(server.url("/cm/").toString(),"personal")
+            val repo=NeteaseSongActionsRepository(ApiClient({s.server},{s.token},{}),now={clock}){s}
+            assertTrue(repo.isLiked(11))
+            repo.setLiked(11,false,s,Song(11,"Track"))
+            assertFalse(repo.isLiked(11,fresh=true))
+            uid=8L;assertTrue(repo.isLiked(11,fresh=true))
+            uid=7L;clock=121_000_000_000L;assertTrue(repo.isLiked(11,fresh=true))
+        }
+    }
+    @Test fun failedOrContradictoryWriteDoesNotCreateAConfirmedMembership()=runBlocking {
+        MockWebServer().use { server ->
+            server.dispatcher=object:Dispatcher(){
+                override fun dispatch(request:RecordedRequest)=MockResponse().setBody(when(request.requestUrl!!.encodedPath){
+                    "/cm/ncmbind" -> """{"bound":true,"profile":{"uid":7}}"""
+                    "/cm/ncmbind/likelist" -> """{"ids":[]}"""
+                    "/cm/ncmbind/like/11" -> """{"code":200,"like":false}"""
+                    else -> error("Unexpected endpoint")
+                })
+            }
+            val s=RequestSession(server.url("/cm/").toString(),"personal")
+            val repo=NeteaseSongActionsRepository(ApiClient({s.server},{s.token},{})){s}
+            assertEquals(ErrorKind.Server,(appResult{repo.setLiked(11,true,s,Song(11,"Track"))} as AppResult.Failure).kind)
+            assertFalse(repo.isLiked(11,fresh=true));assertEquals(0L,repo.revision.value)
+        }
+    }
     @Test fun olderServersFallBackOnlyWhenBindingLikeEndpointsAreMissing() = runBlocking {
         MockWebServer().use { server ->
             val paths = mutableListOf<String>()
