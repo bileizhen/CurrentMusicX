@@ -9,17 +9,18 @@ import io.github.currencortex.music.core.media.PlaybackMode
 import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
 
-@Composable internal fun PlayerSongActionsBar(vm: PlayerViewModel, onComments: () -> Unit, onQueue: () -> Unit) {
+@Composable internal fun PlayerSongActionsBar(vm: PlayerViewModel, onComments: () -> Unit, onQueue: () -> Unit, onLike: (() -> Unit)?) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     val player by vm.state.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
+    val statuses by vm.libraryStatuses.collectAsStateWithLifecycle()
     val heartLoading by vm.heartLoading.collectAsStateWithLifecycle()
     val id = NeteaseSongActionsRepository.songId(queue.current)
     val current = actions.takeIf { it.songId == id }
     PlayerFunctionBar(actionCount = 4) {
-        PlayerIconButton(PlayerIcon.LIKE, if (current?.liked == true) "取消喜欢" else "喜欢", vm::toggleNeteaseLike,
-            Modifier.testTag("player_like"), selected = current?.liked == true, count = current?.likeCount,
-            showCount = true, enabled = id != null && current?.liking != true, loading = current?.liking == true)
+        PlayerIconButton(PlayerIcon.LIKE, "收录到我喜欢", { onLike?.invoke() },
+            Modifier.testTag("player_like"), selected = statuses[queue.current?.id]?.liked == true || current?.liked == true, count = current?.likeCount,
+            showCount = true, enabled = queue.current?.video == false && onLike != null)
         PlayerIconButton(PlayerIcon.COMMENT, "评论区", onComments, Modifier.testTag("player_comments"),
             count = current?.commentCount, showCount = true, enabled = id != null)
         PlayerIconButton(when (queue.mode) {

@@ -49,7 +49,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     val status = statuses[song.id] ?: SongStatus()
     val dismiss = LocalDismissSongMenu.current
     LaunchedEffect(song.id) { vm.refreshStatuses(listOf(song)) }
-    MusicDestinationRow(if (status.liked) "取消点赞" else "点赞", onClick = { dismiss(); vm.toggle(song) }, enabled = !status.pending,
+    MusicDestinationRow("收录到我喜欢", onClick = { dismiss(); vm.likes.open(song) }, enabled = !status.pending && !song.video,
         modifier = Modifier.testTag("song_like_${song.id}"), chevron = false)
     MusicDestinationRow("加入歌单", onClick = { dismiss(); vm.choosePlaylist(song) }, modifier = Modifier.testTag("song_playlist_${song.id}"), chevron = false)
     if (song.artistIds.isNotEmpty()) song.artistIds.forEachIndexed { index, id ->
@@ -60,6 +60,8 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 }
 
 @Composable fun LibraryDialogs(vm: LibraryViewModel) {
+    val likes by vm.likes.state.collectAsStateWithLifecycle()
+    if (likes.song != null) SongLikeSheet(likes, vm.likes::toggle, vm.likes::dismiss)
     val song by vm.selectedSong.collectAsStateWithLifecycle()
     val lists by vm.availablePlaylists.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()

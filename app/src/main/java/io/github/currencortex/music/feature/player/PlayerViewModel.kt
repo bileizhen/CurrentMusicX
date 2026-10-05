@@ -32,6 +32,7 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val currentSong = queue.map { it.current }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), queue.value.current)
     val settings = container.musicSettings.state
+    val libraryStatuses = container.libraryRepository.statuses
     private val _lyrics = MutableStateFlow(LyricsUiState())
     val lyrics: StateFlow<LyricsUiState> = _lyrics.asStateFlow()
     private val _actions = MutableStateFlow(PlayerSongActions())
@@ -56,8 +57,9 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     init {
         viewModelScope.launch {
             combine(queue.map { NeteaseSongActionsRepository.songId(it.current) }.distinctUntilChanged(),
-                container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged()) {
-                    id, revision, server -> id to (revision to server)
+                container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged(),
+                netease.revision, container.libraryRepository.revision) {
+                    id, revision, server, ncmRevision, libraryRevision -> id to listOf(revision, server, ncmRevision, libraryRevision)
                 }.collectLatest { (id, _) ->
                 actionEpoch++
                 commentsJob?.cancel()
@@ -65,6 +67,7 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
                 _actions.value = PlayerSongActions(songId = id)
                 if (id == null) return@collectLatest
                 supervisorScope {
+                    launch { appResult { container.libraryRepository.refreshStatus(listOf(queue.value.current?.id ?: id)) } }
                     launch { val result = appResult { netease.likeCount(id) }; if (result is AppResult.Success) _actions.update { it.copy(likeCount = result.value) } }
                     launch { val result = appResult { netease.comments(id, limit = 1) }; if (result is AppResult.Success) _actions.update { it.copy(commentCount = result.value.total?.takeIf { n -> n >= 0 }) } }
                     launch { val result = appResult { netease.isLiked(id) }; if (result is AppResult.Success) _actions.update { it.copy(liked = result.value) } }

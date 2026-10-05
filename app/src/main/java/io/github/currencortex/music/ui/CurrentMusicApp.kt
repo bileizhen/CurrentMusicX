@@ -140,6 +140,7 @@ fun CurrentMusicApp(container: AppContainer) {
     LaunchedEffect(sessionRevision) { profileVm.dialog.value = null; profileVm.avatar.value = null; profileVm.message.value = null }
     val libraryMessage by libraryVm.message.collectAsStateWithLifecycle()
     val libraryDialogSong by libraryVm.selectedSong.collectAsStateWithLifecycle()
+    val likeSelection by libraryVm.likes.state.collectAsStateWithLifecycle()
     // Position and loading updates belong to the player, not the entire navigation tree.
     val playerState by playerVm.navigation.collectAsStateWithLifecycle()
     val currentSong by playerVm.currentSong.collectAsStateWithLifecycle()
@@ -401,7 +402,8 @@ fun CurrentMusicApp(container: AppContainer) {
                         when {
                             route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateBack, ::navigateLibrary)
                             route == "lib/video" -> if (currentSong?.video == true) io.github.currencortex.music.feature.mv.MvPlayerScreen(container, ::navigateBack)
-                                else PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } })
+                                else PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
+                                    onLike = { currentSong?.let(libraryVm.likes::open) })
                             route.startsWith("lib/browse/") -> {
                                 val parts = route.split('/')
                                 val catalogVm: CatalogViewModel = viewModel(key = route, factory = viewModelFactory {
@@ -483,14 +485,15 @@ fun CurrentMusicApp(container: AppContainer) {
             origin = playerOrigin, viewport = navigationBounds, artwork = artworkTransition,
             artworkUrl = currentSong?.cover.orEmpty(), predictiveBack = predictiveBack,
             backEnabled = !showLogs && pendingPlay == null && playerState.warning == null && !updateDialogVisible &&
-                !showScale && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null &&
+                !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null &&
                 !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
             onBack = ::navigateBack, onSettled = { playerSheetMotion = PlayerSheetMotion.NONE }) {
             playerSavedState.SaveableStateProvider(PLAYER) {
                 PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
                     actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
                     onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") },
-                    onDialogActive = { playerDialogOpen = it }, onNetwork = { navigateTo(NETWORK) })
+                    onDialogActive = { playerDialogOpen = it }, onNetwork = { navigateTo(NETWORK) },
+                    onLike = { currentSong?.let(libraryVm.likes::open) })
             }
         }
         if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm) { miniQueueOpen = false }
@@ -503,7 +506,7 @@ fun CurrentMusicApp(container: AppContainer) {
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !playerPresented && !predictiveBack && !showLogs &&
-                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
+                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }

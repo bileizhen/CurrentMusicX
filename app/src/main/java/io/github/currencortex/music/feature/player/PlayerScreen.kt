@@ -50,7 +50,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
     actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null,
     onCast: (() -> Unit)? = null, onRoom: (() -> Unit)? = null, onDialogActive: (Boolean) -> Unit = {},
-    onNetwork: (() -> Unit)? = null) {
+    onNetwork: (() -> Unit)? = null, onLike: (() -> Unit)? = null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -184,7 +184,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         .padding(horizontal = 24.dp, vertical = 14.dp))
             } else PlayerSongActionsBar(vm, { overlay = PlayerOverlay.COMMENTS }, {
                 scope.launch { queueMotion.animation.snapTo(0f); overlay = PlayerOverlay.QUEUE }
-            })
+            }, onLike)
         }
         }
         }

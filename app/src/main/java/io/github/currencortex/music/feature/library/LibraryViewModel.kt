@@ -19,11 +19,14 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
     val selectedSong = MutableStateFlow<Song?>(null)
     val availablePlaylists = MutableStateFlow<List<Playlist>>(emptyList())
     val statuses = container.libraryRepository.statuses
+    val likes = io.github.currencortex.music.data.song.SongLikeController(container.libraryRepository,
+        container.neteaseSongActions, viewModelScope) { RequestSession(container.accountRepository.server, container.accountRepository.token) }
     private val refreshRequest = MutableStateFlow(0)
     private var prefetchJob: Job? = null
     init {
         viewModelScope.launch {
             container.sessionRestored.await()
+            launch { container.accountRepository.sessionRevision.drop(1).collect { likes.dismiss() } }
             var identity: List<Any?>? = null
             combine(container.accountRepository.state.map { it.account?.id }.distinctUntilChanged(),
                 container.musicSettings.state.map { it.server }.distinctUntilChanged(), container.libraryRepository.revision,
@@ -31,6 +34,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                 .collectLatest { keys ->
                     prefetchJob?.cancel()
                     val sameAccount = identity == keys.take(2)
+                    if (!sameAccount) likes.dismiss()
                     identity = keys.take(2)
                     home.value = if (sameAccount) home.value.copy(loading = true, errors = emptyMap()) else LibraryHomeState(loading = true)
                     loadHome()
