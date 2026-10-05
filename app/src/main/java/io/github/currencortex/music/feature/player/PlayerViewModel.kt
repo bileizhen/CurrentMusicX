@@ -8,10 +8,20 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import io.github.currencortex.music.core.media.HighSpecWarning
 import io.github.currencortex.music.core.media.PlayerMode
+import io.github.currencortex.music.core.media.PlaybackMode
+import io.github.currencortex.music.core.network.*
+import io.github.currencortex.music.data.song.*
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class LyricsUiState(val document: LyricsDocument = LyricsDocument(), val loading: Boolean = false, val error: String? = null,
     val issues: List<io.github.currencortex.music.feature.lyrics.data.LyricsIssue> = emptyList(), val songId: Long? = null)
 data class NavigationPlayback(val mode: PlayerMode, val error: String?, val warning: HighSpecWarning?)
+data class PlayerSongActions(val songId: Long? = null, val likeCount: Long? = null, val commentCount: Long? = null,
+    val liked: Boolean? = null, val liking: Boolean = false, val error: String? = null)
+data class PlayerComments(val songId: Long? = null, val total: Long? = null, val hot: List<NeteaseComment> = emptyList(),
+    val latest: List<NeteaseComment> = emptyList(), val more: Boolean = false, val nextOffset: Int = 0,
+    val loading: Boolean = false, val error: String? = null)
 class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val player = container.playerController
     val state = player.state
@@ -24,6 +34,17 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val settings = container.musicSettings.state
     private val _lyrics = MutableStateFlow(LyricsUiState())
     val lyrics: StateFlow<LyricsUiState> = _lyrics.asStateFlow()
+    private val _actions = MutableStateFlow(PlayerSongActions())
+    val actions = _actions.asStateFlow()
+    private val _comments = MutableStateFlow(PlayerComments())
+    val comments = _comments.asStateFlow()
+    private val _heartLoading = MutableStateFlow(false)
+    val heartLoading = _heartLoading.asStateFlow()
+    private var actionEpoch = 0L
+    private var commentsJob: Job? = null
+    private var heartStartJob: Job? = null
+    private val heartMutex = Mutex()
+    private val netease = container.neteaseSongActions
     init { viewModelScope.launch {
         queue.map { it.current?.takeUnless { song -> song.video } }.distinctUntilChanged().collectLatest { song ->
             if (song == null) { _lyrics.value = LyricsUiState(); return@collectLatest }
@@ -32,6 +53,110 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
             _lyrics.value = LyricsUiState(result.document, error = result.error, issues = result.issues, songId = song.id)
         }
     } }
+    init {
+        viewModelScope.launch {
+            combine(queue.map { NeteaseSongActionsRepository.songId(it.current) }.distinctUntilChanged(),
+                container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged()) {
+                    id, revision, server -> id to (revision to server)
+                }.collectLatest { (id, _) ->
+                actionEpoch++
+                commentsJob?.cancel()
+                _comments.value = PlayerComments(songId = id)
+                _actions.value = PlayerSongActions(songId = id)
+                if (id == null) return@collectLatest
+                supervisorScope {
+                    launch { val result = appResult { netease.likeCount(id) }; if (result is AppResult.Success) _actions.update { it.copy(likeCount = result.value) } }
+                    launch { val result = appResult { netease.comments(id, limit = 1) }; if (result is AppResult.Success) _actions.update { it.copy(commentCount = result.value.total?.takeIf { n -> n >= 0 }) } }
+                    launch { val result = appResult { netease.isLiked(id) }; if (result is AppResult.Success) _actions.update { it.copy(liked = result.value) } }
+                }
+            }
+        }
+        viewModelScope.launch {
+            combine(queue.map { Triple(it.mode, it.heartPlaylistId, if (it.songs.lastIndex - it.index <= 2) NeteaseSongActionsRepository.songId(it.current) else null) }.distinctUntilChanged(),
+                state.map { it.mode }.distinctUntilChanged(), container.accountRepository.sessionRevision,
+                settings.map { it.server }.distinctUntilChanged()) { context, playerMode, _, _ -> context to playerMode }
+                .collectLatest { (context, playerMode) ->
+                    val (mode, playlistId, id) = context
+                    if (mode != PlaybackMode.HEART || playlistId <= 0 || id == null || playerMode != PlayerMode.LOCAL) return@collectLatest
+                    val epoch = actionEpoch
+                    heartMutex.withLock {
+                        _heartLoading.value = true
+                        try {
+                            when (val result = appResult { netease.heartList(id, playlistId) }) {
+                                is AppResult.Success -> if (epoch == actionEpoch && state.value.mode == PlayerMode.LOCAL) player.queue.appendHeart(result.value.songs, playlistId)
+                                is AppResult.Failure -> if (epoch == actionEpoch) _actions.update { it.copy(error = "心动推荐：${result.kind.message}") }
+                            }
+                        } finally { _heartLoading.value = false }
+                    }
+                }
+        }
+    }
+    fun toggleNeteaseLike() {
+        val id = NeteaseSongActionsRepository.songId(queue.value.current) ?: return
+        if (_actions.value.liking) return
+        val epoch = actionEpoch
+        _actions.update { it.copy(liking = true, error = null) }
+        viewModelScope.launch {
+            try {
+                when (val result = appResult { netease.toggleLiked(id) }) {
+                    is AppResult.Success -> if (epoch == actionEpoch) {
+                        _actions.update { it.copy(liked = result.value) }
+                        val count = appResult { netease.likeCount(id, fresh = true) }
+                        if (epoch == actionEpoch && count is AppResult.Success) _actions.update { it.copy(likeCount = count.value) }
+                    }
+                    is AppResult.Failure -> if (epoch == actionEpoch) _actions.update { it.copy(error = result.kind.message) }
+                }
+            } finally { if (epoch == actionEpoch) _actions.update { it.copy(liking = false) } }
+        }
+    }
+    fun loadComments(more: Boolean = false) {
+        val id = NeteaseSongActionsRepository.songId(queue.value.current) ?: return
+        if (_comments.value.loading || more && !_comments.value.more) return
+        val epoch = actionEpoch
+        val previous = _comments.value
+        _comments.value = if (more) previous.copy(loading = true, error = null) else PlayerComments(songId = id, loading = true)
+        commentsJob = viewModelScope.launch {
+            val offset = if (more) previous.nextOffset else 0
+            when (val result = appResult { netease.comments(id, offset, fresh = true) }) {
+                is AppResult.Success -> if (epoch == actionEpoch) {
+                    val page = result.value
+                    _comments.value = PlayerComments(id, page.total, if (more) previous.hot else page.hotComments,
+                        ((if (more) previous.latest else emptyList()) + page.comments).distinctBy { it.commentId },
+                        page.more && page.comments.isNotEmpty(), offset + page.comments.size)
+                    _actions.update { it.copy(commentCount = page.total?.takeIf { n -> n >= 0 }) }
+                }
+                is AppResult.Failure -> if (epoch == actionEpoch) _comments.update { it.copy(loading = false, error = result.kind.message) }
+            }
+        }
+    }
+    fun cyclePlaybackMode() {
+        heartStartJob?.cancel()
+        player.setMode(when (queue.value.mode) {
+            PlaybackMode.LIST -> PlaybackMode.ONE
+            PlaybackMode.ONE -> PlaybackMode.SHUFFLE
+            PlaybackMode.SHUFFLE, PlaybackMode.HEART -> PlaybackMode.LIST
+        })
+        _actions.update { it.copy(error = null) }
+    }
+    fun toggleHeartMode() {
+        if (queue.value.mode == PlaybackMode.HEART) { player.setMode(PlaybackMode.LIST); return }
+        if (_heartLoading.value) return
+        val id = NeteaseSongActionsRepository.songId(queue.value.current) ?: return
+        if (state.value.mode != PlayerMode.LOCAL) { _actions.update { it.copy(error = "请先退出一起听或结束投屏") }; return }
+        val epoch = actionEpoch
+        _actions.update { it.copy(error = null) }
+        heartStartJob = viewModelScope.launch {
+            heartMutex.withLock {
+                _heartLoading.value = true
+                try {
+                    when (val result = appResult { netease.heartList(id) }) {
+                        is AppResult.Success -> if (epoch == actionEpoch && state.value.mode == PlayerMode.LOCAL) player.startHeartMode(result.value.songs, result.value.playlistId)
+                        is AppResult.Failure -> if (epoch == actionEpoch) _actions.update { it.copy(error = result.kind.message) }
+                    }
+                } finally { _heartLoading.value = false }
+            }
+        }
+    }
     fun quality(value: io.github.currencortex.music.core.media.AudioQuality) = viewModelScope.launch {
         container.musicSettings.setQuality(value)
         player.qualityChanged()

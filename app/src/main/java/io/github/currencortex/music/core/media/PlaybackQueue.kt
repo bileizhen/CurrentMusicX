@@ -5,10 +5,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.random.Random
 
-@Serializable enum class PlaybackMode(val label: String) { LIST("列表循环"), ONE("单曲循环"), SHUFFLE("随机播放") }
+@Serializable enum class PlaybackMode(val label: String) { LIST("列表循环"), ONE("单曲循环"), SHUFFLE("随机播放"), HEART("心动模式") }
 @Serializable data class QueueSnapshot(val songs: List<Song> = emptyList(), val index: Int = -1,
     val positionMs: Long = 0, val mode: PlaybackMode = PlaybackMode.LIST, val quality: AudioQuality = AudioQuality.AUTO,
-    val shuffleHistory: List<Int> = emptyList(), val shuffleHistoryIndex: Int = -1) {
+    val shuffleHistory: List<Int> = emptyList(), val shuffleHistoryIndex: Int = -1,
+    val heartPlaylistId: Long = 0) {
     val current get() = songs.getOrNull(index)
 }
 class PlaybackQueue {
@@ -41,7 +42,8 @@ class PlaybackQueue {
         return s.songs.getOrNull(nextIndex(s, automatic = true, random = random))?.takeIf { it.id != s.current?.id && !it.video }
     }
     fun replace(songs: List<Song>, index: Int) {
-        state.value = resetHistory(state.value.copy(songs = songs.toList(), index = if (songs.isEmpty()) -1 else index.coerceIn(songs.indices), positionMs = 0))
+        state.value = resetHistory(state.value.copy(songs = songs.toList(), index = if (songs.isEmpty()) -1 else index.coerceIn(songs.indices), positionMs = 0,
+            mode = if (state.value.mode == PlaybackMode.HEART) PlaybackMode.LIST else state.value.mode, heartPlaylistId = 0))
     }
     fun restore(value: QueueSnapshot) {
         plannedShuffle = null
@@ -76,7 +78,20 @@ class PlaybackQueue {
     }
     fun select(index: Int) { if (index in state.value.songs.indices) state.value = resetHistory(state.value.copy(index = index, positionMs = 0)) }
     fun setMode(mode: PlaybackMode) {
-        if (state.value.mode != mode) state.value = resetHistory(state.value.copy(mode = mode))
+        if (state.value.mode != mode) state.value = resetHistory(state.value.copy(mode = mode, heartPlaylistId = 0))
+    }
+    fun startHeart(songs: List<Song>, playlistId: Long, positionMs: Long) {
+        val current = state.value.current ?: return
+        require(playlistId > 0)
+        state.value = resetHistory(state.value.copy(songs = (listOf(current) + songs).distinctBy { it.id },
+            index = 0, positionMs = positionMs.coerceAtLeast(0), mode = PlaybackMode.HEART, heartPlaylistId = playlistId))
+    }
+    fun appendHeart(songs: List<Song>, playlistId: Long) {
+        val s = state.value
+        if (s.mode != PlaybackMode.HEART || s.heartPlaylistId != playlistId) return
+        val existing = s.songs.map { it.id }.toSet()
+        val additions = songs.distinctBy { it.id }.filter { it.id !in existing }
+        if (additions.isNotEmpty()) state.value = s.copy(songs = s.songs + additions)
     }
     fun add(song: Song, next: Boolean = false) {
         val s = state.value

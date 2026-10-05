@@ -42,6 +42,10 @@ android {
         }
     }
     buildTypes {
+        getByName("debug") {
+            // Keep instrumentation separate from the user's signed release installation.
+            if (providers.gradleProperty("isolatedDebug").orNull == "true") applicationIdSuffix = ".verification"
+        }
         getByName("release") { signingConfig = keystoreProperties?.let { signingConfigs.getByName("release") } }
     }
     compileOptions {

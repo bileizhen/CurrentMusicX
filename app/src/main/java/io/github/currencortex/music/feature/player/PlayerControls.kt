@@ -1,5 +1,9 @@
 package io.github.currencortex.music.feature.player
 
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
+import io.github.currencortex.music.R
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -8,6 +12,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
@@ -15,9 +22,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -28,20 +33,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.yukonga.miuix.kmp.basic.Text
+import io.github.currencortex.music.data.song.formatNeteaseCount
 
 internal data class PlayerButtonVisual(val pressed: Boolean, val scale: Float, val glyphProgress: Float, val alpha: Float)
 internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("PlayerButtonVisuals")
 
 /** Keep 48dp touch targets while grouping the secondary actions near the center. */
-@Composable internal fun PlayerFunctionBar(modifier: Modifier = Modifier, content: @Composable RowScope.() -> Unit) {
-    Row(modifier.fillMaxWidth().height(56.dp).testTag("player_function_bar"),
-        horizontalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterHorizontally),
-        verticalAlignment = Alignment.CenterVertically, content = content)
+@Composable internal fun PlayerFunctionBar(modifier: Modifier = Modifier, actionCount: Int = 3, content: @Composable RowScope.() -> Unit) {
+    BoxWithConstraints(modifier.fillMaxWidth().height(56.dp).testTag("player_function_bar")) {
+        val gap = if (actionCount <= 3) 24.dp else ((maxWidth - 48.dp * actionCount) / (actionCount - 1)).coerceIn(0.dp, 12.dp)
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically, content = content)
+    }
 }
 
 @Composable internal fun PlayerTransport(vm: PlayerViewModel, onToggle: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
+    val actions by vm.actions.collectAsStateWithLifecycle()
     val knownDuration = state.durationMs.takeIf { it > 0 } ?: queue.current?.durationMs ?: 0
     val enabled = state.canControlPlayback && queue.current != null
     var drag by remember(queue.current?.id) { mutableStateOf<Float?>(null) }
@@ -66,6 +75,7 @@ internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("Pla
         Box(Modifier.fillMaxWidth().height(22.dp), contentAlignment = Alignment.Center) {
             val message = when {
                 state.error != null -> state.error
+                actions.error != null -> actions.error
                 !state.canControlPlayback -> "播放由房主或管理员控制"
                 state.loading -> "正在加载音源…"
                 else -> null
@@ -116,78 +126,61 @@ internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("Pla
             contentDescription = label; if (!enabled) disabled()
             this[PlayerButtonVisuals] = PlayerButtonVisual(pressed, scale.value, glyph.value, if (enabled) 1f else .28f)
         }, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(if (direction == 0) 40.dp else 30.dp).graphicsLayer {
+        Box(Modifier.size(if (direction == 0) 40.dp else 30.dp).graphicsLayer {
             scaleX = scale.value; scaleY = scaleX
             translationX = direction * 3.dp.toPx() * ((1 - scale.value) / .1f)
         }) {
             val ink = Color.White.copy(alpha = if (enabled) 1f else .28f)
-            if (direction == 0 && glyph.value <= .001f) {
-                drawPath(Path().apply { moveTo(size.width * .24f, size.height * .09f); lineTo(size.width * .87f, size.height * .5f); lineTo(size.width * .24f, size.height * .91f); close() }, ink)
-            } else if (direction == 0) {
-                // The two parts of a triangle open smoothly into the two pause bars.
-                val p = glyph.value
-                fun polygon(from: List<Offset>, to: List<Offset>) = Path().apply {
-                    from.indices.forEach { i ->
-                        val point = from[i] * (1 - p) + to[i] * p
-                        if (i == 0) moveTo(point.x * size.width, point.y * size.height)
-                        else lineTo(point.x * size.width, point.y * size.height)
-                    }
-                    close()
-                }
-                drawPath(polygon(listOf(Offset(.24f, .09f), Offset(.47f, .255f), Offset(.47f, .745f), Offset(.24f, .91f)),
-                    listOf(Offset(.2f, .12f), Offset(.4f, .12f), Offset(.4f, .88f), Offset(.2f, .88f))), ink)
-                drawPath(polygon(listOf(Offset(.47f, .255f), Offset(.87f, .5f), Offset(.87f, .5f), Offset(.47f, .745f)),
-                    listOf(Offset(.6f, .12f), Offset(.8f, .12f), Offset(.8f, .88f), Offset(.6f, .88f))), ink)
-            } else {
-                for (part in 0..1) {
-                    val x = size.width * (.08f + part * .43f)
-                    drawPath(Path().apply {
-                        if (direction > 0) { moveTo(x, size.height * .14f); lineTo(x + size.width * .43f, size.height * .5f); lineTo(x, size.height * .86f) }
-                        else { moveTo(x + size.width * .43f, size.height * .14f); lineTo(x, size.height * .5f); lineTo(x + size.width * .43f, size.height * .86f) }
-                        close()
-                    }, ink)
-                }
-            }
+            if (direction == 0) {
+                Image(painterResource(R.drawable.player_symbol_play_arrow_fill1), null,
+                    Modifier.fillMaxSize().graphicsLayer { alpha = 1 - glyph.value }, colorFilter = ColorFilter.tint(ink))
+                Image(painterResource(R.drawable.player_symbol_pause_fill1), null,
+                    Modifier.fillMaxSize().graphicsLayer { alpha = glyph.value }, colorFilter = ColorFilter.tint(ink))
+            } else Image(painterResource(if (direction < 0) R.drawable.player_symbol_skip_previous_fill1 else R.drawable.player_symbol_skip_next_fill1),
+                null, Modifier.fillMaxSize(), colorFilter = ColorFilter.tint(ink))
         }
     }
 }
 
-internal enum class PlayerIcon { COLLAPSE, MORE, LYRICS, QUEUE, CAST }
+internal enum class PlayerIcon { COLLAPSE, MORE, LYRICS, QUEUE, CAST, LIKE, COMMENT, REPEAT, REPEAT_ONE, SHUFFLE, HEART_MODE }
 
 @Composable internal fun PlayerIconButton(icon: PlayerIcon, label: String, onClick: () -> Unit,
-    modifier: Modifier = Modifier, selected: Boolean = false) {
+    modifier: Modifier = Modifier, selected: Boolean = false, count: Long? = null, showCount: Boolean = false,
+    enabled: Boolean = true, loading: Boolean = false) {
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
-    val scale = animateFloatAsState(if (pressed) .88f else 1f,
+    val scale = animateFloatAsState(if (pressed && enabled) .88f else 1f,
         tween(if (pressed) 90 else 140, easing = CubicBezierEasing(.2f, 0f, 0f, 1f)), label = "player action press")
     val opacity = animateFloatAsState(if (selected) 1f else .65f, tween(160), label = "player action selection")
-    Box(modifier.size(48.dp).clickable(role = Role.Button, interactionSource = interactions,
+    val rotation = if (loading) rememberInfiniteTransition(label = "action loading").animateFloat(0f, 360f,
+        infiniteRepeatable(tween(900, easing = LinearEasing)), label = "action spinner").value else 0f
+    Box(modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button, interactionSource = interactions,
         indication = null, onClick = onClick).semantics {
-            contentDescription = label; this.selected = selected
+            contentDescription = label + if (count != null) "，网易云数量 $count" else ""; this.selected = selected
+            if (!enabled) disabled()
             this[PlayerButtonVisuals] = PlayerButtonVisual(pressed, scale.value, 0f, opacity.value)
         }, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(24.dp).graphicsLayer { scaleX = scale.value; scaleY = scaleX }) {
-            val ink = Color.White.copy(alpha = opacity.value)
-            val stroke = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round)
-            fun point(x: Float, y: Float) = Offset(size.width * x, size.height * y)
-            when (icon) {
-                PlayerIcon.COLLAPSE -> drawPath(Path().apply { moveTo(size.width * .18f, size.height * .36f); lineTo(size.width * .5f, size.height * .67f); lineTo(size.width * .82f, size.height * .36f) }, ink, style = stroke)
-                PlayerIcon.MORE -> listOf(.2f, .5f, .8f).forEach { drawCircle(ink, 1.6.dp.toPx(), point(it, .5f)) }
-                PlayerIcon.QUEUE -> {
-                    listOf(.22f, .5f, .78f).forEach { drawCircle(ink, 1.3.dp.toPx(), point(.1f, it)); drawLine(ink, point(.3f, it), point(.9f, it), stroke.width, StrokeCap.Round) }
-                }
-                PlayerIcon.LYRICS -> {
-                    drawRoundRect(ink, point(.08f, .1f), Size(size.width * .84f, size.height * .67f), androidx.compose.ui.geometry.CornerRadius(3.dp.toPx()), style = stroke)
-                    drawPath(Path().apply { moveTo(size.width * .23f, size.height * .76f); lineTo(size.width * .23f, size.height * .92f); lineTo(size.width * .44f, size.height * .76f) }, ink, style = stroke)
-                    drawLine(ink, point(.27f, .33f), point(.73f, .33f), stroke.width, StrokeCap.Round)
-                    drawLine(ink, point(.27f, .54f), point(.55f, .54f), stroke.width, StrokeCap.Round)
-                }
-                PlayerIcon.CAST -> {
-                    drawPath(Path().apply { moveTo(size.width * .1f, size.height * .67f); lineTo(size.width * .1f, size.height * .16f); lineTo(size.width * .9f, size.height * .16f); lineTo(size.width * .9f, size.height * .67f) }, ink, style = stroke)
-                    drawPath(Path().apply { moveTo(size.width * .5f, size.height * .56f); lineTo(size.width * .22f, size.height * .9f); lineTo(size.width * .78f, size.height * .9f); close() }, ink)
-                }
-            }
-        }
+        val ink = (if (icon == PlayerIcon.LIKE && selected) Color(0xFFFF647C) else Color.White)
+            .copy(alpha = opacity.value * if (enabled) 1f else .4f)
+        val iconModifier = Modifier.size(24.dp).graphicsLayer { scaleX = scale.value; scaleY = scaleX }
+        if (loading) Canvas(iconModifier) {
+            drawArc(ink, rotation, 270f, false, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+        } else Image(painterResource(when (icon) {
+            PlayerIcon.COLLAPSE -> R.drawable.player_symbol_keyboard_arrow_down
+            PlayerIcon.MORE -> R.drawable.player_symbol_more_horiz
+            PlayerIcon.LYRICS -> R.drawable.player_symbol_lyrics
+            PlayerIcon.QUEUE -> R.drawable.player_symbol_queue_music
+            PlayerIcon.CAST -> R.drawable.player_symbol_airplay
+            PlayerIcon.LIKE -> if (selected) R.drawable.player_symbol_favorite_fill1 else R.drawable.player_symbol_favorite
+            PlayerIcon.COMMENT -> R.drawable.player_symbol_chat_bubble
+            PlayerIcon.REPEAT -> R.drawable.player_symbol_repeat
+            PlayerIcon.REPEAT_ONE -> R.drawable.player_symbol_repeat_one
+            PlayerIcon.SHUFFLE -> R.drawable.player_symbol_shuffle
+            PlayerIcon.HEART_MODE -> R.drawable.player_symbol_ecg_heart
+        }), null, iconModifier, colorFilter = ColorFilter.tint(ink))
+        if (showCount) Text(count?.let(::formatNeteaseCount) ?: "—", fontSize = 9.sp,
+            color = Color.White.copy(alpha = .8f), maxLines = 1,
+            modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp).testTag("${icon.name.lowercase()}_count"))
     }
 }
 

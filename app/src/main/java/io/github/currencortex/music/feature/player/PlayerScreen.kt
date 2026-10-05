@@ -40,7 +40,7 @@ import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import kotlinx.coroutines.launch
 
 private enum class PlayerContent { COVER, LYRICS }
-private enum class PlayerOverlay { NONE, QUEUE, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE }
+private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE }
 internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePosition")
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
@@ -49,6 +49,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val songActions by vm.actions.collectAsStateWithLifecycle()
+    val comments by vm.comments.collectAsStateWithLifecycle()
     var content by rememberSaveable { mutableStateOf(PlayerContent.COVER) }
     val pager = rememberPagerState(initialPage = content.ordinal) { 2 }
     val pagerArtwork = remember(pager) { PlayerPagerArtworkTransition { pager.currentPage + pager.currentPageOffsetFraction } }
@@ -60,6 +62,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val menuHost = LocalSongMenu.current
     val dismiss = { overlay = PlayerOverlay.NONE }
     LaunchedEffect(overlay) { onDialogActive(overlay != PlayerOverlay.NONE) }
+    LaunchedEffect(overlay, songActions.songId) { if (overlay == PlayerOverlay.COMMENTS) vm.loadComments() }
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     val indication = LocalIndication.current
     var lyricsCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
@@ -138,24 +141,13 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 Text("显示控制面板", color = Color.White.copy(alpha = .65f), fontSize = 12.sp,
                     modifier = Modifier.testTag("lyrics_reveal_controls").clickable(role = Role.Button) { controlsRevealed = true }
                         .padding(horizontal = 24.dp, vertical = 14.dp))
-            } else PlayerFunctionBar {
-                PlayerIconButton(PlayerIcon.LYRICS, if (content == PlayerContent.LYRICS) "显示封面" else "显示歌词", {
-                    scope.launch { pager.animateScrollToPage(if (pager.targetPage == 0) 1 else 0,
-                        animationSpec = tween(260, easing = LinearOutSlowInEasing)) }
-                }, Modifier.testTag("open_lyrics"), selected = content == PlayerContent.LYRICS)
-                if (onCast != null) PlayerIconButton(PlayerIcon.CAST, if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏", onCast,
-                    selected = state.mode == PlayerMode.CAST)
-                if (settings.lyricsDisplay.hideControls && content == PlayerContent.LYRICS)
-                    Text("隐藏", color = Color.White.copy(alpha = .65f), fontSize = 12.sp,
-                        modifier = Modifier.testTag("lyrics_conceal_controls").clickable(role = Role.Button) { controlsRevealed = false }
-                            .padding(horizontal = 12.dp, vertical = 14.dp))
-                PlayerIconButton(PlayerIcon.QUEUE, "播放队列，${queue.songs.size} 首", { overlay = PlayerOverlay.QUEUE }, Modifier.testTag("open_player_queue"))
-            }
+            } else PlayerSongActionsBar(vm, { overlay = PlayerOverlay.COMMENTS }, { overlay = PlayerOverlay.QUEUE })
         }
         }
         }
         when (overlay) {
             PlayerOverlay.NONE -> Unit
+            PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) })
             PlayerOverlay.QUEUE -> MusicDialog("播放队列 · ${queue.songs.size}", dismiss) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     TextButton(queue.mode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL, modifier = Modifier.weight(1f))
@@ -173,7 +165,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 }
             }
             PlayerOverlay.MODE -> MusicDialog("播放模式", dismiss) {
-                PlaybackMode.entries.forEach { mode -> TextButton((if (mode == queue.mode) "✓ " else "") + mode.label,
+                PlaybackMode.entries.filter { it != PlaybackMode.HEART }.forEach { mode -> TextButton((if (mode == queue.mode) "✓ " else "") + mode.label,
                     onClick = { vm.player.setMode(mode); overlay = PlayerOverlay.QUEUE }, enabled = state.mode == PlayerMode.LOCAL) }
             }
             PlayerOverlay.QUALITY -> MusicDialog("播放音质", dismiss) {
@@ -183,6 +175,16 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlayerOverlay.ACTIONS -> if (queue.current != null) MusicDialog("歌曲操作", dismiss) { actions?.invoke(queue.current!!) }
             PlayerOverlay.OPTIONS -> MusicDialog("播放与歌词", dismiss) {
                 Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                MusicDestinationRow(if (content == PlayerContent.LYRICS) "显示封面" else "显示歌词",
+                    modifier = Modifier.testTag("open_lyrics"), onClick = {
+                        dismiss()
+                        scope.launch { pager.animateScrollToPage(if (pager.targetPage == 0) 1 else 0,
+                            animationSpec = tween(260, easing = LinearOutSlowInEasing)) }
+                    })
+                if (onCast != null) MusicDestinationRow(if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏",
+                    modifier = Modifier.testTag("open_player_cast"), onClick = { dismiss(); onCast() })
+                if (controlsRevealed && settings.lyricsDisplay.hideControls && content == PlayerContent.LYRICS)
+                    MusicDestinationRow("隐藏控制面板", modifier = Modifier.testTag("lyrics_conceal_controls"), onClick = { controlsRevealed = false; dismiss() })
                 if (actions != null && queue.current != null) MusicDestinationRow("歌曲操作", onClick = {
                     val song = queue.current ?: return@MusicDestinationRow
                     if (menuHost == null) overlay = PlayerOverlay.ACTIONS

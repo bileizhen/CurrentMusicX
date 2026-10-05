@@ -171,6 +171,10 @@ class PlayerController(private val context: Context, override val queue: Playbac
     fun clear() { if (!localOnly()) return; ++transportGeneration; commandIntent = null; beforeVideo = null; queue.clear(); controller?.stop(); controller?.clearMediaItems(); state.value = PlayerState() }
     fun select(index: Int) { if (!localOnly()) return; queue.select(index); load() }
     fun setMode(mode: PlaybackMode) { if (!localOnly()) return; queue.setMode(mode) }
+    fun startHeartMode(songs: List<Song>, playlistId: Long) {
+        if (!localOnly()) return
+        queue.startHeart(songs, playlistId, state.value.positionMs)
+    }
     fun qualityChanged() { if (localOnly()) load(state.value.showPause,
         if (state.value.song?.id == queue.state.value.current?.id) state.value.positionMs else queue.state.value.positionMs) }
     fun acceptHighSpec() = scope.launch {
