@@ -29,11 +29,12 @@ fun coverRequestUrl(url: String, pixels: Int): String {
     val size = pixels.coerceIn(32, 1200)
     return parsed.newBuilder().scheme("https").setQueryParameter("param", "${size}y$size").build().toString()
 }
-@Composable fun MusicCover(url: String, modifier: Modifier = Modifier, pixels: Int = 160) {
+@Composable fun MusicCover(url: String, modifier: Modifier = Modifier, pixels: Int = 160,
+    cornerRadius: androidx.compose.ui.unit.Dp = 22.dp) {
     val context = LocalContext.current
     var loading by remember(url, pixels) { mutableStateOf(url.isNotBlank()) }
     var failed by remember(url, pixels) { mutableStateOf(url.isBlank()) }
-    Box(modifier.squircleClip(22.dp)) {
+    Box(modifier.squircleClip(cornerRadius)) {
     if (loading) MusicPlaceholder(Modifier.matchParentSize())
     if (failed) Box(Modifier.matchParentSize().background(MiuixTheme.colorScheme.onSurface.copy(alpha = .06f)), contentAlignment = androidx.compose.ui.Alignment.Center) { Text("♪", fontSize = 20.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .3f)) }
     AsyncImage(remember(context, url, pixels) { ImageRequest.Builder(context).data(coverRequestUrl(url, pixels)).size(pixels).build() },

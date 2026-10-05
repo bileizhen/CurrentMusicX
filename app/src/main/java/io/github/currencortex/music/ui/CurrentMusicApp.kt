@@ -146,7 +146,8 @@ fun CurrentMusicApp(container: AppContainer) {
     val roomLive by container.roomSession.state.collectAsStateWithLifecycle()
     val tabsState = rememberSaveableStateHolder()
     var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
-    LeiTheme(settings, darkSystemBars = if (backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null) {
+    var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
+    LeiTheme(settings, darkSystemBars = if (miniQueueOpen || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null) {
         var selected by rememberSaveable { mutableIntStateOf(0) }
         var startupRouted by rememberSaveable { mutableStateOf(false) }
         LaunchedEffect(container) {
@@ -183,7 +184,6 @@ fun CurrentMusicApp(container: AppContainer) {
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
         var roomDialogOpen by remember { mutableStateOf(false) }
         var playerDialogOpen by remember { mutableStateOf(false) }
-        var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
         var castDialogOpen by remember { mutableStateOf(false) }
         fun navigateBack() {
             if (roomDialogOpen || castDialogOpen || playerDialogOpen || miniQueueOpen || songMenu != null) return
@@ -296,7 +296,7 @@ fun CurrentMusicApp(container: AppContainer) {
             }
         }
         val page: @Composable () -> Unit = {
-        Box(Modifier.fillMaxSize().then(if (playerPresented) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
+        Box(Modifier.fillMaxSize().then(if (playerPresented || miniQueueOpen) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
         Column(Modifier.fillMaxSize().imePadding()) {
         NavDisplay(
             backStack = sceneStack,
@@ -452,12 +452,12 @@ fun CurrentMusicApp(container: AppContainer) {
                 visible = dockVisible,
                 miniPresent = miniAvailable, navigationInteractive = showRootNavigation && !keyboardOpen,
                 modifier = Modifier.align(Alignment.BottomCenter)
-                    .then(if (playerPresented) Modifier.clearAndSetSemantics {} else Modifier)
+                    .then(if (playerPresented || miniQueueOpen) Modifier.clearAndSetSemantics {} else Modifier)
                     .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) },
                 onOrigin = { dockOrigin = it }, mini = miniBody,
                 navigation = glassNavigation ?: { mod -> PlainFloatingBar(selected, labels, icons, { selected = it }, mod, embedded = true) })
         } else if (miniAvailable) RetainedOverlay(dockVisible, Modifier.align(Alignment.BottomCenter)
-            .then(if (playerPresented) Modifier.clearAndSetSemantics {} else Modifier)
+            .then(if (playerPresented || miniQueueOpen) Modifier.clearAndSetSemantics {} else Modifier)
             .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) }) {
             miniBody()
         }
@@ -492,10 +492,10 @@ fun CurrentMusicApp(container: AppContainer) {
                     onDialogActive = { playerDialogOpen = it })
             }
         }
+        if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm) { miniQueueOpen = false }
         }
         }
         songMenu?.let { SongActionsSheet(it) { songMenu = null } }
-        if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm) { miniQueueOpen = false }
         // XBlocker pattern: intercept completion when prediction is disabled. MIUIX
         // owns seeking, cancellation and settling otherwise. Popups are hosted after
         // navigation, once, and take precedence over returning to the parent page.

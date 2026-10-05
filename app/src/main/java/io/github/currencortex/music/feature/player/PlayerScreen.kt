@@ -58,6 +58,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val scope = rememberCoroutineScope()
     LaunchedEffect(pager.settledPage) { content = PlayerContent.entries[pager.settledPage] }
     var overlay by rememberSaveable { mutableStateOf(PlayerOverlay.NONE) }
+    val queueMotion = remember(overlay == PlayerOverlay.QUEUE) { QueuePageMotion() }
     var controlsRevealed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(settings.lyricsDisplay.hideControls) { controlsRevealed = false }
     val menuHost = LocalSongMenu.current
@@ -83,7 +84,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         // The artwork viewport uses light ink; dialogs below inherit the app appearance.
         MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
         CompositionLocalProvider(LocalIndication provides indication) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
+        Column(Modifier.fillMaxSize().graphicsLayer { translationY = -size.height * queueMotion.progress }
+            .then(if (overlay == PlayerOverlay.QUEUE) Modifier.semantics { hideFromAccessibility() } else Modifier)
+            .statusBarsPadding().navigationBarsPadding()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             .padding(horizontal = 24.dp).testTag("player_safe_content")
             .graphicsLayer { alpha = playerSheetContentAlpha(sheetProgress()) }) {
@@ -149,22 +152,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         when (overlay) {
             PlayerOverlay.NONE -> Unit
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) })
-            PlayerOverlay.QUEUE -> MusicDialog("播放队列 · ${queue.songs.size}", dismiss) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(queue.mode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL, modifier = Modifier.weight(1f).testTag("open_player_mode"))
-                    TextButton("清空", onClick = { vm.player.clear(); dismiss() }, enabled = state.mode == PlayerMode.LOCAL)
-                }
-                LazyColumn(Modifier.heightIn(max = 360.dp).testTag("player_queue_sheet")) {
-                    itemsIndexed(queue.songs, key = { index, song -> "${song.id}-$index" }) { index, song ->
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            MusicDestinationRow((if (index == queue.index) "▶ " else "") + song.name,
-                                { vm.player.select(index); dismiss() }, Modifier.weight(1f), summary = song.artists,
-                                enabled = state.mode == PlayerMode.LOCAL, chevron = false)
-                            TextButton("移除", onClick = { vm.player.remove(index) }, enabled = state.mode == PlayerMode.LOCAL)
-                        }
-                    }
-                }
-            }
+            PlayerOverlay.QUEUE -> PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss)
             PlayerOverlay.MODE -> MusicDialog("播放模式", dismiss) {
                 PlaybackMode.entries.forEach { mode -> TextButton((if (mode == queue.mode) "✓ " else "") + mode.label,
                     onClick = { vm.setPlaybackMode(mode); overlay = PlayerOverlay.QUEUE },
