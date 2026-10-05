@@ -118,12 +118,12 @@ private fun LegalDocument.route() = 3 + ordinal
 @Composable
 fun CurrentMusicApp(container: AppContainer) {
     val settings by container.settings.state.collectAsStateWithLifecycle()
-    val updateSettings by container.updateSettings.state.collectAsStateWithLifecycle()
     val settingsVm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container.settings) })
     val updateVm: UpdateSettingsViewModel = viewModel(factory = viewModelFactory { UpdateSettingsViewModel(container.updateSettings) })
 
-    LaunchedEffect(updateSettings.autoCheckOnLaunch) {
-        if (updateSettings.autoCheckOnLaunch) container.updates.checkOnLaunch()
+    // Decide from DataStore directly: the StateFlow's initial value can race the first disk read.
+    LaunchedEffect(Unit) {
+        if (container.updateSettings.snapshot().autoCheckOnLaunch) container.updates.checkOnLaunch()
     }
 
     val searchVm: SearchViewModel = viewModel(factory = viewModelFactory { SearchViewModel(container) })

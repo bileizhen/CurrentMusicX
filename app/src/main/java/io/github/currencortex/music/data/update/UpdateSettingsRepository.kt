@@ -24,14 +24,14 @@ class UpdateSettingsRepository(
 
     private fun read(preferences: Preferences) = UpdateSettings(
             autoCheckOnLaunch = preferences[autoCheck] ?: true,
-            channel = runCatching { UpdateChannel.valueOf(preferences[channel] ?: UpdateChannel.STABLE.name) }
-                .getOrDefault(UpdateChannel.STABLE),
+            channel = runCatching { UpdateChannel.valueOf(preferences[channel] ?: UpdateChannel.PRERELEASE.name) }
+                .getOrDefault(UpdateChannel.PRERELEASE),
             ignoredVersions = mapOf(UpdateChannel.STABLE to preferences[ignoredStable].orEmpty(),
                 UpdateChannel.PRERELEASE to preferences[ignoredPrerelease].orEmpty()),
         )
 
     val state: StateFlow<UpdateSettings> = dataStore.data.map(::read)
-        .stateIn(scope, SharingStarted.Eagerly, UpdateSettings(autoCheckOnLaunch = false))
+        .stateIn(scope, SharingStarted.Eagerly, UpdateSettings())
 
     suspend fun snapshot(): UpdateSettings = read(dataStore.data.first())
 

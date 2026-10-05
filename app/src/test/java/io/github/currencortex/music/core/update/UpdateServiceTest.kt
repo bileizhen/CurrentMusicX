@@ -4,6 +4,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.emptyPreferences
 import io.github.currencortex.music.core.logging.LogSink
+import io.github.currencortex.music.core.update.UpdateChannel
 import io.github.currencortex.music.data.update.UpdateSettingsRepository
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,8 +33,17 @@ class UpdateServiceTest {
         try { block(UpdateSettingsRepository(store, scope)) } finally { scope.cancel() }
     }
 
+    @Test fun defaultsAutoCheckOnPrereleaseChannel() = runBlocking {
+        scenario { settings ->
+            val defaults = settings.snapshot()
+            assertTrue(defaults.autoCheckOnLaunch)
+            assertEquals(UpdateChannel.PRERELEASE, defaults.channel)
+        }
+    }
+
     @Test fun automaticPromptsRespectIgnoreSettingsAndManualChecksOverrideIt() = runBlocking {
         scenario { settings ->
+            settings.setChannel(UpdateChannel.STABLE)
             val service = UpdateService(ReleaseChecker { release }, settings, logger)
             service.check()
             assertTrue(service.dialogVisible.value)

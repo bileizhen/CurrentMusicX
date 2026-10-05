@@ -4,6 +4,6 @@ import io.github.currencortex.music.core.update.UpdateChannel
 
 data class UpdateSettings(
     val autoCheckOnLaunch: Boolean = true,
-    val channel: UpdateChannel = UpdateChannel.STABLE,
+    val channel: UpdateChannel = UpdateChannel.PRERELEASE,
     val ignoredVersions: Map<UpdateChannel, String> = emptyMap(),
 )
