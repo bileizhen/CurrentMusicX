@@ -22,7 +22,12 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val sessi
         val value = api.request("GET", "ncm/$path", query, authenticated = expected.token != null, expectedSession = expected)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         val code = (value as? JsonObject)?.get("code")?.jsonPrimitive?.intOrNull
-        if (code != null && code != 200) throw ApiException(if (code in listOf(301, 401)) ErrorKind.NeteaseBindingRequired else ErrorKind.Server, code)
+        if (code != null && code != 200) throw ApiException(when {
+            code in listOf(301, 401) -> ErrorKind.NeteaseBindingRequired
+            path == "playmode/intelligence/list" && code == 400 &&
+                (value as? JsonObject)?.get("message")?.jsonPrimitive?.contentOrNull?.contains("歌单不存在") == true -> ErrorKind.NeteaseLikedPlaylistUnavailable
+            else -> ErrorKind.Server
+        }, code)
         return value
     }
     private suspend fun binding(expected: RequestSession): BindingState {
@@ -68,13 +73,17 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val sessi
     suspend fun heartList(seedId: Long, playlistId: Long? = null): NeteaseHeartList = withContext(Dispatchers.Default) {
         val expected = session()
         val bound = binding(expected)
-        var pid = bound.likedPlaylistId.takeIf { it > 0 }
-        if (pid == null) {
-            val lists = request("user/playlist", mapOf("uid" to "${bound.profile!!.uid}", "limit" to "100"), expected) as? JsonObject
-            pid = (lists?.get("playlist") as? JsonArray)?.mapNotNull { it as? JsonObject }
-                ?.firstOrNull { it["specialType"]?.jsonPrimitive?.intOrNull == 5 }?.get("id")?.jsonPrimitive?.longOrNull
+        val uid = bound.profile!!.uid
+        // Binding's ncmLikedPlId refers to a CurrentMusic import. Obtain the upstream ID separately.
+        val pid = reads.read("liked-playlist/$uid") {
+            val lists = request("user/playlist", mapOf("uid" to "$uid", "limit" to "100"), expected) as? JsonObject
+            (lists?.get("playlist") as? JsonArray)?.mapNotNull { it as? JsonObject }
+                ?.firstOrNull { item ->
+                    val owner = (item["creator"] as? JsonObject)?.get("userId")?.jsonPrimitive?.longOrNull
+                    item["specialType"]?.jsonPrimitive?.intOrNull == 5 && (owner == null || owner == uid)
+                }?.get("id")?.jsonPrimitive?.longOrNull?.takeIf { it > 0 }
+                ?: throw ApiException(ErrorKind.NeteaseLikedPlaylistUnavailable)
         }
-        if (pid == null || pid <= 0) throw ApiException(ErrorKind.NotFound)
         // Restored recommendations may belong to an account that has since been replaced.
         if (playlistId != null && playlistId != pid) throw ApiException(ErrorKind.NeteaseBindingRequired)
         val raw = request("playmode/intelligence/list", mapOf("id" to "$seedId", "sid" to "$seedId", "pid" to "$pid", "count" to "20"), expected) as? JsonObject
@@ -82,7 +91,7 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val sessi
             val info = (entry as? JsonObject)?.get("songInfo") as? JsonObject ?: return@mapNotNull null
             nativeSong(info)
         }.distinctBy { it.id }.filter { it.id != seedId }
-        if (songs.isEmpty()) throw ApiException(ErrorKind.NotFound)
+        if (songs.isEmpty()) throw ApiException(ErrorKind.NeteaseHeartNoRecommendations)
         NeteaseHeartList(pid, songs)
     }
     private data class Count(val value: Long?)

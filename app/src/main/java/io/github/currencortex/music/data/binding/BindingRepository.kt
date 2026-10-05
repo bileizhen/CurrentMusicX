@@ -8,7 +8,8 @@ import java.net.URLEncoder
 @Serializable data class BoundProfile(val uid: Long = 0, val nickname: String = "", val avatar: String = "")
 @Serializable data class BindingState(val bound: Boolean = false, val stale: Boolean = false,
     val profile: BoundProfile? = null, val lastSync: Long = 0, val lastSyncCount: Int = 0,
-    @kotlinx.serialization.SerialName("ncmLikedPlId") val likedPlaylistId: Long = 0)
+    // This is the imported CurrentMusic playlist ID, not an upstream NetEase playlist ID.
+    @kotlinx.serialization.SerialName("ncmLikedPlId") val syncedLikedPlaylistId: Long = 0)
 @Serializable data class LiveBinding(val bound: Boolean = false, val ok: Boolean = false, val profile: BoundProfile? = null)
 @Serializable data class QrKey(val key: String)
 @Serializable data class QrStatus(val code: Int, val profile: BoundProfile? = null)

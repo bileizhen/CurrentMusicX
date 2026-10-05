@@ -13,7 +13,9 @@ enum class ErrorKind(val message: String) {
     AudioKeyRejected("LeiZ API Key 无效或没有访问权限，请检查音源设置"),
     AudioUnavailable("LeiZ 未提供这首歌的音源，可能受 VIP 权限限制"),
     AudioSourceChanged("音源设置已改变，请重新播放"),
-    NeteaseBindingRequired("请先绑定网易云账号；绑定失效时请重新登录网易云")
+    NeteaseBindingRequired("请先绑定网易云账号；绑定失效时请重新登录网易云"),
+    NeteaseLikedPlaylistUnavailable("无法读取网易云“我喜欢的音乐”歌单，请检查网易云绑定"),
+    NeteaseHeartNoRecommendations("暂时没有心动推荐，请换一首歌再试")
 }
 class ApiException(val kind: ErrorKind, val status: Int = 0) : IOException(kind.message)
 sealed interface AppResult<out T> {
