@@ -1,9 +1,17 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
+}
+
+// keystore.properties (gitignored): storeFile / storePassword / keyAlias / keyPassword.
+// Absent file keeps assembleRelease unsigned, e.g. on CI without signing secrets.
+val keystoreProperties = rootProject.file("keystore.properties").takeIf { it.isFile }?.let { file ->
+    Properties().apply { file.inputStream().use(::load) }
 }
 
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
@@ -23,6 +31,19 @@ android {
     }
 
     buildFeatures { compose = true; buildConfig = true }
+    signingConfigs {
+        if (keystoreProperties != null) {
+            create("release") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") { signingConfig = keystoreProperties?.let { signingConfigs.getByName("release") } }
+    }
     compileOptions {
         encoding = "UTF-8"
         sourceCompatibility = JavaVersion.VERSION_17
