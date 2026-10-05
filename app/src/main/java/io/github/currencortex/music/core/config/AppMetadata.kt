@@ -13,7 +13,12 @@ object AppMetadata {
     const val LICENSE = "GPL-3.0-only"
 
     const val PROJECT_URL = "https://github.com/$GITHUB_OWNER/$GITHUB_REPO"
-    const val RELEASES_URL = "$PROJECT_URL/releases"
+    // Native releases live in a dedicated repository so they never mix with the
+    // web client's releases published on backrooms-yrc/CurrentMusic.
+    const val RELEASES_OWNER = "bileizhen"
+    const val RELEASES_REPO = "CurrentMusicX"
+    const val RELEASES_PROJECT_URL = "https://github.com/$RELEASES_OWNER/$RELEASES_REPO"
+    const val RELEASES_URL = "$RELEASES_PROJECT_URL/releases"
     const val ISSUES_URL = "$PROJECT_URL/issues"
     const val AUTHOR_URL = "https://github.com/$GITHUB_OWNER"
     // Optional product-specific URLs. Leave blank to use bundled documents.

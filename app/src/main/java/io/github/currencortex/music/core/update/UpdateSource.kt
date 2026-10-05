@@ -7,7 +7,7 @@ enum class UpdateSource(val label: String) {
     GITHUB("GitHub 原站"), MIRROR("配置的镜像");
     fun url(release: AppRelease): String {
         val official = requireNotNull(release.apkUrl) { "此发布没有 APK" }
-        require(official.startsWith("${AppMetadata.PROJECT_URL}/releases/download/")) { "更新来源不匹配" }
+        require(official.startsWith("${AppMetadata.RELEASES_PROJECT_URL}/releases/download/")) { "更新来源不匹配" }
         val prefix = if (this == MIRROR) AppMetadata.UPDATE_MIRROR_PREFIX else ""
         if (this == MIRROR) require(prefix.isNotBlank()) { "未配置镜像" }
         val result = prefix + official
