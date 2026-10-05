@@ -3,6 +3,7 @@ package io.github.currencortex.music.feature.player
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.PagerDefaults
 import androidx.compose.foundation.pager.rememberPagerState
@@ -19,8 +20,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,6 +41,7 @@ import top.yukonga.miuix.kmp.theme.darkColorScheme
 import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
 
 private enum class PlayerContent { COVER, LYRICS }
 private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE }
@@ -59,12 +63,19 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val scope = rememberCoroutineScope()
     LaunchedEffect(pager.settledPage) { content = PlayerContent.entries[pager.settledPage] }
     var overlay by rememberSaveable { mutableStateOf(PlayerOverlay.NONE) }
-    val queueMotion = remember(overlay == PlayerOverlay.QUEUE) { QueuePageMotion() }
+    val queueMotion = remember { QueuePageMotion() }
+    var queueGesture by remember { mutableStateOf(false) }
+    var queueGestureJob by remember { mutableStateOf<Job?>(null) }
     var controlsRevealed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(settings.lyricsDisplay.hideControls) { controlsRevealed = false }
     val menuHost = LocalSongMenu.current
-    val dismiss = { overlay = PlayerOverlay.NONE }
-    LaunchedEffect(overlay) { onDialogActive(overlay != PlayerOverlay.NONE) }
+    val dismiss = {
+        queueGestureJob?.cancel()
+        queueGestureJob = null
+        queueGesture = false
+        overlay = PlayerOverlay.NONE
+    }
+    LaunchedEffect(overlay, queueGesture) { onDialogActive(overlay != PlayerOverlay.NONE || queueGesture) }
     LaunchedEffect(overlay, songActions.songId) { if (overlay == PlayerOverlay.COMMENTS) vm.loadComments() }
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     val indication = LocalIndication.current
@@ -75,10 +86,35 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val sheetDrag = LocalPlayerSheetDrag.current
     val colors = remember { darkColorScheme(primary = Color.White, onPrimary = Color(0xFF282629),
         background = Color(0xFF262428), surface = Color(0xFF262428)) }
+    val queueFling = with(LocalDensity.current) { 700.dp.toPx() }
+    var queueHeight by remember { mutableFloatStateOf(1f) }
+    val upDrag = PlayerUpDrag(begin = {
+            queueMotion.dragged = 0f
+            queueGesture = true
+        }, drag = { delta ->
+            queueMotion.dragged?.let { queueMotion.dragged = (it - delta / queueHeight).coerceIn(0f, 1f) }
+        }, end = end@{ velocity, cancelled ->
+            // Back or the queue's close gesture may already have taken over this drag.
+            if (!queueGesture || queueMotion.dragged == null) return@end
+            val start = queueMotion.progress
+            val open = !cancelled && (if (kotlin.math.abs(velocity) > queueFling) velocity < 0 else start >= .14f)
+            queueGestureJob = scope.launch {
+                queueMotion.animation.snapTo(start)
+                queueMotion.dragged = null
+                queueMotion.animation.animateTo(if (open) 1f else 0f,
+                    tween((300 * (if (open) 1 - start else start)).toInt().coerceAtLeast(120),
+                        easing = CubicBezierEasing(.2f, 0f, .2f, 1f)))
+                if (open) overlay = PlayerOverlay.QUEUE
+                queueGesture = false
+                queueGestureJob = null
+            }
+    })
     BoxWithConstraints(Modifier.fillMaxSize().testTag("player_screen")
-        .then(if (overlay == PlayerOverlay.NONE) Modifier.playerSheetDrag(fromMini = false) {
-            listOfNotNull(lyricsCoordinates, previewCoordinates)
-        } else Modifier)) {
+        .onSizeChanged { queueHeight = it.height.toFloat().coerceAtLeast(1f) }
+        .then(if (overlay == PlayerOverlay.NONE) Modifier.playerSheetDrag(fromMini = false,
+            upDrag = if (expanded) upDrag else null, enabled = !queueGesture) {
+                listOfNotNull(lyricsCoordinates, previewCoordinates)
+            } else Modifier)) {
         val immersive = settings.lyricsDisplay.hideControls && !controlsRevealed &&
             (content == PlayerContent.LYRICS || maxWidth >= 648.dp)
         PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize())
@@ -86,7 +122,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
         CompositionLocalProvider(LocalIndication provides indication) {
         Column(Modifier.fillMaxSize().graphicsLayer { translationY = -size.height * queueMotion.progress }
-            .then(if (overlay == PlayerOverlay.QUEUE) Modifier.semantics { hideFromAccessibility() } else Modifier)
+            .then(if (overlay == PlayerOverlay.QUEUE || queueGesture) Modifier.semantics { hideFromAccessibility() } else Modifier)
             .statusBarsPadding().navigationBarsPadding()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
             .padding(horizontal = 24.dp).testTag("player_safe_content")
@@ -146,14 +182,18 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 Text("显示控制面板", color = Color.White.copy(alpha = .65f), fontSize = 12.sp,
                     modifier = Modifier.testTag("lyrics_reveal_controls").clickable(role = Role.Button) { controlsRevealed = true }
                         .padding(horizontal = 24.dp, vertical = 14.dp))
-            } else PlayerSongActionsBar(vm, { overlay = PlayerOverlay.COMMENTS }, { overlay = PlayerOverlay.QUEUE })
+            } else PlayerSongActionsBar(vm, { overlay = PlayerOverlay.COMMENTS }, {
+                scope.launch { queueMotion.animation.snapTo(0f); overlay = PlayerOverlay.QUEUE }
+            })
         }
         }
         }
+        if (queueGesture || overlay == PlayerOverlay.QUEUE)
+            PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss)
         when (overlay) {
             PlayerOverlay.NONE -> Unit
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) })
-            PlayerOverlay.QUEUE -> PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss)
+            PlayerOverlay.QUEUE -> Unit
             PlayerOverlay.MODE -> MusicDialog("播放模式", dismiss) {
                 PlaybackMode.entries.forEach { mode -> TextButton((if (mode == queue.mode) "✓ " else "") + mode.label,
                     onClick = { vm.setPlaybackMode(mode); overlay = PlayerOverlay.QUEUE },

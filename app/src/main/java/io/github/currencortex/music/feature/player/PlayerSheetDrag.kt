@@ -67,11 +67,21 @@ internal class PlayerSheetDragController(val state: PlayerSheetState, private va
 }
 internal val LocalPlayerSheetDrag = staticCompositionLocalOf<PlayerSheetDragController?> { null }
 
+internal data class PlayerUpDrag(
+    val begin: () -> Unit,
+    val drag: (Float) -> Unit,
+    val end: (Float, Boolean) -> Unit,
+)
+
 /** Direction locking leaves the mini player's horizontal song gesture and lyric scrolling intact. */
 @Composable internal fun Modifier.playerSheetDrag(fromMini: Boolean,
+    upDrag: PlayerUpDrag? = null,
+    enabled: Boolean = true,
     excludedArea: () -> List<LayoutCoordinates> = { emptyList() }): Modifier {
     val controller = LocalPlayerSheetDrag.current ?: return this
     val exclusion by rememberUpdatedState(excludedArea)
+    val upward by rememberUpdatedState(upDrag)
+    val available by rememberUpdatedState(enabled)
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     return onGloballyPositioned { coordinates = it }.pointerInput(controller, fromMini) {
         val velocity = VelocityTracker()
@@ -80,6 +90,7 @@ internal val LocalPlayerSheetDrag = staticCompositionLocalOf<PlayerSheetDragCont
             // entire lyric viewport and horizontal controls untouched from pointer down.
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                if (!available) return@awaitEachGesture
                 val rootDown = coordinates?.localToRoot(down.position) ?: down.position
                 val root = coordinates ?: return@awaitEachGesture
                 if (exclusion().any { excluded ->
@@ -92,6 +103,10 @@ internal val LocalPlayerSheetDrag = staticCompositionLocalOf<PlayerSheetDragCont
                 velocity.addPosition(down.uptimeMillis, rootDown)
                 var travel = Offset.Zero
                 var started = false
+                var queueDrag: PlayerUpDrag? = null
+                fun finish(speed: Float, cancelled: Boolean = false) {
+                    queueDrag?.end?.invoke(speed, cancelled) ?: controller.end(speed, cancelled)
+                }
                 try {
                     while (true) {
                         val change = awaitPointerEvent(PointerEventPass.Initial).changes.firstOrNull { it.id == down.id }
@@ -99,7 +114,7 @@ internal val LocalPlayerSheetDrag = staticCompositionLocalOf<PlayerSheetDragCont
                         velocity.addPosition(change.uptimeMillis, coordinates?.localToRoot(change.position) ?: change.position)
                         if (change.isConsumed) break
                         if (!change.pressed) {
-                            if (started) { controller.end(velocity.calculateVelocity().y); started = false }
+                            if (started) { finish(velocity.calculateVelocity().y); started = false }
                             break
                         }
                         val delta = change.positionChange()
@@ -107,14 +122,16 @@ internal val LocalPlayerSheetDrag = staticCompositionLocalOf<PlayerSheetDragCont
                             travel += delta
                             if (abs(travel.x) > viewConfiguration.touchSlop && abs(travel.x) >= abs(travel.y)) break
                             if (abs(travel.y) <= viewConfiguration.touchSlop) continue
-                            controller.begin(fromMini = false)
+                            queueDrag = upward.takeIf { travel.y < 0 }
+                            queueDrag?.begin?.invoke() ?: controller.begin(fromMini = false)
                             started = true
-                            controller.drag(travel.y - sign(travel.y) * viewConfiguration.touchSlop)
-                        } else controller.drag(delta.y)
+                            val amount = travel.y - sign(travel.y) * viewConfiguration.touchSlop
+                            queueDrag?.drag?.invoke(amount) ?: controller.drag(amount)
+                        } else queueDrag?.drag?.invoke(delta.y) ?: controller.drag(delta.y)
                         change.consume()
                     }
                 } finally {
-                    if (started) controller.end(0f, cancelled = true)
+                    if (started) finish(0f, cancelled = true)
                 }
             }
             return@pointerInput

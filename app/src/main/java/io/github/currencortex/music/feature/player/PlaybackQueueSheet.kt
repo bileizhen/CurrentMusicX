@@ -110,7 +110,10 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         if (motion.dragged != null) settle(if (kotlin.math.abs(velocity) > fling) velocity > 0 else motion.progress < .82f)
     }
     LaunchedEffect(motion) {
-        settling = scope.launch { motion.animation.animateTo(1f, tween(300, easing = CubicBezierEasing(.2f, 0f, .2f, 1f))) }
+        // Opening from the player is driven by its existing pointer stream until release.
+        if (motion.dragged == null) settling = scope.launch {
+            motion.animation.animateTo(1f, tween(300, easing = CubicBezierEasing(.2f, 0f, .2f, 1f)))
+        }
     }
     LaunchedEffect(queue.current?.id) {
         if (queue.index >= 0) list.scrollToItem((queue.index - 2).coerceAtLeast(0))
