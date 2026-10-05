@@ -51,6 +51,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val settings by vm.settings.collectAsStateWithLifecycle()
     val songActions by vm.actions.collectAsStateWithLifecycle()
     val comments by vm.comments.collectAsStateWithLifecycle()
+    val heartLoading by vm.heartLoading.collectAsStateWithLifecycle()
     var content by rememberSaveable { mutableStateOf(PlayerContent.COVER) }
     val pager = rememberPagerState(initialPage = content.ordinal) { 2 }
     val pagerArtwork = remember(pager) { PlayerPagerArtworkTransition { pager.currentPage + pager.currentPageOffsetFraction } }
@@ -150,7 +151,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) })
             PlayerOverlay.QUEUE -> MusicDialog("播放队列 · ${queue.songs.size}", dismiss) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(queue.mode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL, modifier = Modifier.weight(1f))
+                    TextButton(queue.mode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL, modifier = Modifier.weight(1f).testTag("open_player_mode"))
                     TextButton("清空", onClick = { vm.player.clear(); dismiss() }, enabled = state.mode == PlayerMode.LOCAL)
                 }
                 LazyColumn(Modifier.heightIn(max = 360.dp).testTag("player_queue_sheet")) {
@@ -165,8 +166,11 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 }
             }
             PlayerOverlay.MODE -> MusicDialog("播放模式", dismiss) {
-                PlaybackMode.entries.filter { it != PlaybackMode.HEART }.forEach { mode -> TextButton((if (mode == queue.mode) "✓ " else "") + mode.label,
-                    onClick = { vm.player.setMode(mode); overlay = PlayerOverlay.QUEUE }, enabled = state.mode == PlayerMode.LOCAL) }
+                PlaybackMode.entries.forEach { mode -> TextButton((if (mode == queue.mode) "✓ " else "") + mode.label,
+                    onClick = { vm.setPlaybackMode(mode); overlay = PlayerOverlay.QUEUE },
+                    enabled = state.mode == PlayerMode.LOCAL && (mode != PlaybackMode.HEART ||
+                        (!heartLoading && io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(queue.current) != null)),
+                    modifier = Modifier.testTag("playback_mode_${mode.name}").semantics { selected = mode == queue.mode }) }
             }
             PlayerOverlay.QUALITY -> MusicDialog("播放音质", dismiss) {
                 AudioQuality.entries.forEach { quality -> TextButton((if (quality == settings.quality) "✓ " else "") + quality.label,

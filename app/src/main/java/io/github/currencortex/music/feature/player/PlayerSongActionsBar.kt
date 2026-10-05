@@ -16,7 +16,7 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
     val heartLoading by vm.heartLoading.collectAsStateWithLifecycle()
     val id = NeteaseSongActionsRepository.songId(queue.current)
     val current = actions.takeIf { it.songId == id }
-    PlayerFunctionBar(actionCount = 5) {
+    PlayerFunctionBar(actionCount = 4) {
         PlayerIconButton(PlayerIcon.LIKE, if (current?.liked == true) "取消喜欢" else "喜欢", vm::toggleNeteaseLike,
             Modifier.testTag("player_like"), selected = current?.liked == true, count = current?.likeCount,
             showCount = true, enabled = id != null && current?.liking != true, loading = current?.liking == true)
@@ -25,12 +25,10 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
         PlayerIconButton(when (queue.mode) {
             PlaybackMode.ONE -> PlayerIcon.REPEAT_ONE
             PlaybackMode.SHUFFLE -> PlayerIcon.SHUFFLE
-            else -> PlayerIcon.REPEAT
-        }, if (queue.mode == PlaybackMode.HEART) PlaybackMode.LIST.label else queue.mode.label, vm::cyclePlaybackMode,
-            Modifier.testTag("player_cycle_mode"), enabled = player.mode == PlayerMode.LOCAL)
-        PlayerIconButton(PlayerIcon.HEART_MODE, if (queue.mode == PlaybackMode.HEART) "退出心动模式" else "心动模式",
-            vm::toggleHeartMode, Modifier.testTag("player_heart_mode"), selected = queue.mode == PlaybackMode.HEART,
-            enabled = id != null && player.mode == PlayerMode.LOCAL && !heartLoading, loading = heartLoading)
+            PlaybackMode.HEART -> PlayerIcon.HEART_MODE
+            PlaybackMode.LIST -> PlayerIcon.REPEAT
+        }, queue.mode.label, vm::cyclePlaybackMode, Modifier.testTag("player_cycle_mode"),
+            selected = queue.mode == PlaybackMode.HEART, enabled = player.mode == PlayerMode.LOCAL && !heartLoading, loading = heartLoading)
         PlayerIconButton(PlayerIcon.QUEUE, "播放列表，${queue.songs.size} 首", onQueue, Modifier.testTag("open_player_queue"))
     }
 }

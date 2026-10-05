@@ -130,19 +130,25 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
     fun cyclePlaybackMode() {
-        heartStartJob?.cancel()
-        player.setMode(when (queue.value.mode) {
+        setPlaybackMode(when (queue.value.mode) {
             PlaybackMode.LIST -> PlaybackMode.ONE
             PlaybackMode.ONE -> PlaybackMode.SHUFFLE
-            PlaybackMode.SHUFFLE, PlaybackMode.HEART -> PlaybackMode.LIST
+            PlaybackMode.SHUFFLE -> if (NeteaseSongActionsRepository.songId(queue.value.current) != null) PlaybackMode.HEART else PlaybackMode.LIST
+            PlaybackMode.HEART -> PlaybackMode.LIST
         })
-        _actions.update { it.copy(error = null) }
     }
-    fun toggleHeartMode() {
-        if (queue.value.mode == PlaybackMode.HEART) { player.setMode(PlaybackMode.LIST); return }
+    // Every entry point selects the same exclusive queue mode. HEART needs recommendations first.
+    fun setPlaybackMode(mode: PlaybackMode) {
+        if (state.value.mode != PlayerMode.LOCAL) { _actions.update { it.copy(error = "请先退出一起听或结束投屏") }; return }
+        if (mode != PlaybackMode.HEART) {
+            heartStartJob?.cancel()
+            player.setMode(mode)
+            _actions.update { it.copy(error = null) }
+            return
+        }
+        if (queue.value.mode == PlaybackMode.HEART) return
         if (_heartLoading.value) return
         val id = NeteaseSongActionsRepository.songId(queue.value.current) ?: return
-        if (state.value.mode != PlayerMode.LOCAL) { _actions.update { it.copy(error = "请先退出一起听或结束投屏") }; return }
         val epoch = actionEpoch
         _actions.update { it.copy(error = null) }
         heartStartJob = viewModelScope.launch {
