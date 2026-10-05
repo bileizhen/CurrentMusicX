@@ -207,9 +207,10 @@ class LyricsDisplayCapabilitiesTest {
             compose.onNodeWithTag("mini_lyric", useUnmergedTree = true).assertTextEquals("歌词显示预览") // Real end-time gap, not a stale lyric.
             compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(positionMs = 4500) }
             compose.onNodeWithTag("mini_cover").performClick()
+            compose.onNodeWithTag("lyrics_options").performClick()
             compose.onNodeWithTag("open_lyrics").performClick()
             compose.onNodeWithTag("lyrics_options").performClick()
-            compose.onNodeWithTag("open_lyrics_display").performClick()
+            compose.onNodeWithTag("open_lyrics_display").performScrollTo().performClick()
             compose.onNodeWithTag("lyrics_centered").performScrollTo().performClick()
             compose.onNodeWithTag("lyrics_font_strength").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(600f) }
             compose.onNodeWithTag("lyrics_stagger").performScrollTo().performClick()
@@ -232,6 +233,7 @@ class LyricsDisplayCapabilitiesTest {
             compose.onNodeWithTag("lyrics_reveal_controls").assertIsDisplayed().performClick()
             compose.onNodeWithTag("player_transport").assertIsDisplayed()
             save("player_screen", "lyrics-display-player-preview.png")
+            compose.onNodeWithTag("lyrics_options").performClick()
             compose.onNodeWithTag("lyrics_conceal_controls").performClick()
             compose.onNodeWithTag("player_transport").assertDoesNotExist()
             compose.onNodeWithTag("navigate_back").performClick()

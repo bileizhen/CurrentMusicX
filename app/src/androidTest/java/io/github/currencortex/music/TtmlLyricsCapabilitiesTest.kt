@@ -107,6 +107,7 @@ class TtmlLyricsCapabilitiesTest {
             compose.setContent { CurrentMusicApp(container) }
             compose.waitUntil(10000) { compose.onAllNodesWithTag("mini_cover").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("mini_cover").performClick()
+            compose.onNodeWithTag("lyrics_options").performClick()
             compose.onNodeWithTag("open_lyrics").performClick()
             compose.waitUntil(10000) { compose.onAllNodesWithText("循着星光", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("lyric_bg_0_0").assertExists()

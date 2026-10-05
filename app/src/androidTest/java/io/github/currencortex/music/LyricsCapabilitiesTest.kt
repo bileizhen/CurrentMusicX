@@ -155,6 +155,7 @@ class LyricsCapabilitiesTest {
                 assertFalse("Gesture handle must be light over the dark player", bars.isAppearanceLightNavigationBars)
                 assertFalse("Status icons must be light over the dark player", bars.isAppearanceLightStatusBars)
             }
+            compose.onNodeWithTag("lyrics_options").performClick()
             compose.onNodeWithTag("open_lyrics").performClick()
             compose.waitUntil(10000) { compose.onAllNodesWithTag("lyric_line_1").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("lyric_line_1").assertIsSelected()
@@ -171,14 +172,14 @@ class LyricsCapabilitiesTest {
             assertEquals(30f, lyricLayout().layoutInput.style.fontSize.value, 0f)
             assertEquals(io.github.currencortex.music.feature.lyrics.ui.LyricsFontFamily, lyricLayout().layoutInput.style.fontFamily)
             compose.onNodeWithTag("lyrics_options").performClick()
-            compose.onNodeWithTag("open_lyrics_display").assertIsDisplayed()
+            compose.onNodeWithTag("open_lyrics_display").performScrollTo().assertIsDisplayed()
             compose.mainClock.advanceTimeBy(800); compose.waitForIdle()
             androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()?.let { bitmap ->
                 java.io.File(context.externalCacheDir, "player-options-preview.png").outputStream().use {
                     bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                 }
             }
-            compose.onNodeWithTag("open_lyrics_display").performClick()
+            compose.onNodeWithTag("open_lyrics_display").performScrollTo().performClick()
             compose.onNodeWithTag("lyrics_font_size").performTouchInput {
                 swipe(start = androidx.compose.ui.geometry.Offset(width * .4f, height / 2f),
                     end = androidx.compose.ui.geometry.Offset(width - 1f, height / 2f), durationMillis = 500)
@@ -220,7 +221,7 @@ class LyricsCapabilitiesTest {
             compose.onNodeWithTag("lyric_line_1").assertIsSelected().assertIsDisplayed()
             compose.onNodeWithTag("player_toggle").assertIsDisplayed()
             compose.onNodeWithTag("lyrics_options").performClick()
-            compose.onNodeWithTag("open_lyrics_display").performClick()
+            compose.onNodeWithTag("open_lyrics_display").performScrollTo().performClick()
             compose.onNodeWithTag("lyrics_font_reset").performClick()
             compose.waitUntil(5000) { container.musicSettings.state.value.lyricsFontSize == 30f }
             compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
@@ -249,6 +250,7 @@ class LyricsCapabilitiesTest {
                     bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                 }
             }
+            compose.onNodeWithTag("lyrics_options").performClick()
             compose.onNodeWithTag("open_lyrics").performClick()
             compose.onNodeWithTag("lyrics_panel").assertDoesNotExist()
             compose.onNodeWithTag("player_screen").captureToImage().asAndroidBitmap().let { bitmap ->

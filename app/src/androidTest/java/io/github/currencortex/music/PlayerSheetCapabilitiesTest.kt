@@ -421,7 +421,7 @@ class PlayerSheetCapabilitiesTest {
         }
         compose.mainClock.advanceTimeBy(1000)
         assertEquals("Left swipe opens lyrics", 1f, page(), .001f)
-        compose.onNodeWithContentDescription("显示封面").assertIsDisplayed()
+        compose.onNodeWithTag("lyrics_panel").assertIsDisplayed()
         compose.onNodeWithTag("lyrics_panel").performTouchInput {
             swipe(androidx.compose.ui.geometry.Offset(width * .15f, height * .5f),
                 androidx.compose.ui.geometry.Offset(width * .85f, height * .5f), 180)
@@ -492,6 +492,7 @@ class PlayerSheetCapabilitiesTest {
         assertFalse("A control-area drag must not toggle playback", container.playerController.state.value.playing)
         title.performClick()
         compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("lyrics_options").performClick()
         compose.onNodeWithTag("open_lyrics").performClick()
         compose.mainClock.advanceTimeBy(500)
         compose.onNodeWithTag("lyrics_panel").performTouchInput {
@@ -601,17 +602,19 @@ class PlayerSheetCapabilitiesTest {
         runBlocking { container.settings.edit { it.copy(predictiveBack = false) } }
         start()
         compose.onNodeWithTag("mini_cover").performClick()
+        compose.onNodeWithTag("lyrics_options").performClick()
         compose.onNodeWithTag("open_lyrics").performClick()
         compose.waitForIdle()
-        compose.onNodeWithContentDescription("显示封面").assertIsDisplayed()
-        compose.onNodeWithContentDescription("投屏").performClick()
+        compose.onNodeWithTag("lyrics_panel").assertIsDisplayed()
+        compose.onNodeWithTag("lyrics_options").performClick()
+        compose.onNodeWithTag("open_player_cast").performClick()
         compose.waitForIdle()
         compose.onNodeWithTag("cast_screen").assertIsDisplayed()
         compose.onNodeWithTag("player_sheet").assertDoesNotExist()
         compose.runOnUiThread { dispatcher.onBackPressed() }
         compose.waitForIdle()
         compose.onNodeWithTag("player_sheet").assertIsDisplayed()
-        compose.onNodeWithContentDescription("显示封面").assertIsDisplayed()
+        compose.onNodeWithTag("lyrics_panel").assertIsDisplayed()
         assertEquals(1f, frame().progress, .001f)
         compose.onNodeWithContentDescription("收起播放器").performClick()
         compose.waitForIdle()

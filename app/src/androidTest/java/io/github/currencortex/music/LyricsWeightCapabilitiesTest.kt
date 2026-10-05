@@ -54,6 +54,7 @@ class LyricsWeightCapabilitiesTest {
             }
             compose.waitUntil(10000) { compose.onAllNodesWithTag("mini_cover").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("mini_cover").performClick()
+            compose.onNodeWithTag("lyrics_options").performClick()
             compose.onNodeWithTag("open_lyrics").performClick()
             compose.waitUntil(10000) { compose.onAllNodesWithTag("lyric_line_0").fetchSemanticsNodes().isNotEmpty() }
             fun weight(text: String): FontWeight? {
@@ -70,7 +71,7 @@ class LyricsWeightCapabilitiesTest {
             assertWeights(FontWeight.Medium, FontWeight.Normal)
             suspend fun choose(mode: LyricsWeight) {
                 compose.onNodeWithTag("lyrics_options").performClick()
-                compose.onNodeWithTag("open_lyrics_display").performClick()
+                compose.onNodeWithTag("open_lyrics_display").performScrollTo().performClick()
                 compose.onNodeWithTag("open_lyrics_weight").performScrollTo().performClick()
                 compose.onNodeWithTag("lyrics_weight_${mode.name}").performClick()
                 compose.waitUntil(5000) { container.musicSettings.state.value.lyricsWeight == mode }

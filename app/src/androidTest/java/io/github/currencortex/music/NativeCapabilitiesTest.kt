@@ -143,6 +143,7 @@ class NativeCapabilitiesTest {
         compose.onNodeWithTag("mini_player").performClick()
         compose.onNodeWithTag("player_seek").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(.5f) }
         compose.waitUntil(10000) { container.playerController.state.value.positionMs > 12000 }
+        compose.onNodeWithTag("lyrics_options").performClick()
         compose.onNodeWithTag("open_lyrics").performClick()
         compose.onNodeWithTag("lyrics_panel").assertExists()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Line two").fetchSemanticsNodes().isNotEmpty() }
