@@ -6,6 +6,58 @@ import kotlinx.serialization.decodeFromString
 import org.junit.Assert.*
 import org.junit.Test
 class PlaybackQueueTest {
+    @Test fun shufflePreviousRetracesHistoryAndNextReusesForwardHistoryAndPreload() {
+        val queue = PlaybackQueue()
+        queue.replace((1L..10L).map { Song(it, "$it") }, 0)
+        queue.setMode(PlaybackMode.SHUFFLE)
+        val played = mutableListOf(queue.state.value.current)
+        repeat(3) { queue.next(random = kotlin.random.Random(it + 7)); played += queue.state.value.current }
+        queue.previewNext(kotlin.random.Random(20)) // An abandoned preload must not affect going back.
+        queue.previous()
+        assertEquals(played[2], queue.state.value.current)
+        assertEquals(played[3], queue.previewNext(kotlin.random.Random(99)))
+        queue.previous()
+        assertEquals(played[1], queue.state.value.current)
+        assertEquals(played[2], queue.previewNext())
+        queue.next(); assertEquals(played[2], queue.state.value.current)
+        queue.next(automatic = true); assertEquals(played[3], queue.state.value.current)
+        repeat(5) { queue.previous() }
+        assertEquals("No earlier history restarts the first played song instead of picking a random neighbor", played[0], queue.state.value.current)
+        assertEquals(0L, queue.state.value.positionMs)
+        queue.next(); assertEquals(played[1], queue.state.value.current)
+    }
+
+    @Test fun shuffleHistorySurvivesRestoreAndInvalidatesOnQueueSelectionOrModeChanges() {
+        val songs = (1L..8L).map { Song(it, "$it") }
+        val queue = PlaybackQueue()
+        queue.replace(songs, 0); queue.setMode(PlaybackMode.SHUFFLE)
+        queue.next(random = kotlin.random.Random(7))
+        val first = queue.state.value.current
+        queue.next(random = kotlin.random.Random(9))
+        val second = queue.state.value.current
+        queue.previous()
+        val restored = PlaybackQueue()
+        restored.restore(ApiJson.decodeFromString<QueueSnapshot>(ApiJson.encodeToString(queue.state.value)))
+        assertEquals(first, restored.state.value.current)
+        assertEquals(second, restored.previewNext())
+        restored.next(); assertEquals(second, restored.state.value.current)
+        restored.select(0)
+        restored.previous(); assertEquals(songs[0], restored.state.value.current)
+        restored.next(); restored.setMode(PlaybackMode.LIST)
+        assertTrue(restored.state.value.shuffleHistory.isEmpty())
+        restored.setMode(PlaybackMode.SHUFFLE)
+        val before = restored.state.value.current
+        restored.previous(); assertEquals(before, restored.state.value.current)
+        restored.remove(0)
+        assertTrue(restored.state.value.shuffleHistory.isEmpty())
+        restored.replace(songs, 0)
+        assertTrue(restored.state.value.shuffleHistory.isEmpty())
+        restored.restore(QueueSnapshot(songs, 0, mode = PlaybackMode.SHUFFLE,
+            shuffleHistory = listOf(99, 0), shuffleHistoryIndex = 1))
+        assertTrue("Invalid restored indices cannot be replayed", restored.state.value.shuffleHistory.isEmpty())
+        restored.previous(); assertEquals(songs[0], restored.state.value.current)
+    }
+
     @Test fun preloadPreviewDoesNotMoveQueueAndUsesActualShuffleTargetAfterPositionUpdates() {
         val queue = PlaybackQueue()
         queue.replace((1L..10L).map { Song(it, "$it") }, 8)

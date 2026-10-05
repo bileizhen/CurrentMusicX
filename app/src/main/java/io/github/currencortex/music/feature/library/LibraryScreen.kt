@@ -134,7 +134,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
                     item { TextButton("播放全部", enabled = roomRequest == null && playbackMode == io.github.currencortex.music.core.media.PlayerMode.LOCAL,
                         onClick = { vm.container.playerController.setMode(io.github.currencortex.music.core.media.PlaybackMode.LIST); play(state.songs, 0) }, modifier = Modifier.testTag("play_library_all")) }
                     item { MusicTextAction("随机播放", enabled = roomRequest == null && playbackMode == io.github.currencortex.music.core.media.PlayerMode.LOCAL,
-                        onClick = { vm.container.playerController.setMode(io.github.currencortex.music.core.media.PlaybackMode.SHUFFLE); play(state.songs.shuffled(), 0) }) }
+                        onClick = { vm.container.playerController.setMode(io.github.currencortex.music.core.media.PlaybackMode.SHUFFLE); play(state.songs, state.songs.indices.random()) }) }
                 }
             }
             if (roomRequest != null) item { Text("点击歌曲，为当前房间点歌", fontSize = 13.sp) }
