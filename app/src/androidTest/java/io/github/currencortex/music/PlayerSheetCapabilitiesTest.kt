@@ -443,6 +443,77 @@ class PlayerSheetCapabilitiesTest {
         assertFalse(container.playerController.state.value.playing)
     }
 
+    @Test fun upwardPlayerDragOpensQueueFollowsFingerAndKeepsLyricsScroll() {
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        val root = compose.onNodeWithTag("music_window")
+        fun coverPoint() = compose.onNodeWithTag("player_cover").fetchSemanticsNode().boundsInRoot.center -
+            root.fetchSemanticsNode().boundsInRoot.topLeft
+        fun queueProgress() = compose.onNodeWithTag("player_queue_sheet").fetchSemanticsNode()
+            .config[io.github.currencortex.music.feature.player.QueuePageProgress]
+        root.performTouchInput { down(coverPoint()); moveBy(androidx.compose.ui.geometry.Offset(0f, -180f)) }
+        compose.mainClock.advanceTimeBy(64)
+        val held = queueProgress()
+        assertTrue("Queue follows upward drag before release", held > 0f && held < .14f)
+        assertEquals("Upward drag does not collapse the player", 1f, frame().progress, .001f)
+        compose.mainClock.advanceTimeBy(240)
+        assertEquals("Held queue drag must not run its entry animation", held, queueProgress(), .001f)
+        save("player-queue-upward-held.png")
+        root.performTouchInput { advanceEventTime(400); up() }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("player_queue_sheet").assertDoesNotExist()
+        root.performTouchInput { down(coverPoint()); moveBy(androidx.compose.ui.geometry.Offset(0f, -650f)) }
+        compose.mainClock.advanceTimeBy(64)
+        assertTrue(queueProgress() > .14f)
+        root.performTouchInput { advanceEventTime(400); up() }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals(1f, queueProgress(), .001f)
+        compose.onNodeWithTag("queue_current_song").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("player_queue_sheet").assertDoesNotExist()
+        root.performTouchInput { swipe(coverPoint(), coverPoint() - androidx.compose.ui.geometry.Offset(0f, 180f), 40) }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals("A short fast upward swipe opens the queue", 1f, queueProgress(), .001f)
+        compose.runOnUiThread { dispatcher.onBackPressed() }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithTag("player_queue_sheet").assertDoesNotExist()
+        root.performTouchInput { down(coverPoint()); moveBy(androidx.compose.ui.geometry.Offset(0f, -650f)) }
+        compose.mainClock.advanceTimeBy(64)
+        compose.runOnUiThread { dispatcher.onBackPressed() }
+        compose.mainClock.advanceTimeBy(64)
+        root.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithTag("player_queue_sheet").assertDoesNotExist()
+        root.performTouchInput { swipe(coverPoint(), coverPoint() - androidx.compose.ui.geometry.Offset(0f, 180f), 40) }
+        compose.mainClock.advanceTimeBy(64)
+        compose.runOnUiThread { dispatcher.onBackPressed() }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithTag("player_queue_sheet").assertDoesNotExist()
+        compose.onNodeWithTag("lyrics_options").performClick()
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithTag("open_lyrics").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("lyrics_panel").performTouchInput { swipeUp() }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("player_queue_sheet").assertDoesNotExist()
+        compose.onNodeWithTag("player_lyrics_header").performTouchInput {
+            swipe(center, center - androidx.compose.ui.geometry.Offset(0f, 650f), 300)
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals("Lyrics header can still open the queue", 1f, queueProgress(), .001f)
+        assertEquals(55L, container.playerController.queue.state.value.current?.id)
+        assertEquals(1500L, container.playerController.state.value.positionMs)
+        assertFalse(container.playerController.state.value.playing)
+    }
+
     @Test fun miniTitleAndPlayerArtworkOrLyricsHeaderCanBeDragged() {
         start()
         compose.mainClock.autoAdvance = false
@@ -493,6 +564,7 @@ class PlayerSheetCapabilitiesTest {
         title.performClick()
         compose.mainClock.advanceTimeBy(1000)
         compose.onNodeWithTag("lyrics_options").performClick()
+        compose.mainClock.advanceTimeBy(500)
         compose.onNodeWithTag("open_lyrics").performClick()
         compose.mainClock.advanceTimeBy(500)
         compose.onNodeWithTag("lyrics_panel").performTouchInput {
