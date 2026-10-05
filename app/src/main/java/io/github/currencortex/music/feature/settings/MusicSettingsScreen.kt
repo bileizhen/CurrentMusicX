@@ -27,6 +27,7 @@ import io.github.currencortex.music.data.settings.AudioProvider
     val audioState by vm.audioState.collectAsStateWithLifecycle()
     // Credentials must not be saved in Bundle/saved instance state.
     var audioKey by remember { mutableStateOf("") }
+    var qualityOpen by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(vm) { vm.refreshCache() }
     var server by rememberSaveable(settings.server) { mutableStateOf(settings.server) }
     LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().testTag("network_settings"),
@@ -74,11 +75,13 @@ import io.github.currencortex.music.data.settings.AudioProvider
                 enabled = !cacheState.busy, modifier = Modifier.testTag("clear_audio_cache"))
             cacheState.message?.let { Text(it) }
         } } }
-        item { Text("默认音质") }
-        AudioQuality.entries.forEach { quality -> item {
-            TextButton((if (settings.quality == quality) "✓ " else "") + quality.label, onClick = { vm.quality(quality) })
+        item { Card {
+            io.github.currencortex.music.ui.component.MusicDestinationRow("默认音质", { qualityOpen = true },
+                Modifier.testTag("default_quality"), summary = settings.quality.label)
         } }
         item { SettingsSwitch("高规格音频提醒", settings.warnHighSpec, vm::warning) }
         item { SettingsSwitch("恢复播放队列", settings.restoreQueue, vm::restore) }
     }
+    if (qualityOpen) io.github.currencortex.music.feature.player.AudioQualitySheet(settings.quality, vm::quality,
+        { qualityOpen = false }, title = "默认播放音质")
 }

@@ -489,7 +489,7 @@ fun CurrentMusicApp(container: AppContainer) {
                 PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
                     actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
                     onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") },
-                    onDialogActive = { playerDialogOpen = it })
+                    onDialogActive = { playerDialogOpen = it }, onNetwork = { navigateTo(NETWORK) })
             }
         }
         if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm) { miniQueueOpen = false }
