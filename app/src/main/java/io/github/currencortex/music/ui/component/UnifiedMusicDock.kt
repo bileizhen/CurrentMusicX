@@ -10,13 +10,13 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import io.github.currencortex.music.feature.player.PlayerSheetOrigin
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -70,17 +70,6 @@ private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerS
     RetainedOverlay(drawDock, modifier.navigationBarsPadding().padding(horizontal = 26.dp, vertical = 12.dp).widthIn(max = 480.dp)) {
         Box(Modifier.fillMaxWidth().height(miniSpace + navigationTravel).testTag("music_dock")
             .semantics { this[DockExpansion] = progress.value }
-            .onGloballyPositioned { coordinates ->
-                // boundsInRoot includes the current GPU translation, but its layout is always
-                // 122dp. Capture the visible outline's height, including the shared nav row.
-                onOrigin {
-                    if (!coordinates.isAttached) null else with(density) {
-                        val bounds = coordinates.boundsInRoot()
-                        PlayerSheetOrigin(Rect(bounds.left, bounds.top, bounds.right,
-                            bounds.top + miniSpace.toPx() + navigationTravel.toPx() * progress.value), 32.dp.toPx())
-                    }
-                }
-            }
             .graphicsLayer {
                 translationY = navigationTravel.toPx() * (1 - progress.value)
                 shape = DockShape(miniSpace.toPx() + navigationTravel.toPx() * progress.value, 32.dp.toPx())
@@ -94,7 +83,18 @@ private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerS
                     DockShape(miniSpace.toPx() + navigationTravel.toPx() * progress.value, 32.dp.toPx())
                 }
             }) {}
-            Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().onGloballyPositioned { coordinates ->
+                // Measure inside the moving layer: the outer dock layout reserves the
+                // hidden navigation and reports its untranslated position on secondary pages.
+                // localToRoot also avoids clipping the visible outline to ancestor bounds.
+                reportOrigin {
+                    if (!coordinates.isAttached) null else with(density) {
+                        val topLeft = coordinates.localToRoot(Offset.Zero)
+                        PlayerSheetOrigin(Rect(topLeft, Size(coordinates.size.width.toFloat(),
+                            miniSpace.toPx() + navigationTravel.toPx() * progress.value)), 32.dp.toPx())
+                    }
+                }
+            }) {
                 if (miniPresent) CompositionLocalProvider(LocalMusicGlassSurface provides { mod, body ->
                     Box(mod) { Box(Modifier.testTag("mini_glass_surface")) { body() } }
                 }) {

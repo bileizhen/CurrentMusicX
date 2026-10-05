@@ -590,6 +590,12 @@ class PlayerSheetCapabilitiesTest {
         compose.waitForIdle()
         val source = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().boundsInRoot
         assertTrue("Secondary-page artwork sits below the root navigation dock", source.center.y > rootCover.center.y + 100)
+        val dock = compose.onNodeWithTag("music_dock").fetchSemanticsNode().boundsInRoot
+        val window = viewport()
+        val density = activity.resources.displayMetrics.density
+        // The visible 64dp panel is centered on its mini artwork. The dock's retained
+        // 122dp layout also reserves the hidden navigation, so it is not the landing rect.
+        val landing = Rect(dock.left, source.center.y - 32f * density, dock.right, source.center.y + 32f * density)
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("mini_cover").performClick()
         compose.mainClock.advanceTimeBy(1000)
@@ -601,6 +607,11 @@ class PlayerSheetCapabilitiesTest {
             val flight = compose.onNodeWithTag("player_artwork_flight").fetchSemanticsNode()
                 .config[io.github.currencortex.music.feature.player.PlayerArtworkGeometry]
             val vertical = flight.progress * flight.progress
+            val sheet = frame()
+            assertEquals("The closing surface must land on the visible secondary-page panel at frame $index",
+                (landing.top - window.top) * (1 - sheet.progress), sheet.bounds.top, .5f)
+            assertEquals("Surface height must end at the collapsed 64dp panel at frame $index",
+                landing.height * (1 - sheet.progress) + window.height * sheet.progress, sheet.bounds.height, .5f)
             assertEquals("Direct close must retain the measured secondary-page landing position at frame $index",
                 source.center.y * (1 - vertical) + destination.center.y * vertical, flight.bounds.center.y, .5f)
             if (index == 0 || index == 6) save("secondary-direct-close-$index.png")
