@@ -33,6 +33,7 @@ class PlayerSongActionsTest {
                 return MockResponse().setBody(when (path) {
                     "/cm/auth/me" -> """{"id":7,"username":"fixture","nickname":"按钮测试"}"""
                     "/cm/ncmbind" -> """{"bound":true,"profile":{"uid":7},"ncmLikedPlId":42}"""
+                    "/cm/ncm/user/playlist" -> """{"code":200,"playlist":[{"id":9918106457,"specialType":5,"creator":{"userId":7}}]}"""
                     "/cm/ncm/song/red/count" -> """{"code":200,"data":{"count":${if (liked.get()) 10002 else 10001}}}"""
                     "/cm/ncm/likelist" -> """{"code":200,"ids":${if (liked.get()) "[11]" else "[]"}}"""
                     "/cm/ncm/like" -> { mutations.incrementAndGet(); liked.set(request.requestUrl!!.queryParameter("like") == "true"); """{"code":200}""" }
@@ -41,7 +42,9 @@ class PlayerSongActionsTest {
                         request.requestUrl!!.queryParameter("offset") == "0" -> """{"code":200,"total":20001,"more":true,"hotComments":[{"commentId":90,"content":"网易云热门评论","user":{"nickname":"热评听友"}}],"comments":[{"commentId":1,"content":"网易云最新评论","user":{"nickname":"听友"}}]}"""
                         else -> """{"code":200,"total":20001,"more":false,"comments":[{"commentId":2,"content":"下一页网易云评论","user":{"nickname":"下一位听友"}}]}"""
                     }
-                    "/cm/ncm/playmode/intelligence/list" -> """{"code":200,"data":[${(12..22).joinToString(",") { "{\"songInfo\":{\"id\":$it,\"name\":\"心动推荐$it\",\"dt\":30000}}" }}]}"""
+                    "/cm/ncm/playmode/intelligence/list" -> if (request.requestUrl!!.queryParameter("pid") == "9918106457")
+                        """{"code":200,"data":[${(12..22).joinToString(",") { "{\"songInfo\":{\"id\":$it,\"name\":\"心动推荐$it\",\"dt\":30000}}" }}]}"""
+                        else """{"code":400,"message":"歌单不存在","data":null}"""
                     "/cm/ncm/lyric" -> """{"lines":[{"t":0,"txt":"当前歌词"},{"t":10000,"txt":"下一行歌词"}]}"""
                     "/cm/daily" -> "{}"
                     "/cm/room/active" -> "{\"room\":null}"
@@ -96,6 +99,7 @@ class PlayerSongActionsTest {
             compose.waitUntil(5000) { container.playbackQueue.state.value.mode == PlaybackMode.HEART }
             compose.runOnIdle {
                 assertEquals(11L, container.playbackQueue.state.value.current!!.id)
+                assertEquals(9918106457L, container.playbackQueue.state.value.heartPlaylistId)
                 assertEquals(1500L, container.playerController.state.value.positionMs)
                 assertFalse(container.playerController.state.value.playing)
                 assertEquals(12L, container.playbackQueue.previewNext()!!.id)

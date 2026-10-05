@@ -63,12 +63,13 @@ class NeteaseSongActionsRepositoryTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = MockResponse().setBody(when (request.requestUrl!!.encodedPath) {
                 "/cm/ncmbind" -> """{"bound":true,"profile":{"uid":7},"ncmLikedPlId":42}"""
+                "/cm/ncm/user/playlist" -> """{"code":200,"playlist":[{"id":1234,"specialType":5,"creator":{"userId":8}},{"id":9918106457,"specialType":5,"creator":{"userId":7}}]}"""
                 "/cm/ncm/comment/music" -> {
                     assertEquals("20", request.requestUrl!!.queryParameter("offset"))
                     """{"code":200,"total":22,"more":false,"comments":[{"commentId":2,"content":"来自网易云的评论","likedCount":19,"user":{"nickname":"听友"}}]}"""
                 }
                 "/cm/ncm/playmode/intelligence/list" -> {
-                    assertEquals("42", request.requestUrl!!.queryParameter("pid")); assertEquals("11", request.requestUrl!!.queryParameter("sid"))
+                    assertEquals("9918106457", request.requestUrl!!.queryParameter("pid")); assertEquals("11", request.requestUrl!!.queryParameter("sid"))
                     assertEquals("20", request.requestUrl!!.queryParameter("count"))
                     """{"code":200,"data":[{"songInfo":{"id":11,"name":"当前曲"}},{"songInfo":{"id":12,"name":"推荐曲","ar":[{"id":3,"name":"歌手"}],"al":{"name":"专辑","picUrl":"http://example.com/cover"},"dt":30000}},{"songInfo":{"id":12,"name":"重复推荐"}}]}"""
                 }
@@ -83,7 +84,7 @@ class NeteaseSongActionsRepositoryTest {
             assertEquals("来自网易云的评论", comments.comments.single().content)
             assertEquals("听友", comments.comments.single().user.nickname)
             val heart = repo.heartList(11)
-            assertEquals(42L, heart.playlistId)
+            assertEquals(9918106457L, heart.playlistId)
             val song = heart.songs.single()
             assertEquals(12L, song.id); assertEquals("歌手", song.artists); assertEquals("专辑", song.album)
             assertEquals("https://example.com/cover", song.cover); assertEquals(30000L, song.durationMs)
@@ -106,6 +107,33 @@ class NeteaseSongActionsRepositoryTest {
             val repo = NeteaseSongActionsRepository(ApiClient({ base }, { token.get() }, {})) { RequestSession(base, token.get()) }
             assertEquals(ErrorKind.Unauthorized, (appResult { repo.likeCount(11) } as AppResult.Failure).kind)
         } finally { server.shutdown() }
+    }
+
+    @Test fun missingUpstreamLikedPlaylistDoesNotUseImportedLocalId(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            val s = RequestSession(server.url("/cm/").toString(), "personal")
+            val repo = NeteaseSongActionsRepository(ApiClient({ s.server }, { s.token }, {})) { s }
+            server.enqueue(MockResponse().setBody("""{"bound":true,"profile":{"uid":7},"ncmLikedPlId":273}"""))
+            server.enqueue(MockResponse().setBody("""{"code":200,"playlist":[{"id":991,"specialType":0,"creator":{"userId":7}}]}"""))
+            val result = appResult { repo.heartList(11) } as AppResult.Failure
+            assertEquals(ErrorKind.NeteaseLikedPlaylistUnavailable, result.kind)
+            assertEquals(2, server.requestCount)
+        }
+    }
+
+    @Test fun heartErrorsDistinguishMissingPlaylistAndNoRecommendations(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            val s = RequestSession(server.url("/cm/").toString(), "personal")
+            val repo = NeteaseSongActionsRepository(ApiClient({ s.server }, { s.token }, {})) { s }
+            server.enqueue(MockResponse().setBody("""{"bound":true,"profile":{"uid":7},"ncmLikedPlId":273}"""))
+            server.enqueue(MockResponse().setBody("""{"code":200,"playlist":[{"id":991,"specialType":5,"creator":{"userId":7}}]}"""))
+            server.enqueue(MockResponse().setBody("""{"code":400,"message":"歌单不存在","data":null}"""))
+            assertEquals(ErrorKind.NeteaseLikedPlaylistUnavailable, (appResult { repo.heartList(11) } as AppResult.Failure).kind)
+            server.enqueue(MockResponse().setBody("""{"bound":true,"profile":{"uid":7},"ncmLikedPlId":273}"""))
+            server.enqueue(MockResponse().setBody("""{"code":200,"data":[]}"""))
+            assertEquals(ErrorKind.NeteaseHeartNoRecommendations, (appResult { repo.heartList(11) } as AppResult.Failure).kind)
+            assertEquals(5, server.requestCount) // The upstream playlist ID is reused within this session.
+        }
     }
 
     @Test fun badgeFormattingAndSourceMatchingNeverInventNeteaseIdentity() {
