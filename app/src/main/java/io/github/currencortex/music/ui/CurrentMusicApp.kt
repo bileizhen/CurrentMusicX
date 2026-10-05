@@ -188,7 +188,6 @@ fun CurrentMusicApp(container: AppContainer) {
         fun navigateBack() {
             if (roomDialogOpen || castDialogOpen || playerDialogOpen || miniQueueOpen || songMenu != null) return
             if (backStack.size > 1) {
-                if (backStack.last() == PLAYER.toString()) artworkTransition.origin = miniArtworkOrigin?.invoke() ?: artworkTransition.origin
                 playerSheetMotion = if (backStack.last() == PLAYER.toString()) PlayerSheetMotion.CLOSE else PlayerSheetMotion.NONE
                 if (backStack.last() == "lib/video") container.playerController.closeVideo()
                 backStack = backStack.dropLast(1)
@@ -199,6 +198,8 @@ fun CurrentMusicApp(container: AppContainer) {
             if (route == PLAYER) {
                 val bounds = miniCoordinates?.takeIf { it.isAttached }?.boundsInRoot() ?: miniBounds
                 playerOrigin = dockOrigin?.invoke() ?: bounds?.let { PlayerSheetOrigin(it, it.height / 2f) }
+                // Capture the placed dock once for both directions. Hidden retained coordinates
+                // omit the secondary-page dock translation until it is placed again.
                 artworkTransition.origin = miniArtworkOrigin?.invoke()
                 playerSheetMotion = PlayerSheetMotion.OPEN
             }
