@@ -582,6 +582,35 @@ class PlayerSheetCapabilitiesTest {
         assertFalse(container.playerController.state.value.playing)
     }
 
+    @Test fun secondaryDirectCloseRetainsArtworkLandingPosition() {
+        start()
+        val rootCover = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText("设置").performClick()
+        compose.onNodeWithTag("open_network").performScrollTo().performClick()
+        compose.waitForIdle()
+        val source = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().boundsInRoot
+        assertTrue("Secondary-page artwork sits below the root navigation dock", source.center.y > rootCover.center.y + 100)
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        val destination = compose.onNodeWithTag("player_cover").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithContentDescription("收起播放器").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        repeat(7) { index ->
+            compose.mainClock.advanceTimeBy(32)
+            val flight = compose.onNodeWithTag("player_artwork_flight").fetchSemanticsNode()
+                .config[io.github.currencortex.music.feature.player.PlayerArtworkGeometry]
+            val vertical = flight.progress * flight.progress
+            assertEquals("Direct close must retain the measured secondary-page landing position at frame $index",
+                source.center.y * (1 - vertical) + destination.center.y * vertical, flight.bounds.center.y, .5f)
+            if (index == 0 || index == 6) save("secondary-direct-close-$index.png")
+        }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("network_settings").assertIsDisplayed()
+        assertEquals(source, compose.onNodeWithTag("mini_cover").fetchSemanticsNode().boundsInRoot)
+        assertFalse(container.playerController.state.value.playing)
+    }
+
     @Test fun circularArtworkMovesWithTheSheetAndReturnsToMini() {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         val file = java.io.File(context.cacheDir, "artwork-${UUID.randomUUID()}.png")
