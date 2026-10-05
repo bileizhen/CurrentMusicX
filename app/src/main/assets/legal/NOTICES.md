@@ -6,6 +6,10 @@ This template uses the following libraries at runtime:
 - AndroidX / Jetpack Compose, under the Apache License 2.0.
 - Kotlin and kotlinx.coroutines by JetBrains and contributors, Apache-2.0.
 - Material Icons by Google, Apache-2.0.
+- Player controls use Google's Material Symbols Rounded vectors, Apache-2.0, from
+  https://github.com/google/material-design-icons/tree/737e3324305806514d7909874fa1818ae1808232/symbols/android.
+  Only the selected 24px XML assets are bundled; their source URLs remain in each resource header.
+  The theme-attribute tint is removed so Compose can apply the player's animated tint.
 - Coil (including animated image decoders) by Coil contributors, Apache-2.0: https://github.com/coil-kt/coil.
 - ZXing QR encoder by ZXing authors, Apache-2.0: https://github.com/zxing/zxing. Copyright 2008 ZXing authors. Used for native login QR generation; the Apache-2.0 license is available offline with the notices.
 
