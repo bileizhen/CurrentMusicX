@@ -229,9 +229,9 @@ class LyricsCapabilitiesTest {
             compose.onNodeWithTag("open_player_queue").performClick()
             compose.onNodeWithTag("player_queue_sheet").assertExists()
             val rowLayouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
-            compose.onNodeWithText("▶ 夜航", useUnmergedTree = true)
+            compose.onNodeWithTag("queue_song_0", useUnmergedTree = true).onChildren().filter(hasText("夜航")).onFirst()
                 .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(rowLayouts) }
-            assertTrue("Queue dialogs must follow light app appearance", rowLayouts.first().layoutInput.style.color.red < .4f)
+            assertTrue("The full queue page uses light ink over the player backdrop", rowLayouts.first().layoutInput.style.color.red > .8f)
             androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()?.let { bitmap ->
                 java.io.File(context.externalCacheDir, "player-queue-preview.png").outputStream().use {
                     bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)

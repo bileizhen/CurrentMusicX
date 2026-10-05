@@ -183,7 +183,7 @@ class MiniPlayerInteractionTest {
         compose.onNodeWithTag("glass_floating_bar").assertExists()
         compose.onNodeWithTag("mini_queue").performClick()
         compose.onNodeWithTag("mini_queue_sheet").assertIsDisplayed()
-        compose.onNodeWithText("▶ Second song").assertExists()
+        compose.onNodeWithTag("queue_song_1").assertIsSelected()
         InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
         compose.onNodeWithTag("mini_queue_sheet").assertDoesNotExist()
         compose.onNodeWithTag("music_home").assertExists()
