@@ -205,12 +205,17 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 @Composable fun DiscoverScreen(vm: DiscoverViewModel, navigate: (String) -> Unit) {
     val state by vm.state.collectAsPageState()
+    val styles by vm.styles.collectAsPageState()
     val bottomInset = LocalMusicBottomInset.current
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(vm, owner) { owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.pollStats() } }
     LazyColumn(Modifier.fillMaxSize().testTag("discover_screen"), contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item {
             Text("发现", fontSize = 30.sp)
+        }
+        item { io.github.currencortex.music.feature.style.MusicStyleCategories(styles, vm::loadStyles, navigate) }
+        item {
+            Text("音乐社区", fontSize = 22.sp, fontWeight = FontWeight.Medium)
             Text("${state.stats.users} 位用户 · ${state.stats.listening} 人正在听歌", fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
         }

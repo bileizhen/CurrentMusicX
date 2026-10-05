@@ -111,12 +111,30 @@ data class DiscoverState(val query: String = "", val submitted: String = "", val
     val total: Int = 0, val stats: SquareStats = SquareStats(), val error: String? = null)
 class DiscoverViewModel(val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(DiscoverState())
+    val styles = MutableStateFlow(io.github.currencortex.music.feature.style.StyleCatalogState())
+    private var styleTask: Job? = null
     private var task: Job? = null
     init {
         viewModelScope.launch { container.ready.await(); submit() }
+        viewModelScope.launch {
+            container.ready.await()
+            container.musicSettings.state.map { it.server }.distinctUntilChanged().collect {
+                styleTask?.cancel(); styles.value = io.github.currencortex.music.feature.style.StyleCatalogState(); loadStyles()
+            }
+        }
         viewModelScope.launch { container.musicSettings.state.map { it.server }.distinctUntilChanged().drop(1).collect {
             task?.cancel(); state.value = DiscoverState(); submit()
         } }
+    }
+    fun loadStyles() {
+        styleTask?.cancel()
+        styles.update { it.copy(loading = true, error = null) }
+        styleTask = viewModelScope.launch {
+            when (val result = appResult { container.musicStyles.list(fresh = true) }) {
+                is AppResult.Success -> styles.value = io.github.currencortex.music.feature.style.StyleCatalogState(styles = result.value, loading = false)
+                is AppResult.Failure -> styles.update { it.copy(loading = false, error = result.kind.message) }
+            }
+        }
     }
     fun query(value: String) { state.update { it.copy(query = value) } }
     fun sort(value: String) { state.update { it.copy(sort = value) }; submit() }

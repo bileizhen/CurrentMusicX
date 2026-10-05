@@ -54,6 +54,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val authRepository = AuthRepository(apiClient, accountRepository, "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
         persistServer = musicSettings::setServer, persistAccount = musicSettings::setAccount)
     val musicRepository = MusicRepository(apiClient, audioSettings::access)
+    val musicStyles = io.github.currencortex.music.data.style.MusicStyleRepository(apiClient) {
+        RequestSession(accountRepository.server.ifBlank { musicSettings.state.value.server }, null)
+    }
     val neteaseSongActions = io.github.currencortex.music.data.song.NeteaseSongActionsRepository(apiClient) {
         RequestSession(accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)
     }

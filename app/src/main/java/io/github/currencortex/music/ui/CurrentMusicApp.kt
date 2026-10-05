@@ -401,6 +401,14 @@ fun CurrentMusicApp(container: AppContainer) {
                     entry(route) {
                         when {
                             route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateBack, ::navigateLibrary)
+                            route.startsWith("lib/style/") -> {
+                                val styleVm: io.github.currencortex.music.feature.style.MusicStyleViewModel = viewModel(key = route,
+                                    factory = viewModelFactory { io.github.currencortex.music.feature.style.MusicStyleViewModel(container,
+                                        route.substringAfterLast('/').toLongOrNull() ?: 0L) })
+                                io.github.currencortex.music.feature.style.MusicStyleScreen(styleVm, libraryVm, ::navigateBack, ::navigateLibrary) {
+                                    songs, index -> playWithPermission { container.playerController.playList(songs, index) }
+                                }
+                            }
                             route == "lib/video" -> if (currentSong?.video == true) io.github.currencortex.music.feature.mv.MvPlayerScreen(container, ::navigateBack)
                                 else PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
                                     onLike = { currentSong?.let(libraryVm.likes::open) })
