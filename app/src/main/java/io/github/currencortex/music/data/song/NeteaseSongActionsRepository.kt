@@ -2,8 +2,11 @@ package io.github.currencortex.music.data.song
 
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.binding.BindingState
+import io.github.currencortex.music.data.library.LibraryRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
@@ -17,6 +20,7 @@ data class NeteaseHeartList(val playlistId: Long, val songs: List<Song>)
 
 /** Metadata and account actions always go through CurrentMusic, independently of the audio source. */
 class NeteaseSongActionsRepository(private val api: ApiClient, private val session: () -> RequestSession) {
+    val revision = MutableStateFlow(0L)
     private val reads = SessionReadCache(session, { 0L })
     private suspend fun request(path: String, query: Map<String, String>, expected: RequestSession): JsonElement {
         val value = api.request("GET", "ncm/$path", query, authenticated = expected.token != null, expectedSession = expected)
@@ -53,22 +57,39 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val sessi
     suspend fun isLiked(id: Long, fresh: Boolean = false): Boolean = withContext(Dispatchers.Default) {
         reads.read("liked", fresh) { expected ->
             val bound = binding(expected)
-            api.decode<NeteaseLikes>(request("likelist", mapOf("uid" to "${bound.profile!!.uid}",
-                "timestamp" to "${System.currentTimeMillis()}"), expected)).ids?.toSet()
+            val value = try {
+                api.request("GET", "ncmbind/likelist", authenticated = true, expectedSession = expected)
+            } catch (failure: ApiException) {
+                if (failure.kind != ErrorKind.NotFound) throw failure
+                request("likelist", mapOf("uid" to "${bound.profile!!.uid}", "timestamp" to "${System.currentTimeMillis()}"), expected)
+            }
+            api.decode<NeteaseLikes>(value).ids?.toSet()
                 ?: throw ApiException(ErrorKind.Parse)
         }.contains(id)
     }
-    suspend fun toggleLiked(id: Long): Boolean {
+    suspend fun toggleLiked(id: Long, song: Song? = null): Boolean {
         val expected = session()
         val desired = !isLiked(id, fresh = true)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
-        setLiked(id, desired, expected)
+        setLiked(id, desired, expected, song)
         return desired
     }
-    suspend fun setLiked(id: Long, liked: Boolean, expected: RequestSession = session()) {
+    suspend fun setLiked(id: Long, liked: Boolean, expected: RequestSession = session(), song: Song? = null) {
         binding(expected)
-        request("like", mapOf("id" to "$id", "like" to "$liked", "timestamp" to "${System.currentTimeMillis()}"), expected)
+        val response = try {
+            api.request("POST", "ncmbind/like/$id", body = buildJsonObject {
+                LibraryRepository.metadata(song ?: Song(id, "")).forEach { (key, value) -> put(key, value) }
+                put("ncm_id", id); put("like", liked)
+            }, authenticated = true, expectedSession = expected)
+        } catch (failure: ApiException) {
+            if (failure.kind != ErrorKind.NotFound) throw failure
+            request("like", mapOf("id" to "$id", "like" to "$liked", "timestamp" to "${System.currentTimeMillis()}"), expected)
+        }
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+        val code = (response as? JsonObject)?.get("code")?.jsonPrimitive?.intOrNull
+        if (code != null && code != 200) throw ApiException(if (code in listOf(301, 401)) ErrorKind.NeteaseBindingRequired else ErrorKind.Server, code)
         reads.clear()
+        revision.update { it + 1 }
     }
     suspend fun heartList(seedId: Long, playlistId: Long? = null): NeteaseHeartList = withContext(Dispatchers.Default) {
         val expected = session()

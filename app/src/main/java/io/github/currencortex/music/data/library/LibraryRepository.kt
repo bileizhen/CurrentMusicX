@@ -19,6 +19,7 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     private val mutationMutex = Mutex()
     private val reads = SessionReadCache(session, { revision.value })
     fun clearReads() = reads.clear()
+    fun invalidate() { reads.clear(); revision.update { it + 1 } }
     fun clearSession() { reads.clear(); statuses.value = emptyMap(); revision.update { it + 1 } }
     private suspend inline fun <reified T> read(path: String, expected: RequestSession, query: Map<String, String> = emptyMap()): T =
         api.decode(api.request("GET", path, query, authenticated = true, expectedSession = expected))
@@ -59,7 +60,8 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
             throw cancelled
         }
         if (expected == session()) {
-            statuses.update { it + (song.id to if (result is AppResult.Success) (it[song.id] ?: before).copy(pending = false) else before) }
+            statuses.update { it + (song.id to if (result is AppResult.Success) (it[song.id] ?: before).copy(
+                liked = (result.value as? JsonObject)?.get("on")?.jsonPrimitive?.booleanOrNull ?: !before.liked, pending = false) else before) }
             if (result is AppResult.Success) revision.update { it + 1 }
         }
         when (result) { is AppResult.Success -> AppResult.Success(Unit); is AppResult.Failure -> result }
