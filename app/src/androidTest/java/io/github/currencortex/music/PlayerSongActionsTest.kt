@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /** Independent app/container, mock NetEase actions, no audio service or production mutations. */
 class PlayerSongActionsTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun fiveActionsUseRealBadgesCommentsModesAndHeartRecommendations(): Unit = runBlocking {
+    @Test fun fourActionsUseRealBadgesCommentsAndExclusivePlaybackModes(): Unit = runBlocking {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         val server = MockWebServer()
         val liked = AtomicBoolean(false)
@@ -54,7 +54,7 @@ class PlayerSongActionsTest {
             }
         }
         server.start()
-        val container = AppContainer(context, "five-actions-${UUID.randomUUID()}")
+        val container = AppContainer(context, "four-actions-${UUID.randomUUID()}")
         try {
             container.ready.await(); container.sessionRestored.await()
             val url = server.url("/cm/").toString()
@@ -62,7 +62,7 @@ class PlayerSongActionsTest {
             container.accountRepository.save("fixture-personal", UserDto(7, nickname = "按钮测试"))
             container.updateSettings.setAutoCheck(false)
             container.settings.edit { it.copy(themeMode = ThemeMode.LIGHT) }
-            val song = Song(11, "五个播放功能", "测试歌手", durationMs = 30000)
+            val song = Song(11, "四个播放功能", "测试歌手", durationMs = 30000)
             container.playbackQueue.replace(listOf(song, Song(23, "原列表歌曲")), 0)
             container.playerController.state.value = PlayerState(song = song, positionMs = 1500, durationMs = 30000)
             lateinit var activity: androidx.activity.ComponentActivity
@@ -75,9 +75,10 @@ class PlayerSongActionsTest {
                 it.config[SemanticsProperties.Text].any { text -> text.text == "1w+" }
             } }
             compose.onNodeWithTag("comment_count", useUnmergedTree = true).assertTextEquals("2w+")
-            val tags = listOf("player_like", "player_comments", "player_cycle_mode", "player_heart_mode", "open_player_queue")
+            val tags = listOf("player_like", "player_comments", "player_cycle_mode", "open_player_queue")
+            compose.onNodeWithTag("player_heart_mode").assertDoesNotExist()
             val bounds = tags.map { compose.onNodeWithTag(it).fetchSemanticsNode().boundsInRoot }
-            bounds.zipWithNext().forEach { (left, right) -> assertTrue("Five touch targets cannot overlap", left.right <= right.left + 1) }
+            bounds.zipWithNext().forEach { (left, right) -> assertTrue("Four touch targets cannot overlap", left.right <= right.left + 1) }
             val bar = compose.onNodeWithTag("player_function_bar").fetchSemanticsNode().boundsInRoot
             assertTrue(bounds.first().left >= bar.left && bounds.last().right <= bar.right)
             val badge = compose.onNodeWithTag("like_count", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
@@ -91,11 +92,18 @@ class PlayerSongActionsTest {
             compose.onNodeWithTag("more_comments").performScrollTo().performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("下一页网易云评论").fetchSemanticsNodes().isNotEmpty() }
             compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
-            for (mode in listOf(PlaybackMode.ONE, PlaybackMode.SHUFFLE, PlaybackMode.LIST)) {
+            for (mode in listOf(PlaybackMode.ONE, PlaybackMode.SHUFFLE, PlaybackMode.HEART, PlaybackMode.LIST)) {
                 compose.onNodeWithTag("player_cycle_mode").performClick()
-                compose.runOnIdle { assertEquals(mode, container.playbackQueue.state.value.mode) }
+                compose.waitUntil(5000) { container.playbackQueue.state.value.mode == mode }
+                compose.onNodeWithTag("player_cycle_mode").assertContentDescriptionEquals(mode.label)
+                if (mode == PlaybackMode.HEART) compose.onNodeWithTag("player_cycle_mode").assertIsSelected()
             }
-            compose.onNodeWithTag("player_heart_mode").performClick()
+            compose.onNodeWithTag("player_cycle_mode").assertIsNotSelected()
+            compose.onNodeWithTag("open_player_queue").performClick()
+            compose.onNodeWithTag("open_player_mode").performClick()
+            PlaybackMode.entries.forEach { compose.onNodeWithTag("playback_mode_${it.name}").assertIsDisplayed() }
+            compose.onNodeWithTag("playback_mode_LIST").assertIsSelected()
+            compose.onNodeWithTag("playback_mode_HEART").performClick()
             compose.waitUntil(5000) { container.playbackQueue.state.value.mode == PlaybackMode.HEART }
             compose.runOnIdle {
                 assertEquals(11L, container.playbackQueue.state.value.current!!.id)
@@ -104,11 +112,15 @@ class PlayerSongActionsTest {
                 assertFalse(container.playerController.state.value.playing)
                 assertEquals(12L, container.playbackQueue.previewNext()!!.id)
             }
+            compose.onNodeWithTag("open_player_mode").performClick()
+            compose.onNodeWithTag("playback_mode_HEART").assertIsSelected()
+            compose.onNodeWithTag("playback_mode_ONE").performClick()
+            compose.runOnIdle { assertEquals(PlaybackMode.ONE, container.playbackQueue.state.value.mode) }
+            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("player_cycle_mode").assertContentDescriptionEquals(PlaybackMode.ONE.label).assertIsNotSelected()
             compose.onNodeWithTag("player_screen").captureToImage().asAndroidBitmap().let { bitmap ->
-                java.io.File(context.externalCacheDir, "player-five-actions.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                java.io.File(context.externalCacheDir, "player-four-actions.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
             }
-            compose.onNodeWithTag("player_heart_mode").performClick()
-            compose.runOnIdle { assertEquals(PlaybackMode.LIST, container.playbackQueue.state.value.mode) }
             compose.onNodeWithTag("lyrics_options").performClick()
             compose.onNodeWithTag("open_lyrics").assertIsDisplayed()
             compose.onNodeWithTag("open_player_cast").assertIsDisplayed()
