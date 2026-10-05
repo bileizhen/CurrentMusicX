@@ -232,12 +232,13 @@ class LibraryCapabilitiesTest {
         compose.waitUntil(15000) { compose.onAllNodesWithText("Library track").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithTag("song_menu_1")[0].performScrollTo().performClick()
         compose.onAllNodesWithTag("song_like_1")[0].performScrollTo().performClick()
-        compose.waitUntil(10000) { compose.onAllNodesWithText("服务器异常").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10000) { compose.onAllNodesWithText("未收录，点击加入").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("like_destination_CURRENT_MUSIC").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithText("服务器异常，点击重试").fetchSemanticsNodes().isNotEmpty() }
         assertFalse(container.libraryRepository.statuses.value[1]!!.liked)
-        dismissMessage();likeFail=false
+        likeFail=false
         compose.onNodeWithTag("song_actions_sheet").assertDoesNotExist()
-        compose.onAllNodesWithTag("song_menu_1")[0].performScrollTo().performClick()
-        compose.onAllNodesWithTag("song_like_1")[0].performClick()
+        compose.onNodeWithTag("like_destination_CURRENT_MUSIC").performClick()
         compose.waitUntil(10000) { container.libraryRepository.statuses.value[1]?.liked == true && container.libraryRepository.statuses.value[1]?.pending == false }
         dismissMessage()
         compose.onNodeWithTag("music_home").performTouchInput { swipeDown(startY=100f,endY=height-100f) }

@@ -11,6 +11,7 @@ import io.github.currencortex.music.data.settings.ThemeMode
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.CurrentMusicApp
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.*
 import okhttp3.mockwebserver.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -26,6 +27,7 @@ class PlayerSongActionsTest {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         val server = MockWebServer()
         val liked = AtomicBoolean(false)
+        val cmLiked = AtomicBoolean(false)
         val mutations = AtomicInteger()
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
@@ -35,8 +37,13 @@ class PlayerSongActionsTest {
                     "/cm/ncmbind" -> """{"bound":true,"profile":{"uid":7},"ncmLikedPlId":42}"""
                     "/cm/ncm/user/playlist" -> """{"code":200,"playlist":[{"id":9918106457,"specialType":5,"creator":{"userId":7}}]}"""
                     "/cm/ncm/song/red/count" -> """{"code":200,"data":{"count":${if (liked.get()) 10002 else 10001}}}"""
-                    "/cm/ncm/likelist" -> """{"code":200,"ids":${if (liked.get()) "[11]" else "[]"}}"""
-                    "/cm/ncm/like" -> { mutations.incrementAndGet(); liked.set(request.requestUrl!!.queryParameter("like") == "true"); """{"code":200}""" }
+                    "/cm/ncmbind/likelist" -> """{"ids":${if (liked.get()) "[11]" else "[]"}}"""
+                    "/cm/ncmbind/like/11" -> {
+                        mutations.incrementAndGet()
+                        liked.set(io.github.currencortex.music.core.network.ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject["like"]!!.jsonPrimitive.boolean)
+                        """{"code":200}"""
+                    }
+                    "/cm/likes/11" -> { cmLiked.set(!cmLiked.get()); """{"on":${cmLiked.get()}}""" }
                     "/cm/ncm/comment/music" -> when {
                         request.requestUrl!!.queryParameter("limit") == "1" -> """{"code":200,"total":20001}"""
                         request.requestUrl!!.queryParameter("offset") == "0" -> """{"code":200,"total":20001,"more":true,"hotComments":[{"commentId":90,"content":"网易云热门评论","user":{"nickname":"热评听友"}}],"comments":[{"commentId":1,"content":"网易云最新评论","user":{"nickname":"听友"}}]}"""
@@ -48,7 +55,7 @@ class PlayerSongActionsTest {
                     "/cm/ncm/lyric" -> """{"lines":[{"t":0,"txt":"当前歌词"},{"t":10000,"txt":"下一行歌词"}]}"""
                     "/cm/daily" -> "{}"
                     "/cm/room/active" -> "{\"room\":null}"
-                    "/cm/songs/status" -> "{}"
+                    "/cm/songs/status" -> """{"liked":${if (cmLiked.get()) "[11]" else "[]"}}"""
                     else -> return MockResponse().setResponseCode(404)
                 })
             }
@@ -84,6 +91,21 @@ class PlayerSongActionsTest {
             val badge = compose.onNodeWithTag("like_count", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
             assertTrue("The real quantity belongs at the icon's upper right", badge.top < bounds.first().center.y && badge.center.x > bounds.first().center.x)
             compose.onNodeWithTag("player_like").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("like_destination_CURRENT_MUSIC").fetchSemanticsNodes().isNotEmpty() &&
+                compose.onAllNodesWithText("未收录，点击加入").fetchSemanticsNodes().isNotEmpty() }
+            assertEquals(0, mutations.get())
+            compose.onNodeWithTag("like_destination_CURRENT_MUSIC").performClick()
+            compose.waitUntil(5000) { cmLiked.get() && container.libraryRepository.statuses.value[11]?.pending == false }
+            assertFalse(liked.get())
+            compose.waitUntil(5000) { compose.onAllNodesWithText("未收录，点击加入 · 红心同步到网易云 APP").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("like_destination_NETEASE").performClick()
+            compose.waitUntil(5000) { liked.get() }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("已收录，点击移出 · 红心同步到网易云 APP").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("like_destination_CURRENT_MUSIC").performClick()
+            compose.waitUntil(5000) { !cmLiked.get() && container.libraryRepository.statuses.value[11]?.pending == false }
+            assertTrue(liked.get())
+            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("song_like_sheet").assertDoesNotExist()
             compose.waitUntil(5000) { compose.onNodeWithTag("player_like").fetchSemanticsNode().config[SemanticsProperties.Selected] }
             assertEquals(1, mutations.get())
             compose.onNodeWithTag("player_comments").performClick()

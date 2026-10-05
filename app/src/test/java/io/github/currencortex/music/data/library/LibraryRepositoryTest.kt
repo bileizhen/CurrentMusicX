@@ -10,6 +10,16 @@ import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 class LibraryRepositoryTest {
+    @Test fun likeMembershipUsesTheServerWriteResponse() = runBlocking {
+        MockWebServer().use { s ->
+            val r=repo(s)
+            s.enqueue(MockResponse().setBody("""{"liked":[]}"""))
+            s.enqueue(MockResponse().setBody("""{"on":false}"""))
+            assertTrue(r.toggleLike(Song(1,"A")) is AppResult.Success)
+            assertFalse(r.statuses.value[1]!!.liked)
+            assertFalse(r.statuses.value[1]!!.pending)
+        }
+    }
     @Test fun cancellingLikeDoesNotLeavePendingStateStuck() = runBlocking {
         MockWebServer().use { s ->
             val r = repo(s)

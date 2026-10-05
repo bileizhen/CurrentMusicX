@@ -2,11 +2,33 @@ package io.github.currencortex.music.data.song
 
 import io.github.currencortex.music.core.network.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.*
 import okhttp3.mockwebserver.*
 import org.junit.Assert.*
 import org.junit.Test
 
 class NeteaseSongActionsRepositoryTest {
+    @Test fun olderServersFallBackOnlyWhenBindingLikeEndpointsAreMissing() = runBlocking {
+        MockWebServer().use { server ->
+            val paths = mutableListOf<String>()
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val path=request.requestUrl!!.encodedPath; paths += path
+                    return MockResponse().setBody(when(path) {
+                        "/cm/ncmbind" -> """{"bound":true,"profile":{"uid":7}}"""
+                        "/cm/ncmbind/likelist", "/cm/ncmbind/like/11" -> return MockResponse().setResponseCode(404)
+                        "/cm/ncm/likelist" -> """{"ids":[]}"""
+                        "/cm/ncm/like" -> { assertEquals("true",request.requestUrl!!.queryParameter("like")); """{"code":200}""" }
+                        else -> error(path)
+                    })
+                }
+            }
+            val s=RequestSession(server.url("/cm/").toString(),"personal")
+            val repo=NeteaseSongActionsRepository(ApiClient({s.server},{s.token},{})){s}
+            assertTrue(repo.toggleLiked(11,Song(11,"Track")))
+            assertTrue(paths.containsAll(listOf("/cm/ncmbind/likelist","/cm/ncm/likelist","/cm/ncmbind/like/11","/cm/ncm/like")))
+        }
+    }
     @Test fun countsUseNeteaseTotalsAndPersonalLikesCanToggleWithoutCurrentMusicLikes() = runBlocking {
         val server = MockWebServer()
         var liked = true
@@ -18,8 +40,12 @@ class NeteaseSongActionsRepositoryTest {
                 assertEquals("Bearer personal", request.getHeader("Authorization"))
                 return MockResponse().setBody(when (path) {
                     "/cm/ncmbind" -> """{"bound":true,"profile":{"uid":7},"ncmLikedPlId":42}"""
-                    "/cm/ncm/likelist" -> """{"code":200,"ids":${if (liked) "[11]" else "[]"}}"""
-                    "/cm/ncm/like" -> { liked = request.requestUrl!!.queryParameter("like") == "true"; """{"code":200}""" }
+                    "/cm/ncmbind/likelist" -> """{"code":200,"ids":${if (liked) "[11]" else "[]"}}"""
+                    "/cm/ncmbind/like/11" -> {
+                        assertEquals("POST", request.method)
+                        liked = io.github.currencortex.music.core.network.ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject["like"]!!.jsonPrimitive.boolean
+                        """{"code":200}"""
+                    }
                     "/cm/ncm/song/red/count" -> """{"code":200,"data":{"count":6804490,"countDesc":"100w+"},"pop":100}"""
                     "/cm/ncm/comment/music" -> """{"code":200,"total":1970250,"comments":[],"more":false}"""
                     else -> error("Unexpected endpoint $path")
