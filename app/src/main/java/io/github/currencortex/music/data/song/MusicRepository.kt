@@ -19,7 +19,14 @@ class MusicRepository(private val api: ApiClient,
         api.get<LyricDto>("ncm/lyric", mapOf("id" to "$id")).lines.filter { it.txt.isNotBlank() }.sortedBy { it.t }
     }
     suspend fun lyricsDocument(id: Long) = appResult {
-        io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(
+        val enhanced = appResult {
+            val raw = api.get<JsonObject>("ncm/lyric/new", mapOf("id" to "$id"))
+            val code = raw["code"]?.jsonPrimitive?.intOrNull
+            if (code != null && code != 200) throw ApiException(ErrorKind.Server, code)
+            io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(raw)
+        }
+        if (enhanced is AppResult.Success && enhanced.value.lines.isNotEmpty()) enhanced.value
+        else io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(
             api.get<JsonObject>("ncm/lyric", mapOf("id" to "$id")))
     }
     suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null): AudioSource {
