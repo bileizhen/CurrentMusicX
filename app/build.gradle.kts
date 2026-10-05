@@ -23,12 +23,6 @@ android {
     }
 
     buildFeatures { compose = true; buildConfig = true }
-    buildTypes {
-        getByName("debug") {
-            buildConfigField("boolean", "UPDATE_DIALOG_PREVIEW", "false")
-        }
-        getByName("release") { buildConfigField("boolean", "UPDATE_DIALOG_PREVIEW", "false") }
-    }
     compileOptions {
         encoding = "UTF-8"
         sourceCompatibility = JavaVersion.VERSION_17
