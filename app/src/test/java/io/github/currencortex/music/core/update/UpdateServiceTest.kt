@@ -33,11 +33,18 @@ class UpdateServiceTest {
         try { block(UpdateSettingsRepository(store, scope)) } finally { scope.cancel() }
     }
 
-    @Test fun defaultsAutoCheckOnPrereleaseChannel() = runBlocking {
+    @Test fun defaultsAutoCheckOnStableChannel() = runBlocking {
         scenario { settings ->
             val defaults = settings.snapshot()
             assertTrue(defaults.autoCheckOnLaunch)
-            assertEquals(UpdateChannel.PRERELEASE, defaults.channel)
+            assertEquals(UpdateChannel.STABLE, defaults.channel)
+        }
+    }
+
+    @Test fun explicitlySelectedPrereleaseChannelIsPreserved() = runBlocking {
+        scenario { settings ->
+            settings.setChannel(UpdateChannel.PRERELEASE)
+            assertEquals(UpdateChannel.PRERELEASE, settings.snapshot().channel)
         }
     }
 

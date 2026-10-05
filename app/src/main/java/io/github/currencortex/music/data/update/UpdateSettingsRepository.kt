@@ -24,8 +24,8 @@ class UpdateSettingsRepository(
 
     private fun read(preferences: Preferences) = UpdateSettings(
             autoCheckOnLaunch = preferences[autoCheck] ?: true,
-            channel = runCatching { UpdateChannel.valueOf(preferences[channel] ?: UpdateChannel.PRERELEASE.name) }
-                .getOrDefault(UpdateChannel.PRERELEASE),
+            channel = runCatching { UpdateChannel.valueOf(preferences[channel] ?: UpdateChannel.STABLE.name) }
+                .getOrDefault(UpdateChannel.STABLE),
             ignoredVersions = mapOf(UpdateChannel.STABLE to preferences[ignoredStable].orEmpty(),
                 UpdateChannel.PRERELEASE to preferences[ignoredPrerelease].orEmpty()),
         )
