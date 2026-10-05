@@ -22,8 +22,6 @@ object AppMetadata {
     const val ISSUES_URL = "$PROJECT_URL/issues"
     const val AUTHOR_URL = "https://github.com/$GITHUB_OWNER"
     // Optional product-specific URLs. Leave blank to use bundled documents.
-    // Optional HTTPS prefix for GitHub asset mirrors; blank keeps the official source only.
-    const val UPDATE_MIRROR_PREFIX = ""
     const val WEBSITE_URL = ""
     const val PRIVACY_URL = ""
 }

@@ -54,7 +54,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
     val release = (state as? UpdateState.Available)?.release
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    var source by remember { mutableStateOf(UpdateSource.GITHUB) }
+    var source by remember { mutableStateOf(UpdateSource.default) }
     var previewProgress by remember { mutableFloatStateOf(-1f) }
     val previewDownloading = previewProgress in 0f..<1f
     val downloading = transferState.download is UpdateDownloadState.Downloading || previewDownloading
