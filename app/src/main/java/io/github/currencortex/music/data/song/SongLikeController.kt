@@ -69,8 +69,12 @@ class SongLikeController(private val library: LibraryRepository, private val net
                             is AppResult.Success -> library.statuses.value[song.id]?.liked ?: throw ApiException(ErrorKind.Parse)
                         }
                     }
-                    LikeDestination.NETEASE -> netease.toggleLiked(NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound), song)
-                        .also { library.invalidate() }
+                    LikeDestination.NETEASE -> {
+                        val desired = !before.liked
+                        netease.setLiked(NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound), desired, expected, song)
+                        library.invalidate()
+                        desired
+                    }
                 }
             }
             update(target, epoch, expected, when (result) {

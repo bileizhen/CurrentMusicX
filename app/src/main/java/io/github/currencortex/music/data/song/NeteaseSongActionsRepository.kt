@@ -19,9 +19,14 @@ data class NeteaseHeartList(val playlistId: Long, val songs: List<Song>)
 @Serializable private data class NeteaseLikes(val ids: List<Long>? = null)
 
 /** Metadata and account actions always go through CurrentMusic, independently of the audio source. */
-class NeteaseSongActionsRepository(private val api: ApiClient, private val session: () -> RequestSession) {
+class NeteaseSongActionsRepository(private val api: ApiClient, private val now: () -> Long = System::nanoTime,
+    private val session: () -> RequestSession) {
     val revision = MutableStateFlow(0L)
     private val reads = SessionReadCache(session, { 0L })
+    private data class LikedSnapshot(val uid: Long, val ids: Set<Long>)
+    private data class WriteKey(val session: RequestSession, val uid: Long, val id: Long)
+    private data class ConfirmedLike(val liked: Boolean, val until: Long)
+    private val confirmedLikes = java.util.concurrent.ConcurrentHashMap<WriteKey, ConfirmedLike>()
     private suspend fun request(path: String, query: Map<String, String>, expected: RequestSession): JsonElement {
         val value = api.request("GET", "ncm/$path", query, authenticated = expected.token != null, expectedSession = expected)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
@@ -55,17 +60,29 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val sessi
         }
     }
     suspend fun isLiked(id: Long, fresh: Boolean = false): Boolean = withContext(Dispatchers.Default) {
-        reads.read("liked", fresh) { expected ->
+        val expected = session()
+        val snapshot = reads.read("liked", fresh) { expected ->
             val bound = binding(expected)
             val value = try {
-                api.request("GET", "ncmbind/likelist", authenticated = true, expectedSession = expected)
+                api.request("GET", "ncmbind/likelist", mapOf("timestamp" to "${System.currentTimeMillis()}"), authenticated = true, expectedSession = expected)
             } catch (failure: ApiException) {
                 if (failure.kind != ErrorKind.NotFound) throw failure
                 request("likelist", mapOf("uid" to "${bound.profile!!.uid}", "timestamp" to "${System.currentTimeMillis()}"), expected)
             }
-            api.decode<NeteaseLikes>(value).ids?.toSet()
-                ?: throw ApiException(ErrorKind.Parse)
-        }.contains(id)
+            LikedSnapshot(bound.profile!!.uid, api.decode<NeteaseLikes>(value).ids?.toSet() ?: throw ApiException(ErrorKind.Parse))
+        }
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+        val key = WriteKey(expected, snapshot.uid, id)
+        val write = confirmedLikes[key]
+        val serverLiked = id in snapshot.ids
+        if (write != null && write.until > now()) {
+            // The upstream list can lag a successful like write; never immediately undo it.
+            if (fresh && serverLiked == write.liked) confirmedLikes.remove(key, write)
+            write.liked
+        } else {
+            if (write != null) confirmedLikes.remove(key, write)
+            serverLiked
+        }
     }
     suspend fun toggleLiked(id: Long, song: Song? = null): Boolean {
         val expected = session()
@@ -75,9 +92,9 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val sessi
         return desired
     }
     suspend fun setLiked(id: Long, liked: Boolean, expected: RequestSession = session(), song: Song? = null) {
-        binding(expected)
+        val bound = binding(expected)
         val response = try {
-            api.request("POST", "ncmbind/like/$id", body = buildJsonObject {
+            api.request("POST", "ncmbind/like/$id", query = mapOf("timestamp" to "${System.currentTimeMillis()}"), body = buildJsonObject {
                 LibraryRepository.metadata(song ?: Song(id, "")).forEach { (key, value) -> put(key, value) }
                 put("ncm_id", id); put("like", liked)
             }, authenticated = true, expectedSession = expected)
@@ -88,6 +105,10 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val sessi
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         val code = (response as? JsonObject)?.get("code")?.jsonPrimitive?.intOrNull
         if (code != null && code != 200) throw ApiException(if (code in listOf(301, 401)) ErrorKind.NeteaseBindingRequired else ErrorKind.Server, code)
+        val acknowledged = (response as? JsonObject)?.let { it["like"] ?: it["on"] }?.jsonPrimitive?.booleanOrNull
+        if (acknowledged != null && acknowledged != liked) throw ApiException(ErrorKind.Server)
+        confirmedLikes.entries.removeIf { it.key.session != expected || it.value.until <= now() }
+        confirmedLikes[WriteKey(expected, bound.profile!!.uid, id)] = ConfirmedLike(liked, now() + 120_000_000_000L)
         reads.clear()
         revision.update { it + 1 }
     }
