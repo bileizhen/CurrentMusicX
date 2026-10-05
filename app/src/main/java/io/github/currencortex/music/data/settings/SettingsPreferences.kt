@@ -17,7 +17,7 @@ internal object SettingsPreferences {
 
     fun read(p: Preferences) = AppearanceSettings(
         themeMode = runCatching { ThemeMode.valueOf(p[THEME] ?: ThemeMode.SYSTEM.name) }.getOrDefault(ThemeMode.SYSTEM),
-        monet = p[MONET] ?: true,
+        monet = p[MONET] ?: false,
         uiScale = p[UI_SCALE] ?: 1f,
         blur = p[BLUR] ?: true,
         floatingBar = p[FLOATING] ?: true,
