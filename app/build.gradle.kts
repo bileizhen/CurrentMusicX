@@ -22,7 +22,7 @@ android {
     compileSdkMinor = 0
 
     defaultConfig {
-        applicationId = "io.github.currencortex.music"
+        applicationId = "com.bileizhen.currentmusic"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
