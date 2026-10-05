@@ -16,6 +16,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
@@ -28,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import io.github.currencortex.music.core.config.AboutMember
+import io.github.currencortex.music.ui.util.openExternalLink
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
@@ -167,6 +169,7 @@ internal fun AnimatedListItem(
  *  show 与 focus 分开传：关闭后 focus 仍保留最后一次选择，供退场动画期间继续渲染内容。 */
 @Composable
 internal fun MemberDetailDialog(show: Boolean, focus: MemberFocus?, onDismiss: () -> Unit) {
+    val context = LocalContext.current
     val contentHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp - 160.dp).coerceAtLeast(180.dp)
     OverlayDialog(show = show, title = "成员信息", onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth().heightIn(max = contentHeight).testTag("member_dialog_content")) {
@@ -188,6 +191,10 @@ internal fun MemberDetailDialog(show: Boolean, focus: MemberFocus?, onDismiss: (
                         modifier = Modifier.weight(1f, fill = false).fillMaxWidth().heightIn(max = 300.dp)
                             .verticalScroll(rememberScrollState())
                             .padding(top = 12.dp))
+                }
+                current.member.githubUrl?.let { url ->
+                    TextButton("GitHub", onClick = { openExternalLink(context, url) },
+                        modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("member_github"))
                 }
                 TextButton("关闭", onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth().padding(top = 18.dp))
