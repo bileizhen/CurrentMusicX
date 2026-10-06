@@ -105,8 +105,13 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     }
     suspend fun artist(id: Long, offset: Int = 0): Artist {
         val d = api.get<ArtistDto>("ncm/artist", mapOf("id" to "$id", "offset" to "$offset", "limit" to "100"))
-        return Artist(id, d.name, d.pic, d.alias, d.songs.map(SongDto::toDomain), d.more,
-            d.albums.map(AlbumDto::domain), d.albumTotal)
+        return Artist(id, d.name, d.pic.replace("http:", "https:"), d.alias, d.songs.map(SongDto::toDomain), d.more,
+            d.albums.map(AlbumDto::domain), d.albumTotal, d.total)
+    }
+    suspend fun artistBiography(id: Long, fresh: Boolean = false): ArtistBiography = backgroundRead("artist-bio/$id", fresh) {
+        api.get<ArtistBiography>("ncm/artist/desc", mapOf("id" to "$id")).also {
+            if (it.code != 200) throw ApiException(if (it.code == 404) ErrorKind.NotFound else ErrorKind.Server, it.code)
+        }
     }
     suspend fun artistAlbums(id: Long, offset: Int): Pair<List<Album>, Boolean> {
         val d = api.get<ArtistAlbumsDto>("ncm/artist/albums", mapOf("id" to "$id", "offset" to "$offset", "limit" to "30"))
@@ -115,8 +120,8 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     suspend fun album(id: Long) = api.get<AlbumDto>("ncm/album", mapOf("id" to "$id")).domain().copy(id = id)
     suspend fun catalog(query: String, albums: Boolean, offset: Int = 0): CatalogPage {
         val d = api.get<CatalogSearchDto>("ncm/search", mapOf("keywords" to query, "type" to if (albums) "album" else "artist", "limit" to "30", "offset" to "$offset"))
-        return if (albums) CatalogPage(d.albums.map { CatalogEntry(it.id, it.name, it.pic, it.artist) }, d.hasMore.album)
-        else CatalogPage(d.artists.map { CatalogEntry(it.id, it.name, it.pic, it.alias) }, d.hasMore.artist)
+        return if (albums) CatalogPage(d.albums.map { CatalogEntry(it.id, it.name, it.pic.replace("http:", "https:"), it.artist) }, d.hasMore.album, d.totals.album)
+        else CatalogPage(d.artists.map { CatalogEntry(it.id, it.name, it.pic.replace("http:", "https:"), it.alias) }, d.hasMore.artist, d.totals.artist)
     }
     suspend fun mv(id: Long) = api.get<MvDetailDto>("ncm/mv/detail", mapOf("mvid" to "$id")).data
     suspend fun mvSource(id: Long): String {
