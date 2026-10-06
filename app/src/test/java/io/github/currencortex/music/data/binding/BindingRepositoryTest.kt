@@ -13,6 +13,59 @@ import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 class BindingRepositoryTest {
+    @Test fun ambiguousSmsDisconnectDoesNotTriggerOkHttpAutomaticReplay() = runBlocking {
+        MockWebServer().use { s ->
+            val base = s.url("/cm/").toString()
+            val repo = BindingRepository(ApiClient({ base }, { "credential" }, {}), { RequestSession(base, "credential") }) {}
+            s.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AFTER_REQUEST))
+            s.enqueue(MockResponse().setBody("""{"code":200,"data":true}"""))
+            assertEquals(ErrorKind.Network, (appResult { repo.sendCode("123456789", "86", alternate = true) } as AppResult.Failure).kind)
+            assertNotNull(s.takeRequest(1, TimeUnit.SECONDS))
+            assertNull(s.takeRequest(100, TimeUnit.MILLISECONDS))
+            assertEquals(1, s.requestCount)
+        }
+    }
+    @Test fun sms502NeverAutomaticallyResendsAndAlternateIsExplicitAndAuthenticated() = runBlocking {
+        MockWebServer().use { s ->
+            val base = s.url("/cm/").toString()
+            val repo = BindingRepository(ApiClient({ base }, { "credential" }, {}), { RequestSession(base, "credential") }) {}
+            s.enqueue(MockResponse().setResponseCode(502))
+            val failure = appResult { repo.sendCode("123456789", "86") } as AppResult.Failure
+            assertEquals(502, failure.status)
+            assertEquals("/cm/ncmbind/phone/code", s.takeRequest().path)
+            assertNull(s.takeRequest(100, TimeUnit.MILLISECONDS))
+            s.enqueue(MockResponse().setBody("""{"code":200,"data":true}"""))
+            repo.sendCode("123456789", "86", alternate = true)
+            val alternate = s.takeRequest()
+            assertEquals("/cm/ncm/captcha/sent/v1", alternate.requestUrl!!.encodedPath)
+            assertEquals("1", alternate.requestUrl!!.queryParameter("confirm"))
+            assertEquals("86", alternate.requestUrl!!.queryParameter("ctcode"))
+            assertEquals("Bearer credential", alternate.getHeader("Authorization"))
+        }
+    }
+    @Test fun upstreamBusinessFailureInHttp200DoesNotCountAsPhoneSuccess() = runBlocking {
+        MockWebServer().use { s ->
+            val base = s.url("/cm/").toString()
+            val repo = BindingRepository(ApiClient({ base }, { "credential" }, {}), { RequestSession(base, "credential") }) {}
+            s.enqueue(MockResponse().setBody("""{"code":502,"message":"private-code"}"""))
+            assertEquals(502, (appResult { repo.sendCode("123456789", "86") } as AppResult.Failure).status)
+            s.enqueue(MockResponse().setBody("""{"code":400,"message":"private-phone"}"""))
+            assertTrue(appResult { repo.bindPhone("123456789", "1234", "86") } is AppResult.Failure)
+            s.enqueue(MockResponse().setBody("""{"code":200,"data":false}"""))
+            assertTrue(appResult { repo.sendCode("123456789", "86", alternate = true) } is AppResult.Failure)
+            assertEquals(3, s.requestCount)
+        }
+    }
+    @Test fun pendingPhoneActionsCannotWriteToSwitchedAccount() = runBlocking {
+        MockWebServer().use { s ->
+            val base = s.url("/cm/").toString(); var token = "old"
+            val repo = BindingRepository(ApiClient({ base }, { token }, {}), { RequestSession(base, token) }) {}
+            val expected = RequestSession(base, token); token = "new"
+            assertTrue(appResult { repo.sendCode("123456789", "86", expected = expected) } is AppResult.Failure)
+            assertTrue(appResult { repo.bindPhone("123456789", "1234", "86", expected) } is AppResult.Failure)
+            assertEquals(0, s.requestCount)
+        }
+    }
     @Test fun phoneBindingAndSyncUseDedicatedAuthenticatedRoutes() = runBlocking {
         MockWebServer().use { s ->
             val base = s.url("/cm/").toString(); var invalidations = 0
