@@ -5,8 +5,13 @@ import androidx.compose.foundation.lazy.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
@@ -15,14 +20,30 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.feature.library.*
 import io.github.currencortex.music.data.song.Song
+import io.github.currencortex.music.data.profile.ProfileUser
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
-@Composable fun MusicHomeScreen(vm: LibraryViewModel, onSearch: () -> Unit, onSettings: () -> Unit,
-    navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit) {
+@Composable fun MusicHomeScreen(vm: LibraryViewModel, onSearch: () -> Unit, onProfile: (String?, Rect?) -> Unit,
+    navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit, profile: ProfileUser? = null, onSearchBounds: (Rect) -> Unit = {}, hideSearch: Boolean = false, searchQuery: String = "", onSearchSubmit: () -> Unit = onSearch) {
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val home by vm.home.collectAsStateWithLifecycle()
+    val preferences by vm.container.musicSettings.state.collectAsStateWithLifecycle()
+    val avatarVersions by vm.container.profileRepository.avatarVersions.collectAsStateWithLifecycle()
+    val scales by vm.container.profileRepository.scales.collectAsStateWithLifecycle()
+    val user = profile?.takeIf { it.id == account.account?.id }
+    val avatar = user?.avatar ?: account.account?.avatar.orEmpty()
+    val decoration = user?.decoration.orEmpty()
+    val decorationUrl = remember(preferences.server, decoration) { vm.container.profileRepository.decorationUrl(preferences.server, decoration) }
+    val version = account.account?.id?.let(avatarVersions::get)
+    val avatarUrl = remember(preferences.server, avatar, version) {
+        vm.container.profileRepository.avatarUrl(preferences.server, avatar)?.let { url ->
+            if (!avatar.startsWith("http") && version != null) url.toHttpUrlOrNull()?.newBuilder()
+                ?.setQueryParameter("v", version.toString())?.build()?.toString() else url
+        }
+    }
     val request = LocalRoomSongRequest.current
     val bottomInset = LocalMusicBottomInset.current
     val waiting = account.loading || home.loading
@@ -34,20 +55,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("CurrentMusic", fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-                        Text(account.account?.let { "欢迎，${it.nickname}" } ?: "音乐，从这里开始", fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                        HomeBrandTitle()
+                        SplitText(account.account?.let { "欢迎，${it.nickname}" } ?: "音乐，从这里开始",
+                            ready = !account.loading && home.loaded && LocalLaunchBrand.current?.active != true,
+                            style = TextStyle(fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f)),
+                            modifier = Modifier.testTag("home_welcome"))
                     }
-                    MusicTextAction("设置", onSettings)
+                    HomeProfileAvatar(avatarUrl, !account.loading && home.loaded, onProfile,
+                        decorationUrl = decorationUrl, decorationScale = scales[decoration] ?: 1.0)
                 }
             }
-            item { Card(Modifier.fillMaxWidth(), onClick = onSearch, showIndication = true) {
-                Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Search, contentDescription = "搜索", modifier = Modifier.size(20.dp), tint = MiuixTheme.colorScheme.primary)
-                    Text("搜索歌曲、歌手", Modifier.padding(start = 12.dp), fontSize = 14.sp,
-                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
-                }
-            } }
+            item { MusicSearchBar(searchQuery, onSearchSubmit,
+                Modifier.testTag("open_home_search").onGloballyPositioned { onSearchBounds(it.boundsInRoot()) }
+                    .graphicsLayer { alpha = if (hideSearch) 0f else 1f }, onActivate = onSearch) }
             item { LibraryLinks(navigate) }
             item { Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (request == null) "一起听" else "正在一起听", Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.Medium)
@@ -56,6 +76,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             if (account.loading) item { Text("正在恢复登录…", fontSize = 13.sp) }
             else if (account.account == null) item { Text("登录后查看每日推荐、最近播放与歌单", fontSize = 13.sp) }
             if (home.loading) item { Text("正在加载音乐库…", fontSize = 13.sp) }
+            if (!home.loading && home.errors.isNotEmpty()) item {
+                MusicTextAction("部分内容加载失败，重新加载", vm::refresh, Modifier.testTag("home_retry"))
+            }
             item { MusicSectionHeader("每日推荐", "查看全部") { navigate("lib/daily") } }
             if (waiting && home.daily.isEmpty()) item { Box(Modifier.testTag("home_loading")) { LoadingSongList() } }
             home.errors["每日推荐"]?.let { item { Text(it, fontSize = 13.sp) } }

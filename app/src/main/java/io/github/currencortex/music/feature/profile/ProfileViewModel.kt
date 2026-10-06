@@ -11,6 +11,8 @@ import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.profile.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import java.io.ByteArrayOutputStream
 
 data class ProfileState(val loading: Boolean = false, val profile: ProfileDto? = null, val error: String? = null,
@@ -113,6 +115,9 @@ class DiscoverViewModel(val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(DiscoverState())
     val styles = MutableStateFlow(io.github.currencortex.music.feature.style.StyleCatalogState())
     private var styleTask: Job? = null
+    private val styleCoverTasks = mutableMapOf<Long, Job>()
+    private val styleCoverPermits = Semaphore(3)
+    private var styleGeneration = 0
     private var task: Job? = null
     init {
         viewModelScope.launch { container.ready.await(); submit() }
@@ -128,12 +133,26 @@ class DiscoverViewModel(val container: AppContainer) : ViewModel() {
     }
     fun loadStyles() {
         styleTask?.cancel()
-        styles.update { it.copy(loading = true, error = null) }
+        styleCoverTasks.values.forEach(Job::cancel)
+        styleCoverTasks.clear()
+        ++styleGeneration
+        styles.update { it.copy(loading = true, error = null, covers = emptyMap()) }
         styleTask = viewModelScope.launch {
             when (val result = appResult { container.musicStyles.list(fresh = true) }) {
                 is AppResult.Success -> styles.value = io.github.currencortex.music.feature.style.StyleCatalogState(styles = result.value, loading = false)
                 is AppResult.Failure -> styles.update { it.copy(loading = false, error = result.kind.message) }
             }
+        }
+    }
+    /** Cards request only their first song, with bounded concurrency and per-server lifetime. */
+    fun loadStyleCover(id: Long) {
+        if (styles.value.covers.containsKey(id) || styleCoverTasks[id]?.isActive == true) return
+        val generation = styleGeneration
+        styleCoverTasks[id] = viewModelScope.launch {
+            val result = styleCoverPermits.withPermit { appResult { container.musicStyles.songs(id, 0, size = 1) } }
+            if (generation != styleGeneration) return@launch
+            val cover = (result as? AppResult.Success)?.value?.songs?.firstOrNull()?.cover.orEmpty()
+            styles.update { it.copy(covers = it.covers + (id to cover)) }
         }
     }
     fun query(value: String) { state.update { it.copy(query = value) } }

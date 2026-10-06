@@ -13,6 +13,13 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
@@ -39,7 +46,7 @@ import kotlinx.coroutines.launch
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 @Composable fun UserAvatar(user: ProfileUser, container: AppContainer, size: androidx.compose.ui.unit.Dp = 64.dp,
-    decoration: String = user.decoration, reserveOverlay: Boolean = true) {
+    decoration: String = user.decoration, reserveOverlay: Boolean = true, flightState: AvatarFlightState? = null) {
     val preferences by container.musicSettings.state.collectAsStateWithLifecycle()
     val scales by container.profileRepository.scales.collectAsStateWithLifecycle()
     val versions by container.profileRepository.avatarVersions.collectAsStateWithLifecycle()
@@ -47,8 +54,26 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     var avatarUrl = repository.avatarUrl(preferences.server, user.avatar)
     if (!user.avatar.startsWith("http") && versions[user.id] != null)
         avatarUrl = avatarUrl?.toHttpUrlOrNull()?.newBuilder()?.setQueryParameter("v", versions[user.id].toString())?.build()?.toString()
-    DecoratedAvatar(avatarUrl, repository.decorationUrl(preferences.server, decoration),
-        scale = scales[decoration] ?: 1.0, size = size, reserveOverlay = reserveOverlay, onImageError = {
+    val decorationUrl = repository.decorationUrl(preferences.server, decoration)
+    val scale = scales[decoration] ?: 1.0
+    val density = LocalDensity.current
+    val placement = LocalRootTabPlacement.current
+    var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val originProvider by rememberUpdatedState<() -> AvatarFlightOrigin?>({
+        coordinates?.takeIf { it.isAttached }?.boundsInRoot()?.takeIf { it.top >= 0f }?.let {
+            val radius = with(density) { size.toPx() / 2f }
+            val bounds = Rect(it.center - Offset(radius, radius), it.center + Offset(radius, radius))
+            if (placement?.visible(bounds) == false) null else AvatarFlightOrigin(avatarUrl, bounds, decorationUrl, scale)
+        }
+    })
+    DisposableEffect(flightState) {
+        val provider = { originProvider() }
+        flightState?.profileOrigin = provider
+        onDispose { if (flightState != null && flightState.profileOrigin === provider) flightState.profileOrigin = null }
+    }
+    DecoratedAvatar(avatarUrl, decorationUrl, modifier = if (flightState != null)
+        Modifier.onGloballyPositioned { coordinates = it } else Modifier,
+        scale = scale, size = size, reserveOverlay = reserveOverlay, onImageError = {
             // Report the failure category only; image URLs can contain signed credentials.
             container.logger.warn("Image", "User image failed: ${it.javaClass.simpleName}", null)
         })
@@ -71,11 +96,20 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) { vm.avatar.value = uri; vm.dialog.value = "avatar" }
     }
-    val user = state.profile?.user
+    val user = state.profile?.user ?: account.account?.takeIf { onBack == null }?.let {
+        ProfileUser(id = it.id, username = it.username, nickname = it.nickname, avatar = it.avatar)
+    }
     val own = user != null && user.id == account.account?.id
     val bottomInset = LocalMusicBottomInset.current
+    val listState = rememberLazyListState()
+    val avatarFlight = LocalAvatarFlight.current.takeIf { onBack == null }
+    val placement = LocalRootTabPlacement.current
+    val density = LocalDensity.current
+    LaunchedEffect(avatarFlight?.request) {
+        if (avatarFlight?.active == true && !avatarFlight.returning) listState.scrollToItem(0)
+    }
     MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
+    LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState, contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item { Row(verticalAlignment = Alignment.CenterVertically) {
             onBack?.let { MusicTextAction("返回", it) }
@@ -89,20 +123,28 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
         if (user != null) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    UserAvatar(user, vm.container, 64.dp)
+                    Box(Modifier.testTag("my_profile_avatar").onGloballyPositioned {
+                        val center = (placement?.landingBounds(it) ?: it.boundsInRoot()).center
+                        val radius = with(density) { 32.dp.toPx() }
+                        if (avatarFlight?.returning != true && (avatarFlight?.active != true || (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0)))
+                            avatarFlight?.destination = Rect(center - Offset(radius, radius), center + Offset(radius, radius))
+                    }.graphicsLayer { alpha = if (avatarFlight?.active == true) 0f else 1f }) {
+                        UserAvatar(user, vm.container, 64.dp, flightState = avatarFlight)
+                    }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                         Text(user.nickname.ifBlank { user.username }, fontSize = 23.sp,
                             fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-                        Text(user.bio.ifBlank { "还没有填写简介" }, fontSize = 13.sp, maxLines = 2,
+                        Text(if (state.loading && state.profile == null) "正在加载资料…" else user.bio.ifBlank { "还没有填写简介" }, fontSize = 13.sp, maxLines = 2,
                             color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
                         if (own) Row {
-                            MusicTextAction("编辑资料", { vm.dialog.value = "edit" }, Modifier.testTag("edit_profile"), !busy)
+                            MusicTextAction("编辑资料", { vm.dialog.value = "edit" }, Modifier.testTag("edit_profile"), !busy && state.profile != null)
                             MusicTextAction("更换头像", { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !busy)
                         }
                     }
                 }
             }
-            item { val stat = state.profile!!.stat
+            if (state.loading && state.profile == null) item { LoadingSongList(2) }
+            if (state.profile != null) item { val stat = state.profile!!.stat
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
                     items(listOf("点赞" to "${stat.likes}", "收藏" to "${stat.favs}", "歌单" to "${stat.playlists}",
                         "听歌天数" to "${stat.playDays}", "听歌时长" to listeningDuration(stat.listenMs))) { (label, value) ->
@@ -126,12 +168,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
                 SongRow(SongRowUi(song.toDomain()), { play(listOf(song.toDomain()), 0) },
                     { vm.container.playerController.add(song.toDomain(), true) }, { vm.container.playerController.add(song.toDomain()) })
             } }
-            val recent = state.profile!!.recent.map { it.toDomain() }
+            val recent = state.profile?.recent.orEmpty().map { it.toDomain() }
             if (recent.isNotEmpty()) item { MusicSectionHeader("最近听过") }
             itemsIndexed(recent, key = { _, song -> "recent-${song.id}" }) { index, song ->
                 SongRow(SongRowUi(song), { play(recent, index) }, { vm.container.playerController.add(song, true) }, { vm.container.playerController.add(song) })
             }
-            val lists = state.profile!!.playlists
+            val lists = state.profile?.playlists.orEmpty()
             if (lists.isNotEmpty()) item { MusicSectionHeader(if (own) "我的歌单" else "公开歌单") }
             items(lists, key = { "playlist-${it.id}" }) { list ->
                 Row(Modifier.fillMaxWidth().clickable { navigate("lib/playlist/${list.id}") }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -213,7 +255,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
         item {
             Text("发现", fontSize = 30.sp)
         }
-        item { io.github.currencortex.music.feature.style.MusicStyleCategories(styles, vm::loadStyles, navigate) }
+        item { io.github.currencortex.music.feature.style.MusicStyleCategories(styles, vm::loadStyles, navigate, vm::loadStyleCover) }
         item {
             Text("音乐社区", fontSize = 22.sp, fontWeight = FontWeight.Medium)
             Text("${state.stats.users} 位用户 · ${state.stats.listening} 人正在听歌", fontSize = 13.sp,
