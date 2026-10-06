@@ -24,18 +24,32 @@ class MusicStyleCapabilitiesTest {
     @Volatile private var catalogFail = true
     @Volatile private var nextPageFail = true
     private val requests = CopyOnWriteArrayList<RecordedRequest>()
+    private lateinit var greenCover: String
+    private lateinit var redCover: String
+    private val extraStyles = (1009L..1013L).joinToString(",") { """{"tagId":$it,"tagName":"曲风 $it"}""" }
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
-    private fun song(id: Long) = """{"id":$id,"name":"曲风歌曲 $id","ar":[{"id":7,"name":"测试歌手"}],"al":{"name":"测试专辑"},"dt":10000}"""
+    private fun song(id: Long) = """{"id":$id,"name":"曲风歌曲 $id","ar":[{"id":7,"name":"测试歌手"}],"al":{"name":"测试专辑","picUrl":"${if (id == 51L) redCover else greenCover}"},"dt":10000}"""
     @Before fun setup() = runBlocking {
         container = AppContainer(ApplicationProvider.getApplicationContext<CurrentMusicApplication>(), "styles-${UUID.randomUUID()}")
         container.ready.await(); container.sessionRestored.await()
+        val app = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        fun cover(name: String, color: Int): String {
+            val file = java.io.File(app.cacheDir, name)
+            val bitmap = android.graphics.Bitmap.createBitmap(32, 32, android.graphics.Bitmap.Config.ARGB_8888)
+            bitmap.eraseColor(color)
+            file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+            return file.toURI().toString()
+        }
+        greenCover = cover("style-green.png", android.graphics.Color.rgb(45, 115, 80))
+        redCover = cover("style-red.png", android.graphics.Color.rgb(155, 65, 55))
         server = MockWebServer().apply {
             dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
                     requests += request
                     val url = request.requestUrl!!
                     return when (url.encodedPath) {
-                        "/cm/ncm/style/list" -> if (catalogFail) MockResponse().setResponseCode(503) else json("""{"data":[{"tagId":1000,"tagName":"流行","enName":"Pop","childrenTags":[{"tagId":1020,"tagName":"华语流行"}]},{"tagId":1008,"tagName":"摇滚","childrenTags":null}]}""")
+                        "/cm/ncm/style/list" -> if (catalogFail) MockResponse().setResponseCode(503) else json("""{"data":[{"tagId":1000,"tagName":"流行","enName":"Pop","childrenTags":[{"tagId":1020,"tagName":"华语流行"}]},{"tagId":1008,"tagName":"摇滚","childrenTags":null},$extraStyles]}""")
                         "/cm/ncm/style/detail" -> {
                             val child = url.queryParameter("tagId") == "1020"
                             json("""{"data":{"tagId":${if (child) 1020 else 1000},"name":"${if (child) "华语流行" else "流行"}","enName":"Pop","desc":"曲风简介","cover":[]}}""")
@@ -67,7 +81,12 @@ class MusicStyleCapabilitiesTest {
         container.playerController.queue.replace(listOf(paused), 0)
         container.playerController.state.value = PlayerState(song = paused)
     }
-    @After fun cleanup() { container.close(); server.shutdown() }
+    @After fun cleanup() {
+        val app = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        java.io.File(app.externalCacheDir, "style-test-requests.txt").writeText(requests.joinToString("\n") { it.path.orEmpty() })
+        runCatching { save("style-test-last.png") }
+        container.close(); server.shutdown()
+    }
     private fun waitFor(tag: String) {
         compose.waitUntil(15000) { compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty() }
         compose.waitForIdle()
@@ -78,6 +97,14 @@ class MusicStyleCapabilitiesTest {
             java.io.File(app.externalCacheDir, name).outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
         }
     }
+    private fun waitForCoverTint(tag: String, green: Boolean) {
+        compose.waitUntil(15000) {
+            val bitmap = compose.onNodeWithTag(tag).captureToImage().asAndroidBitmap()
+            val pixel = bitmap.getPixel(bitmap.width / 3, bitmap.height - 10)
+            if (green) android.graphics.Color.green(pixel) > android.graphics.Color.red(pixel) + 5
+            else android.graphics.Color.red(pixel) > android.graphics.Color.green(pixel) + 5
+        }
+    }
     @Test fun stylesNavigateSortPageRetryAndAddToQueueWithoutTouchingCurrentPlayback() {
         compose.setContent { CurrentMusicApp(container) }
         waitFor("mini_cover")
@@ -86,21 +113,49 @@ class MusicStyleCapabilitiesTest {
         catalogFail = false
         compose.onNodeWithTag("style_catalog_retry").performScrollTo().performClick()
         waitFor("style_category_1000")
+        waitForCoverTint("style_category_1000", green = true)
         compose.onNodeWithText("音乐社区").assertExists()
         save("style-catalog-test.png")
+        compose.onNodeWithTag("style_category_1013").assertDoesNotExist()
+        assertFalse(requests.any { it.requestUrl!!.queryParameter("tagId") == "1013" })
+        compose.onNodeWithTag("style_catalog_expand").performClick()
+        waitFor("style_category_1013")
+        compose.waitUntil(15000) { requests.any { it.requestUrl!!.queryParameter("tagId") == "1013" } }
+        compose.onNodeWithTag("style_catalog_expand").performClick()
+        compose.onNodeWithTag("style_category_1013").assertDoesNotExist()
         compose.onNodeWithTag("style_category_1000").performClick()
         waitFor("style_song_41")
+        waitForCoverTint("style_hero", green = true)
         compose.onNodeWithText("曲风简介").assertExists()
         save("style-detail-test.png")
-        compose.onNodeWithTag("style_load_more").performScrollTo().performClick()
+        compose.onNodeWithTag("style_detail").performScrollToNode(hasTestTag("style_load_more"))
+        compose.waitUntil(15000) {
+            !compose.onNodeWithTag("style_load_more").fetchSemanticsNode().config.contains(androidx.compose.ui.semantics.SemanticsProperties.Disabled)
+        }
+        compose.onNodeWithTag("style_load_more").assertIsEnabled().performClick()
+        compose.onNodeWithTag("style_detail").performScrollToIndex(0)
         waitFor("style_songs_retry")
+        compose.onNodeWithTag("style_detail").performScrollToNode(hasTestTag("style_song_41"))
         compose.onNodeWithTag("style_song_41").assertExists()
         nextPageFail = false
-        compose.onNodeWithTag("style_songs_retry").performScrollTo().performClick()
+        compose.onNodeWithTag("style_detail").performScrollToNode(hasTestTag("style_songs_retry"))
+        compose.onNodeWithTag("style_songs_retry").performClick()
         waitFor("style_song_43")
         assertEquals(1, compose.onAllNodesWithTag("style_song_42").fetchSemanticsNodes().size)
-        compose.onNodeWithTag("style_sort_new").performScrollTo().performClick()
+        compose.onNodeWithTag("style_detail").performScrollToNode(hasTestTag("style_sort_new"))
+        compose.onNodeWithTag("style_sort_new").performClick()
         waitFor("style_song_51")
+        waitForCoverTint("style_hero", green = false)
+        runBlocking { container.settings.edit { it.copy(themeMode = ThemeMode.DARK) } }
+        compose.waitForIdle()
+        waitForCoverTint("style_hero", green = false)
+        compose.waitUntil(15000) {
+            val bitmap = compose.onNodeWithTag("style_hero").captureToImage().asAndroidBitmap()
+            android.graphics.Color.red(bitmap.getPixel(10, bitmap.height / 2)) < 120
+        }
+        save("style-detail-dark-test.png")
+        runBlocking { container.settings.edit { it.copy(themeMode = ThemeMode.LIGHT) } }
+        compose.waitForIdle()
         compose.onNodeWithTag("style_song_41").assertDoesNotExist()
         compose.onNodeWithTag("style_category_1020").performScrollTo().performClick()
         waitFor("style_song_61")

@@ -9,10 +9,12 @@ import io.github.currencortex.music.data.song.Song
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
-data class StyleCatalogState(val loading: Boolean = true, val styles: List<MusicStyle> = emptyList(), val error: String? = null)
+data class StyleCatalogState(val loading: Boolean = true, val styles: List<MusicStyle> = emptyList(), val error: String? = null,
+    val covers: Map<Long, String> = emptyMap())
 data class StyleDetailState(val loading: Boolean = true, val title: String = "曲风", val description: StyleDescription? = null,
     val style: MusicStyle? = null, val songs: List<Song> = emptyList(), val sort: Int = 0, val cursor: Int = 0,
-    val more: Boolean = false, val total: Int = 0, val error: String? = null, val detailError: String? = null)
+    val more: Boolean = false, val total: Int = 0, val error: String? = null, val detailError: String? = null,
+    val heroCover: String = "")
 
 class MusicStyleViewModel(val container: AppContainer, val id: Long) : ViewModel() {
     val state = MutableStateFlow(StyleDetailState())
@@ -55,6 +57,7 @@ class MusicStyleViewModel(val container: AppContainer, val id: Long) : ViewModel
                     is AppResult.Success -> if (request == generation) state.update {
                         val songs = ((if (more) before.songs else emptyList()) + result.value.songs).distinctBy(Song::id)
                         it.copy(songs = songs, cursor = result.value.nextCursor, total = result.value.total,
+                            heroCover = if (more) it.heroCover else result.value.songs.firstOrNull()?.cover.orEmpty(),
                             more = result.value.more && (!more || songs.size > before.songs.size))
                     }
                     is AppResult.Failure -> if (request == generation) state.update { it.copy(error = result.kind.message) }
