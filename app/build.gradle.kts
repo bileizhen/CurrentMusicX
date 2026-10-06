@@ -110,6 +110,7 @@ dependencies {
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
     androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    androidTestImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.11.2")
     debugImplementation("androidx.compose.ui:ui-test-manifest:1.11.2")
 }
