@@ -10,7 +10,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 data class LibraryHomeState(val loading: Boolean = false, val daily: List<Song> = emptyList(), val forYou: List<Song> = emptyList(),
-    val recent: List<Song> = emptyList(), val playlists: List<Playlist> = emptyList(), val errors: Map<String, String> = emptyMap())
+    val recent: List<Song> = emptyList(), val playlists: List<Playlist> = emptyList(), val errors: Map<String, String> = emptyMap(),
+    val loaded: Boolean = false)
 
 class LibraryViewModel(val container: AppContainer) : ViewModel() {
     val home = MutableStateFlow(LibraryHomeState())
@@ -47,7 +48,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
     }
     fun refresh() { container.libraryRepository.clearReads(); refreshRequest.update { it + 1 } }
     private suspend fun loadHome() = coroutineScope {
-        if (container.accountRepository.token == null) { home.value = LibraryHomeState(); return@coroutineScope }
+        if (container.accountRepository.token == null) { home.value = LibraryHomeState(loaded = true); return@coroutineScope }
         suspend fun <T> section(name: String, request: suspend () -> T, update: (LibraryHomeState, T) -> LibraryHomeState) {
             when (val r = appResult { request() }) {
                 is AppResult.Success -> home.update { update(it, r.value) }
@@ -59,7 +60,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
             launch { section("最近播放", container.libraryRepository::recent) { s, d -> s.copy(recent = d) } },
             launch { section("我的歌单", container.libraryRepository::playlists) { s, d -> s.copy(playlists = d) } },
         ).joinAll()
-        home.update { it.copy(loading = false) }
+        home.update { it.copy(loading = false, loaded = true) }
     }
     fun toggle(song: Song) = viewModelScope.launch {
         when (val result = container.libraryRepository.toggleLike(song)) {
