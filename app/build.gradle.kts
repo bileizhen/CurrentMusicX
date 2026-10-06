@@ -13,6 +13,13 @@ plugins {
 val keystoreProperties = rootProject.file("keystore.properties").takeIf { it.isFile }?.let { file ->
     Properties().apply { file.inputStream().use(::load) }
 }
+val updateProxyProperties = rootProject.file("update-proxy.properties").takeIf { it.isFile }?.let { file ->
+    Properties().apply { file.inputStream().use(::load) }
+}
+fun updateProxyField(name: String): String {
+    val value = providers.environmentVariable(name).orNull ?: updateProxyProperties?.getProperty(name).orEmpty()
+    return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r") + "\""
+}
 
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
@@ -28,6 +35,9 @@ android {
         versionCode = 8
         versionName = "1.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "UPDATE_PROXY_URL", updateProxyField("UPDATE_PROXY_URL"))
+        buildConfigField("String", "UPDATE_PROXY_KEY_ID", updateProxyField("UPDATE_PROXY_KEY_ID"))
+        buildConfigField("String", "UPDATE_PROXY_SECRET", updateProxyField("UPDATE_PROXY_SECRET"))
     }
 
     buildFeatures { compose = true; buildConfig = true }

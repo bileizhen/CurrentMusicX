@@ -1,6 +1,7 @@
 package io.github.currencortex.music.core.update
 
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Test
@@ -63,5 +64,97 @@ class UpdateTransferTest {
             assertEquals(2, installer.requests)
             assertFalse(transfer.state.value.permissionRequired)
         } finally { scope.cancel() }
+    }
+
+    @Test fun switchingSourcesResetsProgressAndNeverInstallsAutomatically() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val calls = mutableListOf<UpdateSource>()
+        val installer = Installer()
+        lateinit var transfer: UpdateTransfer
+        val downloader = UpdateDownload { _, source, progress ->
+            calls += source
+            assertEquals(0, (transfer.state.value.download as UpdateDownloadState.Downloading).received)
+            assertEquals(source, transfer.state.value.activeSource)
+            progress(4, 10)
+            if (source != UpdateSource.GITHUB) throw IOException("Mirror unavailable")
+            File("verified.apk")
+        }
+        transfer = UpdateTransfer(downloader, installer, scope)
+        try {
+            transfer.selectRelease(release)
+            transfer.download(UpdateSource.DPIK)
+            assertEquals(UpdateSource.DPIK.fallbacks(), calls)
+            assertEquals(UpdateDownloadState.Ready(File("verified.apk")), transfer.state.value.download)
+            assertEquals(calls.size, transfer.state.value.attempt)
+            assertEquals(0, installer.requests)
+        } finally { scope.cancel() }
+    }
+
+    @Test fun exhaustedSourcesFailOnceWithUsefulReasonsAndAllowRetry() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        var calls = 0
+        val transfer = UpdateTransfer(UpdateDownload { _, _, _ -> calls++; throw IOException("HTTP 429") }, Installer(), scope)
+        try {
+            transfer.selectRelease(release)
+            transfer.download(UpdateSource.GEEKERTAO)
+            assertEquals(UpdateSource.GEEKERTAO.fallbacks().size, calls)
+            val failure = transfer.state.value.download as UpdateDownloadState.Failed
+            UpdateSource.available.forEach { assertTrue(failure.message.contains(it.label)) }
+            assertTrue(failure.message.contains("HTTP 429"))
+            transfer.download(UpdateSource.GITHUB)
+            assertEquals(UpdateSource.GEEKERTAO.fallbacks().size + UpdateSource.GITHUB.fallbacks().size, calls)
+        } finally { scope.cancel() }
+    }
+
+    @Test fun invalidMetadataDoesNotRetryEveryMirror() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        var calls = 0
+        val transfer = UpdateTransfer(UpdateDownload { _, _, _ -> calls++; throw IllegalArgumentException("安装包校验信息无效") }, Installer(), scope)
+        try {
+            transfer.selectRelease(release)
+            transfer.download(UpdateSource.DPIK)
+            assertEquals(1, calls)
+            assertEquals(UpdateDownloadState.Failed("安装包校验信息无效"), transfer.state.value.download)
+        } finally { scope.cancel() }
+    }
+
+    @Test fun cancellingNetworkRequestDoesNotStartAnotherSource() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        var calls = 0
+        val downloader = UpdateDownload { _, _, _ ->
+            calls++
+            try { awaitCancellation() }
+            catch (_: CancellationException) { throw IOException("Canceled") }
+        }
+        val transfer = UpdateTransfer(downloader, Installer(), scope)
+        try {
+            transfer.selectRelease(release)
+            transfer.download(UpdateSource.GEEKERTAO)
+            transfer.cancel()
+            assertEquals(1, calls)
+            assertEquals(UpdateDownloadState.Idle, transfer.state.value.download)
+        } finally { scope.cancel() }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test fun lateCancelledRequestCannotOverwriteRetryForTheSameRelease() = kotlinx.coroutines.test.runTest {
+        val scope = CoroutineScope(SupervisorJob() + kotlinx.coroutines.test.UnconfinedTestDispatcher(testScheduler))
+        val finishOld = CompletableDeferred<Unit>()
+        var calls = 0
+        val transfer = UpdateTransfer(UpdateDownload { _, _, progress ->
+            if (++calls == 1) withContext(NonCancellable) { finishOld.await(); progress(10, 10); File("old.apk") }
+            else { progress(2, 10); awaitCancellation() }
+        }, Installer(), scope)
+        try {
+            transfer.selectRelease(release)
+            transfer.download(UpdateSource.GEEKERTAO)
+            transfer.cancel()
+            transfer.download(UpdateSource.GITHUB)
+            finishOld.complete(Unit)
+            testScheduler.runCurrent()
+            assertEquals(2, calls)
+            assertEquals(UpdateDownloadState.Downloading(2, 10), transfer.state.value.download)
+            assertEquals(UpdateSource.GITHUB, transfer.state.value.activeSource)
+        } finally { finishOld.complete(Unit); scope.cancel() }
     }
 }

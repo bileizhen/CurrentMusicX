@@ -14,3 +14,7 @@ keystore.properties
 *.jks
 *.keystore
 /.verification/
+/update-proxy.properties
+/services/update-proxy/node_modules/
+/services/update-proxy/.wrangler/
+/services/update-proxy/.dev.vars*

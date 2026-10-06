@@ -4,6 +4,7 @@ package io.github.currencortex.music.core.update
 import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.InternalCoroutinesApi
 import kotlinx.coroutines.currentCoroutineContext
@@ -20,9 +21,21 @@ fun interface UpdateDownload {
 
 /** Clean client, HTTPS-only redirects, bounded files and official GitHub asset SHA-256. */
 class UpdateDownloader(client: OkHttpClient, private val directory: File,
+    private val nanoTime: () -> Long = System::nanoTime,
     private val urlFor: (AppRelease, UpdateSource) -> String = { release, source -> source.url(release) },
 ) : UpdateDownload {
-    private val http = client.newBuilder().followRedirects(false).followSslRedirects(false).build()
+    private val http = client.newBuilder().followRedirects(false).followSslRedirects(false)
+        .retryOnConnectionFailure(false).connectTimeout(8, TimeUnit.SECONDS)
+        .readTimeout(15, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS).build()
+    // Permit alternate DNS routes when the dedicated mirror's first TLS connection fails.
+    // A request already accepted by the Worker cannot be replayed: its nonce is single-use.
+    private val privateMirrorHttp = http.newBuilder().retryOnConnectionFailure(true)
+        .dns(object : okhttp3.Dns {
+            override fun lookup(hostname: String) = http.dns.lookup(hostname).let { addresses ->
+                if (hostname == "updates.bileizhen.top") addresses.sortedBy { if (it is java.net.Inet4Address) 0 else 1 }
+                else addresses
+            }
+        }).build()
 
     @OptIn(InternalCoroutinesApi::class)
     override suspend fun download(release: AppRelease, source: UpdateSource, onProgress: (Long, Long) -> Unit): File = withContext(Dispatchers.IO) {
@@ -40,21 +53,29 @@ class UpdateDownloader(client: OkHttpClient, private val directory: File,
         var url = urlFor(release, source).toHttpUrl()
         try {
             for (redirect in 0..MAX_REDIRECTS) {
-                check(url.scheme == "https" && url.username.isBlank() && url.password.isBlank()) { "下载源必须使用 HTTPS" }
-                val call = http.newCall(Request.Builder().url(url)
+                remoteCheck(url.scheme == "https" && url.username.isBlank() && url.password.isBlank(), "下载源必须使用 HTTPS")
+                val request = Request.Builder().url(url)
                     .header("Accept", "application/vnd.android.package-archive, application/octet-stream")
-                    .header("User-Agent", "CurrentMusic updater").build())
+                    .header("User-Agent", "CurrentMusic updater")
+                if (source == UpdateSource.CURRENTMUSIC) UpdateProxy.current.headers(url).forEach { (name, value) -> request.header(name, value) }
+                val call = (if (source == UpdateSource.CURRENTMUSIC) privateMirrorHttp else http).newCall(request.build())
                 val cancel = currentCoroutineContext().job.invokeOnCompletion(onCancelling = true, invokeImmediately = true) { if (it != null) call.cancel() }
                 try {
                     call.execute().use { response ->
                         if (response.code in listOf(301, 302, 303, 307, 308)) {
-                            check(redirect < MAX_REDIRECTS) { "下载重定向次数过多" }
-                            url = response.header("Location")?.let(url::resolve) ?: error("下载重定向地址无效")
+                            remoteCheck(redirect < MAX_REDIRECTS, "下载重定向次数过多")
+                            url = response.header("Location")?.let(url::resolve) ?: throw IOException("下载重定向地址无效")
                         } else {
-                            check(response.isSuccessful) { "下载失败（HTTP ${response.code}）" }
-                            val body = response.body ?: error("下载内容为空")
-                            check(body.contentLength() <= 0 || body.contentLength() == release.size) { "安装包大小与发布信息不符" }
+                            remoteCheck(response.isSuccessful, "下载失败（HTTP ${response.code}）")
+                            val body = response.body ?: throw IOException("下载内容为空")
+                            remoteCheck(body.contentType()?.let { "${it.type}/${it.subtype}" } !in
+                                setOf("text/html", "application/xhtml+xml", "application/json"), "下载源返回了网页或错误信息")
+                            remoteCheck(body.contentLength() <= 0 || body.contentLength() == release.size, "安装包大小与发布信息不符")
+                            remoteCheck(body.source().peek().readByteArray(4).contentEquals(byteArrayOf(0x50, 0x4b, 0x03, 0x04)),
+                                "下载源未返回 APK 文件")
                             var received = 0L
+                            var checkpoint = nanoTime()
+                            var checkpointBytes = 0L
                             body.byteStream().use { input -> temporary.outputStream().buffered().use { output ->
                                 val buffer = ByteArray(64 * 1024)
                                 while (true) {
@@ -62,19 +83,29 @@ class UpdateDownloader(client: OkHttpClient, private val directory: File,
                                     val count = input.read(buffer)
                                     if (count < 0) break
                                     received += count
-                                    check(received <= release.size) { "安装包超过预期大小" }
+                                    remoteCheck(received <= release.size, "安装包超过预期大小")
                                     output.write(buffer, 0, count)
                                     onProgress(received, release.size)
+                                    if (source != UpdateSource.GITHUB && received < release.size) {
+                                        val now = nanoTime()
+                                        val elapsed = now - checkpoint
+                                        if (elapsed >= TimeUnit.SECONDS.toNanos(16)) {
+                                            remoteCheck((received - checkpointBytes).toDouble() * 1_000_000_000 / elapsed >= 32 * 1024,
+                                                "镜像下载速度过慢，请使用其他下载源")
+                                            checkpoint = now
+                                            checkpointBytes = received
+                                        }
+                                    }
                                 }
                             } }
-                            check(matches(temporary, release)) { "安装包不完整或 SHA-256 校验失败，请重试或切换下载源" }
+                            remoteCheck(matches(temporary, release), "安装包不完整或 SHA-256 校验失败")
                             check(temporary.renameTo(target)) { "无法保存更新文件" }
                             return@withContext target
                         }
                     }
                 } finally { cancel.dispose() }
             }
-            error("下载重定向次数过多")
+            throw IOException("下载重定向次数过多")
         } catch (failure: Exception) {
             temporary.delete()
             currentCoroutineContext().ensureActive()
@@ -83,6 +114,7 @@ class UpdateDownloader(client: OkHttpClient, private val directory: File,
     }
 
     companion object {
+        private fun remoteCheck(valid: Boolean, message: String) { if (!valid) throw IOException(message) }
         const val MAX_APK_BYTES = 128L * 1024 * 1024
         private const val MAX_REDIRECTS = 8
         fun matches(file: File, release: AppRelease): Boolean = file.isFile && file.length() == release.size &&

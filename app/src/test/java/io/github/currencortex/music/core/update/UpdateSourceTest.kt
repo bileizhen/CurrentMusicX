@@ -18,8 +18,15 @@ class UpdateSourceTest {
         assertEquals("https://github.dpik.top/" + release.apkUrl, UpdateSource.DPIK.url(release))
     }
 
-    @Test fun defaultIsTheGeekertaoMirrorAndAllSourcesAreAvailable() {
-        assertEquals(UpdateSource.GEEKERTAO, UpdateSource.default)
-        assertEquals(listOf(UpdateSource.GITHUB, UpdateSource.GEEKERTAO, UpdateSource.DPIK), UpdateSource.available)
+    @Test fun defaultUsesConfiguredPrivateMirrorAndEachFallbackIsTriedOnlyOnce() {
+        assertEquals(if (UpdateProxy.current.configured) UpdateSource.CURRENTMUSIC else UpdateSource.GITHUB, UpdateSource.default)
+        for (source in UpdateSource.available) {
+            assertEquals(source, source.fallbacks().first())
+            assertEquals(UpdateSource.available.toSet(), source.fallbacks().toSet())
+            assertEquals(source.fallbacks().size, source.fallbacks().distinct().size)
+        }
+        assertEquals(UpdateSource.GITHUB, UpdateSource.GEEKERTAO.fallbacks().last())
+        assertEquals(UpdateSource.GITHUB, UpdateSource.DPIK.fallbacks().last())
+        assertEquals(UpdateSource.GITHUB, UpdateSource.CURRENTMUSIC.fallbacks()[1])
     }
 }
