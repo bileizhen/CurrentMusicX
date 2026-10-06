@@ -12,6 +12,8 @@ import java.util.concurrent.TimeUnit
 class CurrentMusicApplication : Application(), SingletonImageLoader.Factory {
     lateinit var container: AppContainer
         private set
+    private val launchPending = java.util.concurrent.atomic.AtomicBoolean(true)
+    fun consumeLaunchAnimation(): Boolean = launchPending.getAndSet(false)
 
     override fun onCreate() {
         super.onCreate()
