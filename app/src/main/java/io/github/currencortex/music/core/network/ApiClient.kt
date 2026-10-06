@@ -22,8 +22,10 @@ class ApiClient(
         .callTimeout(90, TimeUnit.SECONDS).followRedirects(false).build(),
 ) {
     private val http = client.newBuilder().addInterceptor(AuthInterceptor()).build()
+    private val singleAttemptHttp = http.newBuilder().retryOnConnectionFailure(false).build()
     suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
-                        body: JsonElement? = null, authenticated: Boolean = false, expectedSession: RequestSession? = null): JsonElement = withContext(Dispatchers.IO) {
+                        body: JsonElement? = null, authenticated: Boolean = false, expectedSession: RequestSession? = null,
+                        retryConnection: Boolean = true): JsonElement = withContext(Dispatchers.IO) {
         val session = RequestSession(server(), if (authenticated) token() else null)
         if (expectedSession != null && expectedSession != session) throw ApiException(ErrorKind.Unauthorized)
         val url = ServerUrl.endpoint(session.server, path, query)
@@ -32,7 +34,7 @@ class ApiClient(
             .method(method, if (method == "GET") null else (body?.toString() ?: "{}").toRequestBody("application/json".toMediaType()))
             .build()
         val response = suspendCancellableCoroutine<Response> { cont ->
-            val call = http.newCall(request)
+            val call = (if (retryConnection) http else singleAttemptHttp).newCall(request)
             cont.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) { if (!cont.isCancelled) cont.resumeWithException(e) }

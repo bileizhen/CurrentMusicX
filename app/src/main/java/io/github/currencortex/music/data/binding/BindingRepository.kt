@@ -20,18 +20,38 @@ import java.net.URLEncoder
 class BindingRepository(private val api: ApiClient, private val session: () -> RequestSession, private val invalidate: () -> Unit) {
     suspend fun status() = api.get<BindingState>("ncmbind", authenticated = true)
     suspend fun live() = api.get<LiveBinding>("ncmbind/live", authenticated = true)
-    suspend fun refresh() { write("POST", "ncmbind/refresh") }
-    suspend fun unbind() { write("DELETE", "ncmbind"); invalidate() }
+    suspend fun refresh(expected: RequestSession = session()) { write("POST", "ncmbind/refresh", expected = expected) }
+    suspend fun unbind(expected: RequestSession = session()) { write("DELETE", "ncmbind", expected = expected); invalidate() }
     private suspend fun write(method: String, path: String, body: JsonObject = buildJsonObject {}, expected: RequestSession = session()) =
-        api.request(method, path, body = body, authenticated = true, expectedSession = expected)
+        api.request(method, path, body = body, authenticated = true, expectedSession = expected,
+            retryConnection = !path.startsWith("ncmbind/phone/"))
     suspend fun sync(expected: RequestSession = session()): SyncResult = ApiJson.decodeFromJsonElement<SyncResult>(write("POST", "ncmbind/sync", expected = expected)).also { invalidate() }
-    suspend fun sendCode(phone: String, country: String) {
-        require(phone.matches(Regex("[0-9]{5,15}")) && country.matches(Regex("[0-9]{1,4}")))
-        write("POST", "ncmbind/phone/code", buildJsonObject { put("phone", phone); put("ctcode", country) })
+    private fun checkPhoneResult(value: JsonElement) {
+        val result = value as? JsonObject ?: return
+        val code = (result["code"] as? JsonPrimitive)?.intOrNull
+        if (code != null && code != 200) throw ApiException(when (code) {
+            406, 429 -> ErrorKind.RateLimited
+            else -> ErrorKind.Server
+        }, code)
+        if ((result["data"] as? JsonPrimitive)?.booleanOrNull == false ||
+            (result["ok"] as? JsonPrimitive)?.booleanOrNull == false) throw ApiException(ErrorKind.Unknown)
     }
-    suspend fun bindPhone(phone: String, code: String, country: String) {
+    suspend fun sendCode(phone: String, country: String, alternate: Boolean = false, expected: RequestSession = session()) {
+        require(phone.matches(Regex("[0-9]{5,15}")) && country.matches(Regex("[0-9]{1,4}")))
+        // Explicitly selected only: never retry a potentially delivered SMS automatically.
+        val value = if (alternate) api.request("GET", "ncm/captcha/sent/v1",
+            mapOf("phone" to phone, "ctcode" to country, "confirm" to "1"), authenticated = true,
+            expectedSession = expected, retryConnection = false)
+        else write("POST", "ncmbind/phone/code", buildJsonObject { put("phone", phone); put("ctcode", country) }, expected)
+        checkPhoneResult(value)
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+    }
+    suspend fun bindPhone(phone: String, code: String, country: String, expected: RequestSession = session()) {
         require(phone.matches(Regex("[0-9]{5,15}")) && code.isNotBlank() && country.matches(Regex("[0-9]{1,4}")))
-        write("POST", "ncmbind/phone/login", buildJsonObject { put("phone", phone); put("captcha", code); put("ctcode", country) })
+        checkPhoneResult(write("POST", "ncmbind/phone/login", buildJsonObject {
+            put("phone", phone); put("captcha", code.trim()); put("ctcode", country)
+        }, expected))
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
     }
     suspend fun qrKey(expected: RequestSession) = ApiJson.decodeFromJsonElement<QrKey>(
         api.request("POST", "ncmbind/qr/key", authenticated = true, expectedSession = expected)).key
