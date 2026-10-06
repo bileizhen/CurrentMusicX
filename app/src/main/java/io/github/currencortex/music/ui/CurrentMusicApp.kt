@@ -82,6 +82,10 @@ import io.github.currencortex.music.ui.util.viewModelFactory
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
@@ -321,7 +325,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val miniLift = animateDpAsState(navigationSpace, tween(180), label = "mini player lift")
         // A scene's insets must not depend on which route is currently on top. Predictive back
         // renders both scenes before committing; changing the shared viewport makes them jump.
-        val rootFloating = settings.floatingBar && !wideLayout && !keyboardOpen
+        val rootFloating = (settings.floatingBar || wideLayout) && !keyboardOpen
         val rootTabSpace = if (!wideLayout && !keyboardOpen && !settings.floatingBar) 92.dp else 0.dp
         val sceneInsets = remember(miniAvailable, miniHeight) {
             NavEntryDecorator<String> { entry ->
@@ -348,9 +352,12 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             entryProvider = entryProvider {
                 entry(ROOT.toString()) {
                     Box(Modifier.fillMaxSize()) {
-                    Box(Modifier.fillMaxSize().statusBarsPadding().padding(start = if (wideLayout) 104.dp else 0.dp,
+                    Box(Modifier.fillMaxSize().statusBarsPadding()
+                        .then(if (wideLayout) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) else Modifier)
+                        .padding(end = if (wideLayout) SideNavigationSpace else 0.dp,
                         bottom = if (rootFloating) 0.dp else rootTabSpace + if (miniAvailable) miniHeight else 0.dp)) {
-                        CompositionLocalProvider(LocalMusicBottomInset provides if (rootFloating) 92.dp + if (miniAvailable) miniHeight else 0.dp else 0.dp) {
+                        CompositionLocalProvider(LocalMusicBottomInset provides if (rootFloating)
+                            (if (wideLayout) 0.dp else 92.dp) + if (miniAvailable) miniHeight else 0.dp else 0.dp) {
                         Box(Modifier.fillMaxSize().then(if (searchPresented) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
                         RootTabTransition(selected, tabsState, onSelected = ::selectTab) { tab ->
                             when (tab) {
@@ -519,7 +526,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             else Modifier.navigationBarsPadding().graphicsLayer {
                     translationY = -miniLift.value.toPx()
                 }
-                .padding(start = if (miniRoot && wideLayout) 104.dp else 0.dp)
+                .then(if (miniRoot && wideLayout) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) else Modifier)
+                .padding(end = if (miniRoot && wideLayout) SideNavigationSpace else 0.dp)
                 .onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp),
             onNext = { container.playerController.next(container.playerController.state.value.showPause) },
             onPrevious = { container.playerController.previous(container.playerController.state.value.showPause) },
@@ -545,6 +553,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         if (showRootNavigation && !rootWide && !keyboardOpen && !settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
             StandardNavigationBar(selected, labels, icons, ::selectTab)
         }
+        if (rootWide && showRootNavigation && !keyboardOpen) FloatingSideBar(selected, labels, icons, ::selectTab,
+            Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(end = 12.dp, bottom = 12.dp))
         }
         }
         if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) {
@@ -555,10 +565,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 page()
                 miniOverlay()
             }
-        }
-        if (rootWide && showRootNavigation) Column(Modifier.width(100.dp).fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(8.dp)
-            .testTag("wide_navigation"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            labels.forEachIndexed { index, label -> MusicTextAction(if (selected == index) "● $label" else label, { selectTab(index) }) }
         }
         PlayerSheetHost(open = playerOpen, motion = playerSheetMotion, expansion = playerExpansion,
             origin = playerOrigin, viewport = navigationBounds, artwork = artworkTransition,

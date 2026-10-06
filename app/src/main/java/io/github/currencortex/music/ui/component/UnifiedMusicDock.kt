@@ -101,8 +101,12 @@ private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerS
                     // Preserve the original 64dp bar's 32dp corner; the cover shares its center.
                     Box(Modifier.height(miniSpace).padding(horizontal = 5.dp, vertical = 6.dp)) { mini() }
                 }
-                RetainedOverlay(drawNavigation, Modifier.align(Alignment.BottomCenter).fillMaxWidth()
-                    .then(if (navigationInteractive) Modifier else Modifier.clearAndSetSemantics {})
+                // The dock itself owns placement visibility. Keep its navigation row placed:
+                // when a secondary route is pushed above PLAYER, expansion can finish while
+                // the whole dock is unplaced. A nested unplaced overlay then stays absent
+                // when the player closes, until another expansion forces placement again.
+                Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .then(if (drawNavigation && navigationInteractive) Modifier else Modifier.clearAndSetSemantics {})
                     .pointerInput(navigationInteractive) {
                         if (!navigationInteractive) awaitPointerEventScope {
                             while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }

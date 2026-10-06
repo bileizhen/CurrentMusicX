@@ -47,7 +47,8 @@ internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("Pla
     }
 }
 
-@Composable internal fun PlayerTransport(vm: PlayerViewModel, onToggle: () -> Unit) {
+@Composable internal fun PlayerTransport(vm: PlayerViewModel, onToggle: () -> Unit,
+    compact: Boolean = false) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
@@ -55,24 +56,31 @@ internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("Pla
     val enabled = state.canControlPlayback && queue.current != null
     var drag by remember(queue.current?.id) { mutableStateOf<Float?>(null) }
     val position = drag?.let { (it * knownDuration).toLong() } ?: state.positionMs
-    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp).testTag("player_transport")) {
-        PlayerSeekBar(drag ?: (state.positionMs.toFloat() / knownDuration.coerceAtLeast(1)).coerceIn(0f, 1f),
-            enabled && knownDuration > 0, { drag = it }, {
-                vm.player.seek((it * knownDuration).toLong()); drag = null
-            }, { drag = null })
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(formatPlayerTime(position), fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
-            Text("−" + formatPlayerTime((knownDuration - position).coerceAtLeast(0)), fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
+    val progress: @Composable () -> Unit = {
+        Column(Modifier.fillMaxWidth()) {
+            PlayerSeekBar(drag ?: (state.positionMs.toFloat() / knownDuration.coerceAtLeast(1)).coerceIn(0f, 1f),
+                enabled && knownDuration > 0, { drag = it }, {
+                    vm.player.seek((it * knownDuration).toLong()); drag = null
+                }, { drag = null })
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(formatPlayerTime(position), fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
+                Text("−" + formatPlayerTime((knownDuration - position).coerceAtLeast(0)), fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
+            }
         }
-        Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.SpaceEvenly,
+    }
+    val buttons: @Composable () -> Unit = {
+        Row(Modifier.fillMaxWidth().padding(top = if (compact) 6.dp else 12.dp), horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically) {
-            PlayerTransportButton("上一首", { vm.player.previous() }, enabled = enabled, direction = -1)
+            PlayerTransportButton("上一首", { vm.player.previous() }, enabled = enabled, direction = -1, compact = compact)
             PlayerTransportButton(if (state.showPause) "暂停" else "播放", onToggle,
-                Modifier.testTag("player_toggle"), enabled, state.showPause)
-            PlayerTransportButton("下一首", { vm.player.next() }, enabled = enabled, direction = 1)
+                Modifier.testTag("player_toggle"), enabled, state.showPause, compact = compact)
+            PlayerTransportButton("下一首", { vm.player.next() }, enabled = enabled, direction = 1, compact = compact)
         }
+    }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp).testTag("player_transport")) {
+        progress(); buttons()
         // A fixed status slot keeps the controls still when buffering or permission changes.
-        Box(Modifier.fillMaxWidth().height(22.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().height(if (compact) 18.dp else 22.dp), contentAlignment = Alignment.Center) {
             val message = when {
                 state.error != null -> state.error
                 actions.error != null -> actions.error
@@ -115,18 +123,18 @@ internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("Pla
 }
 
 @Composable internal fun PlayerTransportButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
-    enabled: Boolean = true, playing: Boolean = false, direction: Int = 0) {
+    enabled: Boolean = true, playing: Boolean = false, direction: Int = 0, compact: Boolean = false) {
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
     val scale = animateFloatAsState(if (pressed && enabled) .9f else 1f,
         tween(if (pressed) 90 else 140, easing = CubicBezierEasing(.2f, 0f, 0f, 1f)), label = "transport press")
     val glyph = animateFloatAsState(if (playing) 1f else 0f, tween(180, easing = LinearEasing), label = "play pause glyph")
-    Box(modifier.size(68.dp).clickable(enabled = enabled, role = Role.Button, interactionSource = interactions,
+    Box(modifier.size(if (compact) 48.dp else 68.dp).clickable(enabled = enabled, role = Role.Button, interactionSource = interactions,
         indication = null, onClick = onClick).semantics {
             contentDescription = label; if (!enabled) disabled()
             this[PlayerButtonVisuals] = PlayerButtonVisual(pressed, scale.value, glyph.value, if (enabled) 1f else .28f)
         }, contentAlignment = Alignment.Center) {
-        Box(Modifier.size(if (direction == 0) 40.dp else 30.dp).graphicsLayer {
+        Box(Modifier.size(if (compact) { if (direction == 0) 32.dp else 26.dp } else if (direction == 0) 40.dp else 30.dp).graphicsLayer {
             scaleX = scale.value; scaleY = scaleX
             translationX = direction * 3.dp.toPx() * ((1 - scale.value) / .1f)
         }) {

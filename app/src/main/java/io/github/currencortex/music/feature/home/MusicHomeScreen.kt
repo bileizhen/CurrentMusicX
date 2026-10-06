@@ -47,11 +47,19 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     val request = LocalRoomSongRequest.current
     val bottomInset = LocalMusicBottomInset.current
     val waiting = account.loading || home.loading
+    val listState = rememberLazyListState()
+    val avatarFlight = LocalAvatarFlight.current
+    LaunchedEffect(listState, avatarFlight) {
+        snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
+            // A lazy header is disposed after scrolling away; invalidate its cached hero slot.
+            if (index > 0) avatarFlight?.homeLanding = null
+        }
+    }
     PreloadMusicCovers(home.daily.take(3).map { it.cover })
     PreloadMusicCovers(home.forYou.take(8).map { it.cover }, 320)
     PreloadMusicCovers(home.playlists.take(4).map { it.cover }, 320)
     MusicPullToRefresh(home.loading, vm::refresh, Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize().testTag("music_home"), contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        LazyColumn(Modifier.fillMaxSize().testTag("music_home"), state = listState, contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {

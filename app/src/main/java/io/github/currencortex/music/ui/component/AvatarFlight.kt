@@ -27,20 +27,28 @@ data class AvatarFlightOrigin(val url: String?, val bounds: Rect, val decoration
     var request by mutableIntStateOf(0)
     var source by mutableStateOf<Rect?>(null)
     var destination by mutableStateOf<Rect?>(null)
+    // Stationary home slot, retained across pager disposal only while its list header is visible.
+    var homeLanding by mutableStateOf<Rect?>(null)
     var url by mutableStateOf<String?>(null)
     var decorationUrl by mutableStateOf<String?>(null)
     var decorationScale by mutableStateOf(1.0)
     var returning by mutableStateOf(false)
     var homeOrigin: (() -> AvatarFlightOrigin?)? = null
     var profileOrigin: (() -> AvatarFlightOrigin?)? = null
-    fun beginFromHome() { homeOrigin?.invoke()?.let { begin(it, returning = false) } }
-    fun beginFromProfile() { profileOrigin?.invoke()?.let { begin(it, returning = true) } }
-    private fun begin(origin: AvatarFlightOrigin, returning: Boolean) {
+    fun beginFromHome() {
+        if (homeLanding == null) return
+        homeOrigin?.invoke()?.let { begin(it, returning = false) }
+    }
+    fun beginFromProfile() {
+        val landing = homeLanding ?: return
+        profileOrigin?.invoke()?.let { begin(it, returning = true, landing = landing) }
+    }
+    private fun begin(origin: AvatarFlightOrigin, returning: Boolean, landing: Rect? = null) {
         if (active) return
         this.returning = returning
         url = origin.url; source = origin.bounds
         decorationUrl = origin.decorationUrl; decorationScale = origin.decorationScale
-        destination = null; request++; active = true
+        destination = landing; request++; active = true
     }
 }
 val LocalAvatarFlight = staticCompositionLocalOf<AvatarFlightState?> { null }

@@ -47,8 +47,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         var frameLoaded by remember(decorationUrl) { mutableStateOf(false) }
         val originProvider by rememberUpdatedState<() -> AvatarFlightOrigin?>({
             val origin = if (settled && reveal.value > 0f && !launching)
-                imageCoordinates?.takeIf { it.isAttached }?.boundsInRoot() ?: bounds else null
-            origin?.takeIf { it.bottom > 0f && it.top >= 0f && (placement?.visible(it) != false) }?.let {
+                imageCoordinates?.takeIf { it.isAttached }?.boundsInRoot() else null
+            origin?.takeIf { it.width > 0f && it.height > 0f && it.top >= 0f && (placement?.visible(it) != false) }?.let {
                 AvatarFlightOrigin(if (failed) null else url, it, decorationUrl.takeIf { frameLoaded }, decorationScale)
             }
         })
@@ -77,10 +77,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     translationY = (1f - reveal.value) * 3.dp.toPx()
                 }.onGloballyPositioned {
                     imageCoordinates = it
-                    if (flight?.active == true && flight.returning) {
-                        (placement?.landingBounds(it) ?: it.boundsInRoot()).takeIf { rect -> rect.top >= 0f }
-                            ?.let { rect -> flight.destination = rect }
-                    }
+                    val landing = placement?.landingBounds(it) ?: it.boundsInRoot()
+                    flight?.homeLanding = landing.takeIf { rect -> rect.width > 0f && rect.height > 0f &&
+                        rect.top >= 0f && placement?.visible(rect) != false }
                 }) {
                 Box(Modifier.fillMaxSize().clip(CircleShape).background(MiuixTheme.colorScheme.primary.copy(alpha = .08f)),
                     contentAlignment = Alignment.Center) {

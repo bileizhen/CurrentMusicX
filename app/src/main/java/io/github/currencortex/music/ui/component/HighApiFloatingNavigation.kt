@@ -37,6 +37,9 @@ fun HighApiFloatingNavigation(selectedIndex: Int, labels: List<String>, icons: L
             LocalMusicDockSurface provides { modifier, shape, body ->
                 Box(modifier.musicGlassMaterial(backdrop, blur, glass, highlight, shape)) { body() }
             },
+            LocalMusicSideWaterDrop provides if (blur) { modifier, motion, mirror ->
+                HighApiSideWaterDrop(backdrop, modifier, motion, glass, mirror)
+            } else null,
             LocalMusicDockNavigation provides { modifier ->
                 if (!blur) PlainFloatingBar(selectedIndex, labels, icons, onSelect, modifier, embedded = true)
                 else
