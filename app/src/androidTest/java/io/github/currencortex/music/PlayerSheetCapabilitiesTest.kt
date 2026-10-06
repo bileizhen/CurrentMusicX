@@ -128,7 +128,8 @@ class PlayerSheetCapabilitiesTest {
 
     @Test fun miniExpandsVerticallyAndCollapsesBackToTheSameSecondaryPage() {
         start()
-        compose.onNodeWithText("设置").performClick()
+        compose.onNodeWithTag("tab_3").performClick()
+        compose.mainClock.advanceTimeBy(700)
         compose.onNodeWithTag("open_network").performScrollTo().performClick()
         compose.onNodeWithTag("network_settings").assertIsDisplayed()
         compose.waitForIdle()
@@ -263,7 +264,9 @@ class PlayerSheetCapabilitiesTest {
         fun expansion() = compose.onNodeWithTag("music_dock").fetchSemanticsNode().config[io.github.currencortex.music.ui.component.DockExpansion]
         assertEquals(1f, expansion(), .001f)
         compose.mainClock.autoAdvance = false
-        compose.onNodeWithText("设置").performClick()
+        compose.onNodeWithTag("tab_3").performClick()
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithTag("open_network").performScrollTo().performClick()
         compose.mainClock.advanceTimeBy(64)
         val early = expansion()
         assertTrue("Navigation must fade rather than disappear immediately", early > 0f && early < 1f)
@@ -297,7 +300,9 @@ class PlayerSheetCapabilitiesTest {
         compose.onNodeWithTag("plain_floating_bar").assertIsDisplayed()
         compose.onNodeWithTag("mini_cover").assertIsDisplayed()
         assertEquals(1f, expansion(), .001f)
-        compose.onNodeWithText("设置").performClick()
+        compose.onNodeWithTag("tab_3").performClick()
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithTag("open_network").performScrollTo().performClick()
         compose.waitForIdle()
         assertEquals(0f, expansion(), .001f)
         compose.onNodeWithTag("plain_floating_bar").assertDoesNotExist()
@@ -585,7 +590,8 @@ class PlayerSheetCapabilitiesTest {
     @Test fun secondaryDirectCloseRetainsArtworkLandingPosition() {
         start()
         val rootCover = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().boundsInRoot
-        compose.onNodeWithText("设置").performClick()
+        compose.onNodeWithTag("tab_3").performClick()
+        compose.mainClock.advanceTimeBy(700)
         compose.onNodeWithTag("open_network").performScrollTo().performClick()
         compose.waitForIdle()
         val source = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().boundsInRoot

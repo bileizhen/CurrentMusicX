@@ -107,17 +107,14 @@ class LibraryCapabilitiesTest {
             }
         }
 
-        compose.onNodeWithText("设置").performClick()
+        compose.onNodeWithTag("tab_3").performClick()
+        compose.mainClock.advanceTimeBy(700)
+        assertSurface("0", "0", 700)
+        compose.onNodeWithTag("open_network").performScrollTo().performClick()
         compose.mainClock.advanceTimeBy(160)
-        assertSurface("20", "0", 160)
+        assertSurface("21", "0", 160)
         compose.mainClock.advanceTimeBy(160)
-        assertSurface("20", "0", 320)
-        compose.mainClock.advanceTimeBy(1000)
-        compose.onNodeWithText("网络与播放").performClick()
-        compose.mainClock.advanceTimeBy(160)
-        assertSurface("21", "20", 160)
-        compose.mainClock.advanceTimeBy(160)
-        assertSurface("21", "20", 320)
+        assertSurface("21", "0", 320)
         compose.mainClock.advanceTimeBy(1000)
         compose.onNodeWithTag("network_settings").assertExists()
         compose.mainClock.autoAdvance = true
@@ -262,6 +259,8 @@ class LibraryCapabilitiesTest {
         compose.onNodeWithTag("catalog_submit").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Artist").fetchSemanticsNodes().size>=2 }
         compose.onNodeWithTag("catalog_entry_12").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("artist_tab_albums").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("artist_tab_albums").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Album").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Album").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Library track").fetchSemanticsNodes().isNotEmpty() }

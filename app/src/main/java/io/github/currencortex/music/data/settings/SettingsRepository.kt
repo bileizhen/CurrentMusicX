@@ -8,11 +8,13 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.first
 
 class SettingsRepository(
     private val dataStore: DataStore<Preferences>,
     scope: CoroutineScope,
 ) {
+    suspend fun snapshot(): AppearanceSettings = SettingsPreferences.read(dataStore.data.first())
     val state: StateFlow<AppearanceSettings> = dataStore.data
         .map(SettingsPreferences::read)
         .stateIn(scope, SharingStarted.Eagerly, AppearanceSettings())

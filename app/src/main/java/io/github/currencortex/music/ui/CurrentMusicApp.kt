@@ -83,7 +83,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.Column
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
@@ -113,10 +112,28 @@ private const val ABOUT = 2
 private const val SETTINGS = 20
 private const val NETWORK = 21
 private const val PLAYER = 22
+private const val SEARCH = 23
+private const val HOME_TAB = 0
+private const val DISCOVER_TAB = 1
+private const val ME_TAB = 2
+private const val SETTINGS_TAB = 3
 private fun LegalDocument.route() = 3 + ordinal
 
 @Composable
-fun CurrentMusicApp(container: AppContainer) {
+fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, launchWindowReady: Boolean = true) {
+    var launchFinished by rememberSaveable { mutableStateOf(!animateLaunch) }
+    val launchBrand = remember { LaunchBrandState() }
+    val avatarFlight = remember { AvatarFlightState() }
+    launchBrand.active = !launchFinished
+    val launchReady by androidx.compose.runtime.produceState(!animateLaunch, container) {
+        if (animateLaunch) {
+            container.ready.await()
+            container.settings.snapshot()
+            container.sessionRestored.await()
+        }
+        value = true
+    }
+    LaunchedEffect(animateLaunch) { if (!animateLaunch) launchFinished = true }
     val settings by container.settings.state.collectAsStateWithLifecycle()
     val settingsVm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container.settings) })
     val updateVm: UpdateSettingsViewModel = viewModel(factory = viewModelFactory { UpdateSettingsViewModel(container.updateSettings) })
@@ -131,7 +148,9 @@ fun CurrentMusicApp(container: AppContainer) {
     val musicSettingsVm: MusicSettingsViewModel = viewModel(factory = viewModelFactory { MusicSettingsViewModel(container) })
     val playerVm: PlayerViewModel = viewModel(factory = viewModelFactory { PlayerViewModel(container) })
     val libraryVm: LibraryViewModel = viewModel(factory = viewModelFactory { LibraryViewModel(container) })
+    val libraryHome by libraryVm.home.collectAsStateWithLifecycle()
     val profileVm: ProfileViewModel = viewModel(key = "my-profile", factory = viewModelFactory { ProfileViewModel(container) })
+    val myProfile by profileVm.state.collectAsStateWithLifecycle()
     val discoverVm: DiscoverViewModel = viewModel(factory = viewModelFactory { DiscoverViewModel(container) })
     val profileDialog by profileVm.dialog.collectAsStateWithLifecycle()
     val profileMessage by profileVm.message.collectAsStateWithLifecycle()
@@ -144,17 +163,22 @@ fun CurrentMusicApp(container: AppContainer) {
     // Position and loading updates belong to the player, not the entire navigation tree.
     val playerState by playerVm.navigation.collectAsStateWithLifecycle()
     val currentSong by playerVm.currentSong.collectAsStateWithLifecycle()
+    val searchState by searchVm.state.collectAsStateWithLifecycle()
+    val searchKeyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
+    val searchFocusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val roomLive by container.roomSession.state.collectAsStateWithLifecycle()
     val tabsState = rememberSaveableStateHolder()
     var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
     var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
     LeiTheme(settings, darkSystemBars = if (miniQueueOpen || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null) {
-        var selected by rememberSaveable { mutableIntStateOf(0) }
+        CompositionLocalProvider(LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight) {
+        Box(Modifier.fillMaxSize()) {
+        var selected by rememberSaveable { mutableIntStateOf(HOME_TAB) }
         var startupRouted by rememberSaveable { mutableStateOf(false) }
         LaunchedEffect(container) {
             if (!startupRouted) {
                 container.sessionRestored.await()
-                selected = if (container.accountRepository.state.value.account != null) 0 else 3
+                selected = if (container.accountRepository.state.value.account != null) HOME_TAB else ME_TAB
                 startupRouted = true
             }
         }
@@ -171,15 +195,21 @@ fun CurrentMusicApp(container: AppContainer) {
         var miniArtworkOrigin by remember { mutableStateOf<(() -> PlayerArtworkOrigin?)?>(null) }
         val playerOpen = backStack.last() == PLAYER.toString()
         val playerPresented by remember(playerOpen) { derivedStateOf { playerOpen || playerExpansion.value > .0001f } }
-        val sceneStack = remember(backStack) { backStack.filter { it != PLAYER.toString() } }
+        val searchOpen = SEARCH.toString() in backStack
+        val searchSheet = remember { io.github.currencortex.music.feature.search.SearchSheetState(searchOpen) }
+        var searchBounds by remember { mutableStateOf<Rect?>(null) }
+        var searchFocus by remember { mutableStateOf(false) }
+        val searchPresented by remember(searchOpen) { derivedStateOf { searchOpen || searchSheet.progress > .0001f } }
+        val sceneStack = remember(backStack) { backStack.filter { it != PLAYER.toString() && it != SEARCH.toString() } }
         val playerSavedState = rememberSaveableStateHolder()
         var navigationBounds by remember { mutableStateOf<Rect?>(null) }
         var playerSheetMotion by remember { mutableStateOf(PlayerSheetMotion.NONE) }
 
         val density = LocalDensity.current
-        val rootPage = sceneStack.last() == ROOT.toString()
+        val rootPage = sceneStack.last() == ROOT.toString() && !searchPresented
         val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
-        val miniAvailable = !keyboardOpen && (currentSong != null || playerState.mode == PlayerMode.ROOM)
+        val miniRetainedAvailable = currentSong != null || playerState.mode == PlayerMode.ROOM
+        val miniAvailable = !keyboardOpen && miniRetainedAvailable
         val showMini = miniAvailable && !playerPresented && sceneStack.last() != "lib/video"
         PreloadMusicCovers(listOf(currentSong?.cover.orEmpty()), 800)
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
@@ -189,6 +219,7 @@ fun CurrentMusicApp(container: AppContainer) {
         fun navigateBack() {
             if (roomDialogOpen || castDialogOpen || playerDialogOpen || miniQueueOpen || songMenu != null) return
             if (backStack.size > 1) {
+                if (backStack.last() == SEARCH.toString()) { searchFocusManager.clearFocus(); searchKeyboard?.hide() }
                 playerSheetMotion = if (backStack.last() == PLAYER.toString()) PlayerSheetMotion.CLOSE else PlayerSheetMotion.NONE
                 if (backStack.last() == "lib/video") container.playerController.closeVideo()
                 backStack = backStack.dropLast(1)
@@ -205,6 +236,7 @@ fun CurrentMusicApp(container: AppContainer) {
                 playerSheetMotion = PlayerSheetMotion.OPEN
             }
             else playerSheetMotion = PlayerSheetMotion.NONE
+            if (route == SEARCH) { searchSheet.source = searchBounds; searchFocus = true }
             backStack = backStack + route.toString()
         }
         fun navigateLibrary(route: String) {
@@ -263,8 +295,16 @@ fun CurrentMusicApp(container: AppContainer) {
             playerDrag.flingThreshold = with(density) { 600.dp.toPx() }
         }
         val predictiveBack = settings.predictiveBack && Build.VERSION.SDK_INT >= 34
-        val labels = listOf("首页", "发现", "搜索", "我的")
-        val icons = listOf(Icons.Default.Home, Icons.Default.Star, Icons.Default.Search, Icons.Default.Person)
+        val labels = listOf("首页", "发现", "我的", "设置")
+        val icons = listOf(Icons.Default.Home, Icons.Default.Star, Icons.Default.Person, Icons.Default.Settings)
+        fun selectTab(index: Int) {
+            if (selected == HOME_TAB && index == ME_TAB && account.account != null) avatarFlight.beginFromHome()
+            if (selected == ME_TAB && index == HOME_TAB && account.account != null) avatarFlight.beginFromProfile()
+            selected = index
+        }
+        androidx.activity.compose.BackHandler(enabled = backStack.size == 1 && (selected == SETTINGS_TAB || (selected == ME_TAB && account.account != null)) && !avatarFlight.active) {
+            selectTab(HOME_TAB)
+        }
 
         top.yukonga.miuix.kmp.basic.Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = MiuixTheme.colorScheme.background) {
@@ -298,8 +338,8 @@ fun CurrentMusicApp(container: AppContainer) {
             }
         }
         val page: @Composable () -> Unit = {
-        Box(Modifier.fillMaxSize().then(if (playerPresented || miniQueueOpen) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
-        Column(Modifier.fillMaxSize().imePadding()) {
+        Box(Modifier.fillMaxSize().then(if (launchBrand.active || playerPresented || miniQueueOpen) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
+        Column(Modifier.fillMaxSize().then(if (searchPresented) Modifier else Modifier.imePadding())) {
         NavDisplay(
             backStack = sceneStack,
             modifier = Modifier.weight(1f).fillMaxSize().testTag("music_navigation").background(MiuixTheme.colorScheme.background),
@@ -307,23 +347,43 @@ fun CurrentMusicApp(container: AppContainer) {
             onBack = ::navigateBack,
             entryProvider = entryProvider {
                 entry(ROOT.toString()) {
+                    Box(Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxSize().statusBarsPadding().padding(start = if (wideLayout) 104.dp else 0.dp,
                         bottom = if (rootFloating) 0.dp else rootTabSpace + if (miniAvailable) miniHeight else 0.dp)) {
                         CompositionLocalProvider(LocalMusicBottomInset provides if (rootFloating) 92.dp + if (miniAvailable) miniHeight else 0.dp else 0.dp) {
-                        tabsState.SaveableStateProvider(selected) {
-                            when (selected) {
-                                0 -> MusicHomeScreen(libraryVm, onSearch = { selected = 2 }, onSettings = { navigateTo(SETTINGS) },
-                                    navigate = ::navigateLibrary, play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
-                                1 -> DiscoverScreen(discoverVm, ::navigateLibrary)
-                                2 -> SearchScreen(searchVm, container.playerController, actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) },
-                                    roomName = roomLive.detail?.room?.name, onBack = if (roomLive.detail != null) ({ navigateLibrary("room/list") }) else null) { songs, index ->
-                                    playWithPermission { container.playerController.playList(songs, index) }
-                                }
-                                3 -> MeScreen(profileVm, authVm, ::navigateLibrary, { navigateTo(SETTINGS) },
+                        Box(Modifier.fillMaxSize().then(if (searchPresented) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
+                        RootTabTransition(selected, tabsState, onSelected = ::selectTab) { tab ->
+                            when (tab) {
+                                HOME_TAB -> MusicHomeScreen(libraryVm, onSearch = { navigateTo(SEARCH) }, onProfile = { _, _ -> selectTab(ME_TAB) },
+                                    navigate = ::navigateLibrary, play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
+                                    profile = myProfile.profile?.user, onSearchBounds = { searchBounds = it }, hideSearch = searchPresented,
+                                    searchQuery = searchState.query, onSearchSubmit = {
+                                        navigateTo(SEARCH)
+                                        if (searchState.query.isNotBlank()) { searchVm.search(); searchFocus = false }
+                                    })
+                                DISCOVER_TAB -> DiscoverScreen(discoverVm, ::navigateLibrary)
+                                ME_TAB -> MeScreen(profileVm, authVm, ::navigateLibrary, { selectTab(SETTINGS_TAB) },
                                     play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
+                                SETTINGS_TAB -> SettingsScreen(updateViewModel = updateVm,
+                                    onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
+                                    onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates)
                             }
                         }
                         }
+                    }
+                    }
+                    io.github.currencortex.music.feature.search.SearchSheetHost(searchOpen, searchSheet, predictiveBack,
+                        backEnabled = backStack.last() == SEARCH.toString() && !playerPresented && songMenu == null && !miniQueueOpen && libraryDialogSong == null && likeSelection.song == null,
+                        onBack = ::navigateBack) {
+                        CompositionLocalProvider(LocalMusicBottomInset provides if (miniAvailable) miniHeight else 0.dp) {
+                            SearchScreen(searchVm, container.playerController,
+                                actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) }, navigate = ::navigateLibrary,
+                                onBack = ::navigateBack, sheet = searchSheet, autoFocus = searchFocus, onFocused = { searchFocus = false },
+                                recommendations = libraryHome.daily + libraryHome.forYou, recent = libraryHome.recent) { songs, index ->
+                                playWithPermission { container.playerController.playList(songs, index) }
+                            }
+                        }
+                    }
                     }
                 }
                 entry(SETTINGS.toString()) {
@@ -342,6 +402,7 @@ fun CurrentMusicApp(container: AppContainer) {
                 entry("room/search") {
                     Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                         SearchScreen(searchVm, container.playerController, actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) },
+                            navigate = ::navigateLibrary,
                             roomName = roomLive.detail?.room?.name.orEmpty(), onBack = ::navigateBack) { songs, index -> requestSong(songs[index]) }
                     }
                 }
@@ -401,6 +462,14 @@ fun CurrentMusicApp(container: AppContainer) {
                     entry(route) {
                         when {
                             route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateBack, ::navigateLibrary)
+                            route.startsWith("lib/artist/") -> {
+                                val artistVm: io.github.currencortex.music.feature.artist.ArtistViewModel = viewModel(key = route,
+                                    factory = viewModelFactory { io.github.currencortex.music.feature.artist.ArtistViewModel(container,
+                                        route.substringAfterLast('/').toLongOrNull() ?: 0L) })
+                                io.github.currencortex.music.feature.artist.ArtistScreen(artistVm, libraryVm, ::navigateBack, ::navigateLibrary) {
+                                    songs, index -> playWithPermission { container.playerController.playList(songs, index) }
+                                }
+                            }
                             route.startsWith("lib/style/") -> {
                                 val styleVm: io.github.currencortex.music.feature.style.MusicStyleViewModel = viewModel(key = route,
                                     factory = viewModelFactory { io.github.currencortex.music.feature.style.MusicStyleViewModel(container,
@@ -438,9 +507,10 @@ fun CurrentMusicApp(container: AppContainer) {
         }
         }
         val dockVisible by remember(keyboardOpen, sceneStack) { derivedStateOf {
-            !keyboardOpen && sceneStack.last() != "lib/video" && playerExpansion.value < .9999f
+            sceneStack.last() != "lib/video" && playerExpansion.value < .9999f
         } }
         val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
+        KeyboardDockOverlay(keyboardOpen) {
         val unifiedDock = settings.floatingBar && !wideLayout
         val miniBody: @Composable () -> Unit = {
         MiniPlayer(playerVm, { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
@@ -461,23 +531,24 @@ fun CurrentMusicApp(container: AppContainer) {
             val glassNavigation = LocalMusicDockNavigation.current
             UnifiedMusicDock(expanded = miniRoot && !keyboardOpen,
                 visible = dockVisible,
-                miniPresent = miniAvailable, navigationInteractive = showRootNavigation && !keyboardOpen,
+                miniPresent = miniRetainedAvailable, navigationInteractive = showRootNavigation && !keyboardOpen,
                 modifier = Modifier.align(Alignment.BottomCenter)
                     .then(if (playerPresented || miniQueueOpen) Modifier.clearAndSetSemantics {} else Modifier)
                     .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) },
                 onOrigin = { dockOrigin = it }, mini = miniBody,
-                navigation = glassNavigation ?: { mod -> PlainFloatingBar(selected, labels, icons, { selected = it }, mod, embedded = true) })
-        } else if (miniAvailable) RetainedOverlay(dockVisible, Modifier.align(Alignment.BottomCenter)
+                navigation = glassNavigation ?: { mod -> PlainFloatingBar(selected, labels, icons, ::selectTab, mod, embedded = true) })
+        } else if (miniRetainedAvailable) RetainedOverlay(dockVisible, Modifier.align(Alignment.BottomCenter)
             .then(if (playerPresented || miniQueueOpen) Modifier.clearAndSetSemantics {} else Modifier)
             .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) }) {
             miniBody()
         }
         if (showRootNavigation && !rootWide && !keyboardOpen && !settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
-            StandardNavigationBar(selected, labels, icons) { selected = it }
+            StandardNavigationBar(selected, labels, icons, ::selectTab)
+        }
         }
         }
         if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) {
-            HighApiFloatingNavigation(selected, labels, icons, { selected = it }, settings.blur, settings.liquidGlass,
+            HighApiFloatingNavigation(selected, labels, icons, ::selectTab, settings.blur, settings.liquidGlass,
                 content = page, overlay = miniOverlay)
         } else {
             Box(Modifier.fillMaxSize()) {
@@ -487,7 +558,7 @@ fun CurrentMusicApp(container: AppContainer) {
         }
         if (rootWide && showRootNavigation) Column(Modifier.width(100.dp).fillMaxHeight().statusBarsPadding().navigationBarsPadding().padding(8.dp)
             .testTag("wide_navigation"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            labels.forEachIndexed { index, label -> MusicTextAction(if (selected == index) "● $label" else label, { selected = index }) }
+            labels.forEachIndexed { index, label -> MusicTextAction(if (selected == index) "● $label" else label, { selectTab(index) }) }
         }
         PlayerSheetHost(open = playerOpen, motion = playerSheetMotion, expansion = playerExpansion,
             origin = playerOrigin, viewport = navigationBounds, artwork = artworkTransition,
@@ -513,14 +584,14 @@ fun CurrentMusicApp(container: AppContainer) {
         // navigation, once, and take precedence over returning to the parent page.
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
-            isBackEnabled = backStack.size > 1 && !playerPresented && !predictiveBack && !showLogs &&
+            isBackEnabled = backStack.size > 1 && !playerPresented && !searchPresented && !predictiveBack && !showLogs &&
                 pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }
         MemberDetailDialog(show = memberFocus != null, focus = shownMember, onDismiss = { memberFocus = null })
         LogExportDialog(showLogs, container.logger) { showLogs = false }
-        UpdateDialog(container.updates, container.updateTransfer)
+        if (!launchBrand.active) UpdateDialog(container.updates, container.updateTransfer)
         LibraryDialogs(libraryVm)
         ProfileDialogs(profileVm, authVm)
         if (profileMessage != null) MusicDialog("账号操作", onDismiss = { profileVm.message.value = null }) {
@@ -553,6 +624,20 @@ fun CurrentMusicApp(container: AppContainer) {
             TextButton("继续播放", onClick = { container.playerController.acceptHighSpec() })
             TextButton("切换无损", onClick = { playerVm.quality(AudioQuality.LOSSLESS) })
             TextButton("以后不提示", onClick = { playerVm.suppressWarning() })
+        }
+        }
+        AvatarFlightOverlay(avatarFlight) {
+            avatarFlight.active = false
+            selected = if (avatarFlight.returning) ME_TAB else HOME_TAB
+        }
+        val landingOnHome = selected == HOME_TAB && backStack.last() == ROOT.toString()
+        val pageReady = launchReady && startupRouted && !account.loading &&
+            (!landingOnHome || (libraryHome.loaded && !libraryHome.loading))
+        if (!launchFinished) LaunchBrandOverlay(launchBrand, pageReady,
+            canLandOnHome = landingOnHome,
+            windowReady = launchWindowReady,
+            enableBlur = settings.blur,
+            onFinished = { launchBrand.active = false; launchFinished = true })
         }
         }
     }

@@ -107,12 +107,13 @@ class NativeCapabilitiesTest {
     @Test fun tabsLoginSearchSubmitAndSessionSurviveRestoration() {
         val restoration = StateRestorationTester(compose)
         restoration.setContent { CurrentMusicApp(container) }
-        compose.onNodeWithTag("tab_3").performClick()
+        compose.onNodeWithTag("tab_2").performClick()
         compose.onNodeWithTag("login_username").performTextInput("user")
         compose.onNodeWithTag("login_password").performTextInput("pass")
         compose.onNodeWithTag("login_submit").performClick()
         compose.waitUntil(10000) { container.accountRepository.state.value.account != null }
-        compose.onNodeWithTag("tab_2").performClick()
+        compose.onNodeWithTag("tab_0").performClick()
+        compose.onNodeWithTag("open_home_search").performClick()
         compose.onNodeWithTag("search_input").performTextInput("test")
         assertEquals(0, searchCount)
         compose.onNodeWithTag("submit_search").performClick()
@@ -124,8 +125,8 @@ class NativeCapabilitiesTest {
         assertEquals("test", lastSearchKeyword)
         assertEquals("2", lastSearchOffset)
         compose.onNodeWithTag("search_input").assertTextContains("not submitted")
-        compose.onNodeWithTag("tab_0").performClick()
-        compose.onNodeWithTag("tab_2").performClick()
+        compose.onNodeWithTag("search_back").performClick()
+        compose.onNodeWithTag("open_home_search").performClick()
         compose.onAllNodesWithText("Track one")[0].assertExists()
         restoration.emulateSavedInstanceStateRestore()
         compose.onAllNodesWithText("Track one")[0].assertExists()
@@ -133,7 +134,8 @@ class NativeCapabilitiesTest {
     }
     @Test fun mediaServiceQueueSeekLyricsAndControllerPauseResume() {
         compose.setContent { CurrentMusicApp(container) }
-        compose.onNodeWithTag("tab_2").performClick()
+        compose.onNodeWithTag("tab_0").performClick()
+        compose.onNodeWithTag("open_home_search").performClick()
         compose.onNodeWithTag("search_input").performTextInput("test")
         compose.onNodeWithTag("submit_search").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Track one").fetchSemanticsNodes().isNotEmpty() }
@@ -178,7 +180,7 @@ class NativeCapabilitiesTest {
     @Test fun settingsAppearanceDarkModeGlassAndSystemBack() {
         lateinit var activity: ComponentActivity
         compose.setContent { activity = LocalContext.current.activity(); CurrentMusicApp(container) }
-        compose.onNodeWithText("设置").performClick()
+        compose.onNodeWithTag("tab_3").performClick()
         compose.onNodeWithText("网络与播放").performClick()
         compose.onNodeWithTag("server_input").assertExists()
         compose.onNodeWithTag("navigate_back").performClick()
@@ -191,7 +193,7 @@ class NativeCapabilitiesTest {
         compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
         if (android.os.Build.VERSION.SDK_INT >= 33)
             compose.waitUntil(5000) { compose.onAllNodesWithTag("glass_floating_bar").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("tab_3").performClick()
+        compose.onNodeWithTag("tab_2").performClick()
         compose.onNodeWithTag("login_screen").assertExists()
     }
     @Test fun keystoreTokenIsEncryptedAndRestores() {
@@ -220,7 +222,7 @@ class NativeCapabilitiesTest {
     @Test fun activityRecreationRetainsSearchAccountAndPlayingService() {
         runBlocking { container.authRepository.login("user", "pass") }
         ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-            compose.onNodeWithTag("tab_2").performClick()
+            compose.onNodeWithTag("open_home_search").performClick()
             compose.onNodeWithTag("search_input").performTextInput("rotation")
             compose.onNodeWithTag("submit_search").performClick()
             compose.waitUntil(10000) { compose.onAllNodesWithText("Track one").fetchSemanticsNodes().isNotEmpty() }
@@ -241,7 +243,7 @@ class NativeCapabilitiesTest {
             destination.enqueue(MockResponse().setResponseCode(401))
             destination.start()
             compose.setContent { CurrentMusicApp(container) }
-            compose.onNodeWithText("设置").performClick()
+            compose.onNodeWithTag("tab_3").performClick()
             compose.onNodeWithText("网络与播放").performClick()
             compose.onNodeWithTag("server_input").performTextReplacement(destination.url("/new").toString())
             compose.onNodeWithText("保存服务器").performClick()
