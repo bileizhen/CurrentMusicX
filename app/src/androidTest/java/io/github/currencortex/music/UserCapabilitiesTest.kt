@@ -29,6 +29,11 @@ class UserCapabilitiesTest {
     @Volatile private var sentCode = ""
     @Volatile private var uploadedAvatar: ByteArray? = null
     private val qrChecks = AtomicInteger()
+    private val qrKeys = AtomicInteger()
+    private val codeRequests = AtomicInteger()
+    private val alternateCodeRequests = AtomicInteger()
+    @Volatile private var qrStatus = 801
+    @Volatile private var failNextQrCheck = false
     @Volatile private var failNextPhoneLogin = false
     private val syncRequests = AtomicInteger()
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
@@ -62,8 +67,20 @@ class UserCapabilitiesTest {
                     path == "/cm/plays/recent" -> json("""{"songs":[]}""")
                     path == "/cm/ncmbind" && request.method == "DELETE" -> { bound = false; json("{}") }
                     path == "/cm/ncmbind" -> json("""{"bound":$bound,"profile":{"nickname":"Cloud user"}}""")
-                    path == "/cm/ncmbind/qr/key" -> json("""{"key":"isolated-qr-key"}""")
-                    path == "/cm/ncmbind/qr/check" -> { qrChecks.incrementAndGet(); json("""{"code":801}""") }
+                    path == "/cm/ncmbind/qr/key" -> json("""{"key":"isolated-qr-key-${qrKeys.incrementAndGet()}"}""")
+                    path == "/cm/ncmbind/qr/check" -> {
+                        qrChecks.incrementAndGet()
+                        if (failNextQrCheck) { failNextQrCheck = false; return MockResponse().setResponseCode(502) }
+                        if (qrStatus == 803) bound = true
+                        json("""{"code":$qrStatus}""")
+                    }
+                    path == "/cm/ncmbind/phone/code" -> { codeRequests.incrementAndGet(); MockResponse().setResponseCode(502) }
+                    path == "/cm/ncm/captcha/sent/v1" -> {
+                        alternateCodeRequests.incrementAndGet()
+                        assertEquals("1", request.requestUrl!!.queryParameter("confirm"))
+                        assertEquals("Bearer isolated-first-token", request.getHeader("Authorization"))
+                        json("""{"code":200,"data":true}""")
+                    }
                     path == "/cm/ncmbind/phone/login" -> {
                         if (failNextPhoneLogin) {
                             failNextPhoneLogin = false
@@ -194,7 +211,7 @@ class UserCapabilitiesTest {
         compose.onNodeWithTag("qr_binding").performScrollTo().performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithTag("binding_qr").fetchSemanticsNodes().isNotEmpty() }
         compose.waitUntil(10000) { qrChecks.get() > 0 }
-        compose.onNodeWithText("返回").performScrollTo().performClick()
+        compose.onNodeWithTag("binding_back").performClick()
         compose.waitForIdle(); val checks = qrChecks.get()
         Thread.sleep(2300); assertEquals(checks, qrChecks.get())
         compose.onNodeWithTag("open_binding").performScrollTo().performClick()
@@ -211,8 +228,7 @@ class UserCapabilitiesTest {
         compose.onNodeWithText(failure).assertExists()
         assertEquals(7L, container.accountRepository.state.value.account?.id)
         assertFalse(bound); assertEquals(0, syncRequests.get())
-        compose.onNodeWithTag("binding_code").performScrollTo().performTextInput("1234")
-        compose.onNodeWithTag("binding_code").performImeAction()
+        compose.onNodeWithTag("binding_code").performScrollTo().assertTextContains("1234")
         compose.onNodeWithTag("binding_screen").performScrollToNode(hasTestTag("confirm_phone_binding"))
         compose.onNodeWithTag("confirm_phone_binding").performClick()
         val success = "绑定成功；已同步 2 个歌单 / 10 首歌曲，1 个待续传"
@@ -223,5 +239,110 @@ class UserCapabilitiesTest {
         compose.onNodeWithText("解绑").performScrollTo().performClick()
         compose.onNodeWithTag("confirm_unbind").performClick()
         compose.waitUntil(10000) { !bound }
+    }
+
+    private class BindingLifecycle : androidx.lifecycle.LifecycleOwner {
+        val registry = androidx.lifecycle.LifecycleRegistry(this)
+        override val lifecycle: androidx.lifecycle.Lifecycle get() = registry
+    }
+    private fun bindingFixture(owner: BindingLifecycle, expectQr: Boolean = true): io.github.currencortex.music.feature.binding.BindingViewModel {
+        lateinit var vm: io.github.currencortex.music.feature.binding.BindingViewModel
+        compose.runOnIdle { owner.registry.currentState = androidx.lifecycle.Lifecycle.State.RESUMED }
+        compose.setContent {
+            vm = androidx.lifecycle.viewmodel.compose.viewModel(factory = io.github.currencortex.music.ui.util.viewModelFactory {
+                io.github.currencortex.music.feature.binding.BindingViewModel(container)
+            })
+            androidx.compose.runtime.CompositionLocalProvider(androidx.lifecycle.compose.LocalLifecycleOwner provides owner) {
+                io.github.currencortex.music.ui.theme.LeiTheme(io.github.currencortex.music.data.settings.AppearanceSettings(blur = false)) {
+                    io.github.currencortex.music.feature.binding.BindingScreen(vm) {}
+                }
+            }
+        }
+        compose.waitUntil(10000) {
+            if (expectQr) qrKeys.get() == 1 && vm.state.value.qrMessage != "正在生成二维码…"
+            else vm.state.value.binding != null && !vm.state.value.loading
+        }
+        return vm
+    }
+    @Test fun boundAccountShowsManagementAndOnlyOpensLoginOnRequest() {
+        bound = true
+        val vm = bindingFixture(BindingLifecycle(), expectQr = false)
+        compose.onNodeWithTag("binding_account_card").assertExists()
+        compose.onNodeWithText("Cloud user").assertExists()
+        compose.onNodeWithTag("binding_login_card").assertDoesNotExist()
+        assertEquals("Healthy bindings do not generate another login QR", 0, qrKeys.get())
+        compose.onNodeWithTag("sync_binding").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("relogin_binding").performScrollTo().performClick()
+        compose.waitUntil(10000) { qrKeys.get() == 1 && vm.state.value.qrUrl != null }
+        compose.onNodeWithTag("qr_binding").performScrollTo().assertIsSelected()
+        compose.onNodeWithTag("binding_qr").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("phone_binding_tab").performScrollTo().performClick()
+        compose.onNodeWithTag("phone_binding_tab").assertIsSelected()
+        compose.onNodeWithTag("binding_country").performScrollTo().assertTextContains("86")
+        compose.onNodeWithTag("binding_phone").performScrollTo().performTextInput("123456789")
+        compose.onNodeWithTag("binding_code").performScrollTo().performTextInput("1234")
+        compose.onNodeWithTag("binding_code").performImeAction()
+        compose.onNodeWithTag("confirm_phone_binding").performScrollTo().assertIsEnabled()
+        assertEquals(0, codeRequests.get()); assertEquals(0, syncRequests.get())
+        assertTrue(bound)
+    }
+    @Test fun qrSurvivesBackgroundAndTemporary502ThenBindsTheSameKey() {
+        val owner = BindingLifecycle()
+        failNextQrCheck = true
+        val vm = bindingFixture(owner)
+        compose.waitUntil(10000) { vm.state.value.qrMessage.contains("正在重试") }
+        val url = vm.state.value.qrUrl
+        compose.runOnIdle { owner.registry.currentState = androidx.lifecycle.Lifecycle.State.CREATED }
+        val checks = qrChecks.get()
+        Thread.sleep(2300)
+        assertEquals(checks, qrChecks.get()); assertEquals(url, vm.state.value.qrUrl)
+        qrStatus = 802
+        compose.runOnIdle { owner.registry.currentState = androidx.lifecycle.Lifecycle.State.RESUMED }
+        compose.waitUntil(10000) { vm.state.value.qrMessage.contains("已扫码") }
+        assertEquals(1, qrKeys.get()); assertEquals(url, vm.state.value.qrUrl)
+        compose.runOnIdle { owner.registry.currentState = androidx.lifecycle.Lifecycle.State.CREATED }
+        qrStatus = 803 // The user confirms in the NCM app while CurrentMusic is stopped.
+        compose.runOnIdle { owner.registry.currentState = androidx.lifecycle.Lifecycle.State.RESUMED }
+        compose.waitUntil(10000) { syncRequests.get() == 1 && !vm.busy.value }
+        assertEquals(1, qrKeys.get()); assertTrue(bound); assertNull(vm.state.value.qrUrl)
+        compose.runOnIdle { owner.registry.currentState = androidx.lifecycle.Lifecycle.State.CREATED }
+        compose.runOnIdle { owner.registry.currentState = androidx.lifecycle.Lifecycle.State.RESUMED }
+        compose.waitForIdle()
+        assertEquals(1, qrKeys.get()); assertEquals(1, syncRequests.get())
+    }
+    @Test fun expiredQrRequiresManualRefreshAndAccountSwitchInvalidatesIt() {
+        val owner = BindingLifecycle()
+        qrStatus = 800
+        val vm = bindingFixture(owner)
+        compose.waitUntil(10000) { vm.state.value.qrMessage.contains("已过期") }
+        compose.runOnIdle { owner.registry.currentState = androidx.lifecycle.Lifecycle.State.CREATED }
+        compose.runOnIdle { owner.registry.currentState = androidx.lifecycle.Lifecycle.State.RESUMED }
+        compose.waitForIdle(); assertEquals(1, qrKeys.get()); assertNull(vm.state.value.qrUrl)
+        qrStatus = 801
+        compose.onNodeWithTag("refresh_binding_qr").performScrollTo().performClick()
+        compose.waitUntil(10000) { qrKeys.get() == 2 && vm.state.value.qrUrl?.endsWith("-2") == true }
+        // Even a token change for the same account must discard the old login transaction.
+        runBlocking { container.accountRepository.save("isolated-replaced-token", UserDto(7, "user7", "First user")) }
+        compose.waitUntil(10000) { qrKeys.get() == 3 && vm.state.value.qrUrl?.endsWith("-3") == true }
+        assertEquals(0, syncRequests.get())
+    }
+    @Test fun sms502KeepsCooldownAndOffersOnlyExplicitAlternateSend() {
+        val owner = BindingLifecycle()
+        val vm = bindingFixture(owner)
+        compose.onNodeWithText("手机验证码").performScrollTo().performClick()
+        compose.onNodeWithTag("binding_phone").performScrollTo().performTextInput("123456789")
+        compose.onNodeWithTag("send_binding_code").performScrollTo().performClick()
+        compose.waitUntil(10000) { vm.state.value.codeFailed && !vm.busy.value }
+        assertTrue(vm.message.value!!.contains("发送结果未确认"))
+        assertTrue(vm.state.value.codeUntil > android.os.SystemClock.elapsedRealtime())
+        compose.onNodeWithTag("send_binding_code_alternate").performScrollTo().assertIsNotEnabled()
+        compose.runOnIdle { vm.code("123456789", "86"); vm.code("123456789", "86", alternate = true) }
+        compose.waitForIdle(); assertEquals(1, codeRequests.get()); assertEquals(0, alternateCodeRequests.get())
+        // Move only the fixture's clock deadline; never wait a minute or send a real SMS.
+        compose.runOnIdle { vm.state.value = vm.state.value.copy(codeUntil = 0) }
+        compose.onNodeWithTag("send_binding_code_alternate").performScrollTo().performClick()
+        compose.waitUntil(10000) { alternateCodeRequests.get() == 1 && !vm.busy.value }
+        assertEquals("验证码已发送，请查看短信", vm.message.value)
+        assertEquals(1, codeRequests.get()); assertEquals(0, syncRequests.get())
     }
 }

@@ -166,6 +166,48 @@ class HomeAvatarTest {
     @Test fun homeTabReturnsTheAvatarAndFrameToTheMeasuredHomePosition() = verifyDecoratedFlight(false, returnViaBack = false)
     @Test fun systemBackReturnsTheAvatarAndFrameToTheMeasuredHomePosition() = verifyDecoratedFlight(false, returnViaBack = true)
 
+    @Test fun hiddenHomeAvatarSkipsFlightAndRestoresNormalTravelAfterScrollingBack() {
+        imageGate.countDown()
+        compose.mainClock.autoAdvance = false
+        compose.setContent { CurrentMusicApp(container) }
+        pumpUntil { compose.onAllNodesWithTag("home_avatar_image", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.onNodeWithTag("music_home").performScrollToIndex(6)
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithTag("home_profile_avatar").assertIsNotDisplayed()
+        repeat(2) {
+            compose.onNodeWithTag("tab_2").performClick()
+            compose.mainClock.advanceTimeBy(32)
+            compose.onNodeWithTag("home_avatar_transition").assertDoesNotExist()
+            compose.mainClock.advanceTimeBy(800)
+            compose.onNodeWithTag("my_profile_avatar").assertIsDisplayed()
+            compose.onNodeWithTag("tab_0").performClick()
+            compose.mainClock.advanceTimeBy(32)
+            compose.onNodeWithTag("home_avatar_transition").assertDoesNotExist()
+            compose.mainClock.advanceTimeBy(800)
+            compose.onNodeWithTag("music_home").assertIsDisplayed()
+            compose.onNodeWithTag("home_profile_avatar").assertIsNotDisplayed()
+        }
+        // Keep the saved scroll position; visible endpoints still use the decorated flight.
+        compose.onNodeWithTag("music_home").performScrollToIndex(0)
+        pumpUntil { compose.onAllNodesWithTag("home_avatar_image", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNodeWithTag("home_profile_avatar").assertIsDisplayed()
+        compose.onNodeWithTag("tab_2").performClick()
+        compose.mainClock.advanceTimeBy(32)
+        compose.onNodeWithTag("home_avatar_transition").assertExists()
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNodeWithTag("home_avatar_transition").assertDoesNotExist()
+        compose.onNodeWithTag("tab_0").performClick()
+        compose.mainClock.advanceTimeBy(32)
+        compose.onNodeWithTag("home_avatar_transition").assertExists()
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNodeWithTag("home_avatar_transition").assertDoesNotExist()
+        compose.onNodeWithTag("home_profile_avatar").assertIsDisplayed()
+        assertEquals(7L, container.accountRepository.state.value.account!!.id)
+        assertFalse(container.playerController.state.value.playing)
+    }
+
     @Test fun searchMovesInputUpFocusesAndReturnsToRetainedHome() {
         imageGate.countDown()
         compose.mainClock.autoAdvance = false

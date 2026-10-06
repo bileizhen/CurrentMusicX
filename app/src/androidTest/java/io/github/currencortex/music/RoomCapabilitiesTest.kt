@@ -172,14 +172,39 @@ class RoomCapabilitiesTest {
         assertEquals("1", container.roomSession.state.value.detail!!.room.id)
         assertTrue(container.roomSession.active)
     }
+    @Test fun bottomTabsRecoverAfterRoomOpenedFromPlayer() {
+        val song = Song(55, "Paused fixture song", durationMs = 180000)
+        container.playerController.queue.replace(listOf(song), 0)
+        container.playerController.state.value = PlayerState(song = song, durationMs = 180000)
+        compose.setContent { CurrentMusicApp(container) }
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("mini_cover").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("tab_0").assertIsDisplayed()
+        repeat(2) {
+            compose.onNodeWithTag("mini_cover").performClick()
+            compose.onNodeWithTag("lyrics_options").performClick()
+            compose.onNode(hasText("一起听") and hasClickAction()).performScrollTo().performClick()
+            compose.onNodeWithTag("room_screen").assertIsDisplayed()
+            compose.onNodeWithText("返回").performClick()
+            compose.onNodeWithTag("navigate_back").performClick()
+            compose.waitForIdle()
+            (0..3).forEach { tab -> compose.onNodeWithTag("tab_$tab").assertIsDisplayed() }
+            compose.onNodeWithTag("tab_2").performClick()
+            compose.onNodeWithTag("edit_profile").assertExists()
+            compose.onNodeWithTag("tab_0").performClick()
+            compose.onNodeWithTag("open_rooms").assertExists()
+        }
+        assertEquals(55L, container.playerController.queue.state.value.current?.id)
+        assertFalse(container.playerController.state.value.playing)
+        assertFalse(container.roomSession.active)
+    }
     @Test fun wideRootUsesPermanentNavigationAndRestoresSelectedTab() {
         val restoration = StateRestorationTester(compose)
         restoration.setContent { androidx.compose.foundation.layout.Box(Modifier.requiredSize(900.dp, 650.dp)) { CurrentMusicApp(container) } }
         compose.waitUntil(10000) { compose.onAllNodesWithTag("wide_navigation").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("wide_navigation").assertExists()
-        compose.onNodeWithText("搜索").performClick()
+        compose.onNodeWithTag("tab_3").performClick()
         restoration.emulateSavedInstanceStateRestore()
-        compose.onNodeWithText("● 搜索").assertExists()
+        compose.onNodeWithTag("tab_3").assertIsSelected()
     }
     @Test fun cancelledWifiDiscoveryReleasesRealMulticastLock() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
