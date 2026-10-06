@@ -129,8 +129,8 @@ class AboutUiState {
     val appName: String = AppMetadata.APP_NAME
     val versionName: String = "v${BuildConfig.VERSION_NAME}"
     val links = listOf(
-        AboutLink("GitHub", AppMetadata.PROJECT_URL),
-        AboutLink("原项目", "https://github.com/backrooms-yrc/CurrentMusic/tree/main"),
+        AboutLink("GitHub", "https://github.com/bileizhen/CurrentMusicX"),
+        AboutLink("QQ 群", "https://qm.qq.com/q/LZx3ulz3oG"),
         AboutLink("开源许可", "currentmusic:LICENSE"),
         AboutLink("第三方声明", "currentmusic:NOTICES"),
         AboutLink("隐私", "currentmusic:PRIVACY"),
