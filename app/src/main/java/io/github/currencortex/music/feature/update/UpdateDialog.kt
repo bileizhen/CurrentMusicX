@@ -8,6 +8,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,7 +68,8 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
             is UpdateState.Failed -> state.reason
             is UpdateState.Available -> state.release.notes.ifBlank { "新版本已发布。" }
         }
-        val notesModifier = Modifier.fillMaxWidth().heightIn(max = 220.dp)
+        val notesHeight = (LocalConfiguration.current.screenHeightDp * .42f).dp.coerceAtMost(360.dp)
+        val notesModifier = Modifier.fillMaxWidth().heightIn(max = notesHeight)
             .verticalScroll(rememberScrollState()).testTag("update_message")
         if (release != null) MarkdownText(stripVersionHeadings(release.version, message), modifier = notesModifier)
         else Text(message, modifier = notesModifier)
@@ -87,13 +89,17 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                 previewProgress >= 1f -> Text("测试下载完成，未下载真实安装包")
                 else -> when (val download = transferState.download) {
                     is UpdateDownloadState.Downloading -> {
+                        transferState.activeSource?.let { active ->
+                            Text(if (transferState.attempt > 1) "已切换至 ${active.label}（${transferState.attempt}/${transferState.totalSources}）"
+                                else "正在使用 ${active.label}", fontSize = 12.sp, modifier = Modifier.testTag("update_active_source"))
+                        }
                         Text("${formatSize(download.received)} / ${formatSize(download.total)}")
                         LinearProgressIndicator(progress = (download.received.toDouble() / download.total.coerceAtLeast(1)).toFloat(),
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
                     }
                     is UpdateDownloadState.Ready -> Text("下载完成，已校验安装包")
                     is UpdateDownloadState.Failed -> Text(download.message)
-                    UpdateDownloadState.Idle -> Text("安装包 ${formatSize(release.size)}")
+                    UpdateDownloadState.Idle -> Text("安装包 ${formatSize(release.size)} · 失败时自动切换下载源")
                 }
             }
             transferState.message?.let { Text(it) }
