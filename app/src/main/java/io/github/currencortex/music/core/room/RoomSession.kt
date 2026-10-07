@@ -8,9 +8,12 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.*
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 data class RoomSessionState(val detail: RoomDetail? = null, val connecting: Boolean = false,
-    val connected: Boolean = false, val error: String? = null, val driftMs: Long = 0)
+    val connected: Boolean = false, val error: String? = null, val driftMs: Long = 0,
+    val refreshing: Boolean = false, val pendingActions: Set<String> = emptySet())
 
 class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClient,
     private val player: ExternalPlayer, private val scope: CoroutineScope,
@@ -21,6 +24,10 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     private var activeId: String? = null
     private var job: Job? = null
     private val clock = RoomSynchronizer()
+    private val clockMutex = Mutex()
+    private val refreshMutex = Mutex()
+    private val commandMutex = Mutex()
+    private var generation = 0L
     private var seq = 0L
     private var lastId: String? = null
     private var loaded: Pair<Long, String>? = null
@@ -64,16 +71,19 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
                                         val raw = runCatching { ApiJson.parseToJsonElement(signal.data) as? JsonObject }.getOrNull() ?: return@collect
                                         val next = raw["seq"]?.jsonPrimitive?.longOrNull
                                         if (next != null && next <= seq) return@collect
+                                        val payload = (raw["payload"] as? JsonObject) ?: raw
+                                        // Decode before acknowledging the event so a malformed timeline can be replayed.
+                                        val timeline = payload["timeline"]?.takeIf { it != JsonNull }?.let {
+                                            ApiJson.decodeFromJsonElement<RoomTimeline>(it)
+                                        }
                                         if (next != null) seq = next
                                         lastId = signal.id ?: lastId
                                         backoff = 1000
-                                        val payload = (raw["payload"] as? JsonObject) ?: raw
                                         if (signal.type == "close" || signal.type == "kick" && payload["userId"]?.jsonPrimitive?.longOrNull == userId()) {
                                             disconnect("已离开房间"); return@collect
                                         }
-                                        payload["timeline"]?.takeIf { it != JsonNull }?.let { tl ->
-                                            val timeline = ApiJson.decodeFromJsonElement<RoomTimeline>(tl)
-                                            state.update { it.copy(detail = it.detail?.copy(timeline = timeline)) }; applyTimeline()
+                                        timeline?.let { updated ->
+                                            state.update { it.copy(detail = it.detail?.copy(timeline = updated, latestSeq = seq)) }; applyTimeline()
                                         }
                                         if (signal.type in setOf("join", "leave", "queue", "settings", "role", "kick", "transfer", "track", "next", "prev")) refresh()
                                     }
@@ -98,23 +108,39 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
             disconnect(); throw e
         }
     }
-    private suspend fun calibrate(id: String, expected: RequestSession) {
-        clock.reset()
+    private suspend fun calibrate(id: String, expected: RequestSession) = clockMutex.withLock {
+        val samples = RoomSynchronizer()
         repeat(5) {
             val sent = monotonic()
             when (val sample = appResult { repo.sync(id, expected) }) {
-                is AppResult.Success -> clock.sample(sample.value, sent, monotonic())
+                is AppResult.Success -> samples.sample(sample.value, sent, monotonic())
                 is AppResult.Failure -> Unit
             }
         }
+        if (activeId == id && session == expected) clock.replaceWith(samples)
     }
-    suspend fun refresh() {
-        val id = activeId ?: return; val expected = session ?: return
+    suspend fun refresh() = refreshMutex.withLock {
+        val id = activeId ?: return@withLock; val expected = session ?: return@withLock
         val detail = repo.detail(id, expected)
-        if (activeId != id || expected != session || expected != repo.session()) return
-        if (detail.role(userId()) == null) { disconnect("你已不在此房间"); return }
+        if (activeId != id || expected != session || expected != repo.session()) return@withLock
+        if (detail.latestSeq < seq) return@withLock
+        if (detail.role(userId()) == null) { disconnect("你已不在此房间"); return@withLock }
         seq = maxOf(seq, detail.latestSeq)
         state.update { it.copy(detail = detail) }; applyTimeline()
+    }
+    fun dismissError() { state.update { it.copy(error = null) } }
+    fun refreshWithFeedback() {
+        if (state.value.refreshing || !active) return
+        val epoch = generation
+        state.update { it.copy(refreshing = true) }
+        scope.launch {
+            try {
+                when (val result = appResult { refresh() }) {
+                    is AppResult.Success -> if (epoch == generation) dismissError()
+                    is AppResult.Failure -> if (epoch == generation) state.update { it.copy(error = "房间刷新失败：${result.kind.message}") }
+                }
+            } finally { if (epoch == generation) state.update { it.copy(refreshing = false) } }
+        }
     }
     private suspend fun applyTimeline() {
         publishPermission()
@@ -144,19 +170,39 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     fun action(action: String, fields: JsonObject = buildJsonObject {}, permission: (RoomRole?) -> Boolean = { it?.controls == true }) {
         val id = activeId ?: return; val expected = session ?: return
         if (!permission(role)) { state.update { it.copy(error = "没有操作权限") }; return }
-        scope.launch { when (val result = appResult {
+        command(action, id, expected, { permission(role) }) {
             repo.action(id, action, fields, expected)
-            if (action == "close") disconnect("房间已关闭") else refresh()
-        }) {
-            is AppResult.Failure -> state.update { it.copy(error = result.kind.message) }; else -> Unit } }
+            if (action == "close") disconnect("房间已关闭")
+        }
     }
     fun queueAction(item: RoomQueueItem, action: String) {
         val id = activeId ?: return; val expected = session ?: return
         if (if (action == "remove") !RoomPermissions.remove(role, item) else role?.controls != true) {
             state.update { it.copy(error = "没有操作权限") }; return
         }
-        scope.launch { when (val result = appResult { repo.queueAction(id, item.id, action, expected); refresh() }) {
-            is AppResult.Failure -> state.update { it.copy(error = result.kind.message) }; else -> Unit } }
+        command("queue:${item.id}", id, expected,
+            { if (action == "remove") RoomPermissions.remove(role, item) else role?.controls == true }) {
+            repo.queueAction(id, item.id, action, expected)
+        }
+    }
+    private fun command(key: String, id: String, expected: RequestSession, permitted: () -> Boolean, write: suspend () -> Unit) {
+        if (key in state.value.pendingActions) return
+        val epoch = generation
+        fun valid() = generation == epoch && activeId == id && session == expected && repo.session() == expected
+        state.update { it.copy(pendingActions = it.pendingActions + key, error = null) }
+        scope.launch {
+            try {
+                val result = appResult { commandMutex.withLock {
+                    if (!valid()) throw ApiException(ErrorKind.Unauthorized)
+                    if (!permitted()) throw ApiException(ErrorKind.Forbidden)
+                    write()
+                } }
+                if (!valid()) return@launch
+                if (result is AppResult.Failure) state.update { it.copy(error = result.kind.message) }
+                else if (appResult { refresh() } is AppResult.Failure && valid())
+                    state.update { it.copy(error = "操作已提交，房间刷新失败，请刷新查看") }
+            } finally { if (valid()) state.update { it.copy(pendingActions = it.pendingActions - key) } }
+        }
     }
     suspend fun submit(song: Song): AppResult<Unit> {
         val id = activeId ?: return AppResult.Failure(ErrorKind.Forbidden)
@@ -199,6 +245,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
             is AppResult.Failure -> state.update { it.copy(error = "本地已退出，服务器退出失败：${result.kind.message}") }; else -> Unit }
     }
     fun disconnect(message: String? = null) {
+        generation++
         job?.cancel(); job = null; activeId = null; session = null; loaded = null
         player.endExternal(this); state.value = RoomSessionState(error = message)
     }
