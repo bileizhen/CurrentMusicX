@@ -33,10 +33,11 @@ val LocalMusicBottomInset = staticCompositionLocalOf { 0.dp }
         end = padding.calculateEndPadding(direction), bottom = padding.calculateBottomPadding() + LocalMusicBottomInset.current)
 }
 
-@Composable fun MusicTextAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+@Composable fun MusicTextAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
+    destructive: Boolean = false) {
     Text(label, modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick).heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 12.dp),
         fontSize = 13.sp, fontWeight = FontWeight.Medium,
-        color = MiuixTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else .4f))
+        color = (if (destructive) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary).copy(alpha = if (enabled) 1f else .4f))
 }
 
 @Composable fun MusicSectionHeader(title: String, action: String? = null, onClick: () -> Unit = {}) {

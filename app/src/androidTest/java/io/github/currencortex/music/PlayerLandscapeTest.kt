@@ -123,12 +123,12 @@ class PlayerLandscapeTest {
         compose.onNodeWithTag("open_network").performClick()
         compose.onNodeWithTag("network_settings").assertIsDisplayed()
         compose.onNodeWithTag("wide_navigation").assertDoesNotExist()
-        compose.onNodeWithTag("navigate_back").performClick()
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithTag("tab_3").assertIsSelected()
         compose.onNodeWithTag("mini_cover").performClick()
         compose.onNodeWithTag("player_screen").assertIsDisplayed()
         compose.onNodeWithTag("wide_navigation").assertDoesNotExist()
-        compose.onNodeWithTag("navigate_back").performClick()
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithTag("tab_3").assertIsSelected()
         assertEquals(rail, compose.onNodeWithTag("wide_navigation").fetchSemanticsNode().boundsInRoot)
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
@@ -142,6 +142,16 @@ class PlayerLandscapeTest {
         compose.waitForIdle()
         val pane = compose.onNodeWithTag("player_wide_cover_content").fetchSemanticsNode().boundsInRoot
         val cover = compose.onNodeWithTag("player_cover").fetchSemanticsNode().boundsInRoot
+        val stage = compose.onNodeWithTag("player_wide_stage").fetchSemanticsNode().boundsInRoot
+        val safe = compose.onNodeWithTag("player_safe_content").fetchSemanticsNode().boundsInRoot
+        val screen = compose.onNodeWithTag("player_screen").fetchSemanticsNode().boundsInRoot
+        assertEquals("Both panes must be centered horizontally in the usable area", safe.center.x, stage.center.x, 1f)
+        assertEquals("The header must not push the landscape stage downward", safe.center.y, stage.center.y, 1f)
+        assertEquals("The notch must not leave the stage off-center", screen.center.x, stage.center.x, 1f)
+        assertEquals("Artwork must share the stage's vertical center", stage.center.y, cover.center.y, 1f)
+        assertTrue("The centered stage must stay inside the usable area: stage=$stage, safe=$safe",
+            stage.left >= safe.left - 1f && stage.top >= safe.top - 1f &&
+                stage.right <= safe.right + 1f && stage.bottom <= safe.bottom + 1f)
         assertTrue("A full circular cover must fit the pane", cover.width > 200 && cover.height > 200)
         assertEquals("Artwork must remain square instead of becoming a clipped semicircle", cover.width, cover.height, 1f)
         assertTrue(pane.contains(cover.topLeft)); assertTrue(pane.contains(cover.bottomRight))
@@ -163,7 +173,7 @@ class PlayerLandscapeTest {
         compose.mainClock.autoAdvance = false
         val panePager = compose.onNodeWithTag("player_wide_pager")
         panePager.performTouchInput {
-            down(androidx.compose.ui.geometry.Offset(width * .8f, height * .12f))
+            down(androidx.compose.ui.geometry.Offset(width * .8f, height * .22f))
             advanceEventTime(200)
             moveBy(androidx.compose.ui.geometry.Offset(-width * .68f, 0f))
         }
@@ -178,9 +188,9 @@ class PlayerLandscapeTest {
         compose.onNodeWithTag("player_toggle").assertDoesNotExist()
         compose.onNodeWithTag("lyrics_panel").assertIsDisplayed()
         // Use the lyric viewport's upper blank area so this remains a paging gesture,
-        // rather than a new touch on a lyric row while its vertical fling is stopping.
+        // below the floating header, rather than touching its corner buttons.
         panePager.performTouchInput {
-            down(androidx.compose.ui.geometry.Offset(width * .12f, height * .12f))
+            down(androidx.compose.ui.geometry.Offset(width * .12f, height * .22f))
             advanceEventTime(200)
             moveBy(androidx.compose.ui.geometry.Offset(width * .68f, 0f))
         }
@@ -193,8 +203,8 @@ class PlayerLandscapeTest {
         compose.onNodeWithTag("player_toggle").assertIsDisplayed()
         assertEquals(cover, compose.onNodeWithTag("player_cover").fetchSemanticsNode().boundsInRoot)
         panePager.performTouchInput {
-            swipe(androidx.compose.ui.geometry.Offset(width * .85f, height * .12f),
-                androidx.compose.ui.geometry.Offset(width * .15f, height * .12f), 300)
+            swipe(androidx.compose.ui.geometry.Offset(width * .85f, height * .22f),
+                androidx.compose.ui.geometry.Offset(width * .15f, height * .22f), 300)
         }
         compose.mainClock.advanceTimeBy(800)
         compose.onNodeWithTag("lyrics_panel").performTouchInput {
@@ -204,8 +214,8 @@ class PlayerLandscapeTest {
         assertEquals("Vertical lyric browsing must not close the player", 1f,
             compose.onNodeWithTag("player_sheet").fetchSemanticsNode().config[PlayerSheetGeometry].progress, .01f)
         panePager.performTouchInput {
-            swipe(androidx.compose.ui.geometry.Offset(width * .15f, height * .12f),
-                androidx.compose.ui.geometry.Offset(width * .85f, height * .12f), 300)
+            swipe(androidx.compose.ui.geometry.Offset(width * .15f, height * .22f),
+                androidx.compose.ui.geometry.Offset(width * .85f, height * .22f), 300)
         }
         compose.mainClock.advanceTimeBy(800)
         assertEquals("Horizontal paging remains usable after vertical lyric browsing", 0f,
@@ -214,7 +224,7 @@ class PlayerLandscapeTest {
         compose.onNodeWithTag("open_player_queue").performClick()
         compose.onNodeWithTag("player_queue_sheet").assertExists()
         compose.onNodeWithText("向下轻扫返回播放界面").performClick()
-        compose.onNodeWithTag("navigate_back").performClick()
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithTag("mini_cover").assertIsDisplayed()
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
         assertFalse(container.playerController.state.value.playing)

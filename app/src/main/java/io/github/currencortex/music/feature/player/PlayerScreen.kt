@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.player
 
+import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -20,7 +21,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
@@ -44,7 +47,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 
 private enum class PlayerContent { COVER, LYRICS }
-private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE }
+private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP }
 internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePosition")
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
@@ -57,6 +60,15 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val songActions by vm.actions.collectAsStateWithLifecycle()
     val comments by vm.comments.collectAsStateWithLifecycle()
     val heartLoading by vm.heartLoading.collectAsStateWithLifecycle()
+    val sleepState by vm.sleepTimer.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    // The timer can expire while the sheet is closed; report it once, on the next composition.
+    LaunchedEffect(sleepState.notice) {
+        sleepState.notice?.let {
+            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            vm.sleepTimer.consumeNotice()
+        }
+    }
     var content by rememberSaveable { mutableStateOf(PlayerContent.COVER) }
     val pager = rememberPagerState(initialPage = content.ordinal) { 2 }
     val pagerArtwork = remember(pager) { PlayerPagerArtworkTransition { pager.currentPage + pager.currentPageOffsetFraction } }
@@ -116,11 +128,25 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 listOfNotNull(lyricsCoordinates, previewCoordinates)
             } else Modifier)) {
         val widePlayer = maxWidth >= 648.dp
+        val density = LocalDensity.current
+        val layoutDirection = LocalLayoutDirection.current
+        val wideSafeInset = with(density) { maxOf(WindowInsets.safeDrawing.getLeft(density, layoutDirection),
+            WindowInsets.safeDrawing.getRight(density, layoutDirection)).toDp() }
         val immersive = settings.lyricsDisplay.hideControls && !controlsRevealed && content == PlayerContent.LYRICS
         val functions: @Composable () -> Unit = {
             PlayerSongActionsBar(vm, { overlay = PlayerOverlay.COMMENTS }, {
                 scope.launch { queueMotion.animation.snapTo(0f); overlay = PlayerOverlay.QUEUE }
-            }, onLike)
+            }, { overlay = PlayerOverlay.SLEEP }, onLike)
+        }
+        val header: @Composable () -> Unit = {
+            Row(Modifier.fillMaxWidth().height(if (widePlayer) 48.dp else 52.dp), verticalAlignment = Alignment.CenterVertically) {
+                PlayerIconButton(PlayerIcon.COLLAPSE, "收起播放器", onBack, Modifier.testTag("navigate_back"))
+                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                    Text(settings.quality.label, Modifier.testTag("open_quality_sheet").clickable(enabled = state.mode == PlayerMode.LOCAL, role = Role.Button) { overlay = PlayerOverlay.QUALITY }
+                        .padding(horizontal = 16.dp, vertical = 14.dp), color = Color.White.copy(alpha = .55f), fontSize = 12.sp)
+                }
+                PlayerIconButton(PlayerIcon.MORE, "播放与歌词设置", { overlay = PlayerOverlay.OPTIONS }, Modifier.testTag("lyrics_options"))
+            }
         }
         PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize())
         // The artwork viewport uses light ink; dialogs below inherit the app appearance.
@@ -129,22 +155,20 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         Column(Modifier.fillMaxSize().graphicsLayer { translationY = -size.height * queueMotion.progress }
             .then(if (overlay == PlayerOverlay.QUEUE || queueGesture) Modifier.semantics { hideFromAccessibility() } else Modifier)
             .statusBarsPadding().navigationBarsPadding()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+            .then(if (widePlayer) Modifier.padding(horizontal = wideSafeInset)
+                else Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)))
             .padding(horizontal = 24.dp).testTag("player_safe_content")
             .graphicsLayer { alpha = playerSheetContentAlpha(sheetProgress()) }) {
-            Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
-                PlayerIconButton(PlayerIcon.COLLAPSE, "收起播放器", onBack, Modifier.testTag("navigate_back"))
-                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text(settings.quality.label, Modifier.testTag("open_quality_sheet").clickable(enabled = state.mode == PlayerMode.LOCAL, role = Role.Button) { overlay = PlayerOverlay.QUALITY }
-                        .padding(horizontal = 16.dp, vertical = 14.dp), color = Color.White.copy(alpha = .55f), fontSize = 12.sp)
-                }
-                PlayerIconButton(PlayerIcon.MORE, "播放与歌词设置", { overlay = PlayerOverlay.OPTIONS }, Modifier.testTag("lyrics_options"))
-            }
+            if (!widePlayer) header()
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                 val compactControls = maxHeight < 520.dp
-                if (widePlayer) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+                if (widePlayer) {
+                val stageHeight = (maxHeight - 32.dp).coerceIn(0.dp, 400.dp)
+                val stageWidth = minOf(maxWidth, stageHeight * 2.6f, 840.dp)
+                Box(Modifier.fillMaxSize().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+                Row(Modifier.size(stageWidth, stageHeight).testTag("player_wide_stage"), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
                     WideCoverContent(vm, Modifier.weight(1f).fillMaxHeight())
-                    HorizontalPager(pager, Modifier.weight(1.1f).fillMaxHeight().testTag("player_wide_pager")
+                    HorizontalPager(pager, Modifier.weight(1.05f).fillMaxHeight().testTag("player_wide_pager")
                         .semantics { this[PlayerPagePosition] = pager.currentPage + pager.currentPageOffsetFraction },
                         beyondViewportPageCount = 1,
                         userScrollEnabled = expanded && sheetDrag?.state?.dragging != true,
@@ -156,7 +180,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                 Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
                                     .padding(horizontal = 8.dp, vertical = 4.dp), verticalArrangement = Arrangement.Center) {
                                     Text(song?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"), color = Color.White,
-                                        fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                        fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     Text(song?.artists.orEmpty(), Modifier.padding(top = 4.dp).testTag("player_song_artist"),
                                         color = Color.White.copy(alpha = .55f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
@@ -166,6 +190,10 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                 active = pager.currentPage == 1 || pager.isScrollInProgress)
                         }
                     }
+                }
+                }
+                // Chrome overlays the safe corners instead of pushing both panes down.
+                Box(Modifier.fillMaxWidth().align(Alignment.TopCenter)) { header() }
                 } else Column(Modifier.fillMaxSize()) {
                     CompositionLocalProvider(LocalPlayerPagerArtwork provides pagerArtwork) {
                     Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { pagerArtwork.container = it }) {
@@ -245,6 +273,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 })
                 MusicDestinationRow("播放音质", summary = settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL)
                 MusicDestinationRow("播放模式", summary = queue.mode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL)
+                MusicDestinationRow("定时关闭", summary = sleepSummary(sleepState), modifier = Modifier.testTag("open_sleep_timer"),
+                    onClick = { overlay = PlayerOverlay.SLEEP })
                 MusicDestinationRow("歌词显示", summary = "霞鹜文楷 · 字号 ${settings.lyricsFontSize.toInt()}",
                     modifier = Modifier.testTag("open_lyrics_display"), onClick = { overlay = PlayerOverlay.LYRICS })
                 if (onRoom != null) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
@@ -269,6 +299,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         onClick = { vm.lyricsDisplay { it.copy(karaokeScope = scope) }; overlay = PlayerOverlay.LYRICS })
                 }
             }
+            PlayerOverlay.SLEEP -> SleepTimerSheet(vm.sleepTimer, dismiss)
             PlayerOverlay.LYRICS -> MusicDialog("歌词显示", dismiss) {
                 LyricsDisplaySettings(settings.lyricsFontSize, vm::lyricsFontSize, settings.lyricsWeight, { overlay = PlayerOverlay.WEIGHT },
                     settings.lyricsDisplay, vm::lyricsDisplay, { overlay = PlayerOverlay.KARAOKE })

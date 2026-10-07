@@ -115,13 +115,13 @@ class AudioCacheTest {
         assertEquals(0L, cache.cachedBytes(key, payload.size.toLong()))
         read(null, source()); assertEquals(0L, cache.cachedBytes(key, payload.size.toLong()))
     }
-    @Test fun leastRecentlyUsedAudioIsEvictedWithinCapacityAndClearRemovesMetadata() = runBlocking(Dispatchers.IO) {
-        cache.close(); cache = AudioCache(context, directory, maxBytes = 96 * 1024L)
+    @Test fun everyCachedTrackIsKeptAndClearRemovesMetadata() = runBlocking(Dispatchers.IO) {
         cache.rememberSource(key, source()); cache.preload(key, source(), 64 * 1024L)
         val newer = AudioCache.key("https://fixture/cm", 7, 2, AudioQuality.STANDARD)
         cache.rememberSource(newer, source("/two")); cache.preload(newer, source("/two"), 64 * 1024L)
-        assertTrue(cache.bytes.value <= 96 * 1024L)
-        assertEquals(0L, cache.cachedBytes(key, payload.size.toLong()))
+        // The cache has no size cap, so an older rendition is not evicted by a newer one.
+        assertEquals(64 * 1024L, cache.cachedBytes(key, payload.size.toLong()))
+        assertEquals(64 * 1024L, cache.cachedBytes(newer, payload.size.toLong()))
         cache.clear()
         assertEquals(0L, cache.bytes.value); assertNull(cache.cachedSource(newer))
     }

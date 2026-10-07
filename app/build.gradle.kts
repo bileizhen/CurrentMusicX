@@ -32,8 +32,8 @@ android {
         applicationId = "com.bileizhen.currentmusic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.1.2"
+        versionCode = 10
+        versionName = "1.1.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "UPDATE_PROXY_URL", updateProxyField("UPDATE_PROXY_URL"))
         buildConfigField("String", "UPDATE_PROXY_KEY_ID", updateProxyField("UPDATE_PROXY_KEY_ID"))
@@ -99,6 +99,8 @@ dependencies {
     implementation("androidx.navigation3:navigation3-runtime:1.1.4")
     implementation("androidx.navigationevent:navigationevent-compose:1.1.2")
     implementation("androidx.datastore:datastore-preferences:1.1.7")
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
+    implementation("net.jthink:jaudiotagger:3.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
@@ -109,6 +111,7 @@ dependencies {
     testImplementation("org.json:json:20240303")
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.work:work-testing:2.12.0")
     androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
     androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.11.2")

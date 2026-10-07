@@ -32,6 +32,7 @@ enum class LegalDocument(val title: String, val asset: String) {
     LICENSE("开源许可", "legal/GPL-3.0.txt"),
     NOTICES("第三方声明", "legal/NOTICES.md"),
     APACHE("Apache License 2.0", "legal/APACHE-2.0.txt"),
+    LGPL("GNU LGPL 3.0", "legal/LGPL-3.0.txt"),
     PRIVACY("隐私说明", "legal/PRIVACY.md"),
 }
 
@@ -65,6 +66,8 @@ fun LegalDocumentScreen(document: LegalDocument, onBack: () -> Unit, onOpenDocum
         if (document == LegalDocument.LICENSE) item {
             top.yukonga.miuix.kmp.preference.ArrowPreference(title = "Apache License 2.0",
                 summary = "MIUIX、AndroidX 等组件的许可", onClick = { onOpenDocument(LegalDocument.APACHE) })
+            top.yukonga.miuix.kmp.preference.ArrowPreference(title = "GNU LGPL 3.0",
+                summary = "歌曲标签组件 Jaudiotagger 的许可", onClick = { onOpenDocument(LegalDocument.LGPL) })
         }
         if (error != null) item { BasicComponent(title = error, summary = "点击重试", onClick = { attempt++ }) }
         else if (text == null) item { Text("正在读取…") }

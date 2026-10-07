@@ -18,7 +18,7 @@ import top.yukonga.miuix.kmp.preference.OverlaySpinnerPreference
 
 @Composable
 fun SettingsScreen(updateViewModel: UpdateSettingsViewModel, onAppearance: () -> Unit, onNetwork: () -> Unit,
-                   onLogs: () -> Unit, onAbout: () -> Unit, onUpdates: () -> Unit) {
+                   onStorage: () -> Unit, onLogs: () -> Unit, onAbout: () -> Unit, onUpdates: () -> Unit) {
     val settings by updateViewModel.settings.collectAsStateWithLifecycle()
     LazyColumn(Modifier.fillMaxSize().testTag("settings_screen"),
         contentPadding = musicScrollPadding(PaddingValues(12.dp, 30.dp, 12.dp, 32.dp)),
@@ -43,9 +43,12 @@ fun SettingsScreen(updateViewModel: UpdateSettingsViewModel, onAppearance: () ->
             Card(Modifier.fillMaxWidth()) {
                 ArrowPreference(title = "外观", summary = "主题、颜色与界面效果",
                     startAction = { SettingIcon(MusicIcons.Image) }, onClick = onAppearance)
-                ArrowPreference(title = "网络与播放", summary = "音源、音质与音频缓存",
+                ArrowPreference(title = "网络与播放", summary = "音源、音质与预加载",
                     startAction = { SettingIcon(MusicIcons.Device) }, onClick = onNetwork,
                     modifier = Modifier.testTag("open_network"))
+                ArrowPreference(title = "存储空间", summary = "缓存与下载占用",
+                    startAction = { SettingIcon(MusicIcons.Storage) }, onClick = onStorage,
+                    modifier = Modifier.testTag("open_storage"))
                 ArrowPreference(title = "导出日志", summary = "保存或分享脱敏诊断文件",
                     startAction = { SettingIcon(MusicIcons.File) }, onClick = onLogs)
                 ArrowPreference(title = "关于", summary = "版本、开源许可与隐私",

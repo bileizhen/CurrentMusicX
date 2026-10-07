@@ -183,7 +183,7 @@ class NativeCapabilitiesTest {
         compose.onNodeWithTag("tab_3").performClick()
         compose.onNodeWithText("网络与播放").performClick()
         compose.onNodeWithTag("server_input").assertExists()
-        compose.onNodeWithTag("navigate_back").performClick()
+        compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithText("外观").performScrollTo().performClick()
         compose.onNodeWithText("深色").performClick()
         compose.waitUntil(5000) { container.settings.state.value.themeMode == ThemeMode.DARK }
@@ -246,7 +246,11 @@ class NativeCapabilitiesTest {
             compose.onNodeWithTag("tab_3").performClick()
             compose.onNodeWithText("网络与播放").performClick()
             compose.onNodeWithTag("server_input").performTextReplacement(destination.url("/new").toString())
-            compose.onNodeWithText("保存服务器").performClick()
+            compose.onNodeWithTag("server_input").assertTextContains(destination.port.toString(), substring = true)
+            // The page is scrollable and the floating mini player overlays the lower part of it.
+            compose.onNodeWithTag("save_server").performScrollTo().performClick()
+            // The new server must be persisted before the validation call can reach it.
+            compose.waitUntil(5000) { container.musicSettings.state.value.server.contains(destination.port.toString()) }
             compose.waitUntil(10000) { destination.requestCount == 1 }
             val request = destination.takeRequest()
             assertEquals("/new/auth/me", request.path)

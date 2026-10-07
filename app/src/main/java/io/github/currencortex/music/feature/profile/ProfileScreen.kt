@@ -82,10 +82,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 @Composable fun MeScreen(vm: ProfileViewModel, auth: AuthViewModel, navigate: (String) -> Unit, onSettings: () -> Unit,
     play: (List<Song>, Int) -> Unit) {
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
-    if (account.account == null) Column {
-        TextButton("设置", onClick = onSettings)
-        LoginScreen(auth)
-    } else ProfileScreen(vm, navigate, play, onSettings = onSettings)
+    // The bottom navigation already owns "设置"; a second entry above the login form was redundant.
+    if (account.account == null) LoginScreen(auth) else ProfileScreen(vm, navigate, play, onSettings = onSettings)
 }
 
 @Composable fun ProfileScreen(vm: ProfileViewModel, navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit,
@@ -112,7 +110,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState, contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
         item { Row(verticalAlignment = Alignment.CenterVertically) {
-            onBack?.let { MusicTextAction("返回", it) }
+            // No back button here either: system/predictive back is handled by the navigation layer.
             Text(if (onBack == null) "我的" else "用户主页", Modifier.weight(1f), fontSize = 28.sp,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
             onSettings?.let { MusicTextAction("设置", it) }
@@ -160,8 +158,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
                 item { Card(Modifier.fillMaxWidth()) {
                     MusicDestinationRow("网易云账号", { navigate("user/binding") }, Modifier.testTag("open_binding"), "绑定与同步歌单")
                     MusicDestinationRow("头像挂件", { navigate("user/decorations") }, Modifier.testTag("open_decorations"))
-                    MusicDestinationRow("账户管理", { navigate("user/accounts") }, Modifier.testTag("open_accounts"), "添加或切换账号")
-                    MusicDestinationRow("账号与安全", { navigate("user/security") }, Modifier.testTag("open_security"))
+                    MusicDestinationRow("账号与安全", { navigate("user/security") }, Modifier.testTag("open_security"), "切换账号、修改密码、退出登录")
                 } }
             }
             state.profile?.current?.let { song -> item { MusicSectionHeader("当前在听")
@@ -190,16 +187,66 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     }
 }
 
-@Composable fun AccountSecurityScreen(vm: ProfileViewModel, onBack: () -> Unit) {
+/** Accounts and security are one page: switching accounts and changing credentials are the same job. */
+@Composable fun AccountSecurityScreen(vm: ProfileViewModel, auth: AuthViewModel, add: () -> Unit) {
+    val container = vm.container
+    val accounts by container.accountRepository.savedAccounts.collectAsStateWithLifecycle()
+    val account by container.accountRepository.state.collectAsStateWithLifecycle()
+    val state by auth.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
-    Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        MusicTextAction("返回", onBack)
-        Text("账号与安全", fontSize = 28.sp)
-        Card(Modifier.fillMaxWidth()) {
-            MusicDestinationRow("修改密码", { vm.dialog.value = "password" }, enabled = !busy)
-            MusicDestinationRow("退出登录", { vm.dialog.value = "logout" }, enabled = !busy)
+    val colors = MiuixTheme.colorScheme
+    var removing by remember { mutableStateOf<io.github.currencortex.music.data.auth.SavedAccount?>(null) }
+    LazyColumn(Modifier.fillMaxSize().testTag("security_screen"), contentPadding = musicScrollPadding(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            // No back button: the navigation layer already owns system/predictive back.
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("账号与安全", Modifier.weight(1f), fontSize = 28.sp)
+                MusicTextAction("添加账号", add, Modifier.testTag("add_account"), enabled = !state.loading)
+            }
         }
+        item { MusicSectionHeader("已保存账号") }
+        item { Card(Modifier.fillMaxWidth()) {
+            accounts.forEach { saved ->
+                val active = saved.id == account.account?.id && saved.server == container.accountRepository.server
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    UserAvatar(ProfileUser(id = saved.id, avatar = saved.avatar), container, 40.dp, reserveOverlay = false)
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Text(saved.nickname.ifBlank { saved.username }, fontSize = 16.sp, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                        Text(saved.server, fontSize = 12.sp, color = colors.onSurfaceVariantSummary, maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                    }
+                    // The active account needs no action; the others get switch + remove in place.
+                    if (active) Text("当前账号", fontSize = 13.sp, color = colors.primary,
+                        modifier = Modifier.testTag("current_account_${saved.id}"))
+                    else {
+                        MusicTextAction("切换", { auth.switch(saved.key) },
+                            Modifier.testTag("switch_account_${saved.id}"), enabled = !state.loading)
+                        MusicTextAction("移除", { removing = saved },
+                            Modifier.testTag("remove_account_${saved.id}"), enabled = !state.loading, destructive = true)
+                    }
+                }
+            }
+            if (accounts.isEmpty()) Text("本机还没有保存的账号", Modifier.padding(16.dp), fontSize = 13.sp,
+                color = colors.onSurfaceVariantSummary)
+        } }
+        item { MusicSectionHeader("安全") }
+        item { Card(Modifier.fillMaxWidth()) {
+            MusicDestinationRow("修改密码", { vm.dialog.value = "password" }, Modifier.testTag("open_password"),
+                "登录密码至少 6 位", enabled = !busy)
+            MusicDestinationRow("退出登录", { vm.dialog.value = "logout" }, Modifier.testTag("open_logout"),
+                "仅移除本机凭据，其他已保存账号保留", enabled = !busy)
+        } }
+        state.message?.let { item { Text(it, fontSize = 13.sp, color = colors.onSurfaceVariantSummary) } }
+        if (state.loading) item { Text("正在验证账号…", fontSize = 13.sp, color = colors.onSurfaceVariantSummary) }
     }
+    removing?.let { saved -> MusicDialog("移除已保存账号？", { removing = null }) {
+        Text(saved.nickname.ifBlank { saved.username }); Text("仅移除本机凭据，账号本身不受影响。")
+        TextButton("确认移除", onClick = { removing = null; auth.removeSaved(saved.key) },
+            modifier = Modifier.testTag("confirm_remove_account"))
+    } }
 }
 
 @Composable fun ProfileDialogs(vm: ProfileViewModel, auth: AuthViewModel) {
@@ -300,14 +347,14 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     }
 }
 
-@Composable fun DecorationScreen(vm: DecorationViewModel, onBack: () -> Unit) {
+@Composable fun DecorationScreen(vm: DecorationViewModel) {
     val state by vm.state.collectAsPageState()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val catalog = state.catalog
     val user = ProfileUser(id = account.account?.id ?: 0L, avatar = account.account?.avatar.orEmpty())
     Column(Modifier.fillMaxSize().padding(20.dp).testTag("decoration_screen"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        TextButton("返回", onClick = onBack); Text("头像挂件", fontSize = 28.sp)
+        Text("头像挂件", fontSize = 28.sp)
         if (state.loading) Text("正在加载挂件…")
         state.error?.let { Text(it); TextButton("重试", onClick = vm::reload) }
         if (catalog != null) {
@@ -332,30 +379,4 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
         val message by vm.message.collectAsStateWithLifecycle()
         message?.let { Text(it) }
     }
-}
-
-@Composable fun AccountScreen(container: AppContainer, auth: AuthViewModel, onBack: () -> Unit, add: () -> Unit) {
-    val accounts by container.accountRepository.savedAccounts.collectAsStateWithLifecycle()
-    val account by container.accountRepository.state.collectAsStateWithLifecycle()
-    val state by auth.state.collectAsStateWithLifecycle()
-    var removing by remember { mutableStateOf<io.github.currencortex.music.data.auth.SavedAccount?>(null) }
-    LazyColumn(Modifier.fillMaxSize().testTag("account_screen"), contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { TextButton("返回", onClick = onBack); Text("账户管理", fontSize = 28.sp); TextButton("添加账号", onClick = add, enabled = !state.loading) }
-        items(accounts, key = { it.key }) { saved ->
-            val active = saved.id == account.account?.id && saved.server == container.accountRepository.server
-            Column {
-                Text(saved.nickname.ifBlank { saved.username }); Text(saved.server)
-                Row {
-                    TextButton(if (active) "当前账号" else "切换", enabled = !active && !state.loading, onClick = { auth.switch(saved.key) }, modifier = Modifier.testTag("switch_account_${saved.id}"))
-                    TextButton("移除保存", enabled = !active && !state.loading, onClick = { removing = saved })
-                }
-            }
-        }
-        state.message?.let { item { Text(it) } }
-        if (state.loading) item { Text("正在验证账号…") }
-    }
-    removing?.let { saved -> MusicDialog("移除已保存账号？", { removing = null }) {
-        Text(saved.nickname.ifBlank { saved.username }); Text("仅移除本机凭据。")
-        TextButton("确认移除", onClick = { removing = null; auth.removeSaved(saved.key) })
-    } }
 }

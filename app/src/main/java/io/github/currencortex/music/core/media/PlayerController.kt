@@ -17,6 +17,8 @@ class PlayerController(private val context: Context, override val queue: Playbac
         MediaController.Builder(context, SessionToken(context, ComponentName(context, MusicService::class.java))).buildAsync().await()
     }) : ExternalPlayer {
     override val state = MutableStateFlow(PlayerState())
+    /** Real automatic/repeat boundaries; seeking backward is not a finished song. */
+    internal val completedTracks = MutableStateFlow(0L)
     private var controller: MediaController? = null
     private var connecting: Deferred<MediaController>? = null
     private var beforeVideo: QueueSnapshot? = null
@@ -92,6 +94,10 @@ class PlayerController(private val context: Context, override val queue: Playbac
             createController().also {
                 controller = it
                 it.addListener(object : Player.Listener {
+                    override fun onMediaItemTransition(mediaItem: androidx.media3.common.MediaItem?, reason: Int) {
+                        if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT)
+                            completedTracks.value += 1
+                    }
                     override fun onEvents(player: Player, events: Player.Events) { publish(player) }
                 })
                 scope.launch { while (isActive && controller === it) { publish(it); delay(300) } }

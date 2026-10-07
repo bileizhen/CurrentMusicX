@@ -25,14 +25,17 @@ import java.util.concurrent.TimeUnit
 
 /** One process owner, private disk storage, and no account headers on CDN requests. */
 @androidx.annotation.OptIn(UnstableApi::class)
-class AudioCache(context: Context, directory: File, maxBytes: Long = MAX_BYTES,
+class AudioCache(context: Context, directory: File,
     client: OkHttpClient = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS).build()) : java.io.Closeable {
-    private val cacheDelegate = lazy { SimpleCache(directory, LeastRecentlyUsedCacheEvictor(maxBytes), StandaloneDatabaseProvider(context.applicationContext)) }
+    // No size cap: cached audio is kept until the user clears it or the system reclaims cacheDir.
+    private val cacheDelegate = lazy { SimpleCache(directory, NoOpCacheEvictor(), StandaloneDatabaseProvider(context.applicationContext)) }
     private val cache get() = cacheDelegate.value
     private val upstream = OkHttpDataSource.Factory(client)
     private val writers = ConcurrentHashMap.newKeySet<CacheWriter>()
     private val writeLock = Mutex()
     val bytes = MutableStateFlow(0L)
+    /** Cached track count, for the storage page. */
+    val entries = MutableStateFlow(0)
     val clearing = MutableStateFlow(false)
     private fun cachedFactory(block: Boolean = false) = CacheDataSource.Factory().setCache(cache)
         .setUpstreamDataSourceFactory(upstream).setFlags(if (block) CacheDataSource.FLAG_BLOCK_ON_CACHE else CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
@@ -66,7 +69,10 @@ class AudioCache(context: Context, directory: File, maxBytes: Long = MAX_BYTES,
         } }
     } }
 
-    fun refreshUsage() { bytes.value = cache.cacheSpace }
+    fun refreshUsage() {
+        bytes.value = cache.cacheSpace
+        entries.value = cache.keys.count { cache.getCachedSpans(it).any { span -> span.length > 0 } }
+    }
     fun cachedSource(key: String): AudioSource? = runCatching {
         cache.getContentMetadata(key).get(SOURCE, "")?.takeIf { it.isNotBlank() }?.let { ApiJson.decodeFromString<AudioSource>(it) }
     }.getOrNull()
@@ -128,7 +134,6 @@ class AudioCache(context: Context, directory: File, maxBytes: Long = MAX_BYTES,
         if (cacheDelegate.isInitialized()) cache.release()
     }
     companion object {
-        const val MAX_BYTES = 256L * 1024 * 1024
         const val PRELOAD_BYTES = 2L * 1024 * 1024
         private const val PREFIX = "cm-audio-v1:"
         private const val SOURCE = "cm.audio.source"

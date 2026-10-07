@@ -60,22 +60,25 @@ object LyricsParser {
         return finish(source.lineSequence().flatMap { row ->
             val stamps = stamp.findAll(row).toList()
             if (stamps.isEmpty()) return@flatMap emptySequence()
-            val body = row.substring(stamps.last().range.last + 1).trim()
+            val rawBody = row.substring(stamps.last().range.last + 1)
+            val body = if (wordStamp.containsMatchIn(rawBody)) rawBody else rawBody.trim()
             val wordTimes = wordStamp.findAll(body).toList()
             val text = body.replace(wordStamp, "")
             stamps.asSequence().map { time ->
                 val start = (millis(time.groupValues[1], time.groupValues[2]) + offset).coerceAtLeast(0)
-                var cursor = 0
+                var cursor = wordTimes.firstOrNull()?.range?.first ?: 0
                 val words = wordTimes.mapIndexedNotNull { index, match ->
                     val token = body.substring(match.range.last + 1, wordTimes.getOrNull(index + 1)?.range?.first ?: body.length)
                     val begin = millis(match.groupValues[1], match.groupValues[2]) + offset
                     val end = wordTimes.getOrNull(index + 1)?.let { millis(it.groupValues[1], it.groupValues[2]) + offset }
-                    val at = text.indexOf(token, cursor).coerceAtLeast(cursor)
-                    cursor = at + token.length
-                    // The final enhanced-LRC token has no exact end unless a closing timestamp exists.
-                    if (token.isEmpty() || end == null || end <= begin) null else LyricWord(token, begin, end, at, cursor)
+                    val at = cursor
+                    cursor += token.length
+                    // Empty/whitespace intervals delimit silence, not fabricated lyric words.
+                    if (token.isBlank() || end == null || end <= begin || begin < 0) null else LyricWord(token, begin, end, at, cursor)
                 }
-                LyricLine(start, 0, text, words)
+                val closing = wordTimes.lastOrNull()?.takeIf { body.substring(it.range.last + 1).isBlank() }
+                    ?.let { millis(it.groupValues[1], it.groupValues[2]) + offset }
+                LyricLine(start, closing ?: 0, text, words)
             }
         }.toList())
     }
@@ -99,13 +102,14 @@ object LyricsParser {
     private fun millis(minutes: String, seconds: String) = ((minutes.toLongOrNull() ?: 0) * 60000 + (seconds.toDoubleOrNull() ?: 0.0) * 1000).toLong()
     private fun finish(lines: List<LyricLine>): LyricsDocument {
         val sorted = lines.filter { it.text.isNotBlank() }.distinctBy { it.startTimeMs to it.text }.sortedBy { it.startTimeMs }
-        return LyricsDocument(sorted.mapIndexed { index, line -> line.copy(
+        val nextStarts = sorted.map { it.startTimeMs }.distinct().zipWithNext().toMap()
+        return LyricsDocument(sorted.map { line -> line.copy(
             // Partial enhanced/normalized word data must not leave the rest of the line dim forever.
             words = line.words.takeIf { words -> line.text.indices.all { offset ->
                 line.text[offset].isWhitespace() || words.any { offset in it.startOffset until it.endOffset }
             } }.orEmpty(),
             endTimeMs =
             line.endTimeMs.takeIf { it > line.startTimeMs }
-                ?: sorted.getOrNull(index + 1)?.startTimeMs ?: maxOf(line.startTimeMs + 5000, line.words.maxOfOrNull { it.endTimeMs } ?: 0)) })
+                ?: nextStarts[line.startTimeMs] ?: maxOf(line.startTimeMs + 5000, line.words.maxOfOrNull { it.endTimeMs } ?: 0)) })
     }
 }

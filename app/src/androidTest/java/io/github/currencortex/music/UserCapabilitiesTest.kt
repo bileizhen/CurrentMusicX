@@ -145,8 +145,8 @@ class UserCapabilitiesTest {
     }
     @Test fun multipleAccountsSwitchWithoutPlaintextCredentialsInMetadata() {
         compose.setContent { CurrentMusicApp(container) }; me()
-        compose.onNodeWithTag("open_accounts").performScrollTo().performClick()
-        compose.onNodeWithText("添加账号").performClick()
+        compose.onNodeWithTag("open_security").performScrollTo().performClick()
+        compose.onNodeWithTag("add_account").performClick()
         compose.onNodeWithTag("login_username").performTextInput("user8")
         compose.onNodeWithTag("login_password").performTextInput("sample-password")
         compose.onNodeWithTag("login_submit").performClick()

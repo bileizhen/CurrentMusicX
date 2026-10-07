@@ -24,6 +24,7 @@ data class PlayerComments(val songId: Long? = null, val total: Long? = null, val
     val loading: Boolean = false, val error: String? = null)
 class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val player = container.playerController
+    val sleepTimer = container.sleepTimer
     val state = player.state
     val queue = player.queue.state
     // The navigation host needs only low-frequency state, never the playback position.
