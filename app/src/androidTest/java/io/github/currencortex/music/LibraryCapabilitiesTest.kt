@@ -37,6 +37,7 @@ class LibraryCapabilitiesTest {
                 val path = request.requestUrl!!.encodedPath
                 return when {
                     path == "/cm/daily" -> json("""{"daily":[$track],"forYou":[$track],"artists":["Artist"]}""").setBodyDelay(dailyDelay, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    path == "/cm/ncmbind" -> json("""{"bound":false}""")
                     path == "/cm/plays/recent" -> json("""{"songs":[$track]}""")
                     path == "/cm/songs/status" -> json("""{"liked":${if (liked) "[1]" else "[]"}}""")
                     path == "/cm/likes/1" -> if (likeFail) MockResponse().setResponseCode(500) else { liked=!liked; json("{}") }
@@ -80,11 +81,12 @@ class LibraryCapabilitiesTest {
         compose.waitForIdle()
         compose.mainClock.autoAdvance = false
 
-        fun assertSurface(route: String, previous: String, frame: Int) {
+        fun assertSurface(route: String, previous: String, frame: Int, moving: Boolean = true) {
             val viewport = compose.onNodeWithTag("music_navigation").fetchSemanticsNode().boundsInRoot
             val incoming = compose.onNodeWithTag("music_scene_$route").fetchSemanticsNode().boundsInRoot
             val outgoing = compose.onNodeWithTag("music_scene_$previous").fetchSemanticsNode().boundsInRoot
-            assertTrue("Capture must be during entry, not after settling: $incoming", incoming.left > viewport.left)
+            if (moving) assertTrue("Capture must be during entry, not after settling: $incoming", incoming.left > viewport.left)
+            else assertEquals("Root tabs retain the same navigation viewport", viewport, incoming)
             val overlapLeft = maxOf(incoming.left, outgoing.left)
             val overlapRight = minOf(incoming.right, outgoing.right)
             assertTrue("Both moving scenes must overlap", overlapRight - overlapLeft > 20f)
@@ -109,7 +111,7 @@ class LibraryCapabilitiesTest {
 
         compose.onNodeWithTag("tab_3").performClick()
         compose.mainClock.advanceTimeBy(700)
-        assertSurface("0", "0", 700)
+        assertSurface("0", "0", 700, moving = false)
         compose.onNodeWithTag("open_network").performScrollTo().performClick()
         compose.mainClock.advanceTimeBy(160)
         assertSurface("21", "0", 160)
@@ -143,7 +145,7 @@ class LibraryCapabilitiesTest {
         }
         gesture(commit = false)
         compose.onNodeWithText("我的歌单").assertExists()
-        compose.onNodeWithText("返回").performClick()
+        compose.runOnUiThread { dispatcher.onBackPressed() }
         compose.mainClock.advanceTimeBy(1500)
         compose.onNodeWithTag("open_playlists").assertExists()
         gesture(commit = true)
@@ -185,7 +187,7 @@ class LibraryCapabilitiesTest {
         assertTrue("Reversing the gesture must reverse the page", compose.onNodeWithTag("library_detail").fetchSemanticsNode().boundsInRoot.left < middle.left)
         compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
         compose.waitForIdle()
-        compose.onNodeWithText("网易云音乐 · 同步歌单只读").assertExists()
+        compose.onNodeWithText("网易云音乐").assertExists()
         assertEquals("Cancellation must restore the same page geometry", original,
             compose.onNodeWithTag("library_detail").fetchSemanticsNode().boundsInRoot)
         compose.runOnUiThread { dispatcher.dispatchOnBackStarted(androidx.activity.BackEventCompat(0f, 500f, 0f, androidx.activity.BackEventCompat.EDGE_RIGHT)) }
@@ -195,7 +197,7 @@ class LibraryCapabilitiesTest {
         compose.onNodeWithTag("library_detail").assertDoesNotExist()
         compose.onNodeWithText("我的歌单").assertExists()
         assertEquals(viewport, compose.onNodeWithTag("music_navigation").fetchSemanticsNode().boundsInRoot)
-        compose.onNodeWithText("返回").performClick()
+        compose.runOnUiThread { dispatcher.onBackPressed() }
         compose.waitForIdle()
         compose.onNodeWithTag("open_playlists").assertExists()
         assertEquals("Returning to root must keep the animated viewport", viewport,
@@ -218,8 +220,10 @@ class LibraryCapabilitiesTest {
         compose.onNodeWithTag("open_playlists").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Cloud read-only").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("Cloud read-only").performClick()
-        compose.waitUntil(10000) { compose.onAllNodesWithText("网易云音乐 · 同步歌单只读").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10000) { compose.onAllNodesWithText("网易云音乐").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("rename_playlist").assertDoesNotExist();compose.onNodeWithTag("delete_playlist").assertDoesNotExist()
+        compose.onNodeWithTag("playlist_info").performClick()
+        compose.onNodeWithText("网易云音乐 · 同步歌单只读").assertExists()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("网易云音乐 · 同步歌单只读").assertExists()
         assertEquals(7L,container.accountRepository.state.value.account!!.id)
@@ -229,13 +233,13 @@ class LibraryCapabilitiesTest {
         compose.waitUntil(15000) { compose.onAllNodesWithText("Library track").fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithTag("song_menu_1")[0].performScrollTo().performClick()
         compose.onAllNodesWithTag("song_like_1")[0].performScrollTo().performClick()
-        compose.waitUntil(10000) { compose.onAllNodesWithText("未收录，点击加入").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("like_destination_CURRENT_MUSIC").performClick()
-        compose.waitUntil(10000) { compose.onAllNodesWithText("服务器异常，点击重试").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10000) { compose.onAllNodesWithText("服务器异常").fetchSemanticsNodes().isNotEmpty() }
         assertFalse(container.libraryRepository.statuses.value[1]!!.liked)
         likeFail=false
         compose.onNodeWithTag("song_actions_sheet").assertDoesNotExist()
-        compose.onNodeWithTag("like_destination_CURRENT_MUSIC").performClick()
+        dismissMessage()
+        compose.onAllNodesWithTag("song_menu_1")[0].performScrollTo().performClick()
+        compose.onAllNodesWithTag("song_like_1")[0].performScrollTo().performClick()
         compose.waitUntil(10000) { container.libraryRepository.statuses.value[1]?.liked == true && container.libraryRepository.statuses.value[1]?.pending == false }
         dismissMessage()
         compose.onNodeWithTag("music_home").performTouchInput { swipeDown(startY=100f,endY=height-100f) }
@@ -245,15 +249,23 @@ class LibraryCapabilitiesTest {
         compose.onNodeWithTag("confirm_create_playlist").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("New playlist").fetchSemanticsNodes().isNotEmpty() }
         dismissMessage();compose.onNodeWithText("New playlist").performClick()
+        compose.onNodeWithTag("playlist_more").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithTag("rename_playlist").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("rename_playlist").performClick();compose.onNodeWithTag("rename_input").performTextReplacement("Renamed")
         compose.onNodeWithText("保存").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Renamed").fetchSemanticsNodes().isNotEmpty() }
     }
     @Test fun artistAlbumAndMvDetailsUseExplicitSearchAndNativeNavigation() {
-        compose.setContent { CurrentMusicApp(container) }
+        lateinit var dispatcher: androidx.activity.OnBackPressedDispatcher
+        compose.setContent {
+            dispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
+            CurrentMusicApp(container)
+        }
         compose.waitUntil(15000) { !container.accountRepository.state.value.loading }
-        compose.onNodeWithTag("open_playlists").performClick();compose.onNodeWithText("返回").performClick()
+        compose.onNodeWithTag("open_playlists").performClick()
+        compose.waitForIdle()
+        compose.runOnUiThread { dispatcher.onBackPressed() }
+        compose.waitForIdle()
         compose.onNodeWithText("歌手").performScrollTo().performClick()
         compose.onNodeWithTag("catalog_query").performTextInput("Artist");assertEquals(0,catalogRequests)
         compose.onNodeWithTag("catalog_submit").performClick()

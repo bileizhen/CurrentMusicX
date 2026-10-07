@@ -100,6 +100,8 @@ class UserCapabilitiesTest {
         container.musicSettings.setServer(url); container.accountRepository.server = url
         container.accountRepository.save("isolated-first-token", UserDto(7, "user7", "First user"))
         container.updateSettings.setAutoCheck(false)
+        // These legacy binding scenarios explicitly exercise snapshot import; live mode has its own tests.
+        container.musicSettings.setNeteaseMainLibrary(false)
         container.settings.edit { io.github.currencortex.music.data.settings.AppearanceSettings(blur = false) }
     }
     @After fun finish() = runBlocking {

@@ -11,6 +11,15 @@ import org.junit.Test
 import org.junit.Assert.*
 
 class RoomProtocolTest {
+    @Test fun failedRecalibrationPreservesClockAndSuccessfulBatchReplacesIt() {
+        val sync = RoomSynchronizer().apply { sample(10_000, 1000, 1100) }
+        val timeline = RoomTimeline(playing = true, basePosition = 2000, baseAt = 10_000)
+        sync.replaceWith(RoomSynchronizer())
+        assertTrue(sync.ready)
+        assertEquals(3050L, sync.position(timeline, 2100))
+        sync.replaceWith(RoomSynchronizer().apply { sample(11_000, 2000, 2200) })
+        assertEquals(3100L, sync.position(timeline, 2200))
+    }
     @Test fun clockIgnoresSlowSamplesAndPausedPositionDoesNotAdvance() {
         val sync = RoomSynchronizer()
         sync.sample(10_000, 1000, 1100); sync.sample(80_000, 1200, 1600)

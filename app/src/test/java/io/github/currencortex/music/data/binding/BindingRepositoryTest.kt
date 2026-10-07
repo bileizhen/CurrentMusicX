@@ -75,7 +75,9 @@ class BindingRepositoryTest {
             s.enqueue(MockResponse().setBody("{}")); repo.bindPhone("123456789", "1234", "86")
             val login = s.takeRequest(); assertEquals("1234", ApiJson.parseToJsonElement(login.body.readUtf8()).jsonObject["captcha"]!!.jsonPrimitive.content)
             s.enqueue(MockResponse().setBody("""{"imported":2,"tracks":5,"pending":1,"failed":1}"""))
-            val result = repo.sync(); assertEquals(1, result.pending); assertTrue(result.message().contains("待续传")); assertEquals(1, invalidations)
+            val result = repo.sync(); assertEquals(1, result.pending); assertTrue(result.message().contains("待续传"))
+            // Successful binding invalidates the old unbound state; sync invalidates again.
+            assertEquals(2, invalidations)
         }
     }
     @Test fun qrKeysAndChecksStayInSessionAndQueryValuesAreEncoded() = runBlocking {

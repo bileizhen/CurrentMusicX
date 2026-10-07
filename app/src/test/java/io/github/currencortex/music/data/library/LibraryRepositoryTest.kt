@@ -10,6 +10,23 @@ import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 class LibraryRepositoryTest {
+    @Test fun refreshingOnePlaylistBypassesOnlyItsOwnReadCache() = runBlocking {
+        MockWebServer().use { s ->
+            val r = repo(s)
+            s.enqueue(MockResponse().setBody("""{"id":3,"name":"P","tracks":[{"ncm_id":1,"name":"A"}]}"""))
+            assertEquals(listOf(1L), r.playlist(3).songs.map { it.id })
+            s.takeRequest()
+            s.enqueue(MockResponse().setBody("""{"songs":[{"ncm_id":9,"name":"Liked"}]}"""))
+            val likes = r.likedSongs()
+            s.takeRequest()
+            s.enqueue(MockResponse().setBody("""{"id":3,"name":"P","tracks":[{"ncm_id":2,"name":"New"},{"ncm_id":1,"name":"A"}]}"""))
+            assertEquals(listOf(2L, 1L), r.playlist(3, fresh = true).songs.map { it.id })
+            assertEquals("/cm/playlists/3", s.takeRequest().path)
+            assertSame(likes, r.likedSongs())
+            assertEquals(listOf(2L, 1L), r.playlist(3).songs.map { it.id })
+            assertNull(s.takeRequest(50, TimeUnit.MILLISECONDS))
+        }
+    }
     @Test fun likeMembershipUsesTheServerWriteResponse() = runBlocking {
         MockWebServer().use { s ->
             val r=repo(s)

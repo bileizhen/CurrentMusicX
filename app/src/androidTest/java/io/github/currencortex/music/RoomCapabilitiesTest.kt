@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.*
@@ -36,6 +37,8 @@ class RoomCapabilitiesTest {
     private val approvals = AtomicInteger()
     private val playRequests = AtomicInteger()
     private val songRequests = AtomicInteger()
+    @Volatile private var roomsDelay = 0L
+    @Volatile private var createFails = false
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
     @Before fun prepare() = runBlocking {
         player = SilentDevicePlayer().apply { queue.replace(listOf(Song(55, "Original local queue")), 0) }
@@ -46,7 +49,8 @@ class RoomCapabilitiesTest {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.requestUrl!!.encodedPath
                 return when {
-                    path == "/cm/rooms" -> json("""{"rooms":[{"id":1,"name":"Fixture room","code":"001234","online":2,"owner_name":"Owner"}]}""")
+                    path == "/cm/rooms" && request.method == "POST" && createFails -> MockResponse().setResponseCode(500)
+                    path == "/cm/rooms" -> json("""{"rooms":[{"id":1,"name":"Fixture room","code":"001234","online":2,"owner_name":"Owner"}]}""").setBodyDelay(roomsDelay, java.util.concurrent.TimeUnit.MILLISECONDS)
                     path == "/cm/rooms/search" -> json("""{"room":{"id":1,"code":"001234","name":"Fixture room"}}""")
                     path == "/cm/rooms/1" -> json("""{"room":{"id":1,"code":"001234","name":"Fixture room"},"members":[{"userId":7,"nickname":"Fixture user","role":"${if(owner) "owner" else "member"}"}],"queue":[{"id":12,"name":"Requested song","status":"${if(approved) "approved" else "pending"}","mine":false}],"latestSeq":0}""")
                     path == "/cm/rooms/1/queue/12/approve" -> { approvals.incrementAndGet(); approved = true; json("{}") }
@@ -92,10 +96,38 @@ class RoomCapabilitiesTest {
         compose.onNodeWithText("通过").performClick()
         compose.waitUntil(10000) { approvals.get() == 1 && vm.session.state.value.detail?.queue?.firstOrNull()?.status == "approved" }
         compose.onNodeWithText("已加入队列").assertExists()
+        captureRoom("room-owner-preview.png")
         compose.onNodeWithText("退出房间").performClick()
         compose.onNodeWithTag("confirm_leave_room").performClick()
         compose.waitUntil(10000) { !vm.session.active }
         assertEquals(55L, player.queue.state.value.current?.id); assertEquals(PlayerMode.LOCAL, player.state.value.mode); assertFalse(player.state.value.playing)
+    }
+    @Test fun refreshingRoomBrowserKeepsExistingCardsVisible() {
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { top.yukonga.miuix.kmp.basic.Scaffold { RoomScreen(vm, {}, {}, {}) } } }
+        compose.waitUntil(10000) { vm.browser.value.rooms.isNotEmpty() && !vm.browser.value.loading }
+        roomsDelay = 1000
+        compose.onNodeWithText("刷新").performClick()
+        compose.onNodeWithText("Fixture room").assertIsDisplayed()
+        captureRoom("room-browser-preview.png")
+        compose.onNodeWithText("加入").assertIsDisplayed()
+        compose.onNodeWithText("刷新中").assertIsNotEnabled()
+        compose.waitUntil(5000) { !vm.browser.value.loading }
+        compose.onNodeWithText("Fixture room").assertIsDisplayed()
+    }
+    @Test fun failedRoomCreationKeepsDialogAndNameForRetry() {
+        createFails = true
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { top.yukonga.miuix.kmp.basic.Scaffold { RoomScreen(vm, {}, {}, {}) } } }
+        compose.waitUntil(10000) { vm.browser.value.rooms.isNotEmpty() }
+        compose.onNodeWithText("创建房间").performClick()
+        compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("room_form")) and hasText("房间名称"))
+            .performTextInput("Retry room")
+        compose.onNodeWithText("保存").performScrollTo().performClick()
+        compose.waitUntil(5000) { !vm.busy.value && vm.browser.value.error != null }
+        compose.onNodeWithTag("room_form").assertExists()
+        compose.onNode(hasSetTextAction() and hasText("Retry room")).assertExists()
+        compose.onNodeWithText("保存").performScrollTo().assertIsEnabled()
     }
     @Test fun memberCannotApproveOrControlPlayback() {
         owner = false
@@ -149,6 +181,12 @@ class RoomCapabilitiesTest {
         compose.onNodeWithText("Requested song").assertExists()
         compose.onNodeWithText("Fixture user · 房主").assertExists()
     }
+    private fun captureRoom(name: String) {
+        val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        java.io.File(context.filesDir, name).outputStream().use { output ->
+            compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, output)
+        }
+    }
     @Test fun roomSongSearchSubmitsOnceAndReturnsToSameRoomWithoutLocalPlayback() {
         owner = false
         compose.setContent { CurrentMusicApp(container) }
@@ -158,7 +196,7 @@ class RoomCapabilitiesTest {
         compose.onNodeWithText("加入").performClick()
         compose.waitUntil(10000) { container.roomSession.active }
         compose.onNodeWithText("点歌").performClick()
-        compose.onNodeWithText("为房间点歌").assertExists()
+        compose.onNodeWithText("Fixture room · 点击歌曲提交点歌").assertExists()
         compose.onNodeWithTag("search_input").performTextInput("Fixture")
         compose.onNodeWithTag("submit_search").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Search request song").fetchSemanticsNodes().isNotEmpty() }
