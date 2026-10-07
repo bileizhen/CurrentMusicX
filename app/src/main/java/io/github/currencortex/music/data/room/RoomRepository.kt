@@ -7,7 +7,8 @@ import kotlinx.serialization.json.*
 class RoomRepository(private val api: ApiClient, val session: () -> RequestSession) {
     private suspend fun request(method: String, path: String, body: JsonObject? = null,
         query: Map<String, String> = emptyMap(), expected: RequestSession = session()) =
-        api.request(method, path, query, body, authenticated = true, expectedSession = expected)
+        api.request(method, path, query, body, authenticated = true, expectedSession = expected,
+            retryConnection = method == "GET")
     suspend fun list(query: String, offset: Int) = api.decode<RoomsDto>(request("GET", "rooms",
         query = mapOf("query" to query, "limit" to "20", "offset" to offset.toString())))
     suspend fun find(code: String): RoomInfo {

@@ -15,6 +15,10 @@ class RoomSynchronizer {
         bestRtt = rtt; serverAnchor = serverNow + rtt / 2; monotonicAnchor = received
     }
     fun reset() { bestRtt = Long.MAX_VALUE }
+    fun replaceWith(sample: RoomSynchronizer) {
+        if (!sample.ready) return
+        serverAnchor = sample.serverAnchor; monotonicAnchor = sample.monotonicAnchor; bestRtt = sample.bestRtt
+    }
     fun position(timeline: RoomTimeline, now: Long): Long = (timeline.basePosition + if (timeline.playing)
         (serverAnchor + (now - monotonicAnchor).coerceAtLeast(0) - timeline.baseAt).coerceAtLeast(0) else 0).coerceAtLeast(0)
     data class Correction(val position: Long, val seek: Boolean, val speed: Float)

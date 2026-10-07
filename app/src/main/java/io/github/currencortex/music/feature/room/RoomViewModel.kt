@@ -9,7 +9,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 data class RoomBrowserState(val rooms: List<RoomCard> = emptyList(), val loading: Boolean = false,
-    val more: Boolean = false, val error: String? = null)
+    val more: Boolean = false, val error: String? = null, val query: String = "")
 class RoomViewModel(val container: AppContainer) : ViewModel() {
     val browser = MutableStateFlow(RoomBrowserState())
     val session = container.roomSession
@@ -20,23 +20,35 @@ class RoomViewModel(val container: AppContainer) : ViewModel() {
     private var writing: Job? = null
     init { viewModelScope.launch {
         container.sessionRestored.await()
-        container.accountRepository.sessionRevision.collect { loading?.cancel(); writing?.cancel(); passwordRoom.value = null; browser.value = RoomBrowserState(); load() }
+        combine(container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged()) { revision, server -> revision to server }
+            .collect { loading?.cancel(); writing?.cancel(); busy.value = false; passwordRoom.value = null; browser.value = RoomBrowserState(); load() }
     } }
     fun load(value: String = query, more: Boolean = false) {
         if (container.accountRepository.state.value.account == null) { browser.value = RoomBrowserState(error = "登录后可创建或加入听歌房"); return }
+        if (more && (browser.value.loading || !browser.value.more)) return
+        val nextQuery = value.trim()
+        val previous = browser.value
+        val retained = if (nextQuery == previous.query) previous.rooms else emptyList()
+        val offset = if (more) retained.size else 0
         loading?.cancel()
         loading = viewModelScope.launch {
-            query = value.trim(); val old = if (more) browser.value.rooms else emptyList()
-            browser.value = RoomBrowserState(old, loading = true)
-            when (val result = appResult { container.roomRepository.list(query, old.size) }) {
-                is AppResult.Success -> browser.value = RoomBrowserState((old + result.value.rooms).distinctBy { it.id }, more = result.value.rooms.size == 20)
-                is AppResult.Failure -> browser.value = RoomBrowserState(old, error = result.kind.message)
+            query = nextQuery
+            browser.value = previous.copy(rooms = retained, loading = true, query = query, error = null)
+            when (val result = appResult { container.roomRepository.list(query, offset) }) {
+                is AppResult.Success -> {
+                    val rooms = ((if (more) retained else emptyList()) + result.value.rooms).distinctBy { it.id }
+                    val hasMore = if (result.value.total > 0) rooms.size < result.value.total else result.value.rooms.size == 20
+                    browser.value = RoomBrowserState(rooms, more = hasMore && result.value.rooms.isNotEmpty(), query = query)
+                }
+                is AppResult.Failure -> browser.value = previous.copy(rooms = retained, loading = false, error = result.kind.message, query = query)
             }
         }
     }
     private fun run(block: suspend () -> Unit) {
         if (busy.value) return
-        writing = viewModelScope.launch { busy.value = true
+        busy.value = true
+        browser.update { it.copy(error = null) }
+        writing = viewModelScope.launch {
             try { when (val result = appResult(block)) {
                 is AppResult.Failure -> browser.update { it.copy(error = result.kind.message) }; else -> Unit }
             } finally { busy.value = false }
