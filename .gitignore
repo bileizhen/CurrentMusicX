@@ -19,3 +19,14 @@ keystore.properties
 /services/update-proxy/node_modules/
 /services/update-proxy/.wrangler/
 /services/update-proxy/.dev.vars*
+
+# Local documentation and tool configuration.
+/docs/
+/.codex/
+/.agents/
+/.claude/
+**/AGENTS.md
+**/CLAUDE.md
+**/CODEX.md
+**/M0_CODEX_TASK.md
+**/DEVELOPMENT_PLAN.md
