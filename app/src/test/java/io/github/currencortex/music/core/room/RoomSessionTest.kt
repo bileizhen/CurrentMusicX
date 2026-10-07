@@ -12,6 +12,88 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
 class RoomSessionTest {
+    @Test fun duplicateCommandsSubmitOnceAndRefreshFailureDoesNotUndoAcceptedWrite() = runBlocking {
+        withOwnerRoom { server, session ->
+            val writes = AtomicInteger()
+            val release = java.util.concurrent.CountDownLatch(1)
+            val failedRefresh = java.util.concurrent.atomic.AtomicBoolean()
+            val original = server.dispatcher
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    if (request.requestUrl!!.encodedPath.endsWith("/next")) {
+                        writes.incrementAndGet(); release.await(3, java.util.concurrent.TimeUnit.SECONDS)
+                        failedRefresh.set(true); return MockResponse().setBody("{}")
+                    }
+                    if (request.requestUrl!!.encodedPath == "/cm/rooms/r1" && failedRefresh.get()) return MockResponse().setResponseCode(500)
+                    return original.dispatch(request)
+                }
+            }
+            try {
+                session.next(); session.next()
+                withTimeout(2000) { while (writes.get() == 0) delay(10) }
+                assertEquals(setOf("next"), session.state.value.pendingActions)
+                release.countDown()
+                withTimeout(3000) { while (session.state.value.pendingActions.isNotEmpty()) delay(10) }
+                assertEquals(1, writes.get())
+                assertTrue(session.state.value.error?.startsWith("操作已提交") == true)
+                assertTrue(session.active)
+            } finally { release.countDown() }
+        }
+    }
+    @Test fun commandFinishingAfterDisconnectCannotRestoreErrorOrPendingState() = runBlocking {
+        withOwnerRoom { server, session ->
+            val started = java.util.concurrent.CountDownLatch(1)
+            val release = java.util.concurrent.CountDownLatch(1)
+            val original = server.dispatcher
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    if (request.requestUrl!!.encodedPath.endsWith("/next")) {
+                        started.countDown(); release.await(3, java.util.concurrent.TimeUnit.SECONDS)
+                        return MockResponse().setResponseCode(500)
+                    }
+                    return original.dispatch(request)
+                }
+            }
+            try {
+                session.next()
+                withContext(Dispatchers.IO) { assertTrue(started.await(2, java.util.concurrent.TimeUnit.SECONDS)) }
+                session.disconnect(); release.countDown(); delay(300)
+                assertFalse(session.active); assertNull(session.state.value.error)
+                assertTrue(session.state.value.pendingActions.isEmpty())
+            } finally { release.countDown() }
+        }
+    }
+    @Test fun staleSnapshotCannotReplaceNewerTimeline() = runBlocking {
+        withOwnerRoom { server, session ->
+            val original = server.dispatcher
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = if (request.requestUrl!!.encodedPath == "/cm/rooms/r1")
+                    MockResponse().setBody("""{"room":{"id":"r1"},"members":[{"userId":7,"role":"owner"}],"latestSeq":4,"timeline":{"basePosition":100}}""")
+                else original.dispatch(request)
+            }
+            session.refresh()
+            assertEquals(5L, session.state.value.detail!!.latestSeq)
+            assertNull(session.state.value.detail!!.timeline)
+        }
+    }
+    private suspend fun withOwnerRoom(block: suspend (MockWebServer, RoomSession) -> Unit) {
+        MockWebServer().use { server ->
+            server.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
+                    "/cm/rooms/r1" -> MockResponse().setBody("""{"room":{"id":"r1"},"members":[{"userId":7,"role":"owner"}],"latestSeq":5}""")
+                    "/cm/rooms/r1/sync" -> MockResponse().setBody("""{"serverNow":${System.currentTimeMillis()}}""")
+                    "/cm/live/r1/events" -> MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
+                    else -> MockResponse().setBody("{}")
+                }
+            }
+            val expected = RequestSession(server.url("/cm/").toString(), "owner-fixture-token")
+            val repo = RoomRepository(ApiClient({ expected.server }, { expected.token }, {})) { expected }
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            val session = RoomSession(repo, RoomSseClient(), SilentExternalPlayer(), scope, { 7 }, {}, { System.nanoTime() / 1_000_000 })
+            try { session.join(RoomInfo("r1")); block(server, session) }
+            finally { session.disconnect(); scope.cancel() }
+        }
+    }
     @Test fun acceptedSongRequestIsNotRetriedWhenQueueRefreshFails() = runBlocking {
         MockWebServer().use { server ->
             val refreshFail = java.util.concurrent.atomic.AtomicBoolean()
