@@ -125,7 +125,7 @@ class NativeCapabilitiesTest {
         assertEquals("test", lastSearchKeyword)
         assertEquals("2", lastSearchOffset)
         compose.onNodeWithTag("search_input").assertTextContains("not submitted")
-        compose.onNodeWithTag("search_back").performClick()
+        compose.onNodeWithTag("search_sheet").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.Dismiss) { it() }
         compose.onNodeWithTag("open_home_search").performClick()
         compose.onAllNodesWithText("Track one")[0].assertExists()
         restoration.emulateSavedInstanceStateRestore()
@@ -139,14 +139,21 @@ class NativeCapabilitiesTest {
         compose.onNodeWithTag("search_input").performTextInput("test")
         compose.onNodeWithTag("submit_search").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Track one").fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.autoAdvance = false
         compose.onNodeWithText("Track one").performClick()
+        compose.mainClock.advanceTimeBy(800)
         if (compose.onAllNodesWithText("继续播放").fetchSemanticsNodes().isNotEmpty()) compose.onNodeWithText("继续播放").performClick()
         compose.waitUntil(20000) { container.playerController.state.value.playing }
-        compose.onNodeWithTag("mini_player").performClick()
+        compose.onNodeWithTag("search_sheet").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.Dismiss) { it() }
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.mainClock.advanceTimeBy(800)
         compose.onNodeWithTag("player_seek").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(.5f) }
         compose.waitUntil(10000) { container.playerController.state.value.positionMs > 12000 }
         compose.onNodeWithTag("lyrics_options").performClick()
+        compose.mainClock.advanceTimeBy(800)
         compose.onNodeWithTag("open_lyrics").performClick()
+        compose.mainClock.advanceTimeBy(800)
         compose.onNodeWithTag("lyrics_panel").assertExists()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Line two").fetchSemanticsNodes().isNotEmpty() }
         runBlocking { withContext(Dispatchers.Main) { container.playerController.connect().pause() } }
@@ -211,8 +218,10 @@ class NativeCapabilitiesTest {
         highSpec = true
         runBlocking { container.musicSettings.setWarning(true) }
         compose.setContent { CurrentMusicApp(container) }
+        compose.mainClock.autoAdvance = false
         compose.runOnUiThread { container.playerController.playList(listOf(io.github.currencortex.music.data.song.Song(1, "High spec")), 0) }
         compose.waitUntil(20000) { container.playerController.state.value.warning != null }
+        compose.mainClock.advanceTimeBy(800)
         assertFalse(container.playerController.state.value.playing)
         compose.onNodeWithText("切换无损").performClick()
         compose.waitUntil(20000) { container.playerController.state.value.playing }
@@ -226,10 +235,12 @@ class NativeCapabilitiesTest {
             compose.onNodeWithTag("search_input").performTextInput("rotation")
             compose.onNodeWithTag("submit_search").performClick()
             compose.waitUntil(10000) { compose.onAllNodesWithText("Track one").fetchSemanticsNodes().isNotEmpty() }
+            compose.mainClock.autoAdvance = false
             compose.runOnUiThread { container.playerController.playList(listOf(io.github.currencortex.music.data.song.Song(1, "Track one")), 0) }
             compose.waitUntil(20000) { container.playerController.state.value.playing }
             val requests = searchCount
             scenario.recreate()
+            compose.mainClock.advanceTimeBy(3000)
             compose.onNodeWithTag("search_input").assertTextContains("rotation")
             compose.onNodeWithTag("mini_player").assertExists()
             assertEquals(requests, searchCount)
@@ -240,7 +251,13 @@ class NativeCapabilitiesTest {
     @Test fun serverChangeClearsAccountAndNeverSendsOldTokenToNewServer() {
         runBlocking { container.authRepository.login("user", "pass") }
         MockWebServer().use { destination ->
-            destination.enqueue(MockResponse().setResponseCode(401))
+            val received = java.util.concurrent.CopyOnWriteArrayList<RecordedRequest>()
+            destination.dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    received.add(request)
+                    return MockResponse().setResponseCode(if (request.requestUrl!!.encodedPath == "/new/auth/me") 401 else 404)
+                }
+            }
             destination.start()
             compose.setContent { CurrentMusicApp(container) }
             compose.onNodeWithTag("tab_3").performClick()
@@ -251,10 +268,11 @@ class NativeCapabilitiesTest {
             compose.onNodeWithTag("save_server").performScrollTo().performClick()
             // The new server must be persisted before the validation call can reach it.
             compose.waitUntil(5000) { container.musicSettings.state.value.server.contains(destination.port.toString()) }
-            compose.waitUntil(10000) { destination.requestCount == 1 }
-            val request = destination.takeRequest()
+            compose.waitUntil(10000) { received.any { it.requestUrl!!.encodedPath == "/new/auth/me" } }
+            val request = received.first { it.requestUrl!!.encodedPath == "/new/auth/me" }
             assertEquals("/new/auth/me", request.path)
             assertNull(request.getHeader("Authorization"))
+            received.forEach { assertNull("No old token on any new-server request", it.getHeader("Authorization")) }
             assertNull(container.accountRepository.token)
             assertNull(container.accountRepository.state.value.account)
             compose.waitUntil(5000) { container.musicSettings.state.value.server == destination.url("/new/").toString() }

@@ -128,7 +128,7 @@ class PlayerLandscapeTest {
         compose.onNodeWithTag("mini_cover").performClick()
         compose.onNodeWithTag("player_screen").assertIsDisplayed()
         compose.onNodeWithTag("wide_navigation").assertDoesNotExist()
-        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithTag("navigate_back").performClick()
         compose.onNodeWithTag("tab_3").assertIsSelected()
         assertEquals(rail, compose.onNodeWithTag("wide_navigation").fetchSemanticsNode().boundsInRoot)
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
@@ -224,7 +224,7 @@ class PlayerLandscapeTest {
         compose.onNodeWithTag("open_player_queue").performClick()
         compose.onNodeWithTag("player_queue_sheet").assertExists()
         compose.onNodeWithText("向下轻扫返回播放界面").performClick()
-        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithTag("navigate_back").performClick()
         compose.onNodeWithTag("mini_cover").assertIsDisplayed()
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
         assertFalse(container.playerController.state.value.playing)
