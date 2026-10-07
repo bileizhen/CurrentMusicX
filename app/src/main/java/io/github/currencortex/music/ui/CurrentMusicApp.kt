@@ -72,6 +72,8 @@ import io.github.currencortex.music.feature.logs.LogExportDialog
 import io.github.currencortex.music.feature.settings.AppearanceScreen
 import io.github.currencortex.music.feature.settings.ScaleDialog
 import io.github.currencortex.music.feature.settings.SettingsScreen
+import io.github.currencortex.music.feature.settings.StorageScreen
+import io.github.currencortex.music.feature.settings.StorageViewModel
 import io.github.currencortex.music.feature.settings.SettingsViewModel
 import io.github.currencortex.music.feature.settings.UpdateSettingsViewModel
 import io.github.currencortex.music.ui.component.PlainFloatingBar
@@ -117,6 +119,7 @@ private const val SETTINGS = 20
 private const val NETWORK = 21
 private const val PLAYER = 22
 private const val SEARCH = 23
+private const val STORAGE = 24
 private const val HOME_TAB = 0
 private const val DISCOVER_TAB = 1
 private const val ME_TAB = 2
@@ -187,6 +190,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             }
         }
         var songMenu by remember { mutableStateOf<SongMenu?>(null) }
+        var downloadSongJson by rememberSaveable { mutableStateOf<String?>(null) }
         var roomPending by remember { mutableStateOf(setOf<Long>()) }
         var miniHeight by remember { mutableStateOf(72.dp) }
         var miniBounds by remember { mutableStateOf<Rect?>(null) }
@@ -373,6 +377,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
                                 SETTINGS_TAB -> SettingsScreen(updateViewModel = updateVm,
                                     onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
+                                    onStorage = { navigateTo(STORAGE) },
                                     onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates)
                             }
                         }
@@ -398,10 +403,15 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         TextButton("返回", onClick = ::navigateBack)
                         Box(Modifier.weight(1f)) { SettingsScreen(updateViewModel = updateVm,
                             onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
+                            onStorage = { navigateTo(STORAGE) },
                             onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates) }
                     }
                 }
-                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, ::navigateBack) }
+                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm) { navigateTo(STORAGE) } }
+                entry(STORAGE.toString()) {
+                    val vm: StorageViewModel = viewModel(key = "storage", factory = viewModelFactory { StorageViewModel(container) })
+                    StorageScreen(vm)
+                }
                 entry("cast/devices") {
                     val vm: io.github.currencortex.music.feature.cast.CastViewModel = viewModel(factory = viewModelFactory { io.github.currencortex.music.feature.cast.CastViewModel(container) })
                     io.github.currencortex.music.feature.cast.CastScreen(vm, ::navigateBack, { castDialogOpen = it })
@@ -439,17 +449,13 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     entry(route) {
                         Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                             when {
-                                route == "user/security" -> AccountSecurityScreen(profileVm, ::navigateBack)
-                                route == "user/accounts" -> AccountScreen(container, authVm, ::navigateBack) {
+                                route == "user/security" -> AccountSecurityScreen(profileVm, authVm) {
                                     authVm.begin(); navigateLibrary("user/login")
                                 }
-                                route == "user/login" -> Column {
-                                    TextButton("返回", onClick = ::navigateBack)
-                                    LoginScreen(authVm, addingAccount = true, onDone = ::navigateBack)
-                                }
+                                route == "user/login" -> LoginScreen(authVm, addingAccount = true, onDone = ::navigateBack)
                                 route == "user/decorations" -> {
                                     val vm: DecorationViewModel = viewModel(key = route, factory = viewModelFactory { DecorationViewModel(container) })
-                                    DecorationScreen(vm, ::navigateBack)
+                                    DecorationScreen(vm)
                                 }
                                 route == "user/binding" -> {
                                     val vm: BindingViewModel = viewModel(key = route, factory = viewModelFactory { BindingViewModel(container) })
@@ -584,14 +590,20 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm) { miniQueueOpen = false }
         }
         }
-        songMenu?.let { SongActionsSheet(it) { songMenu = null } }
+        songMenu?.let { SongActionsSheet(it, onDismiss = { songMenu = null }, onDownload = { song ->
+            downloadSongJson = io.github.currencortex.music.core.network.ApiJson.encodeToString(Song.serializer(), song)
+        }) }
+        downloadSongJson?.let { raw ->
+            val song = remember(raw) { io.github.currencortex.music.core.network.ApiJson.decodeFromString(Song.serializer(), raw) }
+            io.github.currencortex.music.feature.download.SongDownloadDialog(song, container) { downloadSongJson = null }
+        }
         // XBlocker pattern: intercept completion when prediction is disabled. MIUIX
         // owns seeking, cancellation and settling otherwise. Popups are hosted after
         // navigation, once, and take precedence over returning to the parent page.
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !playerPresented && !searchPresented && !predictiveBack && !showLogs &&
-                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
+                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }

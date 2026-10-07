@@ -19,7 +19,7 @@ val LocalSongMenu = staticCompositionLocalOf<((SongMenu) -> Unit)?> { null }
 val LocalDismissSongMenu = staticCompositionLocalOf<() -> Unit> { {} }
 val LocalRoomSongRequest = staticCompositionLocalOf<RoomSongRequest?> { null }
 
-@Composable fun SongActionsSheet(menu: SongMenu, onDismiss: () -> Unit) {
+@Composable fun SongActionsSheet(menu: SongMenu, onDownload: ((Song) -> Unit)? = null, onDismiss: () -> Unit) {
     MusicDialog(menu.song.name, onDismiss) {
         Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()).testTag("song_actions_sheet")) {
             Text(menu.song.artists, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 13.sp,
@@ -29,6 +29,9 @@ val LocalRoomSongRequest = staticCompositionLocalOf<RoomSongRequest?> { null }
                 MusicDestinationRow("下一首播放", { onDismiss(); menu.next() }, chevron = false)
                 MusicDestinationRow("加入队列", { onDismiss(); menu.queue() }, chevron = false)
             }
+            if (!menu.song.video && onDownload != null) MusicDestinationRow("下载歌曲", {
+                onDismiss(); onDownload(menu.song)
+            }, modifier = Modifier.testTag("song_download"), summary = "保存歌曲信息、封面与歌词", chevron = false)
             CompositionLocalProvider(LocalDismissSongMenu provides onDismiss) { menu.extra?.invoke() }
         }
     }

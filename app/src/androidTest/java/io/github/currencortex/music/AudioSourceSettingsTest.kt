@@ -32,14 +32,16 @@ class AudioSourceSettingsTest {
         val account = container.accountRepository.state.value
         val server = container.musicSettings.snapshot().server
         compose.setContent { LeiTheme(AppearanceSettings()) { MusicSettingsScreen(vm) {} } }
+        // The key card only exists once LeiZ is the selected source.
+        compose.onNodeWithTag("audio_key_input").assertDoesNotExist()
+        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("audio_provider_leiz"))
+        compose.onNodeWithTag("audio_provider_leiz").performClick()
+        compose.waitUntil(5000) { vm.audioProvider.value.provider == AudioProvider.LEIZ && !vm.audioState.value.busy }
         compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("audio_key_input"))
         compose.onNodeWithTag("audio_key_input").performTextInput("lz_fixture_only_not_a_real_key")
         compose.onNodeWithTag("audio_key_save").performClick()
         compose.waitUntil(5000) { vm.audioProvider.value.keyConfigured && !vm.audioState.value.busy }
         assertEquals("", compose.onNodeWithTag("audio_key_input").fetchSemanticsNode().config[SemanticsProperties.EditableText].text)
-        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("audio_provider_leiz"))
-        compose.onNodeWithTag("audio_provider_leiz").performClick()
-        compose.waitUntil(5000) { vm.audioProvider.value.provider == AudioProvider.LEIZ && !vm.audioState.value.busy }
         val access = container.audioSettings.access()
         assertTrue(access.identity.startsWith("leiz:"))
         assertFalse(access.identity.contains("fixture")); assertFalse(access.toString().contains("fixture"))

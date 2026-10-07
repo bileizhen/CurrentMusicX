@@ -44,6 +44,11 @@ object MusicIcons {
         moveTo(3f, 8f); lineTo(3f, 3f); lineTo(8f, 3f); moveTo(16f, 3f); lineTo(21f, 3f); lineTo(21f, 8f)
         moveTo(3f, 16f); lineTo(3f, 21f); lineTo(8f, 21f); moveTo(16f, 21f); lineTo(21f, 21f); lineTo(21f, 16f)
     }
+    val Storage = icon("Storage") {
+        moveTo(4f, 4f); lineTo(20f, 4f); lineTo(20f, 10f); lineTo(4f, 10f); close()
+        moveTo(4f, 14f); lineTo(20f, 14f); lineTo(20f, 20f); lineTo(4f, 20f); close()
+        moveTo(7f, 7f); lineTo(7.2f, 7f); moveTo(7f, 17f); lineTo(7.2f, 17f)
+    }
     private fun icon(name: String, autoMirror: Boolean = false, draw: PathBuilder.() -> Unit) = ImageVector.Builder(
         name, 24.dp, 24.dp, 24f, 24f, autoMirror = autoMirror,
     ).apply {

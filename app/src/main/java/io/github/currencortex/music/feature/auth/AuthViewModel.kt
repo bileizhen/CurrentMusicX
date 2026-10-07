@@ -15,6 +15,8 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
     val account = container.accountRepository.state
     val codeUntil = MutableStateFlow(0L)
     fun begin() { state.value = AuthUiState() }
+    /** Drops a stale outcome without touching an in-flight request. */
+    fun clearMessage() { state.update { it.copy(message = null) } }
     private fun action(success: String, block: suspend () -> AppResult<*>) {
         if (state.value.loading) return
         state.value = AuthUiState(loading = true)

@@ -13,6 +13,8 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.player.*
 import io.github.currencortex.music.feature.settings.MusicSettingsViewModel
 import io.github.currencortex.music.feature.settings.MusicSettingsScreen
+import io.github.currencortex.music.feature.settings.StorageScreen
+import io.github.currencortex.music.feature.settings.StorageViewModel
 import io.github.currencortex.music.ui.CurrentMusicApp
 import io.github.currencortex.music.ui.theme.LeiTheme
 import kotlinx.coroutines.runBlocking
@@ -108,24 +110,31 @@ class MiniPlayerInteractionTest {
         compose.onNodeWithTag("mini_cover").performClick(); assertEquals(1, opens)
     }
     @Test fun progressRingFollowsPositionAndResetsWhenTrackChanges() {
+        compose.mainClock.autoAdvance = false
         component()
         compose.runOnIdle {
             container.playerController.state.value = PlayerState(song = container.playbackQueue.state.value.current,
                 positionMs = 2500, durationMs = 10000)
         }
+        compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithTag("mini_toggle").assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(.25f, 0f..1f)))
         compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(positionMs = 7500, playing = true) }
+        compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithTag("mini_toggle").assertContentDescriptionEquals("暂停")
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(.75f, 0f..1f)))
         compose.runOnIdle { container.playbackQueue.next() }
+        compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithTag("mini_toggle").assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(0f, 0f..1f)))
         compose.runOnIdle {
             container.playbackQueue.restore(QueueSnapshot(listOf(Song(5, "Restored song", durationMs = 10000)), 0, positionMs = 5000))
             container.playerController.state.value = PlayerState()
         }
+        compose.mainClock.advanceTimeBy(64)
         compose.onNodeWithTag("mini_toggle").assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(.5f, 0f..1f)))
     }
     @Test fun playIntentIsImmediateBeforeConnectionAndLoadingRingReturnsToProgress() = runBlocking<Unit> {
+        // A rotating cover deliberately never becomes idle; drive its frame clock explicitly.
+        compose.mainClock.autoAdvance = false
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val isolated = PlayerController(ApplicationProvider.getApplicationContext<CurrentMusicApplication>(), container.playbackQueue, scope) {
             awaitCancellation() // Delayed connection without ever launching the production service.
@@ -135,30 +144,29 @@ class MiniPlayerInteractionTest {
             val vm = PlayerViewModel(container)
             compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { MiniPlayer(vm, {}, { isolated.toggle() }) } }
             compose.onNodeWithTag("mini_toggle").assertContentDescriptionEquals("播放").performClick()
+            compose.mainClock.advanceTimeBy(64)
             compose.onNodeWithTag("mini_toggle").assertContentDescriptionEquals("暂停")
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate))
             assertTrue(isolated.state.value.playRequested); assertFalse(isolated.state.value.playing)
             compose.onNodeWithTag("mini_toggle").performClick()
+            compose.mainClock.advanceTimeBy(64)
             compose.onNodeWithTag("mini_toggle").assertContentDescriptionEquals("播放")
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(0f, 0f..1f)))
             compose.runOnIdle { isolated.state.value = PlayerState(song = container.playbackQueue.state.value.current,
                 playRequested = true, loading = true, positionMs = 2500, durationMs = 10000) }
+            compose.mainClock.advanceTimeBy(64)
             compose.onNodeWithTag("mini_toggle").assertContentDescriptionEquals("暂停")
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo.Indeterminate))
             compose.runOnIdle { isolated.state.value = isolated.state.value.copy(playing = true, loading = false) }
+            compose.mainClock.advanceTimeBy(64)
             compose.onNodeWithTag("mini_toggle").assertContentDescriptionEquals("暂停")
                 .assert(SemanticsMatcher.expectValue(SemanticsProperties.ProgressBarRangeInfo, ProgressBarRangeInfo(.25f, 0f..1f)))
             compose.runOnIdle { isolated.state.value = PlayerState(error = "fixture failed") }
+            compose.mainClock.advanceTimeBy(64)
             compose.onNodeWithTag("mini_toggle").assertContentDescriptionEquals("播放")
         } finally { scope.cancel() }
     }
-    @Test fun audioCacheSettingsPersistPolicyAndClearOnlyFixtureCache() = runBlocking<Unit> {
-        val source = io.github.currencortex.music.data.song.AudioSource(server.url("/fixture-bytes").toString(), "standard", 44100, 2, "mp3")
-        val key = AudioCache.key(server.url("/cm/").toString(), 7, 1, AudioQuality.STANDARD)
-        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            container.audioCache.rememberSource(key, source); container.audioCache.preload(key, source, 2)
-        }
-        assertTrue(container.audioCache.bytes.value > 0)
+    @Test fun audioCachePreloadPolicyPersistsAndKeepsQueue() = runBlocking<Unit> {
         val vm = MusicSettingsViewModel(container)
         compose.setContent { LeiTheme(AppearanceSettings()) { MusicSettingsScreen(vm) {} } }
         compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("preload_audio"))
@@ -169,9 +177,22 @@ class MiniPlayerInteractionTest {
         compose.waitUntil(3000) { vm.settings.value.preloadMetered }
         assertFalse(container.musicSettings.snapshot().preloadAudio)
         assertTrue(container.musicSettings.snapshot().preloadMetered)
-        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("clear_audio_cache"))
-        compose.onNodeWithTag("clear_audio_cache").performClick()
-        compose.waitUntil(3000) { vm.cacheState.value.message == "歌曲缓存已清理" }
+        assertEquals(3, container.playbackQueue.state.value.songs.size)
+    }
+    @Test fun clearingAudioCacheOnlyDropsFixtureCacheAndKeepsQueue() = runBlocking<Unit> {
+        val source = io.github.currencortex.music.data.song.AudioSource(server.url("/fixture-bytes").toString(), "standard", 44100, 2, "mp3")
+        val key = AudioCache.key(server.url("/cm/").toString(), 7, 1, AudioQuality.STANDARD)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            container.audioCache.rememberSource(key, source); container.audioCache.preload(key, source, 2)
+        }
+        assertTrue(container.audioCache.bytes.value > 0)
+        val vm = StorageViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings()) { StorageScreen(vm) } }
+        // The action stays disabled until the measured usage arrives.
+        compose.waitUntil(5000) { vm.state.value.usage.audio > 0 }
+        compose.onNodeWithTag("storage_screen").performScrollToNode(hasTestTag("clear_audio_storage"))
+        compose.onNodeWithTag("clear_audio_storage").performClick()
+        compose.waitUntil(5000) { vm.state.value.message == "已清理音乐缓存" }
         assertEquals(0L, container.audioCache.bytes.value)
         assertEquals(3, container.playbackQueue.state.value.songs.size)
         assertEquals(1, container.playbackQueue.state.value.index)

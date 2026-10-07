@@ -4,6 +4,8 @@ This template uses the following libraries at runtime:
 
 - MIUIX KMP by Yukonga and contributors (`top.yukonga.miuix.kmp`), Apache-2.0.
 - AndroidX / Jetpack Compose, under the Apache License 2.0.
+- AndroidX WorkManager provides persistent, cancellable song-download tasks (Apache-2.0).
+- Jaudiotagger 3.0.1 by JThink / Paul Taylor, Raphael Slinckx and contributors is used under LGPL-2.1-or-later (the LGPL-3.0 option). Unmodified source: https://repo.maven.apache.org/maven2/net/jthink/jaudiotagger/3.0.1/jaudiotagger-3.0.1-sources.jar. The complete LGPL text is bundled in `legal/LGPL-3.0.txt`. The public application's Gradle source and build instructions allow rebuilding with a modified/replacement library; no library modifications are distributed. The Android artwork adapter is in `core/download/SongDownloadMetadata.kt`.
 - Kotlin and kotlinx.coroutines by JetBrains and contributors, Apache-2.0.
 - Material Icons by Google, Apache-2.0.
 - Player controls use Google's Material Symbols Rounded vectors, Apache-2.0, from

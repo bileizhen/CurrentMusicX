@@ -54,6 +54,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val authRepository = AuthRepository(apiClient, accountRepository, "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
         persistServer = musicSettings::setServer, persistAccount = musicSettings::setAccount)
     val musicRepository = MusicRepository(apiClient, audioSettings::access)
+    val songDownloads = io.github.currencortex.music.core.download.SongDownloadManager(context.applicationContext, storageSuffix)
     val musicStyles = io.github.currencortex.music.data.style.MusicStyleRepository(apiClient) {
         RequestSession(accountRepository.server.ifBlank { musicSettings.state.value.server }, null)
     }
@@ -61,6 +62,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         RequestSession(accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)
     }
     val audioCache = AudioCache(context.applicationContext, java.io.File(context.cacheDir, "audio$storageSuffix"))
+    val storage = io.github.currencortex.music.core.storage.StorageStore(context.applicationContext, audioCache)
     val audioSources = AudioSourceResolver(audioCache,
         { RequestSession(accountRepository.server, accountRepository.token) },
         currentProvider = { audioSettings.access().identity }, load = musicRepository::source)
@@ -81,6 +83,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         { logger.debug("Lyrics", it) })
     val playbackQueue = PlaybackQueue()
     val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)
+    val sleepTimer = io.github.currencortex.music.core.media.SleepTimer(playerController, playerScope)
     val roomRepository = io.github.currencortex.music.data.room.RoomRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
     val roomSession = io.github.currencortex.music.core.room.RoomSession(roomRepository,
         io.github.currencortex.music.core.room.RoomSseClient(), externalPlayer ?: playerController, playerScope,
