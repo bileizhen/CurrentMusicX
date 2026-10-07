@@ -15,14 +15,17 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
     val player by vm.state.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
     val statuses by vm.libraryStatuses.collectAsStateWithLifecycle()
+    val neteaseMain by vm.usesNeteaseLibrary.collectAsStateWithLifecycle()
     val heartLoading by vm.heartLoading.collectAsStateWithLifecycle()
     val sleep by vm.sleepTimer.state.collectAsStateWithLifecycle()
     val id = NeteaseSongActionsRepository.songId(queue.current)
     val current = actions.takeIf { it.songId == id }
     PlayerFunctionBar(actionCount = 5) {
-        PlayerIconButton(PlayerIcon.LIKE, "收录到我喜欢", { onLike?.invoke() },
-            Modifier.testTag("player_like"), selected = statuses[queue.current?.id]?.liked == true || current?.liked == true, count = current?.likeCount,
-            showCount = true, enabled = queue.current?.video == false && onLike != null)
+        val liked = if (neteaseMain) current?.liked == true else statuses[queue.current?.id]?.liked == true
+        PlayerIconButton(PlayerIcon.LIKE, if (liked) "取消喜欢" else "喜欢", vm::togglePrimaryLike,
+            Modifier.testTag("player_like"), selected = liked, count = current?.likeCount,
+            showCount = true, enabled = queue.current?.video == false && current?.liking != true,
+            loading = current?.liking == true, onLongClick = onLike)
         PlayerIconButton(PlayerIcon.COMMENT, "评论区", onComments, Modifier.testTag("player_comments"),
             count = current?.commentCount, showCount = true, enabled = id != null)
         // Lit while a timer is running, so an armed timer is visible without opening the sheet.

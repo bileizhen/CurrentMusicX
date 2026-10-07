@@ -177,7 +177,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val tabsState = rememberSaveableStateHolder()
     var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
     var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
-    LeiTheme(settings, darkSystemBars = if (miniQueueOpen || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null) {
+    val playlistPage = backStack.last().startsWith("lib/playlist/") || backStack.last().startsWith("lib/ncmplaylist/") || backStack.last() in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent")
+    LeiTheme(settings, darkSystemBars = if (miniQueueOpen || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
+        darkStatusBars = if (playlistPage) true else null) {
         CompositionLocalProvider(LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight) {
         Box(Modifier.fillMaxSize()) {
         var selected by rememberSaveable { mutableIntStateOf(HOME_TAB) }
@@ -474,7 +476,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 backStack.filter { it.startsWith("lib/") }.distinct().forEach { route ->
                     entry(route) {
                         when {
-                            route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateBack, ::navigateLibrary)
+                            route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateLibrary)
                             route.startsWith("lib/artist/") -> {
                                 val artistVm: io.github.currencortex.music.feature.artist.ArtistViewModel = viewModel(key = route,
                                     factory = viewModelFactory { io.github.currencortex.music.feature.artist.ArtistViewModel(container,
@@ -493,7 +495,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             }
                             route == "lib/video" -> if (currentSong?.video == true) io.github.currencortex.music.feature.mv.MvPlayerScreen(container, ::navigateBack)
                                 else PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
-                                    onLike = { currentSong?.let(libraryVm.likes::open) })
+                                    onLike = { currentSong?.let(libraryVm::choosePlaylist) })
                             route.startsWith("lib/browse/") -> {
                                 val parts = route.split('/')
                                 val catalogVm: CatalogViewModel = viewModel(key = route, factory = viewModelFactory {
@@ -584,7 +586,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
                     onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") },
                     onDialogActive = { playerDialogOpen = it }, onNetwork = { navigateTo(NETWORK) },
-                    onLike = { currentSong?.let(libraryVm.likes::open) })
+                    onLike = { currentSong?.let(libraryVm::choosePlaylist) })
             }
         }
         if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm) { miniQueueOpen = false }

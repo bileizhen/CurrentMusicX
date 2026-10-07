@@ -34,6 +34,7 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), queue.value.current)
     val settings = container.musicSettings.state
     val libraryStatuses = container.libraryRepository.statuses
+    val usesNeteaseLibrary = container.primaryLibrary.usesNetease
     private val _lyrics = MutableStateFlow(LyricsUiState())
     val lyrics: StateFlow<LyricsUiState> = _lyrics.asStateFlow()
     private val _actions = MutableStateFlow(PlayerSongActions())
@@ -59,8 +60,8 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             combine(queue.map { NeteaseSongActionsRepository.songId(it.current) }.distinctUntilChanged(),
                 container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged(),
-                netease.revision, container.libraryRepository.revision) {
-                    id, revision, server, ncmRevision, libraryRevision -> id to listOf(revision, server, ncmRevision, libraryRevision)
+                netease.revision, container.libraryRepository.revision, container.primaryLibrary.identity) { values ->
+                    values.first() as Long? to values.drop(1)
                 }.collectLatest { (id, _) ->
                 actionEpoch++
                 commentsJob?.cancel()
@@ -95,17 +96,29 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
                 }
         }
     }
-    fun toggleNeteaseLike() {
-        val id = NeteaseSongActionsRepository.songId(queue.value.current) ?: return
+    fun togglePrimaryLike() {
+        val song = queue.value.current?.takeUnless { it.video } ?: return
         if (_actions.value.liking) return
         val epoch = actionEpoch
+        val expected = RequestSession(container.accountRepository.server, container.accountRepository.token)
         _actions.update { it.copy(liking = true, error = null) }
         viewModelScope.launch {
             try {
-                when (val result = appResult { netease.toggleLiked(id) }) {
+                when (val result = appResult {
+                    val native = container.primaryLibrary.resolveNetease()
+                    if (expected != RequestSession(container.accountRepository.server, container.accountRepository.token)) throw ApiException(ErrorKind.Unauthorized)
+                    if (native) {
+                        val id = NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound)
+                        netease.toggleLiked(id, song)
+                    } else when (val write = container.libraryRepository.toggleLike(song)) {
+                        is AppResult.Success -> container.libraryRepository.statuses.value[song.id]?.liked == true
+                        is AppResult.Failure -> throw ApiException(write.kind)
+                    }
+                }) {
                     is AppResult.Success -> if (epoch == actionEpoch) {
                         _actions.update { it.copy(liked = result.value) }
-                        val count = appResult { netease.likeCount(id, fresh = true) }
+                        container.libraryRepository.invalidate()
+                        val count = NeteaseSongActionsRepository.songId(song)?.let { appResult { netease.likeCount(it, fresh = true) } }
                         if (epoch == actionEpoch && count is AppResult.Success) _actions.update { it.copy(likeCount = count.value) }
                     }
                     is AppResult.Failure -> if (epoch == actionEpoch) _actions.update { it.copy(error = result.kind.message) }

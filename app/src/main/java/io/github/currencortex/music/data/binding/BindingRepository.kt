@@ -4,6 +4,9 @@ import io.github.currencortex.music.core.network.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.net.URLEncoder
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 @Serializable data class BoundProfile(val uid: Long = 0, val nickname: String = "", val avatar: String = "")
 @Serializable data class BindingState(val bound: Boolean = false, val stale: Boolean = false,
@@ -18,10 +21,26 @@ import java.net.URLEncoder
         (if (pending > 0) "，$pending 个待续传" else "") + (if (failed > 0) "，$failed 个失败" else "")
 }
 class BindingRepository(private val api: ApiClient, private val session: () -> RequestSession, private val invalidate: () -> Unit) {
-    suspend fun status() = api.get<BindingState>("ncmbind", authenticated = true)
+    val state = MutableStateFlow<BindingState?>(null)
+    private val statusMutex = Mutex()
+    private var stateOwner: RequestSession? = null
+    fun clearSession() { stateOwner = null; state.value = null }
+    private suspend fun readStatus(): BindingState {
+        val expected = session()
+        val value = api.decode<BindingState>(api.request("GET", "ncmbind", authenticated = true, expectedSession = expected))
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+        stateOwner = expected; state.value = value
+        return value
+    }
+    suspend fun status() = statusMutex.withLock { readStatus() }
+    suspend fun cachedStatus() = statusMutex.withLock { state.value?.takeIf { stateOwner == session() } ?: readStatus() }
     suspend fun live() = api.get<LiveBinding>("ncmbind/live", authenticated = true)
     suspend fun refresh(expected: RequestSession = session()) { write("POST", "ncmbind/refresh", expected = expected) }
-    suspend fun unbind(expected: RequestSession = session()) { write("DELETE", "ncmbind", expected = expected); invalidate() }
+    suspend fun unbind(expected: RequestSession = session()) {
+        write("DELETE", "ncmbind", expected = expected)
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+        stateOwner = expected; state.value = BindingState(); invalidate()
+    }
     private suspend fun write(method: String, path: String, body: JsonObject = buildJsonObject {}, expected: RequestSession = session()) =
         api.request(method, path, body = body, authenticated = true, expectedSession = expected,
             retryConnection = !path.startsWith("ncmbind/phone/"))
@@ -52,10 +71,14 @@ class BindingRepository(private val api: ApiClient, private val session: () -> R
             put("phone", phone); put("captcha", code.trim()); put("ctcode", country)
         }, expected))
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+        clearSession(); invalidate()
     }
     suspend fun qrKey(expected: RequestSession) = ApiJson.decodeFromJsonElement<QrKey>(
         api.request("POST", "ncmbind/qr/key", authenticated = true, expectedSession = expected)).key
     suspend fun qrStatus(key: String, expected: RequestSession) = ApiJson.decodeFromJsonElement<QrStatus>(
-        api.request("GET", "ncmbind/qr/check", mapOf("key" to key), authenticated = true, expectedSession = expected))
+        api.request("GET", "ncmbind/qr/check", mapOf("key" to key), authenticated = true, expectedSession = expected)).also {
+            if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+            if (it.code == 803) { clearSession(); invalidate() }
+        }
     fun qrUrl(key: String) = "https://music.163.com/login?codekey=${URLEncoder.encode(key, "UTF-8")}"
 }

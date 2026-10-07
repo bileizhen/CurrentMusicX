@@ -6,6 +6,7 @@ import androidx.compose.ui.res.painterResource
 import io.github.currencortex.music.R
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -154,7 +155,7 @@ internal enum class PlayerIcon { COLLAPSE, MORE, LYRICS, QUEUE, CAST, LIKE, COMM
 
 @Composable internal fun PlayerIconButton(icon: PlayerIcon, label: String, onClick: () -> Unit,
     modifier: Modifier = Modifier, selected: Boolean = false, count: Long? = null, showCount: Boolean = false,
-    enabled: Boolean = true, loading: Boolean = false) {
+    enabled: Boolean = true, loading: Boolean = false, onLongClick: (() -> Unit)? = null) {
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
     val scale = animateFloatAsState(if (pressed && enabled) .88f else 1f,
@@ -162,8 +163,9 @@ internal enum class PlayerIcon { COLLAPSE, MORE, LYRICS, QUEUE, CAST, LIKE, COMM
     val opacity = animateFloatAsState(if (selected) 1f else .65f, tween(160), label = "player action selection")
     val rotation = if (loading) rememberInfiniteTransition(label = "action loading").animateFloat(0f, 360f,
         infiniteRepeatable(tween(900, easing = LinearEasing)), label = "action spinner").value else 0f
-    Box(modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button, interactionSource = interactions,
-        indication = null, onClick = onClick).semantics {
+    Box(modifier.size(48.dp).combinedClickable(enabled = enabled, role = Role.Button, interactionSource = interactions,
+        indication = null, onClick = onClick, onLongClick = onLongClick,
+        onLongClickLabel = if (onLongClick != null) "选择其他歌单" else null).semantics {
             contentDescription = label + if (count != null) "，网易云数量 $count" else ""; this.selected = selected
             if (!enabled) disabled()
             this[PlayerButtonVisuals] = PlayerButtonVisual(pressed, scale.value, 0f, opacity.value)

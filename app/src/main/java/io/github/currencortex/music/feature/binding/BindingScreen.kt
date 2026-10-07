@@ -54,6 +54,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
     fun finishInput() { focus.clearFocus(); keyboard?.hide() }
     val state by vm.state.collectAsPageState()
     val busy by vm.busy.collectAsStateWithLifecycle()
+    val musicSettings by vm.container.musicSettings.state.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val settings by vm.container.musicSettings.state.collectAsStateWithLifecycle()
@@ -124,14 +125,21 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
         } }
         state.binding?.let { binding ->
             if (binding.bound) item {
-                BindingAccountCard(binding, busy, { vm.sync() }, vm::live, vm::refresh,
-                    { finishInput(); reauthenticate = true; revealLogin = true }, { unbind = true })
+                BindingAccountCard(binding, busy, { if (musicSettings.neteaseMainLibrary) vm.reloadMusic() else vm.sync() }, vm::live, vm::refresh,
+                    { finishInput(); reauthenticate = true; revealLogin = true }, { unbind = true }, musicSettings.neteaseMainLibrary)
             } else item {
                 Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("连接你的音乐库", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
-                    Text("同步网易云歌单，在 CurrentMusic 中继续聆听。", fontSize = 13.sp, lineHeight = 21.sp,
+                    Text("连接网易云的我喜欢和歌单，在 CurrentMusic 中继续聆听。", fontSize = 13.sp, lineHeight = 21.sp,
                         color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
                 }
+            }
+        }
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                io.github.currencortex.music.ui.component.SettingsSwitch("网易云作为主音乐库", musicSettings.neteaseMainLibrary,
+                    vm::mainLibrary, Modifier.testTag("netease_main_library"),
+                    summary = "绑定后直接使用网易云我喜欢；点红心同步收藏，长按选择其他歌单", enabled = !busy)
             }
         }
         if (busy) item { BindingNotice("正在处理，请稍候…", busy = true) }
@@ -179,7 +187,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("confirm_phone_binding")) {
                                 Text("确认绑定", color = MiuixTheme.colorScheme.onPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                             }
-                            Text("验证码由网易云发送。绑定成功后会自动同步歌单。", fontSize = 12.sp, lineHeight = 19.sp,
+                            Text("验证码由网易云发送。绑定后按所选方式连接音乐库。", fontSize = 12.sp, lineHeight = 19.sp,
                                 color = MiuixTheme.colorScheme.onSurface.copy(alpha = .45f))
                         }
                     }

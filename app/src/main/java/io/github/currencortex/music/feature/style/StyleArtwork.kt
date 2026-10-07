@@ -37,7 +37,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable internal fun StyleArtwork(cover: String, modifier: Modifier, tint: MutableState<Color?>, pixels: Int = 360,
-    pending: Boolean = false) {
+    pending: Boolean = false, contentDescription: String = "第一首歌曲封面") {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var loading by remember(cover) { mutableStateOf(cover.isNotBlank()) }
@@ -48,7 +48,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         if (cover.isNotBlank()) AsyncImage(
             model = remember(context, cover, pixels) { ImageRequest.Builder(context)
                 .data(coverRequestUrl(cover, pixels)).size(pixels).allowHardware(false).build() },
-            contentDescription = "第一首歌曲封面", contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize(),
+            contentDescription = contentDescription, contentScale = ContentScale.Crop, modifier = Modifier.matchParentSize(),
             onSuccess = { result ->
                 loading = false; failed = false
                 scope.launch {

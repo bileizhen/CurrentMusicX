@@ -22,6 +22,7 @@ data class NeteaseHeartList(val playlistId: Long, val songs: List<Song>)
 class NeteaseSongActionsRepository(private val api: ApiClient, private val now: () -> Long = System::nanoTime,
     private val session: () -> RequestSession) {
     val revision = MutableStateFlow(0L)
+    val likedState = MutableStateFlow<Set<Long>>(emptySet())
     private val reads = SessionReadCache(session, { 0L })
     private data class LikedSnapshot(val uid: Long, val ids: Set<Long>)
     private data class WriteKey(val session: RequestSession, val uid: Long, val id: Long)
@@ -59,10 +60,10 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
             api.decode<NeteaseCommentsPage>(request("comment/music", mapOf("id" to "$id", "offset" to "$offset", "limit" to "$limit"), expected))
         }
     }
-    suspend fun isLiked(id: Long, fresh: Boolean = false): Boolean = withContext(Dispatchers.Default) {
+    suspend fun likedIds(fresh: Boolean = false): Set<Long> = withContext(Dispatchers.Default) {
         val expected = session()
-        val snapshot = reads.read("liked", fresh) { expected ->
-            val bound = binding(expected)
+        val bound = binding(expected)
+        val snapshot = reads.read("liked/${bound.profile!!.uid}", fresh) { expected ->
             val value = try {
                 api.request("GET", "ncmbind/likelist", mapOf("timestamp" to "${System.currentTimeMillis()}"), authenticated = true, expectedSession = expected)
             } catch (failure: ApiException) {
@@ -72,18 +73,19 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
             LikedSnapshot(bound.profile!!.uid, api.decode<NeteaseLikes>(value).ids?.toSet() ?: throw ApiException(ErrorKind.Parse))
         }
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
-        val key = WriteKey(expected, snapshot.uid, id)
-        val write = confirmedLikes[key]
-        val serverLiked = id in snapshot.ids
-        if (write != null && write.until > now()) {
-            // The upstream list can lag a successful like write; never immediately undo it.
-            if (fresh && serverLiked == write.liked) confirmedLikes.remove(key, write)
-            write.liked
-        } else {
-            if (write != null) confirmedLikes.remove(key, write)
-            serverLiked
+        val ids = snapshot.ids.toMutableSet()
+        confirmedLikes.forEach { (key, write) ->
+            if (key.session == expected && key.uid == snapshot.uid) {
+                if (write.until <= now()) confirmedLikes.remove(key, write)
+                else {
+                    if (fresh && (key.id in snapshot.ids) == write.liked) confirmedLikes.remove(key, write)
+                    if (write.liked) ids.add(key.id) else ids.remove(key.id)
+                }
+            }
         }
+        ids.toSet().also { likedState.value = it }
     }
+    suspend fun isLiked(id: Long, fresh: Boolean = false): Boolean = id in likedIds(fresh)
     suspend fun toggleLiked(id: Long, song: Song? = null): Boolean {
         val expected = session()
         val desired = !isLiked(id, fresh = true)
@@ -109,6 +111,7 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
         if (acknowledged != null && acknowledged != liked) throw ApiException(ErrorKind.Server)
         confirmedLikes.entries.removeIf { it.key.session != expected || it.value.until <= now() }
         confirmedLikes[WriteKey(expected, bound.profile!!.uid, id)] = ConfirmedLike(liked, now() + 120_000_000_000L)
+        likedState.update { if (liked) it + id else it - id }
         reads.clear()
         revision.update { it + 1 }
     }
@@ -137,6 +140,7 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
         NeteaseHeartList(pid, songs)
     }
     private data class Count(val value: Long?)
+    fun clearSession() { reads.clear(); confirmedLikes.clear(); likedState.value = emptySet(); revision.update { it + 1 } }
     companion object {
         fun songId(song: Song?): Long? = song?.takeIf { !it.video && it.musicSource == MusicSource.NETEASE }
             ?.let { it.externalIds.neteaseId?.toLongOrNull() ?: it.id }?.takeIf { it > 0 }
