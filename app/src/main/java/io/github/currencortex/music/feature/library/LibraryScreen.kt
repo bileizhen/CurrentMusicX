@@ -49,7 +49,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     val status = statuses[song.id] ?: SongStatus()
     val dismiss = LocalDismissSongMenu.current
     LaunchedEffect(song.id) { vm.refreshStatuses(listOf(song)) }
-    MusicDestinationRow("收录到我喜欢", onClick = { dismiss(); vm.likes.open(song) }, enabled = !status.pending && !song.video,
+    MusicDestinationRow("喜欢 / 取消喜欢", onClick = { dismiss(); vm.togglePrimaryLike(song) }, enabled = !status.pending && !song.video,
         modifier = Modifier.testTag("song_like_${song.id}"), chevron = false)
     MusicDestinationRow("加入歌单", onClick = { dismiss(); vm.choosePlaylist(song) }, modifier = Modifier.testTag("song_playlist_${song.id}"), chevron = false)
     if (song.artistIds.isNotEmpty()) song.artistIds.forEachIndexed { index, id ->
@@ -64,33 +64,28 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     if (likes.song != null) SongLikeSheet(likes, vm.likes::toggle, vm.likes::dismiss)
     val song by vm.selectedSong.collectAsStateWithLifecycle()
     val lists by vm.availablePlaylists.collectAsStateWithLifecycle()
+    val playlistError by vm.playlistError.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
-    if (song != null) MusicDialog("加入歌单", onDismiss = { vm.selectedSong.value = null }) {
-        if (lists.isEmpty()) Text("没有可编辑的歌单，请先创建歌单")
+    if (song != null) MusicDialog("收藏到歌单", onDismiss = { vm.selectedSong.value = null }) {
+        if (busy && lists.isEmpty()) Text("正在读取歌单…")
+        if (!busy && lists.isEmpty() && playlistError == null) Text("没有可编辑的歌单，请先创建歌单")
+        playlistError?.let { error -> Text(error); TextButton("重试", onClick = { vm.choosePlaylist(song!!) }, enabled = !busy) }
         LazyColumn(Modifier.heightIn(max = 360.dp)) {
-            items(lists, key = Playlist::id) { playlist -> TextButton(playlist.name, onClick = { vm.addToPlaylist(playlist.id) }, enabled = !busy) }
+            items(lists, key = { "${it.source}-${it.id}" }) { playlist ->
+                MusicDestinationRow(playlist.name, { vm.addToPlaylist(playlist) },
+                    Modifier.testTag("collect_playlist_${playlist.source}_${playlist.id}"),
+                    summary = if (playlist.source == "netease") "网易云音乐" else "CurrentMusic", enabled = !busy, chevron = false)
+            }
         }
     }
 }
 
-@Composable fun PlaylistIndexScreen(vm: LibraryViewModel, onBack: () -> Unit, navigate: (String) -> Unit) {
-    val home by vm.home.collectAsStateWithLifecycle()
+@Composable fun PlaylistIndexScreen(vm: LibraryViewModel, navigate: (String) -> Unit) {
     val busy by vm.busy.collectAsStateWithLifecycle()
     var create by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
-    val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
-    MusicPullToRefresh(home.loading, vm::refresh, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-        LazyColumn(Modifier.fillMaxSize().testTag("playlist_index"), contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            item { TextButton("返回", onClick = onBack); Text("我的歌单", fontSize = 30.sp) }
-            if (account.account == null) item { Text("登录后可以查看和管理歌单") }
-            else item { TextButton("新建歌单", onClick = { create = true }, modifier = Modifier.testTag("create_playlist")) }
-            home.errors["我的歌单"]?.let { error -> item { Text(error); TextButton("重试", onClick = vm::refresh) } }
-            if ((account.loading || home.loading) && home.playlists.isEmpty()) item { LoadingSongList(4) }
-            if (!account.loading && !home.loading && home.playlists.isEmpty() && home.errors["我的歌单"] == null) item { Text("还没有歌单") }
-            items(home.playlists, key = Playlist::id) { playlist -> PlaylistCard(playlist) { navigate("lib/playlist/${playlist.id}") } }
-        }
-    }
+    PlaylistIndexBody(vm, navigate, onCreate = { create = true })
     if (create) MusicDialog("新建歌单", onDismiss = { if (!busy) create = false }) {
         TextField(name, { name = it }, label = "歌单名称", modifier = Modifier.testTag("playlist_name"))
         TextField(description, { description = it }, label = "介绍")
@@ -121,8 +116,13 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     var name by rememberSaveable { mutableStateOf("") }
     val editable = state.playlist?.editable(account.account?.id ?: 0) == true
     LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
+    LaunchedEffect(state.refreshError) { state.refreshError?.let { library.message.value = "刷新失败，已保留原列表：$it" } }
     PreloadMusicCovers(state.songs.take(12).map { it.cover })
-    MusicPullToRefresh(state.loading, { vm.reload(force = true) }, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+    if (vm.route.split('/').getOrNull(1) in setOf("playlist", "ncmplaylist", "likes", "daily", "foryou", "recent")) {
+        PlaylistDetailBody(state, vm, library, onBack, navigate, play,
+            onRename = { name = state.title; rename = true }, onDelete = { delete = true })
+    } else {
+    MusicPullToRefresh(state.loading || state.refreshing, { vm.reload(force = true) }, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
         LazyColumn(Modifier.fillMaxSize().testTag("library_detail"), contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item { TextButton("返回", onClick = onBack); Text(state.title, fontSize = 28.sp) }
             if (state.loading && state.songs.isEmpty() && state.mv == null) item { LoadingSongList(4) }
@@ -166,6 +166,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
             }
             if (state.more) item { TextButton("加载更多歌曲", onClick = { vm.reload(true) }, enabled = !state.loading) }
         }
+    }
     }
     if (rename) MusicDialog("重命名歌单", onDismiss = { if (!busy) rename = false }) {
         TextField(name, { name = it }, label = "歌单名称", modifier = Modifier.testTag("rename_input"))

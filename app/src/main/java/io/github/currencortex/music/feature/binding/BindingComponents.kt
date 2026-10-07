@@ -66,7 +66,8 @@ import java.util.Locale
 }
 
 @Composable internal fun BindingAccountCard(binding: BindingState, busy: Boolean,
-    onSync: () -> Unit, onLive: () -> Unit, onRefresh: () -> Unit, onRelogin: () -> Unit, onUnbind: () -> Unit) {
+    onSync: () -> Unit, onLive: () -> Unit, onRefresh: () -> Unit, onRelogin: () -> Unit, onUnbind: () -> Unit,
+    mainLibrary: Boolean = false) {
     Card(Modifier.fillMaxWidth().testTag("binding_account_card")) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -84,7 +85,8 @@ import java.util.Locale
                     .background(MiuixTheme.colorScheme.primary.copy(alpha = .08f)).padding(horizontal = 10.dp, vertical = 6.dp),
                     fontSize = 11.sp, color = MiuixTheme.colorScheme.primary)
             }
-            if (binding.stale) BindingNotice("登录态已失效，请重新登录后继续同步。")
+            if (binding.stale) BindingNotice("登录态已失效，请重新登录后继续使用音乐库。")
+            else if (mainLibrary) Text("已直接连接网易云我喜欢与歌单", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
             else if (binding.lastSync > 0) {
                 val date = remember(binding.lastSync) { SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault()).format(Date(binding.lastSync * 1000)) }
                 Text("已同步 ${binding.lastSyncCount} 个歌单 · $date", fontSize = 12.sp,
@@ -94,7 +96,7 @@ import java.util.Locale
                 modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("sync_binding")) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Refresh, null, Modifier.size(19.dp), tint = MiuixTheme.colorScheme.onPrimary)
-                    Text("同步网易云歌单", color = MiuixTheme.colorScheme.onPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (mainLibrary) "刷新网易云音乐库" else "同步网易云歌单", color = MiuixTheme.colorScheme.onPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
                 }
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

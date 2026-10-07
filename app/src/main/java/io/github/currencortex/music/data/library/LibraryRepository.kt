@@ -25,12 +25,12 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
         api.decode(api.request("GET", path, query, authenticated = true, expectedSession = expected))
     private suspend fun <T : Any> backgroundRead(key: String, fresh: Boolean = false, load: suspend (RequestSession) -> T): T =
         withContext(Dispatchers.Default) { reads.read(key, fresh, load) }
-    suspend fun daily(): Daily = backgroundRead("daily") { expected ->
+    suspend fun daily(fresh: Boolean = false): Daily = backgroundRead("daily", fresh) { expected ->
         val d = read<DailyDto>("daily", expected)
         Daily(d.daily.map(SongDto::toDomain), d.forYou.map(SongDto::toDomain), d.artists)
     }
-    suspend fun recent(): List<Song> = backgroundRead("recent") { read<SongListDto>("plays/recent", it, mapOf("limit" to "50")).songs.map(SongDto::toDomain) }
-    suspend fun likedSongs(): List<Song> = backgroundRead("likes") { read<SongListDto>("likes/mine", it).songs.map(SongDto::toDomain) }
+    suspend fun recent(fresh: Boolean = false): List<Song> = backgroundRead("recent", fresh) { read<SongListDto>("plays/recent", it, mapOf("limit" to "50")).songs.map(SongDto::toDomain) }
+    suspend fun likedSongs(fresh: Boolean = false): List<Song> = backgroundRead("likes", fresh) { read<SongListDto>("likes/mine", it).songs.map(SongDto::toDomain) }
     suspend fun playlists(): List<Playlist> = backgroundRead("playlists") { read<PlaylistsDto>("playlists", it).playlists.map(PlaylistDto::domain) }
     suspend fun playlist(id: Long, fresh: Boolean = false): Playlist = backgroundRead("playlist/$id", fresh) { read<PlaylistDto>("playlists/$id", it).domain() }
     suspend fun refreshStatus(ids: List<Long>) {

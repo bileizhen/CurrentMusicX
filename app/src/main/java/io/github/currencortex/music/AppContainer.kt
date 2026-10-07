@@ -24,6 +24,7 @@ import io.github.currencortex.music.data.settings.MusicSettingsRepository
 import androidx.room.Room
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 
 class AppContainer(context: Context, storageNamespace: String = "", externalPlayer: ExternalPlayer? = null,
     ttmlProvider: io.github.currencortex.music.feature.lyrics.data.LyricsProvider? = null) : java.io.Closeable {
@@ -69,8 +70,12 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val libraryRepository = io.github.currencortex.music.data.library.LibraryRepository(apiClient,
         { accountRepository.state.value.account?.id ?: 0L }, { RequestSession(accountRepository.server, accountRepository.token) })
     val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
-    val bindingRepository = io.github.currencortex.music.data.binding.BindingRepository(apiClient,
-        { RequestSession(accountRepository.server, accountRepository.token) }) { libraryRepository.revision.value += 1 }
+    val bindingRepository: io.github.currencortex.music.data.binding.BindingRepository = io.github.currencortex.music.data.binding.BindingRepository(apiClient,
+        { RequestSession(accountRepository.server, accountRepository.token) }) { libraryRepository.invalidate(); neteaseLibrary.invalidate() }
+    val neteaseLibrary = io.github.currencortex.music.data.library.NeteaseLibraryRepository(apiClient, bindingRepository,
+        neteaseSongActions) { RequestSession(accountRepository.server, accountRepository.token) }
+    val primaryLibrary = io.github.currencortex.music.data.library.PrimaryMusicLibrary(libraryRepository,
+        neteaseLibrary, bindingRepository, musicSettings, appScope)
     val database = Room.databaseBuilder(context.applicationContext, MusicDatabase::class.java, "music$storageSuffix.db").build()
     // Isolated containers use only explicitly injected external providers, never live GitHub.
     val lyricsRepository = io.github.currencortex.music.feature.lyrics.data.LyricsRepository(
@@ -99,13 +104,23 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val sessionRestored = CompletableDeferred<Unit>()
     init {
         playerScope.launch {
-            accountRepository.sessionRevision.collect { audioSources.invalidate(); roomSession.disconnect(); dlnaController.stop() }
+            accountRepository.sessionRevision.collect {
+                audioSources.invalidate(); roomSession.disconnect(); dlnaController.stop()
+                bindingRepository.clearSession(); neteaseLibrary.invalidate(); neteaseSongActions.clearSession()
+            }
         }
         appScope.launch { audioSettings.state.collect { audioSources.invalidate() } }
         appScope.launch {
+            bindingRepository.state.map { it?.profile?.uid to it?.bound }.distinctUntilChanged().collect {
+                neteaseSongActions.clearSession(); neteaseLibrary.invalidate()
+            }
+        }
+        appScope.launch {
             kotlinx.coroutines.flow.combine(accountRepository.state, musicSettings.state) { account, preferences ->
                 account.account?.id to preferences.server
-            }.distinctUntilChanged().collect { libraryRepository.clearSession() }
+            }.distinctUntilChanged().collect {
+                libraryRepository.clearSession(); bindingRepository.clearSession()
+            }
         }
         appScope.launch {
             try {

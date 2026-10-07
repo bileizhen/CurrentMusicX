@@ -15,7 +15,8 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val lyricsFontSize: Float = LyricsTypography.DEFAULT_SIZE,
                          val lyricsWeight: LyricsWeight = LyricsWeight.CURRENT,
                          val lyricsOffsetMs: Long = 0,
-                         val lyricsDisplay: LyricsDisplayOptions = LyricsDisplayOptions())
+                         val lyricsDisplay: LyricsDisplayOptions = LyricsDisplayOptions(),
+                         val neteaseMainLibrary: Boolean = true)
 
 enum class KaraokeScope(val label: String) {
     CURRENT("仅当前行"), ALL("拓展全部行"), ALWAYS("总是");
@@ -64,13 +65,14 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val translation = booleanPreferencesKey("lyrics.translation")
     private val romanization = booleanPreferencesKey("lyrics.romanization")
     private val wordAnimation = booleanPreferencesKey("lyrics.wordAnimation")
+    private val neteaseMain = booleanPreferencesKey("library.neteaseMain")
     private fun decode(p: Preferences) = MusicSettings(p[server] ?: ServerDefaults.URL, AudioQuality.from(p[quality].orEmpty()),
         p[warning] ?: true, p[restore] ?: true, p[nickname].orEmpty(), p[account] ?: 0,
         p[preload] ?: true, p[metered] ?: false, LyricsTypography.normalize(p[lyricsSize] ?: LyricsTypography.DEFAULT_SIZE),
         LyricsWeight.from(p[lyricsWeight]), p[lyricsOffset] ?: 0,
         LyricsDisplayOptions(p[centered] ?: false, (p[fontWeight] ?: 500).coerceIn(400, 900),
             p[blur] ?: true, p[stagger] ?: true, KaraokeScope.from(p[karaokeScope]), p[hideControls] ?: false,
-            p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true))
+            p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true), p[neteaseMain] ?: true)
     val state = store.data.map(::decode)
         .stateIn(scope, SharingStarted.Eagerly, MusicSettings())
     suspend fun snapshot(): MusicSettings {
@@ -96,4 +98,5 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
         }
     }
     suspend fun setAccount(id: Long, name: String) { store.edit { it[account] = id; it[nickname] = name } }
+    suspend fun setNeteaseMainLibrary(value: Boolean) { store.edit { it[neteaseMain] = value } }
 }

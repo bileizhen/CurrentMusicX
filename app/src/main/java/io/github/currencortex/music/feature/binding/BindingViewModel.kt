@@ -71,6 +71,26 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
     }
     fun refresh() = action { expected -> container.bindingRepository.refresh(expected); "网易云登录态已刷新" }
     fun sync(expected: RequestSession = session()) = action { container.bindingRepository.sync(expected).message() }
+    fun mainLibrary(value: Boolean) = viewModelScope.launch { container.musicSettings.setNeteaseMainLibrary(value) }
+    fun reloadMusic() = action {
+        container.bindingRepository.status()
+        container.neteaseLibrary.invalidate()
+        container.libraryRepository.invalidate()
+        "音乐库已更新"
+    }
+    private suspend fun afterBinding(expected: RequestSession): String {
+        if (container.musicSettings.snapshot().neteaseMainLibrary) {
+            val status = appResult { container.bindingRepository.status() }
+            container.neteaseLibrary.invalidate()
+            container.libraryRepository.invalidate()
+            return if (status is AppResult.Success) "绑定成功，已使用网易云音乐库"
+                else "绑定成功；暂时无法读取音乐库，请刷新重试"
+        }
+        return when (val result = appResult { container.bindingRepository.sync(expected) }) {
+            is AppResult.Success -> "绑定成功；${result.value.message()}"
+            is AppResult.Failure -> "绑定成功；${failureMessage(result, "歌单同步")}，可再次同步"
+        }
+    }
     fun unbind() = action { expected -> container.bindingRepository.unbind(expected); clearQr(); "网易云已解绑，已导入歌单保留为快照" }
     fun code(phone: String, country: String, alternate: Boolean = false) {
         if (SystemClock.elapsedRealtime() < state.value.codeUntil) return
@@ -90,10 +110,7 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
         container.bindingRepository.bindPhone(phone, captcha, country, expected)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         state.update { it.copy(phoneBoundRevision = it.phoneBoundRevision + 1) }
-        when (val result = appResult { container.bindingRepository.sync(expected) }) {
-            is AppResult.Success -> "绑定成功；${result.value.message()}"
-            is AppResult.Failure -> "绑定成功；${failureMessage(result, "歌单同步")}，可再次同步"
-        }
+        afterBinding(expected)
     }
     suspend fun qrSession() {
         val expected = session()
@@ -144,7 +161,7 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
                         803 -> {
                             qrTerminal = true
                             state.update { it.copy(qrUrl = null, qrMessage = "绑定成功") }
-                            reload(); sync(expected)
+                            action("音乐库更新") { afterBinding(expected) }
                             return
                         }
                         801 -> state.update { it.copy(qrMessage = "等待扫码…") }
