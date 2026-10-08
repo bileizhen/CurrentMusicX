@@ -17,7 +17,9 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val lyricsOffsetMs: Long = 0,
                          val lyricsDisplay: LyricsDisplayOptions = LyricsDisplayOptions(),
                          val neteaseMainLibrary: Boolean = true,
-                         val visualizerEnabled: Boolean = false)
+                         val visualizerEnabled: Boolean = false,
+                         val visualizerRender: io.github.currencortex.music.data.visualizer.VisualizerRenderSettings =
+                             io.github.currencortex.music.data.visualizer.VisualizerRenderSettings())
 
 enum class KaraokeScope(val label: String) {
     CURRENT("仅当前行"), ALL("拓展全部行"), ALWAYS("总是");
@@ -68,13 +70,19 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val wordAnimation = booleanPreferencesKey("lyrics.wordAnimation")
     private val neteaseMain = booleanPreferencesKey("library.neteaseMain")
     private val visualizer = booleanPreferencesKey("visualizer.enabled")
+    private val visualizerFps = stringPreferencesKey("visualizer.fps")
+    private val visualizerAuto = booleanPreferencesKey("visualizer.autoPerformance")
+    private val visualizerRaw = booleanPreferencesKey("visualizer.rawSpectrum")
     private fun decode(p: Preferences) = MusicSettings(p[server] ?: ServerDefaults.URL, AudioQuality.from(p[quality].orEmpty()),
         p[warning] ?: true, p[restore] ?: true, p[nickname].orEmpty(), p[account] ?: 0,
         p[preload] ?: true, p[metered] ?: false, LyricsTypography.normalize(p[lyricsSize] ?: LyricsTypography.DEFAULT_SIZE),
         LyricsWeight.from(p[lyricsWeight]), p[lyricsOffset] ?: 0,
         LyricsDisplayOptions(p[centered] ?: false, (p[fontWeight] ?: 500).coerceIn(400, 900),
             p[blur] ?: true, p[stagger] ?: true, KaraokeScope.from(p[karaokeScope]), p[hideControls] ?: false,
-            p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true), p[neteaseMain] ?: true, p[visualizer] ?: false)
+            p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true), p[neteaseMain] ?: true, p[visualizer] ?: false,
+        io.github.currencortex.music.data.visualizer.VisualizerRenderSettings(
+            io.github.currencortex.music.data.visualizer.VisualizerFrameRate.from(p[visualizerFps]),
+            p[visualizerAuto] ?: true, p[visualizerRaw] ?: false))
     val state = store.data.map(::decode)
         .stateIn(scope, SharingStarted.Eagerly, MusicSettings())
     suspend fun snapshot(): MusicSettings {
@@ -87,6 +95,16 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     suspend fun setRestore(value: Boolean) { store.edit { it[restore] = value } }
     suspend fun setPreload(value: Boolean) { store.edit { it[preload] = value } }
     suspend fun setVisualizerEnabled(value: Boolean) { store.edit { it[visualizer] = value } }
+    suspend fun setVisualizerFrameRate(value: io.github.currencortex.music.data.visualizer.VisualizerFrameRate) {
+        store.edit { it[visualizerFps] = value.name }
+    }
+    suspend fun editVisualizerRender(transform: (io.github.currencortex.music.data.visualizer.VisualizerRenderSettings) ->
+        io.github.currencortex.music.data.visualizer.VisualizerRenderSettings) {
+        store.edit { p ->
+            val value = transform(decode(p).visualizerRender)
+            p[visualizerFps] = value.frameRate.name; p[visualizerAuto] = value.automaticOptimization; p[visualizerRaw] = value.rawSpectrum
+        }
+    }
     suspend fun setPreloadMetered(value: Boolean) { store.edit { it[metered] = value } }
     suspend fun setLyricsFontSize(value: Float) { store.edit { it[lyricsSize] = LyricsTypography.normalize(value) } }
     suspend fun setLyricsWeight(value: LyricsWeight) { store.edit { it[lyricsWeight] = value.name } }

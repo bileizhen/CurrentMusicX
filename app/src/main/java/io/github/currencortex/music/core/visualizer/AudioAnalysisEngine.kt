@@ -11,7 +11,7 @@ enum class CaptureStatus(val label: String) {
 
 data class CaptureRequest(val enabled: Boolean = false, val visible: Boolean = false,
     val permission: Boolean = false, val supported: Boolean = true, val playing: Boolean = false,
-    val sessionId: Int = 0) {
+    val sessionId: Int = 0, val timelineRevision: Long = 0, val trackId: Long? = null) {
     val status: CaptureStatus get() = when {
         !enabled -> CaptureStatus.DISABLED
         !visible -> CaptureStatus.HIDDEN
@@ -31,15 +31,20 @@ class AudioAnalysisEngine(scope: CoroutineScope, private val source: AudioCaptur
     private val mutableStatus = MutableStateFlow(CaptureStatus.DISABLED)
     val frames = mutableFrames.asStateFlow()
     val status = mutableStatus.asStateFlow()
+    private var generation = 0L
     private val job = scope.launch(dispatcher) {
         requests.collectLatest { request ->
+            var epoch = ++generation
             mutableFrames.value = AudioAnalysisFrame()
             mutableStatus.value = request.status
             if (request.status != CaptureStatus.STARTING) return@collectLatest
             val analyzer = AudioSignalAnalyzer()
             try {
                 source.frames(request.sessionId).collect { packet ->
-                    mutableFrames.value = analyzer.analyze(packet)
+                    val previous = mutableFrames.value
+                    if (previous.timestampNanos > 0 && (previous.sampleRateHz != packet.sampleRateHz || previous.captureSize != packet.fft.size))
+                        epoch = ++generation
+                    mutableFrames.value = analyzer.analyze(packet).copy(generation = epoch)
                     mutableStatus.value = CaptureStatus.CAPTURING
                 }
                 mutableStatus.value = CaptureStatus.FAILED

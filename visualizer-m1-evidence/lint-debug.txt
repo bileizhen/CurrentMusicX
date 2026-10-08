@@ -1,0 +1,334 @@
+M:\app\build.gradle.kts:34: Warning: Not targeting the latest versions of Android; compatibility modes apply. Consider testing and updating this version. Consult the android.os.Build.VERSION_CODES javadoc for details. [OldTargetApi]
+        targetSdk = 36
+        ~~~~~~~~~~~~~~
+
+   Explanation for issues of type "OldTargetApi":
+   When your application or sdk runs on a version of Android that is more
+   recent than your targetSdkVersion specifies that it has been tested with,
+   various compatibility modes kick in. This ensures that your application
+   continues to work, but it may look out of place. For example, if the
+   targetSdkVersion is less than 14, your app may get an option button in the
+   UI.
+
+   To fix this issue, set the targetSdkVersion to the highest available value.
+   Then test your app to make sure everything works correctly. You may want to
+   consult the compatibility notes to see what changes apply to each version
+   you are adding support for:
+   https://developer.android.com/reference/android/os/Build.VERSION_CODES.html
+   as well as follow this guide:
+   https://developer.android.com/distribute/best-practices/develop/target-sdk.
+   html
+
+   https://developer.android.com/distribute/best-practices/develop/target-sdk.html
+
+M:\app\build.gradle.kts:87: Warning: A newer version of androidx.core:core-ktx than 1.17.0 is available: 1.19.1 [GradleDependency]
+    implementation("androidx.core:core-ktx:1.17.0")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:88: Warning: A newer version of androidx.activity:activity-compose than 1.12.1 is available: 1.13.0 [GradleDependency]
+    implementation("androidx.activity:activity-compose:1.12.1")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:89: Warning: A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.10.0 is available: 2.11.0 [GradleDependency]
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:90: Warning: A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.10.0 is available: 2.11.0 [GradleDependency]
+    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:99: Warning: A newer version of androidx.navigation3:navigation3-runtime than 1.1.4 is available: 1.2.0 [GradleDependency]
+    implementation("androidx.navigation3:navigation3-runtime:1.1.4")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:100: Warning: A newer version of androidx.navigationevent:navigationevent-compose than 1.1.2 is available: 1.2.0 [GradleDependency]
+    implementation("androidx.navigationevent:navigationevent-compose:1.1.2")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:101: Warning: A newer version of androidx.datastore:datastore-preferences than 1.1.7 is available: 1.2.1 [GradleDependency]
+    implementation("androidx.datastore:datastore-preferences:1.1.7")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:117: Warning: A newer version of androidx.compose.ui:ui-test-junit4 than 1.11.2 is available: 1.12.1 [GradleDependency]
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4:1.11.2")
+                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:118: Warning: A newer version of androidx.compose.ui:ui-test-manifest than 1.11.2 is available: 1.12.1 [GradleDependency]
+    debugImplementation("androidx.compose.ui:ui-test-manifest:1.11.2")
+                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "GradleDependency":
+   This detector looks for usages of libraries where the version you are using
+   is not the current stable release. Using older versions is fine, and there
+   are cases where you deliberately want to stick with an older version.
+   However, you may simply not be aware that a more recent version is
+   available, and that is what this lint check helps find.
+
+M:\app\build.gradle.kts:71: Warning: A newer version of org.jetbrains.kotlinx:kotlinx-serialization-json than 1.9.0 is available: 1.11.0 [NewerVersionAvailable]
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:72: Warning: A newer version of com.squareup.okhttp3:okhttp-sse than 4.12.0 is available: 5.5.0 [NewerVersionAvailable]
+    implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:73: Warning: A newer version of io.coil-kt.coil3:coil-compose than 3.3.0 is available: 3.6.3 [NewerVersionAvailable]
+    implementation("io.coil-kt.coil3:coil-compose:3.3.0")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:74: Warning: A newer version of io.coil-kt.coil3:coil-network-okhttp than 3.3.0 is available: 3.6.3 [NewerVersionAvailable]
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.3.0")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:75: Warning: A newer version of io.coil-kt.coil3:coil-gif than 3.3.0 is available: 3.6.3 [NewerVersionAvailable]
+    implementation("io.coil-kt.coil3:coil-gif:3.3.0")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:76: Warning: A newer version of com.google.zxing:core than 3.5.3 is available: 3.5.4 [NewerVersionAvailable]
+    implementation("com.google.zxing:core:3.5.3")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:85: Warning: A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-guava than 1.10.2 is available: 1.11.0 [NewerVersionAvailable]
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-guava:1.10.2")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:86: Warning: A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-test than 1.10.2 is available: 1.11.0 [NewerVersionAvailable]
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:93: Warning: A newer version of top.yukonga.miuix.kmp:miuix-ui-android than 0.9.3 is available: 0.9.4 [NewerVersionAvailable]
+    implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.3")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:94: Warning: A newer version of top.yukonga.miuix.kmp:miuix-preference-android than 0.9.3 is available: 0.9.4 [NewerVersionAvailable]
+    implementation("top.yukonga.miuix.kmp:miuix-preference-android:0.9.3")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:95: Warning: A newer version of top.yukonga.miuix.kmp:miuix-blur-android than 0.9.3 is available: 0.9.4 [NewerVersionAvailable]
+    implementation("top.yukonga.miuix.kmp:miuix-blur-android:0.9.3")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:97: Warning: A newer version of top.yukonga.miuix.kmp:miuix-squircle-android than 0.9.3 is available: 0.9.4 [NewerVersionAvailable]
+    implementation("top.yukonga.miuix.kmp:miuix-squircle-android:0.9.3")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:104: Warning: A newer version of org.jetbrains.kotlinx:kotlinx-coroutines-android than 1.10.2 is available: 1.11.0 [NewerVersionAvailable]
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:106: Warning: A newer version of com.squareup.okhttp3:okhttp than 4.12.0 is available: 5.5.0 [NewerVersionAvailable]
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+                   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:108: Warning: A newer version of com.squareup.okhttp3:mockwebserver than 4.12.0 is available: 5.5.0 [NewerVersionAvailable]
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:109: Warning: A newer version of com.squareup.okhttp3:okhttp-tls than 4.12.0 is available: 5.5.0 [NewerVersionAvailable]
+    testImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:111: Warning: A newer version of org.json:json than 20240303 is available: 20260814 [NewerVersionAvailable]
+    testImplementation("org.json:json:20240303")
+                       ~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:115: Warning: A newer version of com.squareup.okhttp3:mockwebserver than 4.12.0 is available: 5.5.0 [NewerVersionAvailable]
+    androidTestImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\build.gradle.kts:116: Warning: A newer version of com.squareup.okhttp3:okhttp-tls than 4.12.0 is available: 5.5.0 [NewerVersionAvailable]
+    androidTestImplementation("com.squareup.okhttp3:okhttp-tls:4.12.0")
+                              ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "NewerVersionAvailable":
+   This detector checks with a central repository to see if there are newer
+   versions available for the dependencies used by this project. This is
+   similar to the GradleDependency check, which checks for newer versions
+   available in the Android SDK tools and libraries, but this works with any
+   MavenCentral dependency, and connects to the library every time, which
+   makes it more flexible but also much slower.
+
+M:\app\src\main\java\io\github\currencortex\music\feature\about\AboutMembers.kt:173: Warning: Using Configuration.screenHeightDp instead of LocalWindowInfo.current.containerSize [ConfigurationScreenWidthHeight from androidx.compose.ui]
+    val contentHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp - 160.dp).coerceAtLeast(180.dp)
+                         ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\feature\player\AudioQualitySheet.kt:57: Warning: Using Configuration.screenHeightDp instead of LocalWindowInfo.current.containerSize [ConfigurationScreenWidthHeight from androidx.compose.ui]
+    val maxHeight = (LocalConfiguration.current.screenHeightDp * .68f).dp
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\feature\settings\ThemePreviewCard.kt:29: Warning: Using Configuration.screenWidthDp instead of LocalWindowInfo.current.containerSize [ConfigurationScreenWidthHeight from androidx.compose.ui]
+    val screenWidth = configuration.screenWidthDp.toFloat()
+                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\feature\settings\ThemePreviewCard.kt:30: Warning: Using Configuration.screenHeightDp instead of LocalWindowInfo.current.containerSize [ConfigurationScreenWidthHeight from androidx.compose.ui]
+    val screenHeight = configuration.screenHeightDp.toFloat()
+                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\feature\update\UpdateDialog.kt:99: Warning: Using Configuration.screenHeightDp instead of LocalWindowInfo.current.containerSize [ConfigurationScreenWidthHeight from androidx.compose.ui]
+        val notesHeight = (LocalConfiguration.current.screenHeightDp - 240).coerceIn(88, 440).dp
+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "ConfigurationScreenWidthHeight":
+   Configuration.screenWidthDp and Configuration.screenHeightDp have different
+   insets behaviour depending on target SDK version, and are rounded to the
+   nearest Dp. This means that using these values in composition to size a
+   layout can result in issues, as these values do not accurately represent
+   the actual available window size. Instead it is recommended to use
+   WindowInfo.containerSize which accurately represents the window size.
+
+   Vendor: Jetpack Compose
+   Identifier: androidx.compose.ui
+   Feedback: https://issuetracker.google.com/issues/new?component=612128
+
+M:\app\src\main\java\io\github\currencortex\music\feature\about\AboutMembers.kt:81: Warning: Modifier parameter should be the first optional parameter [ModifierParameter from androidx.compose.ui]
+private fun QqAvatar(qq: String, size: Dp = 44.dp, spec: Int = 100, modifier: Modifier = Modifier) {
+                                                                    ~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\ui\component\FloatingSideBar.kt:130: Warning: Modifier parameter should be the first optional parameter [ModifierParameter from androidx.compose.ui]
+    onSelect: (Int) -> Unit, itemHeight: Dp, mirror: Boolean = false, modifier: Modifier = Modifier,
+                                                                      ~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\ui\component\MusicLoading.kt:39: Warning: Modifier parameter should be the first optional parameter [ModifierParameter from androidx.compose.ui]
+@Composable fun LoadingSongList(count: Int = 3, modifier: Modifier = Modifier) {
+                                                ~~~~~~~~
+
+   Explanation for issues of type "ModifierParameter":
+   The first (or only) Modifier parameter in a Composable function should
+   follow the following rules:
+   - Be named modifier
+   - Have a type of Modifier
+   - Either have no default value, or have a default value of Modifier
+   - If optional, be the first optional parameter in the parameter list
+
+   Vendor: Jetpack Compose
+   Identifier: androidx.compose.ui
+   Feedback: https://issuetracker.google.com/issues/new?component=612128
+
+M:\app\src\main\AndroidManifest.xml:37: Warning: Exported service does not require permission [ExportedService]
+        <service android:name=".core.media.MusicService" android:exported="true"
+         ~~~~~~~
+
+   Explanation for issues of type "ExportedService":
+   Exported services (services which either set exported=true or contain an
+   intent-filter and do not specify exported=false) should define a permission
+   that an entity must have in order to launch the service or bind to it.
+   Without this, any application can use this service.
+
+   https://goo.gle/ExportedService
+
+M:\app\src\main\java\io\github\currencortex\music\core\storage\StorageStore.kt:80: Warning: This Cursor should be freed up after use with #close() [Recycle]
+        context.contentResolver.query(
+                                ~~~~~
+
+   Explanation for issues of type "Recycle":
+   Many resources, such as TypedArrays, VelocityTrackers, etc., should be
+   recycled (with a recycle() call) after use. This lint check looks for
+   missing recycle() calls.
+
+M:\app\src\main\res\mipmap-anydpi-v26: Warning: This folder configuration (v26) is unnecessary; minSdkVersion is 26. Merge all the resources in this folder into mipmap-anydpi. [ObsoleteSdkInt]
+
+   Explanation for issues of type "ObsoleteSdkInt":
+   This check flags version checks that are not necessary, because the
+   minSdkVersion (or surrounding known API level) is already at least as high
+   as the version checked for.
+
+   Similarly, it also looks for resources in -vNN folders, such as values-v14
+   where the version qualifier is less than or equal to the minSdkVersion,
+   where the contents should be merged into the best folder.
+
+M:\app\src\main\java\io\github\currencortex\music\feature\about\AboutMembers.kt:124: Hint: Prefer mutableFloatStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var offsetInHost by remember { mutableStateOf(0f) }
+                                   ~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\feature\about\AboutMembers.kt:125: Hint: Prefer mutableFloatStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var heightPx by remember { mutableStateOf(0f) }
+                               ~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\ui\component\AvatarFlight.kt:34: Hint: Prefer mutableDoubleStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var decorationScale by mutableStateOf(1.0)
+                           ~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\feature\about\LegalDocumentScreen.kt:44: Hint: Prefer mutableIntStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var attempt by remember(document) { mutableStateOf(0) }
+                                        ~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\feature\player\SleepTimerSheet.kt:104: Hint: Prefer mutableIntStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var hours by rememberSaveable { mutableStateOf(0) }
+                                    ~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\feature\player\SleepTimerSheet.kt:105: Hint: Prefer mutableIntStateOf instead of mutableStateOf [AutoboxingStateCreation from androidx.compose.runtime]
+    var minutes by rememberSaveable { mutableStateOf(0) }
+                                      ~~~~~~~~~~~~~~
+
+   Explanation for issues of type "AutoboxingStateCreation":
+   Calling mutableStateOf<T>() when T is either backed by a primitive type on
+   the JVM or is a value class results in a state implementation that requires
+   all state values to be boxed. This usually causes an additional allocation
+   for each state write, and adds some additional work to auto-unbox values
+   when reading the value of the state. Instead, prefer to use a specialized
+   primitive state implementation for Int, Long, Float, and Double when the
+   state does not need to track null values and does not override the default
+   SnapshotMutationPolicy. See mutableIntStateOf(), mutableLongStateOf(),
+   mutableFloatStateOf(), and mutableDoubleStateOf() for more information.
+
+   Vendor: Jetpack Compose
+   Identifier: androidx.compose.runtime
+   Feedback: https://issuetracker.google.com/issues/new?component=612128
+
+M:\app\src\main\java\io\github\currencortex\music\ui\util\ExternalLinks.kt:11: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+    val uri = Uri.parse(url)
+              ~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\feature\update\MarkdownText.kt:234: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                                                                   ~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\feature\download\SongDownloadDialog.kt:62: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+            .filter { it.isNotBlank() }.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }.distinct()
+                                                                   ~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\feature\download\SongDownloadDialog.kt:134: Warning: Use the KTX extension function String.toUri instead? [UseKtx]
+                        context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(info?.outputData?.getString("uri")), "audio/*")
+                                                                                        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\core\download\SongDownloadManager.kt:23: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+        check(preferences.edit().putString("directory", uri?.toString()).commit()) { "文件夹设置保存失败" }
+              ~~~~~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\core\download\SongDownloadManager.kt:42: Warning: Use the KTX extension function SharedPreferences.edit instead? [UseKtx]
+        check(preferences.edit().putStringSet("hidden", next).commit()) { "下载记录更新失败" }
+              ~~~~~~~~~~~~~~~~~~
+M:\app\src\main\java\io\github\currencortex\music\feature\style\StyleArtwork.kt:60: Warning: Use the KTX extension function Bitmap.get instead? [UseKtx]
+                            val pixel = bitmap.getPixel(x, y)
+                                        ~~~~~~~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "UseKtx":
+   The Android KTX libraries decorates the Android platform SDK as well as
+   various libraries with more convenient extension functions available from
+   Kotlin, allowing you to use default parameters, named parameters, and
+   more.
+
+   Available options:
+
+   **remove-defaults** (default is true):
+   Whether to skip arguments that match the defaults provided by the extension.
+
+   Extensions often provide default values for some of the parameters. For example:
+   ```kotlin
+   fun Path.readLines(charset: Charset = Charsets.UTF_8): List<String> { return Files.readAllLines(this, charset) }
+   ```
+   This lint check will by default automatically omit parameters that match the default, so if your code was calling
+
+   ```kotlin
+   Files.readAllLines(file, Charset.UTF_8)
+   ```
+   lint would replace this with
+   ```kotlin
+   file.readLines()
+   ```
+   rather than
+
+   ```kotlin
+   file.readLines(Charset.UTF_8
+   ```
+   You can turn this behavior off using this option.
+
+   To configure this option, use a `lint.xml` file with an <option> like this:
+
+   ```xml
+   <lint>
+       <issue id="UseKtx">
+           <option name="remove-defaults" value="true" />
+       </issue>
+   </lint>
+   ```
+
+   **require-present** (default is true):
+   Whether to only offer extensions already available.
+
+   This option lets you only have lint suggest extension replacements if those extensions are already available on the class path (in other words, you're already depending on the library containing the extension method.)
+
+   To configure this option, use a `lint.xml` file with an <option> like this:
+
+   ```xml
+   <lint>
+       <issue id="UseKtx">
+           <option name="require-present" value="true" />
+       </issue>
+   </lint>
+   ```
+
+M:\app\src\main\java\io\github\currencortex\music\ui\component\miuix\effect\BgEffectModifier.kt:41: Hint: BgEffectElement does not override inspectableProperties(). The layout inspector will use the default implementation of this function, which will attempt to read BgEffectElement's properties reflectively. Override inspectableProperties() if you'd like to customize this modifier's presentation in the layout inspector. [ModifierNodeInspectableProperties from androidx.compose.ui]
+private data class BgEffectElement(
+                   ~~~~~~~~~~~~~~~
+
+   Explanation for issues of type "ModifierNodeInspectableProperties":
+   ModifierNodeElements may override inspectableProperties() to provide
+   information about the modifier in the layout inspector. The default
+   implementation attempts to read all of the properties on the class
+   reflectively, which may not comprehensively or effectively describe the
+   modifier.
+
+   Vendor: Jetpack Compose
+   Identifier: androidx.compose.ui
+   Feedback: https://issuetracker.google.com/issues/new?component=612128
+
+0 errors, 47 warnings, 7 hints
