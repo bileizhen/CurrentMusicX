@@ -32,6 +32,7 @@ class NeteaseLibraryRepositoryTest {
                     "/cm/ncmbind" -> json("""{"bound":true,"profile":{"uid":7},"ncmLikedPlId":42}""")
                     "/cm/ncmbind/likelist" -> json("""{"ids":[11]}""")
                     "/cm/ncm/user/playlist" -> json(lists())
+                    "/cm/ncm/playlist/detail" -> json("""{"code":200,"playlist":{"id":9918106457,"tracks":[]}}""")
                     "/cm/ncm/song/detail" -> {
                         val ids = request.requestUrl!!.queryParameter("ids")!!.split(',')
                         json("""{"code":200,"songs":[${ids.joinToString(",") { """{"id":$it,"name":"Track $it","ar":[{"id":2,"name":"Artist"}],"al":{"name":"Album"},"dt":180000}""" }}]}""")
@@ -62,13 +63,84 @@ class NeteaseLibraryRepositoryTest {
             val ids = (1..401).toList().reversed()
             dispatch(server) { request -> when (request.requestUrl!!.encodedPath) {
                 "/cm/ncm/playlist/detail" -> json("""{"code":200,"playlist":{"id":88,"name":"Large","creator":{"userId":7},"trackCount":401,"trackIds":[${ids.joinToString(",") { """{"id":$it}""" }}]}}""")
-                "/cm/ncm/song/detail" -> { batches += request.requestUrl!!.queryParameter("ids")!!.split(',').size; null }
+                "/cm/ncm/song/detail" -> {
+                    val size = request.requestUrl!!.queryParameter("ids")!!.split(',').size
+                    batches += size
+                    if (size > 100) json("""{"code":400}""") else null
+                }
                 else -> null
             } }
             val (_, _, native) = fixture(server)
             val playlist = native.playlist(88)
             assertEquals(ids.map(Int::toLong), playlist.songs.map { it.id })
-            assertEquals(listOf(200, 200, 1), batches.toList())
+            assertEquals(listOf(100, 100, 100, 100, 1), batches.toList())
+        }
+    }
+    @Test fun songDetailsAcceptCurrentMusicGatewayMetadataWithoutDroppingTracks() = runBlocking {
+        MockWebServer().use { server ->
+            dispatch(server) { request -> when (request.requestUrl!!.encodedPath) {
+                "/cm/ncm/song/detail" -> json("""{"songs":[{"ncm_id":11,"name":"Gateway track",
+                    "artists":"Artist A / Artist B","artist_ids":[2,3],"album":"Gateway album",
+                    "pic":"http://example.test/cover.jpg","duration":180000,"mv":9}]}""")
+                "/cm/ncm/playlist/detail" -> if (request.requestUrl!!.queryParameter("id") == "88")
+                    json("""{"code":200,"playlist":{"id":88,"name":"My native playlist",
+                    "creator":{"userId":7},"trackCount":1,"trackIds":[{"id":11}]}}""") else null
+                else -> null
+            } }
+            val (_, _, native) = fixture(server)
+            for (playlist in listOf(native.likedPlaylist(), native.playlist(88))) {
+                val song = playlist.songs.single()
+                assertEquals(11L, song.id)
+                assertEquals("Gateway track", song.name)
+                assertEquals("Artist A / Artist B", song.artists)
+                assertEquals("Gateway album", song.album)
+                assertEquals("https://example.test/cover.jpg", song.cover)
+                assertEquals(180000L, song.durationMs)
+                assertEquals(listOf(2L, 3L), song.artistIds)
+                assertEquals(9L, song.mv)
+            }
+        }
+    }
+    @Test fun playlistUsesEmbeddedTracksAndOnlyRequestsMissingMetadata() = runBlocking {
+        MockWebServer().use { server ->
+            val detailIds = CopyOnWriteArrayList<String>()
+            dispatch(server) { request -> when (request.requestUrl!!.encodedPath) {
+                "/cm/ncm/playlist/detail" -> json("""{"code":200,"playlist":{"id":88,"name":"Mixed",
+                    "creator":{"userId":7},"trackCount":2,"trackIds":[{"id":12},{"id":11}],
+                    "tracks":[{"id":11,"name":"Embedded","ar":[{"id":2,"name":"Artist"}],
+                    "al":{"name":"Album","picUrl":"http://example.test/cover.jpg"},"dt":180000}]}}""")
+                "/cm/ncm/song/detail" -> { detailIds += request.requestUrl!!.queryParameter("ids")!!; null }
+                else -> null
+            } }
+            val (_, _, native) = fixture(server)
+            val result = native.playlist(88)
+            assertEquals(listOf(12L, 11L), result.songs.map { it.id })
+            assertEquals("Embedded", result.songs[1].name)
+            assertEquals(listOf("12"), detailIds.toList())
+        }
+    }
+    @Test fun likedPlaylistKeepsConfirmedMembershipWhileReusingAndCachingEmbeddedTracks() = runBlocking {
+        MockWebServer().use { server ->
+            var details = 0
+            var songRequests = 0
+            dispatch(server) { request -> when (request.requestUrl!!.encodedPath) {
+                "/cm/ncm/playlist/detail" -> {
+                    details++
+                    json("""{"code":200,"playlist":{"id":9918106457,"tracks":[
+                        {"id":11,"name":"Embedded liked track"},{"id":12,"name":"Stale track"}]}}""")
+                }
+                "/cm/ncm/song/detail" -> { songRequests++; null }
+                "/cm/ncmbind/like/11" -> json("""{"code":200,"like":false}""")
+                else -> null
+            } }
+            val (_, actions, native) = fixture(server)
+            assertEquals(listOf(11L), native.likedPlaylist().songs.map { it.id })
+            assertEquals(listOf(11L), native.likedPlaylist().songs.map { it.id })
+            assertEquals(1, details)
+            assertEquals(0, songRequests)
+            actions.setLiked(11, false)
+            assertTrue(native.likedPlaylist().songs.isEmpty())
+            assertEquals(2, details)
         }
     }
     @Test fun addingToOwnedPlaylistUsesConfirmedNativeWriteAndRejectsOtherOwners() = runBlocking {
