@@ -145,6 +145,9 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
         fun songId(song: Song?): Long? = song?.takeIf { !it.video && it.musicSource == MusicSource.NETEASE }
             ?.let { it.externalIds.neteaseId?.toLongOrNull() ?: it.id }?.takeIf { it > 0 }
         internal fun nativeSong(info: JsonObject): Song? {
+            // /ncm/song/detail normalizes metadata; other NCM endpoints return raw songs.
+            if (info["ncm_id"] != null) return ApiJson.decodeFromJsonElement<SongDto>(info).toDomain()
+                .takeIf { it.id > 0 && it.name.isNotBlank() }
             fun JsonObject.string(key: String) = (get(key) as? JsonPrimitive)?.contentOrNull.orEmpty()
             val id = info["id"]?.jsonPrimitive?.longOrNull?.takeIf { it > 0 } ?: return null
             val name = info.string("name").takeIf { it.isNotBlank() } ?: return null

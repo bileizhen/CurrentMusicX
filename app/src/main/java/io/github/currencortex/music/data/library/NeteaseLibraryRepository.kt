@@ -50,9 +50,10 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
             result.distinctBy { it.id }
         }
     }
-    private suspend fun songs(ids: List<Long>, expected: RequestSession): List<Song> {
-        val found = mutableMapOf<Long, Song>()
-        ids.distinct().chunked(200).forEach { chunk ->
+    private suspend fun songs(ids: List<Long>, expected: RequestSession, known: List<Song> = emptyList()): List<Song> {
+        val found = known.associateByTo(mutableMapOf()) { it.id }
+        // CurrentMusic's song-detail gateway accepts at most 100 IDs per request.
+        ids.distinct().filterNot(found::containsKey).chunked(100).forEach { chunk ->
             val response = request("song/detail", mapOf("ids" to chunk.joinToString(",")), expected)
             val page = response["songs"] as? JsonArray ?: throw ApiException(ErrorKind.Parse)
             page.mapNotNull { (it as? JsonObject)?.let(NeteaseSongActionsRepository::nativeSong) }.forEach { found[it.id] = it }
@@ -70,9 +71,11 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
             val info = raw.toPlaylist(uid) ?: throw ApiException(ErrorKind.Parse)
             if (info.id != id) throw ApiException(ErrorKind.Parse)
             val ids = (raw["trackIds"] as? JsonArray)?.mapNotNull { (it as? JsonObject)?.get("id")?.jsonPrimitive?.longOrNull }
-            val tracks = if (ids != null) songs(ids, expected) else {
-                val page = raw["tracks"] as? JsonArray ?: throw ApiException(ErrorKind.Parse)
-                page.mapNotNull { (it as? JsonObject)?.let(NeteaseSongActionsRepository::nativeSong) }.also {
+            val embedded = (raw["tracks"] as? JsonArray)?.mapNotNull {
+                (it as? JsonObject)?.let(NeteaseSongActionsRepository::nativeSong)
+            }
+            val tracks = if (ids != null) songs(ids, expected, embedded.orEmpty()) else {
+                (embedded ?: throw ApiException(ErrorKind.Parse)).also {
                     if (it.size < info.count) throw ApiException(ErrorKind.Parse)
                 }
             }
@@ -86,10 +89,19 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
         // Membership comes from the user's red-heart list, including acknowledged writes
         // while upstream playlist/detail is still catching up.
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
-        val ids = actions.likedIds(fresh).toList()
-        val tracks = songs(ids, expected)
-        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
-        info.copy(name = "我喜欢的音乐", songs = tracks, count = tracks.size)
+        reads.read("liked/${info.ownerId}/${info.id}", fresh) { owner ->
+            if (owner != expected) throw ApiException(ErrorKind.Unauthorized)
+            val ids = actions.likedIds(fresh).toList()
+            val detail = request("playlist/detail", mapOf("id" to "${info.id}", "s" to "0"), expected)
+            val raw = detail["playlist"] as? JsonObject ?: throw ApiException(ErrorKind.Parse)
+            if (raw["id"]?.jsonPrimitive?.longOrNull != info.id) throw ApiException(ErrorKind.Parse)
+            val embedded = (raw["tracks"] as? JsonArray).orEmpty().mapNotNull {
+                (it as? JsonObject)?.let(NeteaseSongActionsRepository::nativeSong)
+            }
+            val tracks = songs(ids, expected, embedded)
+            if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+            info.copy(name = "我喜欢的音乐", songs = tracks, count = tracks.size)
+        }
     }
     suspend fun add(id: Long, song: Song) = writeMutex.withLock {
         val songId = NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound)
