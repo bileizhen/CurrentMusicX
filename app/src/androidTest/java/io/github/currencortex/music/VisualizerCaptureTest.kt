@@ -99,11 +99,24 @@ class VisualizerCaptureTest {
         val highUrl = server.url("/high.wav").toString()
         val beatUrl = server.url("/beat.wav").toString()
         val controller = container.playerController
+        suspend fun awaitActualOutput() {
+            // playRequested / a previously published session ID can become available before
+            // the replacement AudioTrack starts. Attach only after actual service output.
+            withTimeout(10_000) {
+                while (!withContext(Dispatchers.Main) {
+                    controller.connect().let {
+                        it.isPlaying && it.currentPosition >= 300 &&
+                            it.currentMediaItem?.mediaId == controller.state.value.song?.id?.toString()
+                    }
+                }) delay(50)
+            }
+        }
         try {
             withContext(Dispatchers.Main) {
                 assertTrue(controller.beginExternal(PlayerMode.ROOM, controls))
                 controller.roomTrack(Song(-91001, "M0 tone", durationMs = 12000), lowUrl, 0, true)
             }
+            awaitActualOutput()
             val id = withTimeout(10_000) { container.audioSessionId.first { it > 0 } }
             withTimeout(10_000) { controller.state.first { it.playing } }
             val source = VisualizerCaptureSource()
@@ -124,10 +137,10 @@ class VisualizerCaptureTest {
             // Waiting for player state progression proves capture teardown does not pause the service.
             withTimeout(5_000) { controller.state.first { it.playing && it.positionMs > positionAfterRelease + 100 } }
             withContext(Dispatchers.Main) { controller.roomTrack(Song(-91002, "M0 treble", durationMs = 12000), highUrl, 0, true) }
-            withTimeout(10_000) { controller.state.first { it.playing && it.positionMs > 300 } }
+            awaitActualOutput()
             measure(6000f, 30)
             withContext(Dispatchers.Main) { controller.roomTrack(Song(-91003, "M0 kick", durationMs = 12000), beatUrl, 0, true) }
-            withTimeout(10_000) { controller.state.first { it.playing && it.positionMs > 300 } }
+            awaitActualOutput()
             val kicks = measure(93.75f, 90)
             assertTrue("Bass impacts must trigger after adaptive warm-up", kicks.count { it.kick } >= 2)
             assertTrue(kicks.any { it.beatPulse > .9f })
@@ -135,7 +148,11 @@ class VisualizerCaptureTest {
             try {
                 engine.request(CaptureRequest(true, true, true, true, true, container.audioSessionId.value))
                 withTimeout(5_000) { engine.status.first { it == CaptureStatus.CAPTURING } }
+                // Compose's test frame clock is synthetic; use it only for pixel assertions.
+                // Real FPS is measured in VisualizerPerformanceTest without a Compose test clock.
+                compose.mainClock.autoAdvance = false
                 compose.runOnIdle { debugEngine = engine }
+                compose.mainClock.advanceTimeBy(240)
                 compose.waitUntil(5_000) { engine.frames.value.spectrum.any { it > .02f } }
                 val image = compose.onNodeWithTag("real_spectrum").captureToImage()
                 val pixels = image.toPixelMap()
@@ -152,7 +169,7 @@ class VisualizerCaptureTest {
                 withTimeout(5_000) { engine.status.first { it == CaptureStatus.HIDDEN } }
                 assertEquals(0, engine.frames.value.sampleRateHz)
                 assertTrue(withContext(Dispatchers.Main) { controller.connect().isPlaying })
-            } finally { engine.close() }
+            } finally { engine.close(); compose.mainClock.autoAdvance = true }
         } finally {
             withContext(Dispatchers.Main) {
                 controller.roomTrack(null, null, 0, false)

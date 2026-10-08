@@ -64,4 +64,21 @@ class AudioAnalysisEngineTest {
         assertEquals(CaptureStatus.PAUSED, engine.status.value)
         engine.close()
     }
+    @Test fun timelineSeekOrTrackChangeRestartsGeneration() = runTest {
+        val source = object : AudioCaptureSource {
+            override fun frames(audioSessionId: Int) = flow {
+                emit(AudioCapturePacket(1_000_000_000L, 48000, ByteArray(1024), ByteArray(1024) { 128.toByte() }))
+                awaitCancellation()
+            }
+        }
+        val engine = AudioAnalysisEngine(backgroundScope, source, StandardTestDispatcher(testScheduler))
+        engine.request(active.copy(trackId = 10)); runCurrent()
+        val old = engine.frames.value.generation
+        engine.request(active.copy(trackId = 10, timelineRevision = 1)); runCurrent()
+        assertTrue(engine.frames.value.generation > old)
+        val seek = engine.frames.value.generation
+        engine.request(active.copy(trackId = 20, timelineRevision = 1)); runCurrent()
+        assertTrue(engine.frames.value.generation > seek)
+        engine.close()
+    }
 }

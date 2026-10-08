@@ -1,0 +1,356 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="io.github.currencortex.music.AudioCacheTest" tests="129" failures="14" errors="0" skipped="2" time="637.956" timestamp="2026-10-08T18:54:31" hostname="localhost">
+  <properties>
+    <property name="device" value="RMX5060 - 16" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="openingBytesArePreloadedReusedAcrossSignedUrlsAndRemainingBytesAreCached" classname="io.github.currencortex.music.AudioCacheTest" time="0.081" />
+  <testcase name="sourceMemoIsSharedButQualityAccountServerAndRepresentationAreIsolated" classname="io.github.currencortex.music.AudioCacheTest" time="0.05" />
+  <testcase name="completeAudioSurvivesReopenAndOfflineResolverButDeniedAccountDoesNotFallback" classname="io.github.currencortex.music.AudioCacheTest" time="0.082" />
+  <testcase name="realExoPlayerPreparesAndSeeksFullyCachedAudioWithoutNetworkOrPlayingSound" classname="io.github.currencortex.music.AudioCacheTest" time="0.386" />
+  <testcase name="everyCachedTrackIsKeptAndClearRemovesMetadata" classname="io.github.currencortex.music.AudioCacheTest" time="0.106" />
+  <testcase name="audioProvidersAndKeysCannotReuseEachOthersBytesOrInFlightSources" classname="io.github.currencortex.music.AudioCacheTest" time="0.107" />
+  <testcase name="cancelledPreloadStopsAndIncompleteAudioCannotResolveOffline" classname="io.github.currencortex.music.AudioCacheTest" time="0.438" />
+  <testcase name="networkSettingsUsesTheSamePickerAndPersistsDefaultWithoutStartingAudio" classname="io.github.currencortex.music.AudioQualitySheetTest" time="2.56" />
+  <testcase name="pickerShowsAllLevelsFollowsAppearanceAndPreventsRedundantSelection" classname="io.github.currencortex.music.AudioQualitySheetTest" time="1.796" />
+  <testcase name="sourceControlsStoreOnlyEncryptedKeyAndKeepProjectAccountAndQueue" classname="io.github.currencortex.music.AudioSourceSettingsTest" time="1.534" />
+  <testcase name="missingAvatarRendersThePersonPlaceholder" classname="io.github.currencortex.music.AvatarPlaceholderTest" time="0.566" />
+  <testcase name="systemBackReturnsTheAvatarAndFrameToTheMeasuredHomePosition" classname="io.github.currencortex.music.HomeAvatarTest" time="27.797" />
+  <testcase name="bottomMyTabFliesTheHomeAvatarAndFrameIntoMyProfile" classname="io.github.currencortex.music.HomeAvatarTest" time="17.422" />
+  <testcase name="photoWaitsForDownloadAndLaunchThenFadesIn" classname="io.github.currencortex.music.HomeAvatarTest" time="1.181" />
+  <testcase name="fourTabsKeepSearchSecondaryAndSettingsPrimary" classname="io.github.currencortex.music.HomeAvatarTest" time="3.555" />
+  <testcase name="searchMovesInputUpFocusesAndReturnsToRetainedHome" classname="io.github.currencortex.music.HomeAvatarTest" time="2.102" />
+  <testcase name="homeAvatarTravelsAlongCurveIntoMyProfile" classname="io.github.currencortex.music.HomeAvatarTest" time="17.197" />
+  <testcase name="absentAndFailedPhotoKeepProfileEntryUsable" classname="io.github.currencortex.music.HomeAvatarTest" time="0.918" />
+  <testcase name="hiddenHomeAvatarSkipsFlightAndRestoresNormalTravelAfterScrollingBack" classname="io.github.currencortex.music.HomeAvatarTest" time="2.586" />
+  <testcase name="homeTabReturnsTheAvatarAndFrameToTheMeasuredHomePosition" classname="io.github.currencortex.music.HomeAvatarTest" time="27.664" />
+  <testcase name="plainDockRetainsMiniAcrossKeyboardFadeAndRapidReversal" classname="io.github.currencortex.music.KeyboardDockOverlayTest" time="1.206" />
+  <testcase name="unifiedDockRetainsMiniAcrossKeyboardFadeAndRapidReversal" classname="io.github.currencortex.music.KeyboardDockOverlayTest" time="1.178" />
+  <testcase name="textDoesNotAnimateUnderTheSystemSplash" classname="io.github.currencortex.music.LaunchBrandAnimationTest" time="0.618" />
+  <testcase name="darkLaunchKeepsMovingUntilReadyThenFadesWithoutHome" classname="io.github.currencortex.music.LaunchBrandAnimationTest" time="0.952" />
+  <testcase name="whiteWordmarkHasMovingHighlight" classname="io.github.currencortex.music.LaunchBrandAnimationTest" time="9.363" />
+  <testcase name="disabledSystemAnimationsSkipTheIntroAndFlight" classname="io.github.currencortex.music.LaunchBrandAnimationTest" time="0.567" />
+  <testcase name="disabledAnimationsStillWaitForHomeData" classname="io.github.currencortex.music.LaunchBrandAnimationTest" time="0.643" />
+  <testcase name="textRevealFliesToMeasuredTitleAndDoesNotReplayAfterRestoration" classname="io.github.currencortex.music.LaunchBrandAnimationTest" time="27.487" />
+  <testcase name="launchWaitsForEveryHomeSectionAndFailureOffersRetryWithoutReplaying" classname="io.github.currencortex.music.LaunchHomeReadinessTest" time="15.85">
+    <failure>androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 15000 ms
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:887)
+at androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:482)
+at io.github.currencortex.music.LaunchHomeReadinessTest.pumpUntil(LaunchHomeReadinessTest.kt:71)
+at io.github.currencortex.music.LaunchHomeReadinessTest.launchWaitsForEveryHomeSectionAndFailureOffersRetryWithoutReplaying(LaunchHomeReadinessTest.kt:79)
+</failure>
+  </testcase>
+  <testcase name="enteringPagesCoverOutgoingScrimInDarkTheme" classname="io.github.currencortex.music.LibraryCapabilitiesTest" time="2.784" />
+  <testcase name="enteringPagesCoverOutgoingScrimInLightTheme" classname="io.github.currencortex.music.LibraryCapabilitiesTest" time="2.738" />
+  <testcase name="predictiveBackKeepsViewportAndCancelsWithoutPopping" classname="io.github.currencortex.music.LibraryCapabilitiesTest" time="2.403" />
+  <testcase name="loadingPlaceholderGivesWayToRealContent" classname="io.github.currencortex.music.LibraryCapabilitiesTest" time="2.505" />
+  <testcase name="globalMiniPlayerSurvivesLibraryNavigationAndMenuDoesNotResizeList" classname="io.github.currencortex.music.LibraryCapabilitiesTest" time="2.294" />
+  <testcase name="predictiveBackWithFixedTabsKeepsViewportAndCompletes" classname="io.github.currencortex.music.LibraryCapabilitiesTest" time="2.409" />
+  <testcase name="predictiveBackCanInterruptForwardEntryAndCancelOrComplete" classname="io.github.currencortex.music.LibraryCapabilitiesTest" time="1.538" />
+  <testcase name="homeNavigationAndReadonlyPlaylistsSurviveStateRestoration" classname="io.github.currencortex.music.LibraryCapabilitiesTest" time="1.865" />
+  <testcase name="createRenameAndFailedLikeRollbackWorkThroughNativeUi" classname="io.github.currencortex.music.LibraryCapabilitiesTest" time="4.429" />
+  <testcase name="artistAlbumAndMvDetailsUseExplicitSearchAndNativeNavigation" classname="io.github.currencortex.music.LibraryCapabilitiesTest" time="2.655" />
+  <testcase name="ownedPrivateRoomRoundTripAndAuthenticatedSse" classname="io.github.currencortex.music.LiveRoomContractTest" time="0.003">
+    <skipped />
+  </testcase>
+  <testcase name="externalMediaSessionRoutesCommandsAndUpdatesRoomPermissionsWithoutLocalPlayback" classname="io.github.currencortex.music.LiveRoomContractTest" time="0.004">
+    <skipped />
+  </testcase>
+  <testcase name="loginFormEnablesSubmitTogglesPasswordAndSwitchesToRegister" classname="io.github.currencortex.music.LoginScreenTest" time="2.941" />
+  <testcase name="seekDragPreviewsContinuouslyAndCommitsOnce" classname="io.github.currencortex.music.LyricsCapabilitiesTest" time="0.591" />
+  <testcase name="playerKeepsTransportAndQueueInLyricsModeAndRendersWrappedWords" classname="io.github.currencortex.music.LyricsCapabilitiesTest" time="1.979">
+    <failure>java.lang.AssertionError: Failed to perform GetTextLayoutResult action.
+Reason: Expected exactly '1' node but found '2' nodes that satisfy: (Text + InputText + EditableText contains '我们沿着夜色 慢慢走向明天' (ignoreCase: false))
+Nodes found:
+1) Node #11411 at (l=-984.0, t=1759.0, r=56.0, b=1836.0)px, Tag: 'player_cover_lyric_current'
+Text = '[我们沿着夜色 慢慢走向明天]'
+Actions = [ClearTextSubstitution, GetTextLayoutResult, SetTextSubstitution, ShowTextSubstitution]
+Has 2 siblings
+2) Node #11443 at (l=112.0, t=1118.24, r=1041.0, b=1379.24)px
+Text = '[我们沿着夜色 慢慢走向明天]'
+Actions = [GetTextLayoutResult]
+Has 1 sibling
+
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+at androidx.compose.ui.test.ActionsKt.performSemanticsAction(Actions.kt:633)
+at io.github.currencortex.music.LyricsCapabilitiesTest$playerKeepsTransportAndQueueInLyricsModeAndRendersWrappedWords$1.invokeSuspend$lyricLayout(LyricsCapabilitiesTest.kt:168)
+at io.github.currencortex.music.LyricsCapabilitiesTest$playerKeepsTransportAndQueueInLyricsModeAndRendersWrappedWords$1.invokeSuspend(LyricsCapabilitiesTest.kt:171)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+at kotlinx.coroutines.UndispatchedCoroutine.afterResume(CoroutineContext.kt:266)
+at kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:101)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:47)
+at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+at io.github.currencortex.music.LyricsCapabilitiesTest.playerKeepsTransportAndQueueInLyricsModeAndRendersWrappedWords(LyricsCapabilitiesTest.kt:113)
+</failure>
+  </testcase>
+  <testcase name="timelineFollowsSeekAndBrowsingCanReturnToCurrentLine" classname="io.github.currencortex.music.LyricsCapabilitiesTest" time="1.307" />
+  <testcase name="activeLyricEnlargesWithoutReflowOrClippingAtLargestFont" classname="io.github.currencortex.music.LyricsCapabilitiesTest" time="1.353" />
+  <testcase name="roomPermissionsDisableLyricSeeking" classname="io.github.currencortex.music.LyricsCapabilitiesTest" time="0.614" />
+  <testcase name="miniLyricsFollowPositionAndSettingsCanHideAndRestoreControls" classname="io.github.currencortex.music.LyricsDisplayCapabilitiesTest" time="5.622" />
+  <testcase name="alwaysSweepsPlainLinesWithoutReplacingRealWordTiming" classname="io.github.currencortex.music.LyricsDisplayCapabilitiesTest" time="1.92" />
+  <testcase name="blurKeepsOnlyCurrentlySungVocalsClear" classname="io.github.currencortex.music.LyricsDisplayCapabilitiesTest" time="2.537" />
+  <testcase name="centeredWeightAndAllLineKaraokeRenderActualGlyphs" classname="io.github.currencortex.music.LyricsDisplayCapabilitiesTest" time="1.459" />
+  <testcase name="fontSizeSurvivesStoreRestartWithoutChangingMusicPreferences" classname="io.github.currencortex.music.LyricsTypographyTest" time="0.131" />
+  <testcase name="weightOptionsPersistAndFollowThePlayingLine" classname="io.github.currencortex.music.LyricsWeightCapabilitiesTest" time="1.421">
+    <failure>java.lang.AssertionError: Failed to perform GetTextLayoutResult action.
+Reason: Expected exactly '1' node but found '2' nodes that satisfy: (Text + InputText + EditableText contains '循着星光慢慢走' (ignoreCase: false))
+Nodes found:
+1) Node #12998 at (l=-984.0, t=1759.0, r=56.0, b=1836.0)px, Tag: 'player_cover_lyric_current'
+Text = '[循着星光慢慢走]'
+Actions = [ClearTextSubstitution, GetTextLayoutResult, SetTextSubstitution, ShowTextSubstitution]
+Has 2 siblings
+2) Node #13022 at (l=112.0, t=1117.86, r=1041.0, b=1241.86)px
+Text = '[循着星光慢慢走]'
+Actions = [GetTextLayoutResult]
+Has 1 sibling
+
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+at androidx.compose.ui.test.ActionsKt.performSemanticsAction(Actions.kt:633)
+at io.github.currencortex.music.LyricsWeightCapabilitiesTest$weightOptionsPersistAndFollowThePlayingLine$1.invokeSuspend$weight(LyricsWeightCapabilitiesTest.kt:62)
+at io.github.currencortex.music.LyricsWeightCapabilitiesTest$weightOptionsPersistAndFollowThePlayingLine$1.invokeSuspend$assertWeights(LyricsWeightCapabilitiesTest.kt:66)
+at io.github.currencortex.music.LyricsWeightCapabilitiesTest$weightOptionsPersistAndFollowThePlayingLine$1.invokeSuspend(LyricsWeightCapabilitiesTest.kt:71)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+at kotlinx.coroutines.UndispatchedCoroutine.afterResume(CoroutineContext.kt:266)
+at kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:101)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:47)
+at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+at io.github.currencortex.music.LyricsWeightCapabilitiesTest.weightOptionsPersistAndFollowThePlayingLine(LyricsWeightCapabilitiesTest.kt:27)
+</failure>
+  </testcase>
+  <testcase name="secondaryListsExtendBehindGlassAndLastItemsRemainReachable" classname="io.github.currencortex.music.MiniOverlayCapabilitiesTest" time="10.983">
+    <failure>androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 10000 ms
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:887)
+at androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:482)
+at io.github.currencortex.music.MiniOverlayCapabilitiesTest$secondaryListsExtendBehindGlassAndLastItemsRemainReachable$1.invokeSuspend(MiniOverlayCapabilitiesTest.kt:52)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+at kotlinx.coroutines.UndispatchedCoroutine.afterResume(CoroutineContext.kt:266)
+at kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:101)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:47)
+at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+at io.github.currencortex.music.MiniOverlayCapabilitiesTest.secondaryListsExtendBehindGlassAndLastItemsRemainReachable(MiniOverlayCapabilitiesTest.kt:21)
+</failure>
+  </testcase>
+  <testcase name="fixedNavigationRemainsVisibleWithGlassMiniPlayer" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="1.05" />
+  <testcase name="titleSwipesDispatchOnceAndShortOrCancelledDragsDoNotClickOrSkip" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="1.156" />
+  <testcase name="memberSwipesAreIgnoredAndPromotionRestoresGestureControls" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="0.845" />
+  <testcase name="playIntentIsImmediateBeforeConnectionAndLoadingRingReturnsToProgress" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="1.125" />
+  <testcase name="progressRingFollowsPositionAndResetsWhenTrackChanges" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="0.972" />
+  <testcase name="coverRotatesOnlyWhilePlayingResumesItsAngleAndResetsOnTrackChange" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="1.227" />
+  <testcase name="rootSharesGlassMaterialAndQueueDismissKeepsCurrentPageAndPausedQueue" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="1.277" />
+  <testcase name="clearingAudioCacheOnlyDropsFixtureCacheAndKeepsQueue" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="0.923" />
+  <testcase name="audioCachePreloadPolicyPersistsAndKeepsQueue" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="0.898" />
+  <testcase name="initialLoadingDoesNotAnimateListHeightOrBlockScrolling" classname="io.github.currencortex.music.MusicEntryMotionTest" time="0.768" />
+  <testcase name="userPullRefreshHoldsHeaderUntilLoadingCompletes" classname="io.github.currencortex.music.MusicEntryMotionTest" time="1.561" />
+  <testcase name="stylesNavigateSortPageRetryAndAddToQueueWithoutTouchingCurrentPlayback" classname="io.github.currencortex.music.MusicStyleCapabilitiesTest" time="6.238" />
+  <testcase name="serverChangeClearsAccountAndNeverSendsOldTokenToNewServer" classname="io.github.currencortex.music.NativeCapabilitiesTest" time="0.519">
+    <failure>java.lang.IllegalStateException: Use a logged-out test device with playback paused; existing account credentials are preserved.
+at io.github.currencortex.music.NativeCapabilitiesTest$prepare$1.invokeSuspend(NativeCapabilitiesTest.kt:44)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+at io.github.currencortex.music.NativeCapabilitiesTest.prepare(NativeCapabilitiesTest.kt:41)
+</failure>
+  </testcase>
+  <testcase name="mediaServiceQueueSeekLyricsAndControllerPauseResume" classname="io.github.currencortex.music.NativeCapabilitiesTest" time="0.544">
+    <failure>java.lang.IllegalStateException: Use a logged-out test device with playback paused; existing account credentials are preserved.
+at io.github.currencortex.music.NativeCapabilitiesTest$prepare$1.invokeSuspend(NativeCapabilitiesTest.kt:44)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+at io.github.currencortex.music.NativeCapabilitiesTest.prepare(NativeCapabilitiesTest.kt:41)
+</failure>
+  </testcase>
+  <testcase name="settingsAppearanceDarkModeGlassAndSystemBack" classname="io.github.currencortex.music.NativeCapabilitiesTest" time="0.517">
+    <failure>java.lang.IllegalStateException: Use a logged-out test device with playback paused; existing account credentials are preserved.
+at io.github.currencortex.music.NativeCapabilitiesTest$prepare$1.invokeSuspend(NativeCapabilitiesTest.kt:44)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+at io.github.currencortex.music.NativeCapabilitiesTest.prepare(NativeCapabilitiesTest.kt:41)
+</failure>
+  </testcase>
+  <testcase name="keystoreTokenIsEncryptedAndRestores" classname="io.github.currencortex.music.NativeCapabilitiesTest" time="0.539">
+    <failure>java.lang.IllegalStateException: Use a logged-out test device with playback paused; existing account credentials are preserved.
+at io.github.currencortex.music.NativeCapabilitiesTest$prepare$1.invokeSuspend(NativeCapabilitiesTest.kt:44)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+at io.github.currencortex.music.NativeCapabilitiesTest.prepare(NativeCapabilitiesTest.kt:41)
+</failure>
+  </testcase>
+  <testcase name="activityRecreationRetainsSearchAccountAndPlayingService" classname="io.github.currencortex.music.NativeCapabilitiesTest" time="0.547">
+    <failure>java.lang.IllegalStateException: Use a logged-out test device with playback paused; existing account credentials are preserved.
+at io.github.currencortex.music.NativeCapabilitiesTest$prepare$1.invokeSuspend(NativeCapabilitiesTest.kt:44)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+at io.github.currencortex.music.NativeCapabilitiesTest.prepare(NativeCapabilitiesTest.kt:41)
+</failure>
+  </testcase>
+  <testcase name="highSpecRequiresDecisionAndLosslessChoiceResumesPlayback" classname="io.github.currencortex.music.NativeCapabilitiesTest" time="0.523">
+    <failure>java.lang.IllegalStateException: Use a logged-out test device with playback paused; existing account credentials are preserved.
+at io.github.currencortex.music.NativeCapabilitiesTest$prepare$1.invokeSuspend(NativeCapabilitiesTest.kt:44)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+at io.github.currencortex.music.NativeCapabilitiesTest.prepare(NativeCapabilitiesTest.kt:41)
+</failure>
+  </testcase>
+  <testcase name="tabsLoginSearchSubmitAndSessionSurviveRestoration" classname="io.github.currencortex.music.NativeCapabilitiesTest" time="0.543">
+    <failure>java.lang.IllegalStateException: Use a logged-out test device with playback paused; existing account credentials are preserved.
+at io.github.currencortex.music.NativeCapabilitiesTest$prepare$1.invokeSuspend(NativeCapabilitiesTest.kt:44)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+at io.github.currencortex.music.NativeCapabilitiesTest.prepare(NativeCapabilitiesTest.kt:41)
+</failure>
+  </testcase>
+  <testcase name="completingBindingWithPrimaryModeSkipsImportAndConnectsTheLiveFavorites" classname="io.github.currencortex.music.NeteasePrimaryLibraryTest" time="1.381" />
+  <testcase name="playerTapTogglesOnlyNeteaseAndDoesNotUnionTheCurrentMusicHeart" classname="io.github.currencortex.music.NeteasePrimaryLibraryTest" time="1.866" />
+  <testcase name="myFavoritesOpenTheLiveNeteasePlaylistAndSettingCanRestoreTheCurrentLibrary" classname="io.github.currencortex.music.NeteasePrimaryLibraryTest" time="1.761" />
+  <testcase name="playerLongPressOffersOwnedNeteasePlaylistsAndUsesTheirRealIds" classname="io.github.currencortex.music.NeteasePrimaryLibraryTest" time="1.636" />
+  <testcase name="bindingDisplaysTheEnabledPrimaryLibraryChoiceWithoutImportingSnapshots" classname="io.github.currencortex.music.NeteasePrimaryLibraryTest" time="1.63" />
+  <testcase name="movingPageRetainsItsDataAndResumedPageReceivesLatestResult" classname="io.github.currencortex.music.PageDataStateTest" time="0.772" />
+  <testcase name="rowsModesRemovalAndClearKeepTheQueuePageOpen" classname="io.github.currencortex.music.PlaybackQueuePageTest" time="1.869" />
+  <testcase name="listScrollingSmallDragAndFullDragHaveSeparateOutcomes" classname="io.github.currencortex.music.PlaybackQueuePageTest" time="1.179" />
+  <testcase name="compactActionsAnimateWhileKeepingTouchTargetsAndClickSemantics" classname="io.github.currencortex.music.PlayerControlsFeedbackTest" time="1.302" />
+  <testcase name="heldLiquidIndicatorCanDrawOutsideDock" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="1.841" />
+  <testcase name="unifiedDockFadesNavigationAndSlidesMiniWithoutResizingThePage" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="2.457">
+    <failure>java.lang.AssertionError: Failed to inject touch input.
+Reason: Expected exactly '1' node but could not find any node that satisfies: (Text + InputText + EditableText contains '返回' (ignoreCase: false))
+
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow(SemanticsNodeInteraction.kt:178)
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchOneOrThrow$default(SemanticsNodeInteraction.kt:150)
+at androidx.compose.ui.test.SemanticsNodeInteraction.fetchSemanticsNode(SemanticsNodeInteraction.kt:84)
+at androidx.compose.ui.test.ActionsKt.performTouchInput(Actions.kt:401)
+at androidx.compose.ui.test.AndroidActions.performClickImpl(Actions.android.kt:23)
+at androidx.compose.ui.test.ActionsKt.performClick(Actions.kt:59)
+at io.github.currencortex.music.PlayerSheetCapabilitiesTest.unifiedDockFadesNavigationAndSlidesMiniWithoutResizingThePage(PlayerSheetCapabilitiesTest.kt:288)
+</failure>
+  </testcase>
+  <testcase name="profileCollapseIncludingMiniPlayerRestoration" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="4.042" />
+  <testcase name="secondaryDirectCloseRetainsArtworkLandingPosition" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="2.944" />
+  <testcase name="upwardPlayerDragOpensQueueFollowsFingerAndKeepsLyricsScroll" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="3.095" />
+  <testcase name="coverLyricsAndPagerFollowDragWithoutChangingPlayback" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="2.862" />
+  <testcase name="pagerSharesOneCircularArtworkAlongReversibleArc" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="2.195" />
+  <testcase name="miniExpandsVerticallyAndCollapsesBackToTheSameSecondaryPage" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="4.955" />
+  <testcase name="circularArtworkMovesWithTheSheetAndReturnsToMini" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="2.864" />
+  <testcase name="predictiveCollapseReversesCancelsAndCommitsWhileDialogsTakePriority" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="2.223" />
+  <testcase name="playerCanVisitCastPageAndReturnWithSavedLyricsView" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="2.146" />
+  <testcase name="miniTitleAndPlayerArtworkOrLyricsHeaderCanBeDragged" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="3.187" />
+  <testcase name="fourActionsUseRealBadgesCommentsAndExclusivePlaybackModes" classname="io.github.currencortex.music.PlayerSongActionsTest" time="6.265">
+    <failure>androidx.compose.ui.test.ComposeTimeoutException: Condition still not satisfied after 5000 ms
+at androidx.compose.ui.test.AndroidComposeUiTestEnvironment$AndroidComposeUiTestImpl.waitUntil(ComposeUiTest.android.kt:887)
+at androidx.compose.ui.test.junit4.AndroidComposeTestRule.waitUntil(AndroidComposeTestRule.android.kt:482)
+at io.github.currencortex.music.PlayerSongActionsTest$fourActionsUseRealBadgesCommentsAndExclusivePlaybackModes$1.invokeSuspend(PlayerSongActionsTest.kt:94)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+at kotlinx.coroutines.UndispatchedCoroutine.afterResume(CoroutineContext.kt:266)
+at kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:101)
+at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:47)
+at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+at io.github.currencortex.music.PlayerSongActionsTest.fourActionsUseRealBadgesCommentsAndExclusivePlaybackModes(PlayerSongActionsTest.kt:26)
+</failure>
+  </testcase>
+  <testcase name="pullMovesOnlyTheSongSurfaceAndReboundsWithoutAWhiteHeader" classname="io.github.currencortex.music.PlaylistPagesTest" time="2.362" />
+  <testcase name="revisionRefreshDoesNotClearThePinnedListAndUnchangedRowsStayInPlace" classname="io.github.currencortex.music.PlaylistPagesTest" time="1.711" />
+  <testcase name="searchSortAndSongActionsUseTheVisibleSongsAndPreserveReadonlyOwnership" classname="io.github.currencortex.music.PlaylistPagesTest" time="2.907" />
+  <testcase name="playlistDoesNotShowAnEmptyMiniPlayerWithoutACurrentSong" classname="io.github.currencortex.music.PlaylistPagesTest" time="1.509" />
+  <testcase name="backgroundRefreshKeepsOldRowsAndAnimatesOnlyTheNewArrival" classname="io.github.currencortex.music.PlaylistPagesTest" time="2.223" />
+  <testcase name="failedBackgroundRefreshPreservesSongsAndUsableControls" classname="io.github.currencortex.music.PlaylistPagesTest" time="1.66" />
+  <testcase name="scrollingMorphsThePanelToAnOpaqueRectangleAndRestoresItsCorners" classname="io.github.currencortex.music.PlaylistPagesTest" time="2.358" />
+  <testcase name="playlistMiniPlayerOpensQueueAndPlayerAndReturnsWithoutStartingPlayback" classname="io.github.currencortex.music.PlaylistPagesTest" time="2.198" />
+  <testcase name="coverHeroAndStickyPlaybackRemainVisibleInLightAndDarkThemes" classname="io.github.currencortex.music.PlaylistPagesTest" time="2.836" />
+  <testcase name="createFormSaveRemainsReachableWithKeyboardOpen" classname="io.github.currencortex.music.RoomCapabilitiesTest" time="1.478" />
+  <testcase name="memberCannotApproveOrControlPlayback" classname="io.github.currencortex.music.RoomCapabilitiesTest" time="1.102" />
+  <testcase name="roomSongSearchSubmitsOnceAndReturnsToSameRoomWithoutLocalPlayback" classname="io.github.currencortex.music.RoomCapabilitiesTest" time="2.514" />
+  <testcase name="cancelledWifiDiscoveryReleasesRealMulticastLock" classname="io.github.currencortex.music.RoomCapabilitiesTest" time="0.768" />
+  <testcase name="failedRoomCreationKeepsDialogAndNameForRetry" classname="io.github.currencortex.music.RoomCapabilitiesTest" time="1.794" />
+  <testcase name="ownerApprovesRequestAndExitRestoresLocalQueuePaused" classname="io.github.currencortex.music.RoomCapabilitiesTest" time="1.788" />
+  <testcase name="nativeSoapAndXmlPipelineControlsSilentRendererEmulator" classname="io.github.currencortex.music.RoomCapabilitiesTest" time="1.049" />
+  <testcase name="wideRootUsesPermanentNavigationAndRestoresSelectedTab" classname="io.github.currencortex.music.RoomCapabilitiesTest" time="1.281" />
+  <testcase name="wideRoomShowsQueueAndMembersTogether" classname="io.github.currencortex.music.RoomCapabilitiesTest" time="0.998" />
+  <testcase name="memberPlayerControlsAreDisabledAndRecoverAfterPromotion" classname="io.github.currencortex.music.RoomCapabilitiesTest" time="0.999" />
+  <testcase name="bottomTabsRecoverAfterRoomOpenedFromPlayer" classname="io.github.currencortex.music.RoomCapabilitiesTest" time="3.654" />
+  <testcase name="refreshingRoomBrowserKeepsExistingCardsVisible" classname="io.github.currencortex.music.RoomCapabilitiesTest" time="1.919" />
+  <testcase name="longJumpPassesThroughIntermediatePagesWithoutTeleporting" classname="io.github.currencortex.music.RootTabTransitionTest" time="1.739" />
+  <testcase name="switchesThroughIntermediateFrameAndKeepsDockAndPageBoundsFixed" classname="io.github.currencortex.music.RootTabTransitionTest" time="0.872" />
+  <testcase name="disabledSystemAnimationsSwitchImmediately" classname="io.github.currencortex.music.RootTabTransitionTest" time="0.696" />
+  <testcase name="fingerSwipeChangesSelectedTabAndKeepsPageState" classname="io.github.currencortex.music.RootTabTransitionTest" time="0.875" />
+  <testcase name="rapidSwitchesKeepOnlyLatestPageInteractiveAndRestoreItsState" classname="io.github.currencortex.music.RootTabTransitionTest" time="0.948" />
+  <testcase name="categorizedSearchAndArtistHomepageKeepSubmittedQueryAndPausedQueue" classname="io.github.currencortex.music.SearchArtistCapabilitiesTest" time="5.801" />
+  <testcase name="sleepSheetSelectsPresetCustomTimeAndExtension" classname="io.github.currencortex.music.SleepTimerSheetTest" time="1.815" />
+  <testcase name="extendKeepsPlayingUntilTheSongEnds" classname="io.github.currencortex.music.SleepTimerTest" time="1.074" />
+  <testcase name="expiryPausesPlaybackAndReportsIt" classname="io.github.currencortex.music.SleepTimerTest" time="1.101" />
+  <testcase name="repeatOneBoundaryEndsTheExtendedTimer" classname="io.github.currencortex.music.SleepTimerTest" time="0.795" />
+  <testcase name="manuallyPausedSongDoesNotKeepTheExtendedTimerWaiting" classname="io.github.currencortex.music.SleepTimerTest" time="0.592" />
+  <testcase name="switchingOffCancelsWithoutPausing" classname="io.github.currencortex.music.SleepTimerTest" time="0.078" />
+  <testcase name="corruptAudioAndCancellationDoNotLeaveFinishedFiles" classname="io.github.currencortex.music.SongDownloadTest" time="281.046">
+    <failure></failure>
+  </testcase>
+  <system-err>Test run failed to complete. Instrumentation run failed due to Process crashed.
+</system-err>
+</testsuite>

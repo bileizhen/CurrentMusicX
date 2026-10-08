@@ -38,16 +38,21 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     private val captureVisibility = MutableStateFlow(false to false)
     init {
         viewModelScope.launch {
+            val playback = state.map { Triple(it.mode != PlayerMode.CAST && it.song?.video != true, it.playing, it.song?.id) }.distinctUntilChanged()
             combine(settings.map { it.visualizerEnabled }.distinctUntilChanged(), container.audioSessionId,
-                state.map { (it.mode != PlayerMode.CAST && it.song?.video != true) to it.playing }.distinctUntilChanged(),
-                captureVisibility) { enabled, session, playback, visibility ->
+                playback, captureVisibility, container.audioTimelineRevision) { enabled, session, playback, visibility, revision ->
                 io.github.currencortex.music.core.visualizer.CaptureRequest(enabled, visibility.first,
-                    visibility.second, playback.first, playback.second, session)
+                    visibility.second, playback.first, playback.second, session, revision, playback.third)
             }.distinctUntilChanged().collect(audioAnalysis::request)
         }
     }
     fun visualizerVisible(visible: Boolean, permission: Boolean) { captureVisibility.value = visible to permission }
     fun visualizerEnabled(enabled: Boolean) = viewModelScope.launch { container.musicSettings.setVisualizerEnabled(enabled) }
+    fun visualizerFrameRate(value: io.github.currencortex.music.data.visualizer.VisualizerFrameRate) =
+        viewModelScope.launch { container.musicSettings.setVisualizerFrameRate(value) }
+    fun visualizerRender(transform: (io.github.currencortex.music.data.visualizer.VisualizerRenderSettings) ->
+        io.github.currencortex.music.data.visualizer.VisualizerRenderSettings) =
+        viewModelScope.launch { container.musicSettings.editVisualizerRender(transform) }
     val libraryStatuses = container.libraryRepository.statuses
     val usesNeteaseLibrary = container.primaryLibrary.usesNetease
     private val _lyrics = MutableStateFlow(LyricsUiState())

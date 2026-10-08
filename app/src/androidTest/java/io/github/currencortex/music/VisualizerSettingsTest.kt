@@ -20,11 +20,17 @@ class VisualizerSettingsTest {
             assertFalse(original.visualizerEnabled)
             settings.setVisualizerEnabled(true)
             assertEquals(original.copy(visualizerEnabled = true), settings.snapshot())
+            settings.setVisualizerFrameRate(io.github.currencortex.music.data.visualizer.VisualizerFrameRate.FPS_120)
+            settings.editVisualizerRender { it.copy(automaticOptimization = false, rawSpectrum = true) }
             scope.coroutineContext[Job]!!.cancelAndJoin()
             scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             settings = MusicSettingsRepository(PreferenceDataStoreFactory.create(scope = scope) { file }, scope)
             assertTrue(settings.snapshot().visualizerEnabled)
+            assertEquals(io.github.currencortex.music.data.visualizer.VisualizerFrameRate.FPS_120, settings.snapshot().visualizerRender.frameRate)
+            assertFalse(settings.snapshot().visualizerRender.automaticOptimization)
+            assertTrue(settings.snapshot().visualizerRender.rawSpectrum)
             settings.setVisualizerEnabled(false)
+            settings.editVisualizerRender { original.visualizerRender }
             assertEquals(original, settings.snapshot())
         } finally { scope.coroutineContext[Job]!!.cancelAndJoin(); file.delete() }
     }

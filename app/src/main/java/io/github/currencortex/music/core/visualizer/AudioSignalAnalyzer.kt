@@ -17,6 +17,12 @@ data class AudioAnalysisFrame(
     val transient: Boolean = false,
     val beatPulse: Float = 0f,
     val peakFrequencyHz: Float = 0f,
+    val generation: Long = 0L,
+    val kickSequence: Long = 0L,
+    val transientSequence: Long = 0L,
+    val kickTimestampNanos: Long = 0L,
+    val transientTimestampNanos: Long = 0L,
+    val rawSpectrum: List<Float> = spectrum,
 )
 
 class AudioSignalAnalyzer(private val bands: Int = 48) {
@@ -31,6 +37,8 @@ class AudioSignalAnalyzer(private val bands: Int = 48) {
     private var previousBass = 0f
     private var previousBins = FloatArray(0)
     private var previousRate = 0
+    private var kickSequence = 0L
+    private var transientSequence = 0L
     private var smooth = AudioAnalysisFrame(spectrum = List(bands) { 0f })
 
     fun analyze(packet: AudioCapturePacket, bassSensitivity: Float = 1f): AudioAnalysisFrame {
@@ -74,8 +82,8 @@ class AudioSignalAnalyzer(private val bands: Int = 48) {
             bass > meanBass + maxOf(.02f, 1.8f * sqrt(varianceBass)) / sensitivity &&
             packet.timestampNanos - lastKick >= 180_000_000L
         val transient = warmed && flux > maxOf(.08f, meanFlux * 1.8f) && packet.timestampNanos - lastTransient >= 100_000_000L
-        if (kick) lastKick = packet.timestampNanos
-        if (transient) lastTransient = packet.timestampNanos
+        if (kick) { lastKick = packet.timestampNanos; kickSequence++ }
+        if (transient) { lastTransient = packet.timestampNanos; transientSequence++ }
         val alpha = 1f - exp(-dt / .8f)
         val deviation = bass - meanBass
         meanBass += alpha * deviation
@@ -88,7 +96,9 @@ class AudioSignalAnalyzer(private val bands: Int = 48) {
             spectrum.mapIndexed { i, value -> envelope(smooth.spectrum[i], value, dt) },
             List(minOf(128, n)) { i -> ((packet.waveform[i * n / minOf(128, n)].toInt() and 255) - 128) / 128f },
             kick, transient, if (kick) 1f else smooth.beatPulse * exp(-dt / .22f),
-            if (bins[peak] > 0f) peak * binHz else 0f)
+            if (bins[peak] > 0f) peak * binHz else 0f, kickSequence = kickSequence,
+            transientSequence = transientSequence, kickTimestampNanos = lastKick, transientTimestampNanos = lastTransient,
+            rawSpectrum = spectrum)
         previousBins = bins; previousBass = bass; previousRate = packet.sampleRateHz; lastTime = packet.timestampNanos
         return smooth
     }
@@ -97,6 +107,7 @@ class AudioSignalAnalyzer(private val bands: Int = 48) {
         lastTime = 0; startTime = 0; lastKick = 0; lastTransient = 0
         meanBass = 0f; varianceBass = 0f; meanFlux = 0f; previousBass = 0f
         previousBins = FloatArray(0); previousRate = 0
+        kickSequence = 0; transientSequence = 0
         smooth = AudioAnalysisFrame(spectrum = List(bands) { 0f })
     }
 

@@ -45,6 +45,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
     // Published by the service ExoPlayer. Zero means unavailable, never the output mix.
     internal val audioSessionId = kotlinx.coroutines.flow.MutableStateFlow(0)
+    internal val audioTimelineRevision = kotlinx.coroutines.flow.MutableStateFlow(0L)
     val audioSettings = io.github.currencortex.music.data.settings.AudioSourceSettings(settingsStore,
         SecureTokenStore(context, ".leiz$storageSuffix"), appScope)
     val accountVault = EncryptedAccountVault.create(context, storageSuffix, settingsStore, appScope)

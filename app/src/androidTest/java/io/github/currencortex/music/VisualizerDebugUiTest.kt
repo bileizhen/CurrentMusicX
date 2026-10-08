@@ -40,6 +40,9 @@ class VisualizerDebugUiTest {
         compose.onNodeWithTag("visualizer_status").assertTextEquals(CaptureStatus.DISABLED.label)
         compose.onNodeWithTag("visualizer_toggle").assertTextEquals("开启音频采集")
         compose.onNodeWithTag("visualizer_spectrum").assertExists()
+        compose.onNodeWithTag("visualizer_fps_FPS_120").performClick()
+        compose.waitUntil(5000) { vm.settings.value.visualizerRender.frameRate == io.github.currencortex.music.data.visualizer.VisualizerFrameRate.FPS_120 }
+        assertFalse(runBlocking { container.musicSettings.snapshot().visualizerEnabled })
         assertEquals(0, vm.audioAnalysis.frames.value.sampleRateHz)
         compose.onNodeWithText("关闭", useUnmergedTree = true).performClick()
         compose.onNodeWithTag("visualizer_spectrum").assertDoesNotExist()

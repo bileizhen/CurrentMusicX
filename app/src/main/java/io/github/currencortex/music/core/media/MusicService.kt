@@ -154,6 +154,9 @@ class MusicService : MediaSessionService() {
             }
         }
         player.addListener(object : Player.Listener {
+            override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                container.audioTimelineRevision.value += 1
+            }
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 container.audioSessionId.value = audioSessionId.coerceAtLeast(0)
             }
