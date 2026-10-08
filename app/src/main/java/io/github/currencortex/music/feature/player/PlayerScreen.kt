@@ -47,7 +47,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 
 private enum class PlayerContent { COVER, LYRICS }
-private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP }
+private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, VISUALIZER }
 internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePosition")
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
@@ -242,6 +242,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss)
         when (overlay) {
             PlayerOverlay.NONE -> Unit
+            PlayerOverlay.VISUALIZER -> io.github.currencortex.music.feature.visualizer.AudioAnalysisDebugDialog(vm, expanded, dismiss)
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) })
             PlayerOverlay.QUEUE -> Unit
             PlayerOverlay.MODE -> MusicDialog("播放模式", dismiss) {
@@ -272,6 +273,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     else { dismiss(); menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false)) }
                 })
                 MusicDestinationRow("播放音质", summary = settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL)
+                MusicDestinationRow("音乐可视化", summary = "实时频谱与节拍分析", modifier = Modifier.testTag("open_visualizer"),
+                    onClick = { overlay = PlayerOverlay.VISUALIZER })
                 MusicDestinationRow("播放模式", summary = queue.mode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL)
                 MusicDestinationRow("定时关闭", summary = sleepSummary(sleepState), modifier = Modifier.testTag("open_sleep_timer"),
                     onClick = { overlay = PlayerOverlay.SLEEP })

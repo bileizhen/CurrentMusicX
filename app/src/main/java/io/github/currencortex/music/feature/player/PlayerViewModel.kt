@@ -33,6 +33,21 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val currentSong = queue.map { it.current }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), queue.value.current)
     val settings = container.musicSettings.state
+    val audioAnalysis = io.github.currencortex.music.core.visualizer.AudioAnalysisEngine(
+        viewModelScope, io.github.currencortex.music.core.visualizer.VisualizerCaptureSource())
+    private val captureVisibility = MutableStateFlow(false to false)
+    init {
+        viewModelScope.launch {
+            combine(settings.map { it.visualizerEnabled }.distinctUntilChanged(), container.audioSessionId,
+                state.map { (it.mode != PlayerMode.CAST && it.song?.video != true) to it.playing }.distinctUntilChanged(),
+                captureVisibility) { enabled, session, playback, visibility ->
+                io.github.currencortex.music.core.visualizer.CaptureRequest(enabled, visibility.first,
+                    visibility.second, playback.first, playback.second, session)
+            }.distinctUntilChanged().collect(audioAnalysis::request)
+        }
+    }
+    fun visualizerVisible(visible: Boolean, permission: Boolean) { captureVisibility.value = visible to permission }
+    fun visualizerEnabled(enabled: Boolean) = viewModelScope.launch { container.musicSettings.setVisualizerEnabled(enabled) }
     val libraryStatuses = container.libraryRepository.statuses
     val usesNeteaseLibrary = container.primaryLibrary.usesNetease
     private val _lyrics = MutableStateFlow(LyricsUiState())
