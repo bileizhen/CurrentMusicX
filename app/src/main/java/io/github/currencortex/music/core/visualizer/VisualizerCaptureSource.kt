@@ -3,7 +3,6 @@ package io.github.currencortex.music.core.visualizer
 import android.media.audiofx.Visualizer
 import android.os.Handler
 import android.os.HandlerThread
-import android.os.SystemClock
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.android.asCoroutineDispatcher
 import kotlinx.coroutines.channels.Channel
@@ -33,11 +32,13 @@ class VisualizerCaptureSource : AudioCaptureSource {
                 check(capture.setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
                     override fun onWaveFormDataCapture(v: Visualizer, data: ByteArray, rate: Int) {
                         waveform = data.copyOf()
-                        waveformTime = SystemClock.elapsedRealtimeNanos()
+                        waveformTime = System.nanoTime()
                         waveformRate = rate
                     }
                     override fun onFftDataCapture(v: Visualizer, data: ByteArray, rate: Int) {
-                        val now = SystemClock.elapsedRealtimeNanos()
+                        // CLOCK_MONOTONIC / uptime, matching Android's Choreographer frame clock.
+                        // elapsedRealtimeNanos includes deep sleep and must not be compared to VSync.
+                        val now = System.nanoTime()
                         if (rate > 0 && rate == waveformRate && waveform.size == data.size &&
                             now - waveformTime <= 100_000_000L) {
                             packets.trySend(AudioCapturePacket(now, rate / 1000, data.copyOf(), waveform))

@@ -1,0 +1,10 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="io.github.currencortex.music.PlayerLandscapeTest" tests="2" failures="0" errors="0" skipped="0" time="9.797" timestamp="2026-10-08T18:24:16" hostname="localhost">
+  <properties>
+    <property name="device" value="RMX5060 - 16" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="floatingSideTabsKeepContentClearAndRecoverAfterSecondaryAndPlayer" classname="io.github.currencortex.music.PlayerLandscapeTest" time="6.416" />
+  <testcase name="shortLandscapeShowsFullCoverMetadataAndControlsAndClosesToMini" classname="io.github.currencortex.music.PlayerLandscapeTest" time="3.113" />
+</testsuite>

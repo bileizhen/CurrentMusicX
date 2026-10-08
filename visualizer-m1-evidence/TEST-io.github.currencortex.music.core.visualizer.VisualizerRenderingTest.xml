@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-10-08T17:51:02.563Z" hostname="ROG-BILEIZHEN" time="0.035">
+  <properties/>
+  <testcase name="sameElapsedTimeHasSameEnvelopeAcrossAllRates" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.003"/>
+  <testcase name="invalidSignalsCannotPoisonRenderState" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.0"/>
+  <testcase name="firstDuplicateBackwardsAndInvalidFrameTimesAreSafe" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.001"/>
+  <testcase name="transientIsSingleAndFasterThanKickDecay" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.0"/>
+  <testcase name="pacingAtAllRatesUsesVsyncDivisors" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.0"/>
+  <testcase name="interpolatorIgnoresDuplicateFramesAndTimes" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.001"/>
+  <testcase name="missingAudioDecaysWithoutInventingKicks" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.004"/>
+  <testcase name="kickIsImmediateAndNeverRepeatedByDrawing" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.0"/>
+  <testcase name="renderLoopStopsWithoutFurtherUpdates" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.017"/>
+  <testcase name="staleEventDoesNotTriggerAfterConsumerRestart" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.001"/>
+  <testcase name="generationAndPauseClearOldTargets" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.0"/>
+  <testcase name="resumeAndLongFramesNeverIntegrateSeconds" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.0"/>
+  <testcase name="renderLoopCanFinishFadeAndReturn" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.006"/>
+  <testcase name="eventSequenceSurvivesConflatedAudioFrames" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.0"/>
+  <testcase name="lowRateSamplesMoveSmoothlyAt120AndUseReusedBuffers" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.0"/>
+  <testcase name="rawSpectrumBypassesEnvelopesWhileWaveformInterpolates" classname="io.github.currencortex.music.core.visualizer.VisualizerRenderingTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
