@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="io.github.currencortex.music.core.visualizer.VisualizerVisualPolishTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-09T04:22:55.879Z" hostname="ROG-BILEIZHEN" time="0.001">
+  <properties/>
+  <testcase name="oneKickProducesBoundedRiseAndReturnsEvenIfPulseRemainsHigh" classname="io.github.currencortex.music.core.visualizer.VisualizerVisualPolishTest" time="0.0"/>
+  <testcase name="silenceAndZeroIntensityCannotCreateSpectrumEnergy" classname="io.github.currencortex.music.core.visualizer.VisualizerVisualPolishTest" time="0.0"/>
+  <testcase name="resetReleasesSpringMomentum" classname="io.github.currencortex.music.core.visualizer.VisualizerVisualPolishTest" time="0.0"/>
+  <testcase name="loudBandsRetainContrastInsteadOfClippingToEqualLengths" classname="io.github.currencortex.music.core.visualizer.VisualizerVisualPolishTest" time="0.001"/>
+  <testcase name="springMatchesAcrossActualDeltaTimesAndReducedMotionAttenuates" classname="io.github.currencortex.music.core.visualizer.VisualizerVisualPolishTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

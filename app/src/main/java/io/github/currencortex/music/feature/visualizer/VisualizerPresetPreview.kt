@@ -66,7 +66,8 @@ import top.yukonga.miuix.kmp.basic.Text
 
 /** Preview only: the existing circular pager and standard player transition are untouched. */
 @Composable fun VisualizerPresetPreview(vm: PlayerViewModel, render: VisualizerRenderState, visible: Boolean,
-    rendererObserver: (VisualizerPresetRenderer?) -> Unit = {}, showMetrics: Boolean = false) {
+    modifier: Modifier = Modifier, rendererObserver: (VisualizerPresetRenderer?) -> Unit = {},
+    showMetrics: Boolean = false, showSong: Boolean = true) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val song by vm.currentSong.collectAsStateWithLifecycle()
     val c = settings.visualizerEffects
@@ -74,7 +75,7 @@ import top.yukonga.miuix.kmp.basic.Text
     val renderer = remember(c.presetId) { VisualizerPresetRenderer(c.presetId) }
     val context = LocalContext.current
     val view = LocalView.current
-    val preference = remember(view) { context.visualizerWindow()?.let { window ->
+    val preference = remember(view) { view.visualizerWindow()?.let { window ->
         VisualizerRefreshPreference({ window.attributes.preferredRefreshRate }) { value ->
             try { window.attributes = window.attributes.apply { preferredRefreshRate = value } }
             catch (_: RuntimeException) { /* Window hints are optional; music/rendering continue. */ }
@@ -88,16 +89,18 @@ import top.yukonga.miuix.kmp.basic.Text
     DisposableEffect(preference) { onDispose { preference?.close() } }
     val scope = rememberCoroutineScope()
     var coverLoaded by remember(song?.cover) { mutableStateOf(false) }
-    var coverColor by remember(song?.cover) { mutableStateOf(Color(0xFF183B50)) }
-    SideEffect { renderer.config = c; renderer.coverLoaded = coverLoaded; renderer.coverColor = coverColor; renderer.hardwareAccelerated = view.isHardwareAccelerated; renderer.systemReduceMotion = Build.VERSION.SDK_INT >= 26 && !ValueAnimator.areAnimatorsEnabled() }
+    val currentCover = rememberUpdatedState(song?.cover.orEmpty())
+    var coverPalette by remember(song?.cover) { mutableStateOf<VisualizerArtworkPalette?>(null) }
+    SideEffect { renderer.config = c; renderer.coverLoaded = coverLoaded; renderer.updateArtworkPalette(coverPalette); renderer.hardwareAccelerated = view.isHardwareAccelerated; renderer.systemReduceMotion = Build.VERSION.SDK_INT >= 26 && !ValueAnimator.areAnimatorsEnabled() }
     DisposableEffect(renderer) {
         rendererObserver(renderer)
         onDispose { renderer.close(); rendererObserver(null) }
     }
-    BoxWithConstraints(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp))
+    BoxWithConstraints(modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(20.dp))
         .preferredFrameRate(render.preferredFps).testTag("visualizer_preset_stage"), contentAlignment = Alignment.Center) {
-        VisualizerRenderLayer(vm.audioAnalysis, Modifier.matchParentSize().testTag("visualizer_spectrum"),
-            settings.visualizerRender, visible, render, renderer)
+        Canvas(Modifier.matchParentSize().preferredFrameRate(render.preferredFps)) {
+            render.revision; with(renderer) { atmosphere() }
+        }
         // Only the expensive shader background is rasterized into a smaller cached layer.
         // Frequency lines, borders and artwork retain the stage's native resolution.
         val shaderSize = minOf(maxWidth, if (stats.qualityLevel == VisualizerQuality.ULTRA) 240.dp else 144.dp)
@@ -108,6 +111,8 @@ import top.yukonga.miuix.kmp.basic.Text
             compositingStrategy = CompositingStrategy.Offscreen
             alpha = if (renderer.active && c.enabled) 1f else 0f
         }) { render.revision; with(renderer) { shaderBackground(render.frame) } }
+        VisualizerRenderLayer(vm.audioAnalysis, Modifier.matchParentSize().testTag("visualizer_spectrum"),
+            settings.visualizerRender, visible, render, renderer)
         val artworkSize = maxWidth * .47f
         val artworkShape = remember(c.presetId) { if (c.presetId.circular) CircleShape else RoundedCornerShape(8.dp) }
         val gray = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) }
@@ -123,8 +128,8 @@ import top.yukonga.miuix.kmp.basic.Text
             render.revision
             drawContent()
             if (c.presetId == VisualizerPreset.DARK_GLITCH && renderer.effects.glitch > 0f) {
-                for (i in 0..1) clipRect(0f, size.height * (.22f + i * .39f), size.width, size.height * (.265f + i * .39f)) {
-                    translate(left = renderer.effects.glitch * 12f) { this@drawWithContent.drawContent() }
+                for (i in 0..1) clipRect(0f, size.height * (.37f + i * .22f), size.width, size.height * (.425f + i * .22f)) {
+                    translate(left = renderer.effects.glitch * size.width * .065f * if (i == 0) 1f else -1f) { this@drawWithContent.drawContent() }
                 }
             }
         }.background(Color(0xFF1B2630)).testTag("visualizer_artwork"), contentAlignment = Alignment.Center) {
@@ -135,27 +140,26 @@ import top.yukonga.miuix.kmp.basic.Text
                     contentDescription = "当前歌曲封面", contentScale = ContentScale.Crop,
                     colorFilter = if (c.presetId == VisualizerPreset.DARK_GLITCH) gray else null,
                     onSuccess = { result ->
-                        coverLoaded = true
+                        if (currentCover.value == url) coverLoaded = true
                         scope.launch {
-                            coverColor = withContext(Dispatchers.Default) {
+                            val sampledPalette = withContext(Dispatchers.Default) {
                                 val bitmap = result.result.image.toBitmap()
-                                var red = 0; var green = 0; var blue = 0
+                                val pixels = IntArray(144)
                                 for (y in 0 until 12) for (x in 0 until 12) {
-                                    val pixel = bitmap.getPixel((x * bitmap.width / 12).coerceAtMost(bitmap.width - 1), (y * bitmap.height / 12).coerceAtMost(bitmap.height - 1))
-                                    red += android.graphics.Color.red(pixel); green += android.graphics.Color.green(pixel); blue += android.graphics.Color.blue(pixel)
+                                    pixels[y * 12 + x] = bitmap.getPixel((x * bitmap.width / 12).coerceAtMost(bitmap.width - 1), (y * bitmap.height / 12).coerceAtMost(bitmap.height - 1))
                                 }
-                                val sampled = Color(red / 144, green / 144, blue / 144)
-                                sampled // Borrowed from Coil: never recycle a shared cached image.
+                                VisualizerArtworkPalette.fromPixels(pixels) // Never recycle Coil's shared cached image.
                             }
+                            if (currentCover.value == url) coverPalette = sampledPalette
                         }
-                    }, onError = { coverLoaded = false },
+                    }, onError = { if (currentCover.value == url) coverLoaded = false },
                     modifier = Modifier.fillMaxSize())
             }
         }
         Canvas(Modifier.matchParentSize().preferredFrameRate(render.preferredFps)) { render.revision; with(renderer) { foreground() } }
     }
-    Text(song?.name ?: "请先播放歌曲", fontSize = 14.sp)
+    if (showSong) Text(song?.name ?: "请先播放歌曲", fontSize = 14.sp)
     if (showMetrics) Text("目标 ${stats.effectiveTargetFps} · Canvas %.1f · 显示 %.0f Hz · ${stats.qualityLevel.name}".format(stats.canvasDrawRate, stats.displayRefreshRate), fontSize = 11.sp)
-    Text("低音 %.0f%% · 鼓点 ${render.audioReadout.value.kickSequence}".format(render.audioReadout.value.bass * 100f), fontSize = 11.sp)
+    if (showMetrics) Text("低音 %.0f%% · 鼓点 ${render.audioReadout.value.kickSequence}".format(render.audioReadout.value.bass * 100f), fontSize = 11.sp)
     if (showMetrics) Text("${renderer.shaderStatus} · Bass %.2f · Kick ${render.audioReadout.value.kickSequence}".format(render.audioReadout.value.bass), fontSize = 11.sp)
 }
