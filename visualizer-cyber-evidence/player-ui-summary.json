@@ -1,0 +1,64 @@
+{
+  "counts": {
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0
+  },
+  "newFailures": [],
+  "results": [
+    {
+      "class": "io.github.currencortex.music.PlayerVisualizerDeviceTest",
+      "test": "realSongRendersInPlayerAndReleasesWhenClosed",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.VisualizerDebugUiTest",
+      "test": "enabledPlayerKeepsOriginalPagerArtworkAndReleasesOnLyrics",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.VisualizerDebugUiTest",
+      "test": "previewSelectorAndParametersPersistWithoutImplicitAudioOptIn",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.VisualizerDebugUiTest",
+      "test": "playerMenuOpensSettingsWithCaptureOffAndLeavesArtworkIntact",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.VisualizerPreviewLayoutTest",
+      "test": "largeFontLandscapeKeepsSquareStageAndReachableControls",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.VisualizerPreviewLayoutTest",
+      "test": "narrowShortViewportKeepsSquareStageAndReachableControls",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.VisualizerSettingsTest",
+      "test": "captureDefaultsOffAndOptInPersistsWithoutChangingOtherSettings",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.VisualizerEffectsSettingsTest",
+      "test": "allEffectParametersPersistInActualDataStoreAndShareM0M1Switches",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.PlayerSheetCapabilitiesTest",
+      "test": "pagerSharesOneCircularArtworkAlongReversibleArc",
+      "result": "passed",
+      "baseline": "passed"
+    }
+  ]
+}

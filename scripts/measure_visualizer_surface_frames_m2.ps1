@@ -34,9 +34,9 @@ function Save-TargetSurfaceStats([string]$Phase) {
 try {
     while ($taskStarted.Elapsed.TotalSeconds -lt $MaximumSeconds) {
         $taskMarks = @(& adb -s $Serial logcat -d -s 'VisualizerM2Phase:I' '*:S')
-        $taskMark = $taskMarks | Where-Object { $_ -match 'begin (preset-(NEON_PULSE|ORBIT_SPECTRUM|BASS_IMPACT|DARK_GLITCH)|soak|lifecycle)' } | Select-Object -Last 1
+        $taskMark = $taskMarks | Where-Object { $_ -match 'begin (preset-(NEON_PULSE|ORBIT_SPECTRUM|BASS_IMPACT|DARK_GLITCH|CYBER_REACTOR)|soak|lifecycle)' } | Select-Object -Last 1
         if (!$ObserveCurrentPhase -and !$taskPhase -and $taskMark -eq $taskInitialMark) { Start-Sleep -Seconds 5; continue }
-        if ($taskMark -match 'begin (preset-(NEON_PULSE|ORBIT_SPECTRUM|BASS_IMPACT|DARK_GLITCH)|soak|lifecycle)') {
+        if ($taskMark -match 'begin (preset-(NEON_PULSE|ORBIT_SPECTRUM|BASS_IMPACT|DARK_GLITCH|CYBER_REACTOR)|soak|lifecycle)') {
             $taskNextPhase = $Matches[1]
         } else {
             # Vendor log spam can evict a one-off phase marker during a fifteen-minute run.
@@ -45,7 +45,7 @@ try {
             $taskNextPhase = $taskPhase
             if ($taskLatestRecord -match '"phase":"soak"') { $taskNextPhase = 'soak' }
             elseif ($taskLatestRecord -match '"phase":"(seek|track|paused|background|closed)"') { $taskNextPhase = 'lifecycle' }
-            elseif (!$taskPhase -and $taskLatestRecord -match '"phase":"(preset-(NEON_PULSE|ORBIT_SPECTRUM|BASS_IMPACT|DARK_GLITCH))"') { $taskNextPhase = $Matches[1] }
+            elseif (!$taskPhase -and $taskLatestRecord -match '"phase":"(preset-(NEON_PULSE|ORBIT_SPECTRUM|BASS_IMPACT|DARK_GLITCH|CYBER_REACTOR))"') { $taskNextPhase = $Matches[1] }
         }
         if ($taskNextPhase) {
             if ($taskNextPhase -ne $taskPhase) {
