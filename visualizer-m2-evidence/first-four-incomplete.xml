@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="io.github.currencortex.music.VisualizerPresetDeviceTest" tests="1" failures="1" errors="0" skipped="0" time="77.621" timestamp="2026-10-08T23:35:41" hostname="localhost">
+  <properties>
+    <property name="device" value="RMX5060 - 16" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="allPresetsAndLifecycle" classname="io.github.currencortex.music.VisualizerPresetDeviceTest" time="67.473">
+    <failure></failure>
+  </testcase>
+  <system-err>Test run failed to complete. Expected 1 tests, received 0
+</system-err>
+</testsuite>

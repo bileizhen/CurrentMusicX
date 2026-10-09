@@ -12,7 +12,8 @@ enum class VisualizerQuality(val fpsCap: Int, val spectrumStride: Int, val wavef
 }
 
 data class VisualizerRenderSettings(val frameRate: VisualizerFrameRate = VisualizerFrameRate.AUTO,
-    val automaticOptimization: Boolean = true, val rawSpectrum: Boolean = false)
+    val automaticOptimization: Boolean = true, val rawSpectrum: Boolean = false,
+    val preferredQuality: VisualizerQuality = VisualizerQuality.ULTRA)
 
 data class VisualizerDisplayState(val refreshRate: Float = 60f, val supportedRates: List<Float> = listOf(60f),
     val powerSave: Boolean = false, val thermalLimited: Boolean = false)
@@ -36,7 +37,7 @@ object VisualizerFrameRatePolicy {
             display.thermalLimited -> "温控限制"
             requested > maximum + 1 -> "设备显示模式限制"
             effective < preference - 2 -> "当前显示刷新率限制 / 使用 VSync 整数分频"
-            quality != VisualizerQuality.ULTRA -> "自动性能档位 ${quality.name}"
+            quality != VisualizerQuality.ULTRA -> "性能档位 ${quality.name}"
             else -> null
         }
         return VisualizerFrameRateDecision(preference, effective, limitation)

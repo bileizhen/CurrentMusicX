@@ -3,6 +3,7 @@ package io.github.currencortex.music
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.core.visualizer.CaptureStatus
@@ -47,6 +48,28 @@ class VisualizerDebugUiTest {
         compose.onNodeWithText("关闭", useUnmergedTree = true).performClick()
         compose.onNodeWithTag("visualizer_spectrum").assertDoesNotExist()
         assertFalse(runBlocking { container.musicSettings.snapshot().visualizerEnabled })
+        assertEquals("音频调试 UI", container.playbackQueue.state.value.current?.name)
+    }
+    @Test fun previewSelectorAndParametersPersistWithoutImplicitAudioOptIn() {
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
+            top.yukonga.miuix.kmp.basic.Scaffold(contentWindowInsets = WindowInsets(0,0,0,0)) {
+                io.github.currencortex.music.feature.visualizer.AudioAnalysisDebugDialog(vm, true, {})
+            }
+        } }
+        compose.onNodeWithTag("visualizer_preview_toggle").performScrollTo().performClick()
+        for (preset in io.github.currencortex.music.core.visualizer.VisualizerPreset.entries) {
+            compose.onNodeWithTag("visualizer_preset_${preset.name}").performScrollTo().performClick()
+            compose.waitUntil(5000) { vm.settings.value.visualizerEffects.presetId == preset }
+            compose.onNodeWithTag("visualizer_preset_stage").assertExists()
+            assertFalse(runBlocking { container.musicSettings.snapshot().visualizerEnabled })
+        }
+        compose.onNodeWithTag("visualizer_details").performScrollTo().performClick()
+        compose.onNodeWithTag("visualizer_reduce_motion").performScrollTo().performClick()
+        compose.waitUntil(5000) { vm.settings.value.visualizerEffects.reduceMotion }
+        compose.onNodeWithTag("visualizer_parameter_intensity").performScrollTo()
+            .performSemanticsAction(SemanticsActions.SetProgress) { it(1.6f) }
+        compose.waitUntil(5000) { vm.settings.value.visualizerEffects.globalIntensity == 1.6f }
+        assertEquals(0, vm.audioAnalysis.frames.value.sampleRateHz)
         assertEquals("音频调试 UI", container.playbackQueue.state.value.current?.name)
     }
 }

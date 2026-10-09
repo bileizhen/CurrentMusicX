@@ -53,6 +53,9 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     fun visualizerRender(transform: (io.github.currencortex.music.data.visualizer.VisualizerRenderSettings) ->
         io.github.currencortex.music.data.visualizer.VisualizerRenderSettings) =
         viewModelScope.launch { container.musicSettings.editVisualizerRender(transform) }
+    fun visualizerEffects(transform: (io.github.currencortex.music.core.visualizer.VisualizerEffectConfig) ->
+        io.github.currencortex.music.core.visualizer.VisualizerEffectConfig) =
+        viewModelScope.launch { container.musicSettings.editVisualizerEffects(transform) }
     val libraryStatuses = container.libraryRepository.statuses
     val usesNeteaseLibrary = container.primaryLibrary.usesNetease
     private val _lyrics = MutableStateFlow(LyricsUiState())
