@@ -1,0 +1,28 @@
+{
+  "counts": {
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+  },
+  "newFailures": [],
+  "results": [
+    {
+      "class": "io.github.currencortex.music.PlaybackQueuePageTest",
+      "test": "rowsModesRemovalAndClearKeepTheQueuePageOpen",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.PlaybackQueuePageTest",
+      "test": "listScrollingSmallDragAndFullDragHaveSeparateOutcomes",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.LyricsDisplayCapabilitiesTest",
+      "test": "miniLyricsFollowPositionAndSettingsCanHideAndRestoreControls",
+      "result": "passed",
+      "baseline": "passed"
+    }
+  ]
+}

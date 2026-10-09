@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="io.github.currencortex.music.core.visualizer.VisualizerArtworkPaletteTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-10-09T04:22:55.803Z" hostname="ROG-BILEIZHEN" time="0.003">
+  <properties/>
+  <testcase name="accentCanComeFromAnotherProminentColorInTheSameArtwork" classname="io.github.currencortex.music.core.visualizer.VisualizerArtworkPaletteTest" time="0.002"/>
+  <testcase name="differentArtworkProducesDifferentStablePalettes" classname="io.github.currencortex.music.core.visualizer.VisualizerArtworkPaletteTest" time="0.001"/>
+  <testcase name="grayscaleRemainsNeutralAndTransparentArtworkUsesFallback" classname="io.github.currencortex.music.core.visualizer.VisualizerArtworkPaletteTest" time="0.0"/>
+  <testcase name="darkBordersDoNotDrownOutTheCoverSubject" classname="io.github.currencortex.music.core.visualizer.VisualizerArtworkPaletteTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

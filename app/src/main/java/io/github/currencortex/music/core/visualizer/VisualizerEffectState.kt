@@ -26,6 +26,8 @@ class VisualizerEffectState {
     private var glitchAge = 1f
     private var elapsed = 0f
     private var ringCursor = 0
+    private var coverOffset = 0f
+    private var coverVelocity = 0f
     fun activate(frame: VisualizerInterpolatedFrame) {
         reset(); generation = frame.generation; kick = frame.kickCount; transient = frame.transientCount
     }
@@ -40,13 +42,24 @@ class VisualizerEffectState {
         treble = energy(frame.treble, c.globalIntensity)
         val pulse = safe(frame.pulse) * c.globalIntensity.coerceAtMost(1f)
         val impact = if (c.presetId == VisualizerPreset.BASS_IMPACT) .12f else .08f
-        coverScale = 1f + minOf(impact, (bass * .035f + pulse * impact * .7f) * c.motionIntensity * if (reduced) .3f else 1f)
+        val motion = c.motionIntensity * if (reduced) .3f else 1f
+        val target = bass * .028f * motion
+        // Stable small integration steps use elapsed seconds, never a fixed number of frames.
+        var remaining = dt
+        while (remaining > 0f) {
+            val h = minOf(remaining, 1f / 240f)
+            coverVelocity += ((target - coverOffset) * 400f - coverVelocity * 28f) * h
+            coverOffset += coverVelocity * h
+            remaining -= h
+        }
+        coverScale = 1f + coverOffset.coerceIn(0f, impact)
         // Phase advances only with genuine energy. Silent frames do not invent beats or motion.
         phase = (phase + dt * (.08f + treble * .4f) * energy(frame.rms, c.globalIntensity) * c.motionIntensity * if (reduced) .2f else 1f) % (2f * PI.toFloat())
         for (i in waveAge.indices) if (waveAge[i] >= 0f) { waveAge[i] += dt; if (waveAge[i] > .35f) waveAge[i] = -1f }
         if (frame.kickCount < kick) kick = 0
         if (frame.kickCount > kick) {
             kick = frame.kickCount; events++
+            coverVelocity = minOf(2f, coverVelocity + pulse * motion * if (c.presetId == VisualizerPreset.BASS_IMPACT) 1.8f else 1.35f)
             waveAge[ringCursor] = 0f; waveStrength[ringCursor] = pulse * if (reduced) .25f else 1f
             ringCursor = (ringCursor + 1) % waveAge.size
         }
@@ -72,7 +85,7 @@ class VisualizerEffectState {
         waveAge.fill(-1f); waveStrength.fill(0f)
         for (i in particleAngle.indices) { particleAngle[i] = i * 2.3999632f; particleRadius[i] = .2f + (i * 37 % 97) / 97f * .75f }
         coverScale = 1f; shakeX = 0f; shakeY = 0f; phase = 0f; bass = 0f; treble = 0f; glitch = 0f
-        transition = 0f; elapsed = 0f; kick = 0; transient = 0; lastGlitch = 0; glitchAge = 1f; ringCursor = 0; events = 0; particleCount = 0
+        coverOffset = 0f; coverVelocity = 0f; transition = 0f; elapsed = 0f; kick = 0; transient = 0; lastGlitch = 0; glitchAge = 1f; ringCursor = 0; events = 0; particleCount = 0
     }
     companion object {
         fun safe(value: Float) = value.takeIf { it.isFinite() }?.coerceIn(0f, 1f) ?: 0f
@@ -82,7 +95,10 @@ class VisualizerEffectState {
             if (values.isEmpty()) return 0f
             val p = (position.takeIf { it.isFinite() } ?: 0f).coerceIn(0f, 1f) * (values.size - 1)
             val i = p.toInt(); val mix = p - i
-            return energy(safe(values[i]) * (1f - mix) + safe(values[minOf(i + 1, values.lastIndex)]) * mix, sensitivity)
+            val magnitude = safe(values[i]) * (1f - mix) + safe(values[minOf(i + 1, values.lastIndex)]) * mix
+            // Soft shoulder retains differences in loud broadband music instead of clipping bars.
+            val gain = sensitivity.takeIf { it.isFinite() }?.coerceIn(0f, 6f) ?: 0f
+            return 1f - exp(-magnitude.pow(.72f) * 4f * gain)
         }
     }
 }

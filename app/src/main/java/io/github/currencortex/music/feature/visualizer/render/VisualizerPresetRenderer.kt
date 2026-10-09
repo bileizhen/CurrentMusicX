@@ -1,6 +1,7 @@
 package io.github.currencortex.music.feature.visualizer.render
 
 import android.os.Build
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -35,7 +36,31 @@ class VisualizerPresetRenderer(val preset: VisualizerPreset) : AutoCloseable {
     private var cachedColor = Color.Unspecified
     private val broad = Stroke(18f)
     private val border = Stroke(2.5f)
-    private val primary = when (preset) { VisualizerPreset.NEON_PULSE -> Color(0xFF7B61FF); VisualizerPreset.ORBIT_SPECTRUM -> Color(0xFF46DED3); VisualizerPreset.BASS_IMPACT -> Color(0xFFFFB548); VisualizerPreset.DARK_GLITCH -> Color(0xFFEF4D62) }
+    private val rayCounts = intArrayOf(96,72,48,32)
+    private val rayX = Array(4) { q -> FloatArray(rayCounts[q]) { cos(it * 2f * PI.toFloat() / rayCounts[q] - PI.toFloat() / 2) } }
+    private val rayY = Array(4) { q -> FloatArray(rayCounts[q]) { sin(it * 2f * PI.toFloat() / rayCounts[q] - PI.toFloat() / 2) } }
+    private var cyan = Color(0xFF54DCEB)
+    private var violet = Color(0xFF9D78ED)
+    internal var verticalNeon = true // Selected after native A/B review; diagnostic alternative uses the same FFT.
+    private val defaultPrimary = when (preset) { VisualizerPreset.NEON_PULSE -> Color(0xFF7B61FF); VisualizerPreset.ORBIT_SPECTRUM -> Color(0xFF46DED3); VisualizerPreset.BASS_IMPACT -> Color(0xFFFFB548); VisualizerPreset.DARK_GLITCH -> Color(0xFFEF4D62) }
+    private var primary = defaultPrimary
+    private var artworkPalette: VisualizerArtworkPalette? = null
+    internal val artworkColors get() = artworkPalette
+    fun updateArtworkPalette(palette: VisualizerArtworkPalette?) {
+        if (palette == artworkPalette) return
+        artworkPalette = palette
+        val sampled = palette?.let { Color(it.primary) }
+        primary = when {
+            sampled == null -> defaultPrimary
+            preset == VisualizerPreset.BASS_IMPACT || preset == VisualizerPreset.DARK_GLITCH -> lerp(sampled, defaultPrimary, .35f)
+            else -> sampled
+        }
+        coverColor = sampled ?: Color(0xFF183B50)
+        violet = sampled ?: Color(0xFF9D78ED)
+        cyan = palette?.let { Color(it.accent) } ?: Color(0xFF54DCEB)
+        // Size/color caches also depend on the preset tint when an image is replaced.
+        cachedColor = Color.Unspecified
+    }
     private var gradient: Brush = Brush.verticalGradient(listOf(Color(0xFF050B14), Color(0xFF09212D)))
     fun step(frame: VisualizerInterpolatedFrame, time: Long, dt: Float, level: VisualizerQuality) {
         if (!closed) {
@@ -44,13 +69,21 @@ class VisualizerPresetRenderer(val preset: VisualizerPreset) : AutoCloseable {
         }
     }
     fun reset() { active = false; effects.reset(); if (Build.VERSION.SDK_INT >= 33) gpu?.close(); gpu = null }
-    fun DrawScope.render(frame: VisualizerInterpolatedFrame) {
+    fun DrawScope.atmosphere() {
         if (cachedSize != size || cachedColor != coverColor) {
             cachedSize = size; cachedColor = coverColor
-            val tint = if (preset.circular) coverColor else primary.copy(alpha = 1f)
+            val tint = lerp(primary, coverColor, if (preset.circular) .4f else .18f)
             gradient = Brush.radialGradient(listOf(lerp(Color(0xFF080B14), tint, if (preset == VisualizerPreset.BASS_IMPACT) .45f else .25f), Color(0xFF050B14)), center, size.maxDimension * .7f)
         }
         drawRect(gradient)
+        if (config.enabled) {
+            drawCircle(primary, size.minDimension * (.31f + effects.bass * .035f), center,
+                alpha = effects.bass * .035f * config.glowIntensity, style = broad)
+            // Deep shadow and separate near glow anchor the artwork in the atmosphere.
+            drawCircle(Color(0xFF030610), size.minDimension * .28f, center, alpha = .25f)
+        }
+    }
+    fun DrawScope.render(frame: VisualizerInterpolatedFrame) {
         if (!config.enabled) return
         val r = size.minDimension * .235f
         when (preset) {
@@ -78,72 +111,83 @@ class VisualizerPresetRenderer(val preset: VisualizerPreset) : AutoCloseable {
             if (!allowGpu) { gpu?.close(); gpu = null }
             else try {
                 if (gpu == null) gpu = ShaderEffectRenderer(preset)
-                gpu?.draw(this, effects, config, frame.pulse, config.reduceMotion || systemReduceMotion)
+                gpu?.draw(this, effects, config, frame.pulse, config.reduceMotion || systemReduceMotion, primary, cyan)
             } catch (_: RuntimeException) { gpu?.close(); gpu = null; shaderFailed = true }
         }
     }
     private fun DrawScope.orbit(frame: VisualizerInterpolatedFrame, r: Float) {
-        val c = Color(0xFF46DED3)
-        val breathing = r * (1.08f + effects.bass * .025f)
-        drawCircle(c, breathing, alpha = (.06f + effects.bass * .12f) * config.glowIntensity.coerceAtMost(2f), style = glowStroke)
-        drawCircle(c, breathing, alpha = .8f, style = thin)
-        drawCircle(Color(0xFF84E5FF), r * 1.22f, alpha = .3f, style = thin)
+        val breathing = r * (1.08f + effects.bass * .018f)
+        drawCircle(cyan, breathing, alpha = .08f * config.glowIntensity, style = glowStroke)
+        drawCircle(cyan, breathing, alpha = .55f, style = thin)
+        drawCircle(primary, r * 1.19f, alpha = .24f, style = thin)
         val count = when (quality) { VisualizerQuality.ULTRA -> 96; VisualizerQuality.HIGH -> 72; VisualizerQuality.BALANCED -> 48; VisualizerQuality.ECO -> 32 }
         for (i in 0 until count) {
-            val angle = i * 2f * PI.toFloat() / count - PI.toFloat() / 2
-            val direction = Offset(cos(angle), sin(angle))
-            val mirrored = abs(i.toFloat() / count * 2f - 1f)
-            val level = VisualizerEffectState.spectrum(frame.spectrum, mirrored, config.spectrumSensitivity * config.globalIntensity)
-            val start = center + direction * (r * 1.28f)
-            val end = center + direction * (r * (1.3f + level * .65f))
-            drawLine(c, start, end, size.minDimension * .005f, cap = StrokeCap.Round, alpha = .3f + level * .7f)
-            if (quality.ordinal < 2 && level > .1f) drawCircle(c, 4f, end, alpha = level * .15f * config.glowIntensity.coerceAtMost(2f))
+            val direction = Offset(rayX[quality.ordinal][i], rayY[quality.ordinal][i])
+            val frequency = abs(i.toFloat() / count * 2f - 1f)
+            val level = VisualizerEffectState.spectrum(frame.spectrum, frequency, config.spectrumSensitivity * config.globalIntensity)
+            val color = lerp(primary, cyan, 1f - frequency)
+            val start = center + direction * (r * 1.27f)
+            val end = center + direction * (r * (1.29f + level * .63f))
+            if (quality.ordinal < 2) drawLine(color, start, end, size.minDimension * .012f,
+                cap = StrokeCap.Round, alpha = level * .075f * config.glowIntensity)
+            drawLine(color, start, end, size.minDimension * .0042f, cap = StrokeCap.Round, alpha = .2f + level * .7f)
         }
     }
     private fun DrawScope.neon(frame: VisualizerInterpolatedFrame, r: Float) {
-        rotate(effects.phase * 5f, center) {
-            path.reset(); path.moveTo(center.x, center.y - r * 1.55f)
-            path.lineTo(center.x + r * 1.55f, center.y); path.lineTo(center.x, center.y + r * 1.55f)
-            path.lineTo(center.x - r * 1.55f, center.y); path.close()
-            drawPath(path, primary, alpha = .07f * config.glowIntensity, style = broad)
-            drawPath(path, Color(0xFF387BFF), alpha = .6f, style = thin)
-        }
-        val count = when (quality) { VisualizerQuality.ULTRA -> 48; VisualizerQuality.HIGH -> 32; VisualizerQuality.BALANCED -> 24; VisualizerQuality.ECO -> 16 }
-        val dy = r * 2f / count
-        for (i in 0 until count) {
-            val energy = VisualizerEffectState.spectrum(frame.spectrum, i.toFloat() / (count - 1), config.spectrumSensitivity * config.globalIntensity)
-            val y = center.y - r + (i + .5f) * dy
-            val length = size.minDimension * (.007f + .16f * energy)
-            val color = if (i > count * .65f) Color(0xFF16D9FF) else primary
-            val gap = r * 1.14f
-            for (sign in -1..1 step 2) {
-                val start = Offset(center.x + sign * gap, y); val end = Offset(start.x + sign * length, y)
-                if (quality.ordinal < 2) drawLine(color, start, end, dy * 1.25f, alpha = energy * .15f * config.glowIntensity)
-                drawLine(color, start, end, dy * .5f, cap = StrokeCap.Round, alpha = .3f + energy * .7f)
+        val pulse = frame.pulse * config.globalIntensity.coerceAtMost(1f) * if (config.reduceMotion || systemReduceMotion) .2f else 1f
+        rotate(effects.phase * 3f, center) {
+            for (layer in 0..1) {
+                val radius = r * (if (layer == 0) 1.62f else 1.87f) * (1f + pulse * .018f)
+                path.reset(); path.moveTo(center.x, center.y - radius)
+                path.lineTo(center.x + radius, center.y); path.lineTo(center.x, center.y + radius)
+                path.lineTo(center.x - radius, center.y); path.close()
+                drawPath(path, violet, alpha = (.08f + pulse * .07f) * config.glowIntensity, style = broad)
+                drawPath(path, if (layer == 0) violet else lerp(primary, cyan, .6f), alpha = if (layer == 0) .42f else .18f, style = thin)
             }
         }
-        if (effects.treble > .08f && quality != VisualizerQuality.ECO) {
+        val count = when (quality) { VisualizerQuality.ULTRA -> 28; VisualizerQuality.HIGH -> 24; VisualizerQuality.BALANCED -> 20; VisualizerQuality.ECO -> 14 }
+        val dy = r * 2.35f / count
+        for (i in 0 until count) {
+            val frequency = i.toFloat() / (count - 1)
+            val energy = VisualizerEffectState.spectrum(frame.spectrum, frequency, config.spectrumSensitivity * config.globalIntensity)
+            val y = center.y + r * 1.175f - (i + .5f) * dy
+            val length = size.minDimension * (.004f + .165f * energy * (1f - frequency * .2f))
+            val color = lerp(violet, cyan, frequency)
             for (side in -1..1 step 2) {
-                path.reset()
-                val x = center.x + side * r * 1.6f
-                path.moveTo(x, center.y - r * 1.1f)
-                for (i in 1..12) path.lineTo(x + sin(i * 3.1f + effects.phase * 20f) * r * .13f * effects.treble,
-                    center.y - r * 1.1f + i * r * 2.2f / 12)
-                drawPath(path, Color(0xFF16D9FF), alpha = effects.treble * .55f, style = thin)
+                val start = if (verticalNeon) Offset(center.x + side * (r * 1.14f + i * size.minDimension * .15f / count), center.y + r)
+                    else Offset(center.x + side * r * 1.14f, y)
+                val end = if (verticalNeon) start - Offset(0f, energy * r * 2f) else start + Offset(side * length, 0f)
+                val width = if (verticalNeon) size.minDimension * .003f * (1.25f - frequency * .3f) else dy * (.34f + (1f - frequency) * .12f)
+                if (quality.ordinal < 2) drawLine(color, start, end, width * 2.8f, cap = StrokeCap.Round, alpha = energy * .09f * config.glowIntensity)
+                drawLine(color, start, end, width, cap = StrokeCap.Round, alpha = .16f + energy * .78f)
+                drawCircle(lerp(color, Color.White, .28f), width * .4f, end, alpha = energy * .65f)
+            }
+        }
+        if (effects.treble > .04f && quality != VisualizerQuality.ECO) {
+            for (side in -1..1 step 2) {
+                val x = center.x + side * r * 1.67f
+                path.reset(); path.moveTo(x, center.y - r)
+                for (i in 1..16) {
+                    val y = center.y - r + i * r / 8f
+                    val branch = sin(i * 2.7f + effects.phase * 14f) * r * .09f * effects.treble
+                    path.lineTo(x + branch, y)
+                    if (i % 4 == 0) { path.lineTo(x + branch + side * r * .09f, y - r * .06f); path.lineTo(x + branch, y) }
+                }
+                drawPath(path, cyan, alpha = (effects.treble * .3f + pulse * .18f).coerceAtMost(.6f), style = thin)
             }
         }
     }
     private fun DrawScope.impact(frame: VisualizerInterpolatedFrame, r: Float) {
         val reduced = config.reduceMotion || systemReduceMotion
-        val count = when (quality) { VisualizerQuality.ULTRA -> 56; VisualizerQuality.HIGH -> 36; VisualizerQuality.BALANCED -> 24; VisualizerQuality.ECO -> 12 }
+        val count = minOf((size.minDimension / 9f).toInt().coerceAtLeast(12), when (quality) { VisualizerQuality.ULTRA -> 56; VisualizerQuality.HIGH -> 36; VisualizerQuality.BALANCED -> 24; VisualizerQuality.ECO -> 12 })
         val pulse = frame.pulse * if (reduced) .15f else 1f
         for (i in 0 until count) {
             val angle = i * 2f * PI.toFloat() / count + sin(i * 7f) * .08f
             val direction = Offset(cos(angle), sin(angle))
-            val start = center + direction * (r * (1.65f + (i % 7) * .07f))
-            val end = start + direction * size.minDimension * (.015f + pulse * .2f * config.motionIntensity)
+            val start = center + direction * (r * (1.47f + (i % 7) * .085f + pulse * .18f))
+            val end = start + direction * size.minDimension * (.012f + pulse * (.11f + (i % 5) * .02f) * config.motionIntensity)
             drawLine(primary, start, end, if (i % 4 == 0) 2f else 1f,
-                alpha = (.05f + pulse * .45f) * config.globalIntensity.coerceAtMost(1f))
+                alpha = (.02f + pulse * if (i % 3 == 0) .5f else .24f) * config.globalIntensity.coerceAtMost(1f))
         }
         drawCircle(primary, r * (1.65f + effects.bass * .15f), alpha = effects.bass * .1f * config.glowIntensity, style = broad)
         // Spectrum remains present even when heavy motion/shaders are disabled.
@@ -180,12 +224,16 @@ class VisualizerPresetRenderer(val preset: VisualizerPreset) : AutoCloseable {
     fun DrawScope.foreground() {
         if (!config.enabled) return
         val r = size.minDimension * .235f * effects.coverScale
-        if (preset.circular) return
+        if (preset.circular) {
+            drawCircle(cyan, r * 1.025f, alpha = .1f * config.glowIntensity, style = glowStroke)
+            drawCircle(cyan, r * 1.012f, alpha = .5f, style = thin)
+            return
+        }
         val topLeft = center - Offset(r,r)
-        drawRoundRect(primary, topLeft, Size(r * 2f,r * 2f), CornerRadius(8f),
+        drawRoundRect(primary, topLeft, Size(r * 2f,r * 2f), CornerRadius(8.dp.toPx() * effects.coverScale),
             alpha = (.08f + effects.bass * .15f) * config.glowIntensity, style = glowStroke)
-        drawRoundRect(if (preset == VisualizerPreset.NEON_PULSE) Color.White else primary,
-            topLeft, Size(r * 2f,r * 2f), CornerRadius(8f), alpha = .75f, style = border)
+        drawRoundRect(if (preset == VisualizerPreset.NEON_PULSE) lerp(violet, Color.White, .55f) else primary,
+            topLeft, Size(r * 2f,r * 2f), CornerRadius(8.dp.toPx() * effects.coverScale), alpha = .75f, style = border)
     }
     override fun close() { reset(); closed = true; path.reset() }
 }

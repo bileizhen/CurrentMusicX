@@ -63,6 +63,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         else launcher.launch(Manifest.permission.RECORD_AUDIO)
     }
     DisposableEffect(vm) { onDispose { vm.visualizerVisible(false, false) } }
+    if (preview) {
+        VisualizerPreviewDialog(vm, render, visible, status.label, denied, details,
+            { details = !details }, toggleCapture, { preview = false }, onDismiss, rendererObserver)
+        return
+    }
     MusicDialog(if (preview) "音乐可视化 · 特效预览" else "音乐可视化 · 音频调试", onDismiss) {
         Column(Modifier.heightIn(max = if (preview) 680.dp else 500.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -85,7 +90,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             TextButton("音频调试", { preview = false }, Modifier.weight(1f).testTag("visualizer_preview_toggle"))
         } else TextButton("打开特效预览", { preview = true }, Modifier.testTag("visualizer_preview_toggle"))
         if (preview) {
-            VisualizerPresetPreview(vm, render, visible, rendererObserver, showMetrics = details)
+            VisualizerPresetPreview(vm, render, visible, rendererObserver = rendererObserver, showMetrics = details)
             VisualizerPresetSelector(settings.visualizerEffects) { selected -> vm.visualizerEffects { it.copy(presetId = selected) } }
             TextButton(if (details) "收起性能与参数" else "性能与参数", { details = !details }, Modifier.testTag("visualizer_details"))
         } else VisualizerRenderLayer(vm.audioAnalysis, Modifier.fillMaxWidth().height(160.dp).testTag("visualizer_spectrum"),

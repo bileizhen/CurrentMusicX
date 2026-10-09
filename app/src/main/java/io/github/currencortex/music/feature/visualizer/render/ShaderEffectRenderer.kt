@@ -15,6 +15,10 @@ internal class ShaderEffectRenderer(preset: VisualizerPreset) : AutoCloseable {
         VisualizerPreset.BASS_IMPACT -> RADIAL
         else -> SCAN
     })
+    private var resolutionWidth = -1f
+    private var resolutionHeight = -1f
+    private var cachedPrimary = Color.Unspecified
+    private var cachedAccent = Color.Unspecified
     private var brush: ShaderBrush? = shader?.let(::ShaderBrush)
     private var quietCover: androidx.compose.ui.graphics.RenderEffect? = null
     private var activeCover: androidx.compose.ui.graphics.RenderEffect? = null
@@ -23,16 +27,24 @@ internal class ShaderEffectRenderer(preset: VisualizerPreset) : AutoCloseable {
             // RenderEffect snapshots shader uniforms. Cache two effects instead of allocating
             // new native effects at 120 Hz; the real transient envelope chooses between them.
             val rgb = RuntimeShader(RGB)
-            rgb.setFloatUniform("offset", .6f)
+            rgb.setFloatUniform("offset", 1.2f)
             quietCover = RenderEffect.createRuntimeShaderEffect(rgb, "image").asComposeRenderEffect()
-            rgb.setFloatUniform("offset", 2.5f)
+            rgb.setFloatUniform("offset", 5f)
             activeCover = RenderEffect.createRuntimeShaderEffect(rgb, "image").asComposeRenderEffect()
         }
     }
-    fun cover(glitch: Float) = if (glitch > .08f) activeCover else quietCover
-    fun draw(scope: DrawScope, e: VisualizerEffectState, c: VisualizerEffectConfig, pulse: Float, reduced: Boolean) {
+    fun cover(glitch: Float) = when { glitch <= 0f -> null; glitch > .1f -> activeCover; else -> quietCover }
+    fun draw(scope: DrawScope, e: VisualizerEffectState, c: VisualizerEffectConfig, pulse: Float, reduced: Boolean, primary: Color, accent: Color) {
         val s = shader ?: return
-        s.setFloatUniform("resolution", scope.size.width, scope.size.height)
+        if (cachedPrimary != primary || cachedAccent != accent) {
+            cachedPrimary = primary; cachedAccent = accent
+            s.setFloatUniform("primary", primary.red, primary.green, primary.blue)
+            s.setFloatUniform("accent", accent.red, accent.green, accent.blue)
+        }
+        if (resolutionWidth != scope.size.width || resolutionHeight != scope.size.height) {
+            resolutionWidth = scope.size.width; resolutionHeight = scope.size.height
+            s.setFloatUniform("resolution", resolutionWidth, resolutionHeight)
+        }
         s.setFloatUniform("time", e.phase)
         s.setFloatUniform("bass", e.bass)
         s.setFloatUniform("treble", e.treble)
@@ -51,6 +63,8 @@ internal class ShaderEffectRenderer(preset: VisualizerPreset) : AutoCloseable {
             uniform float pulse;
             uniform float intensity;
             uniform float distortion;
+            uniform float3 primary;
+            uniform float3 accent;
         """
         private const val NEON = UNIFORMS + """
             half4 main(float2 coord) {
@@ -59,7 +73,7 @@ internal class ShaderEffectRenderer(preset: VisualizerPreset) : AutoCloseable {
                 float ring = exp(-abs(r - .34 - bass * .025) * 30.0);
                 float flow = .5 + .5 * sin(p.x * 14.0 + p.y * 10.0 + time * 3.0);
                 float a = clamp(ring * (.045 + bass * .08 + pulse * .08) * intensity, 0.0, .25);
-                return half4(mix(float3(.18,.13,.8), float3(.05,.6,1.0), flow) * a, a);
+                return half4(mix(primary, accent, flow) * a, a);
             }
         """
         private const val RADIAL = UNIFORMS + """
@@ -70,7 +84,7 @@ internal class ShaderEffectRenderer(preset: VisualizerPreset) : AutoCloseable {
                 float bend = sin(r * 32.0 - time * 4.0) * pulse * distortion * .08;
                 float lines = pow(max(0.0, sin(angle * 38.0 + bend)), 18.0);
                 float a = clamp(lines * smoothstep(.29,.55,r) * (.015 + pulse * .16) * intensity, 0.0, .2);
-                return half4(float3(1.0,.48,.08) * a, a);
+                return half4(primary * a, a);
             }
         """
         private const val SCAN = UNIFORMS + """
@@ -79,7 +93,7 @@ internal class ShaderEffectRenderer(preset: VisualizerPreset) : AutoCloseable {
                 float scan = step(.8, fract(coord.y / 5.0));
                 float noise = fract(sin(dot(floor(coord / 3.0),float2(12.9898,78.233)) + time) * 43758.5453);
                 float a = min(.08, (scan * .012 + noise * treble * .025) * intensity);
-                return half4(float3(.8,.05,.13) * a, a);
+                return half4(primary * a, a);
             }
         """
         private const val RGB = """
@@ -87,7 +101,7 @@ internal class ShaderEffectRenderer(preset: VisualizerPreset) : AutoCloseable {
             uniform float offset;
             half4 main(float2 p) {
                 half4 base = image.eval(p);
-                return half4(image.eval(p + float2(offset,0)).r, base.g, image.eval(p - float2(offset,0)).b, base.a);
+                return half4(min(half3(image.eval(p + float2(offset,0)).r, base.g, image.eval(p - float2(offset,0)).b), half3(base.a)), base.a);
             }
         """
     }
