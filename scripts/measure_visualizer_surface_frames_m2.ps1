@@ -1,7 +1,8 @@
 param(
     [Parameter(Mandatory = $true)][string]$Serial,
     [string]$OutputDirectory = '.verification',
-    [int]$MaximumSeconds = 1300
+    [int]$MaximumSeconds = 1300,
+    [switch]$ObserveCurrentPhase
 )
 $ErrorActionPreference = 'Stop'
 $taskOutput = [IO.Path]::GetFullPath($OutputDirectory)
@@ -34,7 +35,7 @@ try {
     while ($taskStarted.Elapsed.TotalSeconds -lt $MaximumSeconds) {
         $taskMarks = @(& adb -s $Serial logcat -d -s 'VisualizerM2Phase:I' '*:S')
         $taskMark = $taskMarks | Where-Object { $_ -match 'begin (preset-(NEON_PULSE|ORBIT_SPECTRUM|BASS_IMPACT|DARK_GLITCH)|soak|lifecycle)' } | Select-Object -Last 1
-        if (!$taskPhase -and $taskMark -eq $taskInitialMark) { Start-Sleep -Seconds 5; continue }
+        if (!$ObserveCurrentPhase -and !$taskPhase -and $taskMark -eq $taskInitialMark) { Start-Sleep -Seconds 5; continue }
         if ($taskMark -match 'begin (preset-(NEON_PULSE|ORBIT_SPECTRUM|BASS_IMPACT|DARK_GLITCH)|soak|lifecycle)') {
             $taskNextPhase = $Matches[1]
         } else {
@@ -58,11 +59,28 @@ try {
             # Wait five seconds before measuring this phase (126 frames take up to 4.2s at 30).
             if ($taskPhaseAge.Elapsed.TotalSeconds -ge 5) {
             $taskLayers = @(& adb -s $Serial shell dumpsys SurfaceFlinger --list)
-            $taskLayer = $taskLayers | Where-Object {
+            $taskBuffers = @($taskLayers | Where-Object {
                 # A hex-prefixed window container has the same activity name but no buffers.
                 # SurfaceFlinger list order is unspecified: select the exact buffer layer.
                 $_ -match '^(RequestedLayerState\{|Surface\(name=)?com\.bileizhen\.currentmusic\.verification/io\.github\.currencortex\.music\.MainActivity#\d+'
-            } | Select-Object -Last 1
+            })
+            # A Compose Dialog and its Activity share the same title. Bind the buffer
+            # to the first (topmost) owned window, not SurfaceFlinger list ordering.
+            $taskOwnedWindow = @(& adb -s $Serial shell dumpsys window windows) |
+                Where-Object { $_ -match '^\s*Window #\d+ Window\{[a-f0-9]+ u\d+ com\.bileizhen\.currentmusic\.verification/io\.github\.currencortex\.music\.MainActivity\}:' } |
+                Select-Object -First 1
+            $taskLayer = $null
+            if ($taskOwnedWindow -match 'Window\{([a-f0-9]+) u\d+') {
+                $taskWindowHash = $Matches[1]
+                $taskContainer = $taskLayers | Where-Object { $_ -match ('^RequestedLayerState\{' + $taskWindowHash + ' com\.bileizhen\.currentmusic\.verification/.+?#\d+ parentId=') } | Select-Object -First 1
+                if ($taskContainer -match '#(\d+) parentId=') {
+                    $taskParentId = $Matches[1]
+                    $taskLayer = $taskBuffers | Where-Object { $_ -match (' parentId=' + $taskParentId + '(\s|\})') } | Select-Object -First 1
+                }
+            }
+            # Older SurfaceFlinger formats expose only one exact buffer. Never guess
+            # when multiple owned windows exist and the parent cannot be resolved.
+            if (!$taskLayer -and $taskBuffers.Count -eq 1) { $taskLayer = $taskBuffers[0] }
             if ($taskLayer) {
                 # Shell-safe quoting on the Android side; never evaluate a SurfaceFlinger name as code.
                 if ($taskLayer -match 'Surface\(name=([^)]*)\)') { $taskLayer = $Matches[1] }
@@ -81,7 +99,8 @@ try {
             $taskSample++
             }
         }
-        $taskCompletion = @(& adb -s $Serial logcat -d -s 'VisualizerM2Test:I' '*:S') | Select-Object -Last 1
+        $taskCompletion = @(& adb -s $Serial logcat -d -s 'VisualizerM2Test:I' '*:S') |
+            Where-Object { $_ -match 'COMPLETE durationMs=' } | Select-Object -Last 1
         if ($taskCompletion -match 'COMPLETE durationMs=' -and $taskCompletion -ne $taskInitialCompletion) { break }
         Start-Sleep -Seconds 5
     }

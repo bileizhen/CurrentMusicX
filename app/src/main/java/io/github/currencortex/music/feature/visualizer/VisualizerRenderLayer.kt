@@ -27,6 +27,15 @@ internal fun Context.visualizerWindow(): Window? = when (this) {
     else -> null
 }
 
+internal fun android.view.View.visualizerWindow(): Window? {
+    var node: Any? = this
+    while (node is android.view.View) {
+        if (node is androidx.compose.ui.window.DialogWindowProvider) return node.window
+        node = node.parent
+    }
+    return context.visualizerWindow()
+}
+
 /** One VSync loop per active layer; only the draw lambda reads its high-frequency revision. */
 @Composable fun VisualizerRenderLayer(engine: AudioAnalysisEngine, modifier: Modifier = Modifier,
     settings: VisualizerRenderSettings = VisualizerRenderSettings(), visible: Boolean = true,
@@ -62,7 +71,7 @@ internal fun Context.visualizerWindow(): Window? = when (this) {
                         render.preferredFps = decision.preferenceFps.toFloat()
                         var lastStatistics = 0L
                         var fadeStart = 0L
-                        val windowMetrics = view.context.visualizerWindow()?.let {
+                        val windowMetrics = view.visualizerWindow()?.let {
                             try { VisualizerWindowMetrics(it, render.monitor) { display.value.refreshRate } }
                             catch (_: RuntimeException) { null } // Vendor metrics failures must not stop drawing.
                         }

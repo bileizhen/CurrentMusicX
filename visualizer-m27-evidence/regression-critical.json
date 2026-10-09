@@ -1,0 +1,191 @@
+{
+  "counts": {
+    "passed": 24,
+    "failed": 3,
+    "skipped": 0
+  },
+  "newFailures": [
+    {
+      "class": "io.github.currencortex.music.PlaybackQueuePageTest",
+      "test": "rowsModesRemovalAndClearKeepTheQueuePageOpen",
+      "result": "failed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.PlaybackQueuePageTest",
+      "test": "listScrollingSmallDragAndFullDragHaveSeparateOutcomes",
+      "result": "failed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.LyricsDisplayCapabilitiesTest",
+      "test": "miniLyricsFollowPositionAndSettingsCanHideAndRestoreControls",
+      "result": "failed",
+      "baseline": "passed"
+    }
+  ],
+  "results": [
+    {
+      "class": "io.github.currencortex.music.VisualizerDebugUiTest",
+      "test": "previewSelectorAndParametersPersistWithoutImplicitAudioOptIn",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.VisualizerDebugUiTest",
+      "test": "playerMenuOpensRealDiagnosticsWithCaptureOffAndLeavesArtworkIntact",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.VisualizerPreviewLayoutTest",
+      "test": "largeFontLandscapeKeepsSquareStageAndReachableControls",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.VisualizerPreviewLayoutTest",
+      "test": "narrowShortViewportKeepsSquareStageAndReachableControls",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.VisualizerSettingsTest",
+      "test": "captureDefaultsOffAndOptInPersistsWithoutChangingOtherSettings",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.VisualizerEffectsSettingsTest",
+      "test": "allEffectParametersPersistInActualDataStoreAndShareM0M1Switches",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.PlayerControlsFeedbackTest",
+      "test": "compactActionsAnimateWhileKeepingTouchTargetsAndClickSemantics",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.PlayerSheetCapabilitiesTest",
+      "test": "coverLyricsAndPagerFollowDragWithoutChangingPlayback",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.PlayerSheetCapabilitiesTest",
+      "test": "pagerSharesOneCircularArtworkAlongReversibleArc",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.PlayerSheetCapabilitiesTest",
+      "test": "miniExpandsVerticallyAndCollapsesBackToTheSameSecondaryPage",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.MiniPlayerInteractionTest",
+      "test": "fixedNavigationRemainsVisibleWithGlassMiniPlayer",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.MiniPlayerInteractionTest",
+      "test": "titleSwipesDispatchOnceAndShortOrCancelledDragsDoNotClickOrSkip",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.MiniPlayerInteractionTest",
+      "test": "memberSwipesAreIgnoredAndPromotionRestoresGestureControls",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.MiniPlayerInteractionTest",
+      "test": "playIntentIsImmediateBeforeConnectionAndLoadingRingReturnsToProgress",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.MiniPlayerInteractionTest",
+      "test": "progressRingFollowsPositionAndResetsWhenTrackChanges",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.MiniPlayerInteractionTest",
+      "test": "coverRotatesOnlyWhilePlayingResumesItsAngleAndResetsOnTrackChange",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.MiniPlayerInteractionTest",
+      "test": "rootSharesGlassMaterialAndQueueDismissKeepsCurrentPageAndPausedQueue",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.MiniPlayerInteractionTest",
+      "test": "clearingAudioCacheOnlyDropsFixtureCacheAndKeepsQueue",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.MiniPlayerInteractionTest",
+      "test": "audioCachePreloadPolicyPersistsAndKeepsQueue",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.PlayerLandscapeTest",
+      "test": "floatingSideTabsKeepContentClearAndRecoverAfterSecondaryAndPlayer",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.PlayerLandscapeTest",
+      "test": "shortLandscapeShowsFullCoverMetadataAndControlsAndClosesToMini",
+      "result": "passed",
+      "baseline": "new-or-not-in-baseline"
+    },
+    {
+      "class": "io.github.currencortex.music.PlaybackQueuePageTest",
+      "test": "rowsModesRemovalAndClearKeepTheQueuePageOpen",
+      "result": "failed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.PlaybackQueuePageTest",
+      "test": "listScrollingSmallDragAndFullDragHaveSeparateOutcomes",
+      "result": "failed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.LyricsDisplayCapabilitiesTest",
+      "test": "miniLyricsFollowPositionAndSettingsCanHideAndRestoreControls",
+      "result": "failed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.LyricsDisplayCapabilitiesTest",
+      "test": "alwaysSweepsPlainLinesWithoutReplacingRealWordTiming",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.LyricsDisplayCapabilitiesTest",
+      "test": "blurKeepsOnlyCurrentlySungVocalsClear",
+      "result": "passed",
+      "baseline": "passed"
+    },
+    {
+      "class": "io.github.currencortex.music.LyricsDisplayCapabilitiesTest",
+      "test": "centeredWeightAndAllLineKaraokeRenderActualGlyphs",
+      "result": "passed",
+      "baseline": "passed"
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "file": "dark-normal.mp4",
+    "returncode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "dark-reduced.mp4",
+    "returncode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "neon-horizontal.mp4",
+    "returncode": 0,
+    "diagnostics": ""
+  },
+  {
+    "file": "neon-vertical.mp4",
+    "returncode": 0,
+    "diagnostics": ""
+  }
+]
