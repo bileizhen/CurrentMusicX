@@ -66,6 +66,7 @@ internal val LocalPlayerVisualizerObserver = staticCompositionLocalOf<(Visualize
         renderer.config = settings.visualizerEffects
         renderer.updateArtworkPalette(palette)
         renderer.forceCanvas = true
+        renderer.embeddedArtwork = true
         renderer.systemReduceMotion = !ValueAnimator.areAnimatorsEnabled()
     }
     LaunchedEffect(lifecycle, visible, settings.visualizerEnabled) {

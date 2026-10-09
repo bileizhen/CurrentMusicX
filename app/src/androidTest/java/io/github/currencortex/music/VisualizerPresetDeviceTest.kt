@@ -42,6 +42,8 @@ class VisualizerPresetDeviceTest {
     @Test fun darkGlitchMotionEvidence() = verify(5_000, presets = listOf(VisualizerPreset.DARK_GLITCH), modeMillis = 30_000)
     @Test fun neonVerticalComparison() = verify(5_000, presets = listOf(VisualizerPreset.NEON_PULSE), modeMillis = 30_000)
     @Test fun orbitIntegration() = verify(10_000, presets = listOf(VisualizerPreset.ORBIT_SPECTRUM), modeMillis = 10_000)
+    @Test fun cyberReactorReference() = verify(10_000, presets = listOf(VisualizerPreset.CYBER_REACTOR), modeMillis = 30_000,
+        longPreset = VisualizerPreset.CYBER_REACTOR)
     @Test fun allPresetsAndLifecycle() = verify(20_000, modeMillis = 30_000)
     @Test fun complexPresetFifteenMinuteStability() = verify(900_000, modeMillis = 30_000,
         longPreset = VisualizerPreset.from(InstrumentationRegistry.getArguments().getString("m2.longPreset") ?: "NEON_PULSE"))

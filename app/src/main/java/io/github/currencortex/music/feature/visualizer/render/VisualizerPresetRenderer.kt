@@ -24,6 +24,8 @@ class VisualizerPresetRenderer(val preset: VisualizerPreset) : AutoCloseable {
     var active = false; private set
     var hardwareAccelerated = true
     var forceCanvas = false // Explicit diagnostic fallback, never a second renderer.
+    var embeddedArtwork = false // Standard player keeps its existing central circular image.
+    private val cyber = if (preset == VisualizerPreset.CYBER_REACTOR) CyberReactorRenderer() else null
     private var shaderFailed = false
     private var gpu: ShaderEffectRenderer? = null
     val shaderStatus: String get() = when { shaderFailed -> "Canvas / Shader failure"; gpu != null -> "AGSL"; else -> "Canvas" }
@@ -42,7 +44,7 @@ class VisualizerPresetRenderer(val preset: VisualizerPreset) : AutoCloseable {
     private var cyan = Color(0xFF54DCEB)
     private var violet = Color(0xFF9D78ED)
     internal var verticalNeon = true // Selected after native A/B review; diagnostic alternative uses the same FFT.
-    private val defaultPrimary = when (preset) { VisualizerPreset.NEON_PULSE -> Color(0xFF7B61FF); VisualizerPreset.ORBIT_SPECTRUM -> Color(0xFF46DED3); VisualizerPreset.BASS_IMPACT -> Color(0xFFFFB548); VisualizerPreset.DARK_GLITCH -> Color(0xFFEF4D62) }
+    private val defaultPrimary = when (preset) { VisualizerPreset.NEON_PULSE -> Color(0xFF7B61FF); VisualizerPreset.ORBIT_SPECTRUM -> Color(0xFF46DED3); VisualizerPreset.BASS_IMPACT -> Color(0xFFFFB548); VisualizerPreset.DARK_GLITCH -> Color(0xFFEF4D62); VisualizerPreset.CYBER_REACTOR -> Color(0xFF65E9FA) }
     private var primary = defaultPrimary
     private var artworkPalette: VisualizerArtworkPalette? = null
     internal val artworkColors get() = artworkPalette
@@ -68,29 +70,37 @@ class VisualizerPresetRenderer(val preset: VisualizerPreset) : AutoCloseable {
             active = true; quality = level; effects.step(frame, config, level, time, dt, systemReduceMotion)
         }
     }
-    fun reset() { active = false; effects.reset(); if (Build.VERSION.SDK_INT >= 33) gpu?.close(); gpu = null }
+    fun reset() { active = false; effects.reset(); cyber?.reset(); if (Build.VERSION.SDK_INT >= 33) gpu?.close(); gpu = null }
+    private fun DrawScope.coverCenter() = if (preset == VisualizerPreset.CYBER_REACTOR && !embeddedArtwork)
+        Offset(size.width * .32f, size.height * .48f) else center
     fun DrawScope.atmosphere() {
         if (cachedSize != size || cachedColor != coverColor) {
             cachedSize = size; cachedColor = coverColor
             val tint = lerp(primary, coverColor, if (preset.circular) .4f else .18f)
-            gradient = Brush.radialGradient(listOf(lerp(Color(0xFF080B14), tint, if (preset == VisualizerPreset.BASS_IMPACT) .45f else .25f), Color(0xFF050B14)), center, size.maxDimension * .7f)
+            gradient = Brush.radialGradient(listOf(lerp(Color(0xFF080B14), tint, if (preset == VisualizerPreset.BASS_IMPACT) .45f else .25f), Color(0xFF050B14)), coverCenter(), size.maxDimension * .7f)
         }
         drawRect(gradient)
         if (config.enabled) {
-            drawCircle(primary, size.minDimension * (.31f + effects.bass * .035f), center,
+            drawCircle(primary, size.minDimension * (.31f + effects.bass * .035f), coverCenter(),
                 alpha = effects.bass * .035f * config.glowIntensity, style = broad)
             // Deep shadow and separate near glow anchor the artwork in the atmosphere.
-            drawCircle(Color(0xFF030610), size.minDimension * .28f, center, alpha = .25f)
+            drawCircle(Color(0xFF030610), size.minDimension * (if (preset == VisualizerPreset.CYBER_REACTOR) .18f else .28f), coverCenter(), alpha = .25f)
         }
     }
     fun DrawScope.render(frame: VisualizerInterpolatedFrame) {
         if (!config.enabled) return
+        if (preset == VisualizerPreset.CYBER_REACTOR) {
+            cyber?.draw(this, frame, effects, config, quality, primary, cyan, embeddedArtwork,
+                config.reduceMotion || systemReduceMotion)
+            return
+        }
         val r = size.minDimension * .235f
         when (preset) {
             VisualizerPreset.ORBIT_SPECTRUM -> orbit(frame, r)
             VisualizerPreset.NEON_PULSE -> neon(frame, r)
             VisualizerPreset.BASS_IMPACT -> impact(frame, r)
             VisualizerPreset.DARK_GLITCH -> dark(frame, r)
+            VisualizerPreset.CYBER_REACTOR -> Unit
         }
         val e = effects
         for (i in 0 until e.particleCount) {
@@ -223,10 +233,10 @@ class VisualizerPresetRenderer(val preset: VisualizerPreset) : AutoCloseable {
     }
     fun DrawScope.foreground() {
         if (!config.enabled) return
-        val r = size.minDimension * .235f * effects.coverScale
+        val r = size.minDimension * (if (preset == VisualizerPreset.CYBER_REACTOR && !embeddedArtwork) .17f else .235f) * effects.coverScale
         if (preset.circular) {
-            drawCircle(cyan, r * 1.025f, alpha = .1f * config.glowIntensity, style = glowStroke)
-            drawCircle(cyan, r * 1.012f, alpha = .5f, style = thin)
+            drawCircle(cyan, r * 1.025f, coverCenter(), alpha = .1f * config.glowIntensity, style = glowStroke)
+            drawCircle(cyan, r * 1.012f, coverCenter(), alpha = .5f, style = thin)
             return
         }
         val topLeft = center - Offset(r,r)

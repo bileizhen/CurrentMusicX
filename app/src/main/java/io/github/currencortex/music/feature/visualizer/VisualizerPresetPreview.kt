@@ -59,6 +59,7 @@ import top.yukonga.miuix.kmp.basic.Text
                         Text(preset.displayName, fontSize = 12.sp, color = Color.White)
                     }
                 }
+                if (row.size == 1) Spacer(Modifier.weight(1f))
             }
         }
     }
@@ -113,10 +114,12 @@ import top.yukonga.miuix.kmp.basic.Text
         }) { render.revision; with(renderer) { shaderBackground(render.frame) } }
         VisualizerRenderLayer(vm.audioAnalysis, Modifier.matchParentSize().testTag("visualizer_spectrum"),
             settings.visualizerRender, visible, render, renderer)
-        val artworkSize = maxWidth * .47f
+        val reactor = c.presetId == VisualizerPreset.CYBER_REACTOR
+        val artworkSize = maxWidth * if (reactor) .34f else .47f
         val artworkShape = remember(c.presetId) { if (c.presetId.circular) CircleShape else RoundedCornerShape(8.dp) }
         val gray = remember { ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(0f) }) }
-        Box(Modifier.size(artworkSize).preferredFrameRate(render.preferredFps).graphicsLayer {
+        Box(Modifier.offset(x = if (reactor) maxWidth * -.18f else 0.dp, y = if (reactor) maxWidth * -.02f else 0.dp)
+            .size(artworkSize).preferredFrameRate(render.preferredFps).graphicsLayer {
             render.revision // Read in the layer, never in composition or measurement.
             scaleX = renderer.effects.coverScale; scaleY = scaleX
             translationX = renderer.effects.shakeX; translationY = renderer.effects.shakeY
