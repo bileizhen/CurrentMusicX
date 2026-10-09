@@ -4,7 +4,8 @@ enum class VisualizerPreset(val displayName: String, val circular: Boolean) {
     NEON_PULSE("Neon Pulse · 霓虹脉冲", false),
     ORBIT_SPECTRUM("Orbit Spectrum · 环绕频谱", true),
     BASS_IMPACT("Bass Impact · 低音冲击", false),
-    DARK_GLITCH("Dark Glitch · 暗黑故障", false);
+    DARK_GLITCH("Dark Glitch · 暗黑故障", false),
+    CYBER_REACTOR("Cyber Reactor · 赛博反应堆", true);
     companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: ORBIT_SPECTRUM }
 }
 
