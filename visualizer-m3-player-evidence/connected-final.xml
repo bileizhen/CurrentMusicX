@@ -1,0 +1,36 @@
+<?xml version='1.0' encoding='UTF-8' ?>
+<testsuite name="io.github.currencortex.music.VisualizerDebugUiTest" tests="28" failures="0" errors="0" skipped="0" time="52.035" timestamp="2026-10-09T06:12:32" hostname="localhost">
+  <properties>
+    <property name="device" value="RMX5060 - 16" />
+    <property name="flavor" value="" />
+    <property name="project" value=":app" />
+  </properties>
+  <testcase name="enabledPlayerKeepsOriginalPagerArtworkAndReleasesOnLyrics" classname="io.github.currencortex.music.VisualizerDebugUiTest" time="1.744" />
+  <testcase name="previewSelectorAndParametersPersistWithoutImplicitAudioOptIn" classname="io.github.currencortex.music.VisualizerDebugUiTest" time="1.783" />
+  <testcase name="playerMenuOpensSettingsWithCaptureOffAndLeavesArtworkIntact" classname="io.github.currencortex.music.VisualizerDebugUiTest" time="1.95" />
+  <testcase name="largeFontLandscapeKeepsSquareStageAndReachableControls" classname="io.github.currencortex.music.VisualizerPreviewLayoutTest" time="1.793" />
+  <testcase name="narrowShortViewportKeepsSquareStageAndReachableControls" classname="io.github.currencortex.music.VisualizerPreviewLayoutTest" time="1.561" />
+  <testcase name="captureDefaultsOffAndOptInPersistsWithoutChangingOtherSettings" classname="io.github.currencortex.music.VisualizerSettingsTest" time="0.029" />
+  <testcase name="allEffectParametersPersistInActualDataStoreAndShareM0M1Switches" classname="io.github.currencortex.music.VisualizerEffectsSettingsTest" time="0.106" />
+  <testcase name="compactActionsAnimateWhileKeepingTouchTargetsAndClickSemantics" classname="io.github.currencortex.music.PlayerControlsFeedbackTest" time="1.361" />
+  <testcase name="coverLyricsAndPagerFollowDragWithoutChangingPlayback" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="3.301" />
+  <testcase name="pagerSharesOneCircularArtworkAlongReversibleArc" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="2.462" />
+  <testcase name="miniExpandsVerticallyAndCollapsesBackToTheSameSecondaryPage" classname="io.github.currencortex.music.PlayerSheetCapabilitiesTest" time="5.11" />
+  <testcase name="fixedNavigationRemainsVisibleWithGlassMiniPlayer" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="1.054" />
+  <testcase name="titleSwipesDispatchOnceAndShortOrCancelledDragsDoNotClickOrSkip" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="1.154" />
+  <testcase name="memberSwipesAreIgnoredAndPromotionRestoresGestureControls" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="0.951" />
+  <testcase name="playIntentIsImmediateBeforeConnectionAndLoadingRingReturnsToProgress" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="1.127" />
+  <testcase name="progressRingFollowsPositionAndResetsWhenTrackChanges" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="0.925" />
+  <testcase name="coverRotatesOnlyWhilePlayingResumesItsAngleAndResetsOnTrackChange" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="1.209" />
+  <testcase name="rootSharesGlassMaterialAndQueueDismissKeepsCurrentPageAndPausedQueue" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="1.359" />
+  <testcase name="clearingAudioCacheOnlyDropsFixtureCacheAndKeepsQueue" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="0.95" />
+  <testcase name="audioCachePreloadPolicyPersistsAndKeepsQueue" classname="io.github.currencortex.music.MiniPlayerInteractionTest" time="0.899" />
+  <testcase name="rowsModesRemovalAndClearKeepTheQueuePageOpen" classname="io.github.currencortex.music.PlaybackQueuePageTest" time="1.92" />
+  <testcase name="listScrollingSmallDragAndFullDragHaveSeparateOutcomes" classname="io.github.currencortex.music.PlaybackQueuePageTest" time="1.159" />
+  <testcase name="miniLyricsFollowPositionAndSettingsCanHideAndRestoreControls" classname="io.github.currencortex.music.LyricsDisplayCapabilitiesTest" time="6.335" />
+  <testcase name="alwaysSweepsPlainLinesWithoutReplacingRealWordTiming" classname="io.github.currencortex.music.LyricsDisplayCapabilitiesTest" time="1.849" />
+  <testcase name="blurKeepsOnlyCurrentlySungVocalsClear" classname="io.github.currencortex.music.LyricsDisplayCapabilitiesTest" time="2.581" />
+  <testcase name="centeredWeightAndAllLineKaraokeRenderActualGlyphs" classname="io.github.currencortex.music.LyricsDisplayCapabilitiesTest" time="1.361" />
+  <testcase name="floatingSideTabsKeepContentClearAndRecoverAfterSecondaryAndPlayer" classname="io.github.currencortex.music.PlayerLandscapeTest" time="2.92" />
+  <testcase name="shortLandscapeShowsFullCoverMetadataAndControlsAndClosesToMini" classname="io.github.currencortex.music.PlayerLandscapeTest" time="2.611" />
+</testsuite>

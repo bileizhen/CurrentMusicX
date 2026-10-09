@@ -36,6 +36,8 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val audioAnalysis = io.github.currencortex.music.core.visualizer.AudioAnalysisEngine(
         viewModelScope, io.github.currencortex.music.core.visualizer.VisualizerCaptureSource())
     private val captureVisibility = MutableStateFlow(false to false)
+    private val captureOwners = io.github.currencortex.music.core.visualizer.CaptureVisibilityRegistry()
+    private val debugCaptureOwner = Any()
     init {
         viewModelScope.launch {
             val playback = state.map { Triple(it.mode != PlayerMode.CAST && it.song?.video != true, it.playing, it.song?.id) }.distinctUntilChanged()
@@ -46,7 +48,10 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
             }.distinctUntilChanged().collect(audioAnalysis::request)
         }
     }
-    fun visualizerVisible(visible: Boolean, permission: Boolean) { captureVisibility.value = visible to permission }
+    fun visualizerVisible(visible: Boolean, permission: Boolean) = visualizerVisible(debugCaptureOwner, visible, permission)
+    fun visualizerVisible(owner: Any, visible: Boolean, permission: Boolean) {
+        captureVisibility.value = captureOwners.update(owner, visible, permission)
+    }
     fun visualizerEnabled(enabled: Boolean) = viewModelScope.launch { container.musicSettings.setVisualizerEnabled(enabled) }
     fun visualizerFrameRate(value: io.github.currencortex.music.data.visualizer.VisualizerFrameRate) =
         viewModelScope.launch { container.musicSettings.setVisualizerFrameRate(value) }

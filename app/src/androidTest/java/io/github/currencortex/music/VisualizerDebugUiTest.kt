@@ -30,7 +30,7 @@ class VisualizerDebugUiTest {
         vm = PlayerViewModel(container)
     }
     @After fun cleanup() { vm.audioAnalysis.close(); container.close() }
-    @Test fun playerMenuOpensRealDiagnosticsWithCaptureOffAndLeavesArtworkIntact() {
+    @Test fun playerMenuOpensSettingsWithCaptureOffAndLeavesArtworkIntact() {
         compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
             top.yukonga.miuix.kmp.basic.Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) {
                 PlayerScreen(vm, {}, {})
@@ -38,16 +38,39 @@ class VisualizerDebugUiTest {
         } }
         compose.onNodeWithTag("lyrics_options").performClick()
         compose.onNodeWithTag("open_visualizer").performScrollTo().performClick()
-        compose.onNodeWithTag("visualizer_status").assertTextEquals(CaptureStatus.DISABLED.label)
-        compose.onNodeWithTag("visualizer_toggle").assertTextEquals("开启音频采集")
-        compose.onNodeWithTag("visualizer_spectrum").assertExists()
-        compose.onNodeWithTag("visualizer_fps_FPS_120").performClick()
+        compose.onNodeWithTag("visualizer_settings").assertExists()
+        compose.onNodeWithTag("visualizer_toggle").assertTextEquals("开启特效")
+        compose.onNodeWithTag("visualizer_spectrum").assertDoesNotExist()
+        compose.onNodeWithTag("player_visualizer").assertDoesNotExist()
+        compose.onNodeWithTag("visualizer_details").performScrollTo().performClick()
+        compose.onNodeWithTag("visualizer_fps_FPS_120").performScrollTo().performClick()
         compose.waitUntil(5000) { vm.settings.value.visualizerRender.frameRate == io.github.currencortex.music.data.visualizer.VisualizerFrameRate.FPS_120 }
         assertFalse(runBlocking { container.musicSettings.snapshot().visualizerEnabled })
         assertEquals(0, vm.audioAnalysis.frames.value.sampleRateHz)
-        compose.onNodeWithText("关闭", useUnmergedTree = true).performClick()
+        compose.onNodeWithTag("visualizer_settings_close").performScrollTo().performClick()
         compose.onNodeWithTag("visualizer_spectrum").assertDoesNotExist()
         assertFalse(runBlocking { container.musicSettings.snapshot().visualizerEnabled })
+        assertEquals("音频调试 UI", container.playbackQueue.state.value.current?.name)
+        compose.onNodeWithTag("player_cover").assertExists()
+    }
+    @Test fun enabledPlayerKeepsOriginalPagerArtworkAndReleasesOnLyrics() {
+        runBlocking { container.musicSettings.setVisualizerEnabled(true) }
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
+            top.yukonga.miuix.kmp.basic.Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0)) {
+                PlayerScreen(vm, {}, {})
+            }
+        } }
+        compose.onNodeWithTag("player_visualizer").assertExists()
+        compose.onNodeWithTag("player_pager_artwork").assertExists()
+        val initial = compose.onNodeWithTag("player_cover").fetchSemanticsNode().boundsInRoot
+        val stage = compose.onNodeWithTag("player_visualizer").fetchSemanticsNode().boundsInRoot
+        assertEquals(stage.width * .52f, initial.width, 2f)
+        compose.onNodeWithTag("player_content_pager").performTouchInput { swipeLeft() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("player_pager_artwork").assertExists()
+        assertEquals(0, vm.audioAnalysis.frames.value.sampleRateHz)
+        runBlocking { container.musicSettings.setVisualizerEnabled(false) }
+        compose.onNodeWithTag("player_visualizer").assertDoesNotExist()
         assertEquals("音频调试 UI", container.playbackQueue.state.value.current?.name)
     }
     @Test fun previewSelectorAndParametersPersistWithoutImplicitAudioOptIn() {
