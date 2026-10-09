@@ -12,6 +12,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.preferredFrameRate
 import androidx.lifecycle.Lifecycle
@@ -40,7 +41,8 @@ internal fun android.view.View.visualizerWindow(): Window? {
 @Composable fun VisualizerRenderLayer(engine: AudioAnalysisEngine, modifier: Modifier = Modifier,
     settings: VisualizerRenderSettings = VisualizerRenderSettings(), visible: Boolean = true,
     render: VisualizerRenderState = remember(engine) { VisualizerRenderState() },
-    presetRenderer: io.github.currencortex.music.feature.visualizer.render.VisualizerPresetRenderer? = null) {
+    presetRenderer: io.github.currencortex.music.feature.visualizer.render.VisualizerPresetRenderer? = null,
+    drawPreset: (DrawScope.(VisualizerInterpolatedFrame) -> Unit)? = null) {
     val view = LocalView.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val display = rememberVisualizerDisplay(view)
@@ -118,7 +120,7 @@ internal fun android.view.View.visualizerWindow(): Window? {
         val started = System.nanoTime()
         val frame = render.frame
         if (presetRenderer != null) {
-            with(presetRenderer) { render(frame) }
+            if (drawPreset != null) drawPreset(frame) else with(presetRenderer) { render(frame) }
         } else {
         drawRect(Color(0xFF10121C))
         val values = if (settings.rawSpectrum) frame.rawSpectrum else frame.spectrum

@@ -4,7 +4,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 enum class CaptureStatus(val label: String) {
-    DISABLED("尚未开启"), HIDDEN("调试页未显示"), PERMISSION_REQUIRED("需要音频采集权限"),
+    DISABLED("尚未开启"), HIDDEN("可视化页面未显示"), PERMISSION_REQUIRED("需要音频采集权限"),
     UNSUPPORTED("DLNA / MV 模式不采集"), PAUSED("等待音乐播放"), WAITING_SESSION("等待音频会话"),
     STARTING("正在连接音频会话"), CAPTURING("正在采集实际播放音频"), FAILED("采集不可用，音乐继续播放"),
 }

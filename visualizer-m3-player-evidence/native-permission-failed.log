@@ -1,0 +1,104 @@
+INSTRUMENTATION_STATUS: class=io.github.currencortex.music.PlayerVisualizerDeviceTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+io.github.currencortex.music.PlayerVisualizerDeviceTest:
+INSTRUMENTATION_STATUS: test=realSongRendersInPlayerAndReleasesWhenClosed
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=io.github.currencortex.music.PlayerVisualizerDeviceTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stack=java.lang.SecurityException: Error granting runtime permission
+	at android.app.UiAutomation.grantRuntimePermissionAsUser(UiAutomation.java:1586)
+	at android.app.UiAutomation.grantRuntimePermission(UiAutomation.java:1552)
+	at io.github.currencortex.music.PlayerVisualizerDeviceTest$realSongRendersInPlayerAndReleasesWhenClosed$1.invokeSuspend(PlayerVisualizerDeviceTest.kt:92)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.internal.ScopeCoroutine.afterResume(Scopes.kt:35)
+	at kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:101)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:47)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+	at io.github.currencortex.music.PlayerVisualizerDeviceTest.realSongRendersInPlayerAndReleasesWhenClosed(PlayerVisualizerDeviceTest.kt:31)
+	... 8 trimmed
+Caused by: java.lang.SecurityException: grantRuntimePermission: Neither user 2000 nor current process has android.permission.GRANT_RUNTIME_PERMISSIONS.
+	at android.os.Parcel.createExceptionOrNull(Parcel.java:3369)
+	at android.os.Parcel.createException(Parcel.java:3353)
+	at android.os.Parcel.readException(Parcel.java:3336)
+	at android.os.Parcel.readException(Parcel.java:3278)
+	at android.app.IUiAutomationConnection$Stub$Proxy.grantRuntimePermission(IUiAutomationConnection.java:777)
+	at android.app.UiAutomation.grantRuntimePermissionAsUser(UiAutomation.java:1583)
+	... 23 more
+
+INSTRUMENTATION_STATUS: stream=
+Error in realSongRendersInPlayerAndReleasesWhenClosed(io.github.currencortex.music.PlayerVisualizerDeviceTest):
+java.lang.SecurityException: Error granting runtime permission
+	at android.app.UiAutomation.grantRuntimePermissionAsUser(UiAutomation.java:1586)
+	at android.app.UiAutomation.grantRuntimePermission(UiAutomation.java:1552)
+	at io.github.currencortex.music.PlayerVisualizerDeviceTest$realSongRendersInPlayerAndReleasesWhenClosed$1.invokeSuspend(PlayerVisualizerDeviceTest.kt:92)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.internal.ScopeCoroutine.afterResume(Scopes.kt:35)
+	at kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:101)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:47)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+	at io.github.currencortex.music.PlayerVisualizerDeviceTest.realSongRendersInPlayerAndReleasesWhenClosed(PlayerVisualizerDeviceTest.kt:31)
+	... 8 trimmed
+Caused by: java.lang.SecurityException: grantRuntimePermission: Neither user 2000 nor current process has android.permission.GRANT_RUNTIME_PERMISSIONS.
+	at android.os.Parcel.createExceptionOrNull(Parcel.java:3369)
+	at android.os.Parcel.createException(Parcel.java:3353)
+	at android.os.Parcel.readException(Parcel.java:3336)
+	at android.os.Parcel.readException(Parcel.java:3278)
+	at android.app.IUiAutomationConnection$Stub$Proxy.grantRuntimePermission(IUiAutomationConnection.java:777)
+	at android.app.UiAutomation.grantRuntimePermissionAsUser(UiAutomation.java:1583)
+	... 23 more
+
+INSTRUMENTATION_STATUS: test=realSongRendersInPlayerAndReleasesWhenClosed
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 13.229
+There was 1 failure:
+1) realSongRendersInPlayerAndReleasesWhenClosed(io.github.currencortex.music.PlayerVisualizerDeviceTest)
+java.lang.SecurityException: Error granting runtime permission
+	at android.app.UiAutomation.grantRuntimePermissionAsUser(UiAutomation.java:1586)
+	at android.app.UiAutomation.grantRuntimePermission(UiAutomation.java:1552)
+	at io.github.currencortex.music.PlayerVisualizerDeviceTest$realSongRendersInPlayerAndReleasesWhenClosed$1.invokeSuspend(PlayerVisualizerDeviceTest.kt:92)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+	at kotlinx.coroutines.internal.ScopeCoroutine.afterResume(Scopes.kt:35)
+	at kotlinx.coroutines.AbstractCoroutine.resumeWith(AbstractCoroutine.kt:101)
+	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:47)
+	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+	at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:263)
+	at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:94)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:70)
+	at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source:1)
+	at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:48)
+	at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source:1)
+	at io.github.currencortex.music.PlayerVisualizerDeviceTest.realSongRendersInPlayerAndReleasesWhenClosed(PlayerVisualizerDeviceTest.kt:31)
+	... 8 trimmed
+Caused by: java.lang.SecurityException: grantRuntimePermission: Neither user 2000 nor current process has android.permission.GRANT_RUNTIME_PERMISSIONS.
+	at android.os.Parcel.createExceptionOrNull(Parcel.java:3369)
+	at android.os.Parcel.createException(Parcel.java:3353)
+	at android.os.Parcel.readException(Parcel.java:3336)
+	at android.os.Parcel.readException(Parcel.java:3278)
+	at android.app.IUiAutomationConnection$Stub$Proxy.grantRuntimePermission(IUiAutomationConnection.java:777)
+	at android.app.UiAutomation.grantRuntimePermissionAsUser(UiAutomation.java:1583)
+	... 23 more
+
+FAILURES!!!
+Tests run: 1,  Failures: 1
+
+
+INSTRUMENTATION_CODE: -1

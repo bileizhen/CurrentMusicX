@@ -167,7 +167,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 val stageWidth = minOf(maxWidth, stageHeight * 2.6f, 840.dp)
                 Box(Modifier.fillMaxSize().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
                 Row(Modifier.size(stageWidth, stageHeight).testTag("player_wide_stage"), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-                    WideCoverContent(vm, Modifier.weight(1f).fillMaxHeight())
+                    WideCoverContent(vm, Modifier.weight(1f).fillMaxHeight(),
+                        visualizerVisible = expanded && overlay == PlayerOverlay.NONE && !queueGesture)
                     HorizontalPager(pager, Modifier.weight(1.05f).fillMaxHeight().testTag("player_wide_pager")
                         .semantics { this[PlayerPagePosition] = pager.currentPage + pager.currentPageOffsetFraction },
                         beyondViewportPageCount = 1,
@@ -221,6 +222,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         } else CoverContent(vm, Modifier.fillMaxSize(), transitionTarget = pager.currentPage == 0,
                             active = pager.currentPage == 0 || pager.isScrollInProgress,
                             pagerRole = PlayerPagerArtworkRole.COVER,
+                            visualizerVisible = expanded && overlay == PlayerOverlay.NONE && !queueGesture && pager.settledPage == 0 && !pager.isScrollInProgress,
                             onPreviewCoordinates = { previewCoordinates = it })
                         }
                     }
@@ -242,7 +244,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss)
         when (overlay) {
             PlayerOverlay.NONE -> Unit
-            PlayerOverlay.VISUALIZER -> io.github.currencortex.music.feature.visualizer.AudioAnalysisDebugDialog(vm, expanded, dismiss)
+            PlayerOverlay.VISUALIZER -> io.github.currencortex.music.feature.visualizer.VisualizerSettingsDialog(vm, expanded, dismiss)
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) })
             PlayerOverlay.QUEUE -> Unit
             PlayerOverlay.MODE -> MusicDialog("播放模式", dismiss) {
@@ -273,7 +275,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     else { dismiss(); menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false)) }
                 })
                 MusicDestinationRow("播放音质", summary = settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL)
-                MusicDestinationRow("音乐可视化", summary = "实时频谱与节拍分析", modifier = Modifier.testTag("open_visualizer"),
+                MusicDestinationRow("音乐可视化", summary = if (settings.visualizerEnabled) "播放页特效已开启" else "封面特效与预设", modifier = Modifier.testTag("open_visualizer"),
                     onClick = { overlay = PlayerOverlay.VISUALIZER })
                 MusicDestinationRow("播放模式", summary = queue.mode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL)
                 MusicDestinationRow("定时关闭", summary = sleepSummary(sleepState), modifier = Modifier.testTag("open_sleep_timer"),
@@ -313,14 +315,20 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 
 @Composable private fun CoverContent(vm: PlayerViewModel, modifier: Modifier, transitionTarget: Boolean = true,
     active: Boolean = true, pagerRole: PlayerPagerArtworkRole? = null, showPreview: Boolean = true,
-    onPreviewCoordinates: (LayoutCoordinates) -> Unit = {}) {
+    onPreviewCoordinates: (LayoutCoordinates) -> Unit = {}, visualizerVisible: Boolean = true) {
     val queue by vm.queue.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val effects = settings.visualizerEnabled
     val song = queue.current
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val coverSize = minOf(maxWidth * .92f, (maxHeight - if (showPreview) 200.dp else 128.dp).coerceAtLeast(72.dp), 360.dp)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            PlayerArtwork(song?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"),
+            if (effects) io.github.currencortex.music.feature.visualizer.PlayerVisualizerArtwork(vm,
+                visualizerVisible && active, Modifier.size(coverSize)) {
+                PlayerArtwork(song?.cover.orEmpty(), Modifier.size(coverSize * .52f).testTag("player_cover"),
+                    transitionTarget = transitionTarget, pagerRole = pagerRole)
+            } else PlayerArtwork(song?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"),
                 transitionTarget = transitionTarget, pagerRole = pagerRole)
             Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(song?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -333,12 +341,16 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 }
 
 /** Artwork remains stationary while the right-hand pane switches controls and lyrics. */
-@Composable private fun WideCoverContent(vm: PlayerViewModel, modifier: Modifier) {
+@Composable private fun WideCoverContent(vm: PlayerViewModel, modifier: Modifier, visualizerVisible: Boolean = true) {
     val queue by vm.queue.collectAsStateWithLifecycle()
+    val settings by vm.settings.collectAsStateWithLifecycle()
     BoxWithConstraints(modifier.fillMaxWidth().testTag("player_wide_cover_content")) {
         val coverSize = minOf(maxWidth * .96f, (maxHeight - 8.dp).coerceAtLeast(0.dp), 360.dp)
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"))
+            if (settings.visualizerEnabled) io.github.currencortex.music.feature.visualizer.PlayerVisualizerArtwork(vm,
+                visualizerVisible, Modifier.size(coverSize)) {
+                PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.size(coverSize * .52f).testTag("player_cover"))
+            } else PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"))
         }
     }
 }
