@@ -21,7 +21,7 @@ import io.github.currencortex.music.core.visualizer.*
 import io.github.currencortex.music.data.visualizer.*
 import kotlinx.coroutines.flow.collectLatest
 
-private fun Context.visualizerWindow(): Window? = when (this) {
+internal fun Context.visualizerWindow(): Window? = when (this) {
     is Activity -> window
     is ContextWrapper -> baseContext.visualizerWindow()
     else -> null
@@ -30,11 +30,13 @@ private fun Context.visualizerWindow(): Window? = when (this) {
 /** One VSync loop per active layer; only the draw lambda reads its high-frequency revision. */
 @Composable fun VisualizerRenderLayer(engine: AudioAnalysisEngine, modifier: Modifier = Modifier,
     settings: VisualizerRenderSettings = VisualizerRenderSettings(), visible: Boolean = true,
-    render: VisualizerRenderState = remember(engine) { VisualizerRenderState() }) {
+    render: VisualizerRenderState = remember(engine) { VisualizerRenderState() },
+    presetRenderer: io.github.currencortex.music.feature.visualizer.render.VisualizerPresetRenderer? = null) {
     val view = LocalView.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val display = rememberVisualizerDisplay(view)
     val currentSettings = rememberUpdatedState(settings)
+    val currentRenderer = rememberUpdatedState(presetRenderer)
     val path = remember { Path() }
     val waveformStroke = remember { Stroke(2f) }
     SideEffect { render.monitor.composition() }
@@ -49,13 +51,13 @@ private fun Context.visualizerWindow(): Window? = when (this) {
                     engine.status.collectLatest { status ->
                         val capture = status == CaptureStatus.CAPTURING
                         val fade = status == CaptureStatus.PAUSED && render.frame.audioTimestampNanos > 0
-                        if (!capture && !fade) { render.clear(); return@collectLatest }
+                        if (!capture && !fade) { render.clear(); currentRenderer.value?.reset(); return@collectLatest }
                         if (fade) render.interpolator.pause()
                         render.monitor.resetTiming()
                         render.running = true
                         var previousSettings = currentSettings.value
                         var previousDisplay = display.value
-                        var previousQuality = quality.quality
+                        var previousQuality = VisualizerQuality.entries[maxOf(quality.quality.ordinal, previousSettings.preferredQuality.ordinal)]
                         var decision = VisualizerFrameRatePolicy.decide(previousSettings, previousDisplay, previousQuality)
                         render.preferredFps = decision.preferenceFps.toFloat()
                         var lastStatistics = 0L
@@ -68,23 +70,24 @@ private fun Context.visualizerWindow(): Window? = when (this) {
                             VisualizerRenderLoop(clock).run({ decision.effectiveFps }, render.monitor::tick) { time, dt ->
                                 val config = currentSettings.value
                                 val device = display.value
-                                if (config != previousSettings || device != previousDisplay || quality.quality != previousQuality) {
+                                if (config != previousSettings || device != previousDisplay || maxOf(quality.quality.ordinal, config.preferredQuality.ordinal) != previousQuality.ordinal) {
                                     if (config.frameRate != previousSettings.frameRate || config.automaticOptimization != previousSettings.automaticOptimization) quality.reset()
-                                    decision = VisualizerFrameRatePolicy.decide(config, device, quality.quality)
+                                    decision = VisualizerFrameRatePolicy.decide(config, device, VisualizerQuality.entries[maxOf(quality.quality.ordinal, config.preferredQuality.ordinal)])
                                     render.monitor.resetTiming()
-                                    previousSettings = config; previousDisplay = device; previousQuality = quality.quality
+                                    previousSettings = config; previousDisplay = device; previousQuality = VisualizerQuality.entries[maxOf(quality.quality.ordinal, config.preferredQuality.ordinal)]
                                     render.preferredFps = decision.preferenceFps.toFloat()
                                 }
-                                render.quality = quality.quality
+                                render.quality = previousQuality
                                 if (capture) {
                                     val audio = engine.frames.value
                                     render.interpolator.accept(audio)
                                     render.monitor.audio(audio.timestampNanos)
                                 }
                                 render.interpolator.step(time, dt)
+                                currentRenderer.value?.step(render.frame, time, dt, render.quality)
                                 render.revision++
                                 if (time - lastStatistics >= 500_000_000L) {
-                                    val stats = render.monitor.snapshot(time, config, device, decision, quality.quality, true)
+                                    val stats = render.monitor.snapshot(time, config, device, decision, render.quality, true)
                                     render.statistics.value = stats
                                     render.audioReadout.value = engine.frames.value.copy(beatPulse = render.frame.pulse)
                                     quality.observe(time, stats, config.automaticOptimization)
@@ -94,17 +97,20 @@ private fun Context.visualizerWindow(): Window? = when (this) {
                                 !fade || time - fadeStart < 600_000_000L
                             }
                         } finally { windowMetrics?.close() }
-                        render.clear()
+                        render.clear(); currentRenderer.value?.reset()
                     }
-                } finally { render.clear() }
+                } finally { render.clear(); currentRenderer.value?.reset() }
             }
-        } finally { render.clear() }
+        } finally { render.clear(); currentRenderer.value?.reset() }
     }
-    DisposableEffect(render) { onDispose { render.clear() } }
+    DisposableEffect(render) { onDispose { render.clear(); currentRenderer.value?.reset() } }
     Canvas(modifier.preferredFrameRate(render.preferredFps)) {
         render.revision // The only 30–120 Hz snapshot read, in the draw phase.
         val started = System.nanoTime()
         val frame = render.frame
+        if (presetRenderer != null) {
+            with(presetRenderer) { render(frame) }
+        } else {
         drawRect(Color(0xFF10121C))
         val values = if (settings.rawSpectrum) frame.rawSpectrum else frame.spectrum
         val stride = render.quality.spectrumStride
@@ -127,6 +133,7 @@ private fun Context.visualizerWindow(): Window? = when (this) {
         drawCircle(Color(0xFFFFBE62), size.minDimension * (.025f + .035f * frame.pulse),
             Offset(size.width - 18f, 18f), alpha = .2f + .8f * frame.pulse)
         drawLine(Color(0xFF53D8E8), Offset.Zero, Offset(size.width * frame.rms, 0f), 4f)
+        }
         if (render.running) render.monitor.draw(System.nanoTime(), System.nanoTime() - started)
     }
 }

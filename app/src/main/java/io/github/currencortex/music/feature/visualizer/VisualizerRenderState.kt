@@ -20,7 +20,7 @@ import io.github.currencortex.music.data.visualizer.*
         running = false; preferredFps = 0f; interpolator.reset(); revision++
         statistics.value = statistics.value.copy(preferenceFps = 0, effectiveTargetFps = 0,
             renderTickRate = 0f, canvasDrawRate = 0f, measuredFrameRate = null, running = false,
-            audioCaptureRate = 0f, audioFrameAgeMs = null, renderJankPercentage = 0f, estimatedDroppedFrames = 0)
+            audioCaptureRate = 0f, audioFrameAgeMs = null, renderJankPercentage = 0f, estimatedDroppedFrames = 0, gpuAverageMs = null, gpuP95Ms = null)
         audioReadout.value = AudioAnalysisFrame()
     }
 }

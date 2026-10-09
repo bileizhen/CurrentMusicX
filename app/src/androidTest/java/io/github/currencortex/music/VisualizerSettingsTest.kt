@@ -19,7 +19,7 @@ class VisualizerSettingsTest {
             val original = settings.snapshot()
             assertFalse(original.visualizerEnabled)
             settings.setVisualizerEnabled(true)
-            assertEquals(original.copy(visualizerEnabled = true), settings.snapshot())
+            assertEquals(original.copy(visualizerEnabled = true, visualizerEffects = original.visualizerEffects.copy(enabled = true)), settings.snapshot())
             settings.setVisualizerFrameRate(io.github.currencortex.music.data.visualizer.VisualizerFrameRate.FPS_120)
             settings.editVisualizerRender { it.copy(automaticOptimization = false, rawSpectrum = true) }
             scope.coroutineContext[Job]!!.cancelAndJoin()

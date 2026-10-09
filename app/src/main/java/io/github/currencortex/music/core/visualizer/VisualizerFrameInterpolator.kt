@@ -11,6 +11,7 @@ class VisualizerInterpolatedFrame(val spectrum: FloatArray = FloatArray(48),
     var captureIntervalNanos = 52_000_000L
     var kickCount = 0L
     var transientCount = 0L
+    var generation = 0L
     fun clear() {
         spectrum.fill(0f); rawSpectrum.fill(0f); waveform.fill(0f)
         rms = 0f; bass = 0f; mid = 0f; treble = 0f; pulse = 0f; transientPulse = 0f
@@ -36,7 +37,7 @@ class VisualizerFrameInterpolator {
             if (interval in 5_000_000L..500_000_000L)
                 output.captureIntervalNanos = (output.captureIntervalNanos * .8 + interval * .2).toLong()
         }
-        target = frame; paused = false; output.audioTimestampNanos = frame.timestampNanos
+        target = frame; paused = false; output.audioTimestampNanos = frame.timestampNanos; output.generation = frame.generation
         for (i in output.rawSpectrum.indices) output.rawSpectrum[i] = safe(frame.rawSpectrum.getOrElse(i) { 0f })
     }
 
