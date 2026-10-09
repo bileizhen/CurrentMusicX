@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" tests="23" skipped="0" failures="0" errors="0" timestamp="2026-10-09T00:06:27.615Z" hostname="ROG-BILEIZHEN" time="0.037">
+  <properties/>
+  <testcase name="presetActivationDoesNotReplayOldEvents" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.004"/>
+  <testcase name="deltaTimeIsIndependentOfFrameRate" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.002"/>
+  <testcase name="shockwavesExpire" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.001"/>
+  <testcase name="scaleNeverExceedsSafetyLimit" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <testcase name="trackGenerationClearsOldEvents" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <testcase name="systemReducedMotionAlsoApplies" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <testcase name="windowFallbackPreservesConcurrentOwner" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.003"/>
+  <testcase name="malformedSpectrumIsSafe" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <testcase name="gpuMetricsRemainUnknownWhenNotAvailableAndAreMeasuredWhenPresent" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.009"/>
+  <testcase name="corruptedEnumFallsBack" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <testcase name="defaultsAreOptInAndOrbit" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.001"/>
+  <testcase name="shaderPolicyAlwaysRetainsCanvasOnOldApiFailureOrLowQuality" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <testcase name="windowFallbackWaitsForComposeAndRestoresPreviousPreference" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.001"/>
+  <testcase name="glitchExpiresAndHasCooldown" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <testcase name="parametersHaveFiniteSafeRanges" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <testcase name="kickOnlyTriggersOnce" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <testcase name="poolSizesFollowQuality" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <testcase name="shockwavesAreBoundedUnderManyKicks" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <testcase name="silenceDoesNotMoveParticlesOrInventEvents" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.001"/>
+  <testcase name="reducedMotionRemovesShakeAndAttenuatesGlitch" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <testcase name="pauseResetAndNewPresetDoNotKeepEnergy" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.001"/>
+  <testcase name="persistenceUsesExistingEnableAndPerformanceKeys" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.013"/>
+  <testcase name="zeroGlobalIntensityRemovesAudioMotion" classname="io.github.currencortex.music.core.visualizer.VisualizerEffectsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

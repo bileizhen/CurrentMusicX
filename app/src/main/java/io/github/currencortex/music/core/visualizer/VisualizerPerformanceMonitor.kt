@@ -16,6 +16,7 @@ data class VisualizerPerformanceSnapshot(
     val windowFrames: Long = 0, val droppedWindowReports: Long = 0, val running: Boolean = false,
     /** Late Canvas intervals and estimated missed target slots in the last five seconds. */
     val renderJankPercentage: Float = 0f, val estimatedDroppedFrames: Int = 0,
+    val gpuAverageMs: Float? = null, val gpuP95Ms: Float? = null,
 )
 
 /** Bounded rings. Frame callbacks only record primitives; sorting happens at 2 Hz, never in drawing. */
@@ -37,7 +38,7 @@ class VisualizerPerformanceMonitor {
     }
     private val ticks = Samples(); private val draws = Samples(); private val audio = Samples()
     private val windowIntervals = Samples(); private val windowTotal = Samples(); private val jank = Samples()
-    private val drawCpu = Samples()
+    private val drawCpu = Samples(); private val gpu = Samples()
     private var lastTick = 0L; private var lastDraw = 0L; private var lastAudio = 0L; private var lastWindow = 0L
     private var tickCount = 0L; private var drawCount = 0L; private var compositionCount = 0L
     private var windowCount = 0L; private var droppedReports = 0L
@@ -58,15 +59,16 @@ class VisualizerPerformanceMonitor {
         lastAudio = time
     }
     @Synchronized fun composition() { compositionCount++ }
-    @Synchronized fun window(time: Long, totalNanos: Long, deadlineNanos: Long, reportsDropped: Int = 0) {
+    @Synchronized fun window(time: Long, totalNanos: Long, deadlineNanos: Long, reportsDropped: Int = 0, gpuNanos: Long = -1) {
         if (time <= lastWindow || time <= 0 || totalNanos < 0) return
         if (lastWindow > 0) windowIntervals.add(time, (time - lastWindow) / 1e6f)
         windowTotal.add(time, totalNanos / 1e6f)
+        if (gpuNanos >= 0) gpu.add(time, gpuNanos / 1e6f)
         jank.add(time, if (deadlineNanos > 0 && totalNanos > deadlineNanos) 100f else 0f)
         lastWindow = time; windowCount++; droppedReports += reportsDropped.coerceAtLeast(0)
     }
     @Synchronized fun resetTiming() {
-        ticks.clear(); draws.clear(); audio.clear(); windowIntervals.clear(); windowTotal.clear(); jank.clear(); drawCpu.clear()
+        ticks.clear(); draws.clear(); audio.clear(); windowIntervals.clear(); windowTotal.clear(); jank.clear(); drawCpu.clear(); gpu.clear()
         lastTick = 0; lastDraw = 0; lastAudio = 0; lastWindow = 0
     }
     @Synchronized fun snapshot(now: Long, settings: VisualizerRenderSettings, display: VisualizerDisplayState,
@@ -87,6 +89,8 @@ class VisualizerPerformanceMonitor {
             lastAudio.takeIf { it > 0 && running }?.let { (now - it).coerceAtLeast(0) / 1e6f },
             mean(windowTotal.recent(now)), mean(drawCpu.recent(now)), quality, decision.limitation,
             tickCount, drawCount, compositionCount, windowCount, droppedReports, running,
-            if (running && draw.isNotEmpty()) late * 100f / draw.size else 0f, if (running) missed else 0)
+            if (running && draw.isNotEmpty()) late * 100f / draw.size else 0f, if (running) missed else 0,
+            gpu.recent(now).takeIf { running && it.isNotEmpty() }?.let(::mean),
+            gpu.recent(now).takeIf { running && it.isNotEmpty() }?.let { percentile(it, .95f) })
     }
 }
