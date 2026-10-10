@@ -33,34 +33,6 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val currentSong = queue.map { it.current }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), queue.value.current)
     val settings = container.musicSettings.state
-    val audioAnalysis = io.github.currencortex.music.core.visualizer.AudioAnalysisEngine(
-        viewModelScope, io.github.currencortex.music.core.visualizer.VisualizerCaptureSource())
-    private val captureVisibility = MutableStateFlow(false to false)
-    private val captureOwners = io.github.currencortex.music.core.visualizer.CaptureVisibilityRegistry()
-    private val debugCaptureOwner = Any()
-    init {
-        viewModelScope.launch {
-            val playback = state.map { Triple(it.mode != PlayerMode.CAST && it.song?.video != true, it.playing, it.song?.id) }.distinctUntilChanged()
-            combine(settings.map { it.visualizerEnabled }.distinctUntilChanged(), container.audioSessionId,
-                playback, captureVisibility, container.audioTimelineRevision) { enabled, session, playback, visibility, revision ->
-                io.github.currencortex.music.core.visualizer.CaptureRequest(enabled, visibility.first,
-                    visibility.second, playback.first, playback.second, session, revision, playback.third)
-            }.distinctUntilChanged().collect(audioAnalysis::request)
-        }
-    }
-    fun visualizerVisible(visible: Boolean, permission: Boolean) = visualizerVisible(debugCaptureOwner, visible, permission)
-    fun visualizerVisible(owner: Any, visible: Boolean, permission: Boolean) {
-        captureVisibility.value = captureOwners.update(owner, visible, permission)
-    }
-    fun visualizerEnabled(enabled: Boolean) = viewModelScope.launch { container.musicSettings.setVisualizerEnabled(enabled) }
-    fun visualizerFrameRate(value: io.github.currencortex.music.data.visualizer.VisualizerFrameRate) =
-        viewModelScope.launch { container.musicSettings.setVisualizerFrameRate(value) }
-    fun visualizerRender(transform: (io.github.currencortex.music.data.visualizer.VisualizerRenderSettings) ->
-        io.github.currencortex.music.data.visualizer.VisualizerRenderSettings) =
-        viewModelScope.launch { container.musicSettings.editVisualizerRender(transform) }
-    fun visualizerEffects(transform: (io.github.currencortex.music.core.visualizer.VisualizerEffectConfig) ->
-        io.github.currencortex.music.core.visualizer.VisualizerEffectConfig) =
-        viewModelScope.launch { container.musicSettings.editVisualizerEffects(transform) }
     val libraryStatuses = container.libraryRepository.statuses
     val usesNeteaseLibrary = container.primaryLibrary.usesNetease
     private val _lyrics = MutableStateFlow(LyricsUiState())

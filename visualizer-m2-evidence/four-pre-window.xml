@@ -1,9 +1,0 @@
-<?xml version='1.0' encoding='UTF-8' ?>
-<testsuite name="io.github.currencortex.music.VisualizerPresetDeviceTest" tests="1" failures="0" errors="0" skipped="0" time="166.511" timestamp="2026-10-08T23:43:21" hostname="localhost">
-  <properties>
-    <property name="device" value="RMX5060 - 16" />
-    <property name="flavor" value="" />
-    <property name="project" value=":app" />
-  </properties>
-  <testcase name="allPresetsAndLifecycle" classname="io.github.currencortex.music.VisualizerPresetDeviceTest" time="166.201" />
-</testsuite>
