@@ -154,12 +154,6 @@ class MusicService : MediaSessionService() {
             }
         }
         player.addListener(object : Player.Listener {
-            override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
-                container.audioTimelineRevision.value += 1
-            }
-            override fun onAudioSessionIdChanged(audioSessionId: Int) {
-                container.audioSessionId.value = audioSessionId.coerceAtLeast(0)
-            }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 listening.update(SystemClock.elapsedRealtime(), isPlaying)
                 val song = trackedSong
@@ -182,7 +176,6 @@ class MusicService : MediaSessionService() {
                 if (container.playerController.state.value.mode == PlayerMode.ROOM) container.playerController.external?.failed()
             }
         })
-        container.audioSessionId.value = player.audioSessionId.coerceAtLeast(0)
         scope.launch(Dispatchers.IO) {
             for (report in reports) if (report.session == currentSession()) {
                 val result = appResult {
@@ -307,7 +300,6 @@ class MusicService : MediaSessionService() {
         if (container.playerController.state.value.mode == PlayerMode.LOCAL && !player.playWhenReady) { container.playerController.disconnect(); stopSelf() }
     }
     override fun onDestroy() {
-        container.audioSessionId.value = 0
         flushListening(); reports.close(); videoView?.player = null; videoView = null
         loading?.cancel()
         scope.cancel()
