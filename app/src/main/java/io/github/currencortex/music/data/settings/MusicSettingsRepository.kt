@@ -1,6 +1,5 @@
 package io.github.currencortex.music.data.settings
 
-import io.github.currencortex.music.core.visualizer.*
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import io.github.currencortex.music.core.config.ServerDefaults
@@ -17,11 +16,7 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val lyricsWeight: LyricsWeight = LyricsWeight.CURRENT,
                          val lyricsOffsetMs: Long = 0,
                          val lyricsDisplay: LyricsDisplayOptions = LyricsDisplayOptions(),
-                         val neteaseMainLibrary: Boolean = true,
-                         val visualizerEnabled: Boolean = false,
-                         val visualizerRender: io.github.currencortex.music.data.visualizer.VisualizerRenderSettings =
-                             io.github.currencortex.music.data.visualizer.VisualizerRenderSettings(),
-                         val visualizerEffects: VisualizerEffectConfig = VisualizerEffectConfig())
+                         val neteaseMainLibrary: Boolean = true)
 
 enum class KaraokeScope(val label: String) {
     CURRENT("仅当前行"), ALL("拓展全部行"), ALWAYS("总是");
@@ -71,32 +66,13 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val romanization = booleanPreferencesKey("lyrics.romanization")
     private val wordAnimation = booleanPreferencesKey("lyrics.wordAnimation")
     private val neteaseMain = booleanPreferencesKey("library.neteaseMain")
-    private val visualizer = booleanPreferencesKey("visualizer.enabled")
-    private val visualizerFps = stringPreferencesKey("visualizer.fps")
-    private val visualizerAuto = booleanPreferencesKey("visualizer.autoPerformance")
-    private val visualizerQuality = stringPreferencesKey("visualizer.quality")
-    private val visualizerRaw = booleanPreferencesKey("visualizer.rawSpectrum")
-    private val preset = stringPreferencesKey("visualizer.preset")
-    private val reduceMotion = booleanPreferencesKey("visualizer.reduceMotion")
-    private val effectNames = listOf("globalIntensity", "bassSensitivity", "spectrumSensitivity", "glowIntensity",
-        "particleDensity", "motionIntensity", "distortionIntensity", "glitchIntensity")
-    private val effectKeys = effectNames.map { floatPreferencesKey("visualizer.$it") }
-    private fun effects(p: Preferences) = VisualizerEffectConfig(p[visualizer] ?: false, VisualizerPreset.from(p[preset]),
-        p[effectKeys[0]] ?: 1f, p[effectKeys[1]] ?: 1f, p[effectKeys[2]] ?: 1f, p[effectKeys[3]] ?: 1f,
-        p[effectKeys[4]] ?: .65f, p[effectKeys[5]] ?: .6f, p[effectKeys[6]] ?: .5f, p[effectKeys[7]] ?: .5f,
-        p[reduceMotion] ?: false, p[visualizerAuto] ?: true).normalized()
     private fun decode(p: Preferences) = MusicSettings(p[server] ?: ServerDefaults.URL, AudioQuality.from(p[quality].orEmpty()),
         p[warning] ?: true, p[restore] ?: true, p[nickname].orEmpty(), p[account] ?: 0,
         p[preload] ?: true, p[metered] ?: false, LyricsTypography.normalize(p[lyricsSize] ?: LyricsTypography.DEFAULT_SIZE),
         LyricsWeight.from(p[lyricsWeight]), p[lyricsOffset] ?: 0,
         LyricsDisplayOptions(p[centered] ?: false, (p[fontWeight] ?: 500).coerceIn(400, 900),
             p[blur] ?: true, p[stagger] ?: true, KaraokeScope.from(p[karaokeScope]), p[hideControls] ?: false,
-            p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true), p[neteaseMain] ?: true, p[visualizer] ?: false,
-        io.github.currencortex.music.data.visualizer.VisualizerRenderSettings(
-            io.github.currencortex.music.data.visualizer.VisualizerFrameRate.from(p[visualizerFps]),
-            p[visualizerAuto] ?: true, p[visualizerRaw] ?: false,
-            io.github.currencortex.music.data.visualizer.VisualizerQuality.entries.firstOrNull { it.name == p[visualizerQuality] }
-                ?: io.github.currencortex.music.data.visualizer.VisualizerQuality.ULTRA), effects(p))
+            p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true), p[neteaseMain] ?: true)
     val state = store.data.map(::decode)
         .stateIn(scope, SharingStarted.Eagerly, MusicSettings())
     suspend fun snapshot(): MusicSettings {
@@ -108,27 +84,6 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     suspend fun setWarning(value: Boolean) { store.edit { it[warning] = value } }
     suspend fun setRestore(value: Boolean) { store.edit { it[restore] = value } }
     suspend fun setPreload(value: Boolean) { store.edit { it[preload] = value } }
-    suspend fun setVisualizerEnabled(value: Boolean) { store.edit { it[visualizer] = value } }
-    suspend fun setVisualizerFrameRate(value: io.github.currencortex.music.data.visualizer.VisualizerFrameRate) {
-        store.edit { it[visualizerFps] = value.name }
-    }
-    suspend fun editVisualizerRender(transform: (io.github.currencortex.music.data.visualizer.VisualizerRenderSettings) ->
-        io.github.currencortex.music.data.visualizer.VisualizerRenderSettings) {
-        store.edit { p ->
-            val value = transform(decode(p).visualizerRender)
-            p[visualizerFps] = value.frameRate.name; p[visualizerAuto] = value.automaticOptimization; p[visualizerRaw] = value.rawSpectrum; p[visualizerQuality] = value.preferredQuality.name
-        }
-    }
-    suspend fun editVisualizerEffects(transform: (VisualizerEffectConfig) -> VisualizerEffectConfig) {
-        store.edit { p ->
-            val value = transform(effects(p)).normalized()
-            p[visualizer] = value.enabled; p[visualizerAuto] = value.adaptiveQuality
-            p[preset] = value.presetId.name; p[reduceMotion] = value.reduceMotion
-            val values = listOf(value.globalIntensity, value.bassSensitivity, value.spectrumSensitivity, value.glowIntensity,
-                value.particleDensity, value.motionIntensity, value.distortionIntensity, value.glitchIntensity)
-            effectKeys.forEachIndexed { i, key -> p[key] = values[i] }
-        }
-    }
     suspend fun setPreloadMetered(value: Boolean) { store.edit { it[metered] = value } }
     suspend fun setLyricsFontSize(value: Float) { store.edit { it[lyricsSize] = LyricsTypography.normalize(value) } }
     suspend fun setLyricsWeight(value: LyricsWeight) { store.edit { it[lyricsWeight] = value.name } }
