@@ -37,7 +37,7 @@ class UserCapabilitiesTest {
     @Volatile private var failNextPhoneLogin = false
     private val syncRequests = AtomicInteger()
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
-    private fun user(id: Int = 7): String = """{"id":$id,"username":"user$id","nickname":"${if (id == 7) nickname else "Second user"}","bio":"Profile bio","avatarDecoration":"$decoration","publicSquare":true,"stat":{"likes":3,"favs":2,"playDays":5,"listenMs":7200000}}"""
+    private fun user(id: Int = 7): String = """{"id":$id,"username":"user$id","nickname":"${if (id == 7) nickname else "Second user"}","bio":"Profile bio","avatarDecoration":"$decoration","publicSquare":true,"isAdmin":true,"isSuper":false,"stat":{"likes":3,"favs":2,"playDays":5,"listenMs":7200000}}"""
     @Before fun prepare() = runBlocking {
         namespace = "user-test-${UUID.randomUUID()}"
         container = AppContainer(ApplicationProvider.getApplicationContext<CurrentMusicApplication>(), namespace)
@@ -59,9 +59,9 @@ class UserCapabilitiesTest {
                     path == "/cm/decorations/scales" -> json("""{"scales":{"frame-one":1.4}}""")
                     path == "/cm/users/square" -> {
                         assertNull(request.getHeader("Authorization"))
-                        json("""{"total":1,"users":[{"id":9,"nickname":"Public user","bio":"Public bio","days":5}],"stats":{"users":1,"listening":0}}""")
+                        json("""{"total":1,"users":[{"id":9,"nickname":"Public user","bio":"Public bio","days":5,"is_admin":1,"is_super":1}],"stats":{"users":1,"listening":0}}""")
                     }
-                    path == "/cm/users/9/profile" -> json("""{"user":{"id":9,"nickname":"Public user","bio":"Public bio"},"stat":{"listenMs":60000}}""")
+                    path == "/cm/users/9/profile" -> json("""{"user":{"id":9,"nickname":"Public user","bio":"Public bio","isAdmin":true,"isSuper":true},"stat":{"listenMs":60000}}""")
                     path == "/cm/daily" -> json("""{"daily":[],"forYou":[]}""")
                     path == "/cm/playlists" -> json("""{"playlists":[]}""")
                     path == "/cm/plays/recent" -> json("""{"songs":[]}""")
@@ -130,6 +130,7 @@ class UserCapabilitiesTest {
         restoration.setContent { CurrentMusicApp(container) }
         compose.waitUntil(15000) { compose.onAllNodesWithText("首页").fetchSemanticsNodes().isNotEmpty() }
         me()
+        compose.onNodeWithTag("user_role_admin").assertIsDisplayed()
         compose.onNodeWithText("2 小时 0 分").assertExists()
         compose.onNodeWithTag("edit_profile").performClick()
         compose.onNodeWithTag("profile_nickname").performTextReplacement("Updated user")
@@ -139,8 +140,12 @@ class UserCapabilitiesTest {
         compose.onNodeWithText("关闭").performClick()
         compose.onNodeWithText("发现").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithTag("discover_user_9").fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("user_role_super_admin", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("discover_user_9").performScrollTo().performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Public user").fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("user_role_super_admin").assertIsDisplayed()
         compose.onNodeWithTag("edit_profile").assertDoesNotExist()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("Public user").assertExists()
