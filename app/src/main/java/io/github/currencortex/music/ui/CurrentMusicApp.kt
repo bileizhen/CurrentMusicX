@@ -6,6 +6,8 @@ import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -566,7 +568,13 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     .then(if (playerPresented || miniQueueOpen) Modifier.clearAndSetSemantics {} else Modifier)
                     .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) },
                 onOrigin = { dockOrigin = it }, mini = miniBody,
-                navigation = glassNavigation ?: { mod -> PlainFloatingBar(selected, labels, icons, ::selectTab, mod, embedded = true) })
+                navigation = glassNavigation ?: { mod -> PlainFloatingBar(selected, labels, icons, ::selectTab, mod, embedded = true) },
+                glow = {
+                    if (settings.navigationGlow && currentSong != null) io.github.currencortex.music.ui.component.NavigationGlow(
+                        currentSong?.cover.orEmpty(), playerVm.state, container.dockAudioLevel,
+                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(88.dp),
+                        active = dockVisible && !keyboardOpen && !playerPresented && !miniQueueOpen)
+                })
         } else if (miniRetainedAvailable) RetainedOverlay(dockVisible, Modifier.align(Alignment.BottomCenter)
             .then(if (playerPresented || miniQueueOpen) Modifier.clearAndSetSemantics {} else Modifier)
             .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) }) {
@@ -574,6 +582,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         if (showRootNavigation && !rootWide && !keyboardOpen && !settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
             StandardNavigationBar(selected, labels, icons, ::selectTab)
+            if (settings.navigationGlow && currentSong != null) io.github.currencortex.music.ui.component.NavigationGlow(
+                currentSong?.cover.orEmpty(), playerVm.state, container.dockAudioLevel,
+                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(48.dp), active = dockVisible && !playerPresented && !miniQueueOpen)
         }
         if (rootWide && showRootNavigation && !keyboardOpen) FloatingSideBar(selected, labels, icons, ::selectTab,
             Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(end = 12.dp, bottom = 12.dp))

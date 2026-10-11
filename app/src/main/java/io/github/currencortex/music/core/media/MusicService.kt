@@ -66,7 +66,8 @@ class MusicService : MediaSessionService() {
     override fun onBind(intent: Intent?): IBinder? = if (intent?.action == VIDEO_SURFACE) VideoBinder() else super.onBind(intent)
     override fun onCreate() {
         super.onCreate()
-        player = ExoPlayer.Builder(this)
+        val renderers = DockRenderersFactory(this, container.dockAudioLevel)
+        player = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory))
             .build().apply {
             setAudioAttributes(AudioAttributes.Builder().setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).setUsage(C.USAGE_MEDIA).build(), true)
@@ -306,6 +307,7 @@ class MusicService : MediaSessionService() {
         loading?.cancel()
         scope.cancel()
         session?.release(); player.release(); session = null
+        container.dockAudioLevel.reset()
         super.onDestroy()
     }
     companion object {

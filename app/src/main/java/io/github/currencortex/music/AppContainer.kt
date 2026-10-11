@@ -100,6 +100,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         io.github.currencortex.music.feature.lyrics.data.LyricsCache(java.io.File(context.cacheDir, "lyrics$storageSuffix")),
         { logger.debug("Lyrics", it) })
     val playbackQueue = PlaybackQueue()
+    val dockAudioLevel = DockAudioLevel()
     val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)
     val sleepTimer = io.github.currencortex.music.core.media.SleepTimer(playerController, playerScope)
     val roomRepository = io.github.currencortex.music.data.room.RoomRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }

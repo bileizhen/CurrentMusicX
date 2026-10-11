@@ -55,7 +55,7 @@ private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerS
 @Composable internal fun UnifiedMusicDock(expanded: Boolean, visible: Boolean, miniPresent: Boolean,
     navigationInteractive: Boolean, modifier: Modifier = Modifier,
     onOrigin: (() -> PlayerSheetOrigin?) -> Unit = {}, mini: @Composable () -> Unit,
-    navigation: @Composable (Modifier) -> Unit) {
+    navigation: @Composable (Modifier) -> Unit, glow: @Composable BoxScope.() -> Unit = {}) {
     val progress = animateFloatAsState(if (expanded) 1f else 0f, tween(320), label = "music dock expansion")
     val miniSpace = if (miniPresent) 64.dp else 0.dp
     val navigationSpace = 64.dp
@@ -77,12 +77,24 @@ private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerS
                 // while navigation is disappearing into the shorter secondary-page surface.
                 clip = progress.value < 1f
             }) {
-            // Backdrop materials clip their children too, so keep the glass in a sibling layer.
+            // Capture glass and light together, while navigation stays outside the surface clip.
             surface(Modifier.matchParentSize(), {
                 with(density) {
                     DockShape(miniSpace.toPx() + navigationTravel.toPx() * progress.value, 32.dp.toPx())
                 }
-            }) {}
+            }) {
+                Box(Modifier.matchParentSize().graphicsLayer {
+                    shape = DockShape(miniSpace.toPx() + navigationTravel.toPx() * progress.value, 32.dp.toPx())
+                    clip = true
+                    alpha = if (miniPresent) 1f else progress.value
+                }) {
+                    // Keep the light on the visible glass edge as navigation folds away.
+                    // Translate only its drawing layer so the mini row keeps a fixed layout.
+                    Box(Modifier.matchParentSize().graphicsLayer {
+                        translationY = -navigationTravel.toPx() * (1 - progress.value)
+                    }) { glow() }
+                }
+            }
             Box(Modifier.fillMaxSize().onGloballyPositioned { coordinates ->
                 // Measure inside the moving layer: the outer dock layout reserves the
                 // hidden navigation and reports its untranslated position on secondary pages.
