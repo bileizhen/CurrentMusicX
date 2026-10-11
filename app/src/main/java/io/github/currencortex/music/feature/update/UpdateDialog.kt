@@ -29,7 +29,7 @@ import io.github.currencortex.music.ui.util.openExternalLink
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDialog
 import top.yukonga.miuix.kmp.preference.OverlaySpinnerPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 

@@ -7,7 +7,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 

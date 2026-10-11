@@ -28,7 +28,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
