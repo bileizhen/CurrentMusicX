@@ -50,6 +50,9 @@ class MusicRepository(private val api: ApiClient,
                 authenticated = true, expectedSession = session))
         val url = dto.url?.toHttpUrlOrNull() ?: throw ApiException(ErrorKind.NotFound)
         if (audioAccess().identity != access.identity) throw ApiException(ErrorKind.AudioSourceChanged)
-        return AudioSource(url.toString(), dto.level, maxOf(dto.sr, dto.sampleRate), maxOf(dto.ch, dto.channelCount), dto.type, dto.md5)
+        // CurrentMusic documents a 20-minute CDN URL lifetime. Older servers omit expi;
+        // use only five minutes in that case, rather than discarding a prefetch after 30s.
+        return AudioSource(url.toString(), dto.level, maxOf(dto.sr, dto.sampleRate), maxOf(dto.ch, dto.channelCount), dto.type, dto.md5,
+            validForSeconds = dto.expi.takeIf { it > 0 } ?: 300)
     }
 }
