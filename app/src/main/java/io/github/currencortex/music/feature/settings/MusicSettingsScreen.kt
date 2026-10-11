@@ -23,7 +23,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import io.github.currencortex.music.data.settings.AudioProvider
 
-@Composable fun MusicSettingsScreen(vm: MusicSettingsViewModel, onStorage: () -> Unit) {
+@Composable fun MusicSettingsScreen(vm: MusicSettingsViewModel, onEqualizer: () -> Unit = {}, onStorage: () -> Unit) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
     val cacheBytes by vm.cacheBytes.collectAsStateWithLifecycle()
@@ -98,6 +98,8 @@ import io.github.currencortex.music.data.settings.AudioProvider
             summary = "已缓存 ${String.format(java.util.Locale.ROOT, "%.1f", cacheBytes / 1048576.0)} MB") } }
 
         item { MusicSectionHeader("播放") }
+        item { Card { MusicDestinationRow("均衡器", onEqualizer, Modifier.testTag("open_equalizer"),
+            summary = "五段调节 · 音效预设") } }
         item { Card { MusicDestinationRow("默认音质", { qualityOpen = true },
             Modifier.testTag("default_quality"), summary = settings.quality.label) } }
         item { Card {
