@@ -155,6 +155,7 @@ class MusicService : MediaSessionService() {
             }
         }
         player.addListener(object : Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) { container.equalizer.attach(audioSessionId) }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 listening.update(SystemClock.elapsedRealtime(), isPlaying)
                 val song = trackedSong
@@ -178,6 +179,7 @@ class MusicService : MediaSessionService() {
                 if (container.playerController.state.value.mode == PlayerMode.ROOM) container.playerController.external?.failed()
             }
         })
+        scope.launch { container.equalizerSettings.state.collect { container.equalizer.configure(it) } }
         scope.launch(Dispatchers.IO) {
             for (report in reports) if (report.session == currentSession()) {
                 val result = appResult {
@@ -325,6 +327,7 @@ class MusicService : MediaSessionService() {
         loading?.cancel()
         scope.cancel()
         session?.release(); player.release(); session = null
+        container.equalizer.close()
         container.dockAudioLevel.reset()
         super.onDestroy()
     }

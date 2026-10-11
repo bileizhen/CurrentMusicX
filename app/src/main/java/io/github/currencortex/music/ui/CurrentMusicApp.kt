@@ -122,6 +122,7 @@ private const val NETWORK = 21
 private const val PLAYER = 22
 private const val SEARCH = 23
 private const val STORAGE = 24
+private const val EQUALIZER = 25
 private const val HOME_TAB = 0
 private const val DISCOVER_TAB = 1
 private const val ME_TAB = 2
@@ -425,7 +426,13 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates) }
                     }
                 }
-                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm) { navigateTo(STORAGE) } }
+                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onEqualizer = { navigateTo(EQUALIZER) }) { navigateTo(STORAGE) } }
+                entry(EQUALIZER.toString()) {
+                    val vm: io.github.currencortex.music.feature.settings.EqualizerViewModel = viewModel(factory = viewModelFactory {
+                        io.github.currencortex.music.feature.settings.EqualizerViewModel(container)
+                    })
+                    io.github.currencortex.music.feature.settings.EqualizerScreen(vm)
+                }
                 entry(STORAGE.toString()) {
                     val vm: StorageViewModel = viewModel(key = "storage", factory = viewModelFactory { StorageViewModel(container) })
                     StorageScreen(vm)
@@ -611,7 +618,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
                     onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") },
                     onDialogActive = { playerDialogOpen = it }, onNetwork = { navigateTo(NETWORK) },
-                    onLike = { currentSong?.let(libraryVm::choosePlaylist) })
+                    onLike = { currentSong?.let(libraryVm::choosePlaylist) }, onEqualizer = { navigateTo(EQUALIZER) })
             }
         }
         if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm) { miniQueueOpen = false }

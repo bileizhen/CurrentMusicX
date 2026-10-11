@@ -46,6 +46,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         io.github.currencortex.music.core.update.AndroidUpdateInstaller(context.applicationContext), appScope)
     val logger = AppLogger(context)
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
+    val equalizerSettings = io.github.currencortex.music.data.settings.EqualizerSettingsRepository(settingsStore, appScope)
+    val equalizer = PlaybackEqualizer { logger.warn("Equalizer", it) }
     val audioSettings = io.github.currencortex.music.data.settings.AudioSourceSettings(settingsStore,
         SecureTokenStore(context, ".leiz$storageSuffix"), appScope)
     val accountVault = EncryptedAccountVault.create(context, storageSuffix, settingsStore, appScope)
@@ -182,6 +184,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         logger = logger,
     )
     override fun close() {
+        equalizer.close()
         roomSession.disconnect()
         appScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         playerScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
