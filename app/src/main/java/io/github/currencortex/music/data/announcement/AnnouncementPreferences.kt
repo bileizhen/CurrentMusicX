@@ -13,7 +13,7 @@ data class AnnouncementReadState(val suppressRead: Boolean = false, val read: Se
         if (!suppressRead) items else items.filter { announcementKey(server, it) !in read }
 }
 
-internal fun announcementKey(server: String, item: Announcement): String {
+fun announcementKey(server: String, item: Announcement): String {
     val identity = if (item.id > 0) item.id.toString() else "${item.createdAt}:${item.title}:${item.body}"
     return MessageDigest.getInstance("SHA-256").digest("$server\n$identity".toByteArray(Charsets.UTF_8))
         .joinToString("") { "%02x".format(it) }

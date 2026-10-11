@@ -2,6 +2,10 @@
 
 完整发布说明与安装包见 [CurrentMusicX Releases](https://github.com/bileizhen/CurrentMusicX/releases)。
 
+## 未发布
+
+- 公告在返回应用及前台使用时重新检查，网络失败自动重试；已关闭的旧公告不会在同一次使用中反复弹出，新公告仍会提示。
+
 ## 1.1.6 · 2026-10-11
 
 - 音乐资料、搜索、歌词、推荐、歌单与收藏改为手机原生直连网易云，歌曲播放源继续使用 CurrentMusic。

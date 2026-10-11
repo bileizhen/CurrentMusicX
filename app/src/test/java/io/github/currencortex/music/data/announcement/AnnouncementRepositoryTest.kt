@@ -101,4 +101,38 @@ class AnnouncementRepositoryTest {
             assertNull(Announcement(link = link).detailUrl)
         assertEquals("http://example.com/", Announcement(link = "http://example.com").detailUrl)
     }
+
+    @Test fun refreshFindsNewNoticesAndFailureDoesNotErasePendingContent() = runBlocking {
+        MockWebServer().use { server ->
+            val base = server.url("/cm/").toString()
+            val refreshes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+            val repository = AnnouncementRepository(ApiClient({ base }, { null }, {}))
+            val collected = mutableListOf<List<Announcement>>()
+            server.enqueue(MockResponse().setBody(fixture))
+            val job = launch { repository.observe(flowOf(base), refreshes, clearBeforeFetch = false).collect { collected += it } }
+            try {
+                withTimeout(3_000) { while (collected.isEmpty()) delay(5) }
+                server.enqueue(MockResponse().setResponseCode(502))
+                refreshes.emit(Unit)
+                withTimeout(3_000) { while (server.requestCount < 2) delay(5) }
+                delay(100)
+                assertEquals(1, collected.size)
+                server.enqueue(MockResponse().setBody("""{"items":[{"id":5,"title":"New"}]}"""))
+                refreshes.emit(Unit)
+                withTimeout(3_000) { while (collected.last().first().id != 5L) delay(5) }
+                assertEquals(3, server.requestCount)
+            } finally { job.cancelAndJoin() }
+        }
+    }
+
+    @Test fun temporaryFailureRetriesAndRecoversWithoutAnotherStartup() = runBlocking {
+        MockWebServer().use { server ->
+            val base = server.url("/cm/").toString()
+            server.enqueue(MockResponse().setResponseCode(502))
+            server.enqueue(MockResponse().setBody(fixture))
+            val repository = AnnouncementRepository(ApiClient({ base }, { null }, {}))
+            assertEquals(2, repository.observe(flowOf(base), retryCount = 1).last().size)
+            assertEquals(2, server.requestCount)
+        }
+    }
 }
