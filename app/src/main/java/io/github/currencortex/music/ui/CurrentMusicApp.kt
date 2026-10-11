@@ -146,6 +146,15 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val updateVm: UpdateSettingsViewModel = viewModel(factory = viewModelFactory { UpdateSettingsViewModel(container.updateSettings) })
     val announcementVm: io.github.currencortex.music.feature.announcement.AnnouncementViewModel =
         viewModel(factory = viewModelFactory { io.github.currencortex.music.feature.announcement.AnnouncementViewModel(container) })
+    val announcementLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(announcementVm, announcementLifecycle) {
+        fun update() = announcementVm.setForeground(
+            announcementLifecycle.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, _ -> update() }
+        announcementLifecycle.lifecycle.addObserver(observer)
+        update()
+        onDispose { announcementLifecycle.lifecycle.removeObserver(observer); announcementVm.setForeground(false) }
+    }
     val announcements by announcementVm.items.collectAsStateWithLifecycle()
     val suppressReadAnnouncements by announcementVm.suppressRead.collectAsStateWithLifecycle()
     val updateDialogVisible by container.updates.dialogVisible.collectAsStateWithLifecycle()

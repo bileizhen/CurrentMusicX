@@ -3,9 +3,14 @@ package io.github.currencortex.music.data.announcement
 import io.github.currencortex.music.core.network.ApiClient
 import io.github.currencortex.music.core.network.RequestSession
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.Serializable
@@ -41,15 +46,25 @@ class AnnouncementRepository(private val api: ApiClient, private val timeoutMill
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    fun observe(servers: Flow<String>): Flow<List<Announcement>> = servers.distinctUntilChanged().transformLatest { server ->
-        emit(emptyList())
-        val items = try {
-            withTimeoutOrNull(timeoutMillis) { fetch(server) }.orEmpty()
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            emptyList()
+    fun observe(servers: Flow<String>, refreshes: Flow<Unit> = emptyFlow(),
+        retryCount: Int = 0, clearBeforeFetch: Boolean = true): Flow<List<Announcement>> =
+        servers.distinctUntilChanged().transformLatest { server ->
+        if (clearBeforeFetch) emit(emptyList())
+        merge(flowOf(Unit), refreshes).collectLatest {
+            var attempt = 0
+            while (true) {
+                val items = try {
+                    withTimeoutOrNull(timeoutMillis) { fetch(server) }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                    null
+                }
+                // A failed refresh must not erase a notice already waiting to be shown.
+                if (items != null) { emit(items); break }
+                if (attempt >= retryCount) break
+                delay(1_000L * ++attempt)
+            }
         }
-        emit(items)
     }
 }

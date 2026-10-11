@@ -178,4 +178,48 @@ class AnnouncementsTest {
             compose.waitUntil(5_000) { runBlocking { container.announcementPreferences.snapshot().read.size == 3 } }
         } finally { compose.runOnIdle { store.clear() } }
     }
+
+    @Test fun returningToForegroundChecksNewNoticesWithoutRepeatingDismissedOnes() {
+        release.countDown()
+        val store = ViewModelStore()
+        lateinit var vm: AnnouncementViewModel
+        compose.runOnIdle {
+            vm = ViewModelProvider(store, viewModelFactory { AnnouncementViewModel(container) })[AnnouncementViewModel::class.java]
+        }
+        try {
+            compose.waitUntil(10_000) { vm.items.value.size == 2 }
+            compose.runOnIdle { vm.dismiss(false); vm.setForeground(false) }
+            compose.waitForIdle()
+            extraNotice = true
+            compose.runOnIdle { vm.setForeground(true) }
+            compose.waitUntil(10_000) { vm.items.value.map { it.id } == listOf(3L) }
+            assertEquals(2, requests.get())
+            compose.runOnIdle { vm.dismiss(false); vm.setForeground(false) }
+            compose.waitForIdle()
+            compose.runOnIdle { vm.setForeground(true) }
+            compose.waitUntil(10_000) { requests.get() == 3 }
+            compose.waitForIdle()
+            assertTrue(vm.items.value.isEmpty())
+        } finally { compose.runOnIdle { store.clear() } }
+    }
+
+    @Test fun foregroundPollingFindsNewNoticeAndStopsWhenBackgrounded() {
+        release.countDown()
+        val store = ViewModelStore()
+        lateinit var vm: AnnouncementViewModel
+        compose.runOnIdle {
+            vm = ViewModelProvider(store, viewModelFactory { AnnouncementViewModel(container, 500) })[AnnouncementViewModel::class.java]
+        }
+        try {
+            compose.waitUntil(10_000) { vm.items.value.size == 2 }
+            compose.runOnIdle { vm.dismiss(true) }
+            extraNotice = true
+            compose.waitUntil(10_000) { vm.items.value.map { it.id } == listOf(3L) }
+            compose.runOnIdle { vm.setForeground(false) }
+            compose.waitForIdle()
+            val stopped = requests.get()
+            Thread.sleep(1_100)
+            assertEquals(stopped, requests.get())
+        } finally { compose.runOnIdle { store.clear() } }
+    }
 }
