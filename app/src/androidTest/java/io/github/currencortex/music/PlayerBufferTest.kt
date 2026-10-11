@@ -117,14 +117,19 @@ class PlayerBufferTest {
                 compose.runOnUiThread {
                     assertEquals(player.bufferedPosition, controller.state.value.bufferedPositionMs)
                     assertTrue(controller.state.value.bufferedProgress() > 0f)
+                    controller.state.value = controller.state.value.copy(audioFullyCached = true)
+                    controller.publish(player)
+                    assertEquals(1f, controller.state.value.bufferedProgress(), 0f)
                     controller.state.value = controller.state.value.copy(resolving = true)
                     controller.publish(player)
                     assertEquals(0L, controller.state.value.bufferedPositionMs)
+                    assertFalse(controller.state.value.audioFullyCached)
                     controller.state.value = controller.state.value.copy(resolving = false)
                     queue.replace(listOf(Song(id = 2, name = "Next track", durationMs = duration)), 0)
                     controller.publish(player)
                     assertEquals(2L, controller.state.value.song!!.id)
                     assertEquals(0L, controller.state.value.bufferedPositionMs)
+                    assertFalse(controller.state.value.audioFullyCached)
                 }
             } finally {
                 compose.runOnUiThread { if (playerCreated) player.release() }

@@ -4,6 +4,14 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class BufferedProgressTest {
+    @Test fun completeLocalCacheShowsFullAvailabilityWithoutWaitingForMemoryReadAhead() {
+        val state = PlayerState(durationMs = 180_000, bufferedPositionMs = 5_000, audioFullyCached = true)
+        assertEquals(1f, state.bufferedProgress(), 0f)
+        assertEquals(0f, state.copy(resolving = true).bufferedProgress(), 0f)
+        assertEquals(0f, state.copy(mode = PlayerMode.CAST).bufferedProgress(), 0f)
+        assertEquals(5_000f / 180_000, state.copy(mode = PlayerMode.ROOM).bufferedProgress(), .001f)
+        assertEquals(5_000f / 180_000, state.copy(audioFullyCached = false).bufferedProgress(), .001f)
+    }
     @Test fun unknownDurationAndRemotePlaybackNeverPretendToBeFullyLoaded() {
         val state = PlayerState(bufferedPositionMs = 20_000)
         assertEquals(0f, state.bufferedProgress(), 0f)

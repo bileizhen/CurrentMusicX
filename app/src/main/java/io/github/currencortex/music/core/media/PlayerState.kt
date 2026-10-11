@@ -9,9 +9,11 @@ data class PlayerState(val song: Song? = null, val playing: Boolean = false, val
                        val positionMs: Long = 0, val durationMs: Long = 0, val error: String? = null,
                        val warning: HighSpecWarning? = null, val mode: PlayerMode = PlayerMode.LOCAL,
                        val canControlPlayback: Boolean = true, val playRequested: Boolean = false,
-                       val playbackSpeed: Float = 1f, val bufferedPositionMs: Long = 0) {
+                       val playbackSpeed: Float = 1f, val bufferedPositionMs: Long = 0,
+                       val audioFullyCached: Boolean = false) {
     val showPause get() = playing || playRequested
     fun bufferedProgress(duration: Long = durationMs): Float =
         if (resolving || warning != null || mode == PlayerMode.CAST || duration <= 0) 0f
+        else if (mode == PlayerMode.LOCAL && audioFullyCached) 1f
         else (bufferedPositionMs.coerceAtLeast(0).toDouble() / duration).coerceIn(0.0, 1.0).toFloat()
 }
