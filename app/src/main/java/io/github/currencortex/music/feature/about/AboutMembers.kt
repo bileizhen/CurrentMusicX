@@ -37,7 +37,7 @@ import java.net.URL
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
+import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDialog
 import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
 
 internal data class MemberFocus(val member: AboutMember, val group: String)
