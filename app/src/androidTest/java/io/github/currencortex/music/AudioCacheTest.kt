@@ -77,25 +77,56 @@ class AudioCacheTest {
         assertNotNull(cache.completeSource(key))
         assertEquals(payload.size.toLong(), cache.cachedBytes(key, payload.size.toLong()))
     }
-    @Test fun completeAudioSurvivesReopenAndOfflineResolverButDeniedAccountDoesNotFallback() = runBlocking(Dispatchers.IO) {
+    @Test fun completeAudioSurvivesReopenWithoutResolvingButConfirmedDenialDoesNotFallback() = runBlocking(Dispatchers.IO) {
         val source = source()
         cache.rememberSource(key, source); assertArrayEquals(payload, read(key, source))
         cache.close(); cache = AudioCache(context, directory)
         var session = RequestSession("https://fixture/cm", "fixture-token")
         val request = AudioRequest(1, AudioQuality.STANDARD, 7, session)
         var denied = false
+        var offline = true
+        var loads = 0
         val resolver = AudioSourceResolver(cache, { session }) { _, _, _ ->
-            if (denied) throw ApiException(ErrorKind.Forbidden) else throw IOException("offline fixture")
+            loads++
+            if (denied) throw ApiException(ErrorKind.Forbidden)
+            if (offline) throw IOException("offline fixture")
+            source()
         }
         val resolved = resolver.resolve(request)
         assertEquals(key, resolved.key)
         assertTrue(resolved.source.url.startsWith("cache://audio/"))
         assertArrayEquals(payload, read(resolved.key, resolved.source))
         assertEquals(1, requests)
+        assertEquals("Complete cache must play without waiting for the source server", 0, loads)
         denied = true; resolver.invalidate()
-        try { resolver.resolve(request); fail("Forbidden must not fall back to cache") } catch (e: ApiException) { assertEquals(ErrorKind.Forbidden, e.kind) }
-        denied = false; session = RequestSession(session.server, "different-account-token")
+        try { resolver.resolve(request, refresh = true); fail("Forbidden must not fall back to cache") } catch (e: ApiException) { assertEquals(ErrorKind.Forbidden, e.kind) }
+        try { resolver.resolve(request); fail("Known denial must also block a cache hit") } catch (e: ApiException) { assertEquals(ErrorKind.Forbidden, e.kind) }
+        denied = false
+        try { resolver.resolve(request, refresh = true); fail("Network failure cannot erase a known denial") } catch (e: ApiException) { assertEquals(ErrorKind.Forbidden, e.kind) }
+        offline = false
+        resolver.resolve(request, refresh = true)
+        assertTrue(resolver.resolve(request).source.url.startsWith("cache://audio/"))
+        session = RequestSession(session.server, "different-account-token")
         try { resolver.resolve(request); fail("Stale session must not resolve") } catch (e: ApiException) { assertEquals(ErrorKind.Unauthorized, e.kind) }
+    }
+    @Test fun returningToFullyCachedSongAfterUrlExpirySkipsSourceAndCdnRequests() = runBlocking(Dispatchers.IO) {
+        val session = RequestSession("https://fixture/cm", "fixture-token")
+        val request = AudioRequest(1, AudioQuality.STANDARD, 7, session)
+        var clock = 0L
+        var loads = 0
+        val resolver = AudioSourceResolver(cache, { session }, now = { clock }) { _, _, _ -> loads++; source() }
+        val initial = resolver.resolve(request)
+        assertArrayEquals(payload, read(initial.key, initial.source))
+        clock = 900_000_000_000L
+        val returning = resolver.resolve(request)
+        assertTrue(returning.source.url.startsWith("cache://audio/"))
+        assertEquals(Long.MAX_VALUE, returning.refreshAfterMs)
+        assertArrayEquals(payload, read(returning.key, returning.source))
+        assertEquals(1, loads)
+        assertEquals(1, requests)
+        val otherAccount = request.copy(accountId = 8)
+        resolver.resolve(otherAccount)
+        assertEquals("Another account must not reuse this complete cache", 2, loads)
     }
     @Test fun sourceMemoIsSharedButQualityAccountServerAndRepresentationAreIsolated() = runBlocking(Dispatchers.IO) {
         val session = RequestSession("https://fixture/cm", "fixture-token")
@@ -214,7 +245,14 @@ class AudioCacheTest {
         }.array()
         val source = source("/silent.wav").copy(format = "wav", sampleRate = 16000, channelCount = 1)
         cache.rememberSource(key, source); cache.preload(key, source)
-        val offline = cache.completeSource(key)!!
+        val session = RequestSession("https://fixture/cm", "fixture-token")
+        var sourceRequests = 0
+        val resolver = AudioSourceResolver(cache, { session }) { _, _, _ ->
+            sourceRequests++
+            throw IOException("Source server must not be needed for complete audio")
+        }
+        val offline = resolver.resolve(AudioRequest(1, AudioQuality.STANDARD, 7, session)).source
+        assertEquals(0, sourceRequests)
         assertTrue(offline.url.startsWith("cache://audio/"))
         val player = withContext(Dispatchers.Main) {
             androidx.media3.exoplayer.ExoPlayer.Builder(context)

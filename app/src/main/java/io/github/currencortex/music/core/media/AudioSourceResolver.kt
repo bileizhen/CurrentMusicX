@@ -19,9 +19,11 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
     private val currentProvider: () -> String = { "currentmusic" },
     private val load: suspend (Long, AudioQuality, RequestSession) -> AudioSource) {
     private data class Entry(val request: AudioRequest, val source: AudioSource, val until: Long)
+    private data class Denial(val request: AudioRequest, val error: ApiException)
     private val memo = java.util.concurrent.ConcurrentHashMap<String, Entry>()
+    private val denied = java.util.concurrent.ConcurrentHashMap<String, Denial>()
     private val locks = Array(8) { Mutex() }
-    fun invalidate() { memo.clear() }
+    fun invalidate() { memo.clear(); denied.clear() }
     private fun checkRequest(request: AudioRequest) {
         if (request.session != currentSession()) throw ApiException(ErrorKind.Unauthorized)
         if (request.providerIdentity != currentProvider()) throw ApiException(ErrorKind.AudioSourceChanged)
@@ -37,9 +39,19 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
         return ResolvedAudio(entry.source, entry.request.key, (remainingMs - advanceMs).coerceAtLeast(250))
     }
     suspend fun resolve(request: AudioRequest, refresh: Boolean = false): ResolvedAudio = withContext(Dispatchers.IO) {
+        checkRequest(request)
+        val key = request.key
+        if (!refresh) {
+            denied[key]?.takeIf { it.request == request }?.let { throw it.error }
+            // Complete, account/provider/quality-scoped audio does not need a CDN URL.
+            // Partial cache must still resolve a live URL to read the missing bytes.
+            cache.completeSource(key)?.let {
+                checkRequest(request)
+                return@withContext ResolvedAudio(it, key, refreshAfterMs = Long.MAX_VALUE)
+            }
+        }
         // A background renewal must not block a switch that already has a valid URL.
         if (!refresh) saved(request)?.let { return@withContext it }
-        val key = request.key
         locks[(key.hashCode() and Int.MAX_VALUE) % locks.size].withLock {
             if (!refresh) saved(request)?.let { return@withLock it }
             checkRequest(request)
@@ -49,10 +61,18 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
             catch (e: Exception) {
                 // Never turn a denied or expired account response into an offline success.
                 val unavailable = if (e is ApiException) e.kind == ErrorKind.Server else e is IOException
-                if (!unavailable) throw e
+                if (!unavailable) {
+                    if (e is ApiException && e.kind != ErrorKind.RateLimited) {
+                        denied[key] = Denial(request, e)
+                        memo.remove(key)
+                    }
+                    throw e
+                }
+                denied[key]?.takeIf { it.request == request }?.let { throw it.error }
                 cache.completeSource(key) ?: throw e
             }
             checkRequest(request)
+            denied.remove(key)
             // Disk cache failure must not turn a valid network source into playback failure.
             runCatching { cache.rememberSource(key, source) }
             // Bound reuse, reserve expiry headroom, and include the time spent resolving.
