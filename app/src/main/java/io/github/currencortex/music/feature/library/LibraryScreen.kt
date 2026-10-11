@@ -82,13 +82,14 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 
 @Composable fun PlaylistIndexScreen(vm: LibraryViewModel, navigate: (String) -> Unit) {
     val busy by vm.busy.collectAsStateWithLifecycle()
+    val neteaseMain by vm.container.primaryLibrary.usesNetease.collectAsStateWithLifecycle()
     var create by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
     PlaylistIndexBody(vm, navigate, onCreate = { create = true })
     if (create) MusicDialog("新建歌单", onDismiss = { if (!busy) create = false }) {
         TextField(name, { name = it }, label = "歌单名称", modifier = Modifier.testTag("playlist_name"))
-        TextField(description, { description = it }, label = "介绍")
+        if (!neteaseMain || vm.container.nativeNetease == null) TextField(description, { description = it }, label = "介绍")
         TextButton("创建", onClick = { vm.create(name, description) { create = false; name = ""; description = "" } },
             enabled = name.isNotBlank() && !busy, modifier = Modifier.testTag("confirm_create_playlist"))
     }
@@ -114,7 +115,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     var rename by rememberSaveable { mutableStateOf(false) }
     var delete by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
-    val editable = state.playlist?.editable(account.account?.id ?: 0) == true
+    val editable = vm.editable(state.playlist, account.account?.id ?: 0)
     LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
     LaunchedEffect(state.refreshError) { state.refreshError?.let { library.message.value = "刷新失败，已保留原列表：$it" } }
     PreloadMusicCovers(state.songs.take(12).map { it.cover })
@@ -161,7 +162,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
                 SongRow(SongRowUi(song), { play(state.songs, index) }, { vm.container.playerController.add(song, true) }, { vm.container.playerController.add(song) }) {
                     LibrarySongActions(library, song, navigate)
                     val dismiss = LocalDismissSongMenu.current
-                    if (editable) MusicDestinationRow("移出歌单", onClick = { dismiss(); library.action("已移出歌单") { vm.container.libraryRepository.remove(vm.id, song) } }, enabled = !busy, chevron = false)
+                    if (editable) MusicDestinationRow("移出歌单", onClick = { dismiss(); library.action("已移出歌单") { vm.remove(song) } }, enabled = !busy, chevron = false)
                 }
             }
             if (state.more) item { TextButton("加载更多歌曲", onClick = { vm.reload(true) }, enabled = !state.loading) }
@@ -170,11 +171,11 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     }
     if (rename) MusicDialog("重命名歌单", onDismiss = { if (!busy) rename = false }) {
         TextField(name, { name = it }, label = "歌单名称", modifier = Modifier.testTag("rename_input"))
-        TextButton("保存", onClick = { library.action("名称已更新") { vm.container.libraryRepository.rename(vm.id, name); rename = false } }, enabled = name.isNotBlank() && !busy)
+        TextButton("保存", onClick = { library.action("名称已更新") { vm.rename(name); rename = false } }, enabled = name.isNotBlank() && !busy)
     }
     if (delete) MusicDialog("删除歌单？", onDismiss = { if (!busy) delete = false }) {
         Text("删除后无法恢复。")
-        TextButton("确认删除", onClick = { library.action("歌单已删除") { vm.container.libraryRepository.delete(vm.id); delete = false; deleted() } }, enabled = !busy)
+        TextButton("确认删除", onClick = { library.action("歌单已删除") { vm.delete(); delete = false; deleted() } }, enabled = !busy)
     }
 }
 

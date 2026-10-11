@@ -59,14 +59,22 @@ class LyricsWeightCapabilitiesTest {
             compose.waitUntil(10000) { compose.onAllNodesWithTag("lyric_line_0").fetchSemanticsNodes().isNotEmpty() }
             fun weight(text: String): FontWeight? {
                 val layouts = mutableListOf<TextLayoutResult>()
-                compose.onNodeWithText(text, useUnmergedTree = true).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                compose.onNode(hasText(text) and hasAnyAncestor(hasTestTag("lyrics_panel")), useUnmergedTree = true)
+                    .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
                 return layouts.single().layoutInput.style.fontWeight
             }
-            fun assertWeights(current: FontWeight, other: FontWeight) {
+            fun assertWeights(current: FontWeight, other: FontWeight, secondActive: Boolean = false) {
                 assertEquals(current, weight("循着星光慢慢走"))
                 assertEquals(other, weight("让音乐陪着你"))
-                assertEquals(current, weight("Walk beneath the stars"))
-                assertEquals(other, weight("Let music stay with you"))
+                if (secondActive) {
+                    compose.onNodeWithText("Walk beneath the stars", useUnmergedTree = true).assertDoesNotExist()
+                    compose.onNodeWithText("Let music stay with you", useUnmergedTree = true).assertExists()
+                    assertEquals(other, weight("Let music stay with you"))
+                } else {
+                    compose.onNodeWithText("Walk beneath the stars", useUnmergedTree = true).assertExists()
+                    compose.onNodeWithText("Let music stay with you", useUnmergedTree = true).assertDoesNotExist()
+                    assertEquals(current, weight("Walk beneath the stars"))
+                }
             }
             assertWeights(FontWeight.Medium, FontWeight.Normal)
             suspend fun choose(mode: LyricsWeight) {
@@ -88,7 +96,7 @@ class LyricsWeightCapabilitiesTest {
             compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(positionMs = 3500) }
             compose.mainClock.advanceTimeBy(1000); compose.waitForIdle()
             compose.onNodeWithTag("lyric_line_1").assertIsSelected()
-            assertWeights(FontWeight.Normal, FontWeight.Medium)
+            assertWeights(FontWeight.Normal, FontWeight.Medium, secondActive = true)
             compose.onNodeWithTag("player_screen").captureToImage().asAndroidBitmap().let { bitmap ->
                 java.io.File(context.externalCacheDir, "lyrics-weight-preview.png").outputStream().use {
                     bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)

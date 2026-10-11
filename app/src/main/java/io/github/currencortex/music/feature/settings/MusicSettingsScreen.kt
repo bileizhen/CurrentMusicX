@@ -43,7 +43,7 @@ import io.github.currencortex.music.data.settings.AudioProvider
 
         item { MusicSectionHeader("音乐音源") }
         item { Card { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("只切换歌曲播放与投屏的音源；搜索、歌词、歌单、账户、MV 与一起听仍走 CurrentMusic。",
+            Text("搜索、歌词、歌单与 MV 直接连接网易云；歌曲音源继续使用 CurrentMusic，用于播放、下载和投屏。CurrentMusic 账户与房间保留原服务。",
                 Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 12.sp, color = hint)
             AudioProvider.entries.forEach { entry ->
                 MusicDestinationRow((if (provider.provider == entry) "✓ " else "") + entry.label,

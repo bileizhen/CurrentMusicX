@@ -28,6 +28,8 @@ data class LyricsDisplayOptions(
     val blur: Boolean = true, val stagger: Boolean = true,
     val karaokeScope: KaraokeScope = KaraokeScope.ALL, val hideControls: Boolean = false,
     val translation: Boolean = true, val romanization: Boolean = false, val wordAnimation: Boolean = true,
+    val perspective: Boolean = true,
+    val glow: Boolean = true, val wordLift: Boolean = true,
 )
 
 enum class LyricsWeight(val label: String) {
@@ -65,6 +67,9 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val translation = booleanPreferencesKey("lyrics.translation")
     private val romanization = booleanPreferencesKey("lyrics.romanization")
     private val wordAnimation = booleanPreferencesKey("lyrics.wordAnimation")
+    private val perspective = booleanPreferencesKey("lyrics.perspective")
+    private val glow = booleanPreferencesKey("lyrics.glow")
+    private val wordLift = booleanPreferencesKey("lyrics.wordLift")
     private val neteaseMain = booleanPreferencesKey("library.neteaseMain")
     private fun decode(p: Preferences) = MusicSettings(p[server] ?: ServerDefaults.URL, AudioQuality.from(p[quality].orEmpty()),
         p[warning] ?: true, p[restore] ?: true, p[nickname].orEmpty(), p[account] ?: 0,
@@ -72,7 +77,8 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
         LyricsWeight.from(p[lyricsWeight]), p[lyricsOffset] ?: 0,
         LyricsDisplayOptions(p[centered] ?: false, (p[fontWeight] ?: 500).coerceIn(400, 900),
             p[blur] ?: true, p[stagger] ?: true, KaraokeScope.from(p[karaokeScope]), p[hideControls] ?: false,
-            p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true), p[neteaseMain] ?: true)
+            p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true,
+            p[perspective] ?: true, p[glow] ?: true, p[wordLift] ?: true), p[neteaseMain] ?: true)
     val state = store.data.map(::decode)
         .stateIn(scope, SharingStarted.Eagerly, MusicSettings())
     suspend fun snapshot(): MusicSettings {
@@ -95,6 +101,8 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[blur] = value.blur; p[stagger] = value.stagger; p[karaokeScope] = value.karaokeScope.name
             p[hideControls] = value.hideControls; p[translation] = value.translation
             p[romanization] = value.romanization; p[wordAnimation] = value.wordAnimation
+            p[perspective] = value.perspective
+            p[glow] = value.glow; p[wordLift] = value.wordLift
         }
     }
     suspend fun setAccount(id: Long, name: String) { store.edit { it[account] = id; it[nickname] = name } }

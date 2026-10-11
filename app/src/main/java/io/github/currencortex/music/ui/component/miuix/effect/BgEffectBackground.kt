@@ -31,6 +31,7 @@ fun BgEffectBackground(
     isFullSize: Boolean = false,
     effectBackground: Boolean = true,
     alpha: () -> Float = { 1f },
+    animationSpeed: Float = 1f,
     content: @Composable BoxScope.() -> Unit,
 ) {
     if (android.os.Build.VERSION.SDK_INT < 33 || !isRuntimeShaderSupported()) {
@@ -50,18 +51,19 @@ fun BgEffectBackground(
         }
 
         val colorStage = remember { Animatable(0f) }
+        val speed = animationSpeed.coerceIn(.1f, 6f)
 
-        LaunchedEffect(dynamicBackground, preset) {
+        LaunchedEffect(dynamicBackground, preset, speed) {
             if (!dynamicBackground) return@LaunchedEffect
             val animatesColors = preset.colors1 !== preset.colors2 || preset.colors2 !== preset.colors3
             if (!animatesColors) return@LaunchedEffect
 
             var targetStage = floor(colorStage.value) + 1f
             while (isActive) {
-                delay((preset.colorInterpPeriod * 500).toLong())
+                delay((preset.colorInterpPeriod * 500 / speed).toLong())
                 colorStage.animateTo(
                     targetValue = targetStage,
-                    animationSpec = spring(dampingRatio = 0.9f, stiffness = 35f),
+                    animationSpec = spring(dampingRatio = 0.9f, stiffness = 35f * speed * speed),
                 )
                 targetStage += 1f
             }
@@ -80,6 +82,7 @@ fun BgEffectBackground(
                     effectBackground = effectBackground,
                     isFullSize = isFullSize,
                     playing = dynamicBackground,
+                    animationSpeed = speed,
                     colorStage = { colorStage.value },
                     alpha = alpha,
                 ),

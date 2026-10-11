@@ -18,7 +18,7 @@ import kotlinx.serialization.json.*
 @Serializable private data class StyleDetailResponse(val data: StyleDescription)
 data class StyleSongsPage(val songs: List<Song>, val nextCursor: Int, val more: Boolean, val total: Int)
 
-/** Public catalog through the configured CurrentMusic gateway; independent of playback source. */
+/** Public NetEase catalog; independent of the selected playback source. */
 class MusicStyleRepository(private val api: ApiClient, private val session: () -> RequestSession) {
     private val reads = SessionReadCache(session, { 0L })
     private suspend fun request(path: String, expected: RequestSession, query: Map<String, String> = emptyMap()): JsonElement {

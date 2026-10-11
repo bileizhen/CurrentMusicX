@@ -11,6 +11,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.core.app.ApplicationProvider
@@ -110,8 +111,8 @@ class HomeAvatarTest {
     }
     private fun green(pixel: Int) = Color.red(pixel) in 20..50 && Color.green(pixel) in 155..190 && Color.blue(pixel) in 75..115
     private fun magenta(pixel: Int) = Color.red(pixel) > 230 && Color.blue(pixel) > 230 && Color.green(pixel) < 30
-    private fun imageBounds(predicate: (Int) -> Boolean): androidx.compose.ui.geometry.Rect {
-        val bitmap = compose.onNodeWithTag("music_window").captureToImage().asAndroidBitmap()
+    private fun imageBounds(predicate: (Int) -> Boolean, rootTag: String = "music_window"): androidx.compose.ui.geometry.Rect {
+        val bitmap = compose.onNodeWithTag(rootTag).captureToImage().asAndroidBitmap()
         var left = bitmap.width; var top = bitmap.height; var right = 0; var bottom = 0
         for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) if (predicate(bitmap.getPixel(x, y))) {
             left = minOf(left,x); top = minOf(top,y); right = maxOf(right,x); bottom = maxOf(bottom,y)
@@ -125,6 +126,73 @@ class HomeAvatarTest {
         val avatar = greenBounds(); val frame = frameBounds()
         assertTrue("Frame must not be cropped to the circular photo", frame.width > avatar.width * 1.2f)
         assertTrue("Frame and photo must follow the same centre", kotlin.math.abs(frame.center.x - avatar.center.x) < 3 && kotlin.math.abs(frame.center.y - avatar.center.y) < 3)
+    }
+
+    @Composable private fun StartupFixture(ready: Boolean) {
+        var done by remember { mutableStateOf(false) }
+        launch.active = !done
+        LeiTheme(AppearanceSettings(themeMode = ThemeMode.LIGHT, blur = false)) {
+            CompositionLocalProvider(LocalLaunchBrand provides launch) {
+                Box(Modifier.fillMaxSize().background(top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.background)
+                    .testTag("launch_avatar_fixture")) {
+                    Row(Modifier.fillMaxWidth().statusBarsPadding().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.weight(1f)) { HomeBrandTitle() }
+                        HomeProfileAvatar(server.url("/avatar.png").toString(), ready, onOpen = { _, _ -> },
+                            decorationUrl = server.url("/cm/decor/fixture.gif").toString(), decorationScale = 1.5)
+                    }
+                    if (!done) LaunchBrandOverlay(launch, ready, true, enableBlur = false) { launch.active = false; done = true }
+                }
+            }
+        }
+    }
+
+    @Test fun startupPhotoAndFrameArcIntoHomeWithoutASecondReveal() {
+        compose.mainClock.autoAdvance = false
+        var ready by mutableStateOf(false)
+        compose.setContent { StartupFixture(ready) }
+        pumpUntil { imageRequested.count == 0L }
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithTag("launch_avatar", useUnmergedTree = true).assertDoesNotExist()
+        assertAvatarBlank()
+        imageGate.countDown()
+        pumpUntil { launch.avatar?.decorationUrl != null }
+        compose.mainClock.advanceTimeBy(500)
+        val start = imageBounds(::green, "launch_avatar_fixture")
+        val frame = imageBounds(::magenta, "launch_avatar_fixture")
+        val wordmark = compose.onNodeWithTag("launch_wordmark", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val viewport = compose.onNodeWithTag("launch_avatar_fixture").fetchSemanticsNode().boundsInRoot
+        assertTrue("Photo must sit above the lowered wordmark", start.bottom < wordmark.top)
+        assertTrue("Wordmark must move below the screen centre", wordmark.center.y > viewport.center.y)
+        assertTrue("Decoration must surround the startup photo", frame.width > start.width * 1.2f)
+        assertTrue(kotlin.math.abs(frame.center.x - start.center.x) < 3 && kotlin.math.abs(frame.center.y - start.center.y) < 3)
+        val target = launch.avatar!!.bounds
+        fun save(name: String) {
+            val app = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+            compose.onNodeWithTag("launch_avatar_fixture").captureToImage().asAndroidBitmap().let { bitmap ->
+                java.io.File(app.externalCacheDir, name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        }
+        save("launch-avatar-waiting.png")
+        compose.runOnUiThread { ready = true }
+        compose.mainClock.advanceTimeBy(200)
+        assertEquals("The portrait should pause briefly before taking flight", 0f, launch.flight.value)
+        compose.mainClock.advanceTimeBy(340)
+        val middle = imageBounds(::green, "launch_avatar_fixture")
+        val middleFrame = imageBounds(::magenta, "launch_avatar_fixture")
+        assertTrue("Photo must travel right and shrink", middle.center.x > start.center.x && middle.center.x < target.center.x && middle.width < start.width)
+        val along = (middle.center.x - start.center.x) / (target.center.x - start.center.x)
+        val straightY = start.center.y + (target.center.y - start.center.y) * along
+        assertTrue("Flight must follow a parabola above the straight path", middle.center.y < straightY - 5)
+        assertTrue("Frame must stay centred throughout flight", kotlin.math.abs(middleFrame.center.x - middle.center.x) < 3 && kotlin.math.abs(middleFrame.center.y - middle.center.y) < 3)
+        save("launch-avatar-flight.png")
+        // At the first frame after landing the home photo must already be fully visible.
+        compose.mainClock.advanceTimeUntil(timeoutMillis = 1500) { !launch.active }
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithTag("launch_animation").assertDoesNotExist()
+        val landed = imageBounds(::green, "launch_avatar_fixture")
+        assertTrue("Photo must land at the unscaled home slot", kotlin.math.abs(landed.center.x - target.center.x) < 3 && kotlin.math.abs(landed.center.y - target.center.y) < 3 && kotlin.math.abs(landed.width - target.width) < 3)
+        assertTrue("The home photo must not fade in again", green(avatarPixel()))
+        save("launch-avatar-landed.png")
     }
 
     @Test fun photoWaitsForDownloadAndLaunchThenFadesIn() {

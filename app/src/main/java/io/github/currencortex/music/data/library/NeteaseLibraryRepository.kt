@@ -16,6 +16,7 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
     val revision = MutableStateFlow(0L)
     private val reads = SessionReadCache(session, { revision.value + actions.revision.value })
     private val writeMutex = Mutex()
+    val directAvailable get() = api.netease != null
     fun invalidate() { reads.clear(); revision.update { it + 1 } }
     private suspend fun owner(fresh: Boolean = false): Long {
         val bound = if (fresh) binding.status() else binding.cachedStatus()
@@ -52,8 +53,8 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
     }
     private suspend fun songs(ids: List<Long>, expected: RequestSession, known: List<Song> = emptyList()): List<Song> {
         val found = known.associateByTo(mutableMapOf()) { it.id }
-        // CurrentMusic's song-detail gateway accepts at most 100 IDs per request.
-        ids.distinct().filterNot(found::containsKey).chunked(100).forEach { chunk ->
+        // Direct NetEase accepts up to 1000 IDs; retain the legacy gateway's smaller limit.
+        ids.distinct().filterNot(found::containsKey).chunked(if (directAvailable) 500 else 100).forEach { chunk ->
             val response = request("song/detail", mapOf("ids" to chunk.joinToString(",")), expected)
             val page = response["songs"] as? JsonArray ?: throw ApiException(ErrorKind.Parse)
             page.mapNotNull { (it as? JsonObject)?.let(NeteaseSongActionsRepository::nativeSong) }.forEach { found[it.id] = it }
@@ -114,6 +115,31 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
         else request("playlist/tracks", mapOf("pid" to "$id", "tracks" to "$songId", "op" to "add", "confirm" to "1"), expected)
         invalidate()
     }
+    suspend fun create(name: String) = writeMutex.withLock {
+        require(name.trim().isNotBlank())
+        val expected = session(); owner(fresh = true)
+        request("playlist/create", mapOf("name" to name.trim()), expected)
+        invalidate()
+    }
+    private suspend fun editable(id: Long, expected: RequestSession) {
+        val uid = owner(fresh = true)
+        if (expected != session() || playlists(fresh = true).none {
+            it.id == id && it.ownerId == uid && it.nativeOwned && !it.nativeLiked
+        }) throw ApiException(ErrorKind.Forbidden)
+    }
+    suspend fun rename(id: Long, name: String) = writeMutex.withLock {
+        require(name.trim().isNotBlank()); val expected = session(); editable(id, expected)
+        request("playlist/name/update", mapOf("id" to "$id", "name" to name.trim()), expected); invalidate()
+    }
+    suspend fun delete(id: Long) = writeMutex.withLock {
+        val expected = session(); editable(id, expected)
+        request("playlist/delete", mapOf("id" to "$id"), expected); invalidate()
+    }
+    suspend fun remove(id: Long, song: Song) = writeMutex.withLock {
+        val songId = NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound)
+        val expected = session(); editable(id, expected)
+        request("playlist/tracks", mapOf("pid" to "$id", "tracks" to "$songId", "op" to "del"), expected); invalidate()
+    }
     private fun JsonObject.toPlaylist(uid: Long): Playlist? {
         val id = this["id"]?.jsonPrimitive?.longOrNull?.takeIf { it > 0 } ?: return null
         val creator = this["creator"] as? JsonObject
@@ -130,11 +156,13 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
 class PrimaryMusicLibrary(private val current: LibraryRepository, private val netease: NeteaseLibraryRepository,
     private val binding: BindingRepository, private val settings: MusicSettingsRepository, scope: CoroutineScope) {
     val identity = combine(binding.state, settings.state.map { it.neteaseMainLibrary }.distinctUntilChanged()) { bound, preferred ->
-        Triple(preferred && bound?.bound == true, bound?.profile?.uid ?: 0, bound?.stale == true)
+        Triple(preferred && (netease.directAvailable || bound?.bound == true), bound?.profile?.uid ?: 0, bound?.stale == true)
     }.stateIn(scope, SharingStarted.Eagerly, Triple(false, 0L, false))
     val usesNetease = identity.map { it.first }.stateIn(scope, SharingStarted.Eagerly, false)
-    suspend fun resolveNetease(): Boolean = settings.snapshot().neteaseMainLibrary && binding.cachedStatus().bound
-    suspend fun playlists(fresh: Boolean = false): List<Playlist> = if (resolveNetease()) netease.playlists(fresh) else {
+    suspend fun resolveNetease(): Boolean = settings.snapshot().neteaseMainLibrary && (netease.directAvailable || binding.cachedStatus().bound)
+    suspend fun playlists(fresh: Boolean = false): List<Playlist> = if (resolveNetease()) {
+        if (netease.directAvailable && !binding.cachedStatus().bound) emptyList() else netease.playlists(fresh)
+    } else {
         if (fresh) current.clearReads()
         current.playlists()
     }

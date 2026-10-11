@@ -75,6 +75,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val home by vm.home.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val neteaseMain by vm.container.primaryLibrary.usesNetease.collectAsStateWithLifecycle()
+    val nativeAccount by vm.container.neteaseSessions.state.collectAsStateWithLifecycle()
     MusicPullToRefresh(home.loading, vm::refresh, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), showIndicator = false) {
         LazyVerticalGrid(GridCells.Adaptive(148.dp), Modifier.fillMaxSize().testTag("playlist_index"),
             contentPadding = musicScrollPadding(PaddingValues(20.dp, 8.dp, 20.dp, 24.dp)),
@@ -87,7 +88,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             Text("${home.playlists.size} 个歌单 · 你的音乐收藏", Modifier.padding(top = 6.dp),
                                 fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
                         }
-                        if (account.account != null && !neteaseMain) PlaylistIconAction(Icons.Default.Add, "新建歌单", onCreate,
+                        if ((!neteaseMain && account.account != null) || (neteaseMain && vm.container.nativeNetease != null && nativeAccount.loggedIn && !nativeAccount.stale)) PlaylistIconAction(Icons.Default.Add, "新建歌单", onCreate,
                             Modifier.testTag("create_playlist"), ink = MiuixTheme.colorScheme.primary,
                             background = MiuixTheme.colorScheme.primary.copy(alpha = .1f))
                     }
@@ -136,7 +137,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val queue by vm.container.playbackQueue.state.collectAsStateWithLifecycle()
     val busy by library.busy.collectAsStateWithLifecycle()
     val room = LocalRoomSongRequest.current
-    val editable = state.playlist?.editable(account.account?.id ?: 0) == true
+    val editable = vm.editable(state.playlist, account.account?.id ?: 0)
     val cover = state.cover.ifBlank { state.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() }
     val tint = rememberStyleTint(cover)
     val backdrop by animateColorAsState(lerp(Color(0xFF222831), tint.value ?: Color(0xFF69798A), .30f), tween(280), label = "playlist cover tint")
@@ -302,7 +303,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             LibrarySongActions(library, song, navigate)
                             val dismiss = LocalDismissSongMenu.current
                             if (editable) MusicDestinationRow("移出歌单", {
-                                dismiss(); library.action("已移出歌单") { vm.container.libraryRepository.remove(vm.id, song) }
+                                dismiss(); library.action("已移出歌单") { vm.remove(song) }
                             }, enabled = !busy, chevron = false)
                         }
                     }

@@ -42,6 +42,7 @@ class LaunchHomeReadinessTest {
                 val path = request.requestUrl!!.encodedPath
                 paths += path
                 return when (path) {
+                    "/cm/ncmbind" -> json("""{"bound":false}""")
                     "/cm/daily" -> {
                         daily.await(20, TimeUnit.SECONDS)
                         json("""{"daily":[{"ncm_id":11,"name":"Ready fixture song","artists":"Fixture Artist"}],"forYou":[],"artists":[]}""")

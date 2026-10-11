@@ -27,10 +27,11 @@ class SongDownloadManager(context: Context, namespace: String = "") {
     fun observe(song: Song) = combine(work.getWorkInfosForUniqueWorkFlow(key(song)), hidden) { items, removed ->
         items.lastOrNull { it.id.toString() !in removed }
     }
-    fun start(song: Song, quality: AudioQuality, accountId: Long, server: String, provider: String) {
+    fun start(song: Song, quality: AudioQuality, accountId: Long, server: String, provider: String, neteaseUid: Long = -1) {
         val request = OneTimeWorkRequestBuilder<SongDownloadWorker>()
             .setInputData(workDataOf("song" to ApiJson.encodeToString(song), "quality" to quality.value,
-                "directory" to directory.value?.toString(), "account" to accountId, "server" to server, "provider" to provider))
+                "directory" to directory.value?.toString(), "account" to accountId, "server" to server, "provider" to provider,
+                "netease_uid" to neteaseUid))
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .addTag("song-download").build()
         work.enqueueUniqueWork(key(song), ExistingWorkPolicy.KEEP, request)

@@ -31,11 +31,12 @@ class LaunchBrandAnimationTest {
     })
     private lateinit var motion: LaunchBrandState
     private var clicks = 0
-    @Composable private fun Fixture(theme: ThemeMode = ThemeMode.LIGHT, ready: Boolean = true, home: Boolean = true, windowReady: Boolean = true) {
+    @Composable private fun Fixture(theme: ThemeMode = ThemeMode.LIGHT, ready: Boolean = true, home: Boolean = true,
+        windowReady: Boolean = true, blur: Boolean = false) {
         var done by rememberSaveable { mutableStateOf(false) }
         motion = remember { LaunchBrandState() }
         motion.active = !done
-        LeiTheme(AppearanceSettings(themeMode = theme, blur = false)) {
+        LeiTheme(AppearanceSettings(themeMode = theme, blur = blur)) {
             CompositionLocalProvider(LocalLaunchBrand provides motion) {
                 Box(Modifier.fillMaxSize().background(top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.background).testTag("launch_fixture")) {
                     Column(Modifier.statusBarsPadding().padding(20.dp)) {
@@ -43,7 +44,7 @@ class LaunchBrandAnimationTest {
                         Text("Fixture action", Modifier.padding(top = 24.dp).clickable { clicks++ }.testTag("launch_fixture_action"),
                             color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.primary)
                     }
-                    if (!done) LaunchBrandOverlay(motion, ready, home, windowReady, enableBlur = false) { motion.active = false; done = true }
+                    if (!done) LaunchBrandOverlay(motion, ready, home, windowReady, enableBlur = blur) { motion.active = false; done = true }
                 }
             }
         }
@@ -70,52 +71,59 @@ class LaunchBrandAnimationTest {
         return androidx.compose.ui.geometry.Rect(left.toFloat(), top.toFloat(), right.toFloat(), bottom.toFloat())
     }
 
-    @Test fun whiteWordmarkHasMovingHighlight() {
+    @Test fun wordmarkUsesAboutBackgroundInkAndKeepsMovingWhileLoading() {
         compose.mainClock.autoAdvance = false
-        compose.setContent { Fixture(ThemeMode.DARK, ready = false) }
-        compose.mainClock.advanceTimeBy(1200)
-        val bounds = inkBounds(lightInk = true)
-        val bitmap = compose.onNodeWithTag("launch_fixture").captureToImage().asAndroidBitmap()
-        var whiteLetters = 0
-        for (y in bounds.top.toInt()..bounds.bottom.toInt()) for (x in bounds.left.toInt()..bounds.right.toInt()) {
+        compose.setContent { Fixture(ThemeMode.LIGHT, ready = false, blur = true) }
+        compose.mainClock.advanceTimeBy(600)
+        assertEquals("The faster intro must already be complete", 1f, motion.reveal.value, .001f)
+        val wordmark = compose.onNodeWithTag("launch_wordmark", useUnmergedTree = true)
+        val bitmap = wordmark.captureToImage().asAndroidBitmap()
+        var coloredLetters = 0
+        for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) {
             val pixel = bitmap.getPixel(x, y)
-            if (android.graphics.Color.red(pixel) >= 250 && android.graphics.Color.green(pixel) >= 250 && android.graphics.Color.blue(pixel) >= 250) whiteLetters++
+            val hsv = FloatArray(3)
+            android.graphics.Color.colorToHSV(pixel, hsv)
+            if (android.graphics.Color.alpha(pixel) > 180 && hsv[1] > .3f && hsv[2] < .85f) coloredLetters++
         }
-        assertTrue("The wordmark body must be white", whiteLetters > 500)
+        assertTrue("The wordmark must carry About's colored background ink", coloredLetters > 200)
         compose.mainClock.advanceTimeBy(500)
-        val after = compose.onNodeWithTag("launch_fixture").captureToImage().asAndroidBitmap()
+        val after = wordmark.captureToImage().asAndroidBitmap()
         var changed = 0
-        for (y in bounds.top.toInt()..bounds.bottom.toInt()) for (x in bounds.left.toInt()..bounds.right.toInt()) {
+        for (y in 0 until bitmap.height) for (x in 0 until bitmap.width) {
             if (bitmap.getPixel(x, y) != after.getPixel(x, y)) changed++
         }
-        assertTrue("The theme highlight must move across the letters", changed > 200)
-        save("launch-white-highlight.png")
+        assertTrue("The background ink must keep flowing across the letters", changed > 200)
+        save("launch-about-ink.png")
         compose.onNodeWithTag("launch_animation").assertExists()
     }
 
     @Test fun textRevealFliesToMeasuredTitleAndDoesNotReplayAfterRestoration() {
         compose.mainClock.autoAdvance = false
+        var ready by mutableStateOf(false)
         val restoration = StateRestorationTester(compose)
-        restoration.setContent { Fixture(ThemeMode.DARK) }
-        compose.mainClock.advanceTimeBy(600)
-        save("launch-white-reveal.png")
-        compose.mainClock.advanceTimeBy(380)
+        restoration.setContent { Fixture(ThemeMode.DARK, ready = ready) }
+        compose.mainClock.advanceTimeBy(350)
+        save("launch-reveal.png")
+        compose.mainClock.advanceTimeBy(210)
         val central = inkBounds(lightInk = true)
         val anchor = motion.anchor!!
         assertTrue(central.center.y > anchor.bottom + 100f)
         val actionCenter = compose.onNodeWithTag("launch_fixture_action").fetchSemanticsNode().boundsInRoot.center
         compose.onNodeWithTag("launch_animation").performTouchInput { click(actionCenter) }
         assertEquals(0, clicks)
-        compose.mainClock.advanceTimeBy(300)
+        compose.runOnUiThread { ready = true }
+        compose.mainClock.advanceTimeBy(200)
+        assertEquals("Allow a brief pause before departure", 0f, motion.flight.value)
+        compose.mainClock.advanceTimeBy(500)
         val middle = inkBounds(lightInk = true)
         assertTrue("Text must travel up rather than jump", middle.center.y < central.center.y && middle.center.y > anchor.center.y)
         assertTrue("Text must shrink while travelling", middle.width < central.width)
-        save("launch-white-flight.png")
+        save("launch-flight.png")
         compose.mainClock.advanceTimeBy(1000)
         compose.onNodeWithTag("launch_animation").assertDoesNotExist()
         val landed = inkBounds(lightInk = true)
         assertTrue("Visible title must land inside its actual layout", landed.top >= anchor.top - 2 && landed.bottom <= anchor.bottom + 2)
-        save("launch-white-landed.png")
+        save("launch-landed.png")
         compose.onNodeWithTag("launch_fixture_action").performClick(); assertEquals(1, clicks)
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithTag("launch_animation").assertDoesNotExist()
@@ -132,11 +140,8 @@ class LaunchBrandAnimationTest {
         compose.mainClock.advanceTimeBy(2400)
         compose.onNodeWithTag("launch_animation").assertExists()
         assertEquals(0f, motion.flight.value)
-        val phase = motion.idle.value
-        compose.mainClock.advanceTimeBy(400)
-        assertTrue("The waiting waveform must keep moving", motion.idle.value > phase)
         compose.runOnUiThread { ready = true }
-        compose.mainClock.advanceTimeBy(1000)
+        compose.mainClock.advanceTimeBy(1600)
         compose.onNodeWithTag("launch_animation").assertDoesNotExist()
         assertFalse(motion.active)
     }
@@ -147,7 +152,6 @@ class LaunchBrandAnimationTest {
         compose.setContent { Fixture(ready = ready) }
         compose.onNodeWithTag("launch_animation").assertExists()
         assertEquals(0f, motion.flight.value)
-        assertEquals(0f, motion.idle.value)
         compose.runOnUiThread { ready = true }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("launch_animation").fetchSemanticsNodes().isEmpty() }
     }

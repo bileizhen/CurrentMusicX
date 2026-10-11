@@ -40,11 +40,25 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         var revealed by rememberSaveable { mutableStateOf(false) }
         val reveal = remember { Animatable(if (revealed) 1f else 0f) }
         var bounds by remember { mutableStateOf<Rect?>(null) }
+        var launchBounds by remember { mutableStateOf<Rect?>(null) }
         var imageCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
-        val launching = LocalLaunchBrand.current?.active == true
+        val launch = LocalLaunchBrand.current
+        val launching = launch?.active == true
         val flight = LocalAvatarFlight.current
         val placement = LocalRootTabPlacement.current
         var frameLoaded by remember(decorationUrl) { mutableStateOf(false) }
+        val landed = !launching && url != null && !failed && launch?.landedAvatarUrl == url
+        SideEffect {
+            if (launch?.active == true) {
+                launch.avatarPending = !settled
+                launch.avatar = launchBounds?.takeIf { settled && !failed && url != null }?.let {
+                    AvatarFlightOrigin(url, it, decorationUrl.takeIf { frameLoaded }, decorationScale)
+                }
+            }
+        }
+        DisposableEffect(launch) {
+            onDispose { if (launch?.active == true) { launch.avatar = null; launch.avatarPending = false } }
+        }
         val originProvider by rememberUpdatedState<() -> AvatarFlightOrigin?>({
             val origin = if (settled && reveal.value > 0f && !launching)
                 imageCoordinates?.takeIf { it.isAttached }?.boundsInRoot() else null
@@ -59,11 +73,20 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         }
         LaunchedEffect(settled && ready && !launching) {
             if (settled && ready && !launching && !revealed) {
-                reveal.animateTo(1f, tween(380, easing = CubicBezierEasing(.2f, 0f, .2f, 1f)))
+                if (landed) reveal.snapTo(1f)
+                else reveal.animateTo(1f, tween(380, easing = CubicBezierEasing(.2f, 0f, .2f, 1f)))
                 revealed = true
             }
         }
         Box(Modifier.size(48.dp).testTag("home_profile_avatar")
+            .onGloballyPositioned {
+                // Measure outside the reveal layer, whose initial scale is .84. Landing at
+                // that transformed size would make the photo jump at the end of launch.
+                val slot = placement?.landingBounds(it) ?: it.boundsInRoot()
+                val inset = slot.width * (3f / 48f)
+                launchBounds = Rect(slot.left + inset, slot.top + inset, slot.right - inset, slot.bottom - inset)
+                    .takeIf { rect -> rect.width > 0f && rect.height > 0f && rect.top >= 0f && placement?.visible(rect) != false }
+            }
             .semantics { contentDescription = "账号头像，打开我的" }
             .clickable(role = Role.Button, onClickLabel = "打开我的") {
                 val origin = if (settled && reveal.value > 0f) imageCoordinates?.takeIf { it.isAttached }?.boundsInRoot() ?: bounds else null
@@ -72,9 +95,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             contentAlignment = Alignment.Center) {
             Box(Modifier.size(42.dp).onGloballyPositioned { bounds = it.boundsInRoot() }
                 .graphicsLayer {
-                    alpha = if (settled && flight?.active != true) reveal.value else 0f
-                    scaleX = .84f + .16f * reveal.value; scaleY = scaleX
-                    translationY = (1f - reveal.value) * 3.dp.toPx()
+                    val amount = if (landed) 1f else reveal.value
+                    alpha = if (settled && !launching && flight?.active != true) amount else 0f
+                    scaleX = .84f + .16f * amount; scaleY = scaleX
+                    translationY = (1f - amount) * 3.dp.toPx()
                 }.onGloballyPositioned {
                     imageCoordinates = it
                     val landing = placement?.landingBounds(it) ?: it.boundsInRoot()

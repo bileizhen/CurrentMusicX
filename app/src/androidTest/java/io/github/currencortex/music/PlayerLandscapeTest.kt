@@ -15,9 +15,8 @@ import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.data.auth.UserDto
 import io.github.currencortex.music.data.song.Song
-import io.github.currencortex.music.feature.player.PlayerButtonVisuals
-import io.github.currencortex.music.feature.player.PlayerPagePosition
 import io.github.currencortex.music.feature.player.PlayerSheetGeometry
+import io.github.currencortex.music.feature.player.PlayerPagePosition
 import io.github.currencortex.music.ui.CurrentMusicApp
 import io.github.currencortex.music.ui.component.SideWaterDropVisual
 import kotlinx.coroutines.runBlocking
@@ -128,105 +127,79 @@ class PlayerLandscapeTest {
         compose.onNodeWithTag("mini_cover").performClick()
         compose.onNodeWithTag("player_screen").assertIsDisplayed()
         compose.onNodeWithTag("wide_navigation").assertDoesNotExist()
-        compose.onNodeWithTag("navigate_back").performClick()
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithTag("tab_3").assertIsSelected()
         assertEquals(rail, compose.onNodeWithTag("wide_navigation").fetchSemanticsNode().boundsInRoot)
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
         assertFalse(container.playerController.state.value.playing)
     }
 
-    @Test fun shortLandscapeShowsFullCoverMetadataAndControlsAndClosesToMini() {
-        compose.setContent { Box(Modifier.requiredSize(780.dp, 350.dp)) { CurrentMusicApp(container) } }
+    @Test fun landscapeCentersBothPanesAndSwipesBetweenLyricsAndControls() {
+        compose.setContent { CurrentMusicApp(container) }
         compose.waitUntil(10000) { compose.onAllNodesWithTag("mini_cover").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("mini_cover").performClick()
-        compose.waitForIdle()
-        val pane = compose.onNodeWithTag("player_wide_cover_content").fetchSemanticsNode().boundsInRoot
-        val cover = compose.onNodeWithTag("player_cover").fetchSemanticsNode().boundsInRoot
-        val stage = compose.onNodeWithTag("player_wide_stage").fetchSemanticsNode().boundsInRoot
-        val safe = compose.onNodeWithTag("player_safe_content").fetchSemanticsNode().boundsInRoot
-        val screen = compose.onNodeWithTag("player_screen").fetchSemanticsNode().boundsInRoot
-        assertEquals("Both panes must be centered horizontally in the usable area", safe.center.x, stage.center.x, 1f)
-        assertEquals("The header must not push the landscape stage downward", safe.center.y, stage.center.y, 1f)
-        assertEquals("The notch must not leave the stage off-center", screen.center.x, stage.center.x, 1f)
-        assertEquals("Artwork must share the stage's vertical center", stage.center.y, cover.center.y, 1f)
-        assertTrue("The centered stage must stay inside the usable area: stage=$stage, safe=$safe",
-            stage.left >= safe.left - 1f && stage.top >= safe.top - 1f &&
-                stage.right <= safe.right + 1f && stage.bottom <= safe.bottom + 1f)
-        assertTrue("A full circular cover must fit the pane", cover.width > 200 && cover.height > 200)
-        assertEquals("Artwork must remain square instead of becoming a clipped semicircle", cover.width, cover.height, 1f)
-        assertTrue(pane.contains(cover.topLeft)); assertTrue(pane.contains(cover.bottomRight))
-        compose.onNodeWithTag("player_song_title").assertIsDisplayed().assertTextContains("Landscape title")
-        compose.onNodeWithTag("player_song_artist").assertIsDisplayed().assertTextContains("Landscape artist")
-        compose.onNodeWithTag("player_cover_lyrics").assertDoesNotExist()
-        listOf("player_seek", "player_toggle", "player_like", "player_comments", "player_cycle_mode", "open_player_queue").forEach {
-            compose.onNodeWithTag(it).assertIsDisplayed()
-        }
-        compose.onNodeWithTag("player_seek").assertIsEnabled()
-        compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(canControlPlayback = false) }
-        compose.onNodeWithTag("player_toggle").assertIsNotEnabled()
-        compose.onNodeWithTag("player_seek").assertIsNotEnabled()
-        compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(canControlPlayback = true, loading = true, playRequested = true) }
-        compose.onNodeWithTag("player_toggle").assertContentDescriptionEquals("暂停")
-        compose.waitForIdle()
-        assertEquals(1f, compose.onNodeWithTag("player_toggle").fetchSemanticsNode().config[PlayerButtonVisuals].glyphProgress, .01f)
-        compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(loading = false, playRequested = false) }
-        compose.mainClock.autoAdvance = false
-        val panePager = compose.onNodeWithTag("player_wide_pager")
-        panePager.performTouchInput {
-            down(androidx.compose.ui.geometry.Offset(width * .8f, height * .22f))
-            advanceEventTime(200)
-            moveBy(androidx.compose.ui.geometry.Offset(-width * .68f, 0f))
-        }
-        compose.mainClock.advanceTimeBy(32)
-        val dragged = panePager.fetchSemanticsNode().config[PlayerPagePosition]
-        assertTrue("Lyrics follow the finger before release", dragged > .05f && dragged < .95f)
-        assertEquals("The large cover stays fixed while the right pane moves", cover,
-            compose.onNodeWithTag("player_cover").fetchSemanticsNode().boundsInRoot)
-        panePager.performTouchInput { advanceEventTime(400); up() }
-        compose.mainClock.advanceTimeBy(800)
-        assertEquals(1f, panePager.fetchSemanticsNode().config[PlayerPagePosition], .01f)
-        compose.onNodeWithTag("player_toggle").assertDoesNotExist()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("lyrics_list").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("player_cover").assertIsDisplayed()
         compose.onNodeWithTag("lyrics_panel").assertIsDisplayed()
-        // Use the lyric viewport's upper blank area so this remains a paging gesture,
-        // below the floating header, rather than touching its corner buttons.
-        panePager.performTouchInput {
-            down(androidx.compose.ui.geometry.Offset(width * .12f, height * .22f))
-            advanceEventTime(200)
-            moveBy(androidx.compose.ui.geometry.Offset(width * .68f, 0f))
+        compose.onNodeWithTag("lyrics_options").assertIsDisplayed()
+        compose.onNodeWithTag("player_wide_pager").assertIsDisplayed()
+        listOf("navigate_back", "open_quality_sheet",
+            "player_transport", "player_cover_lyrics", "player_lyrics_header", "player_song_title").forEach {
+            compose.onNodeWithTag(it).assertDoesNotExist()
         }
-        compose.mainClock.advanceTimeBy(32)
-        val returning = panePager.fetchSemanticsNode().config[PlayerPagePosition]
-        assertTrue("Controls also follow the finger before release: $returning", returning > .05f && returning < .95f)
-        panePager.performTouchInput { advanceEventTime(400); up() }
-        compose.mainClock.advanceTimeBy(800)
-        assertEquals(0f, panePager.fetchSemanticsNode().config[PlayerPagePosition], .01f)
-        compose.onNodeWithTag("player_toggle").assertIsDisplayed()
-        assertEquals(cover, compose.onNodeWithTag("player_cover").fetchSemanticsNode().boundsInRoot)
-        panePager.performTouchInput {
-            swipe(androidx.compose.ui.geometry.Offset(width * .85f, height * .22f),
-                androidx.compose.ui.geometry.Offset(width * .15f, height * .22f), 300)
+        val stage = compose.onNodeWithTag("player_wide_stage").fetchSemanticsNode().boundsInRoot
+        val cover = compose.onNodeWithTag("player_cover").fetchSemanticsNode().boundsInRoot
+        val coverPane = compose.onNodeWithTag("player_wide_cover_content").fetchSemanticsNode().boundsInRoot
+        val lyrics = compose.onNodeWithTag("lyrics_panel").fetchSemanticsNode().boundsInRoot
+        val viewport = compose.onNodeWithTag("player_screen").fetchSemanticsNode().boundsInRoot
+        val options = compose.onNodeWithTag("lyrics_options").fetchSemanticsNode().boundsInRoot
+        assertEquals("Cover stays square", cover.width, cover.height, 1f)
+        assertEquals("Both panes center vertically", cover.center.y, lyrics.center.y, 2f)
+        assertEquals("Artwork centers in the left pane", coverPane.center.x, cover.center.x, 2f)
+        assertEquals("Bottom system insets must not shift the stage upwards", viewport.center.y, stage.center.y, 2f)
+        assertEquals("The panes have equal width", coverPane.width, lyrics.width, 2f)
+        assertTrue(stage.contains(cover.topLeft) && stage.contains(cover.bottomRight))
+        assertTrue("Lyrics follow the cover", cover.right < lyrics.left)
+        compose.waitUntil(5000) { !statusBarVisible() }
+        compose.onNodeWithTag("player_screen").captureToImage().asAndroidBitmap().let { bitmap ->
+            val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+            java.io.File(context.externalCacheDir, "player-landscape-immersive.png").outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
         }
-        compose.mainClock.advanceTimeBy(800)
-        compose.onNodeWithTag("lyrics_panel").performTouchInput {
-            swipe(center, center + androidx.compose.ui.geometry.Offset(0f, height * .35f), 200)
-        }
-        compose.mainClock.advanceTimeBy(1500)
-        assertEquals("Vertical lyric browsing must not close the player", 1f,
+        compose.onNodeWithTag("lyrics_panel").performTouchInput { swipeDown() }
+        assertEquals("Browsing lyrics leaves the player open", 1f,
             compose.onNodeWithTag("player_sheet").fetchSemanticsNode().config[PlayerSheetGeometry].progress, .01f)
-        panePager.performTouchInput {
-            swipe(androidx.compose.ui.geometry.Offset(width * .15f, height * .22f),
-                androidx.compose.ui.geometry.Offset(width * .85f, height * .22f), 300)
-        }
-        compose.mainClock.advanceTimeBy(800)
-        assertEquals("Horizontal paging remains usable after vertical lyric browsing", 0f,
-            panePager.fetchSemanticsNode().config[PlayerPagePosition], .01f)
-        compose.mainClock.autoAdvance = true
-        compose.onNodeWithTag("open_player_queue").performClick()
-        compose.onNodeWithTag("player_queue_sheet").assertExists()
-        compose.onNodeWithText("向下轻扫返回播放界面").performClick()
-        compose.onNodeWithTag("navigate_back").performClick()
+        val pager = compose.onNodeWithTag("player_wide_pager")
+        pager.performTouchInput { swipeRight() }
+        compose.waitForIdle()
+        assertEquals(0f, pager.fetchSemanticsNode().config[PlayerPagePosition], .01f)
+        compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        compose.onNodeWithTag("player_song_title").assertIsDisplayed()
+        compose.onNodeWithTag("lyrics_panel").assertDoesNotExist()
+        assertEquals("The cover stays still during the page change", cover,
+            compose.onNodeWithTag("player_cover").fetchSemanticsNode().boundsInRoot)
+        assertEquals("Only the right pane moves; settings stay in the corner", options,
+            compose.onNodeWithTag("lyrics_options").fetchSemanticsNode().boundsInRoot)
+        pager.performTouchInput { swipe(androidx.compose.ui.geometry.Offset(width * .9f, height * .15f),
+            androidx.compose.ui.geometry.Offset(width * .1f, height * .15f), 300) }
+        compose.waitForIdle()
+        assertEquals(1f, pager.fetchSemanticsNode().config[PlayerPagePosition], .01f)
+        compose.onNodeWithTag("lyrics_panel").assertIsDisplayed()
+        compose.onNodeWithTag("player_transport").assertDoesNotExist()
+        compose.onNodeWithTag("lyrics_options").performClick()
+        compose.onNodeWithTag("open_lyrics_display").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("open_lyrics").performScrollTo().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        compose.waitUntil(5000) { !statusBarVisible() }
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+        compose.waitUntil(5000) { statusBarVisible() }
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
         assertFalse(container.playerController.state.value.playing)
     }
+
+    private fun statusBarVisible() = androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
+        ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.statusBars()) == true
 }

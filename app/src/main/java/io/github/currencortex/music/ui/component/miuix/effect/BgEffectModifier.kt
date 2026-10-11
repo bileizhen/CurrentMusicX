@@ -23,6 +23,7 @@ internal fun Modifier.bgEffectDraw(
     effectBackground: Boolean,
     isFullSize: Boolean,
     playing: Boolean,
+    animationSpeed: Float,
     colorStage: () -> Float,
     alpha: () -> Float,
 ): Modifier = this then BgEffectElement(
@@ -34,6 +35,7 @@ internal fun Modifier.bgEffectDraw(
     effectBackground = effectBackground,
     isFullSize = isFullSize,
     playing = playing,
+    animationSpeed = animationSpeed,
     colorStage = colorStage,
     alpha = alpha,
 )
@@ -47,6 +49,7 @@ private data class BgEffectElement(
     val effectBackground: Boolean,
     val isFullSize: Boolean,
     val playing: Boolean,
+    val animationSpeed: Float,
     val colorStage: () -> Float,
     val alpha: () -> Float,
 ) : ModifierNodeElement<BgEffectNode>() {
@@ -60,6 +63,7 @@ private data class BgEffectElement(
         effectBackground = effectBackground,
         isFullSize = isFullSize,
         playing = playing,
+        animationSpeed = animationSpeed,
         colorStage = colorStage,
         alpha = alpha,
     )
@@ -74,6 +78,7 @@ private data class BgEffectElement(
             effectBackground = effectBackground,
             isFullSize = isFullSize,
             playing = playing,
+            animationSpeed = animationSpeed,
             colorStage = colorStage,
             alpha = alpha,
         )
@@ -89,6 +94,7 @@ private class BgEffectNode(
     private var effectBackground: Boolean,
     private var isFullSize: Boolean,
     private var playing: Boolean,
+    private var animationSpeed: Float,
     private var colorStage: () -> Float,
     private var alpha: () -> Float,
 ) : Modifier.Node(),
@@ -96,7 +102,6 @@ private class BgEffectNode(
 
     private var animationJob: Job? = null
     private var animTime: Float = 0f
-    private var startOffset: Float = 0f
 
     override fun onAttach() {
         if (playing) startAnimation()
@@ -116,6 +121,7 @@ private class BgEffectNode(
         effectBackground: Boolean,
         isFullSize: Boolean,
         playing: Boolean,
+        animationSpeed: Float,
         colorStage: () -> Float,
         alpha: () -> Float,
     ) {
@@ -128,6 +134,7 @@ private class BgEffectNode(
         this.isFullSize = isFullSize
         this.colorStage = colorStage
         this.alpha = alpha
+        this.animationSpeed = animationSpeed
 
         if (this.playing != playing) {
             this.playing = playing
@@ -143,7 +150,6 @@ private class BgEffectNode(
 
     private fun startAnimation() {
         animationJob?.cancel()
-        startOffset = animTime
         animationJob = coroutineScope.launch {
             val minDeltaNanos = 1_000_000_000L / 60L
             val origin = withInfiniteAnimationFrameNanos { it }
@@ -151,8 +157,8 @@ private class BgEffectNode(
             while (isActive) {
                 val now = withInfiniteAnimationFrameNanos { it }
                 if (now - lastEmit < minDeltaNanos) continue
+                animTime += (now - lastEmit) / 1_000_000_000f * animationSpeed
                 lastEmit = now
-                animTime = startOffset + (now - origin) / 1_000_000_000f
                 invalidateDraw()
             }
         }

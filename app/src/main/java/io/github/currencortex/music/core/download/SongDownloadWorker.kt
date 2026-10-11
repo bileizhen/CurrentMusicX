@@ -41,18 +41,20 @@ open class SongDownloadWorker(context: Context, params: WorkerParameters) : Coro
         fun verifySession() {
             check(inputData.getLong("account", -1) == (container.accountRepository.state.value.account?.id ?: 0L) &&
                 inputData.getString("server") == container.accountRepository.server &&
-                inputData.getString("provider") == container.audioSettings.access().identity) {
+                inputData.getString("provider") == container.audioSettings.access().identity &&
+                (inputData.getLong("netease_uid", -1) < 0 || inputData.getLong("netease_uid", -1) ==
+                    (container.neteaseSessions.state.value.profile?.uid ?: 0L))) {
                 "账号或音源已变化，请重新开始下载"
             }
         }
         verifySession()
-        val session = RequestSession(container.accountRepository.server, container.accountRepository.token)
+        val session = container.musicSession()
         return SongDownloadEngine(File(applicationContext.cacheDir, "song-downloads"),
-            resolve = { track, quality -> container.musicRepository.source(track.id, quality, session) },
+            resolve = { track, quality -> container.musicRepository.source(track.id, quality, container.audioSession()) },
             detail = { track -> container.musicRepository.detail(track.id) },
             lyrics = { track -> container.lyricsRepository.load(track).document },
             store = SongDownloadStore(applicationContext),
-            guard = { verifySession() })
+            guard = { verifySession(); check(session == container.musicSession()) { "账号已变化，请重新开始下载" } })
     }
     private fun notification(song: Song, progress: SongDownloadProgress): ForegroundInfo {
         val manager = applicationContext.getSystemService(NotificationManager::class.java)
