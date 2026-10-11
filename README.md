@@ -25,7 +25,7 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 
 圆形封面、封面取色背景、逐字歌词与跟手拖拽共同组成播放体验。绑定网易云后，可以直接使用网易云我喜欢和自己的歌单；也可以保留 CurrentMusic 音乐库，在两种方式之间切换。
 
-应用源码位于本仓库的 `main` 分支，同时维护于 [CurrentMusic 的 app 分支](https://github.com/backrooms-yrc/CurrentMusic/tree/app)。歌曲、音质和歌词的可用性取决于所选服务器、音源及账号权限。
+应用源码位于本仓库的 `main` 分支，同时维护于 [CurrentMusic 的 app 分支](https://github.com/backrooms-yrc/CurrentMusic/tree/app)。音乐资料与网易云音乐库由手机直连网易云，歌曲音源继续使用 CurrentMusic。歌曲与音质的可用性取决于所选音源和账号权限。
 
 ## 功能特性
 
@@ -45,12 +45,15 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 - “总是”模式可按行时间为普通歌词生成近似逐字高亮
 - 歌词字体、字号、粗细和时间偏移可调整
 - 横屏采用左侧封面、右侧内容布局，左右滑动或拖拽切换歌词与控制栏
+- 横竖屏均支持 3D 透视、逐字微幅上提和延音辉光，翻译随当前歌词平滑展开与收起
 
 ### 歌单与网易云音乐库
 
 - 歌单封面网格、取色头部、歌单内搜索、排序、随机播放与继续播放
 - 后台刷新对比歌曲变化，保留已有内容和滚动位置，新增歌曲通过动画显示
 - 网易云账号支持扫码和手机验证码绑定，二维码在切到后台时保留
+- 搜索、歌词、歌单、收藏、每日推荐、最近播放、艺人与 MV 原生直连网易云，不经过 CurrentMusic 转发；歌曲音源继续使用 CurrentMusic
+- 网易云登录凭据加密保存在本机；自己的普通歌单支持创建、重命名、删除和移出歌曲
 - 可将网易云设为主音乐库，“我的 → 我喜欢”直接打开网易云我喜欢的音乐
 - 开启主音乐库后，播放页短按红心直接喜欢 / 取消喜欢；长按可选择其他可收录歌单
 - 主音乐库开关可随时关闭，原有 CurrentMusic 音乐库数据保留
@@ -85,6 +88,7 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 - 启动时自动检查更新，也可在设置中手动检查；支持正式版与预发布渠道
 - 更新说明支持图片，默认使用专用镜像下载，失败时切换备用源
 - 更新包通过文件校验后请求系统安装，并核对包名与签名
+- 站内公告一页一条，支持左右滑动、自动高度和图片；可选择不再显示旧公告，新公告仍会提醒
 
 ## 界面预览
 
@@ -114,12 +118,14 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 
 从 [Releases](https://github.com/bileizhen/CurrentMusicX/releases/latest) 下载 `CurrentMusic-Android-v版本号.apk`，按系统提示安装。正式版沿用同一签名，可覆盖升级。
 
-1. 打开应用，登录 CurrentMusic 账号。
+1. 打开应用即可搜索和播放有权限的歌曲，无需先登录 CurrentMusic。
 2. 在首页搜索歌曲，或打开每日推荐、歌单和最近播放。
 3. 需要使用网易云收藏时，在网易云账户绑定页通过扫码或手机验证码完成绑定。
 4. 按需要开启“网易云作为主音乐库”，并在设置中调整音质、歌词与外观。
 
-服务器地址可以在“设置 → 网络与播放”中修改，默认为 `https://music.20110208.xyz/cm/`。
+CurrentMusic 服务器地址可以在“设置 → 网络与播放”中修改，默认为 `https://music.20110208.xyz/cm/`，用于歌曲音源、CurrentMusic 账户、资料装饰、旧音乐库与一起听。网易云音乐资料和音乐库使用独立直连请求。
+
+从旧版本升级后，需要在网易云账户绑定页重新登录一次。旧版本保存在服务器上的网易云凭据不会下载到本机；已有 CurrentMusic 歌单保留。
 
 ## 常见问题
 
@@ -131,7 +137,7 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 
 ### 默认服务器地址里的 `/cm/` 是什么？
 
-`/cm/` 是 CurrentMusic 服务的接口路径。原生客户端的登录、歌单与一起听等功能使用这组接口；部署自己的服务器时，填写对应的 CurrentMusic 服务地址。
+`/cm/` 是 CurrentMusic 服务的接口路径，用于歌曲音源、CurrentMusic 登录、旧音乐库、个人资料和一起听。搜索、网易云歌单与歌词直接连接网易云，修改此地址不会改变网易云请求目标。
 
 ### 下载的歌曲和歌词保存在哪里？
 
@@ -155,8 +161,8 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 
 ## 隐私
 
-- 登录、搜索、歌单、账号绑定与一起听请求由所选服务器处理；音频、MV 和图片从对应服务返回的地址加载。
-- 本机 Token 使用 Android Keystore / AES-GCM 加密保存；密码和验证码不持久化，网易云 Cookie 由服务器管理。
+- 搜索、网易云登录、收藏、歌单与播放记录直接请求网易云；CurrentMusic 账户、旧音乐库和一起听使用所选 CurrentMusic 服务器。音频、MV 和图片从对应服务返回的地址加载。
+- 本机 Token 和网易云 Cookie 使用 Android Keystore / AES-GCM 加密保存；密码和验证码不持久化。网易云凭据不会发送给 CurrentMusic 服务器。
 - 搜索历史、歌曲元数据、歌词和队列保存在本机；多账号凭据按服务器与账户隔离。
 - 下载文件保存到用户选择的目录，退出登录不会删除已下载文件。
 - 日志对账户凭据脱敏；诊断文件包含应用与设备版本等定位信息。

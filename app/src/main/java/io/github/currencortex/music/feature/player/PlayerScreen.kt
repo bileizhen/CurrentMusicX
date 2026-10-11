@@ -127,11 +127,15 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             upDrag = if (expanded) upDrag else null, enabled = !queueGesture) {
                 listOfNotNull(lyricsCoordinates, previewCoordinates)
             } else Modifier)) {
-        val widePlayer = maxWidth >= 648.dp
+        val widePlayer = maxWidth > maxHeight
+        PlayerSystemBars(immersive = widePlayer)
         val density = LocalDensity.current
         val layoutDirection = LocalLayoutDirection.current
         val wideSafeInset = with(density) { maxOf(WindowInsets.safeDrawing.getLeft(density, layoutDirection),
             WindowInsets.safeDrawing.getRight(density, layoutDirection)).toDp() }
+        val wideVerticalInset = with(density) { maxOf(WindowInsets.safeDrawing.getTop(density),
+            WindowInsets.safeDrawing.getBottom(density)).toDp() }
+        LaunchedEffect(widePlayer) { if (widePlayer) pager.scrollToPage(PlayerContent.LYRICS.ordinal) }
         val immersive = settings.lyricsDisplay.hideControls && !controlsRevealed && content == PlayerContent.LYRICS
         val functions: @Composable () -> Unit = {
             PlayerSongActionsBar(vm, { overlay = PlayerOverlay.COMMENTS }, {
@@ -154,46 +158,38 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         CompositionLocalProvider(LocalIndication provides indication) {
         Column(Modifier.fillMaxSize().graphicsLayer { translationY = -size.height * queueMotion.progress }
             .then(if (overlay == PlayerOverlay.QUEUE || queueGesture) Modifier.semantics { hideFromAccessibility() } else Modifier)
-            .statusBarsPadding().navigationBarsPadding()
-            .then(if (widePlayer) Modifier.padding(horizontal = wideSafeInset)
-                else Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)))
+            .then(if (widePlayer) Modifier.padding(horizontal = wideSafeInset, vertical = wideVerticalInset)
+                else Modifier.statusBarsPadding().navigationBarsPadding()
+                    .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)))
             .padding(horizontal = 24.dp).testTag("player_safe_content")
             .graphicsLayer { alpha = playerSheetContentAlpha(sheetProgress()) }) {
             if (!widePlayer) header()
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-                val compactControls = maxHeight < 520.dp
                 if (widePlayer) {
-                val stageHeight = (maxHeight - 32.dp).coerceIn(0.dp, 400.dp)
-                val stageWidth = minOf(maxWidth, stageHeight * 2.6f, 840.dp)
-                Box(Modifier.fillMaxSize().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
-                Row(Modifier.size(stageWidth, stageHeight).testTag("player_wide_stage"), horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-                    WideCoverContent(vm, Modifier.weight(1f).fillMaxHeight())
-                    HorizontalPager(pager, Modifier.weight(1.05f).fillMaxHeight().testTag("player_wide_pager")
-                        .semantics { this[PlayerPagePosition] = pager.currentPage + pager.currentPageOffsetFraction },
-                        beyondViewportPageCount = 1,
-                        userScrollEnabled = expanded && sheetDrag?.state?.dragging != true,
-                        flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = tween(240, easing = LinearOutSlowInEasing))) { page ->
-                        Box(Modifier.fillMaxSize().then(if (pager.currentPage != page && !pager.isScrollInProgress)
-                            Modifier.clearAndSetSemantics {} else Modifier)) {
-                            if (page == 0) Column(Modifier.fillMaxSize().testTag("player_wide_controls")) {
-                                val song = queue.current
-                                Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState())
-                                    .padding(horizontal = 8.dp, vertical = 4.dp), verticalArrangement = Arrangement.Center) {
-                                    Text(song?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"), color = Color.White,
-                                        fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(song?.artists.orEmpty(), Modifier.padding(top = 4.dp).testTag("player_song_artist"),
-                                        color = Color.White.copy(alpha = .55f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    val stageHeight = (maxHeight - 24.dp).coerceAtLeast(0.dp)
+                    val stageWidth = minOf(maxWidth, stageHeight * 2.7f, 1000.dp)
+                    Box(Modifier.fillMaxSize().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
+                        Row(Modifier.size(stageWidth, stageHeight).testTag("player_wide_stage"),
+                            horizontalArrangement = Arrangement.spacedBy(40.dp), verticalAlignment = Alignment.CenterVertically) {
+                            WideCoverContent(vm, Modifier.weight(1f).fillMaxHeight())
+                            HorizontalPager(pager, Modifier.weight(1f).fillMaxHeight().testTag("player_wide_pager")
+                                .semantics { this[PlayerPagePosition] = pager.currentPage + pager.currentPageOffsetFraction },
+                                beyondViewportPageCount = 1,
+                                userScrollEnabled = expanded && sheetDrag?.state?.dragging != true,
+                                flingBehavior = PagerDefaults.flingBehavior(pager,
+                                    snapAnimationSpec = tween(240, easing = LinearOutSlowInEasing))) { page ->
+                                Box(Modifier.fillMaxSize().then(if (pager.currentPage != page && !pager.isScrollInProgress)
+                                    Modifier.clearAndSetSemantics {} else Modifier)) {
+                                    if (page == 0) WideControlsContent(vm, onToggle, functions)
+                                    else LyricsPanel(vm, Modifier.fillMaxSize()
+                                        .onGloballyPositioned { lyricsCoordinates = it },
+                                        active = pager.currentPage == 1 || pager.isScrollInProgress, minimal = true)
                                 }
-                                PlayerTransport(vm, onToggle, compact = compactControls)
-                                functions()
-                            } else LyricsPanel(vm, Modifier.fillMaxSize().onGloballyPositioned { lyricsCoordinates = it },
-                                active = pager.currentPage == 1 || pager.isScrollInProgress)
+                            }
                         }
                     }
-                }
-                }
-                // Chrome overlays the safe corners instead of pushing both panes down.
-                Box(Modifier.fillMaxWidth().align(Alignment.TopCenter)) { header() }
+                    PlayerIconButton(PlayerIcon.MORE, "播放与歌词设置", { overlay = PlayerOverlay.OPTIONS },
+                        Modifier.align(Alignment.TopEnd).testTag("lyrics_options"))
                 } else Column(Modifier.fillMaxSize()) {
                     CompositionLocalProvider(LocalPlayerPagerArtwork provides pagerArtwork) {
                     Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { pagerArtwork.container = it }) {
@@ -202,7 +198,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         beyondViewportPageCount = 1,
                         userScrollEnabled = expanded && sheetDrag?.state?.dragging != true,
                         flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = tween(240, easing = LinearOutSlowInEasing))) { page ->
-                        Box(Modifier.fillMaxSize().onGloballyPositioned {
+                        Box(Modifier.fillMaxSize().then(if (pager.currentPage != page && !pager.isScrollInProgress)
+                            Modifier.clearAndSetSemantics {} else Modifier).onGloballyPositioned {
                             if (page == 0) pagerArtwork.coverPage = it else pagerArtwork.lyricsPage = it
                         }) {
                         if (page == 1) Column(Modifier.fillMaxSize()) {
@@ -256,7 +253,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlayerOverlay.ACTIONS -> if (queue.current != null) MusicDialog("歌曲操作", dismiss) { actions?.invoke(queue.current!!) }
             PlayerOverlay.OPTIONS -> MusicDialog("播放与歌词", dismiss) {
                 Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
-                MusicDestinationRow(if (content == PlayerContent.LYRICS) { if (widePlayer) "显示控制栏" else "显示封面" } else "显示歌词",
+                MusicDestinationRow(if (content == PlayerContent.LYRICS) {
+                    if (widePlayer) "显示控制栏" else "显示封面"
+                } else "显示歌词",
                     modifier = Modifier.testTag("open_lyrics"), onClick = {
                         dismiss()
                         scope.launch { pager.animateScrollToPage(if (pager.targetPage == 0) 1 else 0,
@@ -329,7 +328,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     }
 }
 
-/** Artwork remains stationary while the right-hand pane switches controls and lyrics. */
+/** Artwork stays at the center of its pane while controls and lyrics slide beside it. */
 @Composable private fun WideCoverContent(vm: PlayerViewModel, modifier: Modifier) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     BoxWithConstraints(modifier.fillMaxWidth().testTag("player_wide_cover_content")) {
@@ -340,7 +339,27 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     }
 }
 
-@Composable private fun LyricsPanel(vm: PlayerViewModel, modifier: Modifier, active: Boolean = true) {
+@Composable private fun WideControlsContent(vm: PlayerViewModel, onToggle: () -> Unit,
+    functions: @Composable () -> Unit) {
+    val queue by vm.queue.collectAsStateWithLifecycle()
+    BoxWithConstraints(Modifier.fillMaxSize().testTag("player_wide_controls")) {
+        val compact = maxHeight < 360.dp
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 24.dp, Alignment.CenterVertically)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
+                Text(queue.current?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"),
+                    color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
+                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(queue.current?.artists.orEmpty(), Modifier.padding(top = 6.dp).testTag("player_song_artist"),
+                    color = Color.White.copy(alpha = .55f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            PlayerTransport(vm, onToggle, compact = compact)
+            functions()
+        }
+    }
+}
+
+@Composable private fun LyricsPanel(vm: PlayerViewModel, modifier: Modifier, active: Boolean = true, minimal: Boolean = false) {
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
     val player by vm.state.collectAsStateWithLifecycle()
     val position = rememberLyricsPosition(if (active) player else player.copy(playing = false))
@@ -348,7 +367,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         val settings by vm.settings.collectAsStateWithLifecycle()
         LyricsScreen(lyrics.document, position, vm.player::seek, modifier, player.canControlPlayback,
             settings.lyricsDisplay.translation, settings.lyricsDisplay.romanization, settings.lyricsDisplay.wordAnimation,
-            settings.lyricsDisplay.blur, settings.lyricsFontSize, settings.lyricsWeight, settings.lyricsOffsetMs, settings.lyricsDisplay)
+            settings.lyricsDisplay.blur, if (minimal) settings.lyricsFontSize * .75f else settings.lyricsFontSize,
+            settings.lyricsWeight, settings.lyricsOffsetMs, settings.lyricsDisplay,
+            minimal = minimal, perspective = settings.lyricsDisplay.perspective)
     } else Box(modifier.testTag("lyrics_panel"), contentAlignment = Alignment.Center) {
         if (lyrics.loading) Column(Modifier.fillMaxWidth().padding(28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             MusicPlaceholder(Modifier.fillMaxWidth(.8f).height(30.dp))

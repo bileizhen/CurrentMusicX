@@ -69,7 +69,8 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
                 _actions.value = PlayerSongActions(songId = id)
                 if (id == null) return@collectLatest
                 supervisorScope {
-                    launch { appResult { container.libraryRepository.refreshStatus(listOf(queue.value.current?.id ?: id)) } }
+                    if (container.nativeNetease == null || !container.musicSettings.state.value.neteaseMainLibrary)
+                        launch { appResult { container.libraryRepository.refreshStatus(listOf(queue.value.current?.id ?: id)) } }
                     launch { val result = appResult { netease.likeCount(id) }; if (result is AppResult.Success) _actions.update { it.copy(likeCount = result.value) } }
                     launch { val result = appResult { netease.comments(id, limit = 1) }; if (result is AppResult.Success) _actions.update { it.copy(commentCount = result.value.total?.takeIf { n -> n >= 0 }) } }
                     launch { val result = appResult { netease.isLiked(id) }; if (result is AppResult.Success) _actions.update { it.copy(liked = result.value) } }
@@ -100,13 +101,13 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
         val song = queue.value.current?.takeUnless { it.video } ?: return
         if (_actions.value.liking) return
         val epoch = actionEpoch
-        val expected = RequestSession(container.accountRepository.server, container.accountRepository.token)
+        val expected = container.musicSession()
         _actions.update { it.copy(liking = true, error = null) }
         viewModelScope.launch {
             try {
                 when (val result = appResult {
                     val native = container.primaryLibrary.resolveNetease()
-                    if (expected != RequestSession(container.accountRepository.server, container.accountRepository.token)) throw ApiException(ErrorKind.Unauthorized)
+                    if (expected != container.musicSession()) throw ApiException(ErrorKind.Unauthorized)
                     if (native) {
                         val id = NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound)
                         netease.toggleLiked(id, song)

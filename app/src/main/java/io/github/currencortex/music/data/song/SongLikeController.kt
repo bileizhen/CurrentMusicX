@@ -38,7 +38,7 @@ class SongLikeController(private val library: LibraryRepository, private val net
     }
     private suspend fun load(song: Song, target: LikeDestination, epoch: Long, expected: RequestSession) {
         val result = appResult {
-            if (expected.token == null) throw ApiException(ErrorKind.Unauthorized)
+            if (expected.token == null && target == LikeDestination.CURRENT_MUSIC) throw ApiException(ErrorKind.Unauthorized)
             when (target) {
                 LikeDestination.CURRENT_MUSIC -> { library.refreshStatus(listOf(song.id)); library.statuses.value[song.id]?.liked ?: throw ApiException(ErrorKind.Parse) }
                 LikeDestination.NETEASE -> netease.isLiked(NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound), fresh = true)

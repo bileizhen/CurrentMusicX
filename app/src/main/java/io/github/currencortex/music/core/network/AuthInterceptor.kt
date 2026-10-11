@@ -3,10 +3,10 @@ package io.github.currencortex.music.core.network
 import okhttp3.Interceptor
 import okhttp3.Response
 
-class RequestSession(val server: String, val token: String?) {
+class RequestSession(val server: String, val token: String?, val neteaseRevision: Long? = null) {
     override fun toString() = "RequestSession(redacted)"
-    override fun equals(other: Any?) = other is RequestSession && server == other.server && token == other.token
-    override fun hashCode() = 31 * server.hashCode() + (token?.hashCode() ?: 0)
+    override fun equals(other: Any?) = other is RequestSession && server == other.server && token == other.token && neteaseRevision == other.neteaseRevision
+    override fun hashCode() = 31 * (31 * server.hashCode() + (token?.hashCode() ?: 0)) + (neteaseRevision?.hashCode() ?: 0)
 }
 class AuthInterceptor : Interceptor {
     override fun intercept(chain: Interceptor.Chain): Response {

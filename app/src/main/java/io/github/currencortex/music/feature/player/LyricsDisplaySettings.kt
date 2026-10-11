@@ -73,9 +73,16 @@ import kotlin.math.roundToInt
         LyricsToggle("歌词视图模糊", display.blur, { value -> onDisplay { it.copy(blur = value) } }, "lyrics_blur",
             "仅 Android 12 及以上支持", android.os.Build.VERSION.SDK_INT >= 31)
         LyricsToggle("交错滚动效果", display.stagger, { value -> onDisplay { it.copy(stagger = value) } }, "lyrics_stagger")
-        LyricsToggle("翻译歌词", display.translation, { value -> onDisplay { it.copy(translation = value) } }, "lyrics_translation")
+        LyricsToggle("3D 倾斜歌词", display.perspective, { value -> onDisplay { it.copy(perspective = value) } },
+            "lyrics_perspective", "横竖屏 3D 透视，近大远小的歌词平面")
+        LyricsToggle("歌词辉光", display.glow, { value -> onDisplay { it.copy(glow = value) } },
+            "lyrics_glow", "中长音与强调处渐亮，短音保持正常高亮")
+        LyricsToggle("翻译歌词", display.translation, { value -> onDisplay { it.copy(translation = value) } },
+            "lyrics_translation", "只显示正在播放的歌词翻译")
         LyricsToggle("罗马音", display.romanization, { value -> onDisplay { it.copy(romanization = value) } }, "lyrics_romanization")
         LyricsToggle("逐字动画", display.wordAnimation, { value -> onDisplay { it.copy(wordAnimation = value) } }, "lyrics_word_animation")
+        LyricsToggle("逐字上提", display.wordLift, { value -> onDisplay { it.copy(wordLift = value) } },
+            "lyrics_word_lift", "唱到的字轻轻上提，唱过后保持抬高", display.wordAnimation)
         MusicDestinationRow("卡拉OK（逐字）歌词动画兼容策略", summary = display.karaokeScope.label, onClick = onKaraokeScope,
             modifier = Modifier.testTag("open_karaoke_scope"))
         LyricsToggle("隐藏歌词界面控制面板", display.hideControls, { value -> onDisplay { it.copy(hideControls = value) } },

@@ -49,9 +49,9 @@ class MusicService : MediaSessionService() {
     private data class PreloadPlan(val request: AudioRequest, val warn: Boolean, val metered: Boolean)
     private data class Report(val song: Song, val session: RequestSession, val ms: Long? = null)
     private val reports = Channel<Report>(Channel.UNLIMITED)
-    private fun currentSession() = RequestSession(container.accountRepository.server, container.accountRepository.token)
+    private fun currentSession() = container.musicSession()
     private fun audioRequest(id: Long, quality: AudioQuality) = AudioRequest(id, quality,
-        container.accountRepository.state.value.account?.id ?: 0L, currentSession(), container.audioSettings.access().identity)
+        container.accountRepository.state.value.account?.id ?: 0L, container.audioSession(), container.audioSettings.access().identity)
     private fun flushListening() {
         val ms = listening.drain(SystemClock.elapsedRealtime())
         trackedSong?.takeIf { recorded && ms > 0 && !it.video }?.let { reports.trySend(Report(it, trackedSession, ms)) }
@@ -157,7 +157,8 @@ class MusicService : MediaSessionService() {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 listening.update(SystemClock.elapsedRealtime(), isPlaying)
                 val song = trackedSong
-                if (isPlaying && !recorded && song != null && !song.video && container.accountRepository.token != null) {
+                if (isPlaying && !recorded && song != null && !song.video &&
+                    (if (container.nativeNetease != null) container.neteaseSessions.state.value.loggedIn else container.accountRepository.token != null)) {
                     recorded = true
                     reports.trySend(Report(song, trackedSession))
                 }
@@ -202,8 +203,9 @@ class MusicService : MediaSessionService() {
             combine(container.playbackQueue.state, container.musicSettings.state, container.accountRepository.state) { _, settings, account ->
                 settings to account.account
             }.combine(container.audioSettings.state) { data, _ -> data }
+            .combine(container.neteaseSessions.state) { data, _ -> data }
             .combine(container.playerController.state) { (settings, account), state ->
-                val next = if (settings.preloadAudio && account != null && state.mode == PlayerMode.LOCAL && state.playing &&
+                val next = if (settings.preloadAudio && (account != null || container.nativeNetease != null) && state.mode == PlayerMode.LOCAL && state.playing &&
                     !state.loading && !state.resolving && state.warning == null &&
                     player.currentMediaItem?.mediaId == container.playbackQueue.state.value.current?.id?.toString()) container.playbackQueue.previewNext() else null
                 next?.let { PreloadPlan(audioRequest(it.id, settings.quality), settings.warnHighSpec, settings.preloadMetered) }

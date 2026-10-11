@@ -121,7 +121,8 @@ internal fun stripVersionHeadings(version: String, notes: String): String {
  * to readable content instead of breaking layout.
  */
 @Composable
-internal fun MarkdownText(markdown: String, modifier: Modifier = Modifier, onLinkClick: ((String) -> Unit)? = null) {
+internal fun MarkdownText(markdown: String, modifier: Modifier = Modifier, onLinkClick: ((String) -> Unit)? = null,
+                          compact: Boolean = false) {
     val context = LocalContext.current
     val linkStyle = SpanStyle(color = MiuixTheme.colorScheme.primary, textDecoration = TextDecoration.Underline)
     val blocks = remember(markdown) { markdownBlocks(markdown) }
@@ -129,41 +130,47 @@ internal fun MarkdownText(markdown: String, modifier: Modifier = Modifier, onLin
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         blocks.forEach { block ->
             when (block.kind) {
-                MarkdownKind.IMAGE -> ReleaseNoteImage(block.imageUrl, block.text)
+                MarkdownKind.IMAGE -> ReleaseNoteImage(block.imageUrl, block.text, compact)
                 MarkdownKind.RULE ->
                     HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
                 MarkdownKind.HEADING -> Text(inlineMarkdown(block.text, linkStyle, onLink),
-                    fontSize = when (block.level) { 1 -> 22.sp; 2 -> 19.sp; 3 -> 16.sp; else -> 15.sp }, fontWeight = FontWeight.SemiBold)
+                    fontSize = if (compact) when (block.level) { 1 -> 18.sp; 2 -> 17.sp; else -> 15.sp }
+                        else when (block.level) { 1 -> 22.sp; 2 -> 19.sp; 3 -> 16.sp; else -> 15.sp }, fontWeight = FontWeight.SemiBold)
                 MarkdownKind.BULLET -> Row {
-                    Text("•  ")
-                    Text(inlineMarkdown(block.text, linkStyle, onLink), modifier = Modifier.weight(1f))
+                    Text("•  ", fontSize = if (compact) 15.sp else 17.sp)
+                    Text(inlineMarkdown(block.text, linkStyle, onLink), modifier = Modifier.weight(1f),
+                        fontSize = if (compact) 15.sp else 17.sp, lineHeight = if (compact) 21.sp else 24.sp)
                 }
                 MarkdownKind.ORDERED -> Row {
-                    Text("${block.number}.  ")
-                    Text(inlineMarkdown(block.text, linkStyle, onLink), modifier = Modifier.weight(1f))
+                    Text("${block.number}.  ", fontSize = if (compact) 15.sp else 17.sp)
+                    Text(inlineMarkdown(block.text, linkStyle, onLink), modifier = Modifier.weight(1f),
+                        fontSize = if (compact) 15.sp else 17.sp, lineHeight = if (compact) 21.sp else 24.sp)
                 }
                 MarkdownKind.CODE -> Text(block.text, fontFamily = FontFamily.Monospace, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
                 MarkdownKind.QUOTE -> Text(inlineMarkdown(block.text, linkStyle, onLink), modifier = Modifier.padding(start = 12.dp), color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                MarkdownKind.TEXT -> Text(inlineMarkdown(block.text, linkStyle, onLink))
+                MarkdownKind.TEXT -> Text(inlineMarkdown(block.text, linkStyle, onLink),
+                    fontSize = if (compact) 15.sp else 17.sp, lineHeight = if (compact) 21.sp else 24.sp)
             }
         }
     }
 }
 
 @Composable
-private fun ReleaseNoteImage(url: String, alt: String) {
+private fun ReleaseNoteImage(url: String, alt: String, compact: Boolean = false) {
     val context = LocalContext.current
     var attempt by remember(url) { mutableIntStateOf(0) }
     var loaded by remember(url, attempt) { mutableStateOf(false) }
     var failed by remember(url, attempt) { mutableStateOf(false) }
     var ratio by remember(url) { mutableFloatStateOf(16f / 9f) }
-    Box(Modifier.fillMaxWidth().heightIn(max = 240.dp).aspectRatio(ratio)
+    val imageSize = if (compact) Modifier.heightIn(max = 152.dp).aspectRatio(16f / 9f)
+        else Modifier.heightIn(max = 240.dp).aspectRatio(ratio)
+    Box(Modifier.fillMaxWidth().then(imageSize)
         .clip(RoundedCornerShape(16.dp)).background(MiuixTheme.colorScheme.onSurface.copy(alpha = .05f))
         .testTag("update_note_image"), contentAlignment = Alignment.Center) {
         AsyncImage(model = remember(context, url, attempt) {
             ImageRequest.Builder(context).data(url).size(1200, 1200)
                 .memoryCacheKey("release-note:$url:$attempt").diskCacheKey("release-note:$url:$attempt").build()
-        }, contentDescription = alt.ifBlank { "版本更新图片" }, contentScale = ContentScale.Fit,
+        }, contentDescription = alt.ifBlank { "版本更新图片" }, contentScale = if (compact) ContentScale.Crop else ContentScale.Fit,
             modifier = Modifier.matchParentSize(), onSuccess = {
                 loaded = true
                 if (it.result.image.height > 0) ratio = (it.result.image.width.toFloat() / it.result.image.height).coerceIn(.35f, 3f)

@@ -11,6 +11,7 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import io.github.currencortex.music.core.netease.NeteaseGateway
 
 class ApiClient(
     private val server: () -> String,
@@ -20,14 +21,26 @@ class ApiClient(
     client: OkHttpClient = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(75, TimeUnit.SECONDS).writeTimeout(30, TimeUnit.SECONDS)
         .callTimeout(90, TimeUnit.SECONDS).followRedirects(false).build(),
+    val netease: NeteaseGateway? = null,
 ) {
     private val http = client.newBuilder().addInterceptor(AuthInterceptor()).build()
     private val singleAttemptHttp = http.newBuilder().retryOnConnectionFailure(false).build()
     suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
                         body: JsonElement? = null, authenticated: Boolean = false, expectedSession: RequestSession? = null,
-                        retryConnection: Boolean = true): JsonElement = withContext(Dispatchers.IO) {
+                        retryConnection: Boolean = true, callTimeoutMillis: Long? = null): JsonElement = withContext(Dispatchers.IO) {
         val session = RequestSession(server(), if (authenticated) token() else null)
-        if (expectedSession != null && expectedSession != session) throw ApiException(ErrorKind.Unauthorized)
+        if (expectedSession != null && (expectedSession.server != session.server || expectedSession.token != session.token)) throw ApiException(ErrorKind.Unauthorized)
+        if (netease?.handles(path) == true) {
+            if (expectedSession?.neteaseRevision != null && expectedSession.neteaseRevision != netease.sessions.state.value.revision)
+                throw ApiException(ErrorKind.NeteaseSessionChanged)
+            val response = netease.request(method, path, query, body, expectedSession?.neteaseRevision)
+            if (expectedSession != null && (expectedSession.server != server() || expectedSession.token != if (authenticated) token() else null))
+                throw ApiException(ErrorKind.Unauthorized)
+            val changesLogin = path == "ncmbind/phone/login" || path == "ncmbind/qr/check" || path == "ncmbind/refresh" || (path == "ncmbind" && method == "DELETE")
+            if (!changesLogin && expectedSession?.neteaseRevision != null && expectedSession.neteaseRevision != netease.sessions.state.value.revision)
+                throw ApiException(ErrorKind.NeteaseSessionChanged)
+            return@withContext response
+        }
         val url = ServerUrl.endpoint(session.server, path, query)
         val request = Request.Builder().url(url).tag(RequestSession::class.java, session)
             .header("Accept", "application/json")
@@ -35,6 +48,7 @@ class ApiClient(
             .build()
         val response = suspendCancellableCoroutine<Response> { cont ->
             val call = (if (retryConnection) http else singleAttemptHttp).newCall(request)
+            callTimeoutMillis?.let { call.timeout().timeout(it, TimeUnit.MILLISECONDS) }
             cont.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) { if (!cont.isCancelled) cont.resumeWithException(e) }

@@ -25,9 +25,12 @@ import androidx.room.Room
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import io.github.currencortex.music.core.netease.*
 
 class AppContainer(context: Context, storageNamespace: String = "", externalPlayer: ExternalPlayer? = null,
-    ttmlProvider: io.github.currencortex.music.feature.lyrics.data.LyricsProvider? = null) : java.io.Closeable {
+    ttmlProvider: io.github.currencortex.music.feature.lyrics.data.LyricsProvider? = null,
+    useNativeNetease: Boolean = storageNamespace.isEmpty(),
+    neteaseEndpoints: NeteaseEndpoints = NeteaseEndpoints()) : java.io.Closeable {
     private val storageSuffix = if (storageNamespace.isEmpty()) "" else ".$storageNamespace".also {
         require(storageNamespace.matches(Regex("[a-zA-Z0-9-]+")))
     }
@@ -47,33 +50,43 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         SecureTokenStore(context, ".leiz$storageSuffix"), appScope)
     val accountVault = EncryptedAccountVault.create(context, storageSuffix, settingsStore, appScope)
     val accountRepository = AccountRepository(SecureTokenStore(context, storageSuffix), appScope, accountVault)
+    val neteaseSessions = NeteaseSessionStore(SecureTokenStore(context, ".netease$storageSuffix"), appScope)
+    val nativeNetease = if (useNativeNetease) NeteaseGateway(NeteaseTransport(neteaseSessions, neteaseEndpoints,
+        log = { logger.info("Network", it) })) else null
+    fun musicSession(authenticated: Boolean = true) = RequestSession(
+        accountRepository.server.ifBlank { musicSettings.state.value.server },
+        accountRepository.token.takeIf { authenticated }, nativeNetease?.sessions?.state?.value?.revision)
+    fun audioSession() = RequestSession(accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)
     val apiClient = ApiClient(
         server = { accountRepository.server.ifBlank { musicSettings.state.value.server } },
         token = { accountRepository.token }, onUnauthorized = accountRepository::expired,
         log = { logger.info("Network", it) },
+        netease = nativeNetease,
     )
     val authRepository = AuthRepository(apiClient, accountRepository, "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
         persistServer = musicSettings::setServer, persistAccount = musicSettings::setAccount)
     val musicRepository = MusicRepository(apiClient, audioSettings::access)
+    val announcements = io.github.currencortex.music.data.announcement.AnnouncementRepository(apiClient)
+    val announcementPreferences = io.github.currencortex.music.data.announcement.AnnouncementPreferences(settingsStore)
     val songDownloads = io.github.currencortex.music.core.download.SongDownloadManager(context.applicationContext, storageSuffix)
     val musicStyles = io.github.currencortex.music.data.style.MusicStyleRepository(apiClient) {
-        RequestSession(accountRepository.server.ifBlank { musicSettings.state.value.server }, null)
+        musicSession(authenticated = false)
     }
     val neteaseSongActions = io.github.currencortex.music.data.song.NeteaseSongActionsRepository(apiClient) {
-        RequestSession(accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)
+        musicSession()
     }
     val audioCache = AudioCache(context.applicationContext, java.io.File(context.cacheDir, "audio$storageSuffix"))
     val storage = io.github.currencortex.music.core.storage.StorageStore(context.applicationContext, audioCache)
     val audioSources = AudioSourceResolver(audioCache,
-        { RequestSession(accountRepository.server, accountRepository.token) },
+        { audioSession() },
         currentProvider = { audioSettings.access().identity }, load = musicRepository::source)
     val libraryRepository = io.github.currencortex.music.data.library.LibraryRepository(apiClient,
-        { accountRepository.state.value.account?.id ?: 0L }, { RequestSession(accountRepository.server, accountRepository.token) })
+        { accountRepository.state.value.account?.id ?: 0L }, { musicSession() })
     val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
     val bindingRepository: io.github.currencortex.music.data.binding.BindingRepository = io.github.currencortex.music.data.binding.BindingRepository(apiClient,
-        { RequestSession(accountRepository.server, accountRepository.token) }) { libraryRepository.invalidate(); neteaseLibrary.invalidate() }
+        { musicSession() }) { libraryRepository.invalidate(); neteaseLibrary.invalidate() }
     val neteaseLibrary = io.github.currencortex.music.data.library.NeteaseLibraryRepository(apiClient, bindingRepository,
-        neteaseSongActions) { RequestSession(accountRepository.server, accountRepository.token) }
+        neteaseSongActions) { musicSession() }
     val primaryLibrary = io.github.currencortex.music.data.library.PrimaryMusicLibrary(libraryRepository,
         neteaseLibrary, bindingRepository, musicSettings, appScope)
     val database = Room.databaseBuilder(context.applicationContext, MusicDatabase::class.java, "music$storageSuffix.db").build()
@@ -99,10 +112,17 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     })
     val dlnaDiscovery = io.github.currencortex.music.core.dlna.DlnaDiscovery(context, soap = dlnaSoap)
     val dlnaController = io.github.currencortex.music.core.dlna.DlnaController(externalPlayer ?: playerController, musicRepository,
-        { RequestSession(accountRepository.server, accountRepository.token) }, playerScope, dlnaSoap)
+        { audioSession() }, playerScope, dlnaSoap)
     val ready = CompletableDeferred<Unit>()
     val sessionRestored = CompletableDeferred<Unit>()
     init {
+        if (nativeNetease != null) appScope.launch {
+            neteaseSessions.ready.await()
+            neteaseSessions.state.collect {
+                bindingRepository.clearSession(); bindingRepository.status()
+                libraryRepository.clearSession(); neteaseLibrary.invalidate(); neteaseSongActions.clearSession()
+            }
+        }
         playerScope.launch {
             accountRepository.sessionRevision.collect {
                 audioSources.invalidate(); roomSession.disconnect(); dlnaController.stop()
@@ -126,12 +146,19 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             try {
                 val initial = musicSettings.snapshot()
                 audioSettings.ready.await()
+                if (nativeNetease != null) neteaseSessions.ready.await()
                 accountRepository.server = initial.server
                 if (initial.restoreQueue) database.music().queue()?.let {
                     playbackQueue.restore(ApiJson.decodeFromString<QueueSnapshot>(it.payload))
                 }
                 ready.complete(Unit)
-                authRepository.restore(initial.server)
+                if (nativeNetease != null) {
+                    // Restore cached CurrentMusic identity locally. Its slow validation must
+                    // not block the independent NetEase library or launch animation.
+                    accountRepository.restoreToken()
+                    sessionRestored.complete(Unit)
+                    appScope.launch { authRepository.validateRestored() }
+                } else authRepository.restore(initial.server)
             } catch (_: Exception) {
                 ready.complete(Unit)
                 accountRepository.state.value = AccountState(error = "本地会话恢复失败，请重新登录")

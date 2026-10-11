@@ -10,23 +10,31 @@ import io.github.currencortex.music.data.settings.AudioSourceAccess
 class MusicRepository(private val api: ApiClient,
     private val audioAccess: () -> AudioSourceAccess = { AudioSourceAccess(AudioProvider.CURRENT_MUSIC) },
     private val leiz: LeizAudioClient = LeizAudioClient()) {
+    private fun parseDocument(raw: JsonObject) = io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(raw).let {
+        if (api.netease != null) it.copy(metadata = it.metadata.copy(source = "网易云")) else it
+    }
     suspend fun search(keyword: String, offset: Int = 0): AppResult<SearchPage> = appResult {
         val result = api.get<SearchDto>("ncm/search", mapOf("keywords" to keyword, "offset" to "$offset", "limit" to "30", "type" to "song"))
         SearchPage(result.songs.map(SongDto::toDomain), result.totals.song, result.hasMore.song)
     }
     suspend fun detail(id: Long): Song = api.get<SongDetailDto>("ncm/song/detail", mapOf("ids" to "$id")).songs.first().toDomain()
     suspend fun lyrics(id: Long): AppResult<List<LyricLine>> = appResult {
-        api.get<LyricDto>("ncm/lyric", mapOf("id" to "$id")).lines.filter { it.txt.isNotBlank() }.sortedBy { it.t }
+        if (api.netease != null) {
+            val document = api.get<JsonObject>("ncm/lyric", mapOf("id" to "$id"))
+            io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(document).lines.map {
+                LyricLine(it.startTimeMs, it.text, it.translation)
+            }
+        } else api.get<LyricDto>("ncm/lyric", mapOf("id" to "$id")).lines.filter { it.txt.isNotBlank() }.sortedBy { it.t }
     }
     suspend fun lyricsDocument(id: Long) = appResult {
         val enhanced = appResult {
             val raw = api.get<JsonObject>("ncm/lyric/new", mapOf("id" to "$id"))
             val code = raw["code"]?.jsonPrimitive?.intOrNull
             if (code != null && code != 200) throw ApiException(ErrorKind.Server, code)
-            io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(raw)
+            parseDocument(raw)
         }
         if (enhanced is AppResult.Success && enhanced.value.lines.isNotEmpty()) enhanced.value
-        else io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(
+        else parseDocument(
             api.get<JsonObject>("ncm/lyric", mapOf("id" to "$id")))
     }
     suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null): AudioSource {

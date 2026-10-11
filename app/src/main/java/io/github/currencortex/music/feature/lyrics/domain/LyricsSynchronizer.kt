@@ -14,6 +14,11 @@ class LyricsSynchronizer(private val document: LyricsDocument) {
     private val prefixEnd = LongArray(intervals.size).also { result ->
         intervals.forEachIndexed { index, row -> result[index] = maxOf(row.end, result.getOrElse(index - 1) { 0 }) }
     }
+    private val prefixEndIndex = IntArray(intervals.size).also { result ->
+        intervals.forEachIndexed { index, row ->
+            result[index] = if (index == 0 || row.end >= prefixEnd[index - 1]) row.index else result[index - 1]
+        }
+    }
     private fun lastStarted(positionMs: Long): Int {
         var low = 0; var high = intervals.lastIndex
         while (low <= high) {
@@ -33,7 +38,9 @@ class LyricsSynchronizer(private val document: LyricsDocument) {
     }
     fun findCurrentLine(positionMs: Long): Int = activeLines(positionMs).lastOrNull() ?: -1
     fun scrollTarget(positionMs: Long): Int = findCurrentLine(positionMs).takeIf { it >= 0 }
-        ?: intervals.getOrNull(lastStarted(positionMs))?.index ?: 0
+        // An overlapping vocal can end after a later-starting row. Keep the most
+        // recently finished paragraph at the reading anchor throughout the silence.
+        ?: prefixEndIndex.getOrNull(lastStarted(positionMs)) ?: intervals.firstOrNull()?.index ?: 0
     fun interlude(positionMs: Long): LyricsInterlude? {
         if (intervals.isEmpty() || activeLines(positionMs).isNotEmpty()) return null
         val previous = lastStarted(positionMs)

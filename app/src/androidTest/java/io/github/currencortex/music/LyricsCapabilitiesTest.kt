@@ -164,7 +164,7 @@ class LyricsCapabilitiesTest {
             compose.onNodeWithTag("open_player_queue").assertIsDisplayed()
             fun lyricLayout(): androidx.compose.ui.text.TextLayoutResult {
                 val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
-                compose.onNodeWithText("我们沿着夜色 慢慢走向明天", useUnmergedTree = true)
+                compose.onNode(hasText("我们沿着夜色 慢慢走向明天") and hasAnyAncestor(hasTestTag("lyrics_panel")), useUnmergedTree = true)
                     .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
                 return layouts.single()
             }

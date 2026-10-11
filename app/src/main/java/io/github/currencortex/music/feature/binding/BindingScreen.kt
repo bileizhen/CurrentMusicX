@@ -79,7 +79,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
         (state.binding == null && !state.loading && state.error != null)
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(vm, owner, qr, loginVisible, generation, account.account?.id, settings.server, sessionRevision) {
-        if (qr && loginVisible && account.account != null) owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+        if (qr && loginVisible && (account.account != null || vm.container.nativeNetease != null)) owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             vm.qrSession(); awaitCancellation()
         } else vm.clearQr()
     }
@@ -125,8 +125,8 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
         } }
         state.binding?.let { binding ->
             if (binding.bound) item {
-                BindingAccountCard(binding, busy, { if (musicSettings.neteaseMainLibrary) vm.reloadMusic() else vm.sync() }, vm::live, vm::refresh,
-                    { finishInput(); reauthenticate = true; revealLogin = true }, { unbind = true }, musicSettings.neteaseMainLibrary)
+                BindingAccountCard(binding, busy, { if (musicSettings.neteaseMainLibrary || vm.container.nativeNetease != null) vm.reloadMusic() else vm.sync() }, vm::live, vm::refresh,
+                    { finishInput(); reauthenticate = true; revealLogin = true }, { unbind = true }, musicSettings.neteaseMainLibrary || vm.container.nativeNetease != null)
             } else item {
                 Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("连接你的音乐库", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
@@ -134,6 +134,11 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                         color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
                 }
             }
+        }
+        if (vm.container.nativeNetease != null) item {
+            Text("手机直接连接网易云，登录信息加密保存在此设备。原服务器绑定需要在这里重新扫码登录一次。",
+                fontSize = 12.sp, lineHeight = 19.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f),
+                modifier = Modifier.testTag("netease_direct_notice"))
         }
         item {
             Card(Modifier.fillMaxWidth()) {

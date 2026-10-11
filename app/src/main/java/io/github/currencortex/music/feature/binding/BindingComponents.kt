@@ -139,7 +139,7 @@ import java.util.Locale
 @Composable internal fun BindingQrContent(bitmap: Bitmap?, state: BindingUiState, busy: Boolean, onRefresh: () -> Unit) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text("用网易云音乐扫一扫", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-        Text("扫描二维码 · 确认授权 · 自动同步", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+        Text("扫描二维码 · 确认授权 · 连接音乐库", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
         Box(Modifier.size(216.dp).clip(RoundedCornerShape(22.dp)).background(Color.White)
             .border(1.dp, Color.Black.copy(alpha = .05f), RoundedCornerShape(22.dp)).padding(8.dp), contentAlignment = Alignment.Center) {
             if (bitmap != null) Image(bitmap.asImageBitmap(), "网易云登录二维码", Modifier.fillMaxSize().testTag("binding_qr"))

@@ -69,6 +69,18 @@ class AuthRepository(private val api: ApiClient, val accounts: AccountRepository
                      private val device: String, private val persistServer: suspend (String) -> Unit = {},
                      private val persistAccount: suspend (Long, String) -> Unit) {
     private val sessionMutex = Mutex()
+    suspend fun validateRestored() = sessionMutex.withLock {
+        val expected = RequestSession(accounts.server, accounts.token)
+        val credential = expected.token ?: return@withLock
+        val result = withTimeoutOrNull(8_000) { appResult { api.get<UserDto>("auth/me", authenticated = true) } }
+            ?: AppResult.Failure(ErrorKind.Timeout)
+        if (expected != RequestSession(accounts.server, accounts.token)) return@withLock
+        when (result) {
+            is AppResult.Success -> { accounts.save(credential, result.value, expected); persistAccount(result.value.id, result.value.nickname) }
+            is AppResult.Failure -> accounts.state.value = accounts.state.value.copy(loading = false,
+                offline = result.kind != ErrorKind.Unauthorized, error = result.kind.message)
+        }
+    }
     suspend fun restore(server: String): AppResult<UserDto?> = sessionMutex.withLock {
         accounts.server = server
         appResult {
