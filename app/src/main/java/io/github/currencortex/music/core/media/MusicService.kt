@@ -49,9 +49,9 @@ class MusicService : MediaSessionService() {
     private data class PreloadPlan(val request: AudioRequest, val warn: Boolean, val metered: Boolean)
     private data class Report(val song: Song, val session: RequestSession, val ms: Long? = null)
     private val reports = Channel<Report>(Channel.UNLIMITED)
-    private fun currentSession() = container.musicSession()
-    private fun audioRequest(id: Long, quality: AudioQuality) = AudioRequest(id, quality,
-        container.accountRepository.state.value.account?.id ?: 0L, container.audioSession(), container.audioSettings.access().identity)
+    private fun currentSession(song: Song? = container.playbackQueue.state.value.current) =
+        if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.session() else container.musicSession()
+    private fun audioRequest(song: Song, quality: AudioQuality) = container.audioRequest(song, quality)
     private fun flushListening() {
         val ms = listening.drain(SystemClock.elapsedRealtime())
         trackedSong?.takeIf { recorded && ms > 0 && !it.video }?.let { reports.trySend(Report(it, trackedSession, ms)) }
@@ -160,7 +160,8 @@ class MusicService : MediaSessionService() {
                 listening.update(SystemClock.elapsedRealtime(), isPlaying)
                 val song = trackedSong
                 if (isPlaying && !recorded && song != null && !song.video &&
-                    (if (container.nativeNetease != null) container.neteaseSessions.state.value.loggedIn else container.accountRepository.token != null)) {
+                    (if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.accepts(song)
+                    else if (container.nativeNetease != null) container.neteaseSessions.state.value.loggedIn else container.accountRepository.token != null)) {
                     recorded = true
                     reports.trySend(Report(song, trackedSession))
                 }
@@ -181,9 +182,20 @@ class MusicService : MediaSessionService() {
         })
         scope.launch { container.equalizerSettings.state.collect { container.equalizer.configure(it) } }
         scope.launch(Dispatchers.IO) {
-            for (report in reports) if (report.session == currentSession()) {
+            val listened = mutableMapOf<Pair<Long, RequestSession>, Long>()
+            val submitted = mutableSetOf<Pair<Long, RequestSession>>()
+            for (report in reports) if (report.session == currentSession(report.song)) {
                 val result = appResult {
-                    if (report.ms == null) container.libraryRepository.recordPlay(report.song, report.session)
+                    if (report.song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) {
+                        val key = report.song.id to report.session
+                        if (report.ms == null) { listened[key] = 0; submitted.remove(key); container.navidrome.scrobble(report.song, false) }
+                        else {
+                            val total = (listened[key] ?: 0) + report.ms; listened[key] = total
+                            val threshold = minOf(report.song.durationMs.takeIf { it > 0 }?.div(2) ?: 240000, 240000).coerceAtLeast(30000)
+                            if (total >= threshold && key !in submitted) { container.navidrome.scrobble(report.song, true); submitted.add(key) }
+                        }
+                        if (listened.size > 100) { listened.keys.firstOrNull()?.let { listened.remove(it); submitted.remove(it) } }
+                    } else if (report.ms == null) container.libraryRepository.recordPlay(report.song, report.session)
                     else container.libraryRepository.listen(report.song, report.ms, report.session)
                 }
                 if (result is AppResult.Failure) container.logger.warn("Player", "Listening report failed: ${result.kind}")
@@ -220,11 +232,12 @@ class MusicService : MediaSessionService() {
                 settings to account.account
             }.combine(container.audioSettings.state) { data, _ -> data }
             .combine(container.neteaseSessions.state) { data, _ -> data }
+            .combine(container.navidrome.state) { data, _ -> data }
             .combine(container.playerController.state) { (settings, account), state ->
-                val next = if (settings.preloadAudio && (account != null || container.nativeNetease != null) && state.mode == PlayerMode.LOCAL && state.playing &&
+                val next = if (settings.preloadAudio && (account != null || container.nativeNetease != null || container.navidrome.state.value.configured) && state.mode == PlayerMode.LOCAL && state.playing &&
                     !state.loading && !state.resolving && state.warning == null &&
                     player.currentMediaItem?.mediaId == container.playbackQueue.state.value.current?.id?.toString()) container.playbackQueue.previewNext() else null
-                next?.let { PreloadPlan(audioRequest(it.id, settings.quality), settings.warnHighSpec, settings.preloadMetered) }
+                next?.let { PreloadPlan(audioRequest(it, settings.quality), settings.warnHighSpec, settings.preloadMetered) }
             }.combine(readyForPreload) { plan, ready -> plan.takeIf { ready } }
                 .combine(preloadNetwork(this@MusicService)) { plan, network -> plan.takeIf { network == 2 || network == 1 && it?.metered == true } }
                 .combine(container.audioCache.clearing) { plan, clearing -> plan.takeUnless { clearing } }
@@ -262,7 +275,7 @@ class MusicService : MediaSessionService() {
         loading = scope.launch {
             when (val result = appResult { withContext(Dispatchers.IO) {
                 if (song.video) ResolvedAudio(io.github.currencortex.music.data.song.AudioSource(container.libraryRepository.mvSource(song.mv), "video", 0, 0), "")
-                else container.audioSources.resolve(audioRequest(song.id, container.musicSettings.snapshot().quality))
+                else container.audioSources.resolve(audioRequest(song, container.musicSettings.snapshot().quality))
             } }) {
                 is AppResult.Failure -> container.playerController.state.value = container.playerController.state.value.copy(playing = false,
                     playRequested = false, loading = false, resolving = false, error = result.kind.message)

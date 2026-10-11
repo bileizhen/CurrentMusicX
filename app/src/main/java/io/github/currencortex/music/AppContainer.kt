@@ -67,7 +67,13 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     )
     val authRepository = AuthRepository(apiClient, accountRepository, "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
         persistServer = musicSettings::setServer, persistAccount = musicSettings::setAccount)
-    val musicRepository = MusicRepository(apiClient, audioSettings::access)
+    val navidrome = io.github.currencortex.music.data.navidrome.NavidromeRepository(SecureTokenStore(context, ".navidrome$storageSuffix"), appScope)
+    val navidromeMedia = okhttp3.OkHttpClient.Builder().addInterceptor(navidrome.client.mediaInterceptor()).build()
+    val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome)
+    fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality): AudioRequest =
+        if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
+            AudioRequest(song.id, quality, 0L, navidrome.session(), "navidrome:" + navidrome.state.value.identity, song)
+        else AudioRequest(song.id, quality, accountRepository.state.value.account?.id ?: 0L, audioSession(), audioSettings.access().identity, song)
     val announcements = io.github.currencortex.music.data.announcement.AnnouncementRepository(apiClient)
     val announcementPreferences = io.github.currencortex.music.data.announcement.AnnouncementPreferences(settingsStore)
     val songDownloads = io.github.currencortex.music.core.download.SongDownloadManager(context.applicationContext, storageSuffix)
@@ -77,11 +83,16 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val neteaseSongActions = io.github.currencortex.music.data.song.NeteaseSongActionsRepository(apiClient) {
         musicSession()
     }
-    val audioCache = AudioCache(context.applicationContext, java.io.File(context.cacheDir, "audio$storageSuffix"))
+    val audioCache = AudioCache(context.applicationContext, java.io.File(context.cacheDir, "audio$storageSuffix"), navidromeMedia)
     val storage = io.github.currencortex.music.core.storage.StorageStore(context.applicationContext, audioCache)
     val audioSources = AudioSourceResolver(audioCache,
         { audioSession() },
-        currentProvider = { audioSettings.access().identity }, load = musicRepository::source)
+        currentProvider = { audioSettings.access().identity },
+        validateRequest = { request -> request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME }?.let {
+            navidrome.accepts(it) && request.session == navidrome.session() && request.providerIdentity == "navidrome:" + navidrome.state.value.identity
+        } },
+        loadTrack = { request -> request.song?.let { musicRepository.source(it, request.quality, request.session) }
+            ?: musicRepository.source(request.songId, request.quality, request.session) }, load = musicRepository::source)
     val libraryRepository = io.github.currencortex.music.data.library.LibraryRepository(apiClient,
         { accountRepository.state.value.account?.id ?: 0L }, { musicSession() })
     val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
@@ -119,6 +130,16 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val ready = CompletableDeferred<Unit>()
     val sessionRestored = CompletableDeferred<Unit>()
     init {
+        playerScope.launch {
+            var previous = navidrome.state.value.revision
+            navidrome.state.collect { account ->
+                if (previous != account.revision) {
+                    audioSources.invalidate()
+                    if (playbackQueue.state.value.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) playerController.pause()
+                    previous = account.revision
+                }
+            }
+        }
         if (nativeNetease != null) appScope.launch {
             neteaseSessions.ready.await()
             neteaseSessions.state.collect {
@@ -149,6 +170,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             try {
                 val initial = musicSettings.snapshot()
                 audioSettings.ready.await()
+                navidrome.ready.await()
                 if (nativeNetease != null) neteaseSessions.ready.await()
                 accountRepository.server = initial.server
                 if (initial.restoreQueue) database.music().queue()?.let {

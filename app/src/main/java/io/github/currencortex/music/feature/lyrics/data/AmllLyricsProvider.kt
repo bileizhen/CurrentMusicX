@@ -13,6 +13,7 @@ import kotlin.coroutines.resume
 
 class AmllLyricsProvider(private val remote: LyricsRemoteDataSource = GithubTtmlDataSource()) : LyricsProvider {
     override suspend fun findLyrics(song: Song): LyricsProviderResult {
+        if (song.musicSource == MusicSource.NAVIDROME) return LyricsProviderResult.Failure(LyricsErrorCode.NO_LYRICS, "Navidrome owns its lyrics")
         var error: LyricsProviderResult.Failure? = null
         for (key in LyricsMatcher.candidates(song)) {
             when (val result = remote.fetch(key)) {
@@ -33,7 +34,7 @@ class GithubTtmlDataSource(
 ) : LyricsRemoteDataSource {
     private val base = baseUrl.toHttpUrl()
     override suspend fun fetch(key: LyricsKey): LyricsProviderResult {
-        val directory = when (key.source) { MusicSource.NETEASE -> "ncm-lyrics"; MusicSource.QQ_MUSIC -> "qq-lyrics"; MusicSource.APPLE_MUSIC -> "am-lyrics"; MusicSource.SPOTIFY -> "spotify-lyrics" }
+        val directory = when (key.source) { MusicSource.NETEASE -> "ncm-lyrics"; MusicSource.QQ_MUSIC -> "qq-lyrics"; MusicSource.APPLE_MUSIC -> "am-lyrics"; MusicSource.SPOTIFY -> "spotify-lyrics"; MusicSource.NAVIDROME -> return LyricsProviderResult.Failure(LyricsErrorCode.NO_LYRICS, "Private library") }
         val url = base.newBuilder().addPathSegment(directory).addPathSegment("${key.songId}.ttml").build()
         return suspendCancellableCoroutine { cont ->
             val call = client.newCall(Request.Builder().url(url).header("Accept", "application/ttml+xml, application/xml, text/xml").build())

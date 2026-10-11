@@ -9,7 +9,12 @@ import io.github.currencortex.music.data.settings.AudioSourceAccess
 
 class MusicRepository(private val api: ApiClient,
     private val audioAccess: () -> AudioSourceAccess = { AudioSourceAccess(AudioProvider.CURRENT_MUSIC) },
-    private val leiz: LeizAudioClient = LeizAudioClient()) {
+    private val leiz: LeizAudioClient = LeizAudioClient(),
+    private val navidrome: io.github.currencortex.music.data.navidrome.NavidromeRepository? = null) {
+    suspend fun detail(song: Song): Song = if (song.musicSource == MusicSource.NAVIDROME) requireNotNull(navidrome).detail(song) else detail(song.id)
+    suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.NAVIDROME) appResult { requireNotNull(navidrome).lyrics(song) } else lyricsDocument(song.id)
+    suspend fun source(song: Song, quality: AudioQuality, session: RequestSession? = null): AudioSource =
+        if (song.musicSource == MusicSource.NAVIDROME) requireNotNull(navidrome).source(song, quality) else source(song.id, quality, session)
     private fun parseDocument(raw: JsonObject) = io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(raw).let {
         if (api.netease != null) it.copy(metadata = it.metadata.copy(source = "网易云")) else it
     }

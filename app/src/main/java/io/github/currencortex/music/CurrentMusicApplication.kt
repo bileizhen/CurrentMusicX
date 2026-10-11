@@ -30,7 +30,8 @@ class CurrentMusicApplication : Application(), SingletonImageLoader.Factory {
         // Match the API's bounded timeout for cold server responses and large GIFs.
         // This client has no account interceptor, so images never receive the Token.
         val images = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(75, TimeUnit.SECONDS).callTimeout(90, TimeUnit.SECONDS).build()
+            .readTimeout(75, TimeUnit.SECONDS).callTimeout(90, TimeUnit.SECONDS)
+            .addInterceptor(container.navidrome.client.mediaInterceptor()).build()
         // Cover art is worth caching across sessions, but it must stay bounded: the storage page
         // reports it as part of the data cache and clearing it must not touch the audio cache.
         val covers = coil3.disk.DiskCache.Builder()
