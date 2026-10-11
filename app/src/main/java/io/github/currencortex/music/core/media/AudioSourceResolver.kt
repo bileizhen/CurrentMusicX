@@ -8,7 +8,7 @@ import kotlinx.coroutines.sync.withLock
 import java.io.IOException
 
 data class AudioRequest(val songId: Long, val quality: AudioQuality, val accountId: Long, val session: RequestSession,
-    val providerIdentity: String = "currentmusic") {
+    val providerIdentity: String = "currentmusic", val song: io.github.currencortex.music.data.song.Song? = null) {
     val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity)
 }
 data class ResolvedAudio(val source: AudioSource, val key: String, val refreshAfterMs: Long = 25_000)
@@ -17,6 +17,8 @@ data class ResolvedAudio(val source: AudioSource, val key: String, val refreshAf
 class AudioSourceResolver(private val cache: AudioCache, private val currentSession: () -> RequestSession,
     private val now: () -> Long = System::nanoTime,
     private val currentProvider: () -> String = { "currentmusic" },
+    private val validateRequest: (AudioRequest) -> Boolean? = { null },
+    private val loadTrack: (suspend (AudioRequest) -> AudioSource)? = null,
     private val load: suspend (Long, AudioQuality, RequestSession) -> AudioSource) {
     private data class Entry(val request: AudioRequest, val source: AudioSource, val until: Long)
     private data class Denial(val request: AudioRequest, val error: ApiException)
@@ -25,6 +27,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
     private val locks = Array(8) { Mutex() }
     fun invalidate() { memo.clear(); denied.clear() }
     private fun checkRequest(request: AudioRequest) {
+        when (validateRequest(request)) { true -> return; false -> throw ApiException(ErrorKind.Unauthorized); null -> Unit }
         if (request.session != currentSession()) throw ApiException(ErrorKind.Unauthorized)
         if (request.providerIdentity != currentProvider()) throw ApiException(ErrorKind.AudioSourceChanged)
     }
@@ -56,7 +59,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
             if (!refresh) saved(request)?.let { return@withLock it }
             checkRequest(request)
             val started = now()
-            val source = try { load(request.songId, request.quality, request.session) }
+            val source = try { loadTrack?.invoke(request) ?: load(request.songId, request.quality, request.session) }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 // Never turn a denied or expired account response into an offline success.

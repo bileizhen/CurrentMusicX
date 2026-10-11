@@ -9,6 +9,7 @@ data class LyricsKey(val source: MusicSource, val songId: String) {
 
 object LyricsMatcher {
     fun candidates(song: Song): List<LyricsKey> {
+        if (song.musicSource == MusicSource.NAVIDROME) return listOf(LyricsKey(MusicSource.NAVIDROME, java.lang.Long.toUnsignedString(song.id, 16)))
         val ids = song.externalIds
         val values = linkedMapOf(MusicSource.NETEASE to (ids.neteaseId ?: song.id.takeIf { it > 0 && song.musicSource == MusicSource.NETEASE }?.toString()),
             MusicSource.QQ_MUSIC to ids.qqMusicId, MusicSource.APPLE_MUSIC to ids.appleMusicId, MusicSource.SPOTIFY to ids.spotifyId)
@@ -17,7 +18,7 @@ object LyricsMatcher {
         }
     }
     fun matches(documentIds: Map<String, List<String>>, key: LyricsKey): Boolean {
-        val field = when (key.source) { MusicSource.NETEASE -> "ncmMusicId"; MusicSource.QQ_MUSIC -> "qqMusicId"; MusicSource.APPLE_MUSIC -> "appleMusicId"; MusicSource.SPOTIFY -> "spotifyId" }
+        val field = when (key.source) { MusicSource.NETEASE -> "ncmMusicId"; MusicSource.QQ_MUSIC -> "qqMusicId"; MusicSource.APPLE_MUSIC -> "appleMusicId"; MusicSource.SPOTIFY -> "spotifyId"; MusicSource.NAVIDROME -> "navidromeId" }
         // Older files omit metadata. When present, the id must agree with the indexed path.
         return documentIds[field].let { it.isNullOrEmpty() || key.songId in it }
     }

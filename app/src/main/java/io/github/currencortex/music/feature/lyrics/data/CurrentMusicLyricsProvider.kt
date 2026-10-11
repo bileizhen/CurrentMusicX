@@ -12,9 +12,9 @@ import kotlinx.serialization.json.JsonArray
 class CurrentMusicLyricsProvider(private val music: MusicRepository, private val cache: MusicDao,
     private val log: (String) -> Unit = {}) : LyricsProvider {
     override suspend fun findLyrics(song: Song): LyricsProviderResult {
-        val id = LyricsMatcher.candidates(song).firstOrNull { it.source == MusicSource.NETEASE }?.songId?.toLongOrNull()
+        val id = if (song.musicSource == MusicSource.NAVIDROME) song.id else LyricsMatcher.candidates(song).firstOrNull { it.source == MusicSource.NETEASE }?.songId?.toLongOrNull()
             ?: return LyricsProviderResult.Failure(LyricsErrorCode.NO_LYRICS, "CurrentMusic requires an NCM id")
-        val result = music.lyricsDocument(id)
+        val result = if (song.musicSource == MusicSource.NAVIDROME) music.lyricsDocument(song) else music.lyricsDocument(id)
         if (result is AppResult.Success && result.value.lines.isNotEmpty()) {
             try { cache.cacheLyrics(CachedLyrics(id, ApiJson.encodeToString(result.value))) }
             catch (e: java.io.IOException) { log("CurrentMusic cache write: ${e.javaClass.simpleName}") }
