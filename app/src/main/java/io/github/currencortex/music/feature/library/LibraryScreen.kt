@@ -40,6 +40,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
         Row {
             MusicTextAction("歌手", { navigate(catalogRoute(false)) })
             MusicTextAction("专辑", { navigate(catalogRoute(true)) })
+            MusicTextAction("自建曲库", { navigate("navidrome") }, Modifier.testTag("library_navidrome"))
         }
     }
 }
@@ -52,6 +53,10 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     MusicDestinationRow("喜欢 / 取消喜欢", onClick = { dismiss(); vm.togglePrimaryLike(song) }, enabled = !status.pending && !song.video,
         modifier = Modifier.testTag("song_like_${song.id}"), chevron = false)
     MusicDestinationRow("加入歌单", onClick = { dismiss(); vm.choosePlaylist(song) }, modifier = Modifier.testTag("song_playlist_${song.id}"), chevron = false)
+    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) {
+        MusicDestinationRow("打开 Navidrome 曲库", { dismiss(); navigate("navidrome") })
+        return
+    }
     if (song.artistIds.isNotEmpty()) song.artistIds.forEachIndexed { index, id ->
         MusicDestinationRow("歌手 · ${song.artists.split(" / ").getOrNull(index).orEmpty()}", onClick = { dismiss(); navigate("lib/artist/$id") })
     } else if (song.artists.isNotBlank()) MusicDestinationRow("查看歌手", onClick = { dismiss(); navigate(catalogRoute(false, song.artists)) })
@@ -74,7 +79,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
             items(lists, key = { "${it.source}-${it.id}" }) { playlist ->
                 MusicDestinationRow(playlist.name, { vm.addToPlaylist(playlist) },
                     Modifier.testTag("collect_playlist_${playlist.source}_${playlist.id}"),
-                    summary = if (playlist.source == "netease") "网易云音乐" else "CurrentMusic", enabled = !busy, chevron = false)
+                    summary = when (playlist.source) { "netease" -> "网易云音乐"; "navidrome" -> "Navidrome"; else -> "CurrentMusic" }, enabled = !busy, chevron = false)
             }
         }
     }

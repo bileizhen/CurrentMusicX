@@ -146,7 +146,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             Row(Modifier.fillMaxWidth().height(if (widePlayer) 48.dp else 52.dp), verticalAlignment = Alignment.CenterVertically) {
                 PlayerIconButton(PlayerIcon.COLLAPSE, "收起播放器", onBack, Modifier.testTag("navigate_back"))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text(settings.quality.label, Modifier.testTag("open_quality_sheet").clickable(enabled = state.mode == PlayerMode.LOCAL, role = Role.Button) { overlay = PlayerOverlay.QUALITY }
+                    Text(if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label, Modifier.testTag("open_quality_sheet").clickable(enabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null, role = Role.Button) { overlay = PlayerOverlay.QUALITY }
                         .padding(horizontal = 16.dp, vertical = 14.dp), color = Color.White.copy(alpha = .55f), fontSize = 12.sp)
                 }
                 PlayerIconButton(PlayerIcon.MORE, "播放与歌词设置", { overlay = PlayerOverlay.OPTIONS }, Modifier.testTag("lyrics_options"))
@@ -261,7 +261,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         scope.launch { pager.animateScrollToPage(if (pager.targetPage == 0) 1 else 0,
                             animationSpec = tween(260, easing = LinearOutSlowInEasing)) }
                     })
-                if (onCast != null) MusicDestinationRow(if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏",
+                if (onCast != null && state.song?.navidrome == null) MusicDestinationRow(if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏",
                     modifier = Modifier.testTag("open_player_cast"), onClick = { dismiss(); onCast() })
                 if (controlsRevealed && settings.lyricsDisplay.hideControls && content == PlayerContent.LYRICS)
                     MusicDestinationRow("隐藏控制面板", modifier = Modifier.testTag("lyrics_conceal_controls"), onClick = { controlsRevealed = false; dismiss() })
@@ -270,7 +270,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     if (menuHost == null) overlay = PlayerOverlay.ACTIONS
                     else { dismiss(); menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false)) }
                 })
-                MusicDestinationRow("播放音质", summary = settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL)
+                MusicDestinationRow("播放音质", summary = if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null)
                 if (onEqualizer != null) MusicDestinationRow("均衡器", onClick = { dismiss(); onEqualizer() },
                     modifier = Modifier.testTag("open_player_equalizer"))
                 MusicDestinationRow("播放模式", summary = queue.mode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL)
@@ -278,7 +278,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     onClick = { overlay = PlayerOverlay.SLEEP })
                 MusicDestinationRow("歌词显示", summary = "霞鹜文楷 · 字号 ${settings.lyricsFontSize.toInt()}",
                     modifier = Modifier.testTag("open_lyrics_display"), onClick = { overlay = PlayerOverlay.LYRICS })
-                if (onRoom != null) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
+                if (onRoom != null && state.song?.navidrome == null) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
                 }
             }
             PlayerOverlay.WEIGHT -> MusicDialog("歌词字重", { overlay = PlayerOverlay.LYRICS }) {

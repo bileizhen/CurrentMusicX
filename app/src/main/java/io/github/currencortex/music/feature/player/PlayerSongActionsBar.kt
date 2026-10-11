@@ -19,9 +19,10 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
     val heartLoading by vm.heartLoading.collectAsStateWithLifecycle()
     val sleep by vm.sleepTimer.state.collectAsStateWithLifecycle()
     val id = NeteaseSongActionsRepository.songId(queue.current)
-    val current = actions.takeIf { it.songId == id }
+    val navidrome = queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME
+    val current = actions.takeIf { it.songId == if (navidrome) queue.current?.id else id }
     PlayerFunctionBar(actionCount = 5) {
-        val liked = if (neteaseMain) current?.liked == true else statuses[queue.current?.id]?.liked == true
+        val liked = if (neteaseMain || navidrome) current?.liked == true else statuses[queue.current?.id]?.liked == true
         PlayerIconButton(PlayerIcon.LIKE, if (liked) "取消喜欢" else "喜欢", vm::togglePrimaryLike,
             Modifier.testTag("player_like"), selected = liked, count = current?.likeCount,
             showCount = true, enabled = queue.current?.video == false && current?.liking != true,

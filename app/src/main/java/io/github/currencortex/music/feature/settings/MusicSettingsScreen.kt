@@ -23,7 +23,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import io.github.currencortex.music.data.settings.AudioProvider
 
-@Composable fun MusicSettingsScreen(vm: MusicSettingsViewModel, onEqualizer: () -> Unit = {}, onStorage: () -> Unit) {
+@Composable fun MusicSettingsScreen(vm: MusicSettingsViewModel, onEqualizer: () -> Unit = {}, onNavidrome: () -> Unit = {}, onStorage: () -> Unit) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
     val cacheBytes by vm.cacheBytes.collectAsStateWithLifecycle()
@@ -41,6 +41,8 @@ import io.github.currencortex.music.data.settings.AudioProvider
         contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Text("网络与播放", fontSize = 28.sp) }
 
+        item { Card { MusicDestinationRow("Navidrome 自建曲库", onNavidrome, Modifier.testTag("open_navidrome"),
+            summary = "连接自己的音乐服务器 · Subsonic") } }
         item { MusicSectionHeader("音乐音源") }
         item { Card { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("搜索、歌词、歌单与 MV 直接连接网易云；歌曲音源继续使用 CurrentMusic，用于播放、下载和投屏。CurrentMusic 账户与房间保留原服务。",
