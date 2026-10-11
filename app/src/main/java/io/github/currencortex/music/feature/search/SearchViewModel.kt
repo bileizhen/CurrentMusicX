@@ -64,7 +64,7 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
             container.ready.await()
             val server = container.musicSettings.state.value.server
             val result = appResult {
-                val expected = RequestSession(container.accountRepository.server, container.accountRepository.token)
+                val expected = container.musicSession()
                 val data = container.apiClient.request("GET", "ncm/search/hot/detail", authenticated = expected.token != null, expectedSession = expected).jsonObject
                 if (data["code"]?.jsonPrimitive?.intOrNull?.let { it != 200 } == true) throw ApiException(ErrorKind.Server)
                 (data["data"] as? JsonArray ?: throw ApiException(ErrorKind.Unknown)).mapNotNull { item ->

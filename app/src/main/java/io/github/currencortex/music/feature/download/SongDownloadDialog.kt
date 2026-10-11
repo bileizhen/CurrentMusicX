@@ -50,7 +50,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     fun start() {
         try {
             manager.start(song, AudioQuality.from(quality), container.accountRepository.state.value.account?.id ?: 0L,
-                container.accountRepository.server, container.audioSettings.access().identity)
+                container.accountRepository.server, container.audioSettings.access().identity,
+                if (container.nativeNetease != null) container.neteaseSessions.state.value.profile?.uid ?: 0L else -1)
         } catch (_: Exception) { Toast.makeText(context, "无法开始下载，请重试", Toast.LENGTH_LONG).show() }
     }
     // Deletes only the URIs this task published; a stale/missing file must not abort the rest.

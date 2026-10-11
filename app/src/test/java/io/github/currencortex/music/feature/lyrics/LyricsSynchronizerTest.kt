@@ -34,6 +34,23 @@ class LyricsSynchronizerTest {
         assertEquals(1f, LyricsSynchronizer.wordProgress(word, 3000), 0f)
         assertEquals(1f, LyricsSynchronizer.wordProgress(word.copy(endTimeMs = 1000), 1000), 0f)
     }
+    @Test fun silenceKeepsTheLastEndingVocalWithoutInventingAnActiveLine() {
+        val sync = LyricsSynchronizer(LyricsDocument(listOf(
+            line.copy(backgroundVocals = listOf(LyricLine(2000, 5000, "Echo", isBackground = true))),
+            LyricLine(2000, 3000, "Duet", isDuet = true),
+            LyricLine(10000, 12000, "Next")), LyricsMetadata(durationMs = 18000)))
+        assertEquals(0, sync.scrollTarget(999))
+        assertEquals(0, sync.scrollTarget(4999))
+        assertTrue(sync.activeLines(5000).isEmpty())
+        assertEquals(0, sync.scrollTarget(5000))
+        assertEquals(0, sync.scrollTarget(9999))
+        assertEquals("间奏", sync.interlude(5000)!!.label)
+        assertEquals(2, sync.scrollTarget(10000))
+        assertTrue(sync.activeLines(15000).isEmpty())
+        assertEquals(2, sync.scrollTarget(15000))
+        assertEquals("尾奏", sync.interlude(15000)!!.label)
+        assertEquals(0, sync.scrollTarget(6000))
+    }
     @Test fun offsetsInvertSeekAndSaturate() {
         assertEquals(1200L, LyricsSynchronizer.effectivePosition(1000, 200))
         assertEquals(800L, LyricsSynchronizer.seekPosition(1000, 200))

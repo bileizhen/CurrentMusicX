@@ -33,8 +33,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     val preferences by vm.container.musicSettings.state.collectAsStateWithLifecycle()
     val avatarVersions by vm.container.profileRepository.avatarVersions.collectAsStateWithLifecycle()
     val scales by vm.container.profileRepository.scales.collectAsStateWithLifecycle()
+    val nativeAccount by vm.container.neteaseSessions.state.collectAsStateWithLifecycle()
+    val direct = vm.container.nativeNetease != null
     val user = profile?.takeIf { it.id == account.account?.id }
-    val avatar = user?.avatar ?: account.account?.avatar.orEmpty()
+    val avatar = user?.avatar ?: account.account?.avatar ?: nativeAccount.profile?.avatar.orEmpty()
     val decoration = user?.decoration.orEmpty()
     val decorationUrl = remember(preferences.server, decoration) { vm.container.profileRepository.decorationUrl(preferences.server, decoration) }
     val version = account.account?.id?.let(avatarVersions::get)
@@ -46,7 +48,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     }
     val request = LocalRoomSongRequest.current
     val bottomInset = LocalMusicBottomInset.current
-    val waiting = account.loading || home.loading
+    val waiting = (!direct && account.loading) || home.loading
     val listState = rememberLazyListState()
     val avatarFlight = LocalAvatarFlight.current
     LaunchedEffect(listState, avatarFlight) {
@@ -64,12 +66,12 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         HomeBrandTitle()
-                        SplitText(account.account?.let { "欢迎，${it.nickname}" } ?: "音乐，从这里开始",
-                            ready = !account.loading && home.loaded && LocalLaunchBrand.current?.active != true,
+                        SplitText(account.account?.let { "欢迎，${it.nickname}" } ?: nativeAccount.profile?.let { "欢迎，${it.nickname}" } ?: "音乐，从这里开始",
+                            ready = (!account.loading || direct) && home.loaded && LocalLaunchBrand.current?.active != true,
                             style = TextStyle(fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f)),
                             modifier = Modifier.testTag("home_welcome"))
                     }
-                    HomeProfileAvatar(avatarUrl, !account.loading && home.loaded, onProfile,
+                    HomeProfileAvatar(avatarUrl, (!account.loading || direct) && home.loaded, onProfile,
                         decorationUrl = decorationUrl, decorationScale = scales[decoration] ?: 1.0)
                 }
             }
@@ -81,8 +83,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
                 Text(if (request == null) "一起听" else "正在一起听", Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 MusicTextAction(if (request == null) "进入房间 ›" else "回到房间 ›", { navigate("room/list") }, Modifier.testTag("open_rooms"))
             } }
-            if (account.loading) item { Text("正在恢复登录…", fontSize = 13.sp) }
-            else if (account.account == null) item { Text("登录后查看每日推荐、最近播放与歌单", fontSize = 13.sp) }
+            if (direct && !nativeAccount.loggedIn) item {
+                MusicTextAction("连接网易云，查看每日推荐与我的歌单 ›", { navigate("user/binding") }, Modifier.testTag("home_connect_netease"))
+            } else if (!direct && account.loading) item { Text("正在恢复登录…", fontSize = 13.sp) }
+            else if (!direct && account.account == null) item { Text("登录后查看每日推荐、最近播放与歌单", fontSize = 13.sp) }
             if (home.loading) item { Text("正在加载音乐库…", fontSize = 13.sp) }
             if (!home.loading && home.errors.isNotEmpty()) item {
                 MusicTextAction("部分内容加载失败，重新加载", vm::refresh, Modifier.testTag("home_retry"))

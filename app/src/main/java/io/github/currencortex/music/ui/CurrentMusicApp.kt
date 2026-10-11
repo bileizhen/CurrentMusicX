@@ -144,6 +144,12 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val settings by container.settings.state.collectAsStateWithLifecycle()
     val settingsVm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container.settings) })
     val updateVm: UpdateSettingsViewModel = viewModel(factory = viewModelFactory { UpdateSettingsViewModel(container.updateSettings) })
+    val announcementVm: io.github.currencortex.music.feature.announcement.AnnouncementViewModel =
+        viewModel(factory = viewModelFactory { io.github.currencortex.music.feature.announcement.AnnouncementViewModel(container) })
+    val announcements by announcementVm.items.collectAsStateWithLifecycle()
+    val suppressReadAnnouncements by announcementVm.suppressRead.collectAsStateWithLifecycle()
+    val updateDialogVisible by container.updates.dialogVisible.collectAsStateWithLifecycle()
+    val announcementVisible = launchFinished && announcements.isNotEmpty() && !updateDialogVisible
 
     // Decide from DataStore directly: the StateFlow's initial value can race the first disk read.
     LaunchedEffect(Unit) {
@@ -187,7 +193,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         LaunchedEffect(container) {
             if (!startupRouted) {
                 container.sessionRestored.await()
-                selected = if (container.accountRepository.state.value.account != null) HOME_TAB else ME_TAB
+                selected = if (container.nativeNetease != null || container.accountRepository.state.value.account != null) HOME_TAB else ME_TAB
                 startupRouted = true
             }
         }
@@ -257,7 +263,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         var memberFocus by remember { mutableStateOf<MemberFocus?>(null) }
         var shownMember by remember { mutableStateOf<MemberFocus?>(null) }
         LaunchedEffect(memberFocus) { memberFocus?.let { shownMember = it } }
-        val updateDialogVisible by container.updates.dialogVisible.collectAsStateWithLifecycle()
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         val context = androidx.compose.ui.platform.LocalContext.current
         val openUpdates: () -> Unit = { scope.launch { container.updates.present() } }
@@ -312,7 +317,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             if (selected == ME_TAB && index == HOME_TAB && account.account != null) avatarFlight.beginFromProfile()
             selected = index
         }
-        androidx.activity.compose.BackHandler(enabled = backStack.size == 1 && (selected == SETTINGS_TAB || (selected == ME_TAB && account.account != null)) && !avatarFlight.active) {
+        androidx.activity.compose.BackHandler(enabled = backStack.size == 1 && (selected == SETTINGS_TAB || (selected == ME_TAB && account.account != null)) && !avatarFlight.active && !announcementVisible) {
             selectTab(HOME_TAB)
         }
 
@@ -577,7 +582,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         PlayerSheetHost(open = playerOpen, motion = playerSheetMotion, expansion = playerExpansion,
             origin = playerOrigin, viewport = navigationBounds, artwork = artworkTransition,
             artworkUrl = currentSong?.cover.orEmpty(), predictiveBack = predictiveBack,
-            backEnabled = !showLogs && pendingPlay == null && playerState.warning == null && !updateDialogVisible &&
+            backEnabled = !showLogs && pendingPlay == null && playerState.warning == null && !updateDialogVisible && !announcementVisible &&
                 !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null &&
                 !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
             onBack = ::navigateBack, onSettled = { playerSheetMotion = PlayerSheetMotion.NONE }) {
@@ -605,13 +610,15 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !playerPresented && !searchPresented && !predictiveBack && !showLogs &&
-                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
+                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !announcementVisible && !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }
         MemberDetailDialog(show = memberFocus != null, focus = shownMember, onDismiss = { memberFocus = null })
         LogExportDialog(showLogs, container.logger) { showLogs = false }
-        if (!launchBrand.active) UpdateDialog(container.updates, container.updateTransfer)
+        if (announcementVisible) io.github.currencortex.music.feature.announcement.AnnouncementDialog(announcements,
+            suppressByDefault = suppressReadAnnouncements, onDismiss = announcementVm::dismiss)
+        if (!launchBrand.active && !announcementVisible) UpdateDialog(container.updates, container.updateTransfer)
         LibraryDialogs(libraryVm)
         ProfileDialogs(profileVm, authVm)
         if (profileMessage != null) MusicDialog("账号操作", onDismiss = { profileVm.message.value = null }) {
@@ -651,7 +658,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             selected = if (avatarFlight.returning) ME_TAB else HOME_TAB
         }
         val landingOnHome = selected == HOME_TAB && backStack.last() == ROOT.toString()
-        val pageReady = launchReady && startupRouted && !account.loading &&
+        val pageReady = launchReady && startupRouted && (!account.loading || container.nativeNetease != null) &&
             (!landingOnHome || (libraryHome.loaded && !libraryHome.loading))
         if (!launchFinished) LaunchBrandOverlay(launchBrand, pageReady,
             canLandOnHome = landingOnHome,

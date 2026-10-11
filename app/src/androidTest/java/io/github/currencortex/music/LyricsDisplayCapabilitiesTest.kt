@@ -22,6 +22,7 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.lyrics.data.*
 import io.github.currencortex.music.feature.lyrics.ttml.TtmlParser
 import io.github.currencortex.music.feature.lyrics.ui.LyricsScreen
+import io.github.currencortex.music.feature.lyrics.ui.LyricsPerspectiveAngle
 import io.github.currencortex.music.feature.lyrics.model.*
 import io.github.currencortex.music.ui.CurrentMusicApp
 import kotlinx.coroutines.runBlocking
@@ -209,12 +210,25 @@ class LyricsDisplayCapabilitiesTest {
             compose.onNodeWithTag("mini_cover").performClick()
             compose.onNodeWithTag("lyrics_options").performClick()
             compose.onNodeWithTag("open_lyrics").performClick()
+            assertEquals("The portrait player must enable the actual perspective renderer", -32f,
+                compose.onNodeWithTag("lyrics_list").fetchSemanticsNode().config[LyricsPerspectiveAngle], .01f)
             compose.onNodeWithTag("lyrics_options").performClick()
             compose.onNodeWithTag("open_lyrics_display").performScrollTo().performClick()
+            compose.onNodeWithTag("lyrics_perspective").performScrollTo().performClick()
+            compose.waitUntil(5000) { !container.musicSettings.state.value.lyricsDisplay.perspective }
+            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            assertEquals("Turning the option off restores flat portrait lyrics", 0f,
+                compose.onNodeWithTag("lyrics_list").fetchSemanticsNode().config[LyricsPerspectiveAngle], .01f)
+            compose.onNodeWithTag("lyrics_options").performClick()
+            compose.onNodeWithTag("open_lyrics_display").performScrollTo().performClick()
+            compose.onNodeWithTag("lyrics_perspective").performScrollTo().performClick()
+            compose.waitUntil(5000) { container.musicSettings.state.value.lyricsDisplay.perspective }
             compose.onNodeWithTag("lyrics_centered").performScrollTo().performClick()
             compose.onNodeWithTag("lyrics_font_strength").performScrollTo().performSemanticsAction(SemanticsActions.SetProgress) { it(600f) }
             compose.onNodeWithTag("lyrics_stagger").performScrollTo().performClick()
             compose.onNodeWithTag("lyrics_blur").performScrollTo().performClick()
+            compose.onNodeWithTag("lyrics_glow").performScrollTo().performClick()
+            compose.onNodeWithTag("lyrics_word_lift").performScrollTo().performClick()
             compose.onNodeWithTag("open_karaoke_scope").performScrollTo().performClick()
             compose.onNodeWithTag("karaoke_scope_CURRENT").assertIsDisplayed()
             compose.onNodeWithTag("karaoke_scope_ALL").assertIsDisplayed()
@@ -225,7 +239,8 @@ class LyricsDisplayCapabilitiesTest {
             compose.onNodeWithTag("lyrics_hide_controls").performScrollTo().performClick()
             compose.waitUntil(5000) {
                 val d = container.musicSettings.state.value.lyricsDisplay
-                d.centered && d.fontWeight == 600 && !d.stagger && !d.blur && d.karaokeScope == KaraokeScope.CURRENT && d.hideControls
+                d.centered && d.fontWeight == 600 && !d.stagger && !d.blur && !d.glow && !d.wordLift &&
+                    d.karaokeScope == KaraokeScope.CURRENT && d.hideControls
             }
             compose.mainClock.advanceTimeBy(800); compose.waitForIdle()
             compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }

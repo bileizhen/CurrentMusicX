@@ -42,7 +42,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         when (val result = appResult {
             if (userId != null) container.profileRepository.profile(userId) else {
                 val user = container.profileRepository.me()
-                val lists = async { appResult { container.libraryRepository.playlists() } }
+                val lists = async { appResult { container.primaryLibrary.playlists() } }
                 val recent = async { appResult { container.libraryRepository.recent() } }
                 val p = lists.await(); val r = recent.await()
                 val errors = listOfNotNull(if (p is AppResult.Failure) "歌单：${p.kind.message}" else null,

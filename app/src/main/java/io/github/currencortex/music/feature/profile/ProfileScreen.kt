@@ -83,7 +83,50 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     play: (List<Song>, Int) -> Unit) {
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     // The bottom navigation already owns "设置"; a second entry above the login form was redundant.
-    if (account.account == null) LoginScreen(auth) else ProfileScreen(vm, navigate, play, onSettings = onSettings)
+    if (account.account == null && vm.container.nativeNetease != null) NativeMeScreen(vm.container, navigate, onSettings)
+    else if (account.account == null) LoginScreen(auth) else ProfileScreen(vm, navigate, play, onSettings = onSettings)
+}
+
+@Composable private fun NativeMeScreen(container: AppContainer, navigate: (String) -> Unit, onSettings: () -> Unit) {
+    val account by container.neteaseSessions.state.collectAsStateWithLifecycle()
+    val bottomInset = LocalMusicBottomInset.current
+    val avatarFlight = LocalAvatarFlight.current
+    val placement = LocalRootTabPlacement.current
+    val density = LocalDensity.current
+    val listState = rememberLazyListState()
+    LaunchedEffect(avatarFlight?.request) { if (avatarFlight?.active == true && !avatarFlight.returning) listState.scrollToItem(0) }
+    LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState,
+        contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
+        verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        item { Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("我的", Modifier.weight(1f), fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
+            MusicTextAction("设置", onSettings)
+        } }
+        account.profile?.let { native -> item {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Box(Modifier.testTag("my_profile_avatar").onGloballyPositioned {
+                    val center = (placement?.landingBounds(it) ?: it.boundsInRoot()).center
+                    val radius = with(density) { 32.dp.toPx() }
+                    if (avatarFlight?.returning != true) avatarFlight?.destination = Rect(center - Offset(radius, radius), center + Offset(radius, radius))
+                }.graphicsLayer { alpha = if (avatarFlight?.active == true) 0f else 1f }) {
+                    UserAvatar(ProfileUser(id = native.uid, nickname = native.nickname, avatar = native.avatar), container,
+                        reserveOverlay = false, flightState = avatarFlight)
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(native.nickname, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (account.stale) "网易云登录已过期" else "网易云音乐", fontSize = 13.sp,
+                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+                }
+            }
+        } }
+        item { MusicSectionHeader("我的音乐"); LibraryLinks(navigate) }
+        item { Card(Modifier.fillMaxWidth()) {
+            MusicDestinationRow(if (account.loggedIn) "网易云账号" else "登录网易云", { navigate("user/binding") },
+                Modifier.testTag("open_binding"), "我喜欢、歌单与最近播放")
+            MusicDestinationRow("CurrentMusic 账户", { navigate("user/login") }, Modifier.testTag("open_currentmusic_login"),
+                "头像装饰与一起听房间")
+        } }
+    }
 }
 
 @Composable fun ProfileScreen(vm: ProfileViewModel, navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit,
@@ -173,10 +216,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
             val lists = state.profile?.playlists.orEmpty()
             if (lists.isNotEmpty()) item { MusicSectionHeader(if (own) "我的歌单" else "公开歌单") }
             items(lists, key = { "playlist-${it.id}" }) { list ->
-                Row(Modifier.fillMaxWidth().clickable { navigate("lib/playlist/${list.id}") }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clickable { navigate("lib/${if (list.source == "netease") "ncmplaylist" else "playlist"}/${list.id}") }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     MusicCover(list.cover, Modifier.size(56.dp)); Column(Modifier.weight(1f).padding(start = 12.dp)) {
                         Text(list.name, fontSize = 16.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        Text("${list.count} 首" + if (list.source == "ncm") " · 网易云" else "", fontSize = 12.sp,
+                        Text("${list.count} 首" + if (list.source in setOf("ncm", "netease")) " · 网易云" else "", fontSize = 12.sp,
                             color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
                     }
                 }

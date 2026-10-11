@@ -18,7 +18,7 @@ import kotlinx.serialization.json.*
 data class NeteaseHeartList(val playlistId: Long, val songs: List<Song>)
 @Serializable private data class NeteaseLikes(val ids: List<Long>? = null)
 
-/** Metadata and account actions always go through CurrentMusic, independently of the audio source. */
+/** Account actions use the music API transport, independently of the selected audio provider. */
 class NeteaseSongActionsRepository(private val api: ApiClient, private val now: () -> Long = System::nanoTime,
     private val session: () -> RequestSession) {
     val revision = MutableStateFlow(0L)
@@ -41,7 +41,7 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
         return value
     }
     private suspend fun binding(expected: RequestSession): BindingState {
-        if (expected.token == null) throw ApiException(ErrorKind.Unauthorized)
+        if (expected.token == null && api.netease == null) throw ApiException(ErrorKind.Unauthorized)
         val value = api.decode<BindingState>(api.request("GET", "ncmbind", authenticated = true, expectedSession = expected))
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         if (!value.bound || value.stale || value.profile?.uid == null || value.profile.uid <= 0)
