@@ -28,6 +28,7 @@ fun HighApiFloatingNavigation(selectedIndex: Int, labels: List<String>, icons: L
     }
     val surface = MiuixTheme.colorScheme.surface
     val backdrop = rememberLayerBackdrop { drawRect(surface); drawContent() }
+    val dockBackdrop = rememberLayerBackdrop()
     val highlight = if (blur && glass) rememberGravityRotatedHighlight(iosIndicatorSpecular, -45f) else iosIndicatorSpecular
     Box(Modifier.fillMaxSize()) {
         // Keep the page at the same composition location when blur is toggled.
@@ -35,7 +36,8 @@ fun HighApiFloatingNavigation(selectedIndex: Int, labels: List<String>, icons: L
         CompositionLocalProvider(
             LocalMusicGlassSurface provides { modifier, body -> MusicGlassCapsule(backdrop, modifier, blur, glass, body) },
             LocalMusicDockSurface provides { modifier, shape, body ->
-                Box(modifier.musicGlassMaterial(backdrop, blur, glass, highlight, shape)) { body() }
+                Box(modifier.then(if (blur) Modifier.layerBackdrop(dockBackdrop) else Modifier)
+                    .musicGlassMaterial(backdrop, blur, glass, highlight, shape)) { body() }
             },
             LocalMusicSideWaterDrop provides if (blur) { modifier, motion, mirror ->
                 HighApiSideWaterDrop(backdrop, modifier, motion, glass, mirror)
@@ -45,7 +47,8 @@ fun HighApiFloatingNavigation(selectedIndex: Int, labels: List<String>, icons: L
                 else
                 FloatingBottomBar(modifier.testTag(if (glass && blur) "glass_floating_bar" else if (blur) "blur_floating_bar" else "solid_floating_bar"),
                     selectedIndex = { selectedIndex }, onSelected = onSelect, backdrop = backdrop,
-                    tabsCount = labels.size, isBlurEnabled = blur, isGlassEnabled = glass && blur, embedded = true) {
+                    tabsCount = labels.size, isBlurEnabled = blur, isGlassEnabled = glass && blur, embedded = true,
+                    dockBackdrop = dockBackdrop) {
                     labels.forEachIndexed { index, label ->
                         FloatingBottomBarItem({ onSelect(index) }, Modifier.testTag("tab_$index").semantics { selected = selectedIndex == index }) {
                             Icon(icons[index], null)

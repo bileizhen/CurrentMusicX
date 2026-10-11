@@ -194,6 +194,7 @@ fun FloatingBottomBar(
     isBlurEnabled: Boolean = true,
     isGlassEnabled: Boolean = true,
     embedded: Boolean = false,
+    dockBackdrop: Backdrop? = null,
     content: @Composable RowScope.() -> Unit
 ) {
     val isInDark = isInDarkTheme()
@@ -308,7 +309,8 @@ fun FloatingBottomBar(
         rememberGravityRotatedHighlight(iosIndicatorSpecular, extraDegrees = 90f)
     } else iosIndicatorSpecular
 
-    val combinedBackdrop = rememberCombinedBackdrop(backdrop, tabsBackdrop)
+    val indicatorBackdrop = dockBackdrop ?: backdrop
+    val combinedBackdrop = rememberCombinedBackdrop(indicatorBackdrop, tabsBackdrop)
 
     Box(
         modifier = modifier.width(IntrinsicSize.Min),
@@ -363,17 +365,20 @@ fun FloatingBottomBar(
                         .layerBackdrop(tabsBackdrop)
                         .graphicsLayer { translationX = panelOffset }
                         .drawBackdrop(
-                            backdrop = backdrop,
+                            backdrop = indicatorBackdrop,
                             shape = { pillShape },
                             effects = {
-                                vibrancy()
-                                blur(4.dp.toPx(), 4.dp.toPx())
-                                if (isGlassEnabled) lens(
-                                    refractionHeight = 24.dp.toPx(),
-                                    refractionAmount = 24.dp.toPx(),
-                                )
+                                // The dock capture already includes its glass material and light.
+                                if (dockBackdrop == null) {
+                                    vibrancy()
+                                    blur(4.dp.toPx(), 4.dp.toPx())
+                                    if (isGlassEnabled) lens(
+                                        refractionHeight = 24.dp.toPx(),
+                                        refractionAmount = 24.dp.toPx(),
+                                    )
+                                }
                             },
-                            onDrawSurface = { drawRect(containerColor) },
+                            onDrawSurface = { if (dockBackdrop == null) drawRect(containerColor) },
                         )
                         .then(interactiveHighlight.modifier)
                         .height(56.dp)

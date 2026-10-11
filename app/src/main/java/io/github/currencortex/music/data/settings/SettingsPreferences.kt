@@ -14,6 +14,7 @@ internal object SettingsPreferences {
     private val FLOATING = booleanPreferencesKey("floating_bar")
     private val GLASS = booleanPreferencesKey("liquid_glass")
     private val PREDICTIVE = booleanPreferencesKey("predictive_back")
+    private val NAVIGATION_GLOW = booleanPreferencesKey("navigation_glow")
 
     fun read(p: Preferences) = AppearanceSettings(
         themeMode = runCatching { ThemeMode.valueOf(p[THEME] ?: ThemeMode.SYSTEM.name) }.getOrDefault(ThemeMode.SYSTEM),
@@ -23,6 +24,7 @@ internal object SettingsPreferences {
         floatingBar = p[FLOATING] ?: true,
         liquidGlass = p[GLASS] ?: true,
         predictiveBack = p[PREDICTIVE] ?: true,
+        navigationGlow = p[NAVIGATION_GLOW] ?: true,
     ).normalized()
 
     fun write(p: MutablePreferences, s: AppearanceSettings) {
@@ -34,5 +36,6 @@ internal object SettingsPreferences {
         p[FLOATING] = v.floatingBar
         p[GLASS] = v.liquidGlass
         p[PREDICTIVE] = v.predictiveBack
+        p[NAVIGATION_GLOW] = v.navigationGlow
     }
 }
