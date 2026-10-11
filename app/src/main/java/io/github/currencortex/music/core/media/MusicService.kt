@@ -196,6 +196,19 @@ class MusicService : MediaSessionService() {
                 val queue = container.playbackQueue
                 if (player.currentMediaItem?.mediaId == queue.state.value.current?.id?.toString())
                     queue.state.value = queue.state.value.copy(positionMs = player.currentPosition.coerceAtLeast(0), quality = container.musicSettings.state.value.quality)
+                val item = player.currentMediaItem
+                val cacheKey = item?.localConfiguration?.customCacheKey
+                if (container.playerController.state.value.mode == PlayerMode.LOCAL && cacheKey != null &&
+                    item.mediaId == queue.state.value.current?.id?.toString()) {
+                    // Inspect disk on IO, then reject the result if the track changed during the read.
+                    val complete = withContext(Dispatchers.IO) {
+                        !container.audioCache.clearing.value && container.audioCache.completeSource(cacheKey) != null
+                    }
+                    val state = container.playerController.state.value
+                    if (player.currentMediaItem == item && item.mediaId == queue.state.value.current?.id?.toString() &&
+                        state.mode == PlayerMode.LOCAL && !state.resolving && state.warning == null)
+                        container.playerController.state.value = state.copy(audioFullyCached = complete)
+                }
                 persistQueue()
             }
         }
@@ -259,7 +272,8 @@ class MusicService : MediaSessionService() {
                         container.playerController.state.value = container.playerController.state.value.copy(loading = false, resolving = false, warning = HighSpecWarning(song.id, source))
                         return@launch
                     }
-                    container.playerController.state.value = container.playerController.state.value.copy(resolving = false, warning = null, error = null)
+                    container.playerController.state.value = container.playerController.state.value.copy(resolving = false, warning = null, error = null,
+                        audioFullyCached = source.url.startsWith("cache://audio/"))
                     player.setMediaItem(MediaItemFactory.create(song, source.url, result.value.key.takeIf(String::isNotBlank)), position)
                     player.prepare(); player.playWhenReady = play
                 }
