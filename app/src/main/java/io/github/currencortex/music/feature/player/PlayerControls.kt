@@ -38,6 +38,7 @@ import io.github.currencortex.music.data.song.formatNeteaseCount
 
 internal data class PlayerButtonVisual(val pressed: Boolean, val scale: Float, val glyphProgress: Float, val alpha: Float)
 internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("PlayerButtonVisuals")
+internal val PlayerBufferedProgress = SemanticsPropertyKey<Float>("PlayerBufferedProgress")
 
 /** Keep 48dp touch targets while grouping the secondary actions near the center. */
 @Composable internal fun PlayerFunctionBar(modifier: Modifier = Modifier, actionCount: Int = 3, content: @Composable RowScope.() -> Unit) {
@@ -59,10 +60,10 @@ internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("Pla
     val position = drag?.let { (it * knownDuration).toLong() } ?: state.positionMs
     val progress: @Composable () -> Unit = {
         Column(Modifier.fillMaxWidth()) {
-            PlayerSeekBar(drag ?: (state.positionMs.toFloat() / knownDuration.coerceAtLeast(1)).coerceIn(0f, 1f),
+            key(queue.current?.id) { PlayerSeekBar(drag ?: (state.positionMs.toFloat() / knownDuration.coerceAtLeast(1)).coerceIn(0f, 1f),
                 enabled && knownDuration > 0, { drag = it }, {
                     vm.player.seek((it * knownDuration).toLong()); drag = null
-                }, { drag = null })
+                }, { drag = null }, bufferedValue = if (state.song?.id == queue.current?.id) state.bufferedProgress(knownDuration) else 0f) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(formatPlayerTime(position), fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
                 Text("−" + formatPlayerTime((knownDuration - position).coerceAtLeast(0)), fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
@@ -95,15 +96,18 @@ internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("Pla
 }
 
 @Composable internal fun PlayerSeekBar(value: Float, enabled: Boolean, onPreview: (Float) -> Unit,
-    onSeek: (Float) -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier) {
+    onSeek: (Float) -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier, bufferedValue: Float = 0f) {
     val preview by rememberUpdatedState(onPreview)
     val seek by rememberUpdatedState(onSeek)
     val cancel by rememberUpdatedState(onCancel)
     var dragging by remember { mutableStateOf(false) }
     var target by remember { mutableFloatStateOf(value) }
+    val buffered = animateFloatAsState(bufferedValue.coerceIn(0f, 1f), tween(180), label = "audio buffer progress")
     Canvas(modifier.fillMaxWidth().height(34.dp).testTag("player_seek").semantics {
         progressBarRangeInfo = ProgressBarRangeInfo(value.coerceIn(0f, 1f), 0f..1f)
         contentDescription = "播放进度"
+        this[PlayerBufferedProgress] = bufferedValue.coerceIn(0f, 1f)
+        stateDescription = "已加载 ${(bufferedValue.coerceIn(0f, 1f) * 100).toInt()}%"
         if (enabled) setProgress { seek(it.coerceIn(0f, 1f)); true } else disabled()
     }.pointerInput(enabled) {
         if (enabled) detectTapGestures { seek((it.x / size.width).coerceIn(0f, 1f)) }
@@ -118,6 +122,8 @@ internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("Pla
         val end = size.width * value.coerceIn(0f, 1f)
         val ink = Color.White.copy(alpha = if (enabled) .85f else .28f)
         drawLine(Color.White.copy(alpha = .18f), Offset(0f, y), Offset(size.width, y), 3.dp.toPx(), StrokeCap.Round)
+        if (buffered.value > 0f) drawLine(Color.White.copy(alpha = .42f), Offset(0f, y),
+            Offset(size.width * buffered.value, y), 3.dp.toPx(), StrokeCap.Round)
         drawLine(ink, Offset(0f, y), Offset(end, y), 3.dp.toPx(), StrokeCap.Round)
         if (dragging) drawCircle(ink, 6.dp.toPx(), Offset(end, y))
     }

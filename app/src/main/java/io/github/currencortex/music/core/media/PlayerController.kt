@@ -37,7 +37,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         ++transportGeneration; commandIntent = null
         beforeExternal = saved; external = controls
         state.value = state.value.copy(mode = mode, playing = false, playRequested = false, resolving = false, loading = false, warning = null,
-            canControlPlayback = mode != PlayerMode.ROOM)
+            canControlPlayback = mode != PlayerMode.ROOM, bufferedPositionMs = 0)
         // Await this command before telling a TV to play: it cancels pending source resolution too.
         try { connect().sendCustomCommand(SessionCommand(MusicService.QUIESCE, Bundle.EMPTY), Bundle.EMPTY).await() }
         catch (e: Exception) { endExternal(controls); throw e }
@@ -105,13 +105,15 @@ class PlayerController(private val context: Context, override val queue: Playbac
         }.also { connecting = it }
         return try { pending.await() } finally { connecting = null }
     }
-    private fun publish(player: Player) {
+    internal fun publish(player: Player) {
         if (state.value.mode == PlayerMode.CAST) return
         val matches = player.currentMediaItem?.mediaId == queue.state.value.current?.id?.toString()
         state.value = state.value.copy(song = queue.state.value.current, playing = player.isPlaying && commandIntent != false,
             playbackSpeed = player.playbackParameters.speed,
             playRequested = commandIntent ?: if (state.value.resolving || state.value.warning != null) state.value.playRequested else player.playWhenReady,
             loading = state.value.resolving || player.playbackState == Player.STATE_BUFFERING,
+            bufferedPositionMs = if (matches && !state.value.resolving && state.value.warning == null && player.playbackState != Player.STATE_IDLE)
+                player.bufferedPosition.coerceAtLeast(0) else 0,
             positionMs = if (matches && !state.value.resolving) player.currentPosition.coerceAtLeast(0)
                 else if (state.value.song?.id == queue.state.value.current?.id) state.value.positionMs else queue.state.value.positionMs,
             durationMs = if (matches) player.duration.takeIf { it > 0 } ?: queue.state.value.current?.durationMs ?: 0
@@ -123,7 +125,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         val action = ++transportGeneration
         commandIntent = play
         state.value = state.value.copy(song = queue.state.value.current, playing = false, playRequested = play,
-            loading = true, resolving = true, positionMs = position, error = null, warning = null)
+            loading = true, resolving = true, positionMs = position, error = null, warning = null, bufferedPositionMs = 0)
         try {
             val connected = connect()
             if (epoch != generation || action != transportGeneration || state.value.mode != PlayerMode.LOCAL) return@launch
@@ -145,6 +147,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         val action = ++transportGeneration
         commandIntent = play
         state.value = state.value.copy(playRequested = play, playing = if (play) state.value.playing else false,
+            bufferedPositionMs = if (play && needsSource) 0 else state.value.bufferedPositionMs,
             error = null, loading = play && (state.value.loading || needsSource), resolving = play && (state.value.resolving || needsSource))
         try {
             val player = connect()
