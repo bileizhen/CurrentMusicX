@@ -38,7 +38,17 @@ open class SongDownloadWorker(context: Context, params: WorkerParameters) : Coro
     protected open suspend fun createEngine(): SongDownloadEngine {
         val container = (applicationContext as CurrentMusicApplication).awaitContainer()
         container.ready.await(); container.sessionRestored.await()
+        val song = ApiJson.decodeFromString<Song>(requireNotNull(inputData.getString("song")))
+        val nav = song.navidrome != null
         fun verifySession() {
+            if (nav) {
+                val account = container.navidrome.state.value
+                check(container.navidrome.accepts(song) && inputData.getString("server") == account.server &&
+                    inputData.getString("provider") == "navidrome:" + account.identity && inputData.getString("navidrome_revision") == account.revision) {
+                    "Navidrome 账号已变化，请重新开始下载"
+                }
+                return
+            }
             check(inputData.getLong("account", -1) == (container.accountRepository.state.value.account?.id ?: 0L) &&
                 inputData.getString("server") == container.accountRepository.server &&
                 inputData.getString("provider") == container.audioSettings.access().identity &&
@@ -48,13 +58,14 @@ open class SongDownloadWorker(context: Context, params: WorkerParameters) : Coro
             }
         }
         verifySession()
-        val session = container.musicSession()
+        val session = if (nav) container.navidrome.session() else container.musicSession()
         return SongDownloadEngine(File(applicationContext.cacheDir, "song-downloads"),
-            resolve = { track, quality -> container.musicRepository.source(track.id, quality, container.audioSession()) },
-            detail = { track -> container.musicRepository.detail(track.id) },
+            resolve = { track, quality -> if (nav) container.navidrome.source(track, quality, download = true) else container.musicRepository.source(track, quality, container.audioSession()) },
+            detail = { track -> container.musicRepository.detail(track) },
             lyrics = { track -> container.lyricsRepository.load(track).document },
             store = SongDownloadStore(applicationContext),
-            guard = { verifySession(); check(session == container.musicSession()) { "账号已变化，请重新开始下载" } })
+            guard = { verifySession(); check(session == if (nav) container.navidrome.session() else container.musicSession()) { "账号已变化，请重新开始下载" } },
+            http = container.navidromeMedia)
     }
     private fun notification(song: Song, progress: SongDownloadProgress): ForegroundInfo {
         val manager = applicationContext.getSystemService(NotificationManager::class.java)

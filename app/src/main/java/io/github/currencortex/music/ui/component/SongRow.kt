@@ -47,7 +47,7 @@ fun coverRequestUrl(url: String, pixels: Int): String {
     extraActions: (@Composable () -> Unit)? = null) {
     var menu by remember { mutableStateOf<SongMenu?>(null) }
     val host = LocalSongMenu.current
-    val request = LocalRoomSongRequest.current
+    val request = LocalRoomSongRequest.current.takeUnless { row.song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME }
     val primary = { if (request != null) request.request(row.song) else onPlay() }
     Row(Modifier.fillMaxWidth().clickable(enabled = request?.pending?.invoke(row.song.id) != true, onClick = primary).padding(vertical = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
             MusicCover(row.song.cover, Modifier.size(52.dp))

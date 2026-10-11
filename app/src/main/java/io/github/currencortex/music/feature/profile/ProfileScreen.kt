@@ -123,6 +123,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
         item { Card(Modifier.fillMaxWidth()) {
             MusicDestinationRow(if (account.loggedIn) "网易云账号" else "登录网易云", { navigate("user/binding") },
                 Modifier.testTag("open_binding"), "我喜欢、歌单与最近播放")
+            MusicDestinationRow("Navidrome 曲库", { navigate("navidrome") }, Modifier.testTag("profile_navidrome"), "自己的音乐服务器")
             MusicDestinationRow("CurrentMusic 账户", { navigate("user/login") }, Modifier.testTag("open_currentmusic_login"),
                 "头像装饰与一起听房间")
         } }

@@ -49,7 +49,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val saved = info?.state == WorkInfo.State.SUCCEEDED
     fun start() {
         try {
-            manager.start(song, AudioQuality.from(quality), container.accountRepository.state.value.account?.id ?: 0L,
+            if (song.navidrome != null) {
+                val account = container.navidrome.state.value
+                manager.start(song, AudioQuality.from(quality), 0, account.server, "navidrome:" + account.identity,
+                    navidromeRevision = account.revision)
+            } else manager.start(song, AudioQuality.from(quality), container.accountRepository.state.value.account?.id ?: 0L,
                 container.accountRepository.server, container.audioSettings.access().identity,
                 if (container.nativeNetease != null) container.neteaseSessions.state.value.profile?.uid ?: 0L else -1)
         } catch (_: Exception) { Toast.makeText(context, "无法开始下载，请重试", Toast.LENGTH_LONG).show() }
@@ -89,7 +93,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(song.name, fontSize = 18.sp)
             Text(song.artists, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-            MusicDestinationRow("下载音质", { choosingQuality = true }, summary = AudioQuality.from(quality).label,
+            if (song.navidrome != null) Text("Navidrome 原音质") else MusicDestinationRow("下载音质", { choosingQuality = true }, summary = AudioQuality.from(quality).label,
                 enabled = !active && !deleting, modifier = Modifier.testTag("song_download_quality"))
             val location = directory?.let { Uri.decode(it.lastPathSegment.orEmpty()).substringAfter(':') }
                 ?: if (Build.VERSION.SDK_INT >= 29) "Download/CurrentMusic" else "请选择文件夹"

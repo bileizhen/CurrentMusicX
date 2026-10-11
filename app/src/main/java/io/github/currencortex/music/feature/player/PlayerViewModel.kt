@@ -58,9 +58,11 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     } }
     init {
         viewModelScope.launch {
-            combine(queue.map { NeteaseSongActionsRepository.songId(it.current) }.distinctUntilChanged(),
+            combine(queue.map { if (it.current?.musicSource == MusicSource.NAVIDROME) it.current?.id else NeteaseSongActionsRepository.songId(it.current) }.distinctUntilChanged(),
                 container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged(),
-                netease.revision, container.libraryRepository.revision, container.primaryLibrary.identity) { values ->
+                netease.revision, container.libraryRepository.revision, container.primaryLibrary.identity,
+                container.navidrome.likes.map { if (queue.value.current?.musicSource == MusicSource.NAVIDROME) it else emptyMap() }.distinctUntilChanged(),
+                container.navidrome.state.map { if (queue.value.current?.musicSource == MusicSource.NAVIDROME) it.revision else "" }.distinctUntilChanged()) { values ->
                     values.first() as Long? to values.drop(1)
                 }.collectLatest { (id, _) ->
                 actionEpoch++
@@ -68,6 +70,10 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
                 _comments.value = PlayerComments(songId = id)
                 _actions.value = PlayerSongActions(songId = id)
                 if (id == null) return@collectLatest
+                if (queue.value.current?.musicSource == MusicSource.NAVIDROME) {
+                    _actions.value = PlayerSongActions(songId = id, liked = container.navidrome.likes.value[id] == true)
+                    return@collectLatest
+                }
                 supervisorScope {
                     if (container.nativeNetease == null || !container.musicSettings.state.value.neteaseMainLibrary)
                         launch { appResult { container.libraryRepository.refreshStatus(listOf(queue.value.current?.id ?: id)) } }
@@ -106,6 +112,7 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             try {
                 when (val result = appResult {
+                    if (song.musicSource == MusicSource.NAVIDROME) return@appResult container.navidrome.toggleLike(song)
                     val native = container.primaryLibrary.resolveNetease()
                     if (expected != container.musicSession()) throw ApiException(ErrorKind.Unauthorized)
                     if (native) {

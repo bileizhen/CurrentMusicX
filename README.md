@@ -25,7 +25,7 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 
 圆形封面、封面取色背景、逐字歌词与跟手拖拽共同组成播放体验。绑定网易云后，可以直接使用网易云我喜欢和自己的歌单；也可以保留 CurrentMusic 音乐库，在两种方式之间切换。
 
-应用源码位于本仓库的 `main` 分支，同时维护于 [CurrentMusic 的 app 分支](https://github.com/backrooms-yrc/CurrentMusic/tree/app)。音乐资料与网易云音乐库由手机直连网易云，歌曲音源继续使用 CurrentMusic。歌曲与音质的可用性取决于所选音源和账号权限。
+应用源码位于本仓库的 `main` 分支，同时维护于 [CurrentMusic 的 app 分支](https://github.com/backrooms-yrc/CurrentMusic/tree/app)。音乐资料与网易云音乐库由手机直连网易云，歌曲音源继续使用 CurrentMusic。歌曲与音质的可用性取决于所选音源和账号权限。自建曲库可独立连接 Navidrome，音频直接从自己的服务器播放。
 
 ## 功能特性
 
@@ -58,6 +58,18 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 - 可将网易云设为主音乐库，“我的 → 我喜欢”直接打开网易云我喜欢的音乐
 - 开启主音乐库后，播放页短按红心直接喜欢 / 取消喜欢；长按可选择其他可收录歌单
 - 主音乐库开关可随时关闭，原有 CurrentMusic 音乐库数据保留
+
+### Navidrome 自建曲库
+
+- 从“我的 → 自建曲库”或“设置 → 网络与播放 → Navidrome 自建曲库”连接服务器
+- 支持反向代理子路径、用户名与密码登录，凭据加密保存在本机
+- 专辑、艺术家、歌单与收藏浏览，搜索自建歌曲、专辑和艺术家
+- 播放页红心直接收藏 / 取消收藏到自己的服务器；长按选择自己的歌单
+- 支持新建、重命名、删除歌单与移出歌曲
+- 原音质流式播放、下一首预加载、缓存复用、均衡器和服务器同步歌词
+- 支持服务器允许的歌曲下载，沿用封面、歌曲信息与歌词内嵌
+- 可开启“用作首页曲库”，关闭后恢复原首页，不清除其他服务的数据
+- 私有曲库歌曲当前仅在本机播放，不参与 CurrentMusic 一起听与 DLNA 投屏
 
 ### 搜索与发现
 

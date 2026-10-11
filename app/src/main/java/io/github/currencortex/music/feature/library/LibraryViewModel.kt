@@ -92,6 +92,17 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                 // Direct NetEase is the primary destination. Do not hold its picker behind a
                 // slow legacy library; custom CurrentMusic playlists remain available with
                 // the explicitly selected CurrentMusic library.
+                if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) {
+                    val expectedNav = container.navidrome.session()
+                    val result = appResult { container.navidrome.playlists().filter { it.owned }.map {
+                        Playlist(it.id.hashCode().toLong(), it.name, "", it.cover, "navidrome", 0, it.count, emptyList(), remoteId = it.id)
+                    } }
+                    if (expectedNav == container.navidrome.session() && selectedSong.value == song) when (result) {
+                        is AppResult.Success -> availablePlaylists.value = result.value
+                        is AppResult.Failure -> playlistError.value = result.kind.message
+                    }
+                    return@launch
+                }
                 val current = if (container.nativeNetease != null && container.primaryLibrary.resolveNetease()) AppResult.Success(emptyList())
                     else appResult { container.libraryRepository.playlists().filter { it.editable(container.accountRepository.state.value.account?.id ?: 0) } }
                 val native = appResult {
@@ -110,9 +121,10 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         val song = selectedSong.value ?: return
         if (playlist !in availablePlaylists.value) return
         action("已加入歌单") {
-            if (playlist.source == "netease") container.neteaseLibrary.add(playlist.id, song)
+            if (playlist.source == "navidrome") container.navidrome.add(playlist.remoteId, song)
+            else if (playlist.source == "netease") container.neteaseLibrary.add(playlist.id, song)
             else container.libraryRepository.add(playlist.id, listOf(song))
-            container.libraryRepository.invalidate(); selectedSong.value = null
+            if (song.navidrome == null) container.libraryRepository.invalidate(); selectedSong.value = null
         }
     }
     fun togglePrimaryLike(song: Song) {
@@ -122,6 +134,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             try {
                 when (val result = appResult {
+                    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) return@appResult container.navidrome.toggleLike(song)
                     val native = container.primaryLibrary.resolveNetease()
                     if (expected != container.musicSession()) throw ApiException(ErrorKind.Unauthorized)
                     if (native) {
@@ -133,7 +146,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                     }
                 }) {
                     is AppResult.Success -> if (expected == container.musicSession()) {
-                        container.libraryRepository.invalidate()
+                        if (song.navidrome == null) container.libraryRepository.invalidate()
                         message.value = if (result.value) "已加入我喜欢" else "已取消喜欢"
                     }
                     is AppResult.Failure -> if (expected == container.musicSession()) message.value = result.kind.message
@@ -163,8 +176,10 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         }
     }
     fun refreshStatuses(songs: List<Song>) = viewModelScope.launch { appResult {
+        if (songs.all { it.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME }) return@appResult
+        val legacySongs = songs.filterNot { it.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME }
         if (container.primaryLibrary.resolveNetease()) container.neteaseSongActions.likedIds()
-        else container.libraryRepository.refreshStatus(songs.filterNot { it.video }.map { it.id })
+        else container.libraryRepository.refreshStatus(legacySongs.filterNot { it.video }.map { it.id })
     } }
 }
 

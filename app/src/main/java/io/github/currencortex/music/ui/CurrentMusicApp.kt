@@ -174,6 +174,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val playerVm: PlayerViewModel = viewModel(factory = viewModelFactory { PlayerViewModel(container) })
     val libraryVm: LibraryViewModel = viewModel(factory = viewModelFactory { LibraryViewModel(container) })
     val libraryHome by libraryVm.home.collectAsStateWithLifecycle()
+    val navidromeAccount by container.navidrome.state.collectAsStateWithLifecycle()
+    val navidromeVm: io.github.currencortex.music.feature.navidrome.NavidromeViewModel = viewModel(factory = viewModelFactory {
+        io.github.currencortex.music.feature.navidrome.NavidromeViewModel(container)
+    })
     val profileVm: ProfileViewModel = viewModel(key = "my-profile", factory = viewModelFactory { ProfileViewModel(container) })
     val myProfile by profileVm.state.collectAsStateWithLifecycle()
     val discoverVm: DiscoverViewModel = viewModel(factory = viewModelFactory { DiscoverViewModel(container) })
@@ -292,6 +296,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             else action()
         }
         fun requestSong(song: Song) {
+            if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) { libraryVm.message.value = "私有曲库歌曲不能提交到一起听房间"; return }
             if (!container.roomSession.active || song.id in roomPending) return
             val revision = container.accountRepository.sessionRevision.value
             val roomId = roomLive.detail?.room?.id
@@ -384,7 +389,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         Box(Modifier.fillMaxSize().then(if (searchPresented) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
                         RootTabTransition(selected, tabsState, onSelected = ::selectTab) { tab ->
                             when (tab) {
-                                HOME_TAB -> MusicHomeScreen(libraryVm, onSearch = { navigateTo(SEARCH) }, onProfile = { _, _ -> selectTab(ME_TAB) },
+                                HOME_TAB -> if (navidromeAccount.configured && navidromeAccount.home)
+                                    io.github.currencortex.music.feature.navidrome.NavidromeScreen(navidromeVm, libraryVm, ::navigateLibrary,
+                                        { songs, index -> playWithPermission { container.playerController.playList(songs, index) } }, root = true)
+                                else MusicHomeScreen(libraryVm, onSearch = { navigateTo(SEARCH) }, onProfile = { _, _ -> selectTab(ME_TAB) },
                                     navigate = ::navigateLibrary, play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
                                     profile = myProfile.profile?.user, onSearchBounds = { searchBounds = it }, hideSearch = searchPresented,
                                     searchQuery = searchState.query, onSearchSubmit = {
@@ -426,7 +434,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates) }
                     }
                 }
-                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onEqualizer = { navigateTo(EQUALIZER) }) { navigateTo(STORAGE) } }
+                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onEqualizer = { navigateTo(EQUALIZER) }, onNavidrome = { navigateLibrary("navidrome") }) { navigateTo(STORAGE) } }
+                entry("navidrome") {
+                    io.github.currencortex.music.feature.navidrome.NavidromeScreen(navidromeVm, libraryVm, ::navigateLibrary,
+                        { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
+                }
                 entry(EQUALIZER.toString()) {
                     val vm: io.github.currencortex.music.feature.settings.EqualizerViewModel = viewModel(factory = viewModelFactory {
                         io.github.currencortex.music.feature.settings.EqualizerViewModel(container)
