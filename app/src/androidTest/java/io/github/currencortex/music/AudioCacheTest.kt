@@ -125,6 +125,50 @@ class AudioCacheTest {
         cache.clear()
         assertEquals(0L, cache.bytes.value); assertNull(cache.cachedSource(newer))
     }
+    @Test fun switchAfterSeveralMinutesReusesPrefetchedUrlAndBytesWithoutAnotherRequest() = runBlocking(Dispatchers.IO) {
+        val session = RequestSession("https://fixture/cm", "fixture-token")
+        val request = AudioRequest(1, AudioQuality.STANDARD, 7, session)
+        var loads = 0
+        var clock = 0L
+        val resolver = AudioSourceResolver(cache, { session }, now = { clock }) { _, _, _ ->
+            loads++; source().copy(validForSeconds = 300)
+        }
+        val opening = resolver.resolve(request)
+        cache.preload(opening.key, opening.source, 64 * 1024L)
+        clock = 180_000_000_000L
+        val switch = resolver.resolve(request)
+        assertEquals(1, loads)
+        assertArrayEquals(payload.copyOfRange(0, 64 * 1024), read(switch.key, switch.source, length = 64 * 1024L))
+        assertEquals(1, requests)
+        clock = 275_000_000_000L
+        resolver.resolve(request)
+        assertEquals("Memo hits must not extend URL expiry", 2, loads)
+    }
+    @Test fun renewalDoesNotBlockForegroundAndPreservesCachedOpeningAcrossSignedUrls() = runBlocking(Dispatchers.IO) {
+        val session = RequestSession("https://fixture/cm", "fixture-token")
+        val request = AudioRequest(1, AudioQuality.STANDARD, 7, session)
+        val renewing = CompletableDeferred<Unit>()
+        val finishRenewal = CompletableDeferred<Unit>()
+        var loads = 0
+        val resolver = AudioSourceResolver(cache, { session }) { _, _, _ ->
+            loads++
+            if (loads == 2) { renewing.complete(Unit); finishRenewal.await() }
+            source("/one?signature=$loads").copy(validForSeconds = 300)
+        }
+        val first = resolver.resolve(request)
+        cache.preload(first.key, first.source, 64 * 1024L)
+        val background = async { resolver.resolve(request, refresh = true) }
+        withTimeout(3_000) { renewing.await() }
+        val foreground = withTimeout(1_000) { resolver.resolve(request) }
+        assertEquals(first.source.url, foreground.source.url)
+        finishRenewal.complete(Unit)
+        val renewed = background.await()
+        cache.preload(renewed.key, renewed.source, 64 * 1024L)
+        assertNotEquals(first.source.url, renewed.source.url)
+        assertEquals(1, requests)
+        assertArrayEquals(payload.copyOfRange(0, 64 * 1024), read(renewed.key, renewed.source, length = 64 * 1024L))
+        assertEquals(1, requests)
+    }
     @Test fun audioProvidersAndKeysCannotReuseEachOthersBytesOrInFlightSources() = runBlocking(Dispatchers.IO) {
         val session = RequestSession("https://fixture/cm", "fixture-token")
         var provider = "leiz:fixture-first"

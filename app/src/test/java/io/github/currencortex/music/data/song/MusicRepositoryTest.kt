@@ -6,6 +6,18 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 class MusicRepositoryTest {
+    @Test fun preservesReportedSourceLifetimeAndUsesBoundedCurrentMusicFallback() = runBlocking {
+        MockWebServer().use { server ->
+            val repo = MusicRepository(ApiClient({ server.url("/cm/").toString() }, { null }, {}))
+            for ((expi, expected) in listOf(1200 to 1200L, 60 to 60L, 0 to 300L, -1 to 300L)) {
+                server.enqueue(MockResponse().setBody("""{"url":"https://example.com/audio","expi":$expi}"""))
+                assertEquals(expected, repo.source(7, AudioQuality.STANDARD).validForSeconds)
+                server.takeRequest()
+            }
+            server.enqueue(MockResponse().setBody("""{"url":"https://example.com/audio"}"""))
+            assertEquals(300L, repo.source(7, AudioQuality.STANDARD).validForSeconds)
+        }
+    }
     @Test fun newLyricsUseRealWordTimesAndCurrentMusicProxy() = runBlocking {
         MockWebServer().use { server ->
             val repo = MusicRepository(ApiClient({ server.url("/cm/").toString() }, { "private-token" }, {}))

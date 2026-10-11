@@ -216,12 +216,16 @@ class MusicService : MediaSessionService() {
                 .distinctUntilChanged().collectLatest { plan ->
                     if (plan == null) return@collectLatest
                     delay(800)
-                    try {
-                        val resolved = container.audioSources.resolve(plan.request)
-                        if (resolved.source.highSpec && plan.warn) return@collectLatest
-                        container.audioCache.preload(resolved.key, resolved.source)
-                    } catch (e: CancellationException) { throw e }
-                    catch (_: Exception) { container.logger.info("Player", "Next audio preload unavailable; foreground playback is unaffected") }
+                    NextAudioPreloader(
+                        resolve = { refresh -> container.audioSources.resolve(plan.request, refresh) },
+                        preload = { resolved ->
+                            if (resolved.source.highSpec && plan.warn) false else {
+                                container.audioCache.preload(resolved.key, resolved.source)
+                                true
+                            }
+                        },
+                        onFailure = { container.logger.info("Player", "Next audio preload unavailable; foreground playback is unaffected") },
+                    ).run()
                 }
         }
     }
