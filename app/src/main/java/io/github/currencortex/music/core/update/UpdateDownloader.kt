@@ -86,7 +86,9 @@ class UpdateDownloader(client: OkHttpClient, private val directory: File,
                                     remoteCheck(received <= release.size, "安装包超过预期大小")
                                     output.write(buffer, 0, count)
                                     onProgress(received, release.size)
-                                    if (source != UpdateSource.GITHUB && received < release.size) {
+                                    // The dedicated service is verified independently and can be slow on
+                                    // mobile networks. Keep its progress; readTimeout still detects stalls.
+                                    if (source != UpdateSource.GITHUB && source != UpdateSource.CURRENTMUSIC && received < release.size) {
                                         val now = nanoTime()
                                         val elapsed = now - checkpoint
                                         if (elapsed >= TimeUnit.SECONDS.toNanos(16)) {

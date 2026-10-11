@@ -14,8 +14,16 @@ import java.io.IOException
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.*
 import org.junit.Assert.*
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.tls.HeldCertificate
+import okhttp3.tls.HandshakeCertificates
+import okio.Buffer
+import java.util.concurrent.TimeUnit
+import java.security.MessageDigest
 
 /** Isolated dialog/transfer fixture; does not download or install a production APK. */
 class UpdateMirrorFlowTest {
@@ -64,6 +72,57 @@ class UpdateMirrorFlowTest {
         compose.waitUntil(5000) { transfer.state.value.download is UpdateDownloadState.Ready }
         compose.onNodeWithTag("update_download").assertTextContains("请求安装").performClick()
         compose.runOnIdle { assertEquals(1, installs) }
+    }
+
+    @Test fun dedicatedMirrorBelowSpeedThresholdStillFinishesAndVerifies() = runBlocking<Unit> {
+        val certificate = HeldCertificate.Builder().addSubjectAlternativeName("localhost").build()
+        val serverTls = HandshakeCertificates.Builder().heldCertificate(certificate).build()
+        val clientTls = HandshakeCertificates.Builder().addTrustedCertificate(certificate.certificate).build()
+        MockWebServer().use { server ->
+            server.useHttps(serverTls.sslSocketFactory(), false); server.start()
+            val bytes = ByteArray(512 * 1024) { (it % 251).toByte() }.apply {
+                byteArrayOf(0x50, 0x4b, 0x03, 0x04).copyInto(this)
+            }
+            server.enqueue(MockResponse().setBody(Buffer().write(bytes)).throttleBody(4096, 250, TimeUnit.MILLISECONDS))
+            val digest = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+            val release = AppRelease("99.0.0", "", "https://github.com/bileizhen/CurrentMusicX/releases", null, null, false,
+                bytes.size.toLong(), digest)
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            val directory = File(context.cacheDir, "slow-mirror-${java.util.UUID.randomUUID()}")
+            val client = OkHttpClient.Builder().sslSocketFactory(clientTls.sslSocketFactory(), clientTls.trustManager).build()
+            val downloader = UpdateDownloader(client, directory) { _, _ -> server.url("/asset").toString() }
+            var last = 0L
+            val file = withTimeout(60_000) { downloader.download(release, UpdateSource.CURRENTMUSIC) { received, _ ->
+                assertTrue(received >= last); last = received
+            } }
+            assertEquals(release.size, last)
+            assertTrue(UpdateDownloader.matches(file, release))
+            assertEquals(1, server.requestCount)
+        }
+    }
+
+    @Test fun liveSignedMirrorPrefixMatchesPublishedApkWhenExplicitlyRequested() = runBlocking<Unit> {
+        val args = InstrumentationRegistry.getArguments()
+        val url = args.getString("live_update_url")
+        val expected = args.getString("live_update_prefix_sha256")
+        Assume.assumeTrue("Live signed range verification is opt-in", url != null && expected != null)
+        val release = AppRelease(args.getString("live_update_version")!!, "", "https://github.com/bileizhen/CurrentMusicX/releases",
+            url, "fixture.apk", false, args.getString("live_update_size")!!.toLong(), args.getString("live_update_sha256")!!)
+        val target = UpdateSource.CURRENTMUSIC.url(release)
+        val range = "bytes=0-65535"
+        val request = okhttp3.Request.Builder().url(target).header("Range", range)
+        val parsed = target.toHttpUrl()
+        UpdateProxy.current.headers(parsed, range = range).forEach { (name, value) -> request.header(name, value) }
+        withContext(Dispatchers.IO) {
+            OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
+                .newCall(request.build()).execute().use { response ->
+                    assertEquals(206, response.code)
+                    val bytes = response.body!!.bytes()
+                    assertEquals(65536, bytes.size)
+                    val digest = MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
+                    assertEquals(expected, digest)
+                }
+        }
     }
 
     /** Run only with explicit public release metadata; routine tests stay offline. */

@@ -156,4 +156,17 @@ class UpdateDownloaderTest {
         val file = runBlocking { downloader.download(release, UpdateSource.GITHUB) { _, _ -> } }
         assertTrue(UpdateDownloader.matches(file, release))
     }
+
+    @Test fun slowDedicatedMirrorKeepsProgressInsteadOfDiscardingVerifiedBytes() = secureServer { server, client, directory ->
+        server.enqueue(MockResponse().setBody(Buffer().write(bytes)))
+        var clock = 0L
+        val release = release()
+        val progress = mutableListOf<Long>()
+        val downloader = UpdateDownloader(client, directory, nanoTime = { clock += 16_000_000_000L; clock }) { _, _ -> server.url("/asset").toString() }
+        val file = runBlocking { downloader.download(release, UpdateSource.CURRENTMUSIC) { received, _ -> progress += received } }
+        assertTrue(UpdateDownloader.matches(file, release))
+        assertEquals(release.size, progress.last())
+        assertTrue(progress.zipWithNext().all { (a, b) -> a <= b })
+        assertEquals(1, server.requestCount)
+    }
 }
