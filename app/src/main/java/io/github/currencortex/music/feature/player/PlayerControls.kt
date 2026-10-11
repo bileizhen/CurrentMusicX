@@ -87,7 +87,8 @@ internal val PlayerBufferedProgress = SemanticsPropertyKey<Float>("PlayerBuffere
                 state.error != null -> state.error
                 actions.error != null -> actions.error
                 !state.canControlPlayback -> "播放由房主或管理员控制"
-                state.loading -> "正在加载音源…"
+                state.resolving -> "正在加载音源…"
+                state.loading -> "正在准备播放…"
                 else -> null
             }
             message?.let { Text(it, fontSize = 11.sp, color = Color.White.copy(alpha = .55f), maxLines = 1) }
