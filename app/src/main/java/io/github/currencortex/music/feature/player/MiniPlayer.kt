@@ -160,6 +160,11 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
             }, enabled) { ink ->
                 val stroke = Stroke(1.6.dp.toPx())
                 drawCircle(ink.copy(alpha = .2f), radius = size.minDimension * .45f, style = stroke)
+                val buffered = if (currentMatches) state.bufferedProgress(duration) else 0f
+                if (buffered > 0f) drawArc(ink.copy(alpha = .42f), startAngle = -90f,
+                    sweepAngle = 360f * buffered, useCenter = false,
+                    topLeft = Offset(size.width * .05f, size.height * .05f), size = Size(size.width * .9f, size.height * .9f),
+                    style = stroke)
                 if (loading || progress > 0f) drawArc(ink, startAngle = if (loading) loadingAngle.value - 90f else -90f,
                     sweepAngle = if (loading) 100f else 360f * progress, useCenter = false,
                     topLeft = Offset(size.width * .05f, size.height * .05f), size = Size(size.width * .9f, size.height * .9f),
