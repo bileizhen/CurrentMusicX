@@ -33,6 +33,12 @@ internal class LyricsTextRaster(private val layout: TextLayoutResult, private va
             }
         }
     }
+    /** Static line-level bloom for untimed captions; it carries no invented word cues. */
+    val lineHalo: Pair<ImageBitmap, Offset> by lazy {
+        val offsets = IntArray(2)
+        val alpha = ink.asAndroidBitmap().extractAlpha(maskPaint, offsets)
+        alpha.asImageBitmap() to Offset(offsets[0].toFloat(), offsets[1].toFloat())
+    }
     fun glyphHalo(box: Rect): Pair<ImageBitmap, Offset> = glyphHalos.getOrPut(box) {
         val left = kotlin.math.floor(box.left).toInt()
         val top = kotlin.math.floor(box.top).toInt()

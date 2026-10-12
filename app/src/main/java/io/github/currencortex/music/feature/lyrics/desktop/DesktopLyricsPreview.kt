@@ -60,7 +60,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
             }
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
-                .background(colors.onSurface.copy(alpha = .16f)).padding(12.dp), contentAlignment = Alignment.Center) {
+                .background(Brush.linearGradient(listOf(Color(0xFF303646), Color(0xFF161A25)))).padding(12.dp), contentAlignment = Alignment.Center) {
                 val material = if (capsule) Modifier.background(Brush.linearGradient(listOf(Color(0xCC222538), Color(0xAA10131F))), shape)
                     .border(1.dp, Color.White.copy(alpha = .18f), shape) else Modifier
                 Column(Modifier.widthIn(max = 320.dp).fillMaxWidth().graphicsLayer { this.alpha = alpha }.then(material).padding(14.dp),
@@ -73,7 +73,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             forceLineAnimation = false, glow = motion && options.glowEnabled && options.glowStrength > 0f,
                             wordLift = motion && options.effect == DesktopEffect.STAGE, accurateWordLift = true,
                             glowOpacity = glow, outline = !capsule, color = textColor,
-                            glowColor = Color(options.glowColor.toInt()), glowRadiusScale = options.glowSpread)
+                            glowColor = Color(options.glowColor.toInt()), glowRadiusScale = options.glowSpread,
+                            untimedLineGlow = options.glowEnabled && options.glowStrength > 0f)
                     }
                     if (options.translation && !line.translation.isNullOrBlank()) Text(line.translation,
                         modifier = Modifier.testTag("desktop_preview_translation"), fontSize = (options.fontSize * .58f).sp,

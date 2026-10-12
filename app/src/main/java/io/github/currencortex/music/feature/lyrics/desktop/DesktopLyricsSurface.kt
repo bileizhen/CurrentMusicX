@@ -99,6 +99,7 @@ import kotlinx.coroutines.flow.StateFlow
                     forceLineAnimation = false, glow = motion && options.glowEnabled && options.glowStrength > 0f, wordLift = motion && stage,
                     accurateWordLift = true, glowOpacity = glowOpacity, baseOpacity = baseOpacity,
                     color = textColor, glowColor = Color(options.glowColor.toInt()), glowRadiusScale = options.glowSpread,
+                    untimedLineGlow = options.glowEnabled && options.glowStrength > 0f,
                     outline = !capsule, onLayout = { if (layout != it) layout = it })
             }
             if (options.translation && !line.translation.isNullOrBlank()) BasicText(line.translation,

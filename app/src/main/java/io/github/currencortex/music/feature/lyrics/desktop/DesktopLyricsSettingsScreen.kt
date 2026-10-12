@@ -140,7 +140,7 @@ import kotlin.math.roundToInt
             item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 DesktopLyricsColorControl("文字颜色", options.textColor, "desktop_text_color") { value -> edit { it.copy(textColor = value) } }
                 SettingsSwitch("歌词辉光", options.glowEnabled, { value -> edit { it.copy(glowEnabled = value) } },
-                    Modifier.testTag("desktop_glow_enabled"), summary = "延音与强调歌词亮起，不给所有歌词持续发光")
+                    Modifier.testTag("desktop_glow_enabled"), summary = "整句歌词显示柔光，逐字歌词在延音与强调处亮起")
                 if (options.glowEnabled) {
                     DesktopSlider("辉光强度", "${(glowStrength * 100).roundToInt()}%", glowStrength, 0f..2f, "desktop_glow_strength",
                         { glowStrength = (it * 100).roundToInt() / 100f }, { saveGlowStrength(glowStrength) },
@@ -150,7 +150,7 @@ import kotlin.math.roundToInt
                         { value -> glowSpread = (value * 10).roundToInt() / 10f; saveGlowSpread(glowSpread) })
                     DesktopLyricsColorControl("辉光颜色", options.glowColor, "desktop_glow_color", defaultColor = DESKTOP_DEFAULT_GLOW_COLOR) { value -> edit { it.copy(glowColor = value) } }
                 }
-                Text("仅逐字歌词支持辉光；精致模式更轻柔，舞台模式更明显。", fontSize = 11.sp, color = hint)
+                Text("整句柔光不模拟逐字扫光；精致模式更轻柔，舞台模式更明显。", fontSize = 11.sp, color = hint)
             } } }
             item { MusicSectionHeader("文字与同步") }
             item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
