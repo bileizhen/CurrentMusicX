@@ -63,21 +63,22 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 .background(Brush.linearGradient(listOf(Color(0xFF303646), Color(0xFF161A25)))).padding(12.dp), contentAlignment = Alignment.Center) {
                 val material = if (capsule) Modifier.background(Brush.linearGradient(listOf(Color(0xCC222538), Color(0xAA10131F))), shape)
                     .border(1.dp, Color.White.copy(alpha = .18f), shape) else Modifier
-                Column(Modifier.widthIn(max = 320.dp).fillMaxWidth().graphicsLayer { this.alpha = alpha }.then(material).padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(if (actual == null) "CurrentMusic · 样式预览" else playback.song?.name.orEmpty(),
+                Column(Modifier.widthIn(max = 320.dp).fillMaxWidth().graphicsLayer { this.alpha = alpha }.then(material).padding(horizontal = 4.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(desktopCaptionSpacing)) {
+                    if (!options.locked) Text(if (actual == null) "CurrentMusic · 样式预览" else playback.song?.name.orEmpty(),
+                        modifier = Modifier.padding(horizontal = desktopHaloPadding),
                         fontSize = 11.sp, color = Color.White.copy(alpha = .55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Box(Modifier.heightIn(max = 180.dp).clipToBounds()) {
                         KaraokeText(line, if (actual == null) still else time, animateWords = line.words.isNotEmpty(),
                             fontSize = options.fontSize, fontWeight = FontWeight.Medium,
                             forceLineAnimation = false, glow = motion && options.glowEnabled && options.glowStrength > 0f,
                             wordLift = motion && options.effect == DesktopEffect.STAGE, accurateWordLift = true,
-                            glowOpacity = glow, color = textColor, effectPadding = 20.dp,
+                            glowOpacity = glow, color = textColor, effectPadding = desktopHaloPadding,
                             glowColor = Color(options.glowColor.toInt()), glowRadiusScale = options.glowSpread,
                             untimedLineGlow = options.glowEnabled && options.glowStrength > 0f)
                     }
                     if (options.translation && !line.translation.isNullOrBlank()) Text(line.translation,
-                        modifier = Modifier.testTag("desktop_preview_translation"), fontSize = (options.fontSize * .58f).sp,
+                        modifier = Modifier.padding(horizontal = desktopHaloPadding).testTag("desktop_preview_translation"), fontSize = desktopTranslationSize(options.fontSize).sp,
                         color = textColor.copy(alpha = .75f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }

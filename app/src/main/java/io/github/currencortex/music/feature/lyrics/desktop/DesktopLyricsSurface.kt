@@ -56,14 +56,15 @@ import kotlinx.coroutines.flow.StateFlow
     val capsule = options.appearance == DesktopAppearance.CAPSULE
     val material = if (capsule) Modifier.background(Brush.linearGradient(listOf(Color(0xCC222538), Color(0xAA10131F))), shape)
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(.22f), Color.White.copy(.03f))), shape) else Modifier
-    Column(Modifier.fillMaxWidth().then(material).padding(14.dp).testTag("desktop_lyrics_window"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        if (!options.locked) Row(Modifier.fillMaxWidth().pointerInput(Unit) { detectDragGestures(
+    Column(Modifier.fillMaxWidth().then(material).padding(horizontal = 4.dp, vertical = 8.dp).testTag("desktop_lyrics_window"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (!options.locked) Row(Modifier.fillMaxWidth().testTag("desktop_edit_toolbar")
+            .background(if (capsule) Color.White.copy(.06f) else Color(0xEB161A25), RoundedCornerShape(16.dp))
+            .padding(horizontal = 8.dp).pointerInput(Unit) { detectDragGestures(
             onDragEnd = release, onDragCancel = release, onDrag = { change, amount -> change.consume(); drag(amount.x, amount.y) }) },
             verticalAlignment = Alignment.CenterVertically) {
-            BasicText("⠿  拖动", Modifier.weight(1f).padding(vertical = 8.dp), style = TextStyle(fontSize = 12.sp, color = Color.White.copy(.65f)))
+            BasicText("⠿  拖动", Modifier.weight(1f).heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically), style = TextStyle(fontSize = 12.sp, color = Color.White.copy(.75f)))
             DesktopAction("设置", settings); DesktopAction("锁定", lock); DesktopAction("关闭", close)
         }
-        BasicText(player.song?.name ?: "CurrentMusic", style = TextStyle(fontSize = 11.sp, color = Color.White.copy(.55f)), maxLines = 1)
         if (line != null && interlude == null) key(player.song?.id, line) {
             var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
             val scroll = rememberScrollState()
@@ -88,35 +89,47 @@ import kotlinx.coroutines.flow.StateFlow
                     else scroll.animateScrollTo(target, tween(220))
                 }
             }
-            Box(Modifier.fillMaxWidth().heightIn(max = maxTextHeight().dp).clipToBounds()) {
-                KaraokeText(line, effective, animateWords = line.words.isNotEmpty(), effectPadding = 20.dp,
-                    modifier = Modifier.fillMaxWidth().verticalScroll(scroll, enabled = !options.locked).padding(vertical = 8.dp)
-                        .graphicsLayer {
-                            alpha = .65f + .35f * entrance.value
-                            translationY = (1f - entrance.value) * if (stage) 8.dp.toPx() else 3.dp.toPx()
-                        },
-                    fontSize = options.fontSize, fontWeight = FontWeight.Medium, reservedFontWeight = FontWeight.Medium,
-                    forceLineAnimation = false, glow = motion && options.glowEnabled && options.glowStrength > 0f, wordLift = motion && stage,
-                    accurateWordLift = true, glowOpacity = glowOpacity, baseOpacity = baseOpacity,
-                    color = textColor, glowColor = Color(options.glowColor.toInt()), glowRadiusScale = options.glowSpread,
-                    untimedLineGlow = options.glowEnabled && options.glowStrength > 0f,
-                    onLayout = { if (layout != it) layout = it })
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(desktopCaptionSpacing)) {
+                if (!options.locked) DesktopSongTitle(player.song?.name ?: "CurrentMusic")
+                Box(Modifier.fillMaxWidth().heightIn(max = maxTextHeight().dp).clipToBounds()) {
+                    KaraokeText(line, effective, animateWords = line.words.isNotEmpty(), effectPadding = desktopHaloPadding,
+                        modifier = Modifier.fillMaxWidth().verticalScroll(scroll, enabled = !options.locked)
+                            .graphicsLayer {
+                                alpha = .65f + .35f * entrance.value
+                                translationY = (1f - entrance.value) * if (stage) 8.dp.toPx() else 3.dp.toPx()
+                            },
+                        fontSize = options.fontSize, fontWeight = FontWeight.Medium, reservedFontWeight = FontWeight.Medium,
+                        forceLineAnimation = false, glow = motion && options.glowEnabled && options.glowStrength > 0f, wordLift = motion && stage,
+                        accurateWordLift = true, glowOpacity = glowOpacity, baseOpacity = baseOpacity,
+                        color = textColor, glowColor = Color(options.glowColor.toInt()), glowRadiusScale = options.glowSpread,
+                        untimedLineGlow = options.glowEnabled && options.glowStrength > 0f,
+                        onLayout = { if (layout != it) layout = it })
+                }
+                if (options.translation && !line.translation.isNullOrBlank()) BasicText(line.translation,
+                    modifier = Modifier.padding(horizontal = desktopHaloPadding).testTag("desktop_window_translation"),
+                    style = TextStyle(fontSize = desktopTranslationSize(options.fontSize).sp, color = textColor.copy(.75f),
+                        shadow = if (capsule) Shadow(Color.Black, blurRadius = 3f) else null), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (options.translation && !line.translation.isNullOrBlank()) BasicText(line.translation,
-                style = TextStyle(fontSize = (options.fontSize * .58f).sp, color = textColor.copy(.75f),
-                    shadow = if (capsule) Shadow(Color.Black, blurRadius = 3f) else null), maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (!options.locked && scroll.maxValue > 0 && line.words.isEmpty()) BasicText("长句可上下滑动",
-                style = TextStyle(fontSize = 10.sp, color = Color.White.copy(.5f)))
-        } else BasicText(when {
-            player.song == null -> "等待播放"
-            content.loading || content.songId != player.song?.id -> "正在读取歌词"
-            content.document.lines.isEmpty() -> "暂无歌词 · 聆听音乐"
-            else -> interlude ?: "♪"
-        }, style = TextStyle(fontSize = options.fontSize.sp, color = textColor,
-            shadow = if (capsule) Shadow(Color.Black.copy(.8f), blurRadius = 4f) else null))
+                Modifier.padding(horizontal = desktopHaloPadding), style = TextStyle(fontSize = 10.sp, color = Color.White.copy(.5f)))
+        } else Column(Modifier.padding(horizontal = desktopHaloPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!options.locked) BasicText(player.song?.name ?: "CurrentMusic", style = TextStyle(fontSize = 11.sp, color = Color.White.copy(.55f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            BasicText(when {
+                player.song == null -> "等待播放"
+                content.loading || content.songId != player.song?.id -> "正在读取歌词"
+                content.document.lines.isEmpty() -> "暂无歌词 · 聆听音乐"
+                else -> interlude ?: "♪"
+            }, Modifier.padding(vertical = 8.dp), style = TextStyle(fontSize = options.fontSize.sp, color = textColor,
+                shadow = if (capsule) Shadow(Color.Black.copy(.8f), blurRadius = 4f) else null))
+        }
     }
 }
+@Composable private fun DesktopSongTitle(name: String) {
+    BasicText(name, Modifier.padding(horizontal = desktopHaloPadding).testTag("desktop_window_title"),
+        style = TextStyle(fontSize = 11.sp, color = Color.White.copy(.55f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+}
 @Composable private fun DesktopAction(label: String, click: () -> Unit) {
-    BasicText(label, Modifier.clickable(role = Role.Button, onClick = click).heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 10.dp),
+    BasicText(label, Modifier.clickable(role = Role.Button, onClick = click).heightIn(min = 48.dp)
+        .wrapContentHeight(Alignment.CenterVertically).padding(horizontal = 8.dp),
         style = TextStyle(fontSize = 12.sp, color = Color.White.copy(.85f)))
 }
