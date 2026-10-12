@@ -9,12 +9,6 @@ import io.github.currencortex.music.data.song.Song
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
-data class NavidromePage(val kind: String = "albums", val id: String = "", val title: String = "曲库")
-data class NavidromeUi(val page: NavidromePage = NavidromePage(), val entries: List<NavidromeEntry> = emptyList(),
-    val albums: List<NavidromeEntry> = emptyList(), val artists: List<NavidromeEntry> = emptyList(),
-    val songs: List<Song> = emptyList(), val loading: Boolean = false, val more: Boolean = false,
-    val error: String? = null, val owned: Boolean = false)
-
 class NavidromeViewModel(val container: AppContainer) : ViewModel() {
     val repository = container.navidrome
     val account = repository.state
