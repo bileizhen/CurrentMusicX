@@ -25,7 +25,8 @@ class DesktopLyricsPreferencesDeviceTest {
             val before = music.snapshot()
             val desktop = DesktopLyricsPreferences(store, scope)
             desktop.ready.await()
-            desktop.edit { it.copy(effect = DesktopEffect.STAGE, locked = true, fontSize = 24f, offsetMs = -250, x = .15f, y = .7f) }
+            desktop.edit { it.copy(effect = DesktopEffect.STAGE, locked = true, fontSize = 24f, offsetMs = -250, x = .15f, y = .7f,
+                textColor = 0xFF80DEFFL, glowColor = 0xFFFFAACCL, glowStrength = 1.6f, glowSpread = 1.5f, glowEnabled = false) }
             val expected = desktop.state.first { it.effect == DesktopEffect.STAGE }
             assertEquals(before, music.snapshot())
             scope.coroutineContext[Job]!!.cancelAndJoin()

@@ -83,4 +83,29 @@ class DesktopLyricsSettingsTest {
         compose.runOnIdle { showPage.value = false }
         await { !container.desktopLyricsSettingsVisible.value }
     }
+    @Test fun separateTextAndGlowColorsValidateHexAndSaveGlowControls() {
+        val appBefore = container.musicSettings.state.value
+        scroll("desktop_text_color_80DEFF")
+        compose.onNodeWithTag("desktop_text_color_80DEFF").performClick()
+        await { container.desktopLyrics.state.value.textColor == 0xFF80DEFFL }
+        scroll("desktop_glow_strength")
+        compose.onNodeWithTag("desktop_glow_strength").performSemanticsAction(SemanticsActions.SetProgress) { it(1.5f) }
+        await { container.desktopLyrics.state.value.glowStrength == 1.5f }
+        scroll("desktop_glow_spread")
+        compose.onNodeWithTag("desktop_glow_spread").performSemanticsAction(SemanticsActions.SetProgress) { it(1.6f) }
+        await { container.desktopLyrics.state.value.glowSpread == 1.6f }
+        scroll("desktop_glow_color_hex")
+        compose.onNodeWithTag("desktop_glow_color_hex").performTextReplacement("GGHHII")
+        compose.onNodeWithTag("desktop_glow_color_apply").assertIsNotEnabled()
+        compose.onNodeWithTag("desktop_glow_color_hex").performTextReplacement("#00FF66")
+        compose.onNodeWithTag("desktop_glow_color_apply").performClick()
+        await { container.desktopLyrics.state.value.glowColor == 0xFF00FF66L }
+        Assert.assertEquals(0xFF80DEFFL, container.desktopLyrics.state.value.textColor)
+        scroll("desktop_glow_enabled")
+        compose.onNodeWithTag("desktop_glow_enabled").performClick()
+        await { !container.desktopLyrics.state.value.glowEnabled }
+        compose.onNodeWithTag("desktop_glow_strength").assertDoesNotExist()
+        Assert.assertEquals(0xFF00FF66L, container.desktopLyrics.state.value.glowColor)
+        Assert.assertEquals(appBefore, container.musicSettings.state.value)
+    }
 }

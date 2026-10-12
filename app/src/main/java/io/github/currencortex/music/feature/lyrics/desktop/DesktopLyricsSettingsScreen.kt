@@ -74,10 +74,14 @@ import kotlin.math.roundToInt
     fun saveFont(value: Float) { edit { it.copy(fontSize = value) } }
     fun saveOpacity(value: Float) { edit { it.copy(opacity = value) } }
     fun saveOffset(value: Float) { edit { it.copy(offsetMs = value.toLong()) } }
+    fun saveGlowStrength(value: Float) { edit { it.copy(glowStrength = value) } }
+    fun saveGlowSpread(value: Float) { edit { it.copy(glowSpread = value) } }
     var font by remember(options.fontSize) { mutableFloatStateOf(options.fontSize) }
     var opacity by remember(options.opacity) { mutableFloatStateOf(options.opacity) }
     var offset by remember(options.offsetMs) { mutableFloatStateOf(options.offsetMs.toFloat()) }
-    val preview = options.copy(fontSize = font, opacity = opacity, offsetMs = offset.toLong())
+    var glowStrength by remember(options.glowStrength) { mutableFloatStateOf(options.glowStrength) }
+    var glowSpread by remember(options.glowSpread) { mutableFloatStateOf(options.glowSpread) }
+    val preview = options.copy(fontSize = font, opacity = opacity, offsetMs = offset.toLong(), glowStrength = glowStrength, glowSpread = glowSpread)
     val hint = MiuixTheme.colorScheme.onSurfaceVariantSummary
     val summary = when {
         !ready -> "正在读取设置"
@@ -131,6 +135,22 @@ import kotlin.math.roundToInt
                         options.effect == mode, { edit { it.copy(effect = mode) } }, Modifier.weight(1f).testTag("desktop_effect_${mode.name}"))
                 } }
                 SettingsSwitch("显示翻译", options.translation, { edit { s -> s.copy(translation = it) } }, Modifier.testTag("desktop_translation"), summary = "当前歌词下方显示翻译")
+            } } }
+            item { MusicSectionHeader("颜色与辉光") }
+            item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                DesktopLyricsColorControl("文字颜色", options.textColor, "desktop_text_color") { value -> edit { it.copy(textColor = value) } }
+                SettingsSwitch("歌词辉光", options.glowEnabled, { value -> edit { it.copy(glowEnabled = value) } },
+                    Modifier.testTag("desktop_glow_enabled"), summary = "延音与强调歌词亮起，不给所有歌词持续发光")
+                if (options.glowEnabled) {
+                    DesktopSlider("辉光强度", "${(glowStrength * 100).roundToInt()}%", glowStrength, 0f..2f, "desktop_glow_strength",
+                        { glowStrength = (it * 100).roundToInt() / 100f }, { saveGlowStrength(glowStrength) },
+                        { value -> glowStrength = value; saveGlowStrength(value) })
+                    DesktopSlider("辉光范围", "${(glowSpread * 100).roundToInt()}%", glowSpread, .5f..2f, "desktop_glow_spread",
+                        { glowSpread = (it * 10).roundToInt() / 10f }, { saveGlowSpread(glowSpread) },
+                        { value -> glowSpread = (value * 10).roundToInt() / 10f; saveGlowSpread(glowSpread) })
+                    DesktopLyricsColorControl("辉光颜色", options.glowColor, "desktop_glow_color") { value -> edit { it.copy(glowColor = value) } }
+                }
+                Text("仅逐字歌词支持辉光；精致模式更轻柔，舞台模式更明显。", fontSize = 11.sp, color = hint)
             } } }
             item { MusicSectionHeader("文字与同步") }
             item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

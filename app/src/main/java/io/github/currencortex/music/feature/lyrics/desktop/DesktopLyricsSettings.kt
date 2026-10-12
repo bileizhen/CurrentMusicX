@@ -10,11 +10,19 @@ enum class DesktopAppearance(val label: String) { CAPTION("透明字幕"), CAPSU
 data class DesktopLyricsSettings(val enabled: Boolean = false, val locked: Boolean = false,
     val effect: DesktopEffect = DesktopEffect.PRECISE, val appearance: DesktopAppearance = DesktopAppearance.CAPSULE,
     val translation: Boolean = true, val fontSize: Float = 26f, val opacity: Float = .85f,
-    val offsetMs: Long = 0, val x: Float = .5f, val y: Float = .2f, val snapEdges: Boolean = false) {
+    val offsetMs: Long = 0, val x: Float = .5f, val y: Float = .2f, val snapEdges: Boolean = false,
+    val glowEnabled: Boolean = true, val glowStrength: Float = 1f, val glowSpread: Float = 1f,
+    val textColor: Long = 0xFFFFFFFFL, val glowColor: Long = 0xFFFFFFFFL) {
     fun normalized() = copy(fontSize = fontSize.finite(26f).coerceIn(18f, 38f),
         opacity = opacity.finite(.85f).coerceIn(.35f, .95f), offsetMs = offsetMs.coerceIn(-60000, 60000),
-        x = x.finite(.5f).coerceIn(0f, 1f), y = y.finite(.2f).coerceIn(0f, 1f))
+        x = x.finite(.5f).coerceIn(0f, 1f), y = y.finite(.2f).coerceIn(0f, 1f),
+        glowStrength = glowStrength.finite(1f).coerceIn(0f, 2f), glowSpread = glowSpread.finite(1f).coerceIn(.5f, 2f),
+        textColor = desktopOpaqueColor(textColor), glowColor = desktopOpaqueColor(glowColor))
 }
+internal fun desktopOpaqueColor(value: Long): Long = 0xFF000000L or (value and 0xFFFFFFL)
+internal fun desktopColorHex(value: Long): String = String.format(java.util.Locale.ROOT, "%06X", value and 0xFFFFFFL)
+internal fun desktopParseColor(value: String): Long? = value.trim().removePrefix("#")
+    .takeIf { it.matches(Regex("[0-9a-fA-F]{6}")) }?.toLongOrNull(16)?.let(::desktopOpaqueColor)
 private fun Float.finite(fallback: Float) = takeIf(Float::isFinite) ?: fallback
 
 /** Separate namespace; editing desktop effects cannot change application lyric preferences. */
@@ -28,7 +36,8 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
         store.edit { preferences -> preferences[payload] = encode(change(decode(preferences[payload])).normalized()) }
     }
     private fun encode(s: DesktopLyricsSettings) = listOf(s.enabled, s.locked, s.effect.name, s.appearance.name,
-        s.translation, s.fontSize, s.opacity, s.offsetMs, s.x, s.y, s.snapEdges).joinToString("|")
+        s.translation, s.fontSize, s.opacity, s.offsetMs, s.x, s.y, s.snapEdges,
+        s.glowEnabled, s.glowStrength, s.glowSpread, s.textColor, s.glowColor).joinToString("|")
     private fun decode(raw: String?): DesktopLyricsSettings {
         val fields = raw?.split('|').orEmpty()
         return DesktopLyricsSettings(fields.getOrNull(0)?.toBooleanStrictOrNull() ?: false,
@@ -38,7 +47,10 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
             fields.getOrNull(4)?.toBooleanStrictOrNull() ?: true, fields.getOrNull(5)?.toFloatOrNull() ?: 26f,
             fields.getOrNull(6)?.toFloatOrNull() ?: .85f, fields.getOrNull(7)?.toLongOrNull() ?: 0,
             fields.getOrNull(8)?.toFloatOrNull() ?: .5f, fields.getOrNull(9)?.toFloatOrNull() ?: .2f,
-            fields.getOrNull(10)?.toBooleanStrictOrNull() ?: false).normalized()
+            fields.getOrNull(10)?.toBooleanStrictOrNull() ?: false,
+            fields.getOrNull(11)?.toBooleanStrictOrNull() ?: true,
+            fields.getOrNull(12)?.toFloatOrNull() ?: 1f, fields.getOrNull(13)?.toFloatOrNull() ?: 1f,
+            fields.getOrNull(14)?.toLongOrNull() ?: 0xFFFFFFFFL, fields.getOrNull(15)?.toLongOrNull() ?: 0xFFFFFFFFL).normalized()
     }
 }
 
