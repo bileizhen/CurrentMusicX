@@ -6,16 +6,19 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 enum class DesktopEffect(val label: String) { PRECISE("精致"), STAGE("舞台") }
-enum class DesktopAppearance(val label: String) { CAPTION("透明字幕"), CAPSULE("半透明胶囊") }
+enum class DesktopAppearance(val label: String) { CAPTION("透明字幕"), CAPSULE("半透明胶囊"), ISLAND("灵动岛") }
 internal const val DESKTOP_DEFAULT_GLOW_COLOR: Long = 0xFFE0E0E0L
 internal const val DESKTOP_DEFAULT_FONT_SIZE: Float = 20f
+internal const val DESKTOP_ISLAND_FONT_SIZE: Float = 14f
+internal const val DESKTOP_ISLAND_HEIGHT: Float = .02f
 data class DesktopLyricsSettings(val enabled: Boolean = false, val locked: Boolean = false,
     val effect: DesktopEffect = DesktopEffect.PRECISE, val appearance: DesktopAppearance = DesktopAppearance.CAPSULE,
     val translation: Boolean = true, val fontSize: Float = DESKTOP_DEFAULT_FONT_SIZE, val opacity: Float = .85f,
     val offsetMs: Long = 0, val x: Float = .5f, val y: Float = .2f, val snapEdges: Boolean = false,
     val glowEnabled: Boolean = true, val glowStrength: Float = 1f, val glowSpread: Float = 1f,
-    val textColor: Long = 0xFFFFFFFFL, val glowColor: Long = DESKTOP_DEFAULT_GLOW_COLOR) {
-    fun normalized() = copy(fontSize = fontSize.finite(DESKTOP_DEFAULT_FONT_SIZE).coerceIn(18f, 38f),
+    val textColor: Long = 0xFFFFFFFFL, val glowColor: Long = DESKTOP_DEFAULT_GLOW_COLOR, val islandFontSize: Float = DESKTOP_ISLAND_FONT_SIZE, val islandY: Float = DESKTOP_ISLAND_HEIGHT) {
+    val displayFontSize: Float get() = if (appearance == DesktopAppearance.ISLAND) islandFontSize else fontSize
+    fun normalized() = copy(islandY = islandY.finite(DESKTOP_ISLAND_HEIGHT).coerceIn(0f, 1f), islandFontSize = islandFontSize.finite(DESKTOP_ISLAND_FONT_SIZE).coerceIn(12f, 24f), fontSize = fontSize.finite(DESKTOP_DEFAULT_FONT_SIZE).coerceIn(18f, 38f),
         opacity = opacity.finite(.85f).coerceIn(.35f, .95f), offsetMs = offsetMs.coerceIn(-60000, 60000),
         x = x.finite(.5f).coerceIn(0f, 1f), y = y.finite(.2f).coerceIn(0f, 1f),
         glowStrength = glowStrength.finite(1f).coerceIn(0f, 2f), glowSpread = glowSpread.finite(1f).coerceIn(.5f, 2f),
@@ -39,7 +42,7 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
     }
     private fun encode(s: DesktopLyricsSettings) = listOf(s.enabled, s.locked, s.effect.name, s.appearance.name,
         s.translation, s.fontSize, s.opacity, s.offsetMs, s.x, s.y, s.snapEdges,
-        s.glowEnabled, s.glowStrength, s.glowSpread, s.textColor, s.glowColor).joinToString("|")
+        s.glowEnabled, s.glowStrength, s.glowSpread, s.textColor, s.glowColor, s.islandFontSize, s.islandY).joinToString("|")
     private fun decode(raw: String?): DesktopLyricsSettings {
         val fields = raw?.split('|').orEmpty()
         return DesktopLyricsSettings(fields.getOrNull(0)?.toBooleanStrictOrNull() ?: false,
@@ -52,7 +55,9 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
             fields.getOrNull(10)?.toBooleanStrictOrNull() ?: false,
             fields.getOrNull(11)?.toBooleanStrictOrNull() ?: true,
             fields.getOrNull(12)?.toFloatOrNull() ?: 1f, fields.getOrNull(13)?.toFloatOrNull() ?: 1f,
-            fields.getOrNull(14)?.toLongOrNull() ?: 0xFFFFFFFFL, fields.getOrNull(15)?.toLongOrNull() ?: DESKTOP_DEFAULT_GLOW_COLOR).normalized()
+            fields.getOrNull(14)?.toLongOrNull() ?: 0xFFFFFFFFL, fields.getOrNull(15)?.toLongOrNull() ?: DESKTOP_DEFAULT_GLOW_COLOR,
+            fields.getOrNull(16)?.toFloatOrNull() ?: DESKTOP_ISLAND_FONT_SIZE,
+            fields.getOrNull(17)?.toFloatOrNull() ?: DESKTOP_ISLAND_HEIGHT).normalized()
     }
 }
 
@@ -70,3 +75,14 @@ internal fun desktopPlacement(area: DesktopSafeArea, width: Int, height: Int, x:
 }
 internal fun desktopWindowAlpha(opacity: Float, locked: Boolean, maximum: Float): Float =
     opacity.finite(.85f).coerceIn(.35f, .95f).let { if (locked) minOf(it, (maximum - .01f).coerceIn(0f, 1f)) else it }
+
+/** Physical screen center, symmetric cutout clearance, and a height-independent top anchor. */
+internal fun desktopIslandPlacement(area: DesktopSafeArea, width: Int, height: Int, y: Float,
+    screenCenter: Int): DesktopPlacement {
+    val center = screenCenter.coerceIn(area.left, area.right)
+    val symmetricWidth = (minOf(center - area.left, area.right - center) * 2).coerceAtLeast(1)
+    val w = width.coerceIn(1, symmetricWidth)
+    val h = height.coerceIn(1, area.height)
+    return DesktopPlacement((center - w / 2).coerceIn(area.left, area.right - w),
+        (area.top + area.height * y.finite(DESKTOP_ISLAND_HEIGHT)).toInt().coerceIn(area.top, area.bottom - h), w, h)
+}

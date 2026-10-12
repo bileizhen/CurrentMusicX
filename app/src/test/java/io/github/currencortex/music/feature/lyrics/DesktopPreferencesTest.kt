@@ -59,9 +59,11 @@ class DesktopPreferencesTest {
             val original = music.snapshot()
             val desktop = DesktopLyricsPreferences(store, scope)
             desktop.ready.await()
-            desktop.edit { it.copy(fontSize = 22f, offsetMs = -350, effect = DesktopEffect.STAGE, translation = false, x = .8f,
+            desktop.edit { it.copy(appearance = DesktopAppearance.ISLAND, islandFontSize = 16f, islandY = .15f, fontSize = 22f, offsetMs = -350, effect = DesktopEffect.STAGE, translation = false, x = .8f,
                 textColor = 0xFF80DEFFL, glowColor = 0xFFFFAACCL, glowEnabled = false, glowStrength = 1.7f, glowSpread = 1.4f) }
             val expected = desktop.state.first { it.fontSize == 22f }
+            assertEquals(16f, expected.displayFontSize, .001f)
+            assertEquals(22f, expected.copy(appearance = DesktopAppearance.CAPTION).displayFontSize, .001f)
             assertEquals(original, music.snapshot())
             val secondConsumer = DesktopLyricsPreferences(store, scope)
             secondConsumer.ready.await()

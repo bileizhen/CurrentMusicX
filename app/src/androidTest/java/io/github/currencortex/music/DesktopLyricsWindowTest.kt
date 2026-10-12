@@ -30,6 +30,9 @@ class DesktopLyricsWindowTest {
         android.util.Log.i("DesktopEvidence", "window test started")
         assumeTrue("Grant the isolated app overlay permission in system settings first", Settings.canDrawOverlays(context))
         val container = AppContainer(context, "desktop-window-${UUID.randomUUID()}", useNativeNetease = false)
+        val autoRotation = Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION, 1)
+        val originalRotation = context.getSystemService(android.hardware.display.DisplayManager::class.java)
+            .getDisplay(android.view.Display.DEFAULT_DISPLAY).rotation
         var host: DesktopLyricsHost? = null
         try {
             withTimeout(15000) { container.ready.await(); container.desktopLyrics.ready.await() }
@@ -38,7 +41,7 @@ class DesktopLyricsWindowTest {
             val player = MutableStateFlow(PlayerState(song = song, positionMs = 1500, anchorRealtimeMs = SystemClock.elapsedRealtime()))
             val lyrics = MutableStateFlow(PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 4000, "共享歌词数据"))), songId = 100))
             withContext(Dispatchers.Main) { host = DesktopLyricsHost(context, lyrics, player, container.desktopLyrics, container.desktopLyricsStatus, container.desktopLyricsSettingsVisible) }
-            container.desktopLyrics.edit { it.copy(enabled = true) }
+            container.desktopLyrics.edit { it.copy(enabled = true, appearance = DesktopAppearance.ISLAND) }
             android.util.Log.i("DesktopEvidence", "enable requested")
             try { withTimeout(10000) { while (!container.desktopLyricsStatus.value.visible) delay(50) } }
             catch (e: Exception) { throw AssertionError("Window ${container.desktopLyricsStatus.value}; prefs=${container.desktopLyrics.state.value}; permission=${Settings.canDrawOverlays(context)}", e) }
@@ -48,7 +51,89 @@ class DesktopLyricsWindowTest {
             assertTrue(container.desktopLyricsStatus.value.attached)
             assertTrue(container.desktopLyricsStatus.value.visible)
             assertTrue(container.desktopLyricsStatus.value.width > 1)
+            withTimeout(10000) { while (container.desktopLyricsStatus.value.height <= 0) delay(50) }
+            val editHeight = container.desktopLyricsStatus.value.height
+            val density = context.resources.displayMetrics.density
+            assertTrue("Island width remains bounded", container.desktopLyricsStatus.value.width >= 160 * density)
+            withTimeout(10000) { while (container.desktopLyricsStatus.value.height >= editHeight - 30 * density) delay(50) }
+            instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                java.io.FileOutputStream(java.io.File(context.getExternalFilesDir(null), "desktop-island-portrait.png")).use {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+                bitmap.recycle()
+            }
+            val shortWidth = container.desktopLyricsStatus.value.width
+            lyrics.value = PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 4000, "共享歌词数据".repeat(8)))), songId = 100)
+            withTimeout(10000) { while (container.desktopLyricsStatus.value.width <= shortWidth) delay(50) }
+            delay(350) // Wait for the finite width transition before saving the rotation baseline.
+            val portraitWidth = container.desktopLyricsStatus.value.width
+            // The vendor launcher fixes its orientation. Rotate over the app instead.
+            context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            delay(400)
+            assertTrue(instrumentation.uiAutomation.setRotation(android.app.UiAutomation.ROTATION_FREEZE_90))
+            withTimeout(10000) { while (container.desktopLyricsStatus.value.width <= portraitWidth) delay(50) }
+            delay(600)
+            val wide = container.desktopLyricsStatus.value
+            assertTrue(wide.width <= (640 * context.resources.displayMetrics.density).toInt())
+            val screenCenter = context.getSystemService(android.view.WindowManager::class.java).maximumWindowMetrics.bounds.centerX()
+            assertTrue("Landscape island uses physical screen center despite a side cutout", kotlin.math.abs(wide.x + wide.width / 2 - screenCenter) <= 1)
+            instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                java.io.FileOutputStream(java.io.File(context.getExternalFilesDir(null), "desktop-island-landscape.png")).use {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+                bitmap.recycle()
+            }
+            assertTrue(instrumentation.uiAutomation.setRotation(android.app.UiAutomation.ROTATION_FREEZE_0))
+            withTimeout(10000) { while (container.desktopLyricsStatus.value.width > portraitWidth) delay(50) }
+            android.util.Log.i("DesktopEvidence", "portrait restored: ${container.desktopLyricsStatus.value}")
+            val centeredX = container.desktopLyricsStatus.value.x
+            container.desktopLyrics.edit { it.copy(x = .01f, y = .9f, islandY = .35f) }
+            withTimeout(10000) { while (container.desktopLyricsStatus.value.y <= 200 * density) delay(50) }
+            assertEquals("Island ignores normal horizontal placement", centeredX, container.desktopLyricsStatus.value.x)
+            android.util.Log.i("DesktopEvidence", "height updated: ${container.desktopLyricsStatus.value}")
+            val wideWidth = container.desktopLyricsStatus.value.width
+            lyrics.value = PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 4000, "音乐"))), songId = 100)
+            withTimeout(10000) { while (container.desktopLyricsStatus.value.width >= wideWidth) delay(50) }
+            delay(350)
+            val beforeSwitch = container.desktopLyricsStatus.value
+            shell("dumpsys gfxinfo ${context.packageName} reset")
+            player.value = player.value.copy(song = Song(101, "新歌曲"))
+            delay(700) // Inspect the heading after its velocity-preserving resize settles.
+            assertTrue("Heading-only width follows metadata rather than the previous lyric", container.desktopLyricsStatus.value.width >= 48 * density && container.desktopLyricsStatus.value.width < beforeSwitch.width)
+            assertEquals("Loading does not move the top anchor", beforeSwitch.y, container.desktopLyricsStatus.value.y)
+            assertTrue("Loading follows compact metadata height", container.desktopLyricsStatus.value.height < 45 * density)
+            lyrics.value = PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 8000, "音乐与你同在", translation = "The music stays with you"))), songId = 101)
+            repeat(50) {
+                delay(50)
+                val frame = container.desktopLyricsStatus.value
+                assertEquals("No vertical bounce while new lyrics resize", beforeSwitch.y, frame.y)
+                assertTrue("Adaptive shell remains bounded", frame.height in (30 * density).toInt()..(70 * density).toInt())
+                assertTrue("Every width transition stays centered", kotlin.math.abs(frame.x + frame.width / 2 - context.getSystemService(android.view.WindowManager::class.java).maximumWindowMetrics.bounds.centerX()) <= 2)
+            }
+            assertTrue("Translation grows the shell only when visible", container.desktopLyricsStatus.value.height > beforeSwitch.height + 5 * density)
+            container.desktopLyrics.edit { it.copy(islandY = DESKTOP_ISLAND_HEIGHT) }
+            shell("input keyevent 3")
+            delay(350)
+            java.io.File(context.getExternalFilesDir(null), "desktop-island-switch-framestats.txt")
+                .writeText(shell("dumpsys gfxinfo ${context.packageName} framestats"))
+            instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                java.io.FileOutputStream(java.io.File(context.getExternalFilesDir(null), "desktop-island-centered-bilingual.png")).use {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+                bitmap.recycle()
+            }
+            android.util.Log.i("DesktopEvidence", "short cue: ${container.desktopLyricsStatus.value}")
             val saved = container.desktopLyrics.state.value
+            val heldPlayer = player.value; val heldLyrics = lyrics.value
+            player.value = player.value.copy(song = null)
+            delay(900)
+            assertTrue("No-song FPS island remains visible over Home", container.desktopLyricsStatus.value.visible)
+            instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                java.io.FileOutputStream(java.io.File(context.getExternalFilesDir(null), "desktop-island-fps.png")).use {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }; bitmap.recycle()
+            }
+            player.value = heldPlayer; lyrics.value = heldLyrics
             container.desktopLyricsSettingsVisible.value = true
             withTimeout(10000) { while (container.desktopLyricsStatus.value.visible) delay(50) }
             assertTrue(container.desktopLyricsStatus.value.attached)
@@ -84,6 +169,7 @@ class DesktopLyricsWindowTest {
 
         } finally {
             withContext(Dispatchers.Main) { host?.close() }; container.close()
+            instrumentation.uiAutomation.setRotation(if (autoRotation == 1) android.app.UiAutomation.ROTATION_UNFREEZE else originalRotation)
 
         }
     }
