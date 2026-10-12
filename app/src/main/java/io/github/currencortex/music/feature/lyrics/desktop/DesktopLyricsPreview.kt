@@ -67,12 +67,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(if (actual == null) "CurrentMusic · 样式预览" else playback.song?.name.orEmpty(),
                         fontSize = 11.sp, color = Color.White.copy(alpha = .55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    Box(Modifier.heightIn(max = 108.dp).clipToBounds()) {
+                    Box(Modifier.heightIn(max = 180.dp).clipToBounds()) {
                         KaraokeText(line, if (actual == null) still else time, animateWords = line.words.isNotEmpty(),
                             fontSize = options.fontSize, fontWeight = FontWeight.Medium,
                             forceLineAnimation = false, glow = motion && options.glowEnabled && options.glowStrength > 0f,
                             wordLift = motion && options.effect == DesktopEffect.STAGE, accurateWordLift = true,
-                            glowOpacity = glow, outline = !capsule, color = textColor,
+                            glowOpacity = glow, color = textColor, effectPadding = 20.dp,
                             glowColor = Color(options.glowColor.toInt()), glowRadiusScale = options.glowSpread,
                             untimedLineGlow = options.glowEnabled && options.glowStrength > 0f)
                     }

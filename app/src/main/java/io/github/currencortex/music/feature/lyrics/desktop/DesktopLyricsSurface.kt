@@ -89,7 +89,7 @@ import kotlinx.coroutines.flow.StateFlow
                 }
             }
             Box(Modifier.fillMaxWidth().heightIn(max = maxTextHeight().dp).clipToBounds()) {
-                KaraokeText(line, effective, animateWords = line.words.isNotEmpty(),
+                KaraokeText(line, effective, animateWords = line.words.isNotEmpty(), effectPadding = 20.dp,
                     modifier = Modifier.fillMaxWidth().verticalScroll(scroll, enabled = !options.locked).padding(vertical = 8.dp)
                         .graphicsLayer {
                             alpha = .65f + .35f * entrance.value
@@ -100,11 +100,11 @@ import kotlinx.coroutines.flow.StateFlow
                     accurateWordLift = true, glowOpacity = glowOpacity, baseOpacity = baseOpacity,
                     color = textColor, glowColor = Color(options.glowColor.toInt()), glowRadiusScale = options.glowSpread,
                     untimedLineGlow = options.glowEnabled && options.glowStrength > 0f,
-                    outline = !capsule, onLayout = { if (layout != it) layout = it })
+                    onLayout = { if (layout != it) layout = it })
             }
             if (options.translation && !line.translation.isNullOrBlank()) BasicText(line.translation,
                 style = TextStyle(fontSize = (options.fontSize * .58f).sp, color = textColor.copy(.75f),
-                    shadow = Shadow(Color.Black, blurRadius = 3f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    shadow = if (capsule) Shadow(Color.Black, blurRadius = 3f) else null), maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (!options.locked && scroll.maxValue > 0 && line.words.isEmpty()) BasicText("长句可上下滑动",
                 style = TextStyle(fontSize = 10.sp, color = Color.White.copy(.5f)))
         } else BasicText(when {
@@ -113,7 +113,7 @@ import kotlinx.coroutines.flow.StateFlow
             content.document.lines.isEmpty() -> "暂无歌词 · 聆听音乐"
             else -> interlude ?: "♪"
         }, style = TextStyle(fontSize = options.fontSize.sp, color = textColor,
-            shadow = Shadow(Color.Black.copy(.8f), blurRadius = 4f)))
+            shadow = if (capsule) Shadow(Color.Black.copy(.8f), blurRadius = 4f) else null))
     }
 }
 @Composable private fun DesktopAction(label: String, click: () -> Unit) {
