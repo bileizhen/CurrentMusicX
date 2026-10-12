@@ -24,7 +24,9 @@ import org.junit.Assert.*
 import java.io.File
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Isolated package/container. Only the local fixture receives mutations. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -33,7 +35,7 @@ class NavidromeTest {
     private val context get() = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
     private val testContext get() = InstrumentationRegistry.getInstrumentation().context
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private fun fixtureServer(): MockWebServer {
+    private fun fixtureServer(albumReads: AtomicInteger = AtomicInteger(), createAllowed: AtomicBoolean = AtomicBoolean(true), prepend: AtomicBoolean = AtomicBoolean(false), removedIndex: AtomicInteger = AtomicInteger(-1), refreshRelease: CountDownLatch? = null): MockWebServer {
         val server = MockWebServer()
         val starred = AtomicBoolean(false)
         val audio = testContext.assets.open("download/fixture.flac").use { it.readBytes() }
@@ -56,19 +58,25 @@ class NavidromeTest {
                 val data = when (path) {
                     "ping.view" -> "\"serverVersion\":\"fixture\""
                     "getUser.view" -> "\"user\":{\"downloadRole\":true}"
-                    "getAlbumList2.view" -> """"albumList2":{"album":[{"id":"album-uuid","name":"曲库专辑","artist":"曲库艺术家"}]}"""
+                    "getAlbumList2.view" -> {
+                        val refreshing = albumReads.incrementAndGet() > 1 && refreshRelease != null
+                        if (refreshing) refreshRelease?.await(15, TimeUnit.SECONDS)
+                        "\"albumList2\":{\"album\":[${if (refreshing) """{"id":"new-album","name":"新增专辑"},""" else ""}{\"id\":\"album-uuid\",\"name\":\"曲库专辑\",\"artist\":\"曲库艺术家\"}]}"
+                    }
                     "getAlbum.view" -> "\"album\":{\"song\":[${song()}]}"
                     "getArtists.view" -> """"artists":{"index":[{"artist":[{"id":"artist-uuid","name":"曲库艺术家"}]}]}"""
                     "getArtist.view" -> """"artist":{"album":[{"id":"album-uuid","name":"曲库专辑"}]}"""
                     "getPlaylists.view" -> """"playlists":{"playlist":[{"id":"list-uuid","name":"自己的歌单","owner":"fixture"}]}"""
-                    "getPlaylist.view" -> "\"playlist\":{\"entry\":[${song()}]}"
+                    "getPlaylist.view" -> "\"playlist\":{\"entry\":[${if (prepend.get()) song().replace("track-uuid", "another-track") + "," else ""}${song()}]}"
                     "getSong.view" -> "\"song\":${song()}"
                     "getStarred2.view" -> "\"starred2\":{\"song\":[${song()}]}"
                     "search3.view" -> "\"searchResult3\":{\"song\":[${song()}]}"
                     "getLyricsBySongId.view" -> """"lyricsList":{"structuredLyrics":[{"synced":true,"line":[{"start":0,"value":"内嵌同步歌词"}]}]}"""
                     "star.view" -> { starred.set(true); "" }
                     "unstar.view" -> { starred.set(false); "" }
-                    "updatePlaylist.view", "createPlaylist.view", "deletePlaylist.view" -> ""
+                    "createPlaylist.view" -> if (createAllowed.get()) "" else return MockResponse().setBody("""{"subsonic-response":{"status":"failed","error":{"code":50,"message":"fixture denied"}}}""")
+                    "updatePlaylist.view" -> { request.requestUrl!!.queryParameter("songIndexToRemove")?.toIntOrNull()?.let(removedIndex::set); "" }
+                    "deletePlaylist.view" -> ""
                     else -> return MockResponse().setResponseCode(404)
                 }
                 return MockResponse().setBody("""{"subsonic-response":{"status":"ok"${if (data.isEmpty()) "" else ",$data"}}}""")
@@ -141,16 +149,117 @@ class NavidromeTest {
             assertEquals("list-uuid", library.availablePlaylists.value.single().remoteId)
             compose.runOnUiThread { library.addToPlaylist(library.availablePlaylists.value.single()) }
             compose.waitUntil(10000) { library.selectedSong.value == null && !library.busy.value }
-            compose.onNodeWithTag("navidrome_back").performScrollTo().performClick()
-            compose.onNodeWithTag("navidrome_tab_artists").performScrollTo().performClick()
+            compose.onNodeWithTag("navidrome_back").performClick()
+            compose.onNodeWithTag("navidrome_tab_artists").performClick()
             compose.waitUntil(10000) { vm.state.value.entries.any { it.id == "artist-uuid" } }
             compose.onNodeWithTag("navidrome_entry_artist-uuid").performScrollTo().performClick()
             compose.waitUntil(10000) { vm.state.value.entries.any { it.id == "album-uuid" } }
-            compose.onNodeWithTag("navidrome_query").performScrollTo().performTextInput("自建")
+            compose.onNodeWithTag("navidrome_query").performTextInput("自建")
             compose.onNodeWithTag("navidrome_search").performClick()
             compose.waitUntil(10000) { vm.state.value.page.kind == "search" && vm.state.value.songs.isNotEmpty() }
             compose.onNodeWithText("自建曲库歌曲").assertExists()
             assertNull(library.message.value?.takeIf { it.contains("失败") })
+        } finally { container.close(); server.shutdown() }
+    }
+    @Test fun cachedNavigationImeSearchAndFailedPlaylistDialogCanRetry(): Unit = runBlocking {
+        val reads = AtomicInteger(); val allowed = AtomicBoolean(false)
+        val server = fixtureServer(albumReads = reads, createAllowed = allowed)
+        val container = AppContainer(context, "nd-interactions-${UUID.randomUUID()}", useNativeNetease = false)
+        try {
+            container.ready.await(); container.sessionRestored.await()
+            container.navidrome.connect(server.url("/music/").toString(), "fixture", "fixture-password")
+            val vm = NavidromeViewModel(container); val library = LibraryViewModel(container)
+            compose.setContent { LeiTheme(AppearanceSettings()) {
+                top.yukonga.miuix.kmp.basic.Scaffold { NavidromeScreen(vm, library, {}, { _, _ -> }) }
+            } }
+            compose.waitUntil(10000) { vm.state.value.loaded && !vm.state.value.loading }
+            compose.onNodeWithTag("navidrome_entry_album-uuid").performClick()
+            compose.waitUntil(10000) { vm.state.value.songs.isNotEmpty() }
+            compose.onNodeWithTag("navidrome_filter").performClick()
+            compose.onNodeWithTag("navidrome_filter_input").performTextInput("没有这首")
+            compose.onNodeWithText("没有匹配的歌曲").assertIsDisplayed()
+            compose.onNodeWithText("清除搜索").performClick()
+            compose.onNodeWithText("自建曲库歌曲").assertExists()
+            // First back closes local filtering; second restores cached album grid.
+            compose.onNodeWithTag("navidrome_back").performClick()
+            compose.onNodeWithTag("navidrome_back").performClick()
+            compose.waitUntil(10000) { vm.state.value.page.kind == "albums" }
+            assertEquals(1, reads.get())
+            compose.onNodeWithTag("navidrome_tab_artists").performClick()
+            compose.waitUntil(10000) { vm.state.value.loaded && vm.state.value.page.kind == "artists" }
+            compose.onNodeWithTag("navidrome_tab_albums").performClick()
+            compose.onNodeWithTag("navidrome_entry_album-uuid").assertExists()
+            assertEquals(1, reads.get())
+            compose.onNodeWithTag("navidrome_query").performTextInput("自建")
+            compose.onNodeWithTag("navidrome_query").performImeAction()
+            compose.waitUntil(10000) { vm.state.value.page.kind == "search" && !vm.state.value.loading }
+            compose.onNodeWithTag("navidrome_query").performTextReplacement("曲库")
+            compose.onNodeWithTag("navidrome_query").performImeAction()
+            compose.waitUntil(10000) { vm.state.value.page.id == "曲库" && !vm.state.value.loading }
+            compose.onNodeWithTag("navidrome_back").performClick()
+            compose.waitUntil(10000) { vm.state.value.page.kind == "albums" }
+            assertEquals(1, reads.get())
+            compose.onNodeWithTag("navidrome_tab_playlists").performClick()
+            compose.waitUntil(10000) { vm.state.value.loaded && vm.state.value.page.kind == "playlists" }
+            compose.onNodeWithText("新建歌单").performClick()
+            compose.onNodeWithTag("navidrome_playlist_name").performTextInput("保留我的输入")
+            compose.onNodeWithTag("navidrome_confirm").performClick()
+            compose.waitUntil(10000) { !vm.busy.value && vm.actionError.value != null }
+            compose.onNodeWithTag("navidrome_playlist_name").assertTextContains("保留我的输入")
+            allowed.set(true)
+            compose.onNodeWithTag("navidrome_confirm").performClick()
+            compose.waitUntil(10000) { !vm.busy.value && vm.actionError.value == null }
+            compose.onNodeWithTag("navidrome_playlist_name").assertDoesNotExist()
+            compose.onNodeWithTag("navidrome_account").performClick()
+            compose.onNodeWithTag("navidrome_password").assertDoesNotExist()
+            compose.onNodeWithTag("navidrome_edit_account").performScrollTo().performClick()
+            compose.onNodeWithTag("navidrome_password").assertExists()
+            compose.onNodeWithTag("navidrome_server").performScrollTo().performTextReplacement("https://invalid.example/")
+            compose.onNodeWithTag("navidrome_edit_account").performScrollTo().performClick()
+            compose.onNodeWithTag("navidrome_edit_account").performClick()
+            compose.onNodeWithTag("navidrome_server").assertTextContains(server.url("/music/").toString())
+        } finally { container.close(); server.shutdown() }
+    }
+    @Test fun pullRefreshRetainsVisibleAlbumsUntilChangedEntriesArrive(): Unit = runBlocking {
+        val release = CountDownLatch(1)
+        val reads = AtomicInteger()
+        val server = fixtureServer(albumReads = reads, refreshRelease = release)
+        val container = AppContainer(context, "nd-refresh-${UUID.randomUUID()}", useNativeNetease = false)
+        try {
+            container.ready.await(); container.sessionRestored.await()
+            container.navidrome.connect(server.url("/music/").toString(), "fixture", "fixture-password")
+            val vm = NavidromeViewModel(container); val library = LibraryViewModel(container)
+            compose.setContent { LeiTheme(AppearanceSettings()) {
+                top.yukonga.miuix.kmp.basic.Scaffold { NavidromeScreen(vm, library, {}, { _, _ -> }) }
+            } }
+            compose.waitUntil(10000) { vm.state.value.loaded && !vm.state.value.loading }
+            val existing = vm.state.value.entries.single()
+            compose.onNodeWithTag("navidrome_grid").performTouchInput { swipeDown() }
+            compose.waitUntil(10000) { reads.get() == 2 && vm.state.value.loading }
+            compose.onNodeWithTag("navidrome_entry_album-uuid").assertIsDisplayed()
+            compose.onNodeWithTag("music_loading").assertDoesNotExist()
+            assertSame(existing, vm.state.value.entries.single())
+            release.countDown()
+            compose.waitUntil(10000) { !vm.state.value.loading && vm.state.value.entries.size == 2 }
+            assertSame(existing, vm.state.value.entries[1])
+            compose.onNodeWithTag("navidrome_entry_new-album").assertExists()
+        } finally { release.countDown(); container.close(); server.shutdown() }
+    }
+    @Test fun removingCapturedSongRechecksReorderedServerPlaylist(): Unit = runBlocking {
+        val prepend = AtomicBoolean(false); val removed = AtomicInteger(-1)
+        val server = fixtureServer(prepend = prepend, removedIndex = removed)
+        val container = AppContainer(context, "nd-remove-${UUID.randomUUID()}", useNativeNetease = false)
+        try {
+            container.ready.await(); container.navidrome.connect(server.url("/music/").toString(), "fixture", "fixture-password")
+            val vm = NavidromeViewModel(container)
+            withContext(Dispatchers.Main) { vm.open("playlist", io.github.currencortex.music.data.navidrome.NavidromeEntry("list-uuid", "自己的歌单", owned = true)) }
+            withTimeout(10000) { while (!vm.state.value.loaded || vm.state.value.page.kind != "playlist") delay(50) }
+            val target = vm.removal(vm.state.value.songs.single(), 0)
+            prepend.set(true)
+            val done = CompletableDeferred<Boolean>()
+            withContext(Dispatchers.Main) { vm.remove(target) { done.complete(it) } }
+            assertTrue(withTimeout(10000) { done.await() })
+            assertEquals(1, removed.get())
         } finally { container.close(); server.shutdown() }
     }
     @Test fun actualDecoderPrefetchOfflineReplayAndLogoutGuardUsePrivateStream(): Unit = runBlocking {

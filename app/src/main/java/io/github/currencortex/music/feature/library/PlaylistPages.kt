@@ -341,11 +341,11 @@ internal fun playlistDurationLabel(songs: List<Song>): String {
     return "$count · " + if (minutes >= 60) "${minutes / 60}小时${minutes % 60}分钟" else if (minutes > 0) "${minutes}分钟" else "不足1分钟"
 }
 
-@Composable private fun PlaylistTrack(song: Song, selected: Boolean, liked: Boolean, play: () -> Unit,
+@Composable internal fun PlaylistTrack(song: Song, selected: Boolean, liked: Boolean, play: () -> Unit,
     next: () -> Unit, enqueue: () -> Unit, extra: @Composable () -> Unit) {
     val host = LocalSongMenu.current
     var menu by remember(song.id) { mutableStateOf<SongMenu?>(null) }
-    val room = LocalRoomSongRequest.current
+    val room = LocalRoomSongRequest.current.takeUnless { song.navidrome != null }
     val pending = room?.pending?.invoke(song.id) == true
     val primary = { if (room != null) room.request(song) else play() }
     Row(Modifier.fillMaxWidth().testTag("playlist_song_${song.id}").clickable(enabled = !pending, role = Role.Button, onClick = primary)
