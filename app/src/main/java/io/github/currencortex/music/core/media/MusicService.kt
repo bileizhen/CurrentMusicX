@@ -34,6 +34,7 @@ class MusicService : MediaSessionService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val container get() = (application as CurrentMusicApplication).container
     private lateinit var player: ExoPlayer
+    private var desktopLyrics: io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost? = null
     private var session: MediaSession? = null
     private var loading: Job? = null
     private var pendingPosition = 0L
@@ -66,6 +67,8 @@ class MusicService : MediaSessionService() {
     override fun onBind(intent: Intent?): IBinder? = if (intent?.action == VIDEO_SURFACE) VideoBinder() else super.onBind(intent)
     override fun onCreate() {
         super.onCreate()
+        desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost(this, container.playbackLyrics.state,
+            container.playerController.state, container.desktopLyrics, container.desktopLyricsStatus)
         val renderers = DockRenderersFactory(this, container.dockAudioLevel)
         player = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory))
@@ -336,6 +339,7 @@ class MusicService : MediaSessionService() {
         if (container.playerController.state.value.mode == PlayerMode.LOCAL && !player.playWhenReady) { container.playerController.disconnect(); stopSelf() }
     }
     override fun onDestroy() {
+        desktopLyrics?.close(); desktopLyrics = null
         flushListening(); reports.close(); videoView?.player = null; videoView = null
         loading?.cancel()
         scope.cancel()
