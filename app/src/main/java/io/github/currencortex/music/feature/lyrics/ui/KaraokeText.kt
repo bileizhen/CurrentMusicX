@@ -36,7 +36,8 @@ import androidx.compose.ui.text.style.TextAlign
     color: Color = Color.White, lineHeightRatio: Float = 1.2f, exposeText: Boolean = true,
     glow: Boolean = false, wordLift: Boolean = false, glowOpacity: State<Float>? = null,
     baseOpacity: State<Float>? = null, accurateWordLift: Boolean = false,
-    outline: Boolean = false, onLayout: ((TextLayoutResult) -> Unit)? = null) {
+    outline: Boolean = false, onLayout: ((TextLayoutResult) -> Unit)? = null,
+    glowColor: Color = color, glowRadiusScale: Float = 1f) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -104,8 +105,10 @@ import androidx.compose.ui.text.style.TextAlign
         val wordGlows = remember(words) { FloatArray(words.size) }
         val glowTimed = glow && safeRaster && line.words.isNotEmpty() && glowWeights.any { it > 0f }
         val liftHeight = 2f * density.density
-        val raster = remember(layout, density, direction) { LyricsTextRaster(layout, density, direction) }
+        val radius = glowRadiusScale.takeIf(Float::isFinite)?.coerceIn(.5f, 2f) ?: 1f
+        val raster = remember(layout, density, direction, radius) { LyricsTextRaster(layout, density, direction, radius) }
         val tint = remember(color) { ColorFilter.tint(color) }
+        val haloTint = remember(glowColor) { ColorFilter.tint(glowColor) }
         // Prepare once when enabled, never run a blur filter or text rasterization per frame.
         if (liftTimed) raster.ink
         if (glowTimed) glyphs.filter { glowWeights[it.wordIndex] > 0f }.forEach { raster.glyphHalo(it.box) }
@@ -130,7 +133,7 @@ import androidx.compose.ui.text.style.TextAlign
                     getTextLayoutResult { it.add(layout); true }
                 }
             }) {
-            if (outline) drawText(layout, color = Color.Black.copy(alpha = .85f), drawStyle = Stroke(width = 1.6f * density.density))
+            if (outline) drawText(layout, color = (if (color.luminance() < .35f) Color.White else Color.Black).copy(alpha = .85f), drawStyle = Stroke(width = 1.6f * density.density))
             if (phase == 2 && liftTimed) {
                 // Draw the completed paragraph in two cached masks, without reading the
                 // frame clock or returning sung glyphs to their original baseline.
@@ -167,7 +170,7 @@ import androidx.compose.ui.text.style.TextAlign
                         // Highlight ink still follows exact timing below. The cached
                         // OUTER halo fades in as one shape, never through a hard clip
                         // at the moving karaoke boundary or an arbitrary blur margin.
-                        drawImage(halo.first, topLeft = halo.second, alpha = .75f * intensity * reveal, colorFilter = tint)
+                        drawImage(halo.first, topLeft = halo.second, alpha = (.75f * intensity * reveal).coerceIn(0f, 1f), colorFilter = haloTint)
                     }
                 }
             }
