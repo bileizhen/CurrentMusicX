@@ -130,7 +130,7 @@ private const val SETTINGS_TAB = 3
 private fun LegalDocument.route() = 3 + ordinal
 
 @Composable
-fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, launchWindowReady: Boolean = true) {
+fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, launchWindowReady: Boolean = true, openDesktopRequest: Int = 0) {
     var launchFinished by rememberSaveable { mutableStateOf(!animateLaunch) }
     val launchBrand = remember { LaunchBrandState() }
     val avatarFlight = remember { AvatarFlightState() }
@@ -274,6 +274,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         fun navigateLibrary(route: String) {
             if (backStack.last() != route) { playerSheetMotion = PlayerSheetMotion.NONE; backStack = backStack + route }
         }
+        LaunchedEffect(openDesktopRequest) { if (openDesktopRequest > 0) navigateLibrary("desktop-lyrics") }
         var showLogs by rememberSaveable { mutableStateOf(false) }
         var showScale by rememberSaveable { mutableStateOf(false) }
         var memberFocus by remember { mutableStateOf<MemberFocus?>(null) }
@@ -434,7 +435,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates) }
                     }
                 }
-                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onEqualizer = { navigateTo(EQUALIZER) }, onNavidrome = { navigateLibrary("navidrome") }) { navigateTo(STORAGE) } }
+                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onEqualizer = { navigateTo(EQUALIZER) }, onNavidrome = { navigateLibrary("navidrome") }, onDesktopLyrics = { navigateLibrary("desktop-lyrics") }) { navigateTo(STORAGE) } }
+                entry("desktop-lyrics") { io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsSettingsScreen(container) }
                 entry("navidrome") {
                     io.github.currencortex.music.feature.navidrome.NavidromeScreen(navidromeVm, libraryVm, ::navigateLibrary,
                         { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })

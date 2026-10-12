@@ -7,8 +7,14 @@ import androidx.activity.enableEdgeToEdge
 import io.github.currencortex.music.ui.CurrentMusicApp
 
 class MainActivity : ComponentActivity() {
+    private val desktopRequest = androidx.compose.runtime.mutableIntStateOf(0)
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        if (intent.getBooleanExtra(io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost.OPEN, false)) desktopRequest.intValue++
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent.getBooleanExtra(io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost.OPEN, false)) desktopRequest.intValue++
         val launchWindowReady = androidx.compose.runtime.mutableStateOf(android.os.Build.VERSION.SDK_INT < 31)
         if (android.os.Build.VERSION.SDK_INT >= 31) splashScreen.setOnExitAnimationListener {
             it.remove()
@@ -18,6 +24,6 @@ class MainActivity : ComponentActivity() {
         if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
         val app = application as CurrentMusicApplication
         val animateLaunch = app.consumeLaunchAnimation() && savedInstanceState == null
-        setContent { CurrentMusicApp(app.container, animateLaunch = animateLaunch, launchWindowReady = launchWindowReady.value) }
+        setContent { CurrentMusicApp(app.container, animateLaunch = animateLaunch, launchWindowReady = launchWindowReady.value, openDesktopRequest = desktopRequest.intValue) }
     }
 }
