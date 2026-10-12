@@ -37,9 +37,9 @@ internal data class DesktopIslandSize(val width: Float, val metadata: Dp)
             softWrap = false, maxLines = 1).size.height.toDp().value }
         val subtitleHeight = if (compact || translation.isNullOrBlank()) 0f else with(density) {
             measurer.measure(AnnotatedString(islandSingleLine(translation)), TextStyle(fontSize = desktopSubtitleSize(true, font).sp,
-                lineHeight = (desktopSubtitleSize(true, font) * 1.2f).sp), softWrap = false, maxLines = 1).size.height.toDp().value + 2f
+                lineHeight = (desktopSubtitleSize(true, font) * 1.2f).sp), softWrap = false, maxLines = 1).size.height.toDp().value + desktopLineSpacing(true).value + desktopIslandTranslationBottomPadding.value
         }
-        val cover = if (compact) 22f else (maxOf(30f, primaryHeight + 20f + subtitleHeight) - 8f).coerceAtLeast(22f)
+        val cover = if (compact) 22f else (maxOf(30f, primaryHeight + desktopEffectPadding(true).value * 2 + subtitleHeight) - 8f).coerceAtLeast(22f)
         val preferred = (cover + 6f) + maxOf(lyricWidth, subtitleWidth) + if (compact) 39f else 47f
         DesktopIslandSize(preferred.coerceIn(if (editing) 240f else 48f, 640f), metadata.dp)
     }

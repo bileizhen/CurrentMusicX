@@ -27,7 +27,7 @@ import io.github.currencortex.music.feature.lyrics.ui.*
     val style = TextStyle(fontFamily = LyricsFontFamily, fontWeight = FontWeight.Medium,
         fontSynthesis = lyricsFontSynthesis(FontWeight.Medium), fontSize = font.sp,
         lineHeight = (font * 1.2f).sp, textAlign = TextAlign.Center)
-    Column(Modifier.fillMaxWidth().padding(bottom = if (options.translation && line.translation.isNotBlank()) padding else 0.dp),
+    Column(Modifier.fillMaxWidth().padding(bottom = if (options.translation && line.translation.isNotBlank()) desktopIslandTranslationBottomPadding else 0.dp),
         verticalArrangement = Arrangement.spacedBy(desktopLineSpacing(true))) {
         DesktopIslandMarquee(line.text, style, position, line.startTimeMs, motion, padding) {
             KaraokeText(line, position, animateWords = line.words.isNotEmpty(), modifier = Modifier.fillMaxWidth(),
