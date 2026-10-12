@@ -48,14 +48,15 @@ internal class LyricsScrollMotion {
 internal val LyricsPerspectiveAngle = SemanticsPropertyKey<Float>("LyricsPerspectiveAngle")
 
 @Composable fun rememberLyricsPosition(player: PlayerState): State<Long> {
-    val anchor = remember(player.song?.id, player.positionMs, player.playing, player.loading, player.durationMs, player.playbackSpeed) {
-        PlaybackAnchor(player.positionMs, SystemClock.elapsedRealtime(), player.playing && !player.loading, player.durationMs, player.playbackSpeed)
+    val anchor = remember(player.song?.id, player.positionMs, player.playing, player.loading, player.durationMs, player.playbackSpeed, player.anchorRealtimeMs, player.timelineRevision) {
+        PlaybackAnchor(player.positionMs, player.anchorRealtimeMs.takeIf { it > 0 } ?: SystemClock.elapsedRealtime(),
+            player.playing && !player.loading, player.durationMs, player.playbackSpeed, player.timelineRevision)
     }
     val position = remember { mutableLongStateOf(player.positionMs) }
     val clock = remember { LyricsPlaybackClock() }
     SideEffect {
         clock.update(player.song?.id, anchor)
-        if (!anchor.playing) position.longValue = clock.positionAt(SystemClock.elapsedRealtime())
+        position.longValue = clock.positionAt(SystemClock.elapsedRealtime())
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(player.song?.id, anchor.playing, lifecycle) {

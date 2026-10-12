@@ -3,6 +3,7 @@ package io.github.currencortex.music.core.media
 import android.content.ComponentName
 import android.content.Context
 import android.os.Bundle
+import android.os.SystemClock
 import androidx.media3.common.Player
 import androidx.media3.session.*
 import io.github.currencortex.music.data.song.Song
@@ -98,6 +99,10 @@ class PlayerController(private val context: Context, override val queue: Playbac
                         if (reason == Player.MEDIA_ITEM_TRANSITION_REASON_AUTO || reason == Player.MEDIA_ITEM_TRANSITION_REASON_REPEAT)
                             completedTracks.value += 1
                     }
+                    override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                        state.value = state.value.copy(timelineRevision = state.value.timelineRevision + 1)
+                        publish(it)
+                    }
                     override fun onEvents(player: Player, events: Player.Events) { publish(player) }
                 })
                 scope.launch { while (isActive && controller === it) { publish(it); delay(300) } }
@@ -108,7 +113,8 @@ class PlayerController(private val context: Context, override val queue: Playbac
     internal fun publish(player: Player) {
         if (state.value.mode == PlayerMode.CAST) return
         val matches = player.currentMediaItem?.mediaId == queue.state.value.current?.id?.toString()
-        state.value = state.value.copy(song = queue.state.value.current, playing = player.isPlaying && commandIntent != false,
+        val old = state.value
+        val next = old.copy(song = queue.state.value.current, playing = player.isPlaying && commandIntent != false,
             playbackSpeed = player.playbackParameters.speed,
             playRequested = commandIntent ?: if (state.value.resolving || state.value.warning != null) state.value.playRequested else player.playWhenReady,
             loading = state.value.resolving || player.playbackState == Player.STATE_BUFFERING,
@@ -120,6 +126,9 @@ class PlayerController(private val context: Context, override val queue: Playbac
                 else if (state.value.song?.id == queue.state.value.current?.id) state.value.positionMs else queue.state.value.positionMs,
             durationMs = if (matches) player.duration.takeIf { it > 0 } ?: queue.state.value.current?.durationMs ?: 0
                 else queue.state.value.current?.durationMs ?: 0)
+        state.value = next.copy(anchorRealtimeMs = if (next.playing || old.song?.id != next.song?.id ||
+            old.positionMs != next.positionMs || old.playing != next.playing || old.loading != next.loading ||
+            old.playbackSpeed != next.playbackSpeed || old.anchorRealtimeMs == 0L) SystemClock.elapsedRealtime() else old.anchorRealtimeMs)
     }
     fun load(play: Boolean = true, position: Long = queue.state.value.positionMs) = scope.launch(Dispatchers.Main.immediate) {
         val epoch = generation
@@ -149,6 +158,8 @@ class PlayerController(private val context: Context, override val queue: Playbac
         val action = ++transportGeneration
         commandIntent = play
         state.value = state.value.copy(playRequested = play, playing = if (play) state.value.playing else false,
+            positionMs = if (!play) controller?.currentPosition?.coerceAtLeast(0) ?: state.value.positionMs else state.value.positionMs,
+            anchorRealtimeMs = if (!play) SystemClock.elapsedRealtime() else state.value.anchorRealtimeMs,
             bufferedPositionMs = if (play && needsSource) 0 else state.value.bufferedPositionMs,
             audioFullyCached = if (play && needsSource) false else state.value.audioFullyCached,
             error = null, loading = play && (state.value.loading || needsSource), resolving = play && (state.value.resolving || needsSource))
@@ -172,12 +183,16 @@ class PlayerController(private val context: Context, override val queue: Playbac
         if (!transportAllowed()) return
         external?.let { it.play(false); return }
         ++transportGeneration; commandIntent = false
-        state.value = state.value.copy(playing = false, playRequested = false, loading = false, resolving = false)
+        state.value = state.value.copy(playing = false, playRequested = false, loading = false, resolving = false,
+            positionMs = controller?.currentPosition?.coerceAtLeast(0) ?: state.value.positionMs, anchorRealtimeMs = SystemClock.elapsedRealtime())
         controller?.let { it.pause(); commandIntent = null }
     }
     fun next(play: Boolean = true) { if (!transportAllowed()) return; external?.let { it.next(); return }; queue.next(); load(play) }
     fun previous(play: Boolean = true) { if (!transportAllowed()) return; external?.let { it.previous(); return }; queue.previous(); load(play) }
-    fun seek(position: Long) { if (!transportAllowed()) return; external?.let { it.seek(position.coerceAtLeast(0)); return }; controller?.seekTo(position.coerceAtLeast(0)) }
+    fun seek(position: Long) { if (!transportAllowed()) return; external?.let { it.seek(position.coerceAtLeast(0)); return }; val target = position.coerceAtLeast(0)
+        state.value = state.value.copy(positionMs = target, anchorRealtimeMs = SystemClock.elapsedRealtime(), timelineRevision = state.value.timelineRevision + 1)
+        controller?.seekTo(target)
+    }
     fun add(song: Song, next: Boolean = false) { if (state.value.mode == PlayerMode.ROOM) { external?.request(song); return }; queue.add(song, next) }
     fun remove(index: Int) { if (!localOnly()) return; if (queue.remove(index)) { if (queue.state.value.current == null) clear() else load(state.value.playing) } }
     fun clear() { if (!localOnly()) return; ++transportGeneration; commandIntent = null; beforeVideo = null; queue.clear(); controller?.stop(); controller?.clearMediaItems(); state.value = PlayerState() }

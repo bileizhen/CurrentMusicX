@@ -14,8 +14,8 @@ import io.github.currencortex.music.data.song.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-data class LyricsUiState(val document: LyricsDocument = LyricsDocument(), val loading: Boolean = false, val error: String? = null,
-    val issues: List<io.github.currencortex.music.feature.lyrics.data.LyricsIssue> = emptyList(), val songId: Long? = null)
+typealias LyricsUiState = io.github.currencortex.music.feature.lyrics.data.PlaybackLyricsState
+
 data class NavigationPlayback(val mode: PlayerMode, val error: String?, val warning: HighSpecWarning?)
 data class PlayerSongActions(val songId: Long? = null, val likeCount: Long? = null, val commentCount: Long? = null,
     val liked: Boolean? = null, val liking: Boolean = false, val error: String? = null)
@@ -35,8 +35,7 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val settings = container.musicSettings.state
     val libraryStatuses = container.libraryRepository.statuses
     val usesNeteaseLibrary = container.primaryLibrary.usesNetease
-    private val _lyrics = MutableStateFlow(LyricsUiState())
-    val lyrics: StateFlow<LyricsUiState> = _lyrics.asStateFlow()
+    val lyrics = container.playbackLyrics.state
     private val _actions = MutableStateFlow(PlayerSongActions())
     val actions = _actions.asStateFlow()
     private val _comments = MutableStateFlow(PlayerComments())
@@ -48,14 +47,6 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     private var heartStartJob: Job? = null
     private val heartMutex = Mutex()
     private val netease = container.neteaseSongActions
-    init { viewModelScope.launch {
-        queue.map { it.current?.takeUnless { song -> song.video } }.distinctUntilChanged().collectLatest { song ->
-            if (song == null) { _lyrics.value = LyricsUiState(); return@collectLatest }
-            _lyrics.value = LyricsUiState(loading = true, songId = song.id)
-            val result = container.lyricsRepository.load(song)
-            _lyrics.value = LyricsUiState(result.document, error = result.error, issues = result.issues, songId = song.id)
-        }
-    } }
     init {
         viewModelScope.launch {
             combine(queue.map { if (it.current?.musicSource == MusicSource.NAVIDROME) it.current?.id else NeteaseSongActionsRepository.songId(it.current) }.distinctUntilChanged(),

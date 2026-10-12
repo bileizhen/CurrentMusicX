@@ -13,7 +13,7 @@ class LyricsPlaybackClock {
         if (id == songId && next == sample) return
         val previous = positionAt(next.realtimeMs)
         val snap = sample == null || id != songId || next.playing != anchor.playing ||
-            next.speed != anchor.speed || !next.playing || abs(next.positionMs - previous) > 180
+            next.speed != anchor.speed || next.revision != anchor.revision || !next.playing || abs(next.positionMs - previous) > 180
         anchor = if (snap) next else next.copy(positionMs = previous)
         correctionMs = if (snap) 0 else next.positionMs - previous
         // Smoothstep has a maximum slope of 1.5. Never let a negative correction

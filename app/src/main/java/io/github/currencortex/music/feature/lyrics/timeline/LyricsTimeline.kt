@@ -10,7 +10,7 @@ class LyricsTimeline(private val document: LyricsDocument) {
 
 /** Monotonic UI interpolation only; Media3 remains the authoritative clock. */
 data class PlaybackAnchor(val positionMs: Long, val realtimeMs: Long, val playing: Boolean,
-    val durationMs: Long = 0, val speed: Float = 1f) {
+    val durationMs: Long = 0, val speed: Float = 1f, val revision: Long = 0) {
     fun positionAt(nowMs: Long): Long {
         // DLNA samples every two seconds; allow that interval while bounding stale anchors.
         val elapsed = if (playing) ((nowMs - realtimeMs).coerceIn(0, 3000) * speed).toLong() else 0
