@@ -37,7 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
     glow: Boolean = false, wordLift: Boolean = false, glowOpacity: State<Float>? = null,
     baseOpacity: State<Float>? = null, accurateWordLift: Boolean = false,
     outline: Boolean = false, onLayout: ((TextLayoutResult) -> Unit)? = null,
-    glowColor: Color = color, glowRadiusScale: Float = 1f) {
+    glowColor: Color = color, glowRadiusScale: Float = 1f, untimedLineGlow: Boolean = false) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -104,6 +104,7 @@ import androidx.compose.ui.text.style.TextAlign
         val glowWeights = remember(words, line.roles) { words.map { lyricGlowWeight(it, line.roles) } }
         val wordGlows = remember(words) { FloatArray(words.size) }
         val glowTimed = glow && safeRaster && line.words.isNotEmpty() && glowWeights.any { it > 0f }
+        val glowLine = untimedLineGlow && safeRaster && line.words.isEmpty() && !forceLineAnimation
         val liftHeight = 2f * density.density
         val radius = glowRadiusScale.takeIf(Float::isFinite)?.coerceIn(.5f, 2f) ?: 1f
         val raster = remember(layout, density, direction, radius) { LyricsTextRaster(layout, density, direction, radius) }
@@ -111,6 +112,7 @@ import androidx.compose.ui.text.style.TextAlign
         val haloTint = remember(glowColor) { ColorFilter.tint(glowColor) }
         // Prepare once when enabled, never run a blur filter or text rasterization per frame.
         if (liftTimed) raster.ink
+        if (glowLine) raster.lineHalo
         if (glowTimed) glyphs.filter { glowWeights[it.wordIndex] > 0f }.forEach { raster.glyphHalo(it.box) }
         val begin = words.minOfOrNull { it.startTimeMs } ?: 0
         val finish = maxOf(words.maxOfOrNull { it.endTimeMs } ?: 0,
@@ -133,6 +135,11 @@ import androidx.compose.ui.text.style.TextAlign
                     getTextLayoutResult { it.add(layout); true }
                 }
             }) {
+            if (glowLine) {
+                val halo = raster.lineHalo
+                drawImage(halo.first, topLeft = halo.second,
+                    alpha = (.9f * (glowOpacity?.value ?: 1f)).coerceIn(0f, 1f), colorFilter = haloTint)
+            }
             if (outline) drawText(layout, color = (if (color.luminance() < .35f) Color.White else Color.Black).copy(alpha = .85f), drawStyle = Stroke(width = 1.6f * density.density))
             if (phase == 2 && liftTimed) {
                 // Draw the completed paragraph in two cached masks, without reading the

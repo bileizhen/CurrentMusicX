@@ -2,6 +2,7 @@ package io.github.currencortex.music
 
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.test.core.app.ApplicationProvider
@@ -113,5 +114,18 @@ class DesktopLyricsSettingsTest {
         await { container.desktopLyrics.state.value.glowColor == 0xFFE0E0E0L }
         Assert.assertEquals(0xFF80DEFFL, container.desktopLyrics.state.value.textColor)
         Assert.assertEquals(appBefore, container.musicSettings.state.value)
+    }
+    @Test fun staticPreviewShowsGlowWithoutInventingWordTiming() {
+        val lit = compose.onNodeWithTag("desktop_preview").captureToImage().toPixelMap()
+        runBlocking { container.desktopLyrics.edit { it.copy(glowEnabled = false) } }
+        await { !container.desktopLyrics.state.value.glowEnabled }
+        val unlit = compose.onNodeWithTag("desktop_preview").captureToImage().toPixelMap()
+        var changed = 0
+        for (y in 0 until lit.height) for (x in 0 until lit.width)
+            if (lit[x, y].red > unlit[x, y].red + .025f) changed++
+        Assert.assertTrue("An untimed preview must visibly demonstrate the default glow: $changed", changed > 100)
+        compose.onNodeWithText("示例歌词").assertExists()
+        compose.onNodeWithText("音乐一直陪着你").assertExists()
+        Assert.assertFalse(container.playerController.state.value.playing)
     }
 }
