@@ -40,7 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
     baseOpacity: State<Float>? = null, accurateWordLift: Boolean = false,
     outline: Boolean = false, onLayout: ((TextLayoutResult) -> Unit)? = null,
     glowColor: Color = color, glowRadiusScale: Float = 1f, untimedLineGlow: Boolean = false,
-    effectPadding: Dp = 0.dp) {
+    effectPadding: Dp = 0.dp, singleLine: Boolean = false) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -61,12 +61,13 @@ import androidx.compose.ui.text.style.TextAlign
         // Cache both geometries together. Changing the playing line selects a cached layout;
         // it does not measure each visible lyric again or change the reserved row height.
         val layouts = remember(line.text, width, density.density, density.fontScale, size, reservedFontWeight,
-            normalTypeface, emphasisTypeface, textAlign, lineHeightRatio, direction) {
+            normalTypeface, emphasisTypeface, textAlign, lineHeightRatio, direction, singleLine) {
             val constraints = Constraints(minWidth = if (textAlign == TextAlign.End || textAlign == TextAlign.Center) width else 0,
                 maxWidth = width)
             listOf(FontWeight.Normal, reservedFontWeight).map { weight ->
                 measurer.measure(AnnotatedString(line.text), style.copy(fontWeight = weight,
-                    fontSynthesis = lyricsFontSynthesis(weight)), constraints = constraints)
+                    fontSynthesis = lyricsFontSynthesis(weight)), constraints = constraints,
+                    softWrap = !singleLine, maxLines = if (singleLine) 1 else Int.MAX_VALUE)
             }
         }
         val layout = layouts[if (fontWeight == FontWeight.Normal) 0 else 1]
@@ -102,7 +103,7 @@ import androidx.compose.ui.text.style.TextAlign
         } }
         val timed = animateWords && words.isNotEmpty()
         // Retain the lift when Current-line karaoke stops animating a completed row.
-        val safeRaster = layout.size.width.toLong() * layout.size.height <= 4_000_000 && layout.size.height < 8192
+        val safeRaster = layout.size.width.toLong() * layout.size.height <= 4_000_000 && layout.size.height < 8192 && layout.size.width < 8192
         val liftTimed = wordLift && safeRaster && line.words.isNotEmpty() && lyricsCanLift(line.text)
         val glyphs = remember(geometry) { geometry.flatMap { it.glyphs } }
         val liftedInk = remember(glyphs) { Path().apply { glyphs.forEach { addRect(it.box) } } }
