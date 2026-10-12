@@ -16,10 +16,11 @@ data class DesktopLyricsSettings(val enabled: Boolean = false, val locked: Boole
     val translation: Boolean = true, val fontSize: Float = DESKTOP_DEFAULT_FONT_SIZE, val opacity: Float = .85f,
     val offsetMs: Long = 0, val x: Float = .5f, val y: Float = .2f, val snapEdges: Boolean = false,
     val glowEnabled: Boolean = true, val glowStrength: Float = 1f, val glowSpread: Float = 1f,
-    val textColor: Long = 0xFFFFFFFFL, val glowColor: Long = DESKTOP_DEFAULT_GLOW_COLOR, val islandFontSize: Float = DESKTOP_ISLAND_FONT_SIZE, val islandY: Float = DESKTOP_ISLAND_HEIGHT) {
+    val textColor: Long = 0xFFFFFFFFL, val glowColor: Long = DESKTOP_DEFAULT_GLOW_COLOR, val islandFontSize: Float = DESKTOP_ISLAND_FONT_SIZE, val islandY: Float = DESKTOP_ISLAND_HEIGHT, val islandOpacity: Float = .85f) {
+    val displayOpacity: Float get() = if (appearance == DesktopAppearance.ISLAND) islandOpacity else opacity
     val displayFontSize: Float get() = if (appearance == DesktopAppearance.ISLAND) islandFontSize else fontSize
     fun normalized() = copy(islandY = islandY.finite(DESKTOP_ISLAND_HEIGHT).coerceIn(0f, 1f), islandFontSize = islandFontSize.finite(DESKTOP_ISLAND_FONT_SIZE).coerceIn(12f, 24f), fontSize = fontSize.finite(DESKTOP_DEFAULT_FONT_SIZE).coerceIn(18f, 38f),
-        opacity = opacity.finite(.85f).coerceIn(.35f, .95f), offsetMs = offsetMs.coerceIn(-60000, 60000),
+        opacity = opacity.finite(.85f).coerceIn(.35f, .95f), islandOpacity = islandOpacity.finite(.85f).coerceIn(.35f, .95f), offsetMs = offsetMs.coerceIn(-60000, 60000),
         x = x.finite(.5f).coerceIn(0f, 1f), y = y.finite(.2f).coerceIn(0f, 1f),
         glowStrength = glowStrength.finite(1f).coerceIn(0f, 2f), glowSpread = glowSpread.finite(1f).coerceIn(.5f, 2f),
         textColor = desktopOpaqueColor(textColor), glowColor = desktopOpaqueColor(glowColor))
@@ -42,7 +43,7 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
     }
     private fun encode(s: DesktopLyricsSettings) = listOf(s.enabled, s.locked, s.effect.name, s.appearance.name,
         s.translation, s.fontSize, s.opacity, s.offsetMs, s.x, s.y, s.snapEdges,
-        s.glowEnabled, s.glowStrength, s.glowSpread, s.textColor, s.glowColor, s.islandFontSize, s.islandY).joinToString("|")
+        s.glowEnabled, s.glowStrength, s.glowSpread, s.textColor, s.glowColor, s.islandFontSize, s.islandY, s.islandOpacity).joinToString("|")
     private fun decode(raw: String?): DesktopLyricsSettings {
         val fields = raw?.split('|').orEmpty()
         return DesktopLyricsSettings(fields.getOrNull(0)?.toBooleanStrictOrNull() ?: false,
@@ -57,7 +58,8 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
             fields.getOrNull(12)?.toFloatOrNull() ?: 1f, fields.getOrNull(13)?.toFloatOrNull() ?: 1f,
             fields.getOrNull(14)?.toLongOrNull() ?: 0xFFFFFFFFL, fields.getOrNull(15)?.toLongOrNull() ?: DESKTOP_DEFAULT_GLOW_COLOR,
             fields.getOrNull(16)?.toFloatOrNull() ?: DESKTOP_ISLAND_FONT_SIZE,
-            fields.getOrNull(17)?.toFloatOrNull() ?: DESKTOP_ISLAND_HEIGHT).normalized()
+            fields.getOrNull(17)?.toFloatOrNull() ?: DESKTOP_ISLAND_HEIGHT,
+            fields.getOrNull(18)?.toFloatOrNull() ?: fields.getOrNull(6)?.toFloatOrNull() ?: .85f).normalized()
     }
 }
 

@@ -28,6 +28,7 @@ class DesktopPreferencesTest {
             val preferences = DesktopLyricsPreferences(store, scope); preferences.ready.await()
             val old = preferences.state.value
             assertTrue(old.enabled); assertTrue(old.locked); assertEquals(30f, old.fontSize, .001f)
+            assertEquals(.6f, old.islandOpacity, .001f) // Legacy appearance preserves its old opacity.
             assertEquals(-250L, old.offsetMs); assertEquals(.8f, old.y, .001f)
             assertTrue(old.glowEnabled); assertEquals(1f, old.glowStrength, .001f)
             assertEquals(1f, old.glowSpread, .001f); assertEquals(0xFFFFFFFFL, old.textColor); assertEquals(0xFFE0E0E0L, old.glowColor)
@@ -59,9 +60,11 @@ class DesktopPreferencesTest {
             val original = music.snapshot()
             val desktop = DesktopLyricsPreferences(store, scope)
             desktop.ready.await()
-            desktop.edit { it.copy(appearance = DesktopAppearance.ISLAND, islandFontSize = 16f, islandY = .15f, fontSize = 22f, offsetMs = -350, effect = DesktopEffect.STAGE, translation = false, x = .8f,
+            desktop.edit { it.copy(appearance = DesktopAppearance.ISLAND, islandFontSize = 16f, islandY = .15f, islandOpacity = .52f, opacity = .71f, fontSize = 22f, offsetMs = -350, effect = DesktopEffect.STAGE, translation = false, x = .8f,
                 textColor = 0xFF80DEFFL, glowColor = 0xFFFFAACCL, glowEnabled = false, glowStrength = 1.7f, glowSpread = 1.4f) }
             val expected = desktop.state.first { it.fontSize == 22f }
+            assertEquals(.52f, expected.displayOpacity, .001f)
+            assertEquals(.71f, expected.copy(appearance = DesktopAppearance.CAPTION).displayOpacity, .001f)
             assertEquals(16f, expected.displayFontSize, .001f)
             assertEquals(22f, expected.copy(appearance = DesktopAppearance.CAPTION).displayFontSize, .001f)
             assertEquals(original, music.snapshot())

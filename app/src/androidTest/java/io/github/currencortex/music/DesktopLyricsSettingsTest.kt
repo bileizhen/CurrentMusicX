@@ -54,6 +54,19 @@ class DesktopLyricsSettingsTest {
         compose.onNodeWithTag("desktop_font").performSemanticsAction(SemanticsActions.SetProgress) { it(16f) }
         await { container.desktopLyrics.state.value.islandFontSize == 16f }
         Assert.assertEquals(20f, container.desktopLyrics.state.value.fontSize, .001f)
+        scroll("desktop_opacity")
+        compose.onNodeWithText("灵动岛不透明度").assertExists()
+        compose.onNodeWithTag("desktop_opacity").performSemanticsAction(SemanticsActions.SetProgress) { it(.52f) }
+        await { container.desktopLyrics.state.value.islandOpacity == .52f }
+        Assert.assertEquals(.85f, container.desktopLyrics.state.value.opacity, .001f)
+        scroll("desktop_appearance_CAPTION")
+        compose.onNodeWithTag("desktop_appearance_CAPTION").performClick()
+        await { container.desktopLyrics.state.value.appearance == DesktopAppearance.CAPTION }
+        Assert.assertEquals(.85f, container.desktopLyrics.state.value.displayOpacity, .001f)
+        scroll("desktop_appearance_ISLAND")
+        compose.onNodeWithTag("desktop_appearance_ISLAND").performClick()
+        await { container.desktopLyrics.state.value.appearance == DesktopAppearance.ISLAND }
+        Assert.assertEquals(.52f, container.desktopLyrics.state.value.displayOpacity, .001f)
         val originalPosition = container.desktopLyrics.state.value.let { it.x to it.y }
         scroll("desktop_island_height")
         compose.onNodeWithTag("desktop_island_height").performSemanticsAction(SemanticsActions.SetProgress) { it(.3f) }

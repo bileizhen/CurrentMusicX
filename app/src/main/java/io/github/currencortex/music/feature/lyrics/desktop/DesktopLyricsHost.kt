@@ -146,7 +146,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         val initial = placement(safe, width, (160 * context.resources.displayMetrics.density).toInt())
         p.width = initial.width; p.x = initial.x; p.y = initial.y
         val maximum = if (Build.VERSION.SDK_INT >= 31) context.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch else .8f
-        p.alpha = desktopWindowAlpha(current.opacity, touchThrough(), maximum)
+        p.alpha = desktopWindowAlpha(current.displayOpacity, touchThrough(), maximum)
         owner = life; view = root; composition = compose; params = p
         root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> if (!moving) updateWindow() }
         try { window.addView(root, p) }
@@ -170,7 +170,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         val width = placement.width
         islandMaximumWidth.floatValue = width / density
         val maximum = if (Build.VERSION.SDK_INT >= 31) context.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch else .8f
-        val alpha = desktopWindowAlpha(current.opacity, touchThrough(), maximum)
+        val alpha = desktopWindowAlpha(current.displayOpacity, touchThrough(), maximum)
         if (!moving && (p.x != placement.x || p.y != placement.y || p.width != width || p.flags != flags() || p.alpha != alpha)) {
             p.width = width; p.x = placement.x; p.y = placement.y; p.flags = flags(); p.alpha = alpha
             try { window.updateViewLayout(v, p) } catch (_: RuntimeException) { remove(); return }
