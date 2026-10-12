@@ -61,4 +61,50 @@ class DesktopLyricsLineGlowTest {
         compose.onNodeWithText("正在读取歌词").assertExists()
         assertEquals("Late lyrics must not glow for another song", 0, greenHalo(capture()))
     }
+    @Test fun maximumBloomHasSoftEdgesInsideCaptionAndCapsuleBounds() {
+        val line = LyricLine(0, 5000, "「質」\nAnswer")
+        val lyrics = MutableStateFlow(PlaybackLyricsState(LyricsDocument(listOf(line)), songId = 42))
+        val player = MutableStateFlow(PlayerState(song = Song(42, "Bloom bounds"), positionMs = 2000))
+        val options = MutableStateFlow(DesktopLyricsSettings(locked = true, fontSize = 32f,
+            textColor = 0xFFFF0000, glowColor = 0xFF00FF00, glowStrength = 2f, glowSpread = 2f))
+        compose.setContent {
+            Box(Modifier.size(340.dp, 300.dp).background(Color.Black).testTag("line_glow_host")) {
+                DesktopLyricsSurface(lyrics, player, options, { 220f }, { _, _ -> }, {}, {}, {}, {})
+            }
+        }
+        for (appearance in DesktopAppearance.entries) {
+            compose.runOnIdle { options.value = options.value.copy(appearance = appearance) }
+            val pixels = compose.onNodeWithText(line.text).captureToImage().toPixelMap()
+            assertTrue("Bloom must be present in $appearance", greenHalo(pixels) > 100)
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
+                if (x > 1 && x < pixels.width - 2 && y > 1 && y < pixels.height - 2) continue
+                val color = pixels[x, y]
+                assertTrue("The halo must fade before a clipped edge in $appearance ($x,$y)",
+                    color.green - maxOf(color.red, color.blue) < .015f)
+            }
+        }
+    }
+    @Test fun transparentCaptionHasNoDarkOutlineOrTranslationAndStateShadows() {
+        val line = LyricLine(0, 5000, "Caption", translation = "Translation")
+        val lyrics = MutableStateFlow(PlaybackLyricsState(LyricsDocument(listOf(line)), songId = 42))
+        val player = MutableStateFlow(PlayerState(song = Song(42, "Caption"), positionMs = 2000))
+        val options = MutableStateFlow(DesktopLyricsSettings(locked = true, glowEnabled = false,
+            appearance = DesktopAppearance.CAPTION, textColor = 0xFF0088FF))
+        compose.setContent {
+            Box(Modifier.size(340.dp, 240.dp).background(Color.White).testTag("line_glow_host")) {
+                DesktopLyricsSurface(lyrics, player, options, { 160f }, { _, _ -> }, {}, {}, {}, {})
+            }
+        }
+        fun assertNoDarkInk() {
+            val pixels = capture()
+            var dark = 0
+            for (y in 0 until pixels.height) for (x in 0 until pixels.width)
+                if (pixels[x, y].red < .25f && pixels[x, y].green < .25f && pixels[x, y].blue < .25f) dark++
+            assertEquals("Transparent captions must not draw black strokes or shadows", 0, dark)
+        }
+        assertNoDarkInk()
+        compose.runOnIdle { player.value = player.value.copy(song = null) }
+        compose.onNodeWithText("等待播放").assertExists()
+        assertNoDarkInk()
+    }
 }

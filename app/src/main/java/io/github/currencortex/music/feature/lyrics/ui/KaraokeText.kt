@@ -23,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontSynthesis
 import io.github.currencortex.music.data.settings.LyricsTypography
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.feature.lyrics.model.LyricLine
 import io.github.currencortex.music.feature.lyrics.model.LyricWord
@@ -37,7 +39,8 @@ import androidx.compose.ui.text.style.TextAlign
     glow: Boolean = false, wordLift: Boolean = false, glowOpacity: State<Float>? = null,
     baseOpacity: State<Float>? = null, accurateWordLift: Boolean = false,
     outline: Boolean = false, onLayout: ((TextLayoutResult) -> Unit)? = null,
-    glowColor: Color = color, glowRadiusScale: Float = 1f, untimedLineGlow: Boolean = false) {
+    glowColor: Color = color, glowRadiusScale: Float = 1f, untimedLineGlow: Boolean = false,
+    effectPadding: Dp = 0.dp) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -49,7 +52,10 @@ import androidx.compose.ui.text.style.TextAlign
     val emphasisTypeface by LocalFontFamilyResolver.current.resolve(LyricsFontFamily, fontWeight = reservedFontWeight,
         fontSynthesis = lyricsFontSynthesis(reservedFontWeight))
     BoxWithConstraints(modifier) {
-        val width = with(density) { maxWidth.roundToPx() }
+        // Reserve the entire blur footprint inside layout/layer/scroll bounds.
+        // Keep this margin fixed across strengths so adjusting glow never rewraps text.
+        val padding = with(density) { effectPadding.value.takeIf(Float::isFinite)?.coerceIn(0f, 24f)?.dp?.roundToPx() ?: 0 }
+        val width = (with(density) { maxWidth.roundToPx() } - padding * 2).coerceAtLeast(1)
         val style = TextStyle(fontFamily = LyricsFontFamily, fontSynthesis = synthesis,
             fontSize = size.sp, lineHeight = (size * lineHeightRatio).sp, fontWeight = fontWeight, textAlign = textAlign)
         // Cache both geometries together. Changing the playing line selects a cached layout;
@@ -128,99 +134,101 @@ import androidx.compose.ui.text.style.TextAlign
         } }
         val sung = remember { Path() }
         val cutouts = remember { Path() }
-        Canvas(Modifier.fillMaxWidth().height(with(density) { layouts.maxOf { it.size.height }.toDp() })
+        Canvas(Modifier.fillMaxWidth().height(with(density) { (layouts.maxOf { it.size.height } + padding * 2).toDp() })
             .semantics {
                 if (exposeText) {
                     text = AnnotatedString(line.text)
                     getTextLayoutResult { it.add(layout); true }
                 }
             }) {
-            if (glowLine) {
-                val halo = raster.lineHalo
-                drawImage(halo.first, topLeft = halo.second,
-                    alpha = (.9f * (glowOpacity?.value ?: 1f)).coerceIn(0f, 1f), colorFilter = haloTint)
-            }
-            if (outline) drawText(layout, color = (if (color.luminance() < .35f) Color.White else Color.Black).copy(alpha = .85f), drawStyle = Stroke(width = 1.6f * density.density))
-            if (phase == 2 && liftTimed) {
-                // Draw the completed paragraph in two cached masks, without reading the
-                // frame clock or returning sung glyphs to their original baseline.
-                clipPath(liftedInk, ClipOp.Difference) { drawText(layout, color = color, drawStyle = Fill) }
-                translate(top = -liftHeight) {
-                    clipPath(liftedInk) { drawText(layout, color = color, drawStyle = Fill) }
+            translate(left = padding.toFloat(), top = padding.toFloat()) {
+                if (glowLine) {
+                    val halo = raster.lineHalo
+                    drawImage(halo.first, topLeft = halo.second,
+                        alpha = (.9f * (glowOpacity?.value ?: 1f)).coerceIn(0f, 1f), colorFilter = haloTint)
                 }
-                return@Canvas
-            }
-            val baseAlpha = if (timed && phase < 2) baseOpacity?.value ?: .32f else 1f
-            val glowAlpha = glowOpacity?.value ?: 1f
-            cutouts.reset()
-            val now = if (phase == 1) position.value else 0L
-            if (phase == 1 && liftTimed) glyphs.forEachIndexed { index, glyph ->
-                lifts[index] = lyricGlyphLift(now, glyph.start) * liftHeight
-                if (lifts[index] > .01f) cutouts.addRect(glyph.box)
-            }
-            // Only the currently sung sustained/emphasized word can glow. Completed
-            // words, future words and untimed ordinary lines never receive a halo.
-            if (phase == 1 && glowTimed) {
-                words.forEachIndexed { index, word ->
-                    wordGlows[index] = glowWeights[index] * lyricGlowStrength(now, word.startTimeMs, word.endTimeMs)
-                }
-                glyphs.forEachIndexed { index, glyph ->
-                    val intensity = wordGlows[glyph.wordIndex] * glowAlpha
-                    if (intensity <= .001f) return@forEachIndexed
-                    val shape = geometry[glyph.wordIndex]
-                    val progress = LyricsSynchronizer.wordProgress(words[glyph.wordIndex], now)
-                    val filled = (shape.width * progress - glyph.widthOffset).coerceIn(0f, glyph.box.width)
-                    if (filled <= 0f) return@forEachIndexed
-                    val halo = raster.glyphHalo(glyph.box)
-                    val reveal = lyricGlowReveal(filled / glyph.box.width)
-                    translate(top = if (liftTimed) -lifts[index] else 0f) {
-                        // Highlight ink still follows exact timing below. The cached
-                        // OUTER halo fades in as one shape, never through a hard clip
-                        // at the moving karaoke boundary or an arbitrary blur margin.
-                        drawImage(halo.first, topLeft = halo.second, alpha = (.75f * intensity * reveal).coerceIn(0f, 1f), colorFilter = haloTint)
+                if (outline) drawText(layout, color = (if (color.luminance() < .35f) Color.White else Color.Black).copy(alpha = .85f), drawStyle = Stroke(width = 1.6f * density.density))
+                if (phase == 2 && liftTimed) {
+                    // Draw the completed paragraph in two cached masks, without reading the
+                    // frame clock or returning sung glyphs to their original baseline.
+                    clipPath(liftedInk, ClipOp.Difference) { drawText(layout, color = color, drawStyle = Fill) }
+                    translate(top = -liftHeight) {
+                        clipPath(liftedInk) { drawText(layout, color = color, drawStyle = Fill) }
                     }
+                    return@translate
                 }
-            }
-            clipPath(cutouts, ClipOp.Difference) {
-                drawText(layout, color = color.copy(alpha = color.alpha * baseAlpha), drawStyle = Fill)
-            }
-            if (phase == 1) {
-                sung.reset()
-                words.forEachIndexed { index, word ->
-                    val progress = LyricsSynchronizer.wordProgress(word, now)
-                    val shape = geometry[index]
-                    if (progress >= 1f) {
-                        sung.addPath(shape.complete)
-                        return@forEachIndexed
+                val baseAlpha = if (timed && phase < 2) baseOpacity?.value ?: .32f else 1f
+                val glowAlpha = glowOpacity?.value ?: 1f
+                cutouts.reset()
+                val now = if (phase == 1) position.value else 0L
+                if (phase == 1 && liftTimed) glyphs.forEachIndexed { index, glyph ->
+                    lifts[index] = lyricGlyphLift(now, glyph.start) * liftHeight
+                    if (lifts[index] > .01f) cutouts.addRect(glyph.box)
+                }
+                // Only the currently sung sustained/emphasized word can glow. Completed
+                // words, future words and untimed ordinary lines never receive a halo.
+                if (phase == 1 && glowTimed) {
+                    words.forEachIndexed { index, word ->
+                        wordGlows[index] = glowWeights[index] * lyricGlowStrength(now, word.startTimeMs, word.endTimeMs)
                     }
-                    if (progress <= 0f) return@forEachIndexed
-                    var remaining = shape.width * progress
-                    shape.segments.forEach { segment ->
-                        val box = segment.box
-                        val filled = remaining.coerceIn(0f, box.width)
-                        if (filled > 0) {
-                            val rect = if (segment.rtl) Rect(box.right - filled, box.top, box.right, box.bottom)
-                                else Rect(box.left, box.top, box.left + filled, box.bottom)
-                            sung.addRect(rect)
+                    glyphs.forEachIndexed { index, glyph ->
+                        val intensity = wordGlows[glyph.wordIndex] * glowAlpha
+                        if (intensity <= .001f) return@forEachIndexed
+                        val shape = geometry[glyph.wordIndex]
+                        val progress = LyricsSynchronizer.wordProgress(words[glyph.wordIndex], now)
+                        val filled = (shape.width * progress - glyph.widthOffset).coerceIn(0f, glyph.box.width)
+                        if (filled <= 0f) return@forEachIndexed
+                        val halo = raster.glyphHalo(glyph.box)
+                        val reveal = lyricGlowReveal(filled / glyph.box.width)
+                        translate(top = if (liftTimed) -lifts[index] else 0f) {
+                            // Highlight ink still follows exact timing below. The cached
+                            // OUTER halo fades in as one shape, never through a hard clip
+                            // at the moving karaoke boundary or an arbitrary blur margin.
+                            drawImage(halo.first, topLeft = halo.second, alpha = (.75f * intensity * reveal).coerceIn(0f, 1f), colorFilter = haloTint)
                         }
-                        remaining -= box.width
                     }
                 }
                 clipPath(cutouts, ClipOp.Difference) {
-                    if (timed) clipPath(sung) { drawText(layout, color = color, drawStyle = Fill) }
+                    drawText(layout, color = color.copy(alpha = color.alpha * baseAlpha), drawStyle = Fill)
                 }
-                if (liftTimed) glyphs.forEachIndexed { index, glyph ->
-                    if (lifts[index] <= .01f) return@forEachIndexed
-                    val shape = geometry[glyph.wordIndex]
-                    val progress = LyricsSynchronizer.wordProgress(words[glyph.wordIndex], now)
-                    val filled = (shape.width * progress - glyph.widthOffset).coerceIn(0f, glyph.box.width)
-                    translate(top = -lifts[index]) {
-                        val box = glyph.box
-                        clipRect(box.left, box.top, box.right, box.bottom) {
-                            drawImage(raster.ink, alpha = baseAlpha, colorFilter = tint)
-                            if (timed && filled > 0f) clipRect(if (glyph.rtl) box.right - filled else box.left, box.top,
-                                if (glyph.rtl) box.right else box.left + filled, box.bottom) {
-                                drawImage(raster.ink, colorFilter = tint)
+                if (phase == 1) {
+                    sung.reset()
+                    words.forEachIndexed { index, word ->
+                        val progress = LyricsSynchronizer.wordProgress(word, now)
+                        val shape = geometry[index]
+                        if (progress >= 1f) {
+                            sung.addPath(shape.complete)
+                            return@forEachIndexed
+                        }
+                        if (progress <= 0f) return@forEachIndexed
+                        var remaining = shape.width * progress
+                        shape.segments.forEach { segment ->
+                            val box = segment.box
+                            val filled = remaining.coerceIn(0f, box.width)
+                            if (filled > 0) {
+                                val rect = if (segment.rtl) Rect(box.right - filled, box.top, box.right, box.bottom)
+                                    else Rect(box.left, box.top, box.left + filled, box.bottom)
+                                sung.addRect(rect)
+                            }
+                            remaining -= box.width
+                        }
+                    }
+                    clipPath(cutouts, ClipOp.Difference) {
+                        if (timed) clipPath(sung) { drawText(layout, color = color, drawStyle = Fill) }
+                    }
+                    if (liftTimed) glyphs.forEachIndexed { index, glyph ->
+                        if (lifts[index] <= .01f) return@forEachIndexed
+                        val shape = geometry[glyph.wordIndex]
+                        val progress = LyricsSynchronizer.wordProgress(words[glyph.wordIndex], now)
+                        val filled = (shape.width * progress - glyph.widthOffset).coerceIn(0f, glyph.box.width)
+                        translate(top = -lifts[index]) {
+                            val box = glyph.box
+                            clipRect(box.left, box.top, box.right, box.bottom) {
+                                drawImage(raster.ink, alpha = baseAlpha, colorFilter = tint)
+                                if (timed && filled > 0f) clipRect(if (glyph.rtl) box.right - filled else box.left, box.top,
+                                    if (glyph.rtl) box.right else box.left + filled, box.bottom) {
+                                    drawImage(raster.ink, colorFilter = tint)
+                                }
                             }
                         }
                     }
