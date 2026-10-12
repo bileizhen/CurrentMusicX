@@ -18,7 +18,8 @@ import top.yukonga.miuix.kmp.preference.OverlaySpinnerPreference
 
 @Composable
 fun SettingsScreen(updateViewModel: UpdateSettingsViewModel, onAppearance: () -> Unit, onNetwork: () -> Unit,
-                   onStorage: () -> Unit, onLogs: () -> Unit, onAbout: () -> Unit, onUpdates: () -> Unit) {
+                   onStorage: () -> Unit, onLogs: () -> Unit, onAbout: () -> Unit, onUpdates: () -> Unit,
+                   onDesktopLyrics: () -> Unit = {}) {
     val settings by updateViewModel.settings.collectAsStateWithLifecycle()
     LazyColumn(Modifier.fillMaxSize().testTag("settings_screen"),
         contentPadding = musicScrollPadding(PaddingValues(12.dp, 30.dp, 12.dp, 32.dp)),
@@ -43,6 +44,9 @@ fun SettingsScreen(updateViewModel: UpdateSettingsViewModel, onAppearance: () ->
             Card(Modifier.fillMaxWidth()) {
                 ArrowPreference(title = "外观", summary = "主题、颜色与界面效果",
                     startAction = { SettingIcon(MusicIcons.Image) }, onClick = onAppearance)
+                ArrowPreference(title = "桌面悬浮歌词", summary = "实时预览、字幕样式与窗口控制",
+                    startAction = { SettingIcon(MusicIcons.BottomBar) }, onClick = onDesktopLyrics,
+                    modifier = Modifier.testTag("open_desktop_lyrics"))
                 ArrowPreference(title = "网络与播放", summary = "音源、音质与预加载",
                     startAction = { SettingIcon(MusicIcons.Device) }, onClick = onNetwork,
                     modifier = Modifier.testTag("open_network"))

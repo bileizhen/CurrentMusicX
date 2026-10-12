@@ -37,7 +37,7 @@ class DesktopLyricsWindowTest {
             val song = Song(100, "悬浮歌词验证")
             val player = MutableStateFlow(PlayerState(song = song, positionMs = 1500, anchorRealtimeMs = SystemClock.elapsedRealtime()))
             val lyrics = MutableStateFlow(PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 4000, "共享歌词数据"))), songId = 100))
-            withContext(Dispatchers.Main) { host = DesktopLyricsHost(context, lyrics, player, container.desktopLyrics, container.desktopLyricsStatus) }
+            withContext(Dispatchers.Main) { host = DesktopLyricsHost(context, lyrics, player, container.desktopLyrics, container.desktopLyricsStatus, container.desktopLyricsSettingsVisible) }
             container.desktopLyrics.edit { it.copy(enabled = true) }
             android.util.Log.i("DesktopEvidence", "enable requested")
             try { withTimeout(10000) { while (!container.desktopLyricsStatus.value.visible) delay(50) } }
@@ -48,6 +48,13 @@ class DesktopLyricsWindowTest {
             assertTrue(container.desktopLyricsStatus.value.attached)
             assertTrue(container.desktopLyricsStatus.value.visible)
             assertTrue(container.desktopLyricsStatus.value.width > 1)
+            val saved = container.desktopLyrics.state.value
+            container.desktopLyricsSettingsVisible.value = true
+            withTimeout(10000) { while (container.desktopLyricsStatus.value.visible) delay(50) }
+            assertTrue(container.desktopLyricsStatus.value.attached)
+            assertEquals(saved, container.desktopLyrics.state.value)
+            container.desktopLyricsSettingsVisible.value = false
+            withTimeout(10000) { while (!container.desktopLyricsStatus.value.visible) delay(50) }
             container.desktopLyrics.edit { it.copy(locked = true, opacity = .95f) }
             withTimeout(10000) { while (container.desktopLyricsStatus.value.alpha > .8f) delay(50) }
             assertTrue(container.desktopLyricsStatus.value.alpha <= .8f)

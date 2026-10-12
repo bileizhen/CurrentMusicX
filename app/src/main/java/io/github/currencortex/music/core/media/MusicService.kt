@@ -68,7 +68,7 @@ class MusicService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost(this, container.playbackLyrics.state,
-            container.playerController.state, container.desktopLyrics, container.desktopLyricsStatus)
+            container.playerController.state, container.desktopLyrics, container.desktopLyricsStatus, container.desktopLyricsSettingsVisible)
         val renderers = DockRenderersFactory(this, container.dockAudioLevel)
         player = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory))

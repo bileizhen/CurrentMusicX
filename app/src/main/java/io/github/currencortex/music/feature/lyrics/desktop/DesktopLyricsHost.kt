@@ -24,7 +24,8 @@ import kotlinx.coroutines.flow.*
 /** Exactly one service-owned window. The Activity owns neither this lifecycle nor its clock. */
 class DesktopLyricsHost(private val context: Context, private val lyrics: StateFlow<PlaybackLyricsState>,
     private val playback: StateFlow<PlayerState>, private val preferences: DesktopLyricsPreferences,
-    private val status: MutableStateFlow<DesktopWindowStatus>) : AutoCloseable {
+    private val status: MutableStateFlow<DesktopWindowStatus>,
+    private val settingsVisible: StateFlow<Boolean> = MutableStateFlow(false)) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val visual = if (Build.VERSION.SDK_INT >= 30) context.createDisplayContext(context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
         .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null) else context
@@ -66,7 +67,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         }, androidx.core.content.ContextCompat.RECEIVER_NOT_EXPORTED)
         appOps.startWatchingMode(AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW, context.packageName, permission)
         displays.registerDisplayListener(display, handler)
-        scope.launch { preferences.ready.await(); preferences.state.collect { current = it; reconcile() } }
+        scope.launch { preferences.ready.await(); combine(preferences.state, settingsVisible) { settings, _ -> settings }
+            .collect { current = it; reconcile() } }
     }
     private fun reconcile() {
         if (closed) return
@@ -112,7 +114,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
             }
             override fun onWindowVisibilityChanged(visibility: Int) {
                 super.onWindowVisibilityChanged(visibility)
-                val screenHidden = !power.isInteractive || keyguard.isKeyguardLocked
+                val screenHidden = !power.isInteractive || keyguard.isKeyguardLocked || settingsVisible.value
                 handler.post { if (!closed && view === this) {
                     if (visibility == View.VISIBLE) systemVisible = true
                     else if (!screenHidden) systemVisible = false
@@ -176,7 +178,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         scope.launch { preferences.edit { it.copy(x = x, y = y) } }
     }
     private fun visibility() {
-        val screenHidden = !power.isInteractive || keyguard.isKeyguardLocked
+        val screenHidden = !power.isInteractive || keyguard.isKeyguardLocked || settingsVisible.value
         val visible = view != null && systemVisible && !screenHidden
         // A system-hidden window must retain VISIBLE on its own view, otherwise the
         // app's GONE state would prevent WindowManager from making it visible again.
