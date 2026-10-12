@@ -161,6 +161,22 @@ class DesktopLyricsIslandTest {
         assertTrue("Translation must share the original's horizontal center", kotlin.math.abs(((translated.left + translated.right) / 2 - center).value) < 2f)
         val short = compose.onNodeWithTag("desktop_island").getUnclippedBoundsInRoot()
         assertTrue("Short lyrics and translation should fit near status-bar height", short.bottom - short.top < 52.dp)
+        // Actual rendered ink must be vertically centered, independent of the
+        // transparent halo margins used by the primary paragraph's layout.
+        val image = compose.onNodeWithTag("desktop_island").captureToImage().toPixelMap()
+        val divider = compose.onNodeWithTag("desktop_island_divider").getUnclippedBoundsInRoot()
+        val scale = image.width / (short.right - short.left).value
+        val fromX = ((divider.right - short.left).value * scale + 2 * scale).toInt()
+        var topInk = image.height; var bottomInk = -1
+        for (y in 0 until image.height) for (x in fromX until (image.width - 6 * scale).toInt()) {
+            val pixel = image[x, y]
+            if (pixel.red > .45f && pixel.green > .45f && pixel.blue > .45f) {
+                topInk = minOf(topInk, y); bottomInk = maxOf(bottomInk, y)
+            }
+        }
+        assertTrue("The pixel check must find both lyric lines", bottomInk > topInk)
+        assertTrue("Visible bilingual ink is centered inside the pill",
+            kotlin.math.abs((topInk + bottomInk) / 2f - image.height / 2f) < 2f * scale)
         val bilingualCover = compose.onNodeWithTag("desktop_island_cover").getUnclippedBoundsInRoot()
         assertTrue("Bilingual cover shrinks with its compact pill", bilingualCover.bottom - bilingualCover.top < 42.dp)
         compose.runOnIdle { options.value = options.value.copy(translation = false) }
