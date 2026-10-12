@@ -70,6 +70,10 @@ class DesktopLyricsSettingsTest {
         await { container.desktopLyrics.state.value.x == .5f && container.desktopLyrics.state.value.y == .2f }
         Assert.assertEquals(32f, container.desktopLyrics.state.value.fontSize, .001f)
         Assert.assertEquals(-400L, container.desktopLyrics.state.value.offsetMs)
+        scroll("desktop_font_reset")
+        compose.onNodeWithTag("desktop_font_reset").performClick()
+        await { container.desktopLyrics.state.value.fontSize == 20f }
+        Assert.assertEquals(-400L, container.desktopLyrics.state.value.offsetMs)
         Assert.assertEquals(before, container.musicSettings.state.value)
     }
     @Test fun darkThemeKeepsPreviewAndChosenStyleReadable() {

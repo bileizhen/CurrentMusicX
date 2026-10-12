@@ -18,7 +18,8 @@ class DesktopGeometryTest {
         assertEquals(.49f, desktopWindowAlpha(.85f, true, .5f), .001f)
         assertEquals(.95f, desktopWindowAlpha(.95f, false, .5f), .001f)
         val s = DesktopLyricsSettings(fontSize = Float.NaN, opacity = Float.POSITIVE_INFINITY, offsetMs = Long.MAX_VALUE, x = -100f).normalized()
-        assertEquals(26f, s.fontSize, 0f); assertEquals(.85f, s.opacity, 0f)
+        assertEquals(20f, s.fontSize, 0f); assertEquals(.85f, s.opacity, 0f)
+        assertEquals(20f, DesktopLyricsSettings().fontSize, 0f)
         assertEquals(60000L, s.offsetMs); assertEquals(0f, s.x, 0f)
     }
 }
