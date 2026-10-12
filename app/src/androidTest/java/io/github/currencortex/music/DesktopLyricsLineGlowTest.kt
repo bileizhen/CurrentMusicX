@@ -74,7 +74,13 @@ class DesktopLyricsLineGlowTest {
         }
         for (appearance in DesktopAppearance.entries) {
             compose.runOnIdle { options.value = options.value.copy(appearance = appearance) }
-            val pixels = compose.onNodeWithText(line.text).captureToImage().toPixelMap()
+            if (appearance == DesktopAppearance.ISLAND) {
+                compose.mainClock.advanceTimeBy(2400)
+                compose.waitUntil(5000) {
+                    compose.onAllNodesWithTag("desktop_island_lyrics").fetchSemanticsNodes().any { it.config.getOrElse(DesktopIslandReveal) { 0f } == 1f }
+                }
+            }
+            val pixels = compose.onNodeWithText(if (appearance == DesktopAppearance.ISLAND) islandSingleLine(line.text) else line.text).captureToImage().toPixelMap()
             assertTrue("Bloom must be present in $appearance", greenHalo(pixels) > 100)
             for (y in 0 until pixels.height) for (x in 0 until pixels.width) {
                 if (x > 1 && x < pixels.width - 2 && y > 1 && y < pixels.height - 2) continue

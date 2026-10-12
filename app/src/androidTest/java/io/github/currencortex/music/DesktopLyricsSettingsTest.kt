@@ -44,6 +44,23 @@ class DesktopLyricsSettingsTest {
         compose.onNodeWithTag("desktop_appearance_CAPTION").performClick()
         await { container.desktopLyrics.state.value.appearance == DesktopAppearance.CAPTION }
         compose.onNodeWithTag("desktop_appearance_CAPTION").assertIsSelected()
+        scroll("desktop_appearance_ISLAND")
+        compose.onNodeWithTag("desktop_appearance_ISLAND").performClick()
+        await { container.desktopLyrics.state.value.appearance == DesktopAppearance.ISLAND }
+        compose.onNodeWithTag("desktop_appearance_ISLAND").assertIsSelected()
+        scroll("desktop_preview")
+        compose.onNodeWithTag("desktop_island").assertIsDisplayed()
+        scroll("desktop_font")
+        compose.onNodeWithTag("desktop_font").performSemanticsAction(SemanticsActions.SetProgress) { it(16f) }
+        await { container.desktopLyrics.state.value.islandFontSize == 16f }
+        Assert.assertEquals(20f, container.desktopLyrics.state.value.fontSize, .001f)
+        val originalPosition = container.desktopLyrics.state.value.let { it.x to it.y }
+        scroll("desktop_island_height")
+        compose.onNodeWithTag("desktop_island_height").performSemanticsAction(SemanticsActions.SetProgress) { it(.3f) }
+        await { container.desktopLyrics.state.value.islandY == .3f }
+        Assert.assertEquals(originalPosition, container.desktopLyrics.state.value.let { it.x to it.y })
+        compose.onNodeWithTag("desktop_island_height_reset").performClick()
+        await { container.desktopLyrics.state.value.islandY == .02f }
         scroll("desktop_translation")
         compose.onNodeWithTag("desktop_translation").performClick()
         await { !container.desktopLyrics.state.value.translation }

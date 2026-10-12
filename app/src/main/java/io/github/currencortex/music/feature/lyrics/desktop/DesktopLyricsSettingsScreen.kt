@@ -71,17 +71,20 @@ import kotlin.math.roundToInt
         onDispose { life.removeObserver(observer); container.desktopLyricsSettingsVisible.value = false }
     }
     fun edit(change: (DesktopLyricsSettings) -> DesktopLyricsSettings) { scope.launch { container.desktopLyrics.edit(change) } }
-    fun saveFont(value: Float) { edit { it.copy(fontSize = value) } }
+    val island = options.appearance == DesktopAppearance.ISLAND
+    fun saveFont(value: Float) { edit { if (island) it.copy(islandFontSize = value) else it.copy(fontSize = value) } }
     fun saveOpacity(value: Float) { edit { it.copy(opacity = value) } }
     fun saveOffset(value: Float) { edit { it.copy(offsetMs = value.toLong()) } }
     fun saveGlowStrength(value: Float) { edit { it.copy(glowStrength = value) } }
     fun saveGlowSpread(value: Float) { edit { it.copy(glowSpread = value) } }
-    var font by remember(options.fontSize) { mutableFloatStateOf(options.fontSize) }
+    var font by remember(options.displayFontSize, island) { mutableFloatStateOf(options.displayFontSize) }
+    var islandHeight by remember(options.islandY) { mutableFloatStateOf(options.islandY) }
+    fun saveIslandHeight(value: Float) { edit { it.copy(islandY = value) } }
     var opacity by remember(options.opacity) { mutableFloatStateOf(options.opacity) }
     var offset by remember(options.offsetMs) { mutableFloatStateOf(options.offsetMs.toFloat()) }
     var glowStrength by remember(options.glowStrength) { mutableFloatStateOf(options.glowStrength) }
     var glowSpread by remember(options.glowSpread) { mutableFloatStateOf(options.glowSpread) }
-    val preview = options.copy(fontSize = font, opacity = opacity, offsetMs = offset.toLong(), glowStrength = glowStrength, glowSpread = glowSpread)
+    val preview = options.copy(fontSize = if (island) options.fontSize else font, islandFontSize = if (island) font else options.islandFontSize, opacity = opacity, offsetMs = offset.toLong(), glowStrength = glowStrength, glowSpread = glowSpread)
     val hint = MiuixTheme.colorScheme.onSurfaceVariantSummary
     val summary = when {
         !ready -> "正在读取设置"
@@ -125,10 +128,13 @@ import kotlin.math.roundToInt
             item { MusicSectionHeader("外观与动效") }
             item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Text("背景外观", fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(10.dp)) { DesktopAppearance.entries.forEach { mode ->
+                Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(10.dp)) { DesktopAppearance.entries.filter { it != DesktopAppearance.ISLAND }.forEach { mode ->
                     DesktopChoice(mode.label, if (mode == DesktopAppearance.CAPTION) "只留下文字" else "渐变底色，清晰易读",
                         options.appearance == mode, { edit { it.copy(appearance = mode) } }, Modifier.weight(1f).testTag("desktop_appearance_${mode.name}"))
                 } }
+                DesktopChoice("灵动岛", "旋转封面 · 居中药丸 · 自适应歌词", options.appearance == DesktopAppearance.ISLAND,
+                    { edit { it.copy(appearance = DesktopAppearance.ISLAND) } },
+                    Modifier.fillMaxWidth().testTag("desktop_appearance_ISLAND"))
                 Text("动画强度", fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(10.dp)) { DesktopEffect.entries.forEach { mode ->
                     DesktopChoice(mode.label, if (mode == DesktopEffect.PRECISE) "轻柔切换 · 细腻辉光" else "延音辉光 · 微幅上提",
@@ -154,10 +160,11 @@ import kotlin.math.roundToInt
             } } }
             item { MusicSectionHeader("文字与同步") }
             item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                DesktopSlider("字号", "${font.roundToInt()} sp", font, 18f..38f, "desktop_font", { font = it.roundToInt().toFloat() },
+                DesktopSlider(if (island) "灵动岛字号" else "字号", "${font.roundToInt()} sp", font, if (island) 12f..24f else 18f..38f, "desktop_font", { font = it.roundToInt().toFloat() },
                     { saveFont(font) }, { value -> font = value.roundToInt().toFloat(); saveFont(font) })
-                MusicTextAction("恢复默认字号 · 20 sp", { saveFont(DESKTOP_DEFAULT_FONT_SIZE) },
-                    Modifier.testTag("desktop_font_reset"), enabled = options.fontSize != DESKTOP_DEFAULT_FONT_SIZE)
+                val defaultFont = if (island) DESKTOP_ISLAND_FONT_SIZE else DESKTOP_DEFAULT_FONT_SIZE
+                MusicTextAction("恢复默认字号 · ${defaultFont.roundToInt()} sp", { saveFont(defaultFont) },
+                    Modifier.testTag("desktop_font_reset"), enabled = options.displayFontSize != defaultFont)
                 DesktopSlider("不透明度", "${(opacity * 100).roundToInt()}%", opacity, 0.35f..0.95f, "desktop_opacity", { opacity = (it * 100).roundToInt() / 100f },
                     { saveOpacity(opacity) }, { value -> opacity = value; saveOpacity(value) })
                 if (options.enabled && options.locked && status.alpha > 0 && options.opacity > status.alpha + .005f)
@@ -175,8 +182,16 @@ import kotlin.math.roundToInt
             } } }
             item { MusicSectionHeader("窗口位置") }
             item { Card {
-                SettingsSwitch("松手自动贴边", options.snapEdges, { edit { s -> s.copy(snapEdges = it) } }, Modifier.testTag("desktop_snap"), summary = "关闭后也会在接近边缘时吸附")
-                MusicDestinationRow("重置窗口位置", { edit { it.copy(x = .5f, y = .2f) } }, Modifier.testTag("desktop_reset_position"), summary = "回到屏幕上方，不改变字号和效果", chevron = false)
+                if (island) Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("灵动岛固定水平居中，不支持拖动。", fontSize = 12.sp, color = hint)
+                    DesktopSlider("位置高度", "${(islandHeight * 100).roundToInt()}%", islandHeight, 0f..1f,
+                        "desktop_island_height", { islandHeight = it }, { saveIslandHeight(islandHeight) },
+                        { value -> islandHeight = value; saveIslandHeight(value) })
+                    MusicTextAction("恢复顶部高度", { saveIslandHeight(DESKTOP_ISLAND_HEIGHT) }, Modifier.testTag("desktop_island_height_reset"))
+                } else {
+                    SettingsSwitch("松手自动贴边", options.snapEdges, { edit { s -> s.copy(snapEdges = it) } }, Modifier.testTag("desktop_snap"), summary = "关闭后也会在接近边缘时吸附")
+                    MusicDestinationRow("重置窗口位置", { edit { it.copy(x = .5f, y = .2f) } }, Modifier.testTag("desktop_reset_position"), summary = "回到屏幕上方，不改变字号和效果", chevron = false)
+                }
             } }
             item { Text("普通歌词按句切换；逐字歌词支持扫光与延音辉光。桌面设置单独保存，不影响应用内歌词。锁定后可从通知或这里解锁。", fontSize = 12.sp, color = hint) }
         }

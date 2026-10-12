@@ -42,7 +42,9 @@ class DesktopLyricsIdleTest {
         compose.onNodeWithTag("desktop_edit_toolbar").performTouchInput { down(centerLeft + Offset(30f, 0f)) }
         android.os.SystemClock.sleep(3300)
         compose.onNodeWithTag("desktop_edit_toolbar").assertIsDisplayed()
-        compose.onNodeWithTag("desktop_edit_toolbar").performTouchInput { up() }
+        // The hold above uses wall time. Keep the release event timestamp current;
+        // Android may discard a stale UP and leave the observer pressed forever.
+        compose.onNodeWithTag("desktop_edit_toolbar").performTouchInput { advanceEventTime(3300); up() }
         awaitHidden()
         compose.onNodeWithTag("desktop_window_title").assertDoesNotExist()
         compose.onNodeWithText(line.text).assertIsDisplayed()
@@ -65,6 +67,15 @@ class DesktopLyricsIdleTest {
         compose.onNodeWithText(line.text).performTouchInput { click() }
         compose.onNodeWithTag("desktop_edit_toolbar").assertDoesNotExist()
         compose.runOnIdle { options.value = options.value.copy(locked = false) }
+        compose.onNodeWithTag("desktop_edit_toolbar").assertIsDisplayed()
+        compose.runOnIdle { options.value = options.value.copy(appearance = DesktopAppearance.ISLAND) }
+        awaitHidden()
+        compose.onNodeWithTag("desktop_island_title").assertDoesNotExist()
+        compose.onNodeWithTag("desktop_island_cover").assertIsDisplayed()
+        val beforeIslandDrag = moved
+        compose.onNodeWithText(line.text).performTouchInput { swipe(center, center + Offset(60f, 40f), 500) }
+        compose.runOnIdle { assertEquals("Island must not drag", beforeIslandDrag, moved, .01f) }
+        compose.onNodeWithText(line.text).performTouchInput { click() }
         compose.onNodeWithTag("desktop_edit_toolbar").assertIsDisplayed()
     }
 }
