@@ -22,4 +22,16 @@ class DesktopGeometryTest {
         assertEquals(20f, DesktopLyricsSettings().fontSize, 0f)
         assertEquals(60000L, s.offsetMs); assertEquals(0f, s.x, 0f)
     }
+    @Test fun islandOpacityReachesFullyOpaqueWhileTouchThroughKeepsDeviceLimit() {
+        assertEquals(1f, desktopWindowAlpha(1f, false, .8f), .001f)
+        assertEquals(.79f, desktopWindowAlpha(1f, true, .8f), .001f)
+        assertEquals(1f, DesktopLyricsSettings(islandOpacity = 1f).normalized().islandOpacity, .001f)
+        assertEquals(1f, DesktopLyricsSettings(islandOpacity = 3f).normalized().islandOpacity, .001f)
+        assertEquals(.95f, DesktopLyricsSettings(opacity = 1f).normalized().opacity, .001f)
+    }
+    @Test fun islandPlacementMapsHeightAcrossTheFullScreenBounds() {
+        val screen = DesktopSafeArea(0, 0, 1080, 2400)
+        assertEquals(0, desktopIslandPlacement(screen, 500, 120, 0f, 540).y)
+        assertEquals(2280, desktopIslandPlacement(screen, 500, 120, 1f, 540).y)
+    }
 }
