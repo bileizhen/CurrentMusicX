@@ -156,6 +156,8 @@ import kotlin.math.roundToInt
             item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 DesktopSlider("字号", "${font.roundToInt()} sp", font, 18f..38f, "desktop_font", { font = it.roundToInt().toFloat() },
                     { saveFont(font) }, { value -> font = value.roundToInt().toFloat(); saveFont(font) })
+                MusicTextAction("恢复默认字号 · 20 sp", { saveFont(DESKTOP_DEFAULT_FONT_SIZE) },
+                    Modifier.testTag("desktop_font_reset"), enabled = options.fontSize != DESKTOP_DEFAULT_FONT_SIZE)
                 DesktopSlider("不透明度", "${(opacity * 100).roundToInt()}%", opacity, 0.35f..0.95f, "desktop_opacity", { opacity = (it * 100).roundToInt() / 100f },
                     { saveOpacity(opacity) }, { value -> opacity = value; saveOpacity(value) })
                 if (options.enabled && options.locked && status.alpha > 0 && options.opacity > status.alpha + .005f)
