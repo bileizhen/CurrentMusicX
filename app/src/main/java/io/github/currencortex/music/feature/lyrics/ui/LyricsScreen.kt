@@ -47,7 +47,9 @@ internal class LyricsScrollMotion {
 }
 internal val LyricsPerspectiveAngle = SemanticsPropertyKey<Float>("LyricsPerspectiveAngle")
 
-@Composable fun rememberLyricsPosition(player: PlayerState): State<Long> {
+@Composable fun rememberLyricsPosition(player: PlayerState, sampleDisplayFrames: Boolean = false,
+    onFrameNanos: ((Long) -> Unit)? = null): State<Long> {
+    val frameObserver = rememberUpdatedState(onFrameNanos)
     val anchor = remember(player.song?.id, player.positionMs, player.playing, player.loading, player.durationMs, player.playbackSpeed, player.anchorRealtimeMs, player.timelineRevision) {
         PlaybackAnchor(player.positionMs, player.anchorRealtimeMs.takeIf { it > 0 } ?: SystemClock.elapsedRealtime(),
             player.playing && !player.loading, player.durationMs, player.playbackSpeed, player.timelineRevision)
@@ -59,15 +61,29 @@ internal val LyricsPerspectiveAngle = SemanticsPropertyKey<Float>("LyricsPerspec
         position.longValue = clock.positionAt(SystemClock.elapsedRealtime())
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(player.song?.id, anchor.playing, lifecycle) {
+    LaunchedEffect(player.song?.id, anchor.playing, lifecycle, sampleDisplayFrames) {
         position.longValue = clock.positionAt(SystemClock.elapsedRealtime())
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            if (anchor.playing) while (true) withFrameNanos {
+            frameObserver.value?.invoke(0L)
+            if (anchor.playing || sampleDisplayFrames) while (true) {
+                // FPS-only mode needs real display callbacks even while paused.
+                // It uses this same clock loop, not a second animation driver.
+                val frame = if (sampleDisplayFrames) awaitLyricsDisplayFrame() else withFrameNanos { it }
                 position.longValue = clock.positionAt(SystemClock.elapsedRealtime())
+                frameObserver.value?.invoke(frame)
             }
         }
     }
     return position
+}
+
+private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspendCancellableCoroutine { continuation ->
+    val choreographer = android.view.Choreographer.getInstance()
+    val callback = android.view.Choreographer.FrameCallback { time ->
+        if (continuation.isActive) continuation.resumeWith(Result.success(time))
+    }
+    continuation.invokeOnCancellation { choreographer.removeFrameCallback(callback) }
+    choreographer.postFrameCallback(callback)
 }
 
 /** Foundation-only lyric viewport; playback and network ownership stay outside the renderer. */
