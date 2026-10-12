@@ -62,7 +62,8 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
 }
 
 data class DesktopWindowStatus(val attached: Boolean = false, val visible: Boolean = false,
-    val error: String? = null, val alpha: Float = 0f, val width: Int = 0, val height: Int = 0, val x: Int = 0, val y: Int = 0)
+    val error: String? = null, val alpha: Float = 0f, val width: Int = 0, val height: Int = 0, val x: Int = 0, val y: Int = 0,
+    val contentWidth: Int = 0, val contentHeight: Int = 0, val editing: Boolean = false)
 data class DesktopSafeArea(val left: Int, val top: Int, val right: Int, val bottom: Int) {
     val width get() = (right - left).coerceAtLeast(1)
     val height get() = (bottom - top).coerceAtLeast(1)

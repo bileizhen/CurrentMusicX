@@ -40,11 +40,13 @@ import io.github.currencortex.music.feature.lyrics.ui.KaraokeText
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.unit.IntSize
 
 @Composable internal fun DesktopLyricsSurface(lyrics: StateFlow<PlaybackLyricsState>, playback: StateFlow<PlayerState>,
     preferences: StateFlow<DesktopLyricsSettings>, maxTextHeight: () -> Float,
-    drag: (Float, Float) -> Unit, release: () -> Unit, lock: () -> Unit, close: () -> Unit, settings: () -> Unit, onIslandWidth: (Float) -> Unit = {}) {
+    drag: (Float, Float) -> Unit, release: () -> Unit, lock: () -> Unit, close: () -> Unit, settings: () -> Unit, maxIslandWidth: () -> Float = { 640f }, editRequest: Int = 0,
+    onEditingChanged: (Boolean) -> Unit = {}, onIslandSize: (IntSize) -> Unit = {}) {
     val content by lyrics.collectAsStateWithLifecycle()
     val player by playback.collectAsStateWithLifecycle()
     val options by preferences.collectAsStateWithLifecycle()
@@ -68,7 +70,7 @@ import kotlinx.coroutines.flow.first
     var interaction by remember { mutableIntStateOf(0) }
     fun revealControls() { controlsWanted = true; interaction++ }
     fun finishDrag() { release(); dragging = false; revealControls() }
-    LaunchedEffect(options.locked) { if (!options.locked) revealControls() }
+    LaunchedEffect(options.locked, editRequest) { if (!options.locked) revealControls() }
     LaunchedEffect(lifecycle, options.locked, touching, dragging, interaction, controlsWanted) {
         if (options.locked || touching || dragging || !controlsWanted) return@LaunchedEffect
         // The one-shot idle timer runs only while this window is actually visible.
@@ -80,6 +82,7 @@ import kotlinx.coroutines.flow.first
     val chromeAlpha by animateFloatAsState(if (controlsWanted && !options.locked) 1f else 0f,
         tween(if (motion) 180 else 0), label = "desktop chrome")
     val showChrome = !options.locked && (controlsWanted || chromeAlpha > 0f)
+    SideEffect { onEditingChanged(showChrome) }
     val idleGestures = if (!options.locked && !showChrome) Modifier
         .pointerInput(Unit) { detectTapGestures(onTap = { revealControls() }) }
         .then(if (island) Modifier else Modifier.pointerInput(Unit) { detectDragGestures(onDragStart = { dragging = true },
@@ -105,31 +108,14 @@ import kotlinx.coroutines.flow.first
         line?.translation?.takeIf { options.translation && interlude == null }) else null
     val islandReveal = if (island) rememberIslandPresentation(player.song?.id,
         fpsMode || (!content.loading && content.songId == player.song?.id), motion).value else 1f
-    val introWidth = ((islandSize?.metadata?.value ?: 120f) + 14f).coerceIn(if (showChrome) 240f else 48f, 640f)
+    val introWidth = ((islandSize?.metadata?.value ?: 120f) + 14f).coerceIn(if (showChrome) 240f else 48f, 640f).coerceAtMost(maxIslandWidth())
     // One destination per phase: do not chase a moving target on every intro frame.
-    val desiredIslandWidth = if (islandReveal < .15f) introWidth else islandSize?.width ?: introWidth
+    val desiredIslandWidth = if (islandReveal < .15f) introWidth else (islandSize?.width ?: introWidth).coerceAtMost(maxIslandWidth())
     var islandWidthTarget by remember(island) { mutableFloatStateOf(if (island) desiredIslandWidth else 640f) }
     val islandAnimatedWidth = rememberIslandWidth(islandWidthTarget, motion)
     val islandEntrance = if (island) rememberIslandEntrance(motion) else null
-    var islandWindowWidth by remember(island) { mutableFloatStateOf(islandWidthTarget) }
     SideEffect {
-        // Animate the capsule inside a centered envelope. Resize the Android
-        // window only to admit a larger target and once the capsule settles;
-        // updating WindowManager every animation frame causes costly traversals.
         if (islandReveal == 0f || fpsMode || player.song == null || (!content.loading && content.songId == player.song?.id)) islandSize?.let { islandWidthTarget = desiredIslandWidth }
-    }
-    val finalWidthPhase = islandReveal == 0f || islandReveal == 1f
-    val windowWidthTarget = if (finalWidthPhase) islandWidthTarget else maxOf(introWidth, islandSize?.width ?: introWidth)
-    val widthObserver = rememberUpdatedState(onIslandWidth)
-    LaunchedEffect(island, islandWidthTarget, windowWidthTarget, finalWidthPhase) {
-        if (!island) return@LaunchedEffect
-        islandWindowWidth = maxOf(islandWindowWidth, windowWidthTarget)
-        widthObserver.value(islandWindowWidth)
-        if (finalWidthPhase) {
-            snapshotFlow { kotlin.math.abs(islandAnimatedWidth.value - islandWidthTarget) < .5f }.first { it }
-            islandWindowWidth = windowWidthTarget
-            widthObserver.value(islandWindowWidth)
-        }
     }
     val material = if (capsule) Modifier.background(Brush.linearGradient(listOf(Color(0xCC222538), Color(0xAA10131F))), shape)
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(.22f), Color.White.copy(.03f))), shape) else Modifier
@@ -160,8 +146,11 @@ import kotlinx.coroutines.flow.first
         }
         val lyricBody: @Composable () -> Unit = {
             if (fpsMode) DesktopIslandFrameRate(frameRate.rate, displayFont, textColor)
-            else if (island && line != null) key(player.song?.id, line) {
-                DesktopIslandLyrics(line, effective, options, motion, "desktop_window_translation")
+            else if (island && line != null) {
+                val nextIndex = remember(content.document, index) { desktopIslandNextLineIndex(content.document, index) }
+                DesktopIslandCueHost(player.song?.id, index, line, nextIndex, content.document.lines.getOrNull(nextIndex), options to motion) { cue ->
+                    DesktopIslandLyrics(cue, effective, options, motion, "desktop_window_translation")
+                }
             }
             else if (line != null && interlude == null) key(player.song?.id, line) {
                 var layout by remember { mutableStateOf<TextLayoutResult?>(null) }
@@ -217,7 +206,7 @@ import kotlinx.coroutines.flow.first
                     shadow = if (capsule) Shadow(Color.Black.copy(.8f), blurRadius = 4f) else null))
             }
         }
-        if (island) DesktopIslandFrame(player.song, Modifier.islandAnimatedWidth(islandAnimatedWidth).fillMaxWidth().align(Alignment.CenterHorizontally)
+        if (island) DesktopIslandFrame(player.song, Modifier.islandAnimatedWidth(islandAnimatedWidth).fillMaxWidth().align(Alignment.CenterHorizontally).onSizeChanged(onIslandSize)
             .graphicsLayer {
                 val enter = islandEntrance?.value ?: 1f
                 alpha = enter

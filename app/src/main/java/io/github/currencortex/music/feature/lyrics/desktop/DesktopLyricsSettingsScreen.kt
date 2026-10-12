@@ -93,10 +93,10 @@ import kotlin.math.roundToInt
         !permitted -> "首次开启需要授予悬浮窗权限"
         !options.enabled -> "已关闭，样式与位置会保留"
         status.visible && options.locked -> "已锁定 · 触摸穿透，可在下方解锁"
-        status.visible -> "编辑中 · 拖动窗口顶部调整位置"
+        status.visible -> if (options.appearance == DesktopAppearance.ISLAND) "固定居中 · 闲置后触摸穿透，通知中可编辑" else "编辑中 · 拖动窗口顶部调整位置"
         playback.song == null -> "已开启 · 播放音乐后同步显示"
         options.locked -> "已开启 · 返回桌面显示，窗口已锁定"
-        else -> "已开启 · 返回桌面后可拖动窗口"
+        else -> if (options.appearance == DesktopAppearance.ISLAND) "已开启 · 返回桌面显示居中灵动岛" else "已开启 · 返回桌面后可拖动窗口"
     }
     Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = 600.dp).fillMaxWidth().testTag("desktop_lyrics_settings"),
@@ -115,7 +115,7 @@ import kotlin.math.roundToInt
                     } catch (_: RuntimeException) { pending = false; permissionError = "无法打开权限页面，请在系统设置中授予悬浮窗权限" } }
                 }, Modifier.testTag("desktop_enable"), summary = summary, enabled = ready)
                 if (options.enabled) Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (options.locked) "窗口已锁定" else "窗口可拖动", Modifier.weight(1f), fontSize = 13.sp, color = hint)
+                    Text(if (options.locked) "窗口已锁定" else if (options.appearance == DesktopAppearance.ISLAND) "居中显示 · 通知中可编辑" else "窗口可拖动", Modifier.weight(1f), fontSize = 13.sp, color = hint)
                     MusicTextAction(if (options.locked) "解锁并调整" else "锁定窗口", { edit { it.copy(locked = !it.locked) } },
                         Modifier.testTag("desktop_lock").semantics { toggleableState = if (options.locked)
                             androidx.compose.ui.state.ToggleableState.On else androidx.compose.ui.state.ToggleableState.Off })
@@ -183,7 +183,7 @@ import kotlin.math.roundToInt
             item { MusicSectionHeader("窗口位置") }
             item { Card {
                 if (island) Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("灵动岛固定水平居中，不支持拖动。", fontSize = 12.sp, color = hint)
+                    Text("灵动岛固定水平居中，不支持拖动。闲置后触摸穿透，可从通知的“编辑”按钮恢复操作。", fontSize = 12.sp, color = hint)
                     DesktopSlider("位置高度", "${(islandHeight * 100).roundToInt()}%", islandHeight, 0f..1f,
                         "desktop_island_height", { islandHeight = it }, { saveIslandHeight(islandHeight) },
                         { value -> islandHeight = value; saveIslandHeight(value) })

@@ -36,3 +36,6 @@ private val islandPlaceholderText = setOf("♪", "♫", "♬", "前奏", "间奏
 
 internal fun desktopIslandHasLyrics(document: io.github.currencortex.music.feature.lyrics.model.LyricsDocument) =
     document.lines.any(::desktopIslandRealLine)
+
+internal fun desktopIslandNextLineIndex(document: io.github.currencortex.music.feature.lyrics.model.LyricsDocument, index: Int): Int =
+    ((index + 1).coerceAtLeast(0) until document.lines.size).firstOrNull { desktopIslandRealLine(document.lines[it]) } ?: -1

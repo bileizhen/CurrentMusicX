@@ -34,6 +34,8 @@ class DesktopIslandTextTest {
         assertEquals(0, desktopIslandLineIndex(document, timeline, 6000))
         assertEquals(2, desktopIslandLineIndex(document, timeline, 8500))
         assertEquals(2, desktopIslandLineIndex(document, timeline, 12000))
+        assertEquals(2, desktopIslandNextLineIndex(document, 0))
+        assertEquals(-1, desktopIslandNextLineIndex(document, 2))
     }
 
 }

@@ -76,7 +76,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     .border(1.dp, Color.White.copy(alpha = .18f), shape) else Modifier
                 val lyricBody: @Composable () -> Unit = {
                     if (fpsMode) DesktopIslandFrameRate(frameRate.rate, displayFont, textColor)
-                    else if (island) DesktopIslandLyrics(line, if (actual == null) still else time, options, motion, "desktop_preview_translation")
+                    else if (island) {
+                        val nextIndex = if (actual == null) -1 else remember(content.document, index) { desktopIslandNextLineIndex(content.document, index) }
+                        DesktopIslandCueHost(playback.song?.id, index, line, nextIndex, content.document.lines.getOrNull(nextIndex), options to motion) { cue ->
+                            DesktopIslandLyrics(cue, if (actual == null) still else time, options, motion, "desktop_preview_translation")
+                        }
+                    }
                     else Column(Modifier.fillMaxWidth().then(if (island) Modifier else Modifier.padding(horizontal = 4.dp, vertical = 8.dp)),
                         verticalArrangement = Arrangement.spacedBy(desktopLineSpacing(island))) {
                         if (!options.locked && !island) Text(if (actual == null) "CurrentMusic · 样式预览" else playback.song?.name.orEmpty(),

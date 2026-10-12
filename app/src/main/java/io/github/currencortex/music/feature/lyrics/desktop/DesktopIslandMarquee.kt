@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.*
 import androidx.compose.ui.unit.*
+import androidx.compose.ui.layout.layout
 
 /** Replace hard breaks one-for-one so source UTF-16 timing offsets stay intact. */
 internal fun islandSingleLine(text: String): String = text.map {
@@ -49,30 +50,35 @@ internal fun islandPan(elapsedMs: Long, overflow: Float, speed: Float): Float {
     val natural = remember(text, style, density, direction, face) {
         measurer.measure(AnnotatedString(text), style, softWrap = false, maxLines = 1).size.width
     }
-    BoxWithConstraints(modifier.fillMaxWidth().clipToBounds()) {
-        val viewport = constraints.maxWidth.toFloat()
-        // Keep the shaped canvas independent of animated window width. Fit text is
-        // centered in the viewport; overflow begins at its leading edge and pans.
-        val width = natural + with(density) { padding.toPx() * 2 }
-        val speed = with(density) { 24.dp.toPx() }
-        val overflowing = width > viewport
-        // Isolate the mask from the capsule background; cached per viewport size,
-        // shared by preview/overlay and by original/translation. Fit cues stay crisp.
-        val mask = if (overflowing) Modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-            .drawWithCache {
-                val edge = minOf(14.dp.toPx(), size.width * .2f) / size.width.coerceAtLeast(1f)
-                val fade = Brush.horizontalGradient(0f to Color.Transparent, edge to Color.White,
-                    (1f - edge) to Color.White, 1f to Color.Transparent)
-                onDrawWithContent { drawContent(); drawRect(fade, blendMode = BlendMode.DstIn) }
-            } else Modifier
-        Box(Modifier.fillMaxWidth().then(mask)) {
+    // Observe available width during measure, not subcomposition. A spring resize
+    // no longer recomposes the paragraph or removes/readds its mask/layer nodes.
+    val width = natural + with(density) { padding.toPx() * 2 }
+    val speed = with(density) { 24.dp.toPx() }
+    val viewport = remember { mutableIntStateOf(natural) }
+    Box(modifier.fillMaxWidth().layout { measurable, constraints ->
+        val child = measurable.measure(constraints)
+        viewport.intValue = child.width
+        layout(child.width, child.height) { child.placeRelative(0, 0) }
+    }.graphicsLayer {
+        clip = true
+        compositingStrategy = if (width > size.width) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+    }.drawWithCache {
+        val overflowing = width > size.width
+        val edge = minOf(14.dp.toPx(), size.width * .2f) / size.width.coerceAtLeast(1f)
+        val fade = Brush.horizontalGradient(0f to Color.Transparent, edge to Color.White,
+            (1f - edge) to Color.White, 1f to Color.Transparent)
+        onDrawWithContent {
+            drawContent()
+            if (overflowing) drawRect(fade, blendMode = BlendMode.DstIn)
+        }
+    }) {
         Box(Modifier.wrapContentWidth(Alignment.Start, unbounded = true)
             .width(with(density) { width.toDp() })
             .graphicsLayer {
-                val offset = if (width <= viewport) (width - viewport) / 2
-                    else if (motion) islandPan(position.value - startMs, width - viewport, speed) else 0f
+                val available = viewport.intValue.toFloat()
+                val offset = if (width <= available) (width - available) / 2
+                    else if (motion) islandPan(position.value - startMs, width - available, speed) else 0f
                 translationX = if (direction == LayoutDirection.Rtl) offset else -offset
             }) { content() }
-        }
     }
 }

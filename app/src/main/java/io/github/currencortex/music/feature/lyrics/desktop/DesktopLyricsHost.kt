@@ -44,13 +44,18 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private var params: WindowManager.LayoutParams? = null
     private var closed = false
     private var moving = false
-    private var islandWidth = 640f
+    private val islandMaximumWidth = androidx.compose.runtime.mutableFloatStateOf(640f)
+    private val editRequest = androidx.compose.runtime.mutableIntStateOf(0)
+    private var editing = true
     private var current = DesktopLyricsSettings()
-    private var noticeLocked: Boolean? = null
+    private var noticeKey: Triple<Boolean, DesktopAppearance, Boolean>? = null
     private val screen = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                UNLOCK -> scope.launch { preferences.edit { it.copy(locked = false) } }
+                UNLOCK -> scope.launch {
+                    preferences.edit { it.copy(locked = false) }
+                    editRequest.intValue++
+                }
                 CLOSE -> scope.launch { preferences.edit { it.copy(enabled = false) } }
                 else -> visibility()
             }
@@ -105,10 +110,12 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
             setContent { DesktopLyricsSurface(lyrics, playback, preferences.state, maxTextHeight = { textHeight.floatValue }, drag = ::drag, release = ::release, lock = { scope.launch { preferences.edit { it.copy(locked = true) } } },
                 close = { scope.launch { preferences.edit { it.copy(enabled = false) } } }, settings = {
                     context.startActivity(settingsIntent(context))
-                }, onIslandWidth = { preferred ->
-                    if (preferred.isFinite() && kotlin.math.abs(preferred - islandWidth) > .5f) {
-                        islandWidth = preferred.coerceIn(48f, 640f); updateWindow()
-                    }
+                }, maxIslandWidth = { islandMaximumWidth.floatValue }, editRequest = editRequest.intValue,
+                onEditingChanged = { active ->
+                    if (editing != active) { editing = active; updateWindow(); notification() }
+                }, onIslandSize = { size ->
+                    // Evidence only: content bounds never resize/reposition the native surface.
+                    if (view != null) status.value = status.value.copy(contentWidth = size.width, contentHeight = size.height)
                 }) }
         }
         val root = object : android.widget.FrameLayout(visual) {
@@ -139,14 +146,15 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         val initial = placement(safe, width, (160 * context.resources.displayMetrics.density).toInt())
         p.width = initial.width; p.x = initial.x; p.y = initial.y
         val maximum = if (Build.VERSION.SDK_INT >= 31) context.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch else .8f
-        p.alpha = desktopWindowAlpha(current.opacity, current.locked, maximum)
+        p.alpha = desktopWindowAlpha(current.opacity, touchThrough(), maximum)
         owner = life; view = root; composition = compose; params = p
         root.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> if (!moving) updateWindow() }
         try { window.addView(root, p) }
         catch (failure: RuntimeException) { android.util.Log.e("DesktopLyrics", "Cannot add overlay", failure); remove(); status.value = DesktopWindowStatus(error = "无法显示悬浮歌词，请检查悬浮窗权限"); scope.launch { preferences.edit { it.copy(enabled = false) } } }
     }
+    private fun touchThrough() = current.locked || (current.appearance == DesktopAppearance.ISLAND && !editing)
     private fun flags() = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
-        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or if (current.locked) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0
+        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or if (touchThrough()) WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE else 0
     private fun updateWindow() {
         val v = view ?: return; val p = params ?: return
         if (!Settings.canDrawOverlays(context)) { reconcile(); return }
@@ -154,17 +162,20 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         val density = visual.resources.displayMetrics.density
         val fontScale = visual.resources.configuration.fontScale
         textHeight.floatValue = (a.height / density * .65f - (if (current.locked) 40f else 90f) * fontScale).coerceAtLeast(40f)
-        val desired = if (current.appearance == DesktopAppearance.ISLAND) islandWidth else desktopWindowWidthDp(current.appearance).toFloat()
+        // A fixed native surface avoids moving the previous frame's buffer when a
+        // cue expands. Only the centered pill inside Compose changes its width.
+        val desired = desktopWindowWidthDp(current.appearance).toFloat()
         val requestedWidth = minOf((desired * context.resources.displayMetrics.density).toInt(), a.width)
         val placement = placement(a, requestedWidth, v.height.coerceAtLeast(1))
         val width = placement.width
+        islandMaximumWidth.floatValue = width / density
         val maximum = if (Build.VERSION.SDK_INT >= 31) context.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch else .8f
-        val alpha = desktopWindowAlpha(current.opacity, current.locked, maximum)
+        val alpha = desktopWindowAlpha(current.opacity, touchThrough(), maximum)
         if (!moving && (p.x != placement.x || p.y != placement.y || p.width != width || p.flags != flags() || p.alpha != alpha)) {
             p.width = width; p.x = placement.x; p.y = placement.y; p.flags = flags(); p.alpha = alpha
             try { window.updateViewLayout(v, p) } catch (_: RuntimeException) { remove(); return }
         }
-        status.value = status.value.copy(attached = true, alpha = p.alpha, width = width, height = v.height, x = p.x, y = p.y)
+        status.value = status.value.copy(attached = true, alpha = p.alpha, width = width, height = v.height, x = p.x, y = p.y, editing = editing && !current.locked)
     }
     private fun placement(area: DesktopSafeArea, width: Int, height: Int): DesktopPlacement {
         if (current.appearance != DesktopAppearance.ISLAND) return desktopPlacement(area, width, height, current.x, current.y)
@@ -202,22 +213,24 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         status.value = status.value.copy(visible = visible)
     }
     private fun notification() {
-        if (view == null || noticeLocked == current.locked) return
-        noticeLocked = current.locked
+        val key = Triple(current.locked, current.appearance, editing)
+        if (view == null || noticeKey == key) return
+        noticeKey = key
+        val islandIdle = current.appearance == DesktopAppearance.ISLAND && !editing
         notifications.createNotificationChannel(NotificationChannel(CHANNEL, "桌面歌词控制", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) })
         fun command(action: String, code: Int) = PendingIntent.getBroadcast(context, code,
             Intent(action).setPackage(context.packageName), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val open = PendingIntent.getActivity(context, 813, settingsIntent(context), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notice = NotificationCompat.Builder(context, CHANNEL).setSmallIcon(android.R.drawable.ic_media_play)
-            .setContentTitle("桌面歌词${if (current.locked) "已锁定" else "编辑中"}")
-            .setContentText("${if (current.locked) "触摸穿透 · 点击解锁可操作" else if (current.appearance == DesktopAppearance.ISLAND) "固定居中 · 在设置中调整高度" else "拖动歌词调整位置"} · 应用内也可关闭")
+            .setContentTitle("桌面歌词${if (current.locked) "已锁定" else if (islandIdle) "已收起" else "编辑中"}")
+            .setContentText("${if (current.locked) "触摸穿透 · 点击解锁可操作" else if (islandIdle) "触摸穿透 · 点击编辑可显示按钮" else if (current.appearance == DesktopAppearance.ISLAND) "固定居中 · 在设置中调整高度" else "拖动歌词调整位置"} · 应用内也可关闭")
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setSilent(true)
-            .addAction(0, "解锁", command(UNLOCK, 811)).addAction(0, "关闭", command(CLOSE, 812)).build()
+            .addAction(0, if (current.locked) "解锁" else "编辑", command(UNLOCK, 811)).addAction(0, "关闭", command(CLOSE, 812)).build()
         try { notifications.notify(NOTICE, notice) } catch (_: SecurityException) { /* App settings remain an unlock route. */ }
     }
     private fun remove() {
         val v = view
-        view = null; params = null; moving = false; noticeLocked = null
+        view = null; params = null; moving = false; noticeKey = null; editing = true
         if (v != null) runCatching { window.removeViewImmediate(v) }
         composition?.disposeComposition(); composition = null; systemVisible = true
         owner?.lifecycleRegistry?.currentState = Lifecycle.State.DESTROYED; owner = null
