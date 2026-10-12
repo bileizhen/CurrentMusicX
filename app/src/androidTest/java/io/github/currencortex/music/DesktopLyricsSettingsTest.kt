@@ -73,7 +73,7 @@ class DesktopLyricsSettingsTest {
         await { container.desktopLyrics.state.value.islandY == .3f }
         Assert.assertEquals(originalPosition, container.desktopLyrics.state.value.let { it.x to it.y })
         compose.onNodeWithTag("desktop_island_height_reset").performClick()
-        await { container.desktopLyrics.state.value.islandY == .02f }
+        await { container.desktopLyrics.state.value.islandY == DESKTOP_ISLAND_HEIGHT }
         scroll("desktop_translation")
         compose.onNodeWithTag("desktop_translation").performClick()
         await { !container.desktopLyrics.state.value.translation }
