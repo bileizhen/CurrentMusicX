@@ -107,4 +107,32 @@ class DesktopLyricsLineGlowTest {
         compose.onNodeWithText("等待播放").assertExists()
         assertNoDarkInk()
     }
+    @Test fun compactDefaultAlignsTextAndLockRemovesEditingChrome() {
+        val line = LyricLine(0, 5000, "音乐 Hello", translation = "Music beside you")
+        val lyrics = MutableStateFlow(PlaybackLyricsState(LyricsDocument(listOf(line)), songId = 42))
+        val player = MutableStateFlow(PlayerState(song = Song(42, "Compact song"), positionMs = 2000))
+        val options = MutableStateFlow(DesktopLyricsSettings(appearance = DesktopAppearance.CAPTION))
+        compose.setContent {
+            Box(Modifier.width(340.dp).background(Color.White).testTag("line_glow_host")) {
+                DesktopLyricsSurface(lyrics, player, options, { 200f }, { _, _ -> }, {}, {}, {}, {})
+            }
+        }
+        val title = compose.onNodeWithTag("desktop_window_title").getUnclippedBoundsInRoot()
+        val translation = compose.onNodeWithTag("desktop_window_translation").getUnclippedBoundsInRoot()
+        val paragraph = compose.onNodeWithText(line.text).getUnclippedBoundsInRoot()
+        assertEquals(title.left.value, translation.left.value, .1f)
+        assertEquals(paragraph.left.value + 20f, translation.left.value, .1f)
+        val button = compose.onNodeWithText("设置").getUnclippedBoundsInRoot()
+        assertTrue(button.bottom - button.top >= 48.dp)
+        fun windowHeight() = compose.onNodeWithTag("desktop_lyrics_window").getUnclippedBoundsInRoot().let { it.bottom - it.top }
+        val editedHeight = windowHeight()
+        compose.runOnIdle { options.value = options.value.copy(locked = true) }
+        compose.onNodeWithTag("desktop_edit_toolbar").assertDoesNotExist()
+        compose.onNodeWithTag("desktop_window_title").assertDoesNotExist()
+        compose.onNodeWithText(line.text).assertIsDisplayed()
+        compose.onNodeWithTag("desktop_window_translation").assertIsDisplayed()
+        val lockedHeight = windowHeight()
+        assertTrue("A default single caption should be compact: $lockedHeight", lockedHeight < 100.dp)
+        assertTrue(editedHeight - lockedHeight >= 48.dp)
+    }
 }
