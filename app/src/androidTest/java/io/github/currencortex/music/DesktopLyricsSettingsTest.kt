@@ -106,6 +106,12 @@ class DesktopLyricsSettingsTest {
         await { !container.desktopLyrics.state.value.glowEnabled }
         compose.onNodeWithTag("desktop_glow_strength").assertDoesNotExist()
         Assert.assertEquals(0xFF00FF66L, container.desktopLyrics.state.value.glowColor)
+        compose.onNodeWithTag("desktop_glow_enabled").performClick()
+        await { container.desktopLyrics.state.value.glowEnabled }
+        scroll("desktop_glow_color_reset")
+        compose.onNodeWithTag("desktop_glow_color_reset").performClick()
+        await { container.desktopLyrics.state.value.glowColor == 0xFFE0E0E0L }
+        Assert.assertEquals(0xFF80DEFFL, container.desktopLyrics.state.value.textColor)
         Assert.assertEquals(appBefore, container.musicSettings.state.value)
     }
 }

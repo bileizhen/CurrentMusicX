@@ -7,12 +7,13 @@ import kotlinx.coroutines.flow.*
 
 enum class DesktopEffect(val label: String) { PRECISE("精致"), STAGE("舞台") }
 enum class DesktopAppearance(val label: String) { CAPTION("透明字幕"), CAPSULE("半透明胶囊") }
+internal const val DESKTOP_DEFAULT_GLOW_COLOR: Long = 0xFFE0E0E0L
 data class DesktopLyricsSettings(val enabled: Boolean = false, val locked: Boolean = false,
     val effect: DesktopEffect = DesktopEffect.PRECISE, val appearance: DesktopAppearance = DesktopAppearance.CAPSULE,
     val translation: Boolean = true, val fontSize: Float = 26f, val opacity: Float = .85f,
     val offsetMs: Long = 0, val x: Float = .5f, val y: Float = .2f, val snapEdges: Boolean = false,
     val glowEnabled: Boolean = true, val glowStrength: Float = 1f, val glowSpread: Float = 1f,
-    val textColor: Long = 0xFFFFFFFFL, val glowColor: Long = 0xFFFFFFFFL) {
+    val textColor: Long = 0xFFFFFFFFL, val glowColor: Long = DESKTOP_DEFAULT_GLOW_COLOR) {
     fun normalized() = copy(fontSize = fontSize.finite(26f).coerceIn(18f, 38f),
         opacity = opacity.finite(.85f).coerceIn(.35f, .95f), offsetMs = offsetMs.coerceIn(-60000, 60000),
         x = x.finite(.5f).coerceIn(0f, 1f), y = y.finite(.2f).coerceIn(0f, 1f),
@@ -50,7 +51,7 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
             fields.getOrNull(10)?.toBooleanStrictOrNull() ?: false,
             fields.getOrNull(11)?.toBooleanStrictOrNull() ?: true,
             fields.getOrNull(12)?.toFloatOrNull() ?: 1f, fields.getOrNull(13)?.toFloatOrNull() ?: 1f,
-            fields.getOrNull(14)?.toLongOrNull() ?: 0xFFFFFFFFL, fields.getOrNull(15)?.toLongOrNull() ?: 0xFFFFFFFFL).normalized()
+            fields.getOrNull(14)?.toLongOrNull() ?: 0xFFFFFFFFL, fields.getOrNull(15)?.toLongOrNull() ?: DESKTOP_DEFAULT_GLOW_COLOR).normalized()
     }
 }
 

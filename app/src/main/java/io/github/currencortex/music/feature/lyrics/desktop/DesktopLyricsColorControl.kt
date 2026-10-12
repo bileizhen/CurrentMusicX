@@ -24,11 +24,11 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-private val desktopPalette = listOf("白色" to 0xFFFFFFFFL, "冰蓝" to 0xFF80DEFFL, "薄荷" to 0xFF9DE6BAL,
+private val desktopPalette = listOf("白色" to 0xFFFFFFFFL, "淡灰" to DESKTOP_DEFAULT_GLOW_COLOR, "冰蓝" to 0xFF80DEFFL, "薄荷" to 0xFF9DE6BAL,
     "暖金" to 0xFFFFD58AL, "樱粉" to 0xFFFFAACCL, "淡紫" to 0xFFC5B5FFL, "黑色" to 0xFF20232AL)
 
 @OptIn(ExperimentalLayoutApi::class)
-@Composable internal fun DesktopLyricsColorControl(title: String, value: Long, tag: String, save: (Long) -> Unit) {
+@Composable internal fun DesktopLyricsColorControl(title: String, value: Long, tag: String, defaultColor: Long = 0xFFFFFFFFL, save: (Long) -> Unit) {
     val colors = MiuixTheme.colorScheme
     var hex by rememberSaveable(value) { mutableStateOf(desktopColorHex(value)) }
     val parsed = desktopParseColor(hex)
@@ -37,7 +37,7 @@ private val desktopPalette = listOf("白色" to 0xFFFFFFFFL, "冰蓝" to 0xFF80D
             Text(title, Modifier.weight(1f), fontSize = 15.sp)
             Text("#${desktopColorHex(value)}", color = colors.onSurfaceVariantSummary, fontSize = 12.sp,
                 modifier = Modifier.testTag("${tag}_value"))
-            MusicTextAction("默认", { save(0xFFFFFFFFL) }, Modifier.testTag("${tag}_reset"), enabled = value != 0xFFFFFFFFL)
+            MusicTextAction("默认", { save(defaultColor) }, Modifier.testTag("${tag}_reset"), enabled = value != defaultColor)
         }
         FlowRow(Modifier.fillMaxWidth().selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             desktopPalette.forEach { (label, color) ->

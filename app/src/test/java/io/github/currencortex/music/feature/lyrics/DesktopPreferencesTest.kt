@@ -30,7 +30,7 @@ class DesktopPreferencesTest {
             assertTrue(old.enabled); assertTrue(old.locked); assertEquals(30f, old.fontSize, .001f)
             assertEquals(-250L, old.offsetMs); assertEquals(.8f, old.y, .001f)
             assertTrue(old.glowEnabled); assertEquals(1f, old.glowStrength, .001f)
-            assertEquals(1f, old.glowSpread, .001f); assertEquals(0xFFFFFFFFL, old.textColor); assertEquals(0xFFFFFFFFL, old.glowColor)
+            assertEquals(1f, old.glowSpread, .001f); assertEquals(0xFFFFFFFFL, old.textColor); assertEquals(0xFFE0E0E0L, old.glowColor)
         } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
     }
     @Test fun customColorsRejectInvalidInputAndNormalizeIndependentOfWindowOpacity() {
