@@ -148,7 +148,7 @@ import kotlin.math.roundToInt
                     DesktopSlider("辉光范围", "${(glowSpread * 100).roundToInt()}%", glowSpread, .5f..2f, "desktop_glow_spread",
                         { glowSpread = (it * 10).roundToInt() / 10f }, { saveGlowSpread(glowSpread) },
                         { value -> glowSpread = (value * 10).roundToInt() / 10f; saveGlowSpread(glowSpread) })
-                    DesktopLyricsColorControl("辉光颜色", options.glowColor, "desktop_glow_color") { value -> edit { it.copy(glowColor = value) } }
+                    DesktopLyricsColorControl("辉光颜色", options.glowColor, "desktop_glow_color", defaultColor = DESKTOP_DEFAULT_GLOW_COLOR) { value -> edit { it.copy(glowColor = value) } }
                 }
                 Text("仅逐字歌词支持辉光；精致模式更轻柔，舞台模式更明显。", fontSize = 11.sp, color = hint)
             } } }
