@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -31,6 +32,28 @@ import org.junit.Test
 
 class DesktopLyricsIslandTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun nextCueIsPreparedOnceAndPromotedWithoutRecreatingItsRenderer() {
+        val first = LyricLine(0, 3000, "First")
+        val second = LyricLine(3000, 6000, "Next")
+        val current = mutableStateOf(false)
+        val creations = mutableMapOf<String, Int>()
+        compose.setContent {
+            DesktopIslandCueHost(42, if (current.value) 1 else 0, if (current.value) second else first,
+                if (current.value) -1 else 1, if (current.value) null else second, Unit, Modifier.width(180.dp)) { cue ->
+                DisposableEffect(cue) { creations[cue.text] = (creations[cue.text] ?: 0) + 1; onDispose { } }
+                BasicText(cue.text)
+            }
+        }
+        compose.mainClock.advanceTimeBy(100)
+        compose.runOnIdle { assertEquals(1, creations[second.text]) }
+        compose.onNodeWithText(first.text).assertIsDisplayed()
+        compose.onNodeWithText(second.text).assertDoesNotExist()
+        compose.runOnIdle { current.value = true }
+        compose.onNodeWithText(second.text).assertIsDisplayed()
+        compose.onNodeWithText(first.text).assertDoesNotExist()
+        compose.runOnIdle { assertEquals("Promotion must retain the prepared composition", 1, creations[second.text]) }
+    }
 
     @Test fun resizeRetargetsContinuouslyAndReturningWindowFadesIn() {
         val owner = object : androidx.lifecycle.LifecycleOwner {

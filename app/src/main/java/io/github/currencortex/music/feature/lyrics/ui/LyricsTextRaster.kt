@@ -21,6 +21,11 @@ import androidx.compose.ui.unit.LayoutDirection
 internal class LyricsTextRaster(private val layout: TextLayoutResult, private val density: Density,
     private val direction: LayoutDirection, private val glowRadiusScale: Float = 1f) {
     private val glyphHalos = mutableMapOf<Rect, Pair<ImageBitmap, Offset>>()
+    private val prepared = mutableSetOf<ImageBitmap>()
+    /** Optional desktop prefetch: each immutable finished bitmap is uploaded at most once. */
+    fun prepareForDrawing(bitmap: ImageBitmap) {
+        if (prepared.add(bitmap)) bitmap.asAndroidBitmap().prepareToDraw()
+    }
     private val maskPaint by lazy { Paint().apply {
         // Keep bloom outside the source ink, so a partially sung glyph's halo
         // cannot paint its unsung interior white before the karaoke sweep arrives.

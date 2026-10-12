@@ -62,9 +62,18 @@ class DesktopLyricsWindowTest {
                 }
                 bitmap.recycle()
             }
-            val shortWidth = container.desktopLyricsStatus.value.width
+            val shortWidth = container.desktopLyricsStatus.value.contentWidth
+            val fixedWindow = container.desktopLyricsStatus.value
+            assertFalse("Idle island passes touches without changing the saved lock", fixedWindow.editing)
+            assertFalse(container.desktopLyrics.state.value.locked)
+            assertTrue(fixedWindow.alpha <= .8f)
+            context.sendBroadcast(Intent(DesktopLyricsHost.UNLOCK).setPackage(context.packageName))
+            withTimeout(10000) { while (!container.desktopLyricsStatus.value.editing) delay(50) }
+            withTimeout(10000) { while (container.desktopLyricsStatus.value.editing) delay(50) }
+            assertEquals(fixedWindow.x, container.desktopLyricsStatus.value.x)
+            assertEquals(fixedWindow.width, container.desktopLyricsStatus.value.width)
             lyrics.value = PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 4000, "共享歌词数据".repeat(8)))), songId = 100)
-            withTimeout(10000) { while (container.desktopLyricsStatus.value.width <= shortWidth) delay(50) }
+            withTimeout(10000) { while (container.desktopLyricsStatus.value.contentWidth <= shortWidth) delay(50) }
             delay(350) // Wait for the finite width transition before saving the rotation baseline.
             val portraitWidth = container.desktopLyricsStatus.value.width
             // The vendor launcher fixes its orientation. Rotate over the app instead.
@@ -91,21 +100,23 @@ class DesktopLyricsWindowTest {
             withTimeout(10000) { while (container.desktopLyricsStatus.value.y <= 200 * density) delay(50) }
             assertEquals("Island ignores normal horizontal placement", centeredX, container.desktopLyricsStatus.value.x)
             android.util.Log.i("DesktopEvidence", "height updated: ${container.desktopLyricsStatus.value}")
-            val wideWidth = container.desktopLyricsStatus.value.width
+            val wideWidth = container.desktopLyricsStatus.value.contentWidth
             lyrics.value = PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 4000, "音乐"))), songId = 100)
-            withTimeout(10000) { while (container.desktopLyricsStatus.value.width >= wideWidth) delay(50) }
+            withTimeout(10000) { while (container.desktopLyricsStatus.value.contentWidth >= wideWidth) delay(50) }
             delay(350)
             val beforeSwitch = container.desktopLyricsStatus.value
             shell("dumpsys gfxinfo ${context.packageName} reset")
             player.value = player.value.copy(song = Song(101, "新歌曲"))
             delay(700) // Inspect the heading after its velocity-preserving resize settles.
-            assertTrue("Heading-only width follows metadata rather than the previous lyric", container.desktopLyricsStatus.value.width >= 48 * density && container.desktopLyricsStatus.value.width < beforeSwitch.width)
+            assertTrue("Heading-only width follows metadata rather than the previous lyric", container.desktopLyricsStatus.value.contentWidth >= 48 * density && container.desktopLyricsStatus.value.contentWidth < beforeSwitch.contentWidth)
             assertEquals("Loading does not move the top anchor", beforeSwitch.y, container.desktopLyricsStatus.value.y)
-            assertTrue("Loading follows compact metadata height", container.desktopLyricsStatus.value.height < 45 * density)
+            assertTrue("Loading follows compact metadata height", container.desktopLyricsStatus.value.contentHeight < 45 * density)
             lyrics.value = PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 8000, "音乐与你同在", translation = "The music stays with you"))), songId = 101)
             repeat(50) {
                 delay(50)
                 val frame = container.desktopLyricsStatus.value
+                assertEquals("Cue changes never reposition the native surface", beforeSwitch.x, frame.x)
+                assertEquals("Cue changes never resize the native surface width", beforeSwitch.width, frame.width)
                 assertEquals("No vertical bounce while new lyrics resize", beforeSwitch.y, frame.y)
                 assertTrue("Adaptive shell remains bounded", frame.height in (30 * density).toInt()..(70 * density).toInt())
                 assertTrue("Every width transition stays centered", kotlin.math.abs(frame.x + frame.width / 2 - context.getSystemService(android.view.WindowManager::class.java).maximumWindowMetrics.bounds.centerX()) <= 2)

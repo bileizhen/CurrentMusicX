@@ -40,7 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
     baseOpacity: State<Float>? = null, accurateWordLift: Boolean = false,
     outline: Boolean = false, onLayout: ((TextLayoutResult) -> Unit)? = null,
     glowColor: Color = color, glowRadiusScale: Float = 1f, untimedLineGlow: Boolean = false,
-    effectPadding: Dp = 0.dp, singleLine: Boolean = false) {
+    effectPadding: Dp = 0.dp, singleLine: Boolean = false, prepareDrawResources: Boolean = false) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -118,9 +118,12 @@ import androidx.compose.ui.text.style.TextAlign
         val tint = remember(color) { ColorFilter.tint(color) }
         val haloTint = remember(glowColor) { ColorFilter.tint(glowColor) }
         // Prepare once when enabled, never run a blur filter or text rasterization per frame.
-        if (liftTimed) raster.ink
-        if (glowLine) raster.lineHalo
-        if (glowTimed) glyphs.filter { glowWeights[it.wordIndex] > 0f }.forEach { raster.glyphHalo(it.box) }
+        if (liftTimed) raster.ink.let { if (prepareDrawResources) raster.prepareForDrawing(it) }
+        if (glowLine) raster.lineHalo.first.let { if (prepareDrawResources) raster.prepareForDrawing(it) }
+        if (glowTimed) glyphs.filter { glowWeights[it.wordIndex] > 0f }.forEach {
+            val halo = raster.glyphHalo(it.box).first
+            if (prepareDrawResources) raster.prepareForDrawing(halo)
+        }
         val begin = words.minOfOrNull { it.startTimeMs } ?: 0
         val finish = maxOf(words.maxOfOrNull { it.endTimeMs } ?: 0,
             if (liftTimed) (glyphs.maxOfOrNull { it.start } ?: 0) + LYRIC_GLYPH_RISE_MS else 0)

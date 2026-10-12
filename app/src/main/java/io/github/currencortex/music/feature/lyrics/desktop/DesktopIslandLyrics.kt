@@ -32,7 +32,7 @@ import io.github.currencortex.music.feature.lyrics.ui.*
         DesktopIslandMarquee(line.text, style, position, line.startTimeMs, motion, padding) {
             KaraokeText(line, position, animateWords = line.words.isNotEmpty(), modifier = Modifier.fillMaxWidth(),
                 fontSize = font, fontWeight = FontWeight.Medium, reservedFontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center, singleLine = true, effectPadding = padding,
+                textAlign = TextAlign.Center, singleLine = true, effectPadding = padding, prepareDrawResources = true,
                 forceLineAnimation = false, glow = motion && options.glowEnabled && options.glowStrength > 0f,
                 wordLift = motion && stage, accurateWordLift = true, glowOpacity = opacity, baseOpacity = base,
                 color = color, glowColor = Color(options.glowColor.toInt()),
