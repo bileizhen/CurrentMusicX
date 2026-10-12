@@ -115,6 +115,12 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val playbackQueue = PlaybackQueue()
     val dockAudioLevel = DockAudioLevel()
     val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)
+    val playbackLyrics = io.github.currencortex.music.feature.lyrics.data.PlaybackLyrics(
+        kotlinx.coroutines.flow.combine(playbackQueue.state.map { it.current }.distinctUntilChanged(),
+            accountRepository.sessionRevision, neteaseSessions.state.map { it.revision }.distinctUntilChanged(),
+            navidrome.state.map { it.revision }.distinctUntilChanged(), musicSettings.state.map { it.server }.distinctUntilChanged()) { song, account, netease, navidrome, server ->
+            io.github.currencortex.music.feature.lyrics.data.LyricsRequest(song, listOf(account, netease, navidrome, server))
+        }, lyricsRepository::load, playerScope)
     val sleepTimer = io.github.currencortex.music.core.media.SleepTimer(playerController, playerScope)
     val roomRepository = io.github.currencortex.music.data.room.RoomRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
     val roomSession = io.github.currencortex.music.core.room.RoomSession(roomRepository,

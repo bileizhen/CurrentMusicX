@@ -5,6 +5,13 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LyricsPlaybackClockTest {
+    @org.junit.Test fun explicitSmallSeekSnapsInsteadOfSmoothingThroughOldLyric() {
+        val clock = io.github.currencortex.music.feature.lyrics.timeline.LyricsPlaybackClock()
+        clock.update(1, io.github.currencortex.music.feature.lyrics.timeline.PlaybackAnchor(1000, 0, true))
+        clock.update(1, io.github.currencortex.music.feature.lyrics.timeline.PlaybackAnchor(1070, 100, true, revision = 1))
+        org.junit.Assert.assertEquals(1070L, clock.positionAt(100))
+    }
+
     @Test fun smallSampleDriftDoesNotMakeWordsJumpBackwards() {
         val clock = LyricsPlaybackClock()
         clock.update(1, PlaybackAnchor(1000, 0, true))
