@@ -11,6 +11,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.CanvasDrawScope
+import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.Density
@@ -28,7 +29,7 @@ internal class LyricsTextRaster(private val layout: TextLayoutResult, private va
     val ink: ImageBitmap by lazy {
         ImageBitmap(layout.size.width.coerceAtLeast(1), layout.size.height.coerceAtLeast(1)).also { bitmap ->
             CanvasDrawScope().draw(density, direction, Canvas(bitmap), Size(bitmap.width.toFloat(), bitmap.height.toFloat())) {
-                drawText(layout, color = Color.White)
+                drawText(layout, color = Color.White, drawStyle = Fill)
             }
         }
     }
