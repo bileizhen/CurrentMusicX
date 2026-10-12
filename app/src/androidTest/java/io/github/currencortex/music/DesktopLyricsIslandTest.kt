@@ -160,8 +160,9 @@ class DesktopLyricsIslandTest {
         assertTrue("Short original must be centered in the lyric region", kotlin.math.abs(((original.left + original.right) / 2 - center).value) < 2f)
         assertTrue("Translation must share the original's horizontal center", kotlin.math.abs(((translated.left + translated.right) / 2 - center).value) < 2f)
         val short = compose.onNodeWithTag("desktop_island").getUnclippedBoundsInRoot()
-        assertTrue("Short lyrics and translation should fit near status-bar height", short.bottom - short.top < 60.dp)
+        assertTrue("Short lyrics and translation should fit near status-bar height", short.bottom - short.top < 52.dp)
         val bilingualCover = compose.onNodeWithTag("desktop_island_cover").getUnclippedBoundsInRoot()
+        assertTrue("Bilingual cover shrinks with its compact pill", bilingualCover.bottom - bilingualCover.top < 42.dp)
         compose.runOnIdle { options.value = options.value.copy(translation = false) }
         val monoShell = compose.onNodeWithTag("desktop_island").getUnclippedBoundsInRoot()
         val monoCover = compose.onNodeWithTag("desktop_island_cover").getUnclippedBoundsInRoot()

@@ -15,6 +15,7 @@ internal fun desktopIslandStatusLine(line: io.github.currencortex.music.feature.
     line != null && line.words.isEmpty() && line.text.trim().trimEnd('。', '.', '!', '！').replace('，', ',') == "纯音乐,请欣赏"
 
 internal fun desktopEffectPadding(island: Boolean) = if (island) 10.dp else desktopHaloPadding
+internal val desktopIslandTranslationBottomPadding = 2.dp
 internal fun desktopLineSpacing(island: Boolean) = if (island) (-8).dp else desktopCaptionSpacing
 internal fun desktopGlowSpread(island: Boolean, spread: Float): Float = if (island) .5f + (spread - .5f) * .2f else spread
 internal fun desktopSubtitleSize(island: Boolean, font: Float) = if (island) (font * .72f).coerceAtLeast(10f) else desktopTranslationSize(font)
