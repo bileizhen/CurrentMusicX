@@ -6,16 +6,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextLayoutResult
@@ -25,6 +28,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.feature.lyrics.data.PlaybackLyricsState
 import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
@@ -48,6 +55,32 @@ import kotlinx.coroutines.flow.StateFlow
     val interlude by remember(timeline, effective) { derivedStateOf { timeline.interlude(effective.value)?.label } }
     val jumpTime = remember(player.timelineRevision) { android.os.SystemClock.elapsedRealtime() }
     val motion = rememberDesktopMotion()
+    // Editing chrome is transient; hiding it must never change the saved touch-through lock.
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    var controlsWanted by remember { mutableStateOf(true) }
+    var touching by remember { mutableStateOf(false) }
+    var dragging by remember { mutableStateOf(false) }
+    var interaction by remember { mutableIntStateOf(0) }
+    fun revealControls() { controlsWanted = true; interaction++ }
+    fun finishDrag() { release(); dragging = false; revealControls() }
+    LaunchedEffect(options.locked) { if (!options.locked) revealControls() }
+    LaunchedEffect(lifecycle, options.locked, touching, dragging, interaction, controlsWanted) {
+        if (options.locked || touching || dragging || !controlsWanted) return@LaunchedEffect
+        // The one-shot idle timer runs only while this window is actually visible.
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            delay(3_000)
+            controlsWanted = false
+        }
+    }
+    val chromeAlpha by animateFloatAsState(if (controlsWanted && !options.locked) 1f else 0f,
+        tween(if (motion) 180 else 0), label = "desktop chrome")
+    val showChrome = !options.locked && (controlsWanted || chromeAlpha > 0f)
+    val idleGestures = if (!options.locked && !showChrome) Modifier
+        .pointerInput(Unit) { detectTapGestures(onTap = { revealControls() }) }
+        .pointerInput(Unit) { detectDragGestures(onDragStart = { dragging = true },
+            onDragEnd = { finishDrag() }, onDragCancel = { finishDrag() },
+            onDrag = { change, amount -> change.consume(); drag(amount.x, amount.y) }) }
+        else Modifier
     val stage = options.effect == DesktopEffect.STAGE
     val glowOpacity = remember(stage, options.glowStrength) { mutableFloatStateOf(options.glowStrength * if (stage) 1f else .5f) }
     val textColor = Color(options.textColor.toInt())
@@ -56,11 +89,22 @@ import kotlinx.coroutines.flow.StateFlow
     val capsule = options.appearance == DesktopAppearance.CAPSULE
     val material = if (capsule) Modifier.background(Brush.linearGradient(listOf(Color(0xCC222538), Color(0xAA10131F))), shape)
         .border(1.dp, Brush.linearGradient(listOf(Color.White.copy(.22f), Color.White.copy(.03f))), shape) else Modifier
-    Column(Modifier.fillMaxWidth().then(material).padding(horizontal = 4.dp, vertical = 8.dp).testTag("desktop_lyrics_window"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (!options.locked) Row(Modifier.fillMaxWidth().testTag("desktop_edit_toolbar")
+    Column(Modifier.fillMaxWidth().then(material).then(idleGestures)
+        .pointerInput(options.locked) {
+            if (!options.locked) try {
+                // Observe without consuming: buttons and lyric scrolling keep their gestures.
+                while (true) awaitPointerEventScope {
+                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                    touching = event.changes.any { it.pressed }
+                    if (touching) interaction++
+                }
+            } finally { touching = false }
+        }.padding(horizontal = 4.dp, vertical = 8.dp).testTag("desktop_lyrics_window"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (showChrome) Row(Modifier.fillMaxWidth().testTag("desktop_edit_toolbar")
+            .graphicsLayer { alpha = chromeAlpha }
             .background(if (capsule) Color.White.copy(.06f) else Color(0xEB161A25), RoundedCornerShape(16.dp))
             .padding(horizontal = 8.dp).pointerInput(Unit) { detectDragGestures(
-            onDragEnd = release, onDragCancel = release, onDrag = { change, amount -> change.consume(); drag(amount.x, amount.y) }) },
+            onDragStart = { dragging = true }, onDragEnd = { finishDrag() }, onDragCancel = { finishDrag() }, onDrag = { change, amount -> change.consume(); drag(amount.x, amount.y) }) },
             verticalAlignment = Alignment.CenterVertically) {
             BasicText("⠿  拖动", Modifier.weight(1f).heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically), style = TextStyle(fontSize = 12.sp, color = Color.White.copy(.75f)))
             DesktopAction("设置", settings); DesktopAction("锁定", lock); DesktopAction("关闭", close)
@@ -90,10 +134,10 @@ import kotlinx.coroutines.flow.StateFlow
                 }
             }
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(desktopCaptionSpacing)) {
-                if (!options.locked) DesktopSongTitle(player.song?.name ?: "CurrentMusic")
+                if (showChrome) DesktopSongTitle(player.song?.name ?: "CurrentMusic", chromeAlpha)
                 Box(Modifier.fillMaxWidth().heightIn(max = maxTextHeight().dp).clipToBounds()) {
                     KaraokeText(line, effective, animateWords = line.words.isNotEmpty(), effectPadding = desktopHaloPadding,
-                        modifier = Modifier.fillMaxWidth().verticalScroll(scroll, enabled = !options.locked)
+                        modifier = Modifier.fillMaxWidth().verticalScroll(scroll, enabled = showChrome)
                             .graphicsLayer {
                                 alpha = .65f + .35f * entrance.value
                                 translationY = (1f - entrance.value) * if (stage) 8.dp.toPx() else 3.dp.toPx()
@@ -110,10 +154,10 @@ import kotlinx.coroutines.flow.StateFlow
                     style = TextStyle(fontSize = desktopTranslationSize(options.fontSize).sp, color = textColor.copy(.75f),
                         shadow = if (capsule) Shadow(Color.Black, blurRadius = 3f) else null), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (!options.locked && scroll.maxValue > 0 && line.words.isEmpty()) BasicText("长句可上下滑动",
+            if (showChrome && scroll.maxValue > 0 && line.words.isEmpty()) BasicText("长句可上下滑动",
                 Modifier.padding(horizontal = desktopHaloPadding), style = TextStyle(fontSize = 10.sp, color = Color.White.copy(.5f)))
         } else Column(Modifier.padding(horizontal = desktopHaloPadding), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (!options.locked) BasicText(player.song?.name ?: "CurrentMusic", style = TextStyle(fontSize = 11.sp, color = Color.White.copy(.55f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            if (showChrome) BasicText(player.song?.name ?: "CurrentMusic", Modifier.graphicsLayer { alpha = chromeAlpha }, style = TextStyle(fontSize = 11.sp, color = Color.White.copy(.55f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
             BasicText(when {
                 player.song == null -> "等待播放"
                 content.loading || content.songId != player.song?.id -> "正在读取歌词"
@@ -124,8 +168,8 @@ import kotlinx.coroutines.flow.StateFlow
         }
     }
 }
-@Composable private fun DesktopSongTitle(name: String) {
-    BasicText(name, Modifier.padding(horizontal = desktopHaloPadding).testTag("desktop_window_title"),
+@Composable private fun DesktopSongTitle(name: String, alpha: Float) {
+    BasicText(name, Modifier.padding(horizontal = desktopHaloPadding).graphicsLayer { this.alpha = alpha }.testTag("desktop_window_title"),
         style = TextStyle(fontSize = 11.sp, color = Color.White.copy(.55f)), maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
 @Composable private fun DesktopAction(label: String, click: () -> Unit) {
