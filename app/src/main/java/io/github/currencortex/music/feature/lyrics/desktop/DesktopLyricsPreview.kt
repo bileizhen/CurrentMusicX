@@ -54,7 +54,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val context = LocalContext.current
     val maximum = remember(context) { if (Build.VERSION.SDK_INT >= 31)
         context.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch else .8f }
-    val alpha = desktopWindowAlpha(options.opacity, options.locked, maximum)
+    val alpha = desktopWindowAlpha(options.displayOpacity, options.locked, maximum)
     val glow = remember(options.effect, options.glowStrength) { mutableFloatStateOf(options.glowStrength * if (options.effect == DesktopEffect.STAGE) 1f else .5f) }
     val textColor = Color(options.textColor.toInt())
     val islandSize = if (island) rememberIslandSize(playback.song, if (fpsMode) "000.0 FPS" else line.text, displayFont, fpsMode, false,

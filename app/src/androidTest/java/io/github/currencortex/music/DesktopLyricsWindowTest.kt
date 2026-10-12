@@ -67,6 +67,10 @@ class DesktopLyricsWindowTest {
             assertFalse("Idle island passes touches without changing the saved lock", fixedWindow.editing)
             assertFalse(container.desktopLyrics.state.value.locked)
             assertTrue(fixedWindow.alpha <= .8f)
+            container.desktopLyrics.edit { it.copy(islandOpacity = .62f) }
+            withTimeout(10000) { while (kotlin.math.abs(container.desktopLyricsStatus.value.alpha - .62f) > .001f) delay(50) }
+            assertEquals(.85f, container.desktopLyrics.state.value.opacity, .001f)
+            container.desktopLyrics.edit { it.copy(islandOpacity = .85f) }
             context.sendBroadcast(Intent(DesktopLyricsHost.UNLOCK).setPackage(context.packageName))
             withTimeout(10000) { while (!container.desktopLyricsStatus.value.editing) delay(50) }
             withTimeout(10000) { while (container.desktopLyricsStatus.value.editing) delay(50) }

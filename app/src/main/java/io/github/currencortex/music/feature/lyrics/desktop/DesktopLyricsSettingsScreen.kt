@@ -73,18 +73,18 @@ import kotlin.math.roundToInt
     fun edit(change: (DesktopLyricsSettings) -> DesktopLyricsSettings) { scope.launch { container.desktopLyrics.edit(change) } }
     val island = options.appearance == DesktopAppearance.ISLAND
     fun saveFont(value: Float) { edit { if (island) it.copy(islandFontSize = value) else it.copy(fontSize = value) } }
-    fun saveOpacity(value: Float) { edit { it.copy(opacity = value) } }
+    fun saveOpacity(value: Float) { edit { if (island) it.copy(islandOpacity = value) else it.copy(opacity = value) } }
     fun saveOffset(value: Float) { edit { it.copy(offsetMs = value.toLong()) } }
     fun saveGlowStrength(value: Float) { edit { it.copy(glowStrength = value) } }
     fun saveGlowSpread(value: Float) { edit { it.copy(glowSpread = value) } }
     var font by remember(options.displayFontSize, island) { mutableFloatStateOf(options.displayFontSize) }
     var islandHeight by remember(options.islandY) { mutableFloatStateOf(options.islandY) }
     fun saveIslandHeight(value: Float) { edit { it.copy(islandY = value) } }
-    var opacity by remember(options.opacity) { mutableFloatStateOf(options.opacity) }
+    var opacity by remember(options.displayOpacity, island) { mutableFloatStateOf(options.displayOpacity) }
     var offset by remember(options.offsetMs) { mutableFloatStateOf(options.offsetMs.toFloat()) }
     var glowStrength by remember(options.glowStrength) { mutableFloatStateOf(options.glowStrength) }
     var glowSpread by remember(options.glowSpread) { mutableFloatStateOf(options.glowSpread) }
-    val preview = options.copy(fontSize = if (island) options.fontSize else font, islandFontSize = if (island) font else options.islandFontSize, opacity = opacity, offsetMs = offset.toLong(), glowStrength = glowStrength, glowSpread = glowSpread)
+    val preview = options.copy(fontSize = if (island) options.fontSize else font, islandFontSize = if (island) font else options.islandFontSize, opacity = if (island) options.opacity else opacity, islandOpacity = if (island) opacity else options.islandOpacity, offsetMs = offset.toLong(), glowStrength = glowStrength, glowSpread = glowSpread)
     val hint = MiuixTheme.colorScheme.onSurfaceVariantSummary
     val summary = when {
         !ready -> "正在读取设置"
@@ -165,10 +165,11 @@ import kotlin.math.roundToInt
                 val defaultFont = if (island) DESKTOP_ISLAND_FONT_SIZE else DESKTOP_DEFAULT_FONT_SIZE
                 MusicTextAction("恢复默认字号 · ${defaultFont.roundToInt()} sp", { saveFont(defaultFont) },
                     Modifier.testTag("desktop_font_reset"), enabled = options.displayFontSize != defaultFont)
-                DesktopSlider("不透明度", "${(opacity * 100).roundToInt()}%", opacity, 0.35f..0.95f, "desktop_opacity", { opacity = (it * 100).roundToInt() / 100f },
+                DesktopSlider(if (island) "灵动岛不透明度" else "不透明度", "${(opacity * 100).roundToInt()}%", opacity, 0.35f..0.95f, "desktop_opacity", { opacity = (it * 100).roundToInt() / 100f },
                     { saveOpacity(opacity) }, { value -> opacity = value; saveOpacity(value) })
-                if (options.enabled && options.locked && status.alpha > 0 && options.opacity > status.alpha + .005f)
+                if (options.enabled && (options.locked || (island && !status.editing)) && status.alpha > 0 && options.displayOpacity > status.alpha + .005f)
                     Text("触摸穿透时，系统将实际不透明度限制为 ${(status.alpha * 100).roundToInt()}%。", fontSize = 12.sp, color = hint)
+                if (island) Text("只调整灵动岛，其他外观的透明度独立保留。", fontSize = 11.sp, color = hint)
                 val range = maxOf(3000f, abs(offset))
                 DesktopSlider("歌词偏移", if (offset == 0f) "同步" else "${if (offset > 0) "+" else ""}${offset.toInt()} ms", offset, -range..range, "desktop_offset",
                     { offset = (it / 100).roundToInt() * 100f }, { saveOffset(offset) },
