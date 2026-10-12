@@ -49,7 +49,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val maximum = remember(context) { if (Build.VERSION.SDK_INT >= 31)
         context.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch else .8f }
     val alpha = desktopWindowAlpha(options.opacity, options.locked, maximum)
-    val glow = remember(options.effect) { mutableFloatStateOf(if (options.effect == DesktopEffect.STAGE) 1f else .5f) }
+    val glow = remember(options.effect, options.glowStrength) { mutableFloatStateOf(options.glowStrength * if (options.effect == DesktopEffect.STAGE) 1f else .5f) }
+    val textColor = Color(options.textColor.toInt())
     val colors = MiuixTheme.colorScheme
     Card(Modifier.fillMaxWidth().testTag("desktop_preview")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -69,12 +70,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     Box(Modifier.heightIn(max = 108.dp).clipToBounds()) {
                         KaraokeText(line, if (actual == null) still else time, animateWords = line.words.isNotEmpty(),
                             fontSize = options.fontSize, fontWeight = FontWeight.Medium,
-                            forceLineAnimation = false, glow = motion, wordLift = motion && options.effect == DesktopEffect.STAGE,
-                            accurateWordLift = true, glowOpacity = glow, outline = !capsule)
+                            forceLineAnimation = false, glow = motion && options.glowEnabled && options.glowStrength > 0f,
+                            wordLift = motion && options.effect == DesktopEffect.STAGE, accurateWordLift = true,
+                            glowOpacity = glow, outline = !capsule, color = textColor,
+                            glowColor = Color(options.glowColor.toInt()), glowRadiusScale = options.glowSpread)
                     }
                     if (options.translation && !line.translation.isNullOrBlank()) Text(line.translation,
                         modifier = Modifier.testTag("desktop_preview_translation"), fontSize = (options.fontSize * .58f).sp,
-                        color = Color.White.copy(alpha = .75f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        color = textColor.copy(alpha = .75f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
             Text("样式、字号与透明度在这里预览，无需先开启悬浮窗。", fontSize = 11.sp, color = colors.onSurfaceVariantSummary)

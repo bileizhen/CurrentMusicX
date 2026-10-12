@@ -49,7 +49,8 @@ import kotlinx.coroutines.flow.StateFlow
     val jumpTime = remember(player.timelineRevision) { android.os.SystemClock.elapsedRealtime() }
     val motion = rememberDesktopMotion()
     val stage = options.effect == DesktopEffect.STAGE
-    val glowOpacity = remember(stage) { mutableFloatStateOf(if (stage) 1f else .5f) }
+    val glowOpacity = remember(stage, options.glowStrength) { mutableFloatStateOf(options.glowStrength * if (stage) 1f else .5f) }
+    val textColor = Color(options.textColor.toInt())
     val baseOpacity = remember(stage) { mutableFloatStateOf(if (stage) .35f else .55f) }
     val shape = RoundedCornerShape(22.dp)
     val capsule = options.appearance == DesktopAppearance.CAPSULE
@@ -95,12 +96,13 @@ import kotlinx.coroutines.flow.StateFlow
                             translationY = (1f - entrance.value) * if (stage) 8.dp.toPx() else 3.dp.toPx()
                         },
                     fontSize = options.fontSize, fontWeight = FontWeight.Medium, reservedFontWeight = FontWeight.Medium,
-                    forceLineAnimation = false, glow = motion, wordLift = motion && stage,
+                    forceLineAnimation = false, glow = motion && options.glowEnabled && options.glowStrength > 0f, wordLift = motion && stage,
                     accurateWordLift = true, glowOpacity = glowOpacity, baseOpacity = baseOpacity,
+                    color = textColor, glowColor = Color(options.glowColor.toInt()), glowRadiusScale = options.glowSpread,
                     outline = !capsule, onLayout = { if (layout != it) layout = it })
             }
             if (options.translation && !line.translation.isNullOrBlank()) BasicText(line.translation,
-                style = TextStyle(fontSize = (options.fontSize * .58f).sp, color = Color.White.copy(.75f),
+                style = TextStyle(fontSize = (options.fontSize * .58f).sp, color = textColor.copy(.75f),
                     shadow = Shadow(Color.Black, blurRadius = 3f)), maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (!options.locked && scroll.maxValue > 0 && line.words.isEmpty()) BasicText("长句可上下滑动",
                 style = TextStyle(fontSize = 10.sp, color = Color.White.copy(.5f)))
@@ -109,7 +111,7 @@ import kotlinx.coroutines.flow.StateFlow
             content.loading || content.songId != player.song?.id -> "正在读取歌词"
             content.document.lines.isEmpty() -> "暂无歌词 · 聆听音乐"
             else -> interlude ?: "♪"
-        }, style = TextStyle(fontSize = options.fontSize.sp, color = Color.White,
+        }, style = TextStyle(fontSize = options.fontSize.sp, color = textColor,
             shadow = Shadow(Color.Black.copy(.8f), blurRadius = 4f)))
     }
 }
