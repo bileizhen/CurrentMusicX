@@ -104,7 +104,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             color = textColor.copy(alpha = .75f), maxLines = if (island) 1 else 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                if (island) DesktopIslandFrame(playback.song, Modifier.islandAnimatedWidth(islandWidth).fillMaxWidth().graphicsLayer { this.alpha = alpha }, metadata = islandSize?.metadata,
+                if (island) DesktopIslandFrame(playback.song, Modifier.islandAnimatedWidth(islandWidth).fillMaxWidth().padding(vertical = desktopIslandDrawingSpace).graphicsLayer { this.alpha = alpha }, metadata = islandSize?.metadata,
                     presentation = islandReveal, coverPosition = clock, motion = motion,
                     content = lyricBody)
                 else if (!island) Box(Modifier.widthIn(max = 320.dp).fillMaxWidth().graphicsLayer { this.alpha = alpha }.then(material)) { lyricBody() }

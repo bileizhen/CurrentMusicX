@@ -5,6 +5,7 @@ import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -27,7 +28,11 @@ import io.github.currencortex.music.feature.lyrics.ui.*
     val style = TextStyle(fontFamily = LyricsFontFamily, fontWeight = FontWeight.Medium,
         fontSynthesis = lyricsFontSynthesis(FontWeight.Medium), fontSize = font.sp,
         lineHeight = (font * 1.2f).sp, textAlign = TextAlign.Center)
-    Column(Modifier.fillMaxWidth().padding(bottom = if (options.translation && line.translation.isNotBlank()) desktopIslandTranslationBottomPadding else 0.dp),
+    val bilingual = options.translation && line.translation.isNotBlank()
+    // Center visible text, rather than counting the primary canvas's halo margin
+    // as ink. Keep that canvas intact and reserve space in both hosts for overflow.
+    Column(Modifier.fillMaxWidth().padding(bottom = if (bilingual) desktopIslandTranslationBottomPadding else 0.dp)
+        .graphicsLayer { translationY = if (bilingual) -((padding - desktopIslandTranslationBottomPadding) / 2).toPx() else 0f },
         verticalArrangement = Arrangement.spacedBy(desktopLineSpacing(true))) {
         DesktopIslandMarquee(line.text, style, position, line.startTimeMs, motion, padding) {
             KaraokeText(line, position, animateWords = line.words.isNotEmpty(), modifier = Modifier.fillMaxWidth(),
