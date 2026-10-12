@@ -206,7 +206,7 @@ import androidx.compose.ui.unit.IntSize
                     shadow = if (capsule) Shadow(Color.Black.copy(.8f), blurRadius = 4f) else null))
             }
         }
-        if (island) DesktopIslandFrame(player.song, Modifier.islandAnimatedWidth(islandAnimatedWidth).fillMaxWidth().align(Alignment.CenterHorizontally).onSizeChanged(onIslandSize)
+        if (island) DesktopIslandFrame(player.song, Modifier.islandAnimatedWidth(islandAnimatedWidth).fillMaxWidth().align(Alignment.CenterHorizontally).padding(vertical = desktopIslandDrawingSpace).onSizeChanged(onIslandSize)
             .graphicsLayer {
                 val enter = islandEntrance?.value ?: 1f
                 alpha = enter
