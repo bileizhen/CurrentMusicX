@@ -19,12 +19,12 @@ import androidx.compose.ui.unit.LayoutDirection
 
 /** One paragraph raster, with cached isolated halos only for eligible sung glyphs. */
 internal class LyricsTextRaster(private val layout: TextLayoutResult, private val density: Density,
-    private val direction: LayoutDirection) {
+    private val direction: LayoutDirection, private val glowRadiusScale: Float = 1f) {
     private val glyphHalos = mutableMapOf<Rect, Pair<ImageBitmap, Offset>>()
     private val maskPaint by lazy { Paint().apply {
         // Keep bloom outside the source ink, so a partially sung glyph's halo
         // cannot paint its unsung interior white before the karaoke sweep arrives.
-        maskFilter = BlurMaskFilter(6f * density.density, BlurMaskFilter.Blur.OUTER)
+        maskFilter = BlurMaskFilter(6f * density.density * glowRadiusScale, BlurMaskFilter.Blur.OUTER)
     } }
     val ink: ImageBitmap by lazy {
         ImageBitmap(layout.size.width.coerceAtLeast(1), layout.size.height.coerceAtLeast(1)).also { bitmap ->
