@@ -48,6 +48,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
     val desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsPreferences(settingsStore, appScope)
     val desktopLyricsStatus = kotlinx.coroutines.flow.MutableStateFlow(io.github.currencortex.music.feature.lyrics.desktop.DesktopWindowStatus())
+    val desktopLyricsSettingsVisible = kotlinx.coroutines.flow.MutableStateFlow(false)
     val equalizerSettings = io.github.currencortex.music.data.settings.EqualizerSettingsRepository(settingsStore, appScope)
     val equalizer = PlaybackEqualizer { logger.warn("Equalizer", it) }
     val audioSettings = io.github.currencortex.music.data.settings.AudioSourceSettings(settingsStore,

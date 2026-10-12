@@ -406,7 +406,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                 SETTINGS_TAB -> SettingsScreen(updateViewModel = updateVm,
                                     onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
                                     onStorage = { navigateTo(STORAGE) },
-                                    onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates)
+                                    onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
+                                    onDesktopLyrics = { navigateLibrary("desktop-lyrics") })
                             }
                         }
                         }
@@ -432,7 +433,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         Box(Modifier.weight(1f)) { SettingsScreen(updateViewModel = updateVm,
                             onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
                             onStorage = { navigateTo(STORAGE) },
-                            onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates) }
+                            onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
+                            onDesktopLyrics = { navigateLibrary("desktop-lyrics") }) }
                     }
                 }
                 entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onEqualizer = { navigateTo(EQUALIZER) }, onNavidrome = { navigateLibrary("navidrome") }, onDesktopLyrics = { navigateLibrary("desktop-lyrics") }) { navigateTo(STORAGE) } }
