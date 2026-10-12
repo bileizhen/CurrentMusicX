@@ -10,7 +10,7 @@ enum class DesktopAppearance(val label: String) { CAPTION("透明字幕"), CAPSU
 internal const val DESKTOP_DEFAULT_GLOW_COLOR: Long = 0xFFE0E0E0L
 internal const val DESKTOP_DEFAULT_FONT_SIZE: Float = 20f
 internal const val DESKTOP_ISLAND_FONT_SIZE: Float = 14f
-internal const val DESKTOP_ISLAND_HEIGHT: Float = .02f
+internal const val DESKTOP_ISLAND_HEIGHT: Float = .05f
 data class DesktopLyricsSettings(val enabled: Boolean = false, val locked: Boolean = false,
     val effect: DesktopEffect = DesktopEffect.PRECISE, val appearance: DesktopAppearance = DesktopAppearance.CAPSULE,
     val translation: Boolean = true, val fontSize: Float = DESKTOP_DEFAULT_FONT_SIZE, val opacity: Float = .85f,
@@ -20,7 +20,7 @@ data class DesktopLyricsSettings(val enabled: Boolean = false, val locked: Boole
     val displayOpacity: Float get() = if (appearance == DesktopAppearance.ISLAND) islandOpacity else opacity
     val displayFontSize: Float get() = if (appearance == DesktopAppearance.ISLAND) islandFontSize else fontSize
     fun normalized() = copy(islandY = islandY.finite(DESKTOP_ISLAND_HEIGHT).coerceIn(0f, 1f), islandFontSize = islandFontSize.finite(DESKTOP_ISLAND_FONT_SIZE).coerceIn(12f, 24f), fontSize = fontSize.finite(DESKTOP_DEFAULT_FONT_SIZE).coerceIn(18f, 38f),
-        opacity = opacity.finite(.85f).coerceIn(.35f, .95f), islandOpacity = islandOpacity.finite(.85f).coerceIn(.35f, .95f), offsetMs = offsetMs.coerceIn(-60000, 60000),
+        opacity = opacity.finite(.85f).coerceIn(.35f, .95f), islandOpacity = islandOpacity.finite(.85f).coerceIn(.35f, 1f), offsetMs = offsetMs.coerceIn(-60000, 60000),
         x = x.finite(.5f).coerceIn(0f, 1f), y = y.finite(.2f).coerceIn(0f, 1f),
         glowStrength = glowStrength.finite(1f).coerceIn(0f, 2f), glowSpread = glowSpread.finite(1f).coerceIn(.5f, 2f),
         textColor = desktopOpaqueColor(textColor), glowColor = desktopOpaqueColor(glowColor))
@@ -77,7 +77,7 @@ internal fun desktopPlacement(area: DesktopSafeArea, width: Int, height: Int, x:
         (area.top + area.height * y.finite(.2f) - h / 2).toInt().coerceIn(area.top, area.bottom - h), w, h)
 }
 internal fun desktopWindowAlpha(opacity: Float, locked: Boolean, maximum: Float): Float =
-    opacity.finite(.85f).coerceIn(.35f, .95f).let { if (locked) minOf(it, (maximum - .01f).coerceIn(0f, 1f)) else it }
+    opacity.finite(.85f).coerceIn(.35f, 1f).let { if (locked) minOf(it, (maximum - .01f).coerceIn(0f, 1f)) else it }
 
 /** Physical screen center, symmetric cutout clearance, and a height-independent top anchor. */
 internal fun desktopIslandPlacement(area: DesktopSafeArea, width: Int, height: Int, y: Float,

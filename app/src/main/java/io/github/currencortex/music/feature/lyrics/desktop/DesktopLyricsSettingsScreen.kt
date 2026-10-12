@@ -165,7 +165,7 @@ import kotlin.math.roundToInt
                 val defaultFont = if (island) DESKTOP_ISLAND_FONT_SIZE else DESKTOP_DEFAULT_FONT_SIZE
                 MusicTextAction("恢复默认字号 · ${defaultFont.roundToInt()} sp", { saveFont(defaultFont) },
                     Modifier.testTag("desktop_font_reset"), enabled = options.displayFontSize != defaultFont)
-                DesktopSlider(if (island) "灵动岛不透明度" else "不透明度", "${(opacity * 100).roundToInt()}%", opacity, 0.35f..0.95f, "desktop_opacity", { opacity = (it * 100).roundToInt() / 100f },
+                DesktopSlider(if (island) "灵动岛不透明度" else "不透明度", "${(opacity * 100).roundToInt()}%", opacity, if (island) 0.35f..1f else 0.35f..0.95f, "desktop_opacity", { opacity = (it * 100).roundToInt() / 100f },
                     { saveOpacity(opacity) }, { value -> opacity = value; saveOpacity(value) })
                 if (options.enabled && (options.locked || (island && !status.editing)) && status.alpha > 0 && options.displayOpacity > status.alpha + .005f)
                     Text("触摸穿透时，系统将实际不透明度限制为 ${(status.alpha * 100).roundToInt()}%。", fontSize = 12.sp, color = hint)
@@ -189,6 +189,7 @@ import kotlin.math.roundToInt
                         "desktop_island_height", { islandHeight = it }, { saveIslandHeight(islandHeight) },
                         { value -> islandHeight = value; saveIslandHeight(value) })
                     MusicTextAction("恢复顶部高度", { saveIslandHeight(DESKTOP_ISLAND_HEIGHT) }, Modifier.testTag("desktop_island_height_reset"))
+                    Text("高度按整块屏幕计算：0% 贴到屏幕最顶端（可伸入状态栏区域），100% 到达最底端。", fontSize = 11.sp, color = hint)
                 } else {
                     SettingsSwitch("松手自动贴边", options.snapEdges, { edit { s -> s.copy(snapEdges = it) } }, Modifier.testTag("desktop_snap"), summary = "关闭后也会在接近边缘时吸附")
                     MusicDestinationRow("重置窗口位置", { edit { it.copy(x = .5f, y = .2f) } }, Modifier.testTag("desktop_reset_position"), summary = "回到屏幕上方，不改变字号和效果", chevron = false)

@@ -140,6 +140,9 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         val p = WindowManager.LayoutParams(1, WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flags(), PixelFormat.TRANSLUCENT).apply {
             gravity = Gravity.TOP or Gravity.LEFT; title = "CurrentMusic 桌面歌词"; softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
+            // DEFAULT cutout mode shoves overlay frames below the bar/cutout, defeating the full-screen island span.
+            if (Build.VERSION.SDK_INT >= 30) layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_ALWAYS
+            else if (Build.VERSION.SDK_INT >= 28) layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
         }
         val safe = area()
         val width = minOf((desktopWindowWidthDp(current.appearance) * context.resources.displayMetrics.density).toInt(), safe.width)
@@ -179,9 +182,10 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     }
     private fun placement(area: DesktopSafeArea, width: Int, height: Int): DesktopPlacement {
         if (current.appearance != DesktopAppearance.ISLAND) return desktopPlacement(area, width, height, current.x, current.y)
-        val center = if (Build.VERSION.SDK_INT >= 30) window.maximumWindowMetrics.bounds.centerX()
-            else (area.left + area.right) / 2
-        return desktopIslandPlacement(area, width, height, current.islandY, center)
+        // The pill may cross bar and cutout insets; only the physical bounds keep it on screen.
+        val bounds = if (Build.VERSION.SDK_INT >= 30) window.maximumWindowMetrics.bounds else null
+        val screen = bounds?.let { DesktopSafeArea(it.left, it.top, it.right, it.bottom) } ?: area
+        return desktopIslandPlacement(screen, width, height, current.islandY, (screen.left + screen.right) / 2)
     }
     private fun drag(dx: Float, dy: Float) {
         if (current.locked || current.appearance == DesktopAppearance.ISLAND) return
