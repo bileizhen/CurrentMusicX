@@ -8,7 +8,7 @@ import kotlinx.serialization.SerialName
                              val artistIds: List<Long> = emptyList(), val video: Boolean = false,
                              val musicSource: MusicSource = MusicSource.NETEASE,
                              val externalIds: SongExternalIds = SongExternalIds(),
-                             val navidrome: NavidromeTrackRef? = null)
+                             val navidrome: NavidromeTrackRef? = null, val videoQuality: Int = 1080)
 @Serializable enum class MusicSource { NETEASE, QQ_MUSIC, APPLE_MUSIC, SPOTIFY, NAVIDROME }
 @Serializable data class NavidromeTrackRef(val id: String, val identity: String, val format: String = "",
     val sampleRate: Int = 0, val channels: Int = 0)

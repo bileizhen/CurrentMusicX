@@ -53,7 +53,8 @@ import kotlin.math.roundToInt
                     }
                 })
         }
-        LyricsToggle("歌词居中对齐", display.centered, { value -> onDisplay { it.copy(centered = value) } }, "lyrics_centered")
+        LyricsToggle("歌词居中对齐", display.centered, { value -> onDisplay { it.copy(centered = value) } }, "lyrics_centered",
+            if (display.smoke) "流烟歌词固定居中" else null, !display.smoke)
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
             Text("字体粗细 $strength", fontSize = 14.sp, color = ink)
             Slider(value = strength.toFloat(), onValueChange = { strength = ((it / 100).roundToInt() * 100).coerceIn(400, 900) },
@@ -74,12 +75,15 @@ import kotlin.math.roundToInt
             "仅 Android 12 及以上支持", android.os.Build.VERSION.SDK_INT >= 31)
         LyricsToggle("交错滚动效果", display.stagger, { value -> onDisplay { it.copy(stagger = value) } }, "lyrics_stagger")
         LyricsToggle("3D 倾斜歌词", display.perspective, { value -> onDisplay { it.copy(perspective = value) } },
-            "lyrics_perspective", "横竖屏 3D 透视，近大远小的歌词平面")
+            "lyrics_perspective", if (display.smoke) "与流烟歌词互斥，请先关闭流烟歌词" else "横竖屏 3D 透视，近大远小的歌词平面", !display.smoke)
         LyricsToggle("歌词辉光", display.glow, { value -> onDisplay { it.copy(glow = value) } },
             "lyrics_glow", "中长音与强调处渐亮，短音保持正常高亮")
+        LyricsToggle("流烟歌词", display.smoke, { value -> onDisplay { it.copy(smoke = value).normalized() } },
+            "lyrics_smoke", "自动关闭 3D 并居中显示当前句，下一句在进度条上方预览；颜色随封面变化")
         LyricsToggle("翻译歌词", display.translation, { value -> onDisplay { it.copy(translation = value) } },
             "lyrics_translation", "只显示正在播放的歌词翻译")
-        LyricsToggle("罗马音", display.romanization, { value -> onDisplay { it.copy(romanization = value) } }, "lyrics_romanization")
+        LyricsToggle("罗马音", display.romanization, { value -> onDisplay { it.copy(romanization = value) } },
+            "lyrics_romanization", "只显示正在播放的歌词罗马音")
         LyricsToggle("逐字动画", display.wordAnimation, { value -> onDisplay { it.copy(wordAnimation = value) } }, "lyrics_word_animation")
         LyricsToggle("逐字上提", display.wordLift, { value -> onDisplay { it.copy(wordLift = value) } },
             "lyrics_word_lift", "唱到的字轻轻上提，唱过后保持抬高", display.wordAnimation)

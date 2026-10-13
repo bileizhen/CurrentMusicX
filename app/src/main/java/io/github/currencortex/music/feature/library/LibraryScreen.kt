@@ -111,7 +111,8 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 }
 
 @Composable fun LibraryDetailScreen(vm: LibraryDetailViewModel, library: LibraryViewModel, onBack: () -> Unit,
-    navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit, playMv: (MvDto) -> Unit, deleted: () -> Unit) {
+    navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit, playMv: (MvDto) -> Unit, deleted: () -> Unit,
+    onDialogActive: (Boolean) -> Unit = {}) {
     val state by vm.state.collectAsPageState()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val busy by library.busy.collectAsStateWithLifecycle()
@@ -124,7 +125,10 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
     LaunchedEffect(state.refreshError) { state.refreshError?.let { library.message.value = "刷新失败，已保留原列表：$it" } }
     PreloadMusicCovers(state.songs.take(12).map { it.cover })
-    if (vm.route.split('/').getOrNull(1) in setOf("playlist", "ncmplaylist", "likes", "daily", "foryou", "recent")) {
+    if (vm.route.startsWith("lib/mv/")) {
+        io.github.currencortex.music.feature.mv.MvDetailScreen(state, vm.container, onBack, playMv,
+            onArtist = { navigate("lib/artist/$it") }, onRefresh = { vm.reload(force = true) }, onDialogActive = onDialogActive)
+    } else if (vm.route.split('/').getOrNull(1) in setOf("playlist", "ncmplaylist", "likes", "daily", "foryou", "recent")) {
         PlaylistDetailBody(state, vm, library, onBack, navigate, play,
             onRename = { name = state.title; rename = true }, onDelete = { delete = true })
     } else {

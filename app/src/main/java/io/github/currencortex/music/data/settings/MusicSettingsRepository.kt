@@ -16,7 +16,14 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val lyricsWeight: LyricsWeight = LyricsWeight.CURRENT,
                          val lyricsOffsetMs: Long = 0,
                          val lyricsDisplay: LyricsDisplayOptions = LyricsDisplayOptions(),
-                         val neteaseMainLibrary: Boolean = true)
+                         val neteaseMainLibrary: Boolean = true,
+                         val allowConcurrentPlayback: Boolean = false,
+                         val transitionMode: MusicTransitionMode = MusicTransitionMode.OFF,
+                         val crossfadeSeconds: Int = 5)
+
+enum class MusicTransitionMode { OFF, SMART, CROSSFADE;
+    companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: OFF }
+}
 
 enum class KaraokeScope(val label: String) {
     CURRENT("仅当前行"), ALL("拓展全部行"), ALWAYS("总是");
@@ -30,7 +37,11 @@ data class LyricsDisplayOptions(
     val translation: Boolean = true, val romanization: Boolean = false, val wordAnimation: Boolean = true,
     val perspective: Boolean = true,
     val glow: Boolean = true, val wordLift: Boolean = true,
-)
+    val smoke: Boolean = false,
+) {
+    /** Smoke owns a flat, centered stage; also repairs incompatible older preferences. */
+    fun normalized() = if (smoke) copy(centered = true, perspective = false) else this
+}
 
 enum class LyricsWeight(val label: String) {
     NORMAL("常规"), ALL("全部粗体"), CURRENT("仅当前行粗体");
@@ -70,7 +81,11 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val perspective = booleanPreferencesKey("lyrics.perspective")
     private val glow = booleanPreferencesKey("lyrics.glow")
     private val wordLift = booleanPreferencesKey("lyrics.wordLift")
+    private val smoke = booleanPreferencesKey("lyrics.smoke")
     private val neteaseMain = booleanPreferencesKey("library.neteaseMain")
+    private val concurrentPlayback = booleanPreferencesKey("music.allowConcurrentPlayback")
+    private val transition = stringPreferencesKey("music.transitionMode")
+    private val crossfadeSeconds = intPreferencesKey("music.crossfadeSeconds")
     private fun decode(p: Preferences) = MusicSettings(p[server] ?: ServerDefaults.URL, AudioQuality.from(p[quality].orEmpty()),
         p[warning] ?: true, p[restore] ?: true, p[nickname].orEmpty(), p[account] ?: 0,
         p[preload] ?: true, p[metered] ?: false, LyricsTypography.normalize(p[lyricsSize] ?: LyricsTypography.DEFAULT_SIZE),
@@ -78,7 +93,10 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
         LyricsDisplayOptions(p[centered] ?: false, (p[fontWeight] ?: 500).coerceIn(400, 900),
             p[blur] ?: true, p[stagger] ?: true, KaraokeScope.from(p[karaokeScope]), p[hideControls] ?: false,
             p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true,
-            p[perspective] ?: true, p[glow] ?: true, p[wordLift] ?: true), p[neteaseMain] ?: true)
+            p[perspective] ?: true, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false).normalized(), p[neteaseMain] ?: true,
+        p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12))
+    // Read the persisted value directly, without the StateFlow's initial defaults.
+    val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: false }.distinctUntilChanged()
     val state = store.data.map(::decode)
         .stateIn(scope, SharingStarted.Eagerly, MusicSettings())
     suspend fun snapshot(): MusicSettings {
@@ -89,6 +107,9 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     suspend fun setQuality(value: AudioQuality) { store.edit { it[quality] = value.value } }
     suspend fun setWarning(value: Boolean) { store.edit { it[warning] = value } }
     suspend fun setRestore(value: Boolean) { store.edit { it[restore] = value } }
+    suspend fun setConcurrentPlayback(value: Boolean) { store.edit { it[concurrentPlayback] = value } }
+    suspend fun setTransitionMode(value: MusicTransitionMode) { store.edit { it[transition] = value.name } }
+    suspend fun setCrossfadeSeconds(value: Int) { store.edit { it[crossfadeSeconds] = value.coerceIn(1, 12) } }
     suspend fun setPreload(value: Boolean) { store.edit { it[preload] = value } }
     suspend fun setPreloadMetered(value: Boolean) { store.edit { it[metered] = value } }
     suspend fun setLyricsFontSize(value: Float) { store.edit { it[lyricsSize] = LyricsTypography.normalize(value) } }
@@ -96,13 +117,14 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     suspend fun setLyricsOffset(value: Long) { store.edit { it[lyricsOffset] = value.coerceIn(-60000, 60000) } }
     suspend fun editLyricsDisplay(transform: (LyricsDisplayOptions) -> LyricsDisplayOptions) {
         store.edit { p ->
-            val value = transform(decode(p).lyricsDisplay)
+            val value = transform(decode(p).lyricsDisplay).normalized()
             p[centered] = value.centered; p[fontWeight] = value.fontWeight.coerceIn(400, 900)
             p[blur] = value.blur; p[stagger] = value.stagger; p[karaokeScope] = value.karaokeScope.name
             p[hideControls] = value.hideControls; p[translation] = value.translation
             p[romanization] = value.romanization; p[wordAnimation] = value.wordAnimation
             p[perspective] = value.perspective
             p[glow] = value.glow; p[wordLift] = value.wordLift
+            p[smoke] = value.smoke
         }
     }
     suspend fun setAccount(id: Long, name: String) { store.edit { it[account] = id; it[nickname] = name } }

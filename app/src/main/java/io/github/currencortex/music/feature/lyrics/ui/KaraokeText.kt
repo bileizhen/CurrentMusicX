@@ -40,7 +40,8 @@ import androidx.compose.ui.text.style.TextAlign
     baseOpacity: State<Float>? = null, accurateWordLift: Boolean = false,
     outline: Boolean = false, onLayout: ((TextLayoutResult) -> Unit)? = null,
     glowColor: Color = color, glowRadiusScale: Float = 1f, untimedLineGlow: Boolean = false,
-    effectPadding: Dp = 0.dp, singleLine: Boolean = false, prepareDrawResources: Boolean = false) {
+    effectPadding: Dp = 0.dp, singleLine: Boolean = false, prepareDrawResources: Boolean = false,
+    smokeColors: LyricsSmokeColors? = null, smokeFlight: (() -> LyricsSmokeFlight?)? = null) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -104,7 +105,7 @@ import androidx.compose.ui.text.style.TextAlign
         val timed = animateWords && words.isNotEmpty()
         // Retain the lift when Current-line karaoke stops animating a completed row.
         val safeRaster = layout.size.width.toLong() * layout.size.height <= 4_000_000 && layout.size.height < 8192 && layout.size.width < 8192
-        val liftTimed = wordLift && safeRaster && line.words.isNotEmpty() && lyricsCanLift(line.text)
+        val liftTimed = wordLift && smokeColors == null && safeRaster && line.words.isNotEmpty() && lyricsCanLift(line.text)
         val glyphs = remember(geometry) { geometry.flatMap { it.glyphs } }
         val liftedInk = remember(glyphs) { Path().apply { glyphs.forEach { addRect(it.box) } } }
         val lifts = remember(glyphs) { FloatArray(glyphs.size) }
@@ -115,6 +116,16 @@ import androidx.compose.ui.text.style.TextAlign
         val liftHeight = 2f * density.density
         val radius = glowRadiusScale.takeIf(Float::isFinite)?.coerceIn(.5f, 2f) ?: 1f
         val raster = remember(layout, density, direction, radius) { LyricsTextRaster(layout, density, direction, radius) }
+        val smokeGeometry = remember(line, layout, smokeColors != null, safeRaster) {
+            if (smokeColors != null && safeRaster && layout.size.width.toLong() * layout.size.height <= 1_000_000)
+                smokeGlyphs(line, layout) else emptyList()
+        }
+        val smokeActive by remember(position, line, smokeGeometry) { derivedStateOf {
+            smokeGeometry.isNotEmpty() && position.value >= line.startTimeMs && position.value < line.endTimeMs
+        } }
+        val smokeInk = if (smokeActive && smokeColors != null) remember(smokeGeometry, raster) {
+            LyricsSmokeInk(smokeGeometry, raster.ink)
+        } else null
         val tint = remember(color) { ColorFilter.tint(color) }
         val haloTint = remember(glowColor) { ColorFilter.tint(glowColor) }
         // Prepare once when enabled, never run a blur filter or text rasterization per frame.
@@ -146,6 +157,10 @@ import androidx.compose.ui.text.style.TextAlign
                 }
             }) {
             translate(left = padding.toFloat(), top = padding.toFloat()) {
+                if (smokeInk != null) {
+                    with(smokeInk) { draw(position.value, smokeColors!!, color, smokeFlight?.invoke()) }
+                    return@translate
+                }
                 if (glowLine) {
                     val halo = raster.lineHalo
                     drawImage(halo.first, topLeft = halo.second,

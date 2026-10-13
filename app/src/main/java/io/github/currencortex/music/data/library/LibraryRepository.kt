@@ -127,8 +127,9 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
         else CatalogPage(d.artists.map { CatalogEntry(it.id, it.name, it.pic.replace("http:", "https:"), it.alias) }, d.hasMore.artist, d.totals.artist)
     }
     suspend fun mv(id: Long) = api.get<MvDetailDto>("ncm/mv/detail", mapOf("mvid" to "$id")).data
-    suspend fun mvSource(id: Long): String {
-        val url = api.get<MvUrlDto>("ncm/mv/url", mapOf("id" to "$id", "r" to "1080")).data.url
+    suspend fun mvSource(id: Long, resolution: Int = 1080): String {
+        require(resolution in listOf(240, 480, 720, 1080))
+        val url = api.get<MvUrlDto>("ncm/mv/url", mapOf("id" to "$id", "r" to "$resolution")).data.url
         return url?.toHttpUrlOrNull()?.toString() ?: throw ApiException(ErrorKind.NotFound)
     }
     companion object {

@@ -22,6 +22,20 @@ import java.util.concurrent.atomic.AtomicReference
 @androidx.annotation.OptIn(UnstableApi::class)
 class DockAudioTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @Test fun floatPcmAnalysisPreservesEveryByteAndWorksWithoutVisualMeter() {
+        val probe = TrackEnergyProbe().apply { enabled = true }
+        val processor = DockAudioProcessor(DockAudioLevel(), probe)
+        processor.configure(AudioFormat(48000, 2, C.ENCODING_PCM_FLOAT)); processor.flush()
+        val input = ByteBuffer.allocateDirect(48000 * 2 * 4).order(ByteOrder.LITTLE_ENDIAN)
+        repeat(48000 * 2) { input.putFloat(if (it == 0) Float.NaN else .25f) }; input.flip()
+        val original = ByteArray(input.remaining()).also { input.duplicate().get(it) }
+        processor.queueInput(input)
+        val output = processor.output
+        val actual = ByteArray(output.remaining()).also { output.get(it) }
+        assertArrayEquals(original, actual)
+        assertEquals(.25f, probe.profile()!!.rms, .001f)
+        processor.reset()
+    }
     @Test fun originalPcmSurvivesEnabledDisabledAndSilenceWithNoGainChange() {
         val meter = DockAudioLevel().apply { enabled = true }
         val processor = DockAudioProcessor(meter)

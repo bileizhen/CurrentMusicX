@@ -91,13 +91,21 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     modifier: Modifier = Modifier, canSeek: Boolean = true, translation: Boolean = true,
     romanization: Boolean = false, wordAnimation: Boolean = true, effects: Boolean = true,
     fontSize: Float = LyricsTypography.DEFAULT_SIZE, weightMode: LyricsWeight = LyricsWeight.CURRENT, lyricsOffsetMs: Long = 0,
-    display: LyricsDisplayOptions = LyricsDisplayOptions(), minimal: Boolean = false, perspective: Boolean = false) {
+    display: LyricsDisplayOptions = LyricsDisplayOptions(), minimal: Boolean = false, perspective: Boolean = false,
+    cover: String = "") {
+    val smokeColors = if (display.smoke) rememberLyricsSmokeColors(cover) else null
     val size = LyricsTypography.normalize(fontSize)
     val timeline = remember(document) { LyricsSynchronizer(document) }
     val effectivePosition = remember(position, lyricsOffsetMs) { derivedStateOf { LyricsSynchronizer.effectivePosition(position.value, lyricsOffsetMs) } }
     val activeLines by remember(timeline, effectivePosition) { derivedStateOf { timeline.activeLines(effectivePosition.value) } }
     val target by remember(timeline, effectivePosition) { derivedStateOf { timeline.scrollTarget(effectivePosition.value) } }
     val interlude by remember(timeline, effectivePosition) { derivedStateOf { timeline.interlude(effectivePosition.value) } }
+    if (display.smoke) {
+        SmokeLyricsStage(document, target, effectivePosition, onSeek = { onSeek(LyricsSynchronizer.seekPosition(it, lyricsOffsetMs)) },
+            modifier = modifier, canSeek = canSeek, translation = translation, romanization = romanization,
+            fontSize = size, weightMode = weightMode, display = display.normalized(), colors = smokeColors)
+        return
+    }
     val list = rememberLazyListState()
     val scrollMotion = remember { LyricsScrollMotion() }
     var mode by remember(document) { mutableStateOf(LyricsScrollMode.FOLLOWING) }
@@ -113,7 +121,7 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
         }
     }
     BoxWithConstraints(modifier.testTag("lyrics_panel")) {
-    LaunchedEffect(target, mode, document, size, romanization, weightMode, lyricsOffsetMs,
+    LaunchedEffect(target, mode, document, size, weightMode, lyricsOffsetMs,
         display.centered, display.fontWeight, minimal, maxWidth, maxHeight) {
         if (mode != LyricsScrollMode.FOLLOWING || document.lines.isEmpty()) return@LaunchedEffect
         // Wait for the first layout only. Normal line changes start on the next animation frame.
@@ -187,7 +195,7 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
                 LyricsLineView(line, index, effectivePosition, index in activeLines, resting, distance,
                     mode == LyricsScrollMode.BROWSING, canSeek, {
                         onSeek(LyricsSynchronizer.seekPosition(it, lyricsOffsetMs)); mode = LyricsScrollMode.FOLLOWING
-                    }, translation, romanization, wordAnimation, effects, size, weightMode, display, scrollMotion)
+                    }, translation, romanization, wordAnimation, effects, size, weightMode, display, scrollMotion, smokeColors)
             }
         }
         if (!minimal && interlude != null && mode == LyricsScrollMode.FOLLOWING)

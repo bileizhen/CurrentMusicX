@@ -25,7 +25,7 @@ internal const val ACTIVE_LYRIC_SCALE = 1.12f
 @Composable internal fun LyricsLineView(line: LyricLine, index: Int, position: State<Long>, focused: Boolean,
     resting: Boolean, distance: Int, browsing: Boolean, canSeek: Boolean, onSeek: (Long) -> Unit, translation: Boolean,
     romanization: Boolean, wordAnimation: Boolean, effects: Boolean, fontSize: Float, weightMode: LyricsWeight,
-    display: LyricsDisplayOptions, scrollMotion: LyricsScrollMotion) {
+    display: LyricsDisplayOptions, scrollMotion: LyricsScrollMotion, smokeColors: LyricsSmokeColors? = null) {
     val opacity = animateFloatAsState(if (focused) 1f else if (resting) .68f else when (distance) { 1 -> .56f; 2 -> .35f; else -> .24f }, tween(350), label = "lyric focus")
     val scale = animateFloatAsState(if (focused || resting) ACTIVE_LYRIC_SCALE else if (distance == 1) .96f else .94f,
         spring(dampingRatio = 1f, stiffness = 220f), label = "lyric scale")
@@ -51,14 +51,14 @@ internal const val ACTIVE_LYRIC_SCALE = 1.12f
         }) {
             LyricsVocalView(line, position, mainFocused, resting, translation, romanization, wordAnimation,
                 if (line.isBackground) fontSize * .75f else fontSize, weightMode, display, effects, distance,
-                vocalModifier = Modifier.testTag("lyric_vocal_$index"))
+                vocalModifier = Modifier.testTag("lyric_vocal_$index"), smokeColors = smokeColors)
             line.backgroundVocals.forEachIndexed { bgIndex, bg ->
                 val bgFocused by remember(bg, position) { derivedStateOf { position.value >= bg.startTimeMs && position.value < bg.endTimeMs } }
                 Column(Modifier.padding(top = 10.dp).testTag("lyric_bg_${index}_$bgIndex")
                     .semantics { selected = bgFocused }
                     .clickable(enabled = canSeek, role = Role.Button) { onSeek(bg.startTimeMs) }
                     .graphicsLayer { alpha = if (bgFocused) 1f else .55f }) {
-                    LyricsVocalView(bg, position, bgFocused, false, translation, romanization, wordAnimation, fontSize * .75f, weightMode, display, effects, distance)
+                    LyricsVocalView(bg, position, bgFocused, false, translation, romanization, wordAnimation, fontSize * .75f, weightMode, display, effects, distance, smokeColors = smokeColors)
                 }
             }
         }
@@ -67,9 +67,11 @@ internal const val ACTIVE_LYRIC_SCALE = 1.12f
 
 @Composable private fun LyricsVocalView(line: LyricLine, position: State<Long>, focused: Boolean,
     resting: Boolean, translation: Boolean, romanization: Boolean, wordAnimation: Boolean, size: Float, weightMode: LyricsWeight,
-    display: LyricsDisplayOptions, effects: Boolean, distance: Int, vocalModifier: Modifier = Modifier) {
+    display: LyricsDisplayOptions, effects: Boolean, distance: Int, vocalModifier: Modifier = Modifier,
+    smokeColors: LyricsSmokeColors? = null) {
     val weight = lyricsFontWeight(weightMode, focused || resting, display.fontWeight)
     val reservedWeight = lyricsFontWeight(LyricsWeight.ALL, true, display.fontWeight)
+    val auxiliaryWeight = lyricsFontWeight(weightMode, true, display.fontWeight)
     val align = if (display.centered) TextAlign.Center else if (line.isDuet) TextAlign.End else TextAlign.Start
     val beforeStart by remember(line, position) { derivedStateOf { position.value < line.startTimeMs } }
     val preview = resting && beforeStart
@@ -88,30 +90,11 @@ internal const val ACTIVE_LYRIC_SCALE = 1.12f
     if (line.text.isNotBlank()) KaraokeText(line, position, wordAnimation && (focused || preview || (!resting && display.karaokeScope != KaraokeScope.CURRENT)),
         Modifier.fillMaxWidth().then(vocalModifier), size, weight, align, forceLineAnimation = display.karaokeScope == KaraokeScope.ALWAYS,
         reservedFontWeight = reservedWeight, glow = display.glow && (focused || glowing),
-        wordLift = display.wordLift && wordAnimation, glowOpacity = glowOpacity, baseOpacity = baseOpacity)
-    if (line.translation.isNotBlank()) {
-        val visible = translation && focused
-        val reveal = animateFloatAsState(if (visible) 1f else 0f,
-            tween(260, easing = CubicBezierEasing(.22f, 0f, .18f, 1f)), label = "current translation")
-        // Measure the full paragraph once, then animate only its allocated height and
-        // opacity. Fully hidden translations occupy zero space, including their padding.
-        val auxiliary = remember(line.translation) { line.copy(text = line.translation, words = emptyList()) }
-        KaraokeText(auxiliary, position, false, Modifier.fillMaxWidth()
-            .graphicsLayer { alpha = reveal.value; clip = true }
-            .layout { measurable, constraints ->
-                val child = measurable.measure(constraints)
-                layout(child.width, (child.height * reveal.value).roundToInt()) { child.placeRelative(0, 0) }
-            }
-            .padding(top = 4.dp)
-            .then(if (visible) Modifier.testTag("lyric_translation") else Modifier.clearAndSetSemantics {}),
-            fontSize = size * .6f, fontWeight = weight, textAlign = align, reservedFontWeight = reservedWeight,
-            color = Color.White.copy(alpha = .65f), lineHeightRatio = 1.2f, exposeText = visible)
-    }
-    if (romanization && line.romanization.isNotBlank()) {
-        val auxiliary = remember(line.romanization) { line.copy(text = line.romanization, words = emptyList()) }
-        KaraokeText(auxiliary, position, false, Modifier.fillMaxWidth().padding(top = 4.dp),
-            fontSize = size * .53f, fontWeight = weight, textAlign = align, reservedFontWeight = reservedWeight,
-            color = Color.White.copy(alpha = .5f), lineHeightRatio = 1.2f)
-    }
+        wordLift = display.wordLift && wordAnimation, glowOpacity = glowOpacity, baseOpacity = baseOpacity,
+        smokeColors = smokeColors)
+    LyricsAuxiliaryText(line.translation, position, translation && focused, size * .6f,
+        auxiliaryWeight, align, "lyric_translation", .65f)
+    LyricsAuxiliaryText(line.romanization, position, romanization && focused, size * .53f,
+        auxiliaryWeight, align, "lyric_romanization", .5f)
     }
 }

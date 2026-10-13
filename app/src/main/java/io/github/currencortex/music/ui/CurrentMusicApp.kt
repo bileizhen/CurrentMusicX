@@ -532,7 +532,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     songs, index -> playWithPermission { container.playerController.playList(songs, index) }
                                 }
                             }
-                            route == "lib/video" -> if (currentSong?.video == true) io.github.currencortex.music.feature.mv.MvPlayerScreen(container, ::navigateBack)
+                            route == "lib/video" -> if (currentSong?.video == true) io.github.currencortex.music.feature.mv.MvPlayerScreen(container, ::navigateBack,
+                                onDialogActive = { playerDialogOpen = it })
                                 else PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
                                     onLike = { currentSong?.let(libraryVm::choosePlaylist) })
                             route.startsWith("lib/browse/") -> {
@@ -550,7 +551,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                         container.playerController.playVideo(Song(-mv.id, mv.name, mv.artistName, cover = mv.cover,
                                             durationMs = mv.duration, mv = mv.id, video = true))
                                         navigateLibrary("lib/video")
-                                    } }, deleted = ::navigateBack)
+                                    } }, deleted = ::navigateBack, onDialogActive = { playerDialogOpen = it })
                             }
                         }
                     }
@@ -667,7 +668,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         if (profileMessage != null) MusicDialog("账号操作", onDismiss = { profileVm.message.value = null }) {
             Text(profileMessage.orEmpty()); TextButton("关闭", onClick = { profileVm.message.value = null })
         }
-        val playbackMessage = libraryMessage ?: playerState.error
+        val playbackMessage = libraryMessage ?: playerState.error.takeUnless { sceneStack.last() == "lib/video" }
         if (playbackMessage != null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             androidx.compose.foundation.layout.Row(Modifier.imePadding().navigationBarsPadding().padding(12.dp)
                 .padding(bottom = (if (rootPage && !keyboardOpen) 92.dp else 0.dp) + if (showMini) miniHeight else 0.dp)

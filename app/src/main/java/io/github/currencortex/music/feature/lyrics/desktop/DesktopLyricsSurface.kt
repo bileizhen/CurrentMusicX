@@ -42,7 +42,8 @@ import kotlinx.coroutines.flow.StateFlow
     preferences: StateFlow<DesktopLyricsSettings>, lock: () -> Unit, close: () -> Unit, settings: () -> Unit,
     maxIslandWidth: () -> Float = { 640f }, editRequest: Int = 0, onEditingChanged: (Boolean) -> Unit = {},
     onIslandSize: (IntSize) -> Unit = {}, islandTapRequest: Int = 0, onIslandModeChanged: (Boolean) -> Unit = {},
-    changeSong: (Int) -> Unit = {}, onIslandTop: (Int) -> Unit = {}) {
+    changeSong: (Int) -> Unit = {}, onIslandTop: (Int) -> Unit = {},
+    togglePlayback: () -> Unit = {}, onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {}) {
     val content by lyrics.collectAsStateWithLifecycle()
     val player by playback.collectAsStateWithLifecycle()
     val options by preferences.collectAsStateWithLifecycle()
@@ -124,7 +125,10 @@ import kotlinx.coroutines.flow.StateFlow
             }.graphicsLayer {
                 alpha = entrance.value; scaleX = .94f + .06f * entrance.value; scaleY = scaleX
                 transformOrigin = TransformOrigin(.5f, 0f)
-            }, metadata = size.metadata, presentation = reveal, coverPosition = position, motion = motion, transition = coverTransition) {
+            }, metadata = size.metadata, presentation = reveal, coverPosition = position, motion = motion,
+            durationMs = player.durationMs.takeIf { it > 0 } ?: player.song?.durationMs ?: 0L, transition = coverTransition,
+            coverPlaying = player.showPause, onCoverBounds = onCoverBounds,
+            onCoverTap = { if (player.song != null && player.canControlPlayback) togglePlayback() }) {
             DesktopIslandDisplay(fpsMode, motion, lyrics = {
                 if (line != null) {
                     val next = remember(content.document, index) { desktopIslandNextLineIndex(content.document, index) }

@@ -63,7 +63,10 @@ import androidx.compose.ui.graphics.Color
                 .background(Brush.linearGradient(listOf(Color(0xFF303646), Color(0xFF161A25)))).padding(12.dp), contentAlignment = Alignment.Center) {
                 DesktopIslandFrame(playback.song, Modifier.islandAnimatedWidth(width).fillMaxWidth().padding(vertical = desktopIslandDrawingSpace)
                     .graphicsLayer { this.alpha = alpha }.pointerInput(Unit) { detectTapGestures(onTap = { toggle() }) },
-                    metadata = size.metadata, presentation = reveal, coverPosition = clock, motion = motion) {
+                    metadata = size.metadata, presentation = reveal, coverPosition = clock, motion = motion,
+                    durationMs = playback.durationMs.takeIf { it > 0 } ?: playback.song?.durationMs ?: 0L,
+                    coverPlaying = playback.showPause,
+                    onCoverTap = { if (playback.song != null && playback.canControlPlayback) container.playerController.toggle() }) {
                     DesktopIslandDisplay(fpsMode, motion, lyrics = {
                         if (line != null) {
                             val next = remember(content.document, index) { desktopIslandNextLineIndex(content.document, index) }

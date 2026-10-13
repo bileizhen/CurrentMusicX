@@ -27,12 +27,13 @@ class LyricsTypographyTest {
             store { settings ->
                 assertEquals(30f, settings.snapshot().lyricsFontSize, 0f)
                 assertEquals(LyricsWeight.CURRENT, settings.snapshot().lyricsWeight)
+                assertFalse(settings.snapshot().lyricsDisplay.smoke)
                 settings.setPreloadMetered(true)
                 settings.setLyricsFontSize(38f)
                 settings.setLyricsWeight(LyricsWeight.ALL)
                 settings.editLyricsDisplay { it.copy(centered = true, fontWeight = 700, blur = false, stagger = false,
                     karaokeScope = KaraokeScope.CURRENT, hideControls = true, translation = false, romanization = true,
-                    wordAnimation = false, perspective = false, glow = false, wordLift = false) }
+                    wordAnimation = false, perspective = false, glow = false, wordLift = false, smoke = true) }
             }
             store { settings ->
                 assertEquals(38f, settings.snapshot().lyricsFontSize, 0f)
@@ -44,6 +45,10 @@ class LyricsTypographyTest {
                 assertEquals(KaraokeScope.CURRENT, display.karaokeScope); assertTrue(display.hideControls)
                 assertFalse(display.translation); assertTrue(display.romanization); assertFalse(display.wordAnimation); assertFalse(display.perspective)
                 assertFalse(display.glow); assertFalse(display.wordLift)
+                assertTrue(display.smoke)
+                settings.editLyricsDisplay { it.copy(perspective = true, centered = false) }
+                assertFalse(settings.snapshot().lyricsDisplay.perspective)
+                assertTrue(settings.snapshot().lyricsDisplay.centered)
                 settings.editLyricsDisplay { it.copy(fontWeight = 1000) }
                 assertEquals(900, settings.snapshot().lyricsDisplay.fontWeight)
                 assertEquals(KaraokeScope.CURRENT, settings.snapshot().lyricsDisplay.karaokeScope)

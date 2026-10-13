@@ -80,6 +80,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val announcements = io.github.currencortex.music.data.announcement.AnnouncementRepository(apiClient)
     val announcementPreferences = io.github.currencortex.music.data.announcement.AnnouncementPreferences(settingsStore)
     val songDownloads = io.github.currencortex.music.core.download.SongDownloadManager(context.applicationContext, storageSuffix)
+    val mvDownloads = io.github.currencortex.music.core.download.MvDownloadManager(context.applicationContext, songDownloads)
     val musicStyles = io.github.currencortex.music.data.style.MusicStyleRepository(apiClient) {
         musicSession(authenticated = false)
     }
