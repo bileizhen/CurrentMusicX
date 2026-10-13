@@ -14,6 +14,7 @@ internal object SettingsPreferences {
     private val FLOATING = booleanPreferencesKey("floating_bar")
     private val GLASS = booleanPreferencesKey("liquid_glass")
     private val PREDICTIVE = booleanPreferencesKey("predictive_back")
+    private val DEPTH_RIBBON = booleanPreferencesKey("playlist_depth_ribbon")
     private val NAVIGATION_GLOW = booleanPreferencesKey("navigation_glow")
 
     fun read(p: Preferences) = AppearanceSettings(
@@ -25,6 +26,7 @@ internal object SettingsPreferences {
         liquidGlass = p[GLASS] ?: true,
         predictiveBack = p[PREDICTIVE] ?: true,
         navigationGlow = p[NAVIGATION_GLOW] ?: true,
+        playlistDepthRibbon = p[DEPTH_RIBBON] ?: false,
     ).normalized()
 
     fun write(p: MutablePreferences, s: AppearanceSettings) {
@@ -37,5 +39,6 @@ internal object SettingsPreferences {
         p[GLASS] = v.liquidGlass
         p[PREDICTIVE] = v.predictiveBack
         p[NAVIGATION_GLOW] = v.navigationGlow
+        p[DEPTH_RIBBON] = v.playlistDepthRibbon
     }
 }

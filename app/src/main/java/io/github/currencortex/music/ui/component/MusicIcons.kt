@@ -12,6 +12,16 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
 object MusicIcons {
+    val Heart = icon("Heart") {
+        moveTo(12f, 21f); lineTo(3.8f, 12.8f)
+        curveTo(-1f, 7.8f, 6f, 1f, 12f, 7f)
+        curveTo(18f, 1f, 25f, 7.8f, 20.2f, 12.8f); close()
+    }
+    val Headphones = icon("Headphones") {
+        moveTo(4f, 14f); lineTo(4f, 11f); curveTo(4f, .4f, 20f, .4f, 20f, 11f); lineTo(20f, 14f)
+        moveTo(4f, 12f); lineTo(7f, 12f); lineTo(7f, 21f); lineTo(3f, 21f); lineTo(3f, 12f); close()
+        moveTo(20f, 12f); lineTo(17f, 12f); lineTo(17f, 21f); lineTo(21f, 21f); lineTo(21f, 12f); close()
+    }
     val Update = icon("Update") {
         moveTo(20f, 8f); curveTo(14f, -2f, 2f, 4f, 3f, 13f)
         curveTo(4f, 23f, 18f, 25f, 21f, 15f)

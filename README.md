@@ -25,7 +25,7 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 
 圆形封面、封面取色背景、逐字歌词与跟手拖拽共同组成播放体验。绑定网易云后，可以直接使用网易云我喜欢和自己的歌单；也可以保留 CurrentMusic 音乐库，在两种方式之间切换。
 
-应用源码位于本仓库的 `main` 分支，同时维护于 [CurrentMusic 的 app 分支](https://github.com/backrooms-yrc/CurrentMusic/tree/app)。音乐资料与网易云音乐库由手机直连网易云，歌曲音源继续使用 CurrentMusic。歌曲与音质的可用性取决于所选音源和账号权限。自建曲库可独立连接 Navidrome，音频直接从自己的服务器播放。
+应用源码位于本仓库的 `main` 分支，同时维护于 [CurrentMusic 的 app 分支](https://github.com/backrooms-yrc/CurrentMusic/tree/app)。音乐资料与网易云音乐库由手机直连网易云，歌曲音源与网易云歌词继续使用 CurrentMusic。歌曲与音质的可用性取决于所选音源和账号权限。自建曲库可独立连接 Navidrome，音频直接从自己的服务器播放。
 
 ## 功能特性
 
@@ -52,6 +52,8 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 - 横竖屏均支持 3D 透视、逐字微幅上提和延音辉光，翻译随当前歌词平滑展开与收起
 - 流烟歌词随封面取色，与 3D 倾斜互斥；开启后自动居中，中央显示当前句，翻译固定在歌词区域顶部、歌曲信息下方，进度条上方以小号文字显示下一句
 
+歌词另有独立的“星尘歌词”开关：文字逐字聚合，切句时化作封面色粒子飘散；与流烟效果可切换使用。
+
 ### 桌面悬浮歌词
 
 - 在系统授权后跟随后台播放；桌面歌词仅保留灵动岛，支持精致/舞台效果、翻译、字号和歌词偏移
@@ -63,10 +65,11 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 
 ### 歌单与网易云音乐库
 
+- 歌单支持可选的 Depth Ribbon 立体缎带：左右拖动穿行、点击聚焦、长按全景，最多同时绘制 72 张封面；普通列表为默认，可从歌单顶部或外观设置切换。
 - 歌单封面网格、取色头部、歌单内搜索、排序、随机播放与继续播放
 - 后台刷新对比歌曲变化，保留已有内容和滚动位置，新增歌曲通过动画显示
 - 网易云账号支持扫码和手机验证码绑定，二维码在切到后台时保留
-- 搜索、歌词、歌单、收藏、每日推荐、最近播放、艺人与 MV 原生直连网易云，不经过 CurrentMusic 转发；歌曲音源继续使用 CurrentMusic
+- 搜索、歌单、收藏、每日推荐、最近播放、艺人与 MV 原生直连网易云；歌曲音源和网易云歌词走 CurrentMusic（默认 `https://music.20110208.xyz/cm/`），歌词包含逐字时间、翻译与罗马音，增强接口不可用时回退同服务的普通歌词接口
 - 网易云登录凭据加密保存在本机；自己的普通歌单支持创建、重命名、删除和移出歌曲
 - 可将网易云设为主音乐库，“我的 → 我喜欢”直接打开网易云我喜欢的音乐
 - 开启主音乐库后，播放页短按红心直接喜欢 / 取消喜欢；长按可选择其他可收录歌单
@@ -88,6 +91,7 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 ### 搜索与发现
 
 - 首页搜索框联动搜索页，支持歌曲、歌手和专辑分类搜索
+- 首页每日推荐采用扇形封面与黑胶展示，连续拖动跟手、松手吸附、歌名渐变切换，点击中间封面播放/暂停；刷新保留选中歌曲，支持一起听点歌与独立栏目加载状态
 - 搜索历史、热搜与推荐搜索词
 - 每日推荐、最近播放、音乐风格分类与艺人主页
 - MV 播放与艺人、专辑浏览
@@ -112,7 +116,7 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 
 - Miuix 分组卡片、悬浮底栏、跟手拖拽与预测返回
 - 深浅主题、Monet 动态颜色、模糊与可选玻璃效果
-- 可关闭的封面取色底栏柔光，随音乐音量与低频上下律动，二级页面迷你播放器同步保留
+- 可关闭的封面取色底栏光效：色雾从底边晕开，左右浓淡与高度随音乐缓缓起伏，二级页面迷你播放器同步保留
 - 启动加载动画、头像联动与一级页面切换动画
 - 启动时自动检查更新，也可在设置中手动检查；支持正式版与预发布渠道
 - 更新说明支持图片，默认使用专用镜像下载，失败时切换备用源
@@ -180,7 +184,7 @@ CurrentMusic 服务器地址可以在“设置 → 网络与播放”中修改�
 
 ### 如何检查更新？
 
-在“设置 → 检查更新”手动检查，也可开启启动时自动检查。更新默认使用 `updates.bileizhen.top` 专用镜像，下载失败时会尝试备用源。
+在“设置 → 检查更新”手动检查，也可开启启动时自动检查。更新默认使用 [CurrentMusic 专用镜像](https://music.20110208.xyz/cm/x/download/latest)，下载失败或与目标发布的大小、SHA-256 不符时会尝试备用源。
 
 下载完成并通过校验后，由 Android 系统确认安装。首次更新可能需要允许应用安装未知来源的安装包。自行构建的包与官方包签名不同时，无法直接覆盖安装。
 
@@ -233,7 +237,7 @@ chmod +x gradlew
 
 Debug APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。Windows 项目路径包含中文时，可通过 `subst` 映射到盘符后构建。
 
-正式包使用 `:app:assembleRelease`，签名配置从未入库的 `keystore.properties` 读取，字段为 `storeFile`、`storePassword`、`keyAlias` 和 `keyPassword`。未配置签名时生成未签名 Release 包。官方更新镜像的本地配置见 [更新代理说明](services/update-proxy/README.md)；无需该配置也可以使用 GitHub 下载源。
+正式包使用 `:app:assembleRelease`，签名配置从未入库的 `keystore.properties` 读取，字段为 `storeFile`、`storePassword`、`keyAlias` 和 `keyPassword`。未配置签名时生成未签名 Release 包。当前更新镜像使用 `https://music.20110208.xyz/cm/x/download/latest`，构建时无需配置镜像密钥；GitHub 下载源仍可用。
 
 ## 参与开发
 

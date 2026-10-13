@@ -95,6 +95,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     val density = LocalDensity.current
     val listState = rememberLazyListState()
     LaunchedEffect(avatarFlight?.request) { if (avatarFlight?.active == true && !avatarFlight.returning) listState.scrollToItem(0) }
+    LaunchedEffect(listState, avatarFlight) {
+        snapshotFlow { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
+            .collect { if (!it) avatarFlight?.profileLanding = null }
+    }
     LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState,
         contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -107,7 +111,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
                 Box(Modifier.testTag("my_profile_avatar").onGloballyPositioned {
                     val center = (placement?.landingBounds(it) ?: it.boundsInRoot()).center
                     val radius = with(density) { 32.dp.toPx() }
-                    if (avatarFlight?.returning != true) avatarFlight?.destination = Rect(center - Offset(radius, radius), center + Offset(radius, radius))
+                    val landing = Rect(center - Offset(radius, radius), center + Offset(radius, radius))
+                    if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) avatarFlight?.profileLanding = landing
+                    if (avatarFlight?.returning != true) avatarFlight?.destination = landing
                 }.graphicsLayer { alpha = if (avatarFlight?.active == true) 0f else 1f }) {
                     UserAvatar(ProfileUser(id = native.uid, nickname = native.nickname, avatar = native.avatar), container,
                         reserveOverlay = false, flightState = avatarFlight)
@@ -153,6 +159,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     LaunchedEffect(avatarFlight?.request) {
         if (avatarFlight?.active == true && !avatarFlight.returning) listState.scrollToItem(0)
     }
+    LaunchedEffect(listState, avatarFlight) {
+        snapshotFlow { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
+            .collect { if (!it) avatarFlight?.profileLanding = null }
+    }
     MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState, contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -171,8 +181,10 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
                     Box(Modifier.testTag("my_profile_avatar").onGloballyPositioned {
                         val center = (placement?.landingBounds(it) ?: it.boundsInRoot()).center
                         val radius = with(density) { 32.dp.toPx() }
+                        val landing = Rect(center - Offset(radius, radius), center + Offset(radius, radius))
+                        if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) avatarFlight?.profileLanding = landing
                         if (avatarFlight?.returning != true && (avatarFlight?.active != true || (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0)))
-                            avatarFlight?.destination = Rect(center - Offset(radius, radius), center + Offset(radius, radius))
+                            avatarFlight?.destination = landing
                     }.graphicsLayer { alpha = if (avatarFlight?.active == true) 0f else 1f }) {
                         UserAvatar(user, vm.container, 64.dp, flightState = avatarFlight)
                     }

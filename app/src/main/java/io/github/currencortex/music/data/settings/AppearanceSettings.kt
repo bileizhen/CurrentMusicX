@@ -11,6 +11,7 @@ data class AppearanceSettings(
     val liquidGlass: Boolean = true,
     val predictiveBack: Boolean = true,
     val navigationGlow: Boolean = true,
+    val playlistDepthRibbon: Boolean = false,
 ) {
     fun normalized() = copy(uiScale = if (uiScale.isFinite()) uiScale.coerceIn(MIN_SCALE, MAX_SCALE) else 1f)
     companion object { const val MIN_SCALE = 0.8f; const val MAX_SCALE = 1.2f }

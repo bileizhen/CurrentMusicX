@@ -73,12 +73,44 @@ class NeteaseGatewayTest {
         assertEquals(13L, api.decode<SongListDto>(gateway.recent()).songs.single().id)
         assertEquals(0, current.requestCount)
     }
-    @Test fun rawLrcTranslationAndWordTimingReachTheExistingParser() = runBlocking {
-        enqueue("""{"code":200,"lrc":{"lyric":"[00:01.00]Hello"},"tlyric":{"lyric":"[00:01.00]你好"},"yrc":{"lyric":"[1000,1000](1000,500,0)Hel(1500,500,0)lo"}}""")
+    @Test fun lyricsUseCurrentMusicWithWordTimingAndAuxiliaryTextDespiteNativeLogin() = runBlocking {
+        login()
+        current.enqueue(response("""{"code":200,"lrc":{"lyric":"[00:01.00]Hello"},"tlyric":{"lyric":"[00:01.00]你好"},"yromalrc":{"lyric":"[00:01.00]test romanization"},"yrc":{"lyric":"[1000,1000](1000,500,0)Hel(1500,500,0)lo"}}"""))
         val result = MusicRepository(api).lyricsDocument(11) as AppResult.Success
-        assertEquals("网易云", result.value.metadata.source); assertEquals("你好", result.value.lines.single().translation)
+        assertEquals("CurrentMusic", result.value.metadata.source); assertEquals("你好", result.value.lines.single().translation)
+        assertEquals("test romanization", result.value.lines.single().romanization)
         assertEquals(2, result.value.lines.single().words.size)
-        assertEquals("/eapi/song/lyric/v1", upstream.takeRequest().path)
+        val request = current.takeRequest()
+        assertEquals("/cm/ncm/lyric/new?id=11", request.path)
+        assertNull(request.getHeader("Authorization")); assertNull(request.getHeader("Cookie"))
+        assertEquals(0, upstream.requestCount)
+    }
+    @Test fun lyricFallbackAndLegacyEntryStayOnCurrentMusic() = runBlocking {
+        login()
+        current.enqueue(MockResponse().setResponseCode(404))
+        val body = """{"lines":[{"t":1000,"txt":"Hello","trans":"你好","roma":"test romanization"}]}"""
+        current.enqueue(response(body))
+        val repository = MusicRepository(api)
+        val document = (repository.lyricsDocument(11) as AppResult.Success).value
+        assertEquals("你好", document.lines.single().translation)
+        assertEquals("test romanization", document.lines.single().romanization)
+        current.enqueue(response(body))
+        assertEquals("Hello", (repository.lyrics(11) as AppResult.Success).value.single().txt)
+        for (path in listOf("/cm/ncm/lyric/new?id=11", "/cm/ncm/lyric?id=11", "/cm/ncm/lyric?id=11")) {
+            val request = current.takeRequest()
+            assertEquals(path, request.path)
+            assertNull(request.getHeader("Authorization")); assertNull(request.getHeader("Cookie"))
+        }
+        assertEquals(0, upstream.requestCount)
+    }
+    @Test fun lyricServerFailureDoesNotSilentlySwitchToNativeNetease() = runBlocking {
+        current.enqueue(MockResponse().setResponseCode(503))
+        current.enqueue(response("""{"code":500,"lrc":{"lyric":"[00:01.00]Rejected"}}"""))
+        val result = MusicRepository(api).lyricsDocument(11) as AppResult.Failure
+        assertEquals(ErrorKind.Server, result.kind)
+        assertEquals(500, result.status)
+        assertEquals(2, current.requestCount)
+        assertEquals(0, upstream.requestCount)
     }
     @Test fun qrConfirmationCommitsLocalSessionAndSurvivesRecreation() = runBlocking {
         val plainOwner = owner().let { RequestSession(it.server, it.token) }

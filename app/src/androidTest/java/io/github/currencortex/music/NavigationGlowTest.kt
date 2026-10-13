@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.currencortex.music.core.media.DockAudioLevel
 import io.github.currencortex.music.data.settings.AppearanceSettings
+import io.github.currencortex.music.data.settings.ThemeMode
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.theme.LeiTheme
 import org.junit.Assert.*
@@ -31,11 +32,12 @@ class NavigationGlowTest {
     private var enabled by mutableStateOf(true)
     private var playing by mutableStateOf(false)
     private var selected by mutableIntStateOf(0)
+    private var dark by mutableStateOf(false)
     private var palette by mutableStateOf(ArtworkGlowPalette(0xff227fdd.toInt(), 0xffad55dc.toInt()))
 
     @Composable private fun Fixture() {
-        LeiTheme(AppearanceSettings(blur = false)) {
-            Box(Modifier.size(360.dp, 130.dp).clip(RoundedCornerShape(30.dp)).background(ComposeColor.White).testTag("glow_panel")) {
+        LeiTheme(AppearanceSettings(blur = false, themeMode = if (dark) ThemeMode.DARK else ThemeMode.LIGHT)) {
+            Box(Modifier.size(360.dp, 130.dp).clip(RoundedCornerShape(30.dp)).background(if (dark) ComposeColor.Black else ComposeColor.White).testTag("glow_panel")) {
                 if (enabled) DockGlowLight(palette, playing, meter, Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(88.dp))
                 PlainFloatingBar(selected, listOf("首页", "发现", "我的", "设置"), List(4) { Icons.Default.Home },
                     { selected = it }, Modifier.align(Alignment.BottomCenter), embedded = true)
@@ -44,6 +46,48 @@ class NavigationGlowTest {
     }
     private fun image() = compose.onNodeWithTag("glow_panel").captureToImage().asAndroidBitmap()
     private fun edge() = image().let { it.getPixel((it.width * .28f).toInt(), (it.height * (1f - 18f / 130f)).toInt()) }
+
+    @Test fun atomicPoolsShiftIndependentlyAndPauseIntoAStableGlow() {
+        compose.mainClock.autoAdvance = false
+        dark = true
+        palette = ArtworkGlowPalette(0xffdc4e68.toInt(), 0xffdc4e68.toInt())
+        compose.setContent { Fixture() }
+        compose.mainClock.advanceTimeBy(32)
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val frames = java.io.File(context.getExternalFilesDir(null), "atomic-dock").apply { mkdirs() }
+        fun save(bitmap: android.graphics.Bitmap, name: String) {
+            java.io.File(frames, name).outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        }
+        fun redness(bitmap: android.graphics.Bitmap, x: Float): Int {
+            val pixel = bitmap.getPixel((bitmap.width * x).toInt(), (bitmap.height * (1f - 35f / 130f)).toInt())
+            return Color.red(pixel) - Color.blue(pixel)
+        }
+        compose.runOnIdle { playing = true }
+        var greatestAsymmetry = 0
+        repeat(81) { frame ->
+            compose.runOnIdle { meter.publish(.78f, .45f) }
+            compose.mainClock.advanceTimeBy(80)
+            val bitmap = image()
+            // Sample the gaps between icons, outside the selected tab's tinted pill.
+            greatestAsymmetry = maxOf(greatestAsymmetry, kotlin.math.abs(redness(bitmap, .30f) - redness(bitmap, .70f)))
+            save(bitmap, "dark-%03d.png".format(frame))
+            if (frame == 12) {
+                assertTrue("The middle must leave a darker valley above the joined bottom light",
+                    redness(bitmap, .30f) > redness(bitmap, .5f) + 5)
+                assertEquals("Light must not reach the top of the dock", Color.BLACK, bitmap.getPixel(bitmap.width / 2, 10))
+            }
+        }
+        assertTrue("The left and right light must swell independently, not as a uniform band", greatestAsymmetry > 5)
+        compose.runOnIdle { playing = false }
+        compose.mainClock.advanceTimeBy(3000)
+        val paused = image()
+        compose.mainClock.advanceTimeBy(1000)
+        assertTrue("Paused light must settle without a perpetual animation", paused.sameAs(image()))
+        save(paused, "paused.png")
+        compose.runOnIdle { dark = false }
+        compose.mainClock.advanceTimeBy(1000)
+        save(image(), "light.png")
+    }
 
     @Test fun singleColourCoverIlluminatesBothSidesOfTheDock() {
         compose.mainClock.autoAdvance = false

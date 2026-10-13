@@ -14,7 +14,8 @@ class NeteaseGateway(val transport: NeteaseTransport) {
     private var listeningMs = 0L
     private var listeningReported = false
     val sessions get() = transport.sessions
-    fun handles(path: String) = (path.startsWith("ncm/") && path != "ncm/song/url") || path == "ncmbind" || path.startsWith("ncmbind/")
+    // Audio and lyrics use CurrentMusic, including when native NetEase login is enabled.
+    fun handles(path: String) = (path.startsWith("ncm/") && path !in setOf("ncm/song/url", "ncm/lyric", "ncm/lyric/new")) || path == "ncmbind" || path.startsWith("ncmbind/")
     private fun JsonObject.text(key: String) = (get(key) as? JsonPrimitive)?.contentOrNull.orEmpty()
     private fun JsonObject.long(key: String) = (get(key) as? JsonPrimitive)?.longOrNull ?: 0L
     private fun JsonObject.obj(key: String) = get(key) as? JsonObject ?: buildJsonObject {}
@@ -157,9 +158,6 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 val raw = official("/api/v3/song/detail", data("c" to c), web = true, expected = expected)
                 return buildJsonObject { put("code", 200); put("songs", songs(raw.array("songs"))) }
             }
-            "lyric", "lyric/new" -> return official(if (path.endsWith("/new")) "/api/song/lyric/v1" else "/api/song/lyric",
-                params("id" to JsonPrimitive(id), "cp" to JsonPrimitive(false), "tv" to JsonPrimitive(0), "lv" to JsonPrimitive(0),
-                    "rv" to JsonPrimitive(0), "kv" to JsonPrimitive(0), "yv" to JsonPrimitive(0), "ytv" to JsonPrimitive(0), "yrv" to JsonPrimitive(0)), expected = expected)
             "user/playlist" -> return official("/api/user/playlist", data("uid" to arg("uid"), "limit" to arg("limit", "100"),
                 "offset" to arg("offset", "0"), "includeVideo" to "true"), web = true, expected = expected, authenticated = true)
             "playlist/detail" -> return official("/api/v6/playlist/detail", data("id" to id, "n" to "100000", "s" to arg("s", "0")), expected = expected)

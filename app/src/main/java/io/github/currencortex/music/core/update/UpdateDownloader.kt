@@ -28,11 +28,10 @@ class UpdateDownloader(client: OkHttpClient, private val directory: File,
         .retryOnConnectionFailure(false).connectTimeout(8, TimeUnit.SECONDS)
         .readTimeout(15, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS).build()
     // Permit alternate DNS routes when the dedicated mirror's first TLS connection fails.
-    // A request already accepted by the Worker cannot be replayed: its nonce is single-use.
     private val privateMirrorHttp = http.newBuilder().retryOnConnectionFailure(true)
         .dns(object : okhttp3.Dns {
             override fun lookup(hostname: String) = http.dns.lookup(hostname).let { addresses ->
-                if (hostname == "updates.bileizhen.top") addresses.sortedBy { if (it is java.net.Inet4Address) 0 else 1 }
+                if (hostname == "music.20110208.xyz") addresses.sortedBy { if (it is java.net.Inet4Address) 0 else 1 }
                 else addresses
             }
         }).build()
@@ -57,7 +56,6 @@ class UpdateDownloader(client: OkHttpClient, private val directory: File,
                 val request = Request.Builder().url(url)
                     .header("Accept", "application/vnd.android.package-archive, application/octet-stream")
                     .header("User-Agent", "CurrentMusic updater")
-                if (source == UpdateSource.CURRENTMUSIC) UpdateProxy.current.headers(url).forEach { (name, value) -> request.header(name, value) }
                 val call = (if (source == UpdateSource.CURRENTMUSIC) privateMirrorHttp else http).newCall(request.build())
                 val cancel = currentCoroutineContext().job.invokeOnCompletion(onCancelling = true, invokeImmediately = true) { if (it != null) call.cancel() }
                 try {
