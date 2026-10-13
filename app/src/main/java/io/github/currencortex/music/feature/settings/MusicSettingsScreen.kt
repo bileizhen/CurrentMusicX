@@ -22,6 +22,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import io.github.currencortex.music.data.settings.AudioProvider
+import io.github.currencortex.music.data.settings.MusicTransitionMode
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.setProgress
+import kotlin.math.roundToInt
 
 @Composable fun MusicSettingsScreen(vm: MusicSettingsViewModel, onEqualizer: () -> Unit = {}, onNavidrome: () -> Unit = {}, onDesktopLyrics: () -> Unit = {}, onStorage: () -> Unit) {
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -32,6 +36,7 @@ import io.github.currencortex.music.data.settings.AudioProvider
     // Credentials must not be saved in Bundle/saved instance state.
     var audioKey by remember { mutableStateOf("") }
     var qualityOpen by rememberSaveable { mutableStateOf(false) }
+    var crossfadeSeconds by remember(settings.crossfadeSeconds) { mutableFloatStateOf(settings.crossfadeSeconds.toFloat()) }
     LaunchedEffect(vm) { vm.refreshCache() }
     var server by rememberSaveable(settings.server) { mutableStateOf(settings.server) }
     val colors = MiuixTheme.colorScheme
@@ -100,6 +105,34 @@ import io.github.currencortex.music.data.settings.AudioProvider
             summary = "已缓存 ${String.format(java.util.Locale.ROOT, "%.1f", cacheBytes / 1048576.0)} MB") } }
 
         item { MusicSectionHeader("播放") }
+        item { Card {
+            SettingsSwitch("智能过渡", settings.transitionMode == MusicTransitionMode.SMART,
+                { vm.transition(if (it) MusicTransitionMode.SMART else MusicTransitionMode.OFF) },
+                summary = "智能分析音乐，让歌曲丝滑衔接，让听感更流畅",
+                modifier = Modifier.testTag("smart_transition"))
+            SettingsSwitch("淡入淡出", settings.transitionMode == MusicTransitionMode.CROSSFADE,
+                { vm.transition(if (it) MusicTransitionMode.CROSSFADE else MusicTransitionMode.OFF) },
+                summary = "上一首声音渐弱，下一首声音渐强，交叉过渡",
+                modifier = Modifier.testTag("crossfade"))
+            if (settings.transitionMode == MusicTransitionMode.CROSSFADE) Column(Modifier.padding(horizontal = 16.dp)) {
+                Text("过渡时长 · ${crossfadeSeconds.roundToInt()} 秒", fontSize = 13.sp, color = hint)
+                Slider(value = crossfadeSeconds, valueRange = 1f..12f,
+                    onValueChange = { crossfadeSeconds = it.roundToInt().toFloat() },
+                    onValueChangeFinished = { vm.crossfadeSeconds(crossfadeSeconds.roundToInt()) },
+                    modifier = Modifier.fillMaxWidth().testTag("crossfade_duration").semantics {
+                        setProgress { value ->
+                            crossfadeSeconds = value.roundToInt().coerceIn(1, 12).toFloat()
+                            vm.crossfadeSeconds(crossfadeSeconds.roundToInt()); true
+                        }
+                    })
+            }
+            Text("两种过渡择一开启，自动切歌时生效。", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 12.sp, color = hint)
+        } }
+        item { Card {
+            SettingsSwitch("允许与其他应用同时播放", settings.allowConcurrentPlayback, vm::concurrentPlayback,
+                summary = "允许音乐与其他应用的声音同时播放，立即生效",
+                modifier = Modifier.testTag("allow_concurrent_playback"))
+        } }
         item { Card { MusicDestinationRow("桌面悬浮歌词", onDesktopLyrics, Modifier.testTag("open_desktop_lyrics"), summary = "后台同步 · 精致与舞台效果 · 触摸穿透") } }
         item { Card { MusicDestinationRow("均衡器", onEqualizer, Modifier.testTag("open_equalizer"),
             summary = "五段调节 · 音效预设") } }

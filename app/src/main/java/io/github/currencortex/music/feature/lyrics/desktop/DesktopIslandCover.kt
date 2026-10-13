@@ -67,10 +67,10 @@ private class CoverTransitionHistory { var current: DesktopIslandCoverTransition
 
 /** The outer layer flies and flips around Y; only the circular inner image spins around Z. */
 @Composable internal fun DesktopIslandCover(song: Song?, coverPosition: State<Long>?, motion: Boolean,
-    transition: DesktopIslandCoverTransition? = null) {
+    transition: DesktopIslandCoverTransition? = null, modifier: Modifier = Modifier) {
     val travel = transition ?: rememberIslandCoverTransition(song, motion)
     val outgoing by remember(travel) { derivedStateOf { travel.progress.value < .5f } }
-    Box(Modifier.testTag("desktop_island_cover"), contentAlignment = Alignment.Center) {
+    Box(modifier.testTag("desktop_island_cover"), contentAlignment = Alignment.Center) {
         // Start loading the new image while the old circular face is still visible.
         if (outgoing) CoverFace(song, Modifier.fillMaxSize().clearAndSetSemantics {}.graphicsLayer { alpha = 0f }, { 0f })
         val face = if (outgoing) travel.from else song

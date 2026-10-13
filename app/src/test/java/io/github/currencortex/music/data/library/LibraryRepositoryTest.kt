@@ -128,6 +128,9 @@ class LibraryRepositoryTest {
             s.enqueue(MockResponse().setBody("""{"data":{"id":8,"name":"MV","duration":1234}}"""))
             assertEquals(1234L,r.mv(8).duration);assertEquals("8",s.takeRequest().requestUrl!!.queryParameter("mvid"))
             repeat(2){s.enqueue(MockResponse().setBody("""{"data":{"url":"https://example.com/video$it"}}"""));assertTrue(r.mvSource(8).endsWith("$it"));assertEquals("1080",s.takeRequest().requestUrl!!.queryParameter("r"))}
+            s.enqueue(MockResponse().setBody("""{"data":{"url":"https://example.com/480.mp4"}}"""))
+            assertTrue(r.mvSource(8, 480).endsWith("480.mp4"))
+            assertEquals("480", s.takeRequest().requestUrl!!.queryParameter("r"))
         }
     }
     @Test fun statusRequestsAreBatchedAndSessionResetClearsData() = runBlocking {

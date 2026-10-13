@@ -32,7 +32,13 @@ import kotlinx.serialization.decodeFromString
 class MusicService : MediaSessionService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val container get() = (application as CurrentMusicApplication).container
-    private lateinit var player: ExoPlayer
+    private lateinit var transitions: PlaybackTransitions
+    private val player get() = transitions.player
+    private lateinit var audioFocus: PlaybackAudioFocus
+    private lateinit var audioFocusReady: Deferred<Unit>
+    private var refreshSession: () -> Unit = {}
+    private data class PlayerSlot(val meter: DockAudioLevel, val equalizer: PlaybackEqualizer)
+    private val playerSlots = mutableMapOf<ExoPlayer, PlayerSlot>()
     private var desktopLyrics: io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost? = null
     private var session: MediaSession? = null
     private var loading: Job? = null
@@ -87,114 +93,43 @@ class MusicService : MediaSessionService() {
             changeSong = { direction ->
                 val controller = container.playerController
                 if (direction > 0) controller.next(controller.state.value.showPause) else controller.previous(controller.state.value.showPause)
-            })
-        val renderers = DockRenderersFactory(this, container.dockAudioLevel)
-        player = ExoPlayer.Builder(this, renderers)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory))
-            .build().apply {
-            setAudioAttributes(AudioAttributes.Builder().setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).setUsage(C.USAGE_MEDIA).build(), true)
-            setHandleAudioBecomingNoisy(true)
-            setWakeMode(C.WAKE_MODE_LOCAL)
-        }
-        val forwarding = object : ForwardingSimpleBasePlayer(player) {
-            // Rebuild listener state as well as getters: ExoPlayer's single-item timeline
-            // must not remove the transport commands for the independent business queue.
-            override fun getState(): State {
-                val state = super.getState()
-                val builder = state.buildUpon().setAvailableCommands(state.availableCommands.buildUpon()
-                    .add(Player.COMMAND_SEEK_TO_NEXT).add(Player.COMMAND_SEEK_TO_PREVIOUS)
-                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM).add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM).build())
-                val remote = container.playerController.state.value
-                if (remote.mode == PlayerMode.CAST && remote.song != null) {
-                    val metadata = MediaItemFactory.create(remote.song, "")
-                    builder.setPlaylist(listOf(SimpleBasePlayer.MediaItemData.Builder("cast-${remote.song.id}")
-                        .setMediaItem(metadata).setMediaMetadata(metadata.mediaMetadata).setDurationUs(remote.durationMs.coerceAtLeast(0) * 1000)
-                        .setIsSeekable(true).build())).setCurrentMediaItemIndex(0).setContentPositionMs(remote.positionMs)
-                        .setPlayWhenReady(remote.playing, Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE)
-                        .setPlaybackState(Player.STATE_READY).setPlaybackSuppressionReason(Player.PLAYBACK_SUPPRESSION_REASON_NONE)
-                        .setAvailableCommands(state.availableCommands.buildUpon().add(Player.COMMAND_PLAY_PAUSE)
-                            .add(Player.COMMAND_STOP).add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
-                            .add(Player.COMMAND_SEEK_TO_NEXT).add(Player.COMMAND_SEEK_TO_PREVIOUS).build())
-                }
-                if (remote.mode == PlayerMode.ROOM && !remote.canControlPlayback) {
-                    builder.setAvailableCommands(builder.build().availableCommands.buildUpon().removeAll(
-                        Player.COMMAND_PLAY_PAUSE, Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
-                        Player.COMMAND_SEEK_TO_DEFAULT_POSITION, Player.COMMAND_SEEK_TO_MEDIA_ITEM,
-                        Player.COMMAND_SEEK_BACK, Player.COMMAND_SEEK_FORWARD,
-                        Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_PREVIOUS,
-                        Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
-                    ).build())
-                }
-                return builder.build()
-            }
-            fun remoteChanged() { invalidateState() }
-            override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> {
-                container.playerController.external?.let {
-                    when (seekCommand) {
-                        Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> it.next()
-                        Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> it.previous()
-                        else -> it.seek(positionMs)
-                    }
-                    return Futures.immediateVoidFuture()
-                }
-                when (seekCommand) {
-                    Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> nextSong()
-                    Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> previousSong()
-                    else -> return super.handleSeek(mediaItemIndex, positionMs, seekCommand)
-                }
-                return Futures.immediateVoidFuture()
-            }
-            override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
-                container.playerController.external?.let { it.play(playWhenReady); return Futures.immediateVoidFuture() }
-                if (!playWhenReady) {
-                    pendingPlay = false
-                    loading?.cancel()
-                    container.playerController.state.value = container.playerController.state.value.copy(playing = false, playRequested = false, loading = false, resolving = false)
-                } else if (container.playerController.state.value.warning != null) {
-                    pendingPlay = true
-                    return Futures.immediateVoidFuture()
-                } else if (player.currentMediaItem?.mediaId != container.playbackQueue.state.value.current?.id?.toString()) {
-                    prepareSong(true, container.playbackQueue.state.value.positionMs)
-                    return Futures.immediateVoidFuture()
-                }
-                return super.handleSetPlayWhenReady(playWhenReady)
-            }
-            override fun handleStop(): ListenableFuture<*> {
-                container.playerController.external?.let { it.stop(); return Futures.immediateVoidFuture() }
-                loading?.cancel()
-                return super.handleStop()
-            }
-        }
-        session = MediaSession.Builder(this, forwarding).setSessionActivity(
+            }, togglePlayback = { container.playerController.toggle() })
+        val probe = TrackEnergyProbe()
+        transitions = PlaybackTransitions(createPlaybackPlayer(probe), probe, scope, ::createPlaybackPlayer,
+            ::transitionOffer, resolve = { offer ->
+                val resolved = container.audioSources.resolve(offer.request)
+                if (resolved.source.highSpec && container.musicSettings.snapshot().warnHighSpec) null
+                else MediaItemFactory.create(offer.next, resolved.source.url, resolved.key.takeIf(String::isNotBlank))
+            }, promote = ::promoteTransition, discard = { playerSlots.remove(it)?.equalizer?.close() },
+            currentSong = { container.playbackQueue.state.value.current })
+        audioFocus = PlaybackAudioFocus(player, container.musicSettings.concurrentPlaybackEnabled, scope)
+        audioFocusReady = audioFocus.ready
+        session = MediaSession.Builder(this, sessionPlayer()).setSessionActivity(
             PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         ).setCallback(MusicSessionCallback()).build()
         scope.launch {
             var wasExternal = false
             container.playerController.state.collect { state ->
                 val external = state.mode != PlayerMode.LOCAL
-                if (external || wasExternal) forwarding.remoteChanged()
+                if (external || wasExternal) refreshSession()
                 wasExternal = external
             }
         }
-        player.addListener(object : Player.Listener {
-            override fun onAudioSessionIdChanged(audioSessionId: Int) { container.equalizer.attach(audioSessionId) }
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                updateListening(isPlaying)
+        scope.launch { container.equalizerSettings.state.collect { settings ->
+            container.equalizer.configure(settings)
+            playerSlots.values.forEach { it.equalizer.configure(settings) }
+        } }
+        scope.launch {
+            while (isActive) {
+                val settings = container.musicSettings.state.value
+                transitions.tick(settings.transitionMode, settings.crossfadeSeconds)
+                playerSlots.forEach { (source, slot) ->
+                    slot.meter.enabled = source === player && container.dockAudioLevel.enabled
+                    if (source === player) slot.meter.sample.let { container.dockAudioLevel.publish(it.energy, it.bass, it.timestampNanos) }
+                }
+                delay(if (settings.transitionMode != io.github.currencortex.music.data.settings.MusicTransitionMode.OFF || container.dockAudioLevel.enabled) 40 else 250)
             }
-            override fun onPlaybackStateChanged(state: Int) {
-                readyForPreload.value = state == Player.STATE_READY
-                if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.ROOM) container.playerController.external?.ended()
-                if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.LOCAL) { container.playbackQueue.next(automatic = true); prepareSong(true, 0, newPlayback = true) }
-            }
-            override fun onPlayerError(error: PlaybackException) {
-                player.playWhenReady = false
-                container.playerController.state.value = container.playerController.state.value.copy(playing = false, playRequested = false,
-                    loading = false, resolving = false, error = "音频播放失败，请重试或降低音质")
-                container.logger.warn("Player", "Playback failed code=${error.errorCode}")
-                if (container.playerController.state.value.mode == PlayerMode.ROOM) container.playerController.external?.failed()
-            }
-        })
-        scope.launch { container.equalizerSettings.state.collect { container.equalizer.configure(it) } }
+        }
         scope.launch {
             while (isActive) {
                 delay(1500)
@@ -251,6 +186,153 @@ class MusicService : MediaSessionService() {
                 }
         }
     }
+    private fun createPlaybackPlayer(probe: TrackEnergyProbe): ExoPlayer {
+        val meter = DockAudioLevel()
+        val secondaryEqualizer = PlaybackEqualizer().apply { configure(container.equalizerSettings.state.value) }
+        val source = ExoPlayer.Builder(this, DockRenderersFactory(this, meter, probe))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory)).build().apply {
+                setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
+                setHandleAudioBecomingNoisy(true)
+                setWakeMode(C.WAKE_MODE_LOCAL)
+            }
+        playerSlots[source] = PlayerSlot(meter, secondaryEqualizer)
+        source.addListener(object : Player.Listener {
+            private fun primary() = ::transitions.isInitialized && source === player
+            override fun onAudioSessionIdChanged(audioSessionId: Int) {
+                if (primary()) container.equalizer.attach(audioSessionId) else secondaryEqualizer.attach(audioSessionId)
+            }
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (!primary()) return
+                if (!isPlaying) transitions.pauseCompanion()
+                updateListening(isPlaying)
+            }
+            override fun onPlaybackStateChanged(state: Int) {
+                if (!::transitions.isInitialized) return
+                if (state == Player.STATE_ENDED && transitions.ended(source)) return
+                if (!primary()) return
+                readyForPreload.value = state == Player.STATE_READY
+                if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.ROOM) container.playerController.external?.ended()
+                if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.LOCAL) {
+                    if (container.playbackQueue.state.value.current?.video == true) player.pause()
+                    else { container.playbackQueue.next(automatic = true); prepareSong(true, 0, newPlayback = true) }
+                }
+            }
+            override fun onPlayerError(error: PlaybackException) {
+                if (!::transitions.isInitialized || transitions.failed(source)) return
+                player.playWhenReady = false
+                container.playerController.state.value = container.playerController.state.value.copy(playing = false, playRequested = false,
+                    loading = false, resolving = false, error = if (container.playbackQueue.state.value.current?.video == true)
+                        "MV 播放失败，请重试或降低清晰度" else "音频播放失败，请重试或降低音质")
+                container.logger.warn("Player", "Playback failed code=${error.errorCode}")
+                if (container.playerController.state.value.mode == PlayerMode.ROOM) container.playerController.external?.failed()
+            }
+        })
+        return source
+    }
+    private fun transitionOffer(): TransitionOffer? {
+        val state = container.playerController.state.value
+        val from = container.playbackQueue.state.value.current ?: return null
+        if (state.mode != PlayerMode.LOCAL || state.resolving || state.error != null || state.warning != null || from.video ||
+            container.sleepTimer.state.value.waitingForSongEnd || container.audioCache.clearing.value ||
+            player.currentMediaItem?.mediaId != from.id.toString()) return null
+        val next = container.playbackQueue.previewNext()?.takeUnless { it.video } ?: return null
+        return TransitionOffer(from, next, audioRequest(next, container.musicSettings.state.value.quality))
+    }
+    private fun promoteTransition(song: Song, outgoing: ExoPlayer, incoming: ExoPlayer) {
+        flushListening()
+        trackedSong = song; trackedSession = currentSession(song); recorded = false
+        container.playbackQueue.next(automatic = true)
+        container.playbackQueue.state.value = container.playbackQueue.state.value.copy(positionMs = incoming.currentPosition)
+        audioFocus.replace(incoming)
+        playerSlots[incoming]?.equalizer?.close()
+        container.equalizer.attach(incoming.audioSessionId)
+        playerSlots[outgoing]?.equalizer?.attach(outgoing.audioSessionId)
+        videoView?.player = incoming
+        readyForPreload.value = incoming.playbackState == Player.STATE_READY
+        container.playerController.state.value = PlayerState(song = song, playing = incoming.isPlaying,
+            playRequested = incoming.playWhenReady, positionMs = incoming.currentPosition,
+            durationMs = incoming.duration.coerceAtLeast(0), bufferedPositionMs = incoming.bufferedPosition,
+            anchorRealtimeMs = SystemClock.elapsedRealtime())
+        session?.setPlayer(sessionPlayer())
+        // Media3 publishes this timeline handoff as AUTO; PlayerController counts that event once.
+        updateListening(incoming.isPlaying)
+    }
+    private fun sessionPlayer(): Player {
+        val forwarding = object : ForwardingSimpleBasePlayer(player) {
+            // Rebuild listener state as well as getters: ExoPlayer's single-item timeline
+            // must not remove the transport commands for the independent business queue.
+            override fun getState(): State {
+                val state = super.getState()
+                val builder = state.buildUpon().setAvailableCommands(state.availableCommands.buildUpon()
+                    .add(Player.COMMAND_SEEK_TO_NEXT).add(Player.COMMAND_SEEK_TO_PREVIOUS)
+                    .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM).add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM).build())
+                val remote = container.playerController.state.value
+                if (remote.mode == PlayerMode.CAST && remote.song != null) {
+                    val metadata = MediaItemFactory.create(remote.song, "")
+                    builder.setPlaylist(listOf(SimpleBasePlayer.MediaItemData.Builder("cast-${remote.song.id}")
+                        .setMediaItem(metadata).setMediaMetadata(metadata.mediaMetadata).setDurationUs(remote.durationMs.coerceAtLeast(0) * 1000)
+                        .setIsSeekable(true).build())).setCurrentMediaItemIndex(0).setContentPositionMs(remote.positionMs)
+                        .setPlayWhenReady(remote.playing, Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE)
+                        .setPlaybackState(Player.STATE_READY).setPlaybackSuppressionReason(Player.PLAYBACK_SUPPRESSION_REASON_NONE)
+                        .setAvailableCommands(state.availableCommands.buildUpon().add(Player.COMMAND_PLAY_PAUSE)
+                            .add(Player.COMMAND_STOP).add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
+                            .add(Player.COMMAND_SEEK_TO_NEXT).add(Player.COMMAND_SEEK_TO_PREVIOUS).build())
+                }
+                if (remote.mode == PlayerMode.ROOM && !remote.canControlPlayback) {
+                    builder.setAvailableCommands(builder.build().availableCommands.buildUpon().removeAll(
+                        Player.COMMAND_PLAY_PAUSE, Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,
+                        Player.COMMAND_SEEK_TO_DEFAULT_POSITION, Player.COMMAND_SEEK_TO_MEDIA_ITEM,
+                        Player.COMMAND_SEEK_BACK, Player.COMMAND_SEEK_FORWARD,
+                        Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_PREVIOUS,
+                        Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM
+                    ).build())
+                }
+                return builder.build()
+            }
+            fun remoteChanged() { invalidateState() }
+            override fun handleSeek(mediaItemIndex: Int, positionMs: Long, seekCommand: Int): ListenableFuture<*> {
+                container.playerController.external?.let {
+                    when (seekCommand) {
+                        Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> it.next()
+                        Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> it.previous()
+                        else -> it.seek(positionMs)
+                    }
+                    return Futures.immediateVoidFuture()
+                }
+                transitions.cancel()
+                when (seekCommand) {
+                    Player.COMMAND_SEEK_TO_NEXT, Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM -> nextSong()
+                    Player.COMMAND_SEEK_TO_PREVIOUS, Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM -> previousSong()
+                    else -> return super.handleSeek(mediaItemIndex, positionMs, seekCommand)
+                }
+                return Futures.immediateVoidFuture()
+            }
+            override fun handleSetPlayWhenReady(playWhenReady: Boolean): ListenableFuture<*> {
+                container.playerController.external?.let { it.play(playWhenReady); return Futures.immediateVoidFuture() }
+                if (!playWhenReady) {
+                    transitions.pauseCompanion()
+                    pendingPlay = false
+                    loading?.cancel()
+                    container.playerController.state.value = container.playerController.state.value.copy(playing = false, playRequested = false, loading = false, resolving = false)
+                } else if (container.playerController.state.value.warning != null) {
+                    pendingPlay = true
+                    return Futures.immediateVoidFuture()
+                } else if (player.currentMediaItem?.mediaId != container.playbackQueue.state.value.current?.id?.toString()) {
+                    prepareSong(true, container.playbackQueue.state.value.positionMs)
+                    return Futures.immediateVoidFuture()
+                }
+                return super.handleSetPlayWhenReady(playWhenReady)
+            }
+            override fun handleStop(): ListenableFuture<*> {
+                container.playerController.external?.let { it.stop(); return Futures.immediateVoidFuture() }
+                loading?.cancel()
+                transitions.cancel()
+                return super.handleStop()
+            }
+        }
+        refreshSession = { forwarding.remoteChanged() }
+        return forwarding
+    }
     private suspend fun persistQueue() {
         container.database.music().saveQueue(QueueSnapshotEntity(payload = ApiJson.encodeToString(container.playerController.queueForPersistence())))
     }
@@ -259,6 +341,7 @@ class MusicService : MediaSessionService() {
     private fun prepareSong(play: Boolean, position: Long, newPlayback: Boolean = false) {
         if (container.playerController.state.value.mode != PlayerMode.LOCAL) return
         loading?.cancel()
+        transitions.cancel()
         player.pause()
         val song = container.playbackQueue.state.value.current ?: return
         if (newPlayback || trackedSong?.id != song.id || trackedSong?.musicSource != song.musicSource ||
@@ -268,8 +351,9 @@ class MusicService : MediaSessionService() {
         container.playerController.state.value = PlayerState(song = song, loading = true, resolving = true,
             playRequested = play, positionMs = position, durationMs = song.durationMs)
         loading = scope.launch {
+            audioFocusReady.await()
             when (val result = appResult { withContext(Dispatchers.IO) {
-                if (song.video) ResolvedAudio(io.github.currencortex.music.data.song.AudioSource(container.libraryRepository.mvSource(song.mv), "video", 0, 0), "")
+                if (song.video) ResolvedAudio(io.github.currencortex.music.data.song.AudioSource(container.libraryRepository.mvSource(song.mv, song.videoQuality), "video", 0, 0), "")
                 else container.audioSources.resolve(audioRequest(song, container.musicSettings.snapshot().quality))
             } }) {
                 is AppResult.Failure -> container.playerController.state.value = container.playerController.state.value.copy(playing = false,
@@ -302,12 +386,13 @@ class MusicService : MediaSessionService() {
                                      command: SessionCommand, args: Bundle): ListenableFuture<SessionResult> = scope.future {
             // Queue mutation commands are reserved for this application's controller.
             if (controller.packageName != packageName) return@future SessionResult(SessionError.ERROR_PERMISSION_DENIED)
+            audioFocusReady.await()
             when (command.customAction) {
-                QUIESCE -> { loading?.cancel(); player.pause(); player.clearMediaItems(); player.setPlaybackSpeed(1f); flushListening(); trackedSong = null }
+                QUIESCE -> { loading?.cancel(); transitions.cancel(); player.pause(); player.clearMediaItems(); player.setPlaybackSpeed(1f); flushListening(); trackedSong = null }
                 ROOM_TRACK -> if (container.playerController.state.value.mode == PlayerMode.ROOM) {
                     val song = ApiJson.decodeFromString<Song>(args.getString("song") ?: return@future SessionResult(SessionError.ERROR_BAD_VALUE))
                     val url = args.getString("url") ?: return@future SessionResult(SessionError.ERROR_BAD_VALUE)
-                    loading?.cancel(); player.pause(); flushListening(); trackedSong = song; trackedSession = currentSession(song); recorded = false
+                    loading?.cancel(); transitions.cancel(); player.pause(); flushListening(); trackedSong = song; trackedSession = currentSession(song); recorded = false
                     player.setPlaybackSpeed(1f); player.setMediaItem(MediaItemFactory.create(song, url), args.getLong("position")); player.prepare()
                     container.playerController.state.value = container.playerController.state.value.copy(resolving = false)
                     player.playWhenReady = args.getBoolean("play")
@@ -336,6 +421,8 @@ class MusicService : MediaSessionService() {
         flushListening(); trackedSong = null; videoView?.player = null; videoView = null
         loading?.cancel()
         scope.cancel()
+        transitions.close()
+        playerSlots.remove(player)?.equalizer?.close()
         session?.release(); player.release(); session = null
         container.equalizer.close()
         container.dockAudioLevel.reset()

@@ -94,8 +94,10 @@ class DesktopLyricsWindowTest {
             val player = MutableStateFlow(PlayerState(song = Song(100, "点击验证"), positionMs = 1500))
             val lyrics = MutableStateFlow(PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 10000, "点击切换歌词与帧率"))), songId = 100))
             val directions = mutableListOf<Int>()
+            val playToggles = java.util.concurrent.atomic.AtomicInteger()
             withContext(Dispatchers.Main) { host = DesktopLyricsHost(context, lyrics, player, container.desktopLyrics,
-                container.desktopLyricsStatus, container.desktopLyricsSettingsVisible, changeSong = { directions += it }) }
+                container.desktopLyricsStatus, container.desktopLyricsSettingsVisible, changeSong = { directions += it },
+                togglePlayback = { playToggles.incrementAndGet(); player.value = player.value.copy(playing = !player.value.playing) }) }
             container.desktopLyrics.edit { it.copy(enabled = true, locked = false, appearance = DesktopAppearance.ISLAND, islandY = .25f) }
             shell("input keyevent 3")
             suspend fun await(label: String, condition: (DesktopWindowStatus) -> Boolean) {
@@ -105,6 +107,11 @@ class DesktopLyricsWindowTest {
             fun tap() {
                 val s = container.desktopLyricsStatus.value
                 shell("input tap ${s.x + s.width / 2} ${s.y + s.height - s.contentHeight / 2}")
+            }
+            fun tapCover() {
+                val s = container.desktopLyricsStatus.value
+                val x = s.x + (s.width - s.contentWidth) / 2 + s.contentHeight / 2 - 4 * context.resources.displayMetrics.density
+                shell("input tap ${x.toInt()} ${s.y + s.height - s.contentHeight / 2}")
             }
             suspend fun awaitInputWindowRemoved() {
                 withTimeout(5000) {
@@ -129,6 +136,10 @@ class DesktopLyricsWindowTest {
             val fixed = container.desktopLyricsStatus.value.let { it.x to it.width }
             delay(500) // Let the native buffer settle after removing the editing row.
             image("island-tap-lyrics.png")
+            tapCover(); await("Idle cover plays without FPS") { playToggles.get() == 1 && !it.islandFps }
+            assertTrue(player.value.playing)
+            tapCover(); await("Idle cover pauses without FPS") { playToggles.get() == 2 && !it.islandFps }
+            assertFalse(player.value.playing)
             tap(); await("Idle tap FPS") { it.islandFps && it.islandTouchable }
             delay(700)
             image("island-tap-fps.png")
@@ -144,6 +155,9 @@ class DesktopLyricsWindowTest {
             lyrics.value = PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 10000, "锁定仍可切换"))), songId = 100)
             await("Lyrics return while locked") { !it.islandFps }
             tap(); await("Locked tap FPS") { it.islandFps }
+            delay(500)
+            tapCover(); await("Locked cover preserves FPS mode") { playToggles.get() == 3 && it.islandFps }
+            tapCover(); await("Locked cover pauses") { playToggles.get() == 4 && it.islandFps }
             tap(); await("Locked tap lyrics") { !it.islandFps }
             fun swipe(left: Boolean) {
                 val s = container.desktopLyricsStatus.value
@@ -154,6 +168,8 @@ class DesktopLyricsWindowTest {
             swipe(true); swipe(false)
             withContext(Dispatchers.Main) { assertEquals(listOf(1, -1), directions) }
             player.value = player.value.copy(canControlPlayback = false)
+            tapCover(); delay(200); assertEquals("Unavailable playback is ignored", 4, playToggles.get())
+            assertFalse(container.desktopLyricsStatus.value.islandFps)
             swipe(true)
             withContext(Dispatchers.Main) { assertEquals(2, directions.size) }
             assertEquals(fixed, container.desktopLyricsStatus.value.let { it.x to it.width })

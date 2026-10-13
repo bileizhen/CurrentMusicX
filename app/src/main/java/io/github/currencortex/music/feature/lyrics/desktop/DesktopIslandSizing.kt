@@ -40,7 +40,11 @@ internal data class DesktopIslandSize(val width: Float, val metadata: Dp)
                 lineHeight = (desktopSubtitleSize(font) * 1.2f).sp), softWrap = false, maxLines = 1).size.height.toDp().value + desktopLineSpacing().value + desktopIslandTranslationBottomPadding.value
         }
         val cover = if (compact) 22f else (maxOf(30f, primaryHeight + desktopEffectPadding().value * 2 + subtitleHeight) - 8f).coerceAtLeast(22f)
-        val preferred = (cover + 6f) + maxOf(lyricWidth, subtitleWidth) + if (compact) 39f else 47f
+        // Match the frame's 2 dp outer + 5 dp inner horizontal insets exactly.
+        // Extra spare width would get centered around the paragraph and widen its 6 dp gap.
+        val textPadding = if (compact) 12f else desktopEffectPadding().value * 2
+        val preferred = cover + desktopIslandCoverGap.value + desktopIslandProgressWidth.value +
+            maxOf(lyricWidth, subtitleWidth) + textPadding + 14f - desktopIslandLyricInset.value * 2
         DesktopIslandSize(preferred.coerceIn(if (editing) 240f else 48f, 640f), metadata.dp)
     }
 }

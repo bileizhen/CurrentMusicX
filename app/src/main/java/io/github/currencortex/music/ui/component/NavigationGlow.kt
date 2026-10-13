@@ -43,8 +43,14 @@ private val glowPalettes = LruCache<String, ArtworkGlowPalette>(16)
     modifier: Modifier = Modifier, active: Boolean = true) {
     val playing by remember(playback) { playback.map { it.playing }.distinctUntilChanged() }
         .collectAsStateWithLifecycle(initialValue = false)
+    val palette by rememberArtworkGlowPalette(cover)
+    DockGlowLight(palette, playing, meter, modifier, active)
+}
+
+/** Shared by the dock and lyrics; Coil and this bounded palette cache reuse cover requests. */
+@Composable internal fun rememberArtworkGlowPalette(cover: String): State<ArtworkGlowPalette> {
     val context = LocalContext.current.applicationContext
-    val palette by produceState(glowPalettes.get(cover) ?: ArtworkGlowPalette.Neutral, cover) {
+    return produceState(glowPalettes.get(cover) ?: ArtworkGlowPalette.Neutral, cover) {
         if (cover.isBlank()) { value = ArtworkGlowPalette.Neutral; return@produceState }
         glowPalettes.get(cover)?.let { value = it; return@produceState }
         val result = SingletonImageLoader.get(context).execute(ImageRequest.Builder(context)
@@ -56,7 +62,6 @@ private val glowPalettes = LruCache<String, ArtworkGlowPalette>(16)
             ArtworkGlowPalette.fromPixels(pixels).also { glowPalettes.put(cover, it) }
         } else ArtworkGlowPalette.Neutral
     }
-    DockGlowLight(palette, playing, meter, modifier, active)
 }
 
 /** Light diffuses inside the glass volume; no strokes or light outside the dock. */

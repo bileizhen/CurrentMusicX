@@ -90,4 +90,7 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
     }
     fun warning(value: Boolean) = viewModelScope.launch { container.musicSettings.setWarning(value) }
     fun restore(value: Boolean) = viewModelScope.launch { container.musicSettings.setRestore(value) }
+    fun concurrentPlayback(value: Boolean) = viewModelScope.launch { container.musicSettings.setConcurrentPlayback(value) }
+    fun transition(value: io.github.currencortex.music.data.settings.MusicTransitionMode) = viewModelScope.launch { container.musicSettings.setTransitionMode(value) }
+    fun crossfadeSeconds(value: Int) = viewModelScope.launch { container.musicSettings.setCrossfadeSeconds(value) }
 }

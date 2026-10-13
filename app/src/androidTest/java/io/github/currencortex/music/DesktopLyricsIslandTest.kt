@@ -37,6 +37,38 @@ import org.junit.Test
 class DesktopLyricsIslandTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun coverTapsOnlyTogglePlaybackAndCoverSwipesStillChangeTracks() {
+        val lyrics = MutableStateFlow(PlaybackLyricsState(LyricsDocument(listOf(
+            LyricLine(0, 100000, "点击封面播放或暂停", translation = "Cover playback controls"))), songId = 42))
+        val player = MutableStateFlow(PlayerState(song = Song(42, "Music"), positionMs = 1000))
+        val options = MutableStateFlow(DesktopLyricsSettings())
+        var toggles = 0; var swipes = 0; var fps = false
+        compose.setContent { Box(Modifier.width(340.dp)) {
+            DesktopLyricsSurface(lyrics, player, options, {}, {}, {},
+                onIslandModeChanged = { fps = it }, changeSong = { swipes++ },
+                togglePlayback = { toggles++; player.value = player.value.copy(playing = !player.value.playing) })
+        } }
+        compose.mainClock.advanceTimeBy(2600)
+        // Playback deliberately requests frames continuously; drive this test's clock explicitly.
+        compose.mainClock.autoAdvance = false
+        fun coverTap() = compose.onNodeWithTag("desktop_island_cover").performTouchInput { click() }
+        coverTap(); compose.runOnIdle { assertEquals(1, toggles); assertTrue(player.value.playing); assertFalse(fps) }
+        coverTap(); compose.runOnIdle { assertEquals(2, toggles); assertFalse(player.value.playing); assertFalse(fps) }
+        compose.onNodeWithTag("desktop_island").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(400)
+        compose.runOnIdle { assertTrue(fps); options.value = options.value.copy(locked = true) }
+        coverTap(); compose.runOnIdle { assertEquals(3, toggles); assertTrue(fps) }
+        compose.onNodeWithTag("desktop_island_cover").performTouchInput {
+            swipe(center, center + androidx.compose.ui.geometry.Offset(200f, 0f))
+        }
+        compose.runOnIdle { assertEquals(1, swipes); assertEquals(3, toggles); assertTrue(fps) }
+        compose.runOnIdle { player.value = player.value.copy(canControlPlayback = false) }
+        coverTap(); compose.runOnIdle { assertEquals(3, toggles); assertTrue(fps) }
+        compose.runOnUiThread { player.value = player.value.copy(playing = false) }
+        compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun bilingualCoverShrinksContinuouslyAlongAnArcWhenTheNextHeadingReplacesIt() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         fun cover(name: String, color: Int): String {
@@ -385,7 +417,7 @@ class DesktopLyricsIslandTest {
         awaitLyrics()
         compose.onNodeWithTag("desktop_island_title").assertDoesNotExist()
         compose.onNodeWithTag("desktop_island_cover").assertIsDisplayed()
-        compose.onNodeWithTag("desktop_island_divider").assertIsDisplayed()
+        compose.onNodeWithTag("desktop_island_progress").assertIsDisplayed()
         compose.onNodeWithText(line.text).assertIsDisplayed()
         val metadata = compose.onNodeWithTag("desktop_island_metadata").getUnclippedBoundsInRoot()
         val text = compose.onNodeWithTag("desktop_island_lyrics").getUnclippedBoundsInRoot()
@@ -421,7 +453,7 @@ class DesktopLyricsIslandTest {
         // Actual rendered ink must be vertically centered, independent of the
         // transparent halo margins used by the primary paragraph's layout.
         val image = compose.onNodeWithTag("desktop_island").captureToImage().toPixelMap()
-        val divider = compose.onNodeWithTag("desktop_island_divider").getUnclippedBoundsInRoot()
+        val divider = compose.onNodeWithTag("desktop_island_progress").getUnclippedBoundsInRoot()
         val scale = image.width / (short.right - short.left).value
         val fromX = ((divider.right - short.left).value * scale + 2 * scale).toInt()
         var topInk = image.height; var bottomInk = -1

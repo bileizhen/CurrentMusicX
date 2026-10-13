@@ -78,8 +78,15 @@ class PlayerController(private val context: Context, override val queue: Playbac
     }
     fun playVideo(song: Song) {
         if (!localOnly()) return
-        if (queue.state.value.current?.video != true) beforeVideo = queue.state.value
+        if (queue.state.value.current?.video != true) beforeVideo = queue.state.value.copy(positionMs = state.value.positionMs)
         queue.replace(listOf(song), 0); load()
+    }
+    fun videoQuality(resolution: Int) {
+        val song = queue.state.value.current?.takeIf { it.video } ?: return
+        if (resolution !in listOf(240, 480, 720, 1080) || resolution == song.videoQuality) return
+        val current = state.value
+        queue.replace(listOf(song.copy(videoQuality = resolution)), 0)
+        load(current.showPause, current.positionMs)
     }
     fun closeVideo() {
         if (queue.state.value.current?.video != true) return
@@ -167,7 +174,8 @@ class PlayerController(private val context: Context, override val queue: Playbac
             val player = connect()
             if (action != transportGeneration) return@launch
             if (!play) player.pause()
-            else if (player.playbackState == Player.STATE_IDLE || player.playbackState == Player.STATE_ENDED) load()
+            else if (player.playbackState == Player.STATE_ENDED) load(position = 0)
+            else if (player.playbackState == Player.STATE_IDLE) load()
             else player.play()
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { if (action == transportGeneration) state.value = state.value.copy(playing = false,

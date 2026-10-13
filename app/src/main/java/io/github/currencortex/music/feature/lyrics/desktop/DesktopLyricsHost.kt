@@ -26,7 +26,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private val playback: StateFlow<PlayerState>, private val preferences: DesktopLyricsPreferences,
     private val status: MutableStateFlow<DesktopWindowStatus>,
     private val settingsVisible: StateFlow<Boolean> = MutableStateFlow(false),
-    private val changeSong: (Int) -> Unit = {}) : AutoCloseable {
+    private val changeSong: (Int) -> Unit = {}, private val togglePlayback: () -> Unit = {}) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val visual = if (Build.VERSION.SDK_INT >= 30) context.createDisplayContext(context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
         .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null) else context
@@ -43,6 +43,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private var islandTouchParams: WindowManager.LayoutParams? = null
     private var islandSize = androidx.compose.ui.unit.IntSize.Zero
     private var islandTop: Int? = null
+    private var coverBounds = androidx.compose.ui.geometry.Rect.Zero
     private var systemVisible = true
     private var owner: WindowOwner? = null
     private var params: WindowManager.LayoutParams? = null
@@ -117,6 +118,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                 }, maxIslandWidth = { islandMaximumWidth.floatValue }, editRequest = editRequest.intValue,
                 islandTapRequest = islandTapRequest.intValue,
                 changeSong = changeSong,
+                togglePlayback = togglePlayback,
+                onCoverBounds = { coverBounds = it },
                 onIslandTop = { top -> if (islandTop != top) { islandTop = top; updateIslandTouchWindow() } },
                 onIslandModeChanged = { fps -> status.value = status.value.copy(islandFps = fps) },
                 onEditingChanged = { active ->
@@ -219,7 +222,14 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                     override fun onDown(e: MotionEvent): Boolean {
                         startX = e.rawX; startY = e.rawY; held = false; return true
                     }
-                    override fun onSingleTapUp(e: MotionEvent): Boolean = performClick()
+                    override fun onSingleTapUp(e: MotionEvent): Boolean {
+                        val origin = params ?: return false
+                        if (coverBounds.contains(androidx.compose.ui.geometry.Offset(e.rawX - origin.x, e.rawY - origin.y))) {
+                            if (playback.value.song != null && playback.value.canControlPlayback) togglePlayback()
+                            return true
+                        }
+                        return performClick()
+                    }
                     override fun onLongPress(e: MotionEvent) { held = true; performLongClick() }
                     override fun onScroll(first: MotionEvent?, last: MotionEvent, dx: Float, dy: Float) = true
                 }).apply { setOnDoubleTapListener(null) }
@@ -233,7 +243,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                     }
                     true
                 }
-                contentDescription = "灵动岛：点击切换歌词与帧率，左右滑动切歌，未锁定时长按编辑"
+                contentDescription = "灵动岛：点击封面播放或暂停，点击歌词切换帧率，左右滑动切歌，未锁定时长按编辑"
             }
             val p = WindowManager.LayoutParams(width, height, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -287,7 +297,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         try { notifications.notify(NOTICE, notice) } catch (_: SecurityException) { /* App settings remain an unlock route. */ }
     }
     private fun remove() {
-        removeIslandTouchWindow(); islandSize = androidx.compose.ui.unit.IntSize.Zero; islandTop = null; islandTapRequest.intValue = 0
+        removeIslandTouchWindow(); islandSize = androidx.compose.ui.unit.IntSize.Zero; islandTop = null; coverBounds = androidx.compose.ui.geometry.Rect.Zero; islandTapRequest.intValue = 0
         val v = view
         view = null; params = null; noticeKey = null; editing = true
         if (v != null) runCatching { window.removeViewImmediate(v) }
