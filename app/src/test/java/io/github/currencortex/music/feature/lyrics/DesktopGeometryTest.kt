@@ -7,7 +7,7 @@ class DesktopGeometryTest {
     @Test fun rotationAndOversizedWindowsAlwaysRemainInsideSafeArea() {
         for (area in listOf(DesktopSafeArea(20, 90, 1080, 2300), DesktopSafeArea(90, 20, 2300, 1080))) {
             for (x in listOf(-4f, 0f, .5f, 1f, 8f, Float.NaN)) {
-                val p = desktopPlacement(area, 5000, 5000, x, x)
+                val p = desktopIslandPlacement(area, 5000, 5000, x, (area.left + area.right) / 2)
                 assertTrue(p.x >= area.left && p.y >= area.top)
                 assertTrue(p.x + p.width <= area.right && p.y + p.height <= area.bottom)
             }

@@ -58,7 +58,7 @@ class DesktopLyricsDemoTest {
             shell("input keyevent 3")
             android.util.Log.i("DesktopEvidence", "demo ready; clock=real vsync; document=explicit TTML fixture")
             delay(14000)
-            container.desktopLyrics.edit { it.copy(effect = DesktopEffect.PRECISE, appearance = DesktopAppearance.CAPTION) }
+            container.desktopLyrics.edit { it.copy(effect = DesktopEffect.PRECISE) }
             delay(18000)
             assertTrue(container.desktopLyricsStatus.value.attached)
         } finally {

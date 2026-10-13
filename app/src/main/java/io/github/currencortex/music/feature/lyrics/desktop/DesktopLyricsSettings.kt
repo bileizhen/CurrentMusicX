@@ -6,19 +6,21 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 enum class DesktopEffect(val label: String) { PRECISE("精致"), STAGE("舞台") }
-enum class DesktopAppearance(val label: String) { CAPTION("透明字幕"), CAPSULE("半透明胶囊"), ISLAND("灵动岛") }
+// Retain the stored appearance slot so existing preference payloads remain readable.
+enum class DesktopAppearance(val label: String) { ISLAND("灵动岛") }
 internal const val DESKTOP_DEFAULT_GLOW_COLOR: Long = 0xFFE0E0E0L
 internal const val DESKTOP_DEFAULT_FONT_SIZE: Float = 20f
 internal const val DESKTOP_ISLAND_FONT_SIZE: Float = 14f
 internal const val DESKTOP_ISLAND_HEIGHT: Float = .05f
 data class DesktopLyricsSettings(val enabled: Boolean = false, val locked: Boolean = false,
-    val effect: DesktopEffect = DesktopEffect.PRECISE, val appearance: DesktopAppearance = DesktopAppearance.CAPSULE,
+    val effect: DesktopEffect = DesktopEffect.PRECISE, val appearance: DesktopAppearance = DesktopAppearance.ISLAND,
     val translation: Boolean = true, val fontSize: Float = DESKTOP_DEFAULT_FONT_SIZE, val opacity: Float = .85f,
     val offsetMs: Long = 0, val x: Float = .5f, val y: Float = .2f, val snapEdges: Boolean = false,
     val glowEnabled: Boolean = true, val glowStrength: Float = 1f, val glowSpread: Float = 1f,
     val textColor: Long = 0xFFFFFFFFL, val glowColor: Long = DESKTOP_DEFAULT_GLOW_COLOR, val islandFontSize: Float = DESKTOP_ISLAND_FONT_SIZE, val islandY: Float = DESKTOP_ISLAND_HEIGHT, val islandOpacity: Float = .85f) {
-    val displayOpacity: Float get() = if (appearance == DesktopAppearance.ISLAND) islandOpacity else opacity
-    val displayFontSize: Float get() = if (appearance == DesktopAppearance.ISLAND) islandFontSize else fontSize
+    // fontSize/opacity/x/y/snapEdges are legacy payload slots, never active controls.
+    val displayOpacity: Float get() = islandOpacity
+    val displayFontSize: Float get() = islandFontSize
     fun normalized() = copy(islandY = islandY.finite(DESKTOP_ISLAND_HEIGHT).coerceIn(0f, 1f), islandFontSize = islandFontSize.finite(DESKTOP_ISLAND_FONT_SIZE).coerceIn(12f, 24f), fontSize = fontSize.finite(DESKTOP_DEFAULT_FONT_SIZE).coerceIn(18f, 38f),
         opacity = opacity.finite(.85f).coerceIn(.35f, .95f), islandOpacity = islandOpacity.finite(.85f).coerceIn(.35f, 1f), offsetMs = offsetMs.coerceIn(-60000, 60000),
         x = x.finite(.5f).coerceIn(0f, 1f), y = y.finite(.2f).coerceIn(0f, 1f),
@@ -49,7 +51,7 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
         return DesktopLyricsSettings(fields.getOrNull(0)?.toBooleanStrictOrNull() ?: false,
             fields.getOrNull(1)?.toBooleanStrictOrNull() ?: false,
             DesktopEffect.entries.firstOrNull { it.name == fields.getOrNull(2) } ?: DesktopEffect.PRECISE,
-            DesktopAppearance.entries.firstOrNull { it.name == fields.getOrNull(3) } ?: DesktopAppearance.CAPSULE,
+            DesktopAppearance.ISLAND,
             fields.getOrNull(4)?.toBooleanStrictOrNull() ?: true, fields.getOrNull(5)?.toFloatOrNull() ?: DESKTOP_DEFAULT_FONT_SIZE,
             fields.getOrNull(6)?.toFloatOrNull() ?: .85f, fields.getOrNull(7)?.toLongOrNull() ?: 0,
             fields.getOrNull(8)?.toFloatOrNull() ?: .5f, fields.getOrNull(9)?.toFloatOrNull() ?: .2f,
@@ -65,17 +67,13 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
 
 data class DesktopWindowStatus(val attached: Boolean = false, val visible: Boolean = false,
     val error: String? = null, val alpha: Float = 0f, val width: Int = 0, val height: Int = 0, val x: Int = 0, val y: Int = 0,
-    val contentWidth: Int = 0, val contentHeight: Int = 0, val editing: Boolean = false)
+    val contentWidth: Int = 0, val contentHeight: Int = 0, val editing: Boolean = false,
+    val islandFps: Boolean = false, val islandTouchable: Boolean = false)
 data class DesktopSafeArea(val left: Int, val top: Int, val right: Int, val bottom: Int) {
     val width get() = (right - left).coerceAtLeast(1)
     val height get() = (bottom - top).coerceAtLeast(1)
 }
 data class DesktopPlacement(val x: Int, val y: Int, val width: Int, val height: Int)
-internal fun desktopPlacement(area: DesktopSafeArea, width: Int, height: Int, x: Float, y: Float): DesktopPlacement {
-    val w = width.coerceIn(1, area.width); val h = height.coerceIn(1, area.height)
-    return DesktopPlacement((area.left + area.width * x.finite(.5f) - w / 2).toInt().coerceIn(area.left, area.right - w),
-        (area.top + area.height * y.finite(.2f) - h / 2).toInt().coerceIn(area.top, area.bottom - h), w, h)
-}
 internal fun desktopWindowAlpha(opacity: Float, locked: Boolean, maximum: Float): Float =
     opacity.finite(.85f).coerceIn(.35f, 1f).let { if (locked) minOf(it, (maximum - .01f).coerceIn(0f, 1f)) else it }
 

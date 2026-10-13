@@ -98,6 +98,31 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             ?: musicRepository.source(request.songId, request.quality, request.session) }, load = musicRepository::source)
     val libraryRepository = io.github.currencortex.music.data.library.LibraryRepository(apiClient,
         { accountRepository.state.value.account?.id ?: 0L }, { musicSession() })
+    val listeningReports = run {
+        val listened = mutableMapOf<Pair<Long, RequestSession>, Long>()
+        val submitted = mutableSetOf<Pair<Long, RequestSession>>()
+        ListeningReportQueue(appScope,
+            currentSession = { song -> if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
+                navidrome.session() else musicSession() },
+            currentMusic = { song, ms, owner ->
+                if (ms == null) libraryRepository.recordPlay(song, owner) else libraryRepository.listen(song, ms, owner)
+            },
+            netease = nativeNetease?.let { gateway -> { song, ms, owner ->
+                gateway.recordPlay(song.id, ms, owner.neteaseRevision)
+                if (ms == null) libraryRepository.invalidate()
+            } },
+            navidrome = { song, ms, owner ->
+                val key = song.id to owner
+                if (ms == null) { listened[key] = 0; submitted.remove(key); navidrome.scrobble(song, false) }
+                else {
+                    val total = (listened[key] ?: 0) + ms; listened[key] = total
+                    val threshold = minOf(song.durationMs.takeIf { it > 0 }?.div(2) ?: 240000, 240000).coerceAtLeast(30000)
+                    if (total >= threshold && key !in submitted) { navidrome.scrobble(song, true); submitted.add(key) }
+                }
+                if (listened.size > 100) { listened.keys.firstOrNull()?.let { listened.remove(it); submitted.remove(it) } }
+            },
+            onFailure = { platform, kind -> logger.warn("Player", "$platform listening report failed: $kind") })
+    }
     val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
     val bindingRepository: io.github.currencortex.music.data.binding.BindingRepository = io.github.currencortex.music.data.binding.BindingRepository(apiClient,
         { musicSession() }) { libraryRepository.invalidate(); neteaseLibrary.invalidate() }

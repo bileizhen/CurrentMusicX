@@ -35,6 +35,27 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         }
     }
     fun reload() { refresh.update { it + 1 } }
+    suspend fun pollStats() {
+        while (currentCoroutineContext().isActive) {
+            refreshStats()
+            delay(30_000)
+        }
+    }
+    suspend fun refreshStats() {
+        val before = state.value.profile ?: return
+        if (state.value.loading) return
+        val expected = session()
+        when (val result = appResult {
+            if (userId == null) container.profileRepository.me().let { ProfileDto(it, it.stat) }
+            else container.profileRepository.profile(userId)
+        }) {
+            is AppResult.Success -> if (expected == session()) state.update { current ->
+                if (current.loading || current.profile !== before) current else current.copy(profile = before.copy(
+                    user = result.value.user, stat = result.value.stat, current = result.value.current))
+            }
+            is AppResult.Failure -> Unit
+        }
+    }
     private suspend fun load() = withContext(Dispatchers.Default) {
         if (userId == null && container.accountRepository.token == null) return@withContext
         state.value = ProfileState(loading = true)
@@ -119,6 +140,7 @@ class DiscoverViewModel(val container: AppContainer) : ViewModel() {
     private val styleCoverPermits = Semaphore(3)
     private var styleGeneration = 0
     private var task: Job? = null
+    private var requestGeneration = 0L
     init {
         viewModelScope.launch { container.ready.await(); submit() }
         viewModelScope.launch {
@@ -161,6 +183,7 @@ class DiscoverViewModel(val container: AppContainer) : ViewModel() {
     fun submit(more: Boolean = false) {
         if (more && state.value.loading) return
         task?.cancel()
+        ++requestGeneration
         val request = state.value.copy(submitted = if (more) state.value.submitted else state.value.query.trim())
         state.value = request.copy(loading = true, error = null)
         task = viewModelScope.launch {
@@ -175,15 +198,21 @@ class DiscoverViewModel(val container: AppContainer) : ViewModel() {
     }
     suspend fun pollStats() {
         while (currentCoroutineContext().isActive) {
+            refreshUsers()
             delay(30_000)
-            val before = state.value
-            val server = container.accountRepository.server
-            when (val r = appResult { container.profileRepository.square(before.submitted, before.sort, 0, before.listening) }) {
-                is AppResult.Success -> if (server == container.accountRepository.server &&
-                    before.submitted == state.value.submitted && before.listening == state.value.listening)
-                    state.update { it.copy(stats = r.value.stats) }
-                is AppResult.Failure -> Unit
-            }
+        }
+    }
+    suspend fun refreshUsers() {
+        val before = state.value
+        val generation = requestGeneration
+        val server = container.accountRepository.server
+        if (!before.loading) when (val r = appResult { container.profileRepository.square(before.submitted, before.sort, 0,
+            before.listening, limit = before.users.size.coerceAtLeast(30)) }) {
+            is AppResult.Success -> if (server == container.accountRepository.server &&
+                generation == requestGeneration && !state.value.loading && before.sort == state.value.sort &&
+                before.submitted == state.value.submitted && before.listening == state.value.listening)
+                state.update { it.copy(users = r.value.users, total = r.value.total, stats = r.value.stats) }
+            is AppResult.Failure -> Unit
         }
     }
 }

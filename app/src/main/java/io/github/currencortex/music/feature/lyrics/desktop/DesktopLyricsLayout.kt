@@ -2,25 +2,17 @@ package io.github.currencortex.music.feature.lyrics.desktop
 
 import androidx.compose.ui.unit.dp
 
-// Reuse transparent halo margins as spacing without clipping the bitmap.
-// Only adjacent title/translation layouts overlap; the canvas keeps all 20 dp.
-internal val desktopHaloPadding = 20.dp
-internal val desktopCaptionSpacing = (-14).dp
-internal fun desktopTranslationSize(font: Float): Float = (font * .62f).coerceAtLeast(12f)
-
-internal fun desktopWindowWidthDp(appearance: DesktopAppearance): Int = if (appearance == DesktopAppearance.ISLAND) 640 else 320
-
 // Treat the source's explicit instrumental message as a status, never infer it from missing lyrics.
 internal fun desktopIslandStatusLine(line: io.github.currencortex.music.feature.lyrics.model.LyricLine?): Boolean =
     line != null && line.words.isEmpty() && line.text.trim().trimEnd('。', '.', '!', '！').replace('，', ',') == "纯音乐,请欣赏"
 
-internal fun desktopEffectPadding(island: Boolean) = if (island) 10.dp else desktopHaloPadding
+internal fun desktopEffectPadding() = 10.dp
 internal val desktopIslandTranslationBottomPadding = 2.dp
 // Reserve transparent room outside the pill so optical centering never clips its halo.
 internal val desktopIslandDrawingSpace = 4.dp
-internal fun desktopLineSpacing(island: Boolean) = if (island) (-8).dp else desktopCaptionSpacing
-internal fun desktopGlowSpread(island: Boolean, spread: Float): Float = if (island) .5f + (spread - .5f) * .2f else spread
-internal fun desktopSubtitleSize(island: Boolean, font: Float) = if (island) (font * .72f).coerceAtLeast(10f) else desktopTranslationSize(font)
+internal fun desktopLineSpacing() = (-8).dp
+internal fun desktopGlowSpread(spread: Float): Float = .5f + (spread - .5f) * .2f
+internal fun desktopSubtitleSize(font: Float) = (font * .72f).coerceAtLeast(10f)
 
 /** Preview the first real cue before singing, then retain the last cue through silence; never manufacture an interlude caption. */
 internal fun desktopIslandLineIndex(document: io.github.currencortex.music.feature.lyrics.model.LyricsDocument,

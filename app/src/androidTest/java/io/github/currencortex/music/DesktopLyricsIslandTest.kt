@@ -3,11 +3,15 @@ package io.github.currencortex.music
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.foundation.text.BasicText
 import androidx.test.core.app.ApplicationProvider
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Alignment
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
@@ -32,6 +36,259 @@ import org.junit.Test
 
 class DesktopLyricsIslandTest {
     @get:Rule val compose = createComposeRule()
+
+    @Test fun bilingualCoverShrinksContinuouslyAlongAnArcWhenTheNextHeadingReplacesIt() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        fun cover(name: String, color: Int): String {
+            val file = java.io.File(context.cacheDir, name)
+            val bitmap = android.graphics.Bitmap.createBitmap(64, 64, android.graphics.Bitmap.Config.ARGB_8888)
+            bitmap.eraseColor(color)
+            file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+            return android.net.Uri.fromFile(file).toString()
+        }
+        val first = Song(1, "Bilingual", cover = cover("arc-first.png", android.graphics.Color.RED))
+        val second = Song(2, "Heading", cover = cover("arc-second.png", android.graphics.Color.BLUE))
+        val song = mutableStateOf(first)
+        val reveal = mutableFloatStateOf(1f)
+        compose.setContent {
+            Box(Modifier.width(340.dp).height(100.dp).background(Color.White).testTag("cover_arc_pixels"),
+                contentAlignment = Alignment.TopCenter) {
+                DesktopIslandFrame(song.value, Modifier.width(300.dp).padding(vertical = desktopIslandDrawingSpace),
+                    presentation = reveal.floatValue, motion = true) { Box(Modifier.height(64.dp)) }
+            }
+        }
+        fun diameter() = compose.onNodeWithTag("desktop_island_cover").getUnclippedBoundsInRoot().let { (it.bottom - it.top).value }
+        fun pixels() = compose.onNodeWithTag("cover_arc_pixels").captureToImage().toPixelMap()
+        fun center(red: Boolean): Pair<Float, Float>? {
+            val p = pixels(); var sx = 0f; var sy = 0f; var count = 0
+            for (y in 0 until p.height) for (x in 0 until p.width) {
+                val c = p[x, y]
+                if (c.green < .15f && if (red) c.red > .8f && c.blue < .15f else c.blue > .8f && c.red < .15f) {
+                    sx += x; sy += y; count++
+                }
+            }
+            return if (count > 40) sx / count to sy / count else null
+        }
+        fun image(name: String) {
+            val bitmap = compose.onNodeWithTag("cover_arc_pixels").captureToImage().asAndroidBitmap()
+            java.io.File(context.getExternalFilesDir(null), name).outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
+        compose.waitUntil(5000) { center(true) != null }
+        val large = diameter(); val origin = center(true)!!
+        image("island-arc-start.png")
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { song.value = second; reveal.floatValue = 0f }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals("The first new-song frame retains the large cover", large, diameter(), .5f)
+        var previous = diameter()
+        var intermediateDiameter = 0f
+        var intermediateCenter: Pair<Float, Float>? = null
+        val sizes = mutableSetOf<Float>()
+        repeat(34) { frame ->
+            compose.mainClock.advanceTimeByFrame()
+            val current = diameter(); sizes += current
+            assertTrue("There must be no large-to-small diameter step", kotlin.math.abs(current - previous) < 4.5f)
+            previous = current
+            if (frame == 5) {
+                intermediateDiameter = current; intermediateCenter = center(true)
+                image("island-arc-outgoing.png")
+            }
+            if (frame == 15) image("island-arc-incoming.png")
+        }
+        compose.waitUntil(5000) { compose.mainClock.advanceTimeByFrame(); center(false) != null }
+        val small = diameter(); val destination = center(false)!!
+        image("island-arc-end.png")
+        assertTrue("Resizing contains many distinct rendered sizes", sizes.size >= 12)
+        assertTrue("The heading has a smaller circular cover", small < large - 15f)
+        val at = intermediateCenter ?: error("The outgoing face must still be visible along the arc")
+        val p = (large - intermediateDiameter) / (large - small)
+        val directY = origin.second * (1f - p) + destination.second * p
+        assertTrue("Rendered ink rises above the straight endpoint path", at.second < directY - 3f)
+        // Retarget after another size change, before the first flight finishes.
+        compose.runOnIdle { song.value = first; reveal.floatValue = 1f }
+        compose.mainClock.advanceTimeBy(128)
+        val interrupted = diameter()
+        compose.runOnIdle { song.value = second; reveal.floatValue = 0f }
+        compose.mainClock.advanceTimeByFrame()
+        assertEquals("An interrupted flight starts from its current diameter", interrupted, diameter(), .5f)
+        compose.mainClock.advanceTimeBy(700)
+        assertEquals(small, diameter(), .5f)
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun circularCoverFlipsThroughAnEdgeAndRapidChangesFinishOnTheLatestUnmirroredCover() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        fun cover(name: String, left: Int, right: Int): String {
+            val file = java.io.File(context.cacheDir, name)
+            val bitmap = android.graphics.Bitmap.createBitmap(64, 64, android.graphics.Bitmap.Config.ARGB_8888)
+            for (y in 0 until 64) for (x in 0 until 64) bitmap.setPixel(x, y, if (x < 32) left else right)
+            file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+            return android.net.Uri.fromFile(file).toString()
+        }
+        val first = Song(1, "First", cover = cover("flip-first.png", android.graphics.Color.RED, android.graphics.Color.RED))
+        val second = Song(2, "Second", cover = cover("flip-second.png", android.graphics.Color.BLUE, android.graphics.Color.GREEN))
+        val third = Song(3, "Third", cover = cover("flip-third.png", android.graphics.Color.YELLOW, android.graphics.Color.MAGENTA))
+        val song = mutableStateOf(first)
+        val motion = mutableStateOf(true)
+        compose.setContent {
+            Box(Modifier.width(48.dp).height(48.dp).background(Color.White).testTag("cover_flip_pixels")) {
+                DesktopIslandCover(song.value, null, motion.value)
+            }
+        }
+        fun pixels() = compose.onNodeWithTag("cover_flip_pixels").captureToImage().toPixelMap()
+        fun image(name: String) {
+            val bitmap = compose.onNodeWithTag("cover_flip_pixels").captureToImage().asAndroidBitmap()
+            java.io.File(context.getExternalFilesDir(null), name).outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
+        fun redCount(): Int {
+            val p = pixels(); var count = 0
+            for (y in 0 until p.height) for (x in 0 until p.width) if (p[x, y].red > .8f && p[x, y].green < .2f) count++
+            return count
+        }
+        compose.waitUntil(5000) { redCount() > 200 }
+        val full = redCount()
+        image("island-flip-front.png")
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { song.value = second }
+        compose.mainClock.advanceTimeBy(128)
+        assertTrue("The old face narrows during a Y flip", redCount() in 1 until (full * .85f).toInt())
+        image("island-flip-outgoing.png")
+        compose.mainClock.advanceTimeBy(160)
+        compose.waitUntil(5000) { val p = pixels(); p[p.width / 2 - 2, p.height / 2].blue > .7f }
+        image("island-flip-incoming.png")
+        compose.mainClock.advanceTimeBy(240)
+        val settled = pixels()
+        image("island-flip-settled.png")
+        assertTrue("The incoming cover is not mirrored", settled[settled.width / 4, settled.height / 2].blue > .8f &&
+            settled[settled.width * 3 / 4, settled.height / 2].green > .8f)
+        assertTrue("The face remains circular, with clear corners", settled[0, 0].red > .95f && settled[0, 0].green > .95f)
+        compose.runOnIdle { song.value = first }
+        compose.mainClock.advanceTimeBy(280) // Interrupt the incoming half.
+        compose.runOnIdle { song.value = third }
+        compose.mainClock.advanceTimeBy(500)
+        compose.waitUntil(5000) { val p = pixels(); p[p.width * 3 / 4, p.height / 2].blue > .8f }
+        val latest = pixels()
+        assertTrue("Rapid switching settles on the newest circular face", latest[latest.width / 4, latest.height / 2].green > .8f &&
+            latest[latest.width * 3 / 4, latest.height / 2].green < .2f)
+        compose.runOnIdle { motion.value = false; song.value = second }
+        compose.mainClock.advanceTimeByFrame()
+        compose.waitUntil(5000) { compose.mainClock.advanceTimeByFrame(); val p = pixels(); p[p.width / 4, p.height / 2].blue > .8f }
+        assertTrue("Reduced motion swaps directly to a front-facing cover", pixels()[pixels().width * 3 / 4, pixels().height / 2].green > .8f)
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun lyricFpsSwitchCrossfadesAndChangesHeightThroughAnIntermediateFrame() {
+        val fps = mutableStateOf(false)
+        compose.setContent {
+            Box(Modifier.width(200.dp).background(Color.White).testTag("switch_animation")) {
+                DesktopIslandDisplay(fps.value, true,
+                    lyrics = { Box(Modifier.fillMaxWidth().height(70.dp).background(Color.Blue).testTag("switch_lyrics")) },
+                    fps = { Box(Modifier.fillMaxWidth().height(30.dp).background(Color.Red).testTag("switch_fps")) })
+            }
+        }
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { fps.value = true }
+        compose.mainClock.advanceTimeBy(80)
+        compose.onNodeWithTag("switch_lyrics").assertExists()
+        compose.onNodeWithTag("switch_fps").assertExists()
+        val intermediate = compose.onNodeWithTag("switch_animation").getUnclippedBoundsInRoot()
+        assertTrue("The shell height must have an intermediate value", intermediate.bottom - intermediate.top > 30.dp && intermediate.bottom - intermediate.top < 70.dp)
+        val pixels = compose.onNodeWithTag("switch_animation").captureToImage().toPixelMap()
+        val color = pixels[pixels.width / 2, pixels.height / 2]
+        assertTrue("Both content colors contribute during the fade", color.red > .1f && color.blue > .1f)
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithTag("switch_lyrics").assertDoesNotExist()
+        val settled = compose.onNodeWithTag("switch_animation").getUnclippedBoundsInRoot()
+        assertEquals(30f, (settled.bottom - settled.top).value, .5f)
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun tapsToggleLyricsAndFpsWithoutInterruptingThePlayerAndResetForANewSong() {
+        val lyrics = MutableStateFlow(PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 10000, "可切换歌词", translation = "Translation"))), songId = 42))
+        val player = MutableStateFlow(PlayerState(song = Song(42, "Music"), positionMs = 1000))
+        val options = MutableStateFlow(DesktopLyricsSettings(appearance = DesktopAppearance.ISLAND))
+        compose.setContent { Box(Modifier.width(340.dp)) {
+            DesktopLyricsSurface(lyrics, player, options, {}, {}, {})
+        } }
+        compose.mainClock.advanceTimeBy(2600)
+        compose.onNodeWithText("可切换歌词").assertIsDisplayed()
+        val initialPlayer = player.value
+        val initialOptions = options.value
+        compose.onNodeWithTag("desktop_island").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithTag("desktop_island_fps").assertIsDisplayed()
+        compose.onNodeWithText("可切换歌词").assertDoesNotExist()
+        compose.onNodeWithTag("desktop_window_translation").assertDoesNotExist()
+        compose.onNodeWithTag("desktop_island").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithText("可切换歌词").assertIsDisplayed()
+        compose.onNodeWithTag("desktop_window_translation").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(initialPlayer, player.value); assertEquals(initialOptions, options.value) }
+        compose.onNodeWithTag("desktop_island").performTouchInput { click() }
+        compose.runOnIdle {
+            player.value = player.value.copy(song = Song(43, "Next"))
+            lyrics.value = PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 10000, "新歌歌词"))), songId = 43)
+        }
+        compose.mainClock.advanceTimeBy(2600)
+        compose.onNodeWithText("新歌歌词").assertIsDisplayed()
+        compose.onNodeWithTag("desktop_island_fps").assertDoesNotExist()
+        compose.runOnIdle { options.value = options.value.copy(locked = true) }
+        compose.onNodeWithTag("desktop_island").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithTag("desktop_island_fps").assertIsDisplayed()
+        compose.onNodeWithTag("desktop_island").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithText("新歌歌词").assertIsDisplayed()
+        compose.onNodeWithTag("desktop_edit_toolbar").assertDoesNotExist()
+    }
+
+    @Test fun lockedIslandSwipesChangeTracksOnceWithoutMovingOrShowingControls() {
+        val player = MutableStateFlow(PlayerState(song = Song(42, "Music")))
+        val directions = mutableListOf<Int>()
+        val options = MutableStateFlow(DesktopLyricsSettings(locked = true, appearance = DesktopAppearance.ISLAND))
+        compose.setContent { Box(Modifier.width(340.dp)) {
+            DesktopLyricsSurface(MutableStateFlow(PlaybackLyricsState()), player, options, {}, {}, {}, changeSong = { directions += it })
+        } }
+        compose.mainClock.advanceTimeBy(2600)
+        compose.onNodeWithTag("desktop_island").performTouchInput { swipeLeft() }
+        compose.onNodeWithTag("desktop_island").performTouchInput { swipeRight() }
+        compose.runOnIdle { assertEquals(listOf(1, -1), directions) }
+        compose.onNodeWithTag("desktop_edit_toolbar").assertDoesNotExist()
+        compose.onNodeWithTag("desktop_island").performTouchInput { longClick() }
+        compose.onNodeWithTag("desktop_edit_toolbar").assertDoesNotExist()
+        compose.runOnIdle { player.value = player.value.copy(canControlPlayback = false) }
+        compose.onNodeWithTag("desktop_island").performTouchInput { swipeLeft() }
+        compose.runOnIdle { assertEquals(2, directions.size) }
+    }
+
+    @Test fun noLyricsAndInstrumentalTracksStayOnFpsAcrossRepeatedTaps() {
+        val lyrics = MutableStateFlow(PlaybackLyricsState(songId = 42))
+        val player = MutableStateFlow(PlayerState(song = Song(42, "Instrumental")))
+        val options = MutableStateFlow(DesktopLyricsSettings(appearance = DesktopAppearance.ISLAND))
+        compose.setContent { Box(Modifier.width(340.dp)) {
+            DesktopLyricsSurface(lyrics, player, options, {}, {}, {})
+        } }
+        compose.mainClock.advanceTimeBy(2600)
+        repeat(2) {
+            compose.onNodeWithTag("desktop_island").performTouchInput { click() }
+            compose.onNodeWithTag("desktop_island_fps").assertIsDisplayed()
+        }
+        compose.runOnIdle { lyrics.value = PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 10000, "纯音乐，请欣赏"))), songId = 42) }
+        repeat(2) {
+            compose.onNodeWithTag("desktop_island").performTouchInput { click() }
+            compose.onNodeWithTag("desktop_island_fps").assertIsDisplayed()
+            compose.onNodeWithText("纯音乐，请欣赏").assertDoesNotExist()
+        }
+        compose.runOnIdle { lyrics.value = PlaybackLyricsState(LyricsDocument(listOf(LyricLine(0, 10000, "加载完成的歌词"))), songId = 42) }
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithText("加载完成的歌词").assertIsDisplayed()
+    }
 
     @Test fun nextCueIsPreparedOnceAndPromotedWithoutRecreatingItsRenderer() {
         val first = LyricLine(0, 3000, "First")
@@ -67,7 +324,7 @@ class DesktopLyricsIslandTest {
         compose.setContent {
             androidx.compose.runtime.CompositionLocalProvider(androidx.lifecycle.compose.LocalLifecycleOwner provides owner) {
                 Box(Modifier.width(340.dp).background(Color.White)) {
-                    DesktopLyricsSurface(lyrics, player, options, { 200f }, { _, _ -> }, {}, {}, {}, {})
+                    DesktopLyricsSurface(lyrics, player, options, {}, {}, {})
                 }
             }
         }
@@ -111,7 +368,7 @@ class DesktopLyricsIslandTest {
         val options = MutableStateFlow(DesktopLyricsSettings(locked = true, appearance = DesktopAppearance.ISLAND))
         compose.setContent {
             Box(Modifier.width(340.dp)) {
-                DesktopLyricsSurface(lyrics, player, options, { 200f }, { _, _ -> }, {}, {}, {}, {})
+                DesktopLyricsSurface(lyrics, player, options, {}, {}, {})
             }
         }
         compose.onNodeWithText("花 feat. 花譜").assertIsDisplayed()

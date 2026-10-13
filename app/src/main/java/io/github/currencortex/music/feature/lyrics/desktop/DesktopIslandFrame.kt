@@ -1,28 +1,23 @@
 package io.github.currencortex.music.feature.lyrics.desktop
 
-import androidx.compose.foundation.Image
-import androidx.core.graphics.drawable.toBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.MultiMeasureLayout
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.roundToInt
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -33,19 +28,18 @@ import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.SemanticsProperties
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
 import io.github.currencortex.music.data.song.Song
-import io.github.currencortex.music.ui.component.coverRequestUrl
 
 /** Layout and material only. Both hosts supply the existing timed lyric renderer. */
 internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandReveal")
 @Composable internal fun DesktopIslandFrame(song: Song?, modifier: Modifier = Modifier,
     metadata: androidx.compose.ui.unit.Dp? = null, presentation: Float = 1f,
     coverPosition: State<Long>? = null, motion: Boolean = false,
+    transition: DesktopIslandCoverTransition? = null,
     content: @Composable () -> Unit) {
     val shape = RoundedCornerShape(50)
     val reveal = presentation.coerceIn(0f, 1f)
+    val coverTransition = transition ?: rememberIslandCoverTransition(song, motion)
     BoxWithConstraints(modifier.padding(2.dp).testTag("desktop_island")) {
         val fullMetadata = (metadata ?: 120.dp).coerceIn(28.dp, maxOf(28.dp, maxWidth - 10.dp))
         val infoWidth = (fullMetadata - 28.dp) * (1f - reveal)
@@ -60,19 +54,7 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
             // Cover radius + 5 dp inset equals the pill end radius: concentric.
             .padding(start = 5.dp, end = 5.dp, top = 1.dp, bottom = 1.dp),
             content = {
-                val context = LocalContext.current
-                val cover = song?.cover.orEmpty()
-                Box(Modifier.testTag("desktop_island_cover").clip(CircleShape).background(Color(0xFF2B303B)).graphicsLayer {
-                    rotationZ = if (motion && cover.isNotBlank()) ((coverPosition?.value ?: 0L) % 20000L) / 20000f * 360f else 0f
-                },
-                    contentAlignment = Alignment.Center) {
-                    val icon = remember(context) { context.packageManager.getApplicationIcon(context.applicationInfo).toBitmap(256, 256).asImageBitmap() }
-                    Image(icon, if (song == null) "应用图标" else "占位封面", Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
-                    if (cover.isNotBlank()) AsyncImage(
-                        remember(context, cover) { ImageRequest.Builder(context).data(coverRequestUrl(cover, 256)).size(256).build() },
-                        contentDescription = "歌曲封面", contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize())
-                }
+                DesktopIslandCover(song, coverPosition, motion, coverTransition)
                 Column(Modifier.testTag("desktop_island_metadata").then(if (reveal >= .55f) Modifier.clearAndSetSemantics {} else Modifier).clipToBounds().graphicsLayer { alpha = (1f - reveal / .55f).coerceIn(0f, 1f) },
                     verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     val name = song?.name?.takeIf(String::isNotBlank) ?: "CurrentMusic"
@@ -108,11 +90,28 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
             var lyric = children[3].measure(lyricConstraints(minCover))
             // Hidden lyrics are warmed, but do not reserve a bilingual shell.
             val growth = (reveal / .25f).coerceIn(0f, 1f)
-            val height = maxOf(30.dp.roundToPx(), if (reveal < .55f) info.height else 0,
+            val naturalHeight = maxOf(30.dp.roundToPx(), if (reveal < .55f) info.height else 0,
                 (lyric.height * growth).roundToInt())
+            // A new heading must not shrink a bilingual cover on the first frame.
+            // Capture the previously rendered geometry synchronously with the song
+            // identity, then resize, move and flip using the same finite progress.
+            val p = coverTransition.progress.value
+            val start = coverTransition.start
+            val height = (start?.let { it.height * (1f - p) + naturalHeight * p } ?: naturalHeight.toFloat()).roundToInt()
             val coverSize = (height - 8.dp.roundToPx()).coerceAtLeast(minCover)
             if (coverSize != minCover) lyric = children[3].measure(lyricConstraints(coverSize))
             val cover = children[0].measure(Constraints.fixed(coverSize, coverSize))
+            val direction = if (layoutDirection == LayoutDirection.Rtl) -1f else 1f
+            val slot = Offset(direction * (coverSize - width) / 2f, height / 2f)
+            val destination = Offset(direction * ((naturalHeight - 8.dp.roundToPx()).coerceAtLeast(minCover) - width) / 2f, naturalHeight / 2f)
+            val origin = start?.center ?: destination
+            // The reserved outer drawing room bounds the arc even on a rapid retarget.
+            val room = minOf(start?.let { it.center.y - it.diameter / 2f } ?: 4.dp.toPx(), 4.dp.toPx()) +
+                (desktopIslandDrawingSpace + 3.dp).toPx()
+            val arc = 4f * p * (1f - p) * minOf(10.dp.toPx(), room.coerceAtLeast(0f))
+            val center = origin * (1f - p) + destination * p + Offset(arc * .5f, -arc)
+            coverTransition.translation = center - slot
+            coverTransition.placement = DesktopIslandCoverPlacement(height.toFloat(), coverSize.toFloat(), center)
             val divider = children[2].measure(Constraints.fixed(dividerWidth, 22.dp.roundToPx()))
             layout(width, height) {
                 cover.placeRelative(0, (height - cover.height) / 2)

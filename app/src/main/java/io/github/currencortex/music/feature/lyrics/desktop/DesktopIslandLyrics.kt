@@ -20,7 +20,7 @@ import io.github.currencortex.music.feature.lyrics.ui.*
     options: DesktopLyricsSettings, motion: Boolean, translationTag: String) {
     val line = remember(source) { source.copy(text = islandSingleLine(source.text)) }
     val font = options.displayFontSize
-    val padding = desktopEffectPadding(true)
+    val padding = desktopEffectPadding()
     val stage = options.effect == DesktopEffect.STAGE
     val color = Color(options.textColor.toInt())
     val opacity = remember(stage, options.glowStrength) { mutableFloatStateOf(options.glowStrength * if (stage) 1f else .5f) }
@@ -33,7 +33,7 @@ import io.github.currencortex.music.feature.lyrics.ui.*
     // as ink. Keep that canvas intact and reserve space in both hosts for overflow.
     Column(Modifier.fillMaxWidth().padding(bottom = if (bilingual) desktopIslandTranslationBottomPadding else 0.dp)
         .graphicsLayer { translationY = if (bilingual) -((padding - desktopIslandTranslationBottomPadding) / 2).toPx() else 0f },
-        verticalArrangement = Arrangement.spacedBy(desktopLineSpacing(true))) {
+        verticalArrangement = Arrangement.spacedBy(desktopLineSpacing())) {
         DesktopIslandMarquee(line.text, style, position, line.startTimeMs, motion, padding) {
             KaraokeText(line, position, animateWords = line.words.isNotEmpty(), modifier = Modifier.fillMaxWidth(),
                 fontSize = font, fontWeight = FontWeight.Medium, reservedFontWeight = FontWeight.Medium,
@@ -41,12 +41,12 @@ import io.github.currencortex.music.feature.lyrics.ui.*
                 forceLineAnimation = false, glow = motion && options.glowEnabled && options.glowStrength > 0f,
                 wordLift = motion && stage, accurateWordLift = true, glowOpacity = opacity, baseOpacity = base,
                 color = color, glowColor = Color(options.glowColor.toInt()),
-                glowRadiusScale = desktopGlowSpread(true, options.glowSpread),
+                glowRadiusScale = desktopGlowSpread(options.glowSpread),
                 untimedLineGlow = options.glowEnabled && options.glowStrength > 0f)
         }
         if (options.translation && !line.translation.isNullOrBlank()) {
             val translation = remember(line.translation) { islandSingleLine(line.translation) }
-            val subtitle = TextStyle(fontSize = desktopSubtitleSize(true, font).sp, lineHeight = (desktopSubtitleSize(true, font) * 1.2f).sp,
+            val subtitle = TextStyle(fontSize = desktopSubtitleSize(font).sp, lineHeight = (desktopSubtitleSize(font) * 1.2f).sp,
                 color = color.copy(.75f), textAlign = TextAlign.Center)
             DesktopIslandMarquee(translation, subtitle, position, line.startTimeMs, motion, padding) {
                 BasicText(translation, Modifier.fillMaxWidth().padding(horizontal = padding).testTag(translationTag),

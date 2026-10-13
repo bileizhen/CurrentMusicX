@@ -71,20 +71,19 @@ import kotlin.math.roundToInt
         onDispose { life.removeObserver(observer); container.desktopLyricsSettingsVisible.value = false }
     }
     fun edit(change: (DesktopLyricsSettings) -> DesktopLyricsSettings) { scope.launch { container.desktopLyrics.edit(change) } }
-    val island = options.appearance == DesktopAppearance.ISLAND
-    fun saveFont(value: Float) { edit { if (island) it.copy(islandFontSize = value) else it.copy(fontSize = value) } }
-    fun saveOpacity(value: Float) { edit { if (island) it.copy(islandOpacity = value) else it.copy(opacity = value) } }
+    fun saveFont(value: Float) { edit { it.copy(islandFontSize = value) } }
+    fun saveOpacity(value: Float) { edit { it.copy(islandOpacity = value) } }
     fun saveOffset(value: Float) { edit { it.copy(offsetMs = value.toLong()) } }
     fun saveGlowStrength(value: Float) { edit { it.copy(glowStrength = value) } }
     fun saveGlowSpread(value: Float) { edit { it.copy(glowSpread = value) } }
-    var font by remember(options.displayFontSize, island) { mutableFloatStateOf(options.displayFontSize) }
+    var font by remember(options.displayFontSize) { mutableFloatStateOf(options.displayFontSize) }
     var islandHeight by remember(options.islandY) { mutableFloatStateOf(options.islandY) }
     fun saveIslandHeight(value: Float) { edit { it.copy(islandY = value) } }
-    var opacity by remember(options.displayOpacity, island) { mutableFloatStateOf(options.displayOpacity) }
+    var opacity by remember(options.displayOpacity) { mutableFloatStateOf(options.displayOpacity) }
     var offset by remember(options.offsetMs) { mutableFloatStateOf(options.offsetMs.toFloat()) }
     var glowStrength by remember(options.glowStrength) { mutableFloatStateOf(options.glowStrength) }
     var glowSpread by remember(options.glowSpread) { mutableFloatStateOf(options.glowSpread) }
-    val preview = options.copy(fontSize = if (island) options.fontSize else font, islandFontSize = if (island) font else options.islandFontSize, opacity = if (island) options.opacity else opacity, islandOpacity = if (island) opacity else options.islandOpacity, offsetMs = offset.toLong(), glowStrength = glowStrength, glowSpread = glowSpread)
+    val preview = options.copy(islandFontSize = font, islandOpacity = opacity, offsetMs = offset.toLong(), glowStrength = glowStrength, glowSpread = glowSpread)
     val hint = MiuixTheme.colorScheme.onSurfaceVariantSummary
     val summary = when {
         !ready -> "正在读取设置"
@@ -92,17 +91,17 @@ import kotlin.math.roundToInt
         action.connecting -> "正在连接播放服务，可关闭以取消"
         !permitted -> "首次开启需要授予悬浮窗权限"
         !options.enabled -> "已关闭，样式与位置会保留"
-        status.visible && options.locked -> "已锁定 · 触摸穿透，可在下方解锁"
-        status.visible -> if (options.appearance == DesktopAppearance.ISLAND) "固定居中 · 闲置后触摸穿透，通知中可编辑" else "编辑中 · 拖动窗口顶部调整位置"
+        status.visible && options.locked -> "已锁定 · 可点击切换与左右滑动切歌"
+        status.visible -> "点击切换歌词与帧率 · 左右切歌 · 长按编辑"
         playback.song == null -> "已开启 · 播放音乐后同步显示"
         options.locked -> "已开启 · 返回桌面显示，窗口已锁定"
-        else -> if (options.appearance == DesktopAppearance.ISLAND) "已开启 · 返回桌面显示居中灵动岛" else "已开启 · 返回桌面后可拖动窗口"
+        else -> "已开启 · 返回桌面显示居中灵动岛"
     }
     Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), contentAlignment = Alignment.TopCenter) {
         LazyColumn(Modifier.widthIn(max = 600.dp).fillMaxWidth().testTag("desktop_lyrics_settings"),
             contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("桌面悬浮歌词", fontSize = 28.sp)
+                Text("桌面灵动岛", fontSize = 28.sp)
                 Text("离开应用，也能跟着音乐唱。", fontSize = 13.sp, color = hint)
             } }
             item { Card(Modifier.fillMaxWidth()) {
@@ -115,7 +114,7 @@ import kotlin.math.roundToInt
                     } catch (_: RuntimeException) { pending = false; permissionError = "无法打开权限页面，请在系统设置中授予悬浮窗权限" } }
                 }, Modifier.testTag("desktop_enable"), summary = summary, enabled = ready)
                 if (options.enabled) Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (options.locked) "窗口已锁定" else if (options.appearance == DesktopAppearance.ISLAND) "居中显示 · 通知中可编辑" else "窗口可拖动", Modifier.weight(1f), fontSize = 13.sp, color = hint)
+                    Text(if (options.locked) "窗口已锁定" else "居中显示 · 通知中可编辑", Modifier.weight(1f), fontSize = 13.sp, color = hint)
                     MusicTextAction(if (options.locked) "解锁并调整" else "锁定窗口", { edit { it.copy(locked = !it.locked) } },
                         Modifier.testTag("desktop_lock").semantics { toggleableState = if (options.locked)
                             androidx.compose.ui.state.ToggleableState.On else androidx.compose.ui.state.ToggleableState.Off })
@@ -127,14 +126,6 @@ import kotlin.math.roundToInt
             item { DesktopLyricsPreview(container, preview) }
             item { MusicSectionHeader("外观与动效") }
             item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                Text("背景外观", fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(10.dp)) { DesktopAppearance.entries.filter { it != DesktopAppearance.ISLAND }.forEach { mode ->
-                    DesktopChoice(mode.label, if (mode == DesktopAppearance.CAPTION) "只留下文字" else "渐变底色，清晰易读",
-                        options.appearance == mode, { edit { it.copy(appearance = mode) } }, Modifier.weight(1f).testTag("desktop_appearance_${mode.name}"))
-                } }
-                DesktopChoice("灵动岛", "旋转封面 · 居中药丸 · 自适应歌词", options.appearance == DesktopAppearance.ISLAND,
-                    { edit { it.copy(appearance = DesktopAppearance.ISLAND) } },
-                    Modifier.fillMaxWidth().testTag("desktop_appearance_ISLAND"))
                 Text("动画强度", fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(10.dp)) { DesktopEffect.entries.forEach { mode ->
                     DesktopChoice(mode.label, if (mode == DesktopEffect.PRECISE) "轻柔切换 · 细腻辉光" else "延音辉光 · 微幅上提",
@@ -160,16 +151,15 @@ import kotlin.math.roundToInt
             } } }
             item { MusicSectionHeader("文字与同步") }
             item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                DesktopSlider(if (island) "灵动岛字号" else "字号", "${font.roundToInt()} sp", font, if (island) 12f..24f else 18f..38f, "desktop_font", { font = it.roundToInt().toFloat() },
+                DesktopSlider("灵动岛字号", "${font.roundToInt()} sp", font, 12f..24f, "desktop_font", { font = it.roundToInt().toFloat() },
                     { saveFont(font) }, { value -> font = value.roundToInt().toFloat(); saveFont(font) })
-                val defaultFont = if (island) DESKTOP_ISLAND_FONT_SIZE else DESKTOP_DEFAULT_FONT_SIZE
+                val defaultFont = DESKTOP_ISLAND_FONT_SIZE
                 MusicTextAction("恢复默认字号 · ${defaultFont.roundToInt()} sp", { saveFont(defaultFont) },
                     Modifier.testTag("desktop_font_reset"), enabled = options.displayFontSize != defaultFont)
-                DesktopSlider(if (island) "灵动岛不透明度" else "不透明度", "${(opacity * 100).roundToInt()}%", opacity, if (island) 0.35f..1f else 0.35f..0.95f, "desktop_opacity", { opacity = (it * 100).roundToInt() / 100f },
+                DesktopSlider("灵动岛不透明度", "${(opacity * 100).roundToInt()}%", opacity, 0.35f..1f, "desktop_opacity", { opacity = (it * 100).roundToInt() / 100f },
                     { saveOpacity(opacity) }, { value -> opacity = value; saveOpacity(value) })
-                if (options.enabled && (options.locked || (island && !status.editing)) && status.alpha > 0 && options.displayOpacity > status.alpha + .005f)
+                if (options.enabled && (options.locked || !status.editing) && status.alpha > 0 && options.displayOpacity > status.alpha + .005f)
                     Text("触摸穿透时，系统将实际不透明度限制为 ${(status.alpha * 100).roundToInt()}%。", fontSize = 12.sp, color = hint)
-                if (island) Text("只调整灵动岛，其他外观的透明度独立保留。", fontSize = 11.sp, color = hint)
                 val range = maxOf(3000f, abs(offset))
                 DesktopSlider("歌词偏移", if (offset == 0f) "同步" else "${if (offset > 0) "+" else ""}${offset.toInt()} ms", offset, -range..range, "desktop_offset",
                     { offset = (it / 100).roundToInt() * 100f }, { saveOffset(offset) },
@@ -183,16 +173,13 @@ import kotlin.math.roundToInt
             } } }
             item { MusicSectionHeader("窗口位置") }
             item { Card {
-                if (island) Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("灵动岛固定水平居中，不支持拖动。闲置后触摸穿透，可从通知的“编辑”按钮恢复操作。", fontSize = 12.sp, color = hint)
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("灵动岛固定水平居中。点击切换歌词与帧率，左滑下一首、右滑上一首；锁定后仍可操作。无歌词或纯音乐始终显示帧率；未锁定时长按恢复编辑，也可从通知解锁。切歌时圆形封面沿抛物线翻转。", fontSize = 12.sp, color = hint)
                     DesktopSlider("位置高度", "${(islandHeight * 100).roundToInt()}%", islandHeight, 0f..1f,
                         "desktop_island_height", { islandHeight = it }, { saveIslandHeight(islandHeight) },
                         { value -> islandHeight = value; saveIslandHeight(value) })
                     MusicTextAction("恢复顶部高度", { saveIslandHeight(DESKTOP_ISLAND_HEIGHT) }, Modifier.testTag("desktop_island_height_reset"))
                     Text("高度按整块屏幕计算：0% 贴到屏幕最顶端（可伸入状态栏区域），100% 到达最底端。", fontSize = 11.sp, color = hint)
-                } else {
-                    SettingsSwitch("松手自动贴边", options.snapEdges, { edit { s -> s.copy(snapEdges = it) } }, Modifier.testTag("desktop_snap"), summary = "关闭后也会在接近边缘时吸附")
-                    MusicDestinationRow("重置窗口位置", { edit { it.copy(x = .5f, y = .2f) } }, Modifier.testTag("desktop_reset_position"), summary = "回到屏幕上方，不改变字号和效果", chevron = false)
                 }
             } }
             item { Text("普通歌词按句切换；逐字歌词支持扫光与延音辉光。桌面设置单独保存，不影响应用内歌词。锁定后可从通知或这里解锁。", fontSize = 12.sp, color = hint) }

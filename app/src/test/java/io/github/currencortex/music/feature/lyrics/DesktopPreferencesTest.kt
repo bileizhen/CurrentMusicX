@@ -27,6 +27,7 @@ class DesktopPreferencesTest {
         try {
             val preferences = DesktopLyricsPreferences(store, scope); preferences.ready.await()
             val old = preferences.state.value
+            assertEquals(DesktopAppearance.ISLAND, old.appearance)
             assertTrue(old.enabled); assertTrue(old.locked); assertEquals(30f, old.fontSize, .001f)
             assertEquals(.6f, old.islandOpacity, .001f) // Legacy appearance preserves its old opacity.
             assertEquals(-250L, old.offsetMs); assertEquals(.8f, old.y, .001f)
@@ -64,9 +65,7 @@ class DesktopPreferencesTest {
                 textColor = 0xFF80DEFFL, glowColor = 0xFFFFAACCL, glowEnabled = false, glowStrength = 1.7f, glowSpread = 1.4f) }
             val expected = desktop.state.first { it.fontSize == 22f }
             assertEquals(.52f, expected.displayOpacity, .001f)
-            assertEquals(.71f, expected.copy(appearance = DesktopAppearance.CAPTION).displayOpacity, .001f)
             assertEquals(16f, expected.displayFontSize, .001f)
-            assertEquals(22f, expected.copy(appearance = DesktopAppearance.CAPTION).displayFontSize, .001f)
             assertEquals(original, music.snapshot())
             val secondConsumer = DesktopLyricsPreferences(store, scope)
             secondConsumer.ready.await()
@@ -74,5 +73,23 @@ class DesktopPreferencesTest {
         } finally {
             scope.coroutineContext[Job]!!.cancelAndJoin()
         }
+    }
+    @Test fun removedCapsulePayloadMigratesToTheOnlyAppearance(): Unit = runBlocking {
+        val store = object : DataStore<Preferences> {
+            override val data = MutableStateFlow(preferencesOf(stringPreferencesKey("desktopLyrics.preferences.v1") to
+                "true|false|PRECISE|CAPSULE|true|28|0.62|-100|0.2|0.8|true"))
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences) = transform(data.value).also { data.value = it }
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val preferences = DesktopLyricsPreferences(store, scope); preferences.ready.await()
+            val migrated = preferences.state.value
+            assertEquals(listOf(DesktopAppearance.ISLAND), DesktopAppearance.entries.toList())
+            assertEquals(DesktopAppearance.ISLAND, migrated.appearance)
+            assertTrue(migrated.enabled); assertTrue(migrated.translation)
+            assertEquals(.62f, migrated.displayOpacity, .001f); assertEquals(-100L, migrated.offsetMs)
+            preferences.edit { it.copy(islandFontSize = 18f) }
+            assertEquals("ISLAND", store.data.value[stringPreferencesKey("desktopLyrics.preferences.v1")]!!.split('|')[3])
+        } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
     }
 }

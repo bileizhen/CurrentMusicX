@@ -159,6 +159,31 @@ class NeteaseGatewayTest {
         assertEquals("play", event["action"]!!.jsonPrimitive.content)
         assertEquals(60L, event["json"]!!.jsonObject["time"]!!.jsonPrimitive.long)
     }
+    @Test fun nativeLibraryStillReportsCurrentMusicPresenceAndIncrementalStatistics() = runBlocking {
+        val library = LibraryRepository(api, { 7 }, ::owner)
+        val song = Song(11, "Track")
+        current.enqueue(response("{}")); library.recordPlay(song, owner())
+        val start = current.takeRequest()
+        assertEquals("/cm/plays/11", start.path)
+        assertEquals("Bearer current-secret", start.getHeader("Authorization"))
+        assertNull(start.getHeader("Cookie"))
+        assertEquals("Track", ApiJson.parseToJsonElement(start.body.readUtf8()).jsonObject["name"]!!.jsonPrimitive.content)
+        current.enqueue(response("{}")); library.listen(song, 15_000, owner())
+        val delta = current.takeRequest()
+        assertEquals("{\"ms\":15000}", delta.body.readUtf8())
+        assertEquals(0, upstream.requestCount)
+    }
+    @Test fun failedQualifiedListenCanBeSubmittedWithTheNextDelta() = runBlocking {
+        login(); enqueue("""{"code":200}"""); gateway.recordPlay(11)
+        upstream.enqueue(response("""{"code":500}"""))
+        assertTrue(appResult { gateway.recordPlay(11, 60_000) } is AppResult.Failure)
+        enqueue("""{"code":200}"""); gateway.recordPlay(11, 15_000)
+        gateway.recordPlay(11, 15_000)
+        assertEquals(3, upstream.requestCount)
+        upstream.takeRequest(); upstream.takeRequest()
+        val event = ApiJson.parseToJsonElement(payload(upstream.takeRequest())["logs"]!!.jsonPrimitive.content).jsonArray.single().jsonObject
+        assertEquals(75L, event["json"]!!.jsonObject["time"]!!.jsonPrimitive.long)
+    }
     @Test fun ownPlaylistRenameUsesNativeOwnerAndEndpoint() = runBlocking {
         login(); val actions = NeteaseSongActionsRepository(api, session = ::owner)
         val library = NeteaseLibraryRepository(api, binding, actions, ::owner)

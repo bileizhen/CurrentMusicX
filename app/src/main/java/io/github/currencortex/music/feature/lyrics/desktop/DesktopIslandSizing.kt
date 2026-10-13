@@ -30,16 +30,16 @@ internal data class DesktopIslandSize(val width: Float, val metadata: Dp)
         val lyricWidth = width(text, TextStyle(fontFamily = if (compact) androidx.compose.ui.text.font.FontFamily.Monospace else LyricsFontFamily,
             fontSize = font.sp, fontWeight = if (compact) FontWeight.Normal else FontWeight.Medium))
         val subtitleWidth = if (compact || translation.isNullOrBlank()) 0f else width(translation,
-            TextStyle(fontSize = desktopSubtitleSize(true, font).sp))
+            TextStyle(fontSize = desktopSubtitleSize(font).sp))
         val primaryStyle = TextStyle(fontFamily = LyricsFontFamily, fontSize = font.sp,
             lineHeight = (font * 1.2f).sp, fontWeight = FontWeight.Medium)
         val primaryHeight = with(density) { measurer.measure(AnnotatedString(islandSingleLine(text)), primaryStyle,
             softWrap = false, maxLines = 1).size.height.toDp().value }
         val subtitleHeight = if (compact || translation.isNullOrBlank()) 0f else with(density) {
-            measurer.measure(AnnotatedString(islandSingleLine(translation)), TextStyle(fontSize = desktopSubtitleSize(true, font).sp,
-                lineHeight = (desktopSubtitleSize(true, font) * 1.2f).sp), softWrap = false, maxLines = 1).size.height.toDp().value + desktopLineSpacing(true).value + desktopIslandTranslationBottomPadding.value
+            measurer.measure(AnnotatedString(islandSingleLine(translation)), TextStyle(fontSize = desktopSubtitleSize(font).sp,
+                lineHeight = (desktopSubtitleSize(font) * 1.2f).sp), softWrap = false, maxLines = 1).size.height.toDp().value + desktopLineSpacing().value + desktopIslandTranslationBottomPadding.value
         }
-        val cover = if (compact) 22f else (maxOf(30f, primaryHeight + desktopEffectPadding(true).value * 2 + subtitleHeight) - 8f).coerceAtLeast(22f)
+        val cover = if (compact) 22f else (maxOf(30f, primaryHeight + desktopEffectPadding().value * 2 + subtitleHeight) - 8f).coerceAtLeast(22f)
         val preferred = (cover + 6f) + maxOf(lyricWidth, subtitleWidth) + if (compact) 39f else 47f
         DesktopIslandSize(preferred.coerceIn(if (editing) 240f else 48f, 640f), metadata.dp)
     }
