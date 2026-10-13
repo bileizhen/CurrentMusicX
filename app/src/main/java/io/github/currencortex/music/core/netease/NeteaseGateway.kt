@@ -247,7 +247,6 @@ class NeteaseGateway(val transport: NeteaseTransport) {
             // MusicService supplies 15-second deltas. Submit one qualified listen per
             // playback instead of treating every delta as a completed song.
             if (listeningReported || listeningMs < 60_000) return@withLock
-            listeningReported = true
         }
         val event = buildJsonObject {
             put("action", if (milliseconds == null) "startplay" else "play")
@@ -258,5 +257,6 @@ class NeteaseGateway(val transport: NeteaseTransport) {
             })
         }
         official("/api/feedback/weblog", data("logs" to JsonArray(listOf(event)).toString()), clientLog = true, expected = expected, authenticated = true)
+        if (milliseconds != null) listeningReported = true
     }
 }

@@ -15,9 +15,10 @@ class ProfileRepository(private val api: ApiClient, private val session: () -> R
         api.request("GET", "auth/me", authenticated = true, expectedSession = expected))
     suspend fun me() = own(session())
     suspend fun profile(id: Long) = api.get<ProfileDto>("users/$id/profile")
-    suspend fun square(query: String, sort: String, offset: Int, listening: Boolean): SquareDto {
+    suspend fun square(query: String, sort: String, offset: Int, listening: Boolean, limit: Int = 30): SquareDto {
         require(sort in setOf("reg", "reg_asc", "name", "days", "listen", "likes"))
-        return api.get("users/square", mapOf("query" to query, "sort" to sort, "offset" to "$offset", "limit" to "30", "listening" to if (listening) "1" else "0"))
+        require(limit > 0)
+        return api.get("users/square", mapOf("query" to query, "sort" to sort, "offset" to "$offset", "limit" to "$limit", "listening" to if (listening) "1" else "0"))
     }
     suspend fun loadScales() { scales.value = api.get<DecorationScales>("decorations/scales").scales }
     suspend fun decorations(): DecorationsDto = api.get<DecorationsDto>("decorations", authenticated = true).also { scales.value = it.scales }

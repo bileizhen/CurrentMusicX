@@ -8,7 +8,6 @@ import android.os.IBinder
 import android.os.SystemClock
 import androidx.media3.ui.PlayerView
 import io.github.currencortex.music.data.song.Song
-import kotlinx.coroutines.channels.Channel
 import androidx.media3.common.*
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -48,14 +47,30 @@ class MusicService : MediaSessionService() {
     private var videoView: PlayerView? = null
     private val readyForPreload = MutableStateFlow(false)
     private data class PreloadPlan(val request: AudioRequest, val warn: Boolean, val metered: Boolean)
-    private data class Report(val song: Song, val session: RequestSession, val ms: Long? = null)
-    private val reports = Channel<Report>(Channel.UNLIMITED)
     private fun currentSession(song: Song? = container.playbackQueue.state.value.current) =
         if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.session() else container.musicSession()
     private fun audioRequest(song: Song, quality: AudioQuality) = container.audioRequest(song, quality)
     private fun flushListening() {
         val ms = listening.drain(SystemClock.elapsedRealtime())
-        trackedSong?.takeIf { recorded && ms > 0 && !it.video }?.let { reports.trySend(Report(it, trackedSession, ms)) }
+        trackedSong?.takeIf { recorded && ms > 0 && !it.video }?.let { container.listeningReports.report(it, trackedSession, ms) }
+    }
+    private fun updateListening(isPlaying: Boolean) {
+        val song = trackedSong
+        val owner = currentSession(song)
+        if (song != null && owner != trackedSession) {
+            flushListening()
+            trackedSession = owner
+            recorded = false
+        }
+        listening.update(SystemClock.elapsedRealtime(), isPlaying)
+        if (isPlaying && !recorded && song != null && !song.video &&
+            (if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.accepts(song)
+            else container.accountRepository.token != null ||
+                container.nativeNetease != null && container.neteaseSessions.state.value.loggedIn && !container.neteaseSessions.state.value.stale)) {
+            recorded = true
+            container.listeningReports.report(song, trackedSession)
+        }
+        if (!isPlaying) flushListening()
     }
     inner class VideoBinder : Binder() {
         fun attach(view: PlayerView) {
@@ -68,7 +83,11 @@ class MusicService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost(this, container.playbackLyrics.state,
-            container.playerController.state, container.desktopLyrics, container.desktopLyricsStatus, container.desktopLyricsSettingsVisible)
+            container.playerController.state, container.desktopLyrics, container.desktopLyricsStatus, container.desktopLyricsSettingsVisible,
+            changeSong = { direction ->
+                val controller = container.playerController
+                if (direction > 0) controller.next(controller.state.value.showPause) else controller.previous(controller.state.value.showPause)
+            })
         val renderers = DockRenderersFactory(this, container.dockAudioLevel)
         player = ExoPlayer.Builder(this, renderers)
             .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory))
@@ -160,20 +179,12 @@ class MusicService : MediaSessionService() {
         player.addListener(object : Player.Listener {
             override fun onAudioSessionIdChanged(audioSessionId: Int) { container.equalizer.attach(audioSessionId) }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
-                listening.update(SystemClock.elapsedRealtime(), isPlaying)
-                val song = trackedSong
-                if (isPlaying && !recorded && song != null && !song.video &&
-                    (if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.accepts(song)
-                    else if (container.nativeNetease != null) container.neteaseSessions.state.value.loggedIn else container.accountRepository.token != null)) {
-                    recorded = true
-                    reports.trySend(Report(song, trackedSession))
-                }
-                if (!isPlaying) flushListening()
+                updateListening(isPlaying)
             }
             override fun onPlaybackStateChanged(state: Int) {
                 readyForPreload.value = state == Player.STATE_READY
                 if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.ROOM) container.playerController.external?.ended()
-                if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.LOCAL) { container.playbackQueue.next(automatic = true); prepareSong(true, 0) }
+                if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.LOCAL) { container.playbackQueue.next(automatic = true); prepareSong(true, 0, newPlayback = true) }
             }
             override fun onPlayerError(error: PlaybackException) {
                 player.playWhenReady = false
@@ -184,31 +195,11 @@ class MusicService : MediaSessionService() {
             }
         })
         scope.launch { container.equalizerSettings.state.collect { container.equalizer.configure(it) } }
-        scope.launch(Dispatchers.IO) {
-            val listened = mutableMapOf<Pair<Long, RequestSession>, Long>()
-            val submitted = mutableSetOf<Pair<Long, RequestSession>>()
-            for (report in reports) if (report.session == currentSession(report.song)) {
-                val result = appResult {
-                    if (report.song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) {
-                        val key = report.song.id to report.session
-                        if (report.ms == null) { listened[key] = 0; submitted.remove(key); container.navidrome.scrobble(report.song, false) }
-                        else {
-                            val total = (listened[key] ?: 0) + report.ms; listened[key] = total
-                            val threshold = minOf(report.song.durationMs.takeIf { it > 0 }?.div(2) ?: 240000, 240000).coerceAtLeast(30000)
-                            if (total >= threshold && key !in submitted) { container.navidrome.scrobble(report.song, true); submitted.add(key) }
-                        }
-                        if (listened.size > 100) { listened.keys.firstOrNull()?.let { listened.remove(it); submitted.remove(it) } }
-                    } else if (report.ms == null) container.libraryRepository.recordPlay(report.song, report.session)
-                    else container.libraryRepository.listen(report.song, report.ms, report.session)
-                }
-                if (result is AppResult.Failure) container.logger.warn("Player", "Listening report failed: ${result.kind}")
-            }
-        }
         scope.launch {
             while (isActive) {
                 delay(1500)
                 val now = SystemClock.elapsedRealtime()
-                listening.update(now, player.isPlaying)
+                updateListening(player.isPlaying)
                 if (now - lastFlush >= 15_000) { flushListening(); lastFlush = now }
                 val queue = container.playbackQueue
                 if (player.currentMediaItem?.mediaId == queue.state.value.current?.id?.toString())
@@ -265,12 +256,13 @@ class MusicService : MediaSessionService() {
     }
     private fun nextSong() { container.playbackQueue.next(); prepareSong(true, 0) }
     private fun previousSong() { container.playbackQueue.previous(); prepareSong(true, 0) }
-    private fun prepareSong(play: Boolean, position: Long) {
+    private fun prepareSong(play: Boolean, position: Long, newPlayback: Boolean = false) {
         if (container.playerController.state.value.mode != PlayerMode.LOCAL) return
         loading?.cancel()
         player.pause()
         val song = container.playbackQueue.state.value.current ?: return
-        if (trackedSong?.id != song.id || trackedSession != currentSession()) {
+        if (newPlayback || trackedSong?.id != song.id || trackedSong?.musicSource != song.musicSource ||
+            trackedSong?.video != song.video || trackedSession != currentSession(song)) {
             flushListening(); trackedSong = song; trackedSession = currentSession(); recorded = false
         }
         container.playerController.state.value = PlayerState(song = song, loading = true, resolving = true,
@@ -315,7 +307,7 @@ class MusicService : MediaSessionService() {
                 ROOM_TRACK -> if (container.playerController.state.value.mode == PlayerMode.ROOM) {
                     val song = ApiJson.decodeFromString<Song>(args.getString("song") ?: return@future SessionResult(SessionError.ERROR_BAD_VALUE))
                     val url = args.getString("url") ?: return@future SessionResult(SessionError.ERROR_BAD_VALUE)
-                    loading?.cancel(); player.pause(); flushListening(); trackedSong = song; trackedSession = currentSession(); recorded = false
+                    loading?.cancel(); player.pause(); flushListening(); trackedSong = song; trackedSession = currentSession(song); recorded = false
                     player.setPlaybackSpeed(1f); player.setMediaItem(MediaItemFactory.create(song, url), args.getLong("position")); player.prepare()
                     container.playerController.state.value = container.playerController.state.value.copy(resolving = false)
                     player.playWhenReady = args.getBoolean("play")
@@ -340,7 +332,8 @@ class MusicService : MediaSessionService() {
     }
     override fun onDestroy() {
         desktopLyrics?.close(); desktopLyrics = null
-        flushListening(); reports.close(); videoView?.player = null; videoView = null
+        listening.update(SystemClock.elapsedRealtime(), false)
+        flushListening(); trackedSong = null; videoView?.player = null; videoView = null
         loading?.cancel()
         scope.cancel()
         session?.release(); player.release(); session = null

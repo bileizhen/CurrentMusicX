@@ -32,8 +32,8 @@ android {
         applicationId = "com.bileizhen.currentmusic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 15
-        versionName = "1.1.8"
+        versionCode = 16
+        versionName = "1.1.9"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "UPDATE_PROXY_URL", updateProxyField("UPDATE_PROXY_URL"))
         buildConfigField("String", "UPDATE_PROXY_KEY_ID", updateProxyField("UPDATE_PROXY_KEY_ID"))

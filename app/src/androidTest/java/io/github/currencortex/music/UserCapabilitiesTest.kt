@@ -15,6 +15,7 @@ import org.junit.*
 import org.junit.Assert.*
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /** Each fixture owns a distinct vault, primary token, DataStore and Room database. */
 class UserCapabilitiesTest {
@@ -36,8 +37,10 @@ class UserCapabilitiesTest {
     @Volatile private var failNextQrCheck = false
     @Volatile private var failNextPhoneLogin = false
     private val syncRequests = AtomicInteger()
+    @Volatile private var listeningUser = false
+    private val receivedListenMs = AtomicLong()
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
-    private fun user(id: Int = 7): String = """{"id":$id,"username":"user$id","nickname":"${if (id == 7) nickname else "Second user"}","bio":"Profile bio","avatarDecoration":"$decoration","publicSquare":true,"isAdmin":true,"isSuper":false,"stat":{"likes":3,"favs":2,"playDays":5,"listenMs":7200000}}"""
+    private fun user(id: Int = 7): String = """{"id":$id,"username":"user$id","nickname":"${if (id == 7) nickname else "Second user"}","bio":"Profile bio","avatarDecoration":"$decoration","publicSquare":true,"isAdmin":true,"isSuper":false,"stat":{"likes":3,"favs":2,"playDays":5,"listenMs":${7200000 + receivedListenMs.get()}}}"""
     @Before fun prepare() = runBlocking {
         namespace = "user-test-${UUID.randomUUID()}"
         container = AppContainer(ApplicationProvider.getApplicationContext<CurrentMusicApplication>(), namespace)
@@ -59,7 +62,18 @@ class UserCapabilitiesTest {
                     path == "/cm/decorations/scales" -> json("""{"scales":{"frame-one":1.4}}""")
                     path == "/cm/users/square" -> {
                         assertNull(request.getHeader("Authorization"))
+                        if (request.requestUrl!!.queryParameter("listening") == "1") {
+                            return json(if (listeningUser) """{"total":1,"users":[{"id":7,"nickname":"First user","listenMs":${receivedListenMs.get()},"current":{"ncm_id":11,"name":"Playing track"}}],"stats":{"users":1,"listening":1}}"""
+                                else """{"total":0,"users":[],"stats":{"users":1,"listening":0}}""")
+                        }
                         json("""{"total":1,"users":[{"id":9,"nickname":"Public user","bio":"Public bio","days":5,"is_admin":1,"is_super":1}],"stats":{"users":1,"listening":0}}""")
+                    }
+                    path == "/cm/plays/11" -> {
+                        assertEquals("Bearer isolated-first-token", request.getHeader("Authorization"))
+                        val body = ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject
+                        body["ms"]?.jsonPrimitive?.long?.let(receivedListenMs::addAndGet)
+                        listeningUser = true
+                        json("{}")
                     }
                     path == "/cm/users/9/profile" -> json("""{"user":{"id":9,"nickname":"Public user","bio":"Public bio","isAdmin":true,"isSuper":true},"stat":{"listenMs":60000}}""")
                     path == "/cm/daily" -> json("""{"daily":[],"forYou":[]}""")
@@ -115,6 +129,41 @@ class UserCapabilitiesTest {
     private fun me() {
         compose.onNodeWithText("我的").performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithTag("edit_profile").fetchSemanticsNodes().isNotEmpty() }
+    }
+    @Test fun listeningFilterAndRefreshShowNewListenersAndTheirUpdatedDuration() {
+        lateinit var vm: io.github.currencortex.music.feature.profile.DiscoverViewModel
+        lateinit var profile: io.github.currencortex.music.feature.profile.ProfileViewModel
+        compose.setContent {
+            profile = androidx.lifecycle.viewmodel.compose.viewModel(factory = io.github.currencortex.music.ui.util.viewModelFactory {
+                io.github.currencortex.music.feature.profile.ProfileViewModel(container)
+            })
+            vm = androidx.lifecycle.viewmodel.compose.viewModel(factory = io.github.currencortex.music.ui.util.viewModelFactory {
+                io.github.currencortex.music.feature.profile.DiscoverViewModel(container)
+            })
+            top.yukonga.miuix.kmp.theme.MiuixTheme {
+                io.github.currencortex.music.feature.profile.DiscoverScreen(vm) {}
+            }
+        }
+        compose.waitUntil(10000) { !vm.state.value.loading && vm.state.value.users.isNotEmpty() }
+        compose.onNodeWithText("仅显示正在听歌").performScrollTo().performClick()
+        compose.waitUntil(10000) { vm.state.value.listening && !vm.state.value.loading && vm.state.value.users.isEmpty() }
+        compose.onNodeWithText("当前没有正在听歌的用户").assertExists()
+        val song = io.github.currencortex.music.data.song.Song(11, "Playing track")
+        container.listeningReports.report(song, container.musicSession())
+        container.listeningReports.report(song, container.musicSession(), 65_000)
+        compose.waitUntil(10000) { receivedListenMs.get() == 65_000L }
+        runBlocking { withContext(Dispatchers.Main) { vm.refreshUsers() } }
+        compose.onNodeWithTag("discover_user_7").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("正在听：Playing track").assertExists()
+        assertEquals(65_000L, vm.state.value.users.single().listenMs)
+        compose.waitUntil(10000) { profile.state.value.profile != null && !profile.state.value.loading }
+        runBlocking { withContext(Dispatchers.Main) { profile.refreshStats() } }
+        assertEquals(7_265_000L, profile.state.value.profile!!.stat.listenMs)
+        // The next refresh must remove listeners that have aged out of the server's window.
+        listeningUser = false
+        runBlocking { withContext(Dispatchers.Main) { vm.refreshUsers() } }
+        compose.onNodeWithTag("discover_user_7").assertDoesNotExist()
+        compose.onNodeWithText("当前没有正在听歌的用户").assertExists()
     }
     @Test fun installedImagePipelineDecodesAnimatedGifOverHttp() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()

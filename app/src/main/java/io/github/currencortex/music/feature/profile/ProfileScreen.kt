@@ -148,6 +148,8 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     val avatarFlight = LocalAvatarFlight.current.takeIf { onBack == null }
     val placement = LocalRootTabPlacement.current
     val density = LocalDensity.current
+    val owner = LocalLifecycleOwner.current
+    LaunchedEffect(vm, owner) { owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.pollStats() } }
     LaunchedEffect(avatarFlight?.request) {
         if (avatarFlight?.active == true && !avatarFlight.returning) listState.scrollToItem(0)
     }

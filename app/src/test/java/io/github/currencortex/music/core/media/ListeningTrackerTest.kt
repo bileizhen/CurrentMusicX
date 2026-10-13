@@ -11,4 +11,18 @@ class ListeningTrackerTest {
         val tracker=ListeningTracker();tracker.update(1000,true);assertEquals(200L,tracker.drain(1200))
         assertEquals(0L,tracker.drain(1100));tracker.update(1100,false);assertEquals(0L,tracker.drain(2000))
     }
+    @Test fun delayedBackgroundTickDoesNotTruncateRealPlayingTime() {
+        val tracker = ListeningTracker()
+        tracker.update(1000, true)
+        assertEquals(125_000L, tracker.drain(126_000))
+        tracker.update(127_000, false)
+        assertEquals(1000L, tracker.drain(250_000))
+    }
+    @Test fun regressingClockDoesNotCountTheSameIntervalTwice() {
+        val tracker = ListeningTracker()
+        tracker.update(1000, true)
+        assertEquals(1000L, tracker.drain(2000))
+        assertEquals(0L, tracker.drain(1500))
+        assertEquals(1000L, tracker.drain(3000))
+    }
 }

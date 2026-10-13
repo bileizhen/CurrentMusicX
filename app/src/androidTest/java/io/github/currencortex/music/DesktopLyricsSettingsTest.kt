@@ -34,87 +34,69 @@ class DesktopLyricsSettingsTest {
     }
     private fun await(condition: () -> Boolean) { compose.waitUntil(5000, condition) }
     @Test fun previewChoicesAndTranslationWorkWithoutEnablingOverlay() {
+        val appBefore = container.musicSettings.state.value
         compose.onNodeWithTag("desktop_preview").assertExists()
         await { container.desktopLyricsSettingsVisible.value }
+        compose.onNodeWithText("半透明胶囊").assertDoesNotExist()
+        compose.onNodeWithText("透明字幕").assertDoesNotExist()
+        compose.onNodeWithTag("desktop_appearance_CAPTION").assertDoesNotExist()
+        compose.onNodeWithTag("desktop_appearance_CAPSULE").assertDoesNotExist()
         scroll("desktop_effect_STAGE")
         compose.onNodeWithTag("desktop_effect_STAGE").performClick()
         await { container.desktopLyrics.state.value.effect == DesktopEffect.STAGE }
         compose.onNodeWithTag("desktop_effect_STAGE").assertIsSelected()
-        scroll("desktop_appearance_CAPTION")
-        compose.onNodeWithTag("desktop_appearance_CAPTION").performClick()
-        await { container.desktopLyrics.state.value.appearance == DesktopAppearance.CAPTION }
-        compose.onNodeWithTag("desktop_appearance_CAPTION").assertIsSelected()
-        scroll("desktop_appearance_ISLAND")
-        compose.onNodeWithTag("desktop_appearance_ISLAND").performClick()
-        await { container.desktopLyrics.state.value.appearance == DesktopAppearance.ISLAND }
-        compose.onNodeWithTag("desktop_appearance_ISLAND").assertIsSelected()
         scroll("desktop_preview")
         compose.onNodeWithTag("desktop_island").assertIsDisplayed()
+        compose.onNodeWithTag("desktop_island_fps").assertExists()
         scroll("desktop_font")
         compose.onNodeWithTag("desktop_font").performSemanticsAction(SemanticsActions.SetProgress) { it(16f) }
         await { container.desktopLyrics.state.value.islandFontSize == 16f }
-        Assert.assertEquals(20f, container.desktopLyrics.state.value.fontSize, .001f)
         scroll("desktop_opacity")
-        compose.onNodeWithText("灵动岛不透明度").assertExists()
         compose.onNodeWithTag("desktop_opacity").performSemanticsAction(SemanticsActions.SetProgress) { it(.52f) }
         await { container.desktopLyrics.state.value.islandOpacity == .52f }
-        Assert.assertEquals(.85f, container.desktopLyrics.state.value.opacity, .001f)
-        scroll("desktop_appearance_CAPTION")
-        compose.onNodeWithTag("desktop_appearance_CAPTION").performClick()
-        await { container.desktopLyrics.state.value.appearance == DesktopAppearance.CAPTION }
-        Assert.assertEquals(.85f, container.desktopLyrics.state.value.displayOpacity, .001f)
-        scroll("desktop_appearance_ISLAND")
-        compose.onNodeWithTag("desktop_appearance_ISLAND").performClick()
-        await { container.desktopLyrics.state.value.appearance == DesktopAppearance.ISLAND }
-        Assert.assertEquals(.52f, container.desktopLyrics.state.value.displayOpacity, .001f)
-        val originalPosition = container.desktopLyrics.state.value.let { it.x to it.y }
         scroll("desktop_island_height")
         compose.onNodeWithTag("desktop_island_height").performSemanticsAction(SemanticsActions.SetProgress) { it(.3f) }
         await { container.desktopLyrics.state.value.islandY == .3f }
-        Assert.assertEquals(originalPosition, container.desktopLyrics.state.value.let { it.x to it.y })
         compose.onNodeWithTag("desktop_island_height_reset").performClick()
         await { container.desktopLyrics.state.value.islandY == DESKTOP_ISLAND_HEIGHT }
         scroll("desktop_translation")
         compose.onNodeWithTag("desktop_translation").performClick()
         await { !container.desktopLyrics.state.value.translation }
-        scroll("desktop_preview")
-        compose.onNodeWithTag("desktop_preview_translation").assertDoesNotExist()
         Assert.assertFalse(container.desktopLyrics.state.value.enabled)
+        Assert.assertEquals(appBefore, container.musicSettings.state.value)
     }
     @Test fun parametersSaveAndPositionResetLeavesStyleAndAppLyricsAlone() {
         val before = container.musicSettings.state.value
         scroll("desktop_font")
-        compose.onNodeWithTag("desktop_font").performSemanticsAction(SemanticsActions.SetProgress) { it(32f) }
-        await { container.desktopLyrics.state.value.fontSize == 32f }
+        compose.onNodeWithTag("desktop_font").performSemanticsAction(SemanticsActions.SetProgress) { it(22f) }
+        await { container.desktopLyrics.state.value.islandFontSize == 22f }
         scroll("desktop_opacity")
         compose.onNodeWithTag("desktop_opacity").performSemanticsAction(SemanticsActions.SetProgress) { it(.62f) }
-        await { container.desktopLyrics.state.value.opacity == .62f }
+        await { container.desktopLyrics.state.value.islandOpacity == .62f }
         scroll("desktop_offset_earlier")
         compose.onNodeWithTag("desktop_offset_earlier").performClick()
         await { container.desktopLyrics.state.value.offsetMs == 100L }
         compose.onNodeWithTag("desktop_offset_zero").performClick()
         await { container.desktopLyrics.state.value.offsetMs == 0L }
-        runBlocking { container.desktopLyrics.edit { it.copy(x = .1f, y = .8f, offsetMs = -400) } }
-        scroll("desktop_reset_position")
-        compose.onNodeWithTag("desktop_reset_position").performClick()
-        await { container.desktopLyrics.state.value.x == .5f && container.desktopLyrics.state.value.y == .2f }
-        Assert.assertEquals(32f, container.desktopLyrics.state.value.fontSize, .001f)
+        runBlocking { container.desktopLyrics.edit { it.copy(islandY = .8f, offsetMs = -400) } }
+        scroll("desktop_island_height_reset")
+        compose.onNodeWithTag("desktop_island_height_reset").performClick()
+        await { container.desktopLyrics.state.value.islandY == DESKTOP_ISLAND_HEIGHT }
+        Assert.assertEquals(22f, container.desktopLyrics.state.value.islandFontSize, .001f)
         Assert.assertEquals(-400L, container.desktopLyrics.state.value.offsetMs)
         scroll("desktop_font_reset")
         compose.onNodeWithTag("desktop_font_reset").performClick()
-        await { container.desktopLyrics.state.value.fontSize == 20f }
+        await { container.desktopLyrics.state.value.islandFontSize == DESKTOP_ISLAND_FONT_SIZE }
         Assert.assertEquals(-400L, container.desktopLyrics.state.value.offsetMs)
         Assert.assertEquals(before, container.musicSettings.state.value)
     }
     @Test fun darkThemeKeepsPreviewAndChosenStyleReadable() {
         compose.runOnIdle { appearance.value = AppearanceSettings(themeMode = ThemeMode.DARK) }
         compose.onNodeWithTag("desktop_preview").assertIsDisplayed()
-        scroll("desktop_appearance_CAPSULE")
-        compose.onNodeWithTag("desktop_appearance_CAPSULE").assertIsSelected().assertIsDisplayed()
-        compose.onNodeWithTag("desktop_appearance_CAPTION").performClick()
-        await { container.desktopLyrics.state.value.appearance == DesktopAppearance.CAPTION }
-        scroll("desktop_preview")
-        compose.onNodeWithText("音乐一直陪着你").assertIsDisplayed()
+        compose.onNodeWithTag("desktop_island").assertIsDisplayed()
+        compose.onNodeWithTag("desktop_island_fps").assertExists()
+        scroll("desktop_effect_PRECISE")
+        compose.onNodeWithTag("desktop_effect_PRECISE").assertIsSelected().assertIsDisplayed()
         compose.runOnIdle { showPage.value = false }
         await { !container.desktopLyricsSettingsVisible.value }
     }
@@ -149,17 +131,13 @@ class DesktopLyricsSettingsTest {
         Assert.assertEquals(0xFF80DEFFL, container.desktopLyrics.state.value.textColor)
         Assert.assertEquals(appBefore, container.musicSettings.state.value)
     }
-    @Test fun staticPreviewShowsGlowWithoutInventingWordTiming() {
-        val lit = compose.onNodeWithTag("desktop_preview").captureToImage().toPixelMap()
-        runBlocking { container.desktopLyrics.edit { it.copy(glowEnabled = false) } }
-        await { !container.desktopLyrics.state.value.glowEnabled }
-        val unlit = compose.onNodeWithTag("desktop_preview").captureToImage().toPixelMap()
-        var changed = 0
-        for (y in 0 until lit.height) for (x in 0 until lit.width)
-            if (lit[x, y].red > unlit[x, y].red + .025f) changed++
-        Assert.assertTrue("An untimed preview must visibly demonstrate the default glow: $changed", changed > 100)
-        compose.onNodeWithText("示例歌词").assertExists()
-        compose.onNodeWithText("音乐一直陪着你").assertExists()
+    @Test fun noSongPreviewUsesCircularAppIconAndFpsWithoutInventingLyrics() {
+        compose.onNodeWithTag("desktop_preview").assertIsDisplayed()
+        compose.onNodeWithTag("desktop_island_cover").assertIsDisplayed()
+        compose.onNodeWithTag("desktop_island_fps").assertExists()
+        compose.onNodeWithContentDescription("应用图标").assertExists()
+        compose.onNodeWithText("示例歌词").assertDoesNotExist()
+        compose.onNodeWithText("音乐一直陪着你").assertDoesNotExist()
         Assert.assertFalse(container.playerController.state.value.playing)
     }
 }
