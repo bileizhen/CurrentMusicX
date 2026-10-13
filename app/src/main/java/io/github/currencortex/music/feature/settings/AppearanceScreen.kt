@@ -64,10 +64,13 @@ fun AppearanceScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSca
                     enabled = config.floatingBar && config.blur && Build.VERSION.SDK_INT >= 33, summary = uiText("为悬浮底栏应用液态玻璃效果"),
                     startAction = { SettingIcon(MusicIcons.Drop) }, modifier = Modifier.testTag("setting_liquid"))
                 SettingsSwitch("底栏律动光效", config.navigationGlow, { value -> viewModel.edit { it.copy(navigationGlow = value) } },
-                summary = "封面色光在玻璃内柔和扩散，随音乐音量上下起伏",
+                summary = "封面色雾从底边缓缓晕开，随音乐起伏流动",
                     startAction = { SettingIcon(MusicIcons.Blur) }, modifier = Modifier.testTag("setting_navigation_glow"))
             }
             Card(Modifier.padding(top = 12.dp).fillMaxWidth()) {
+                SettingsSwitch("歌单立体缎带", config.playlistDepthRibbon, { value -> viewModel.edit { it.copy(playlistDepthRibbon = value) } },
+                    summary = "沿歌曲封面穿行，左右拖动，长按查看全景",
+                    startAction = { SettingIcon(MusicIcons.Image) }, modifier = Modifier.testTag("setting_depth_ribbon"))
                 SettingsSwitch(uiText("预测性返回手势"), config.predictiveBack, { value -> viewModel.edit { it.copy(predictiveBack = value) } },
                     enabled = Build.VERSION.SDK_INT >= 34, summary = uiText("启用预测性返回手势支持"),
                     startAction = { SettingIcon(MusicIcons.Back) }, modifier = Modifier.testTag("setting_predictive"))

@@ -88,7 +88,10 @@ class LaunchHomeReadinessTest {
         playlists.countDown()
         pumpUntil { compose.onAllNodesWithTag("launch_animation").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithText("Ready fixture song").assertIsDisplayed()
-        compose.onNodeWithTag("home_retry").assertExists()
+        compose.onNodeWithTag("home_retry").assertIsDisplayed()
+        val retryBounds = compose.onNodeWithTag("home_retry").fetchSemanticsNode().boundsInRoot
+        val tabBounds = compose.onNodeWithTag("tab_1").fetchSemanticsNode().boundsInRoot
+        assertTrue("Retry must stay above the floating tabs", retryBounds.bottom < tabBounds.top)
         failPlaylist = false
         compose.onNodeWithTag("home_retry").performClick()
         pumpUntil { paths.count { it == "/cm/playlists" } >= 2 && compose.onAllNodesWithTag("home_retry").fetchSemanticsNodes().isEmpty() }

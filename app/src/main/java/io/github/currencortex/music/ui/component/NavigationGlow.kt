@@ -12,9 +12,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.CompositingStrategy
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -64,7 +62,7 @@ private val glowPalettes = LruCache<String, ArtworkGlowPalette>(16)
     }
 }
 
-/** Light diffuses inside the glass volume; no strokes or light outside the dock. */
+/** Broad, overlapping pools rise from below the glass edge, like the expanded atomic island. */
 @Composable internal fun DockGlowLight(palette: ArtworkGlowPalette, playing: Boolean, meter: DockAudioLevel,
     modifier: Modifier = Modifier, active: Boolean = true) {
     val owner = LocalLifecycleOwner.current
@@ -102,36 +100,41 @@ private val glowPalettes = LruCache<String, ArtworkGlowPalette>(16)
         energy.floatValue = 0f
         bass.floatValue = 0f
     }
-    Canvas(modifier.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-        .clipToBounds().testTag("navigation_glow")) {
+    Canvas(modifier.clipToBounds().testTag("navigation_glow")) {
         if (!active || !resumed) return@Canvas
         val amplitude = energy.floatValue
         val beat = bass.floatValue
-        val drift = sin(phase.floatValue) * .035f
-        val strength = .78f + amplitude * .14f + beat * .08f
-        // One continuous colour field, softened vertically. No floating points, beams or strokes.
-        drawRect(Brush.horizontalGradient(
-            0f to primary.value.copy(alpha = .32f * strength),
-            (.18f + drift) to primary.value.copy(alpha = .50f * strength),
-            (.42f + drift) to primary.value.copy(alpha = .53f * strength),
-            (.58f + drift) to secondary.value.copy(alpha = .53f * strength),
-            .82f to secondary.value.copy(alpha = .50f * strength),
-            1f to secondary.value.copy(alpha = .32f * strength)))
-        // Keep the source at the glass edge; audio raises and lowers the diffusion front.
-        // Use the available height so the shorter standard bar can also visibly breathe.
-        val restingRise = minOf(44.dp.toPx(), size.height * .5f)
-        val audioRise = (amplitude * .76f + beat * .24f).coerceIn(0f, 1f)
-        val rise = restingRise + (size.height - restingRise) * audioRise
-        // Isolate DstIn to this light layer, so the mask never erases the glass or navigation.
-        drawRect(Brush.verticalGradient(
-            0f to Color.Transparent, .20f to Color.White.copy(alpha = .015f),
-            .45f to Color.White.copy(alpha = .09f), .65f to Color.White.copy(alpha = .26f),
-            .82f to Color.White.copy(alpha = .58f), 1f to Color.White,
-            startY = size.height - rise, endY = size.height), blendMode = BlendMode.DstIn)
-        // Broad sheen merges into the glass at the bottom, without a white spot or sharp rim.
-        drawRect(Brush.verticalGradient(
-            0f to Color.Transparent, .55f to Color.White.copy(alpha = .025f * strength),
-            1f to Color.White.copy(alpha = .17f * strength),
-            startY = size.height - 14.dp.toPx(), endY = size.height))
+        val audio = (amplitude * .72f + beat * .28f).coerceIn(0f, 1f)
+        val travel = sin(phase.floatValue) * audio
+        val swell = sin(phase.floatValue * 1.37f) * audio
+        val restingRise = minOf(46.dp.toPx(), size.height * .55f)
+        val rise = restingRise + (size.height * 1.12f - restingRise) * audio
+        val strength = .68f + audio * .22f
+
+        // Elliptical colour pools have their brightest point below the visible edge.
+        // Several soft stops avoid a visible oval outline or a bright white bottom rim.
+        fun pool(colour: Color, x: Float, width: Float, height: Float, opacity: Float) {
+            val centre = Offset(size.width * x, size.height + height * .12f)
+            scale(size.width * width, height, pivot = centre) {
+                drawCircle(Brush.radialGradient(
+                    0f to colour.copy(alpha = opacity),
+                    .22f to colour.copy(alpha = opacity * .90f),
+                    .46f to colour.copy(alpha = opacity * .56f),
+                    .68f to colour.copy(alpha = opacity * .22f),
+                    .86f to colour.copy(alpha = opacity * .045f),
+                    1f to colour.copy(alpha = 0f),
+                    center = centre, radius = 1f), radius = 1f, center = centre)
+            }
+        }
+        // A low continuous base joins the pools; the darker valley above it remains free
+        // to drift, instead of lifting the entire colour field as a single flat band.
+        pool(androidx.compose.ui.graphics.lerp(primary.value, secondary.value, .5f),
+            .5f, .86f, restingRise * .66f, strength * .26f)
+        pool(primary.value, .18f + travel * .07f, .55f,
+            rise * (1f + swell * .16f), strength * .70f)
+        pool(secondary.value, .82f + travel * .06f, .55f,
+            rise * (1f - swell * .16f), strength * .70f)
+        pool(androidx.compose.ui.graphics.lerp(primary.value, secondary.value, .5f),
+            .5f - travel * .12f, .40f, rise * (.48f + beat * .18f), strength * (.18f + beat * .10f))
     }
 }

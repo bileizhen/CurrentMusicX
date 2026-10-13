@@ -41,7 +41,8 @@ import androidx.compose.ui.text.style.TextAlign
     outline: Boolean = false, onLayout: ((TextLayoutResult) -> Unit)? = null,
     glowColor: Color = color, glowRadiusScale: Float = 1f, untimedLineGlow: Boolean = false,
     effectPadding: Dp = 0.dp, singleLine: Boolean = false, prepareDrawResources: Boolean = false,
-    smokeColors: LyricsSmokeColors? = null, smokeFlight: (() -> LyricsSmokeFlight?)? = null) {
+    smokeColors: LyricsSmokeColors? = null, smokeFlight: (() -> LyricsSmokeFlight?)? = null,
+    particleColors: LyricsSmokeColors? = null, particleExitAt: Long? = null) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -127,6 +128,17 @@ import androidx.compose.ui.text.style.TextAlign
             LyricsSmokeInk(smokeGeometry, raster.ink)
         } else null
         val tint = remember(color) { ColorFilter.tint(color) }
+        val particleGeometry = remember(line, layout, particleColors != null, safeRaster) {
+            if (particleColors != null && safeRaster && layout.size.width.toLong() * layout.size.height <= 1_000_000)
+                smokeGlyphs(line, layout) else emptyList()
+        }
+        val particlesActive by remember(position, line, particleGeometry, particleExitAt) { derivedStateOf {
+            particleGeometry.isNotEmpty() && (particleExitAt != null ||
+                position.value >= line.startTimeMs && position.value < line.endTimeMs)
+        } }
+        val particleInk = if (particlesActive) remember(particleGeometry, raster) {
+            LyricsParticleInk(particleGeometry, raster.ink)
+        } else null
         val haloTint = remember(glowColor) { ColorFilter.tint(glowColor) }
         // Prepare once when enabled, never run a blur filter or text rasterization per frame.
         if (liftTimed) raster.ink.let { if (prepareDrawResources) raster.prepareForDrawing(it) }
@@ -157,6 +169,10 @@ import androidx.compose.ui.text.style.TextAlign
                 }
             }) {
             translate(left = padding.toFloat(), top = padding.toFloat()) {
+                if (particleInk != null) {
+                    with(particleInk) { draw(position.value, particleColors!!, color, particleExitAt) }
+                    return@translate
+                }
                 if (smokeInk != null) {
                     with(smokeInk) { draw(position.value, smokeColors!!, color, smokeFlight?.invoke()) }
                     return@translate

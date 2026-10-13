@@ -57,6 +57,41 @@ class NeteaseLibraryRepositoryTest {
             assertFalse(playlist.editable(7))
         }
     }
+    @Test fun likedPlaylistUsesPlaylistOrderAndKeepsConfirmedWritesWhileUpstreamLags() = runBlocking {
+        MockWebServer().use { server ->
+            dispatch(server) { request -> when (request.requestUrl!!.encodedPath) {
+                "/cm/ncmbind/likelist" -> json("""{"ids":[11,12,13]}""")
+                "/cm/ncm/playlist/detail" -> json("""{"code":200,"playlist":{"id":9918106457,
+                    "trackIds":[{"id":13},{"id":99},{"id":11},{"id":12}],
+                    "tracks":[{"id":11,"name":"Embedded"}]}}""")
+                "/cm/ncm/song/detail" -> {
+                    val ids = request.requestUrl!!.queryParameter("ids")!!.split(',').reversed()
+                    json("""{"code":200,"songs":[${ids.joinToString(",") { """{"id":$it,"name":"Track $it"}""" }}]}""")
+                }
+                "/cm/ncmbind/like/14" -> json("""{"code":200,"like":true}""")
+                "/cm/ncmbind/like/11" -> json("""{"code":200,"like":false}""")
+                else -> null
+            } }
+            val (_, actions, native) = fixture(server)
+            assertEquals(listOf(13L, 11L, 12L), native.likedPlaylist().songs.map { it.id })
+            actions.setLiked(14, true)
+            assertEquals(listOf(14L, 13L, 11L, 12L), native.likedPlaylist(fresh = true).songs.map { it.id })
+            actions.setLiked(11, false)
+            assertEquals(listOf(14L, 13L, 12L), native.likedPlaylist(fresh = true).songs.map { it.id })
+        }
+    }
+    @Test fun likedPlaylistFallsBackToEmbeddedOrderWhenTrackIdsAreAbsent() = runBlocking {
+        MockWebServer().use { server ->
+            dispatch(server) { request -> when (request.requestUrl!!.encodedPath) {
+                "/cm/ncmbind/likelist" -> json("""{"ids":[11,12]}""")
+                "/cm/ncm/playlist/detail" -> json("""{"code":200,"playlist":{"id":9918106457,
+                    "tracks":[{"id":12,"name":"First"},{"id":99,"name":"Unliked"},{"id":11,"name":"Second"}]}}""")
+                else -> null
+            } }
+            val (_, _, native) = fixture(server)
+            assertEquals(listOf(12L, 11L), native.likedPlaylist().songs.map { it.id })
+        }
+    }
     @Test fun nativeSongDetailsLoadEveryBatchInPlaylistOrder() = runBlocking {
         MockWebServer().use { server ->
             val batches = CopyOnWriteArrayList<Int>()

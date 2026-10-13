@@ -15,8 +15,10 @@ class MusicRepository(private val api: ApiClient,
     suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.NAVIDROME) appResult { requireNotNull(navidrome).lyrics(song) } else lyricsDocument(song.id)
     suspend fun source(song: Song, quality: AudioQuality, session: RequestSession? = null): AudioSource =
         if (song.musicSource == MusicSource.NAVIDROME) requireNotNull(navidrome).source(song, quality) else source(song.id, quality, session)
-    private fun parseDocument(raw: JsonObject) = io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(raw).let {
-        if (api.netease != null) it.copy(metadata = it.metadata.copy(source = "网易云")) else it
+    private fun parseDocument(raw: JsonObject): io.github.currencortex.music.feature.lyrics.model.LyricsDocument {
+        val code = raw["code"]?.jsonPrimitive?.intOrNull
+        if (code != null && code != 200) throw ApiException(ErrorKind.Server, code)
+        return io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(raw)
     }
     suspend fun search(keyword: String, offset: Int = 0): AppResult<SearchPage> = appResult {
         val result = api.get<SearchDto>("ncm/search", mapOf("keywords" to keyword, "offset" to "$offset", "limit" to "30", "type" to "song"))
@@ -24,18 +26,13 @@ class MusicRepository(private val api: ApiClient,
     }
     suspend fun detail(id: Long): Song = api.get<SongDetailDto>("ncm/song/detail", mapOf("ids" to "$id")).songs.first().toDomain()
     suspend fun lyrics(id: Long): AppResult<List<LyricLine>> = appResult {
-        if (api.netease != null) {
-            val document = api.get<JsonObject>("ncm/lyric", mapOf("id" to "$id"))
-            io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(document).lines.map {
-                LyricLine(it.startTimeMs, it.text, it.translation)
-            }
-        } else api.get<LyricDto>("ncm/lyric", mapOf("id" to "$id")).lines.filter { it.txt.isNotBlank() }.sortedBy { it.t }
+        parseDocument(api.get<JsonObject>("ncm/lyric", mapOf("id" to "$id"))).lines.map {
+            LyricLine(it.startTimeMs, it.text, it.translation)
+        }
     }
     suspend fun lyricsDocument(id: Long) = appResult {
         val enhanced = appResult {
             val raw = api.get<JsonObject>("ncm/lyric/new", mapOf("id" to "$id"))
-            val code = raw["code"]?.jsonPrimitive?.intOrNull
-            if (code != null && code != 200) throw ApiException(ErrorKind.Server, code)
             parseDocument(raw)
         }
         if (enhanced is AppResult.Success && enhanced.value.lines.isNotEmpty()) enhanced.value

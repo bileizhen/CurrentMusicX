@@ -114,6 +114,9 @@ import io.github.currencortex.music.feature.profile.*
 import io.github.currencortex.music.feature.binding.*
 import io.github.currencortex.music.feature.room.*
 
+private fun isPlaylistRoute(route: String) = route.startsWith("lib/playlist/") || route.startsWith("lib/ncmplaylist/") ||
+    route in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent")
+
 private const val ROOT = 0
 private const val APPEARANCE = 1
 private const val ABOUT = 2
@@ -199,8 +202,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val tabsState = rememberSaveableStateHolder()
     var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
     var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
-    val playlistPage = backStack.last().startsWith("lib/playlist/") || backStack.last().startsWith("lib/ncmplaylist/") || backStack.last() in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent")
-    LeiTheme(settings, darkSystemBars = if (miniQueueOpen || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
+    val playlistPage = isPlaylistRoute(backStack.last())
+    LeiTheme(settings, darkSystemBars = if (miniQueueOpen || (playlistPage && settings.playlistDepthRibbon) || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
         darkStatusBars = if (playlistPage) true else null) {
         CompositionLocalProvider(LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight) {
         Box(Modifier.fillMaxSize()) {
@@ -331,18 +334,23 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val labels = listOf("首页", "发现", "我的", "设置")
         val icons = listOf(Icons.Default.Home, Icons.Default.Star, Icons.Default.Person, Icons.Default.Settings)
         fun selectTab(index: Int) {
-            if (selected == HOME_TAB && index == ME_TAB && account.account != null) avatarFlight.beginFromHome()
-            if (selected == ME_TAB && index == HOME_TAB && account.account != null) avatarFlight.beginFromProfile()
+            if (selected == index) return
+            when {
+                selected == HOME_TAB && index == ME_TAB && account.account != null -> avatarFlight.beginFromHome()
+                selected == ME_TAB && index == HOME_TAB && account.account != null -> avatarFlight.beginFromProfile()
+                else -> avatarFlight.cancel()
+            }
             selected = index
         }
-        androidx.activity.compose.BackHandler(enabled = backStack.size == 1 && (selected == SETTINGS_TAB || (selected == ME_TAB && account.account != null)) && !avatarFlight.active && !announcementVisible) {
+        androidx.activity.compose.BackHandler(enabled = backStack.size == 1 && (selected == SETTINGS_TAB || (selected == ME_TAB && account.account != null)) && !announcementVisible) {
             selectTab(HOME_TAB)
         }
 
         top.yukonga.miuix.kmp.basic.Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = MiuixTheme.colorScheme.background) {
         CompositionLocalProvider(LocalSongMenu provides { songMenu = it }, LocalRoomSongRequest provides roomRequest,
-            LocalPlayerSheetDrag provides playerDrag, LocalPlayerArtworkRotation provides artworkRotation) {
+            LocalPlayerSheetDrag provides playerDrag, LocalPlayerArtworkRotation provides artworkRotation,
+            LocalRecordFlightTarget provides { miniArtworkOrigin?.invoke()?.bounds }) {
         BoxWithConstraints(Modifier.fillMaxSize().testTag("music_window")
             .onGloballyPositioned { navigationBounds = it.boundsInRoot() }) {
         val wideLayout = maxWidth >= 700.dp
@@ -356,14 +364,16 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         // renders both scenes before committing; changing the shared viewport makes them jump.
         val rootFloating = (settings.floatingBar || wideLayout) && !keyboardOpen
         val rootTabSpace = if (!wideLayout && !keyboardOpen && !settings.floatingBar) 92.dp else 0.dp
+        val ribbonEnabled = androidx.compose.runtime.rememberUpdatedState(settings.playlistDepthRibbon)
         val sceneInsets = remember(miniAvailable, miniHeight) {
             NavEntryDecorator<String> { entry ->
+                val ribbonScene = ribbonEnabled.value && isPlaylistRoute(entry.contentKey.toString())
                 val miniSpace = if (miniAvailable && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video")) miniHeight else 0.dp
                 // Each moving scene must cover the outgoing page and its dim scrim, including
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
-                Box(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background)
+                Box(Modifier.fillMaxSize().background(if (ribbonScene) androidx.compose.ui.graphics.Color(0xFF0A0A0A) else MiuixTheme.colorScheme.background)
                     .testTag("music_scene_${entry.contentKey}")
-                    .then(if (entry.contentKey in setOf(PLAYER.toString(), "lib/video")) Modifier else Modifier.navigationBarsPadding())) {
+                    .then(if (ribbonScene || entry.contentKey in setOf(PLAYER.toString(), "lib/video")) Modifier else Modifier.navigationBarsPadding())) {
                     // Keep the scene viewport full size so the glass samples page content.
                     // Clearance belongs to the end of each scrollable list, not to its bounds.
                     CompositionLocalProvider(LocalMusicBottomInset provides miniSpace) { entry.Content() }
@@ -697,10 +707,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             TextButton("以后不提示", onClick = { playerVm.suppressWarning() })
         }
         }
-        AvatarFlightOverlay(avatarFlight) {
-            avatarFlight.active = false
-            selected = if (avatarFlight.returning) ME_TAB else HOME_TAB
-        }
+        AvatarFlightOverlay(avatarFlight)
         val landingOnHome = selected == HOME_TAB && backStack.last() == ROOT.toString()
         val pageReady = launchReady && startupRouted && (!account.loading || container.nativeNetease != null) &&
             (!landingOnHome || (libraryHome.loaded && !libraryHome.loading))

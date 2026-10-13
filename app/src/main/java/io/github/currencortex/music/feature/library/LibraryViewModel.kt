@@ -8,10 +8,11 @@ import io.github.currencortex.music.data.library.*
 import io.github.currencortex.music.data.song.Song
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import java.time.LocalDate
 
 data class LibraryHomeState(val loading: Boolean = false, val daily: List<Song> = emptyList(), val forYou: List<Song> = emptyList(),
     val recent: List<Song> = emptyList(), val playlists: List<Playlist> = emptyList(), val errors: Map<String, String> = emptyMap(),
-    val loaded: Boolean = false)
+    val loaded: Boolean = false, val pendingSections: Set<String> = emptySet())
 
 class LibraryViewModel(val container: AppContainer) : ViewModel() {
     val home = MutableStateFlow(LibraryHomeState())
@@ -27,6 +28,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
     private val refreshRequest = MutableStateFlow(0)
     private var prefetchJob: Job? = null
     private var playlistLoad: Job? = null
+    private var homeDay = LocalDate.now()
     init {
         viewModelScope.launch {
             container.sessionRestored.await()
@@ -45,7 +47,9 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                     val sameAccount = identity == nextIdentity
                     if (!sameAccount) likes.dismiss()
                     identity = nextIdentity
-                    home.value = if (sameAccount) home.value.copy(loading = true, errors = emptyMap()) else LibraryHomeState(loading = true)
+                    val pending = setOf("每日推荐", "最近播放", "我的歌单")
+                    home.value = if (sameAccount) home.value.copy(loading = true, errors = emptyMap(), pendingSections = pending)
+                        else LibraryHomeState(loading = true, pendingSections = pending)
                     loadHome()
                     if (container.accountRepository.token != null || container.nativeNetease != null) prefetchJob = viewModelScope.launch {
                         launch { appResult { container.primaryLibrary.likedPlaylist() ?: container.libraryRepository.likedSongs() } }
@@ -57,13 +61,19 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                 }
         }
     }
-    fun refresh() { container.libraryRepository.clearReads(); container.neteaseLibrary.invalidate(); refreshRequest.update { it + 1 } }
+    fun refresh() {
+        if (home.value.loading) return
+        home.update { it.copy(loading = true, errors = emptyMap(), pendingSections = setOf("每日推荐", "最近播放", "我的歌单")) }
+        container.libraryRepository.clearReads(); container.neteaseLibrary.invalidate(); refreshRequest.update { it + 1 }
+    }
+    fun refreshForNewDay() { if (homeDay != LocalDate.now()) refresh() }
     private suspend fun loadHome() = coroutineScope {
+        homeDay = LocalDate.now()
         if (container.accountRepository.token == null && container.nativeNetease == null) { home.value = LibraryHomeState(loaded = true); return@coroutineScope }
         suspend fun <T> section(name: String, request: suspend () -> T, update: (LibraryHomeState, T) -> LibraryHomeState) {
             when (val r = appResult { request() }) {
-                is AppResult.Success -> home.update { update(it, r.value) }
-                is AppResult.Failure -> home.update { it.copy(errors = it.errors + (name to r.kind.message)) }
+                is AppResult.Success -> home.update { update(it, r.value).copy(pendingSections = it.pendingSections - name) }
+                is AppResult.Failure -> home.update { it.copy(errors = it.errors + (name to r.kind.message), pendingSections = it.pendingSections - name) }
             }
         }
         listOf(
@@ -71,7 +81,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
             launch { section("最近播放", { container.libraryRepository.recent() }) { s, d -> s.copy(recent = d) } },
             launch { section("我的歌单", { container.primaryLibrary.playlists() }) { s, d -> s.copy(playlists = d) } },
         ).joinAll()
-        home.update { it.copy(loading = false, loaded = true) }
+        home.update { it.copy(loading = false, loaded = true, pendingSections = emptySet()) }
     }
     fun toggle(song: Song) = viewModelScope.launch {
         when (val result = container.libraryRepository.toggleLike(song)) {
@@ -189,6 +199,21 @@ data class LibraryDetailState(val loading: Boolean = true, val title: String = "
     val loaded: Boolean = false, val refreshing: Boolean = false, val refreshError: String? = null)
 
 class LibraryDetailViewModel(val container: AppContainer, val route: String) : ViewModel() {
+    /** Explicit play intent: warm the shared URL/initial-byte cache without touching transport. */
+    fun preloadForPlayback(song: Song): Job = viewModelScope.launch {
+        if (song.video || container.playerController.state.value.mode != io.github.currencortex.music.core.media.PlayerMode.LOCAL) return@launch
+        try {
+            withTimeoutOrNull(5_000) {
+                val settings = container.musicSettings.state.value
+                if (container.audioCache.clearing.value) return@withTimeoutOrNull
+                val audio = container.audioSources.resolve(container.audioRequest(song, settings.quality))
+                if (!audio.source.highSpec || !settings.warnHighSpec)
+                    container.audioCache.preload(audio.key, audio.source)
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.logger.info("Player", "Selected audio preload unavailable; playback will use the normal load path") }
+    }
+
     val state = MutableStateFlow(LibraryDetailState())
     val playbackMode = container.playerController.state.map { it.mode }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), container.playerController.state.value.mode)

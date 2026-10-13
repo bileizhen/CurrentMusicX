@@ -92,13 +92,21 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         reads.read("liked/${info.ownerId}/${info.id}", fresh) { owner ->
             if (owner != expected) throw ApiException(ErrorKind.Unauthorized)
-            val ids = actions.likedIds(fresh).toList()
+            val likedIds = actions.likedIds(fresh)
             val detail = request("playlist/detail", mapOf("id" to "${info.id}", "s" to "0"), expected)
             val raw = detail["playlist"] as? JsonObject ?: throw ApiException(ErrorKind.Parse)
             if (raw["id"]?.jsonPrimitive?.longOrNull != info.id) throw ApiException(ErrorKind.Parse)
             val embedded = (raw["tracks"] as? JsonArray).orEmpty().mapNotNull {
                 (it as? JsonObject)?.let(NeteaseSongActionsRepository::nativeSong)
             }
+            // Red-heart IDs determine membership; playlist/detail determines display order.
+            val playlistIds = (raw["trackIds"] as? JsonArray)?.mapNotNull {
+                (it as? JsonObject)?.get("id")?.jsonPrimitive?.longOrNull
+            } ?: embedded.map { it.id }
+            val orderedIds = playlistIds.filter { it in likedIds }.distinct()
+            val orderedSet = orderedIds.toSet()
+            // Recently confirmed likes may reach the heart list before playlist/detail.
+            val ids = likedIds.filterNot { it in orderedSet } + orderedIds
             val tracks = songs(ids, expected, embedded)
             if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
             info.copy(name = "我喜欢的音乐", songs = tracks, count = tracks.size)

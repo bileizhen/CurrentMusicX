@@ -28,12 +28,16 @@ class PlaylistPagesTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var container: AppContainer
     private lateinit var server: MockWebServer
+    private var animationScales: Map<String, String?>? = null
     @Volatile private var holdRefresh = false
     @Volatile private var longPlaylist = false
     @Volatile private var refreshedTracks = false
     @Volatile private var refreshFailure = false
     private val refreshEntered = CountDownLatch(1)
     private val releaseRefresh = CountDownLatch(1)
+    private val selectedAudioRequested = CountDownLatch(1)
+    private val selectedAudioBytesRequested = CountDownLatch(1)
+    private val selectedAudioResolutions = java.util.concurrent.atomic.AtomicInteger()
     private val context get() = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
     private fun json(value: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(value)
 
@@ -43,9 +47,19 @@ class PlaylistPagesTest {
         val image = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.assets
             .open("release-preview.png").use { it.readBytes() }
         val artwork = File(context.cacheDir, "playlist-preview.png").apply { writeBytes(image) }.toURI().toString()
+        val audio = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.assets
+            .open("download/fixture.wav").use { it.readBytes() }
         server = MockWebServer()
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.requestUrl!!.encodedPath == "/cm/ncm/song/url" && request.requestUrl!!.queryParameter("id") == "60") {
+                    selectedAudioResolutions.incrementAndGet(); selectedAudioRequested.countDown()
+                    return json("""{"url":"${server.url("/selected.wav")}","level":"standard","sr":44100,"ch":2,"type":"wav"}""")
+                }
+                if (request.requestUrl!!.encodedPath == "/selected.wav") {
+                    selectedAudioBytesRequested.countDown()
+                    return MockResponse().setHeader("Content-Type", "audio/wav").setBody(Buffer().write(audio))
+                }
                 if (request.requestUrl!!.encodedPath == "/cm/playlists/3" && holdRefresh) {
                     refreshEntered.countDown()
                     releaseRefresh.await(15, TimeUnit.SECONDS)
@@ -83,7 +97,15 @@ class PlaylistPagesTest {
         container.playbackQueue.replace(listOf(paused), 0)
         container.playerController.state.value = PlayerState(song = paused)
     }
-    @After fun teardown() { compose.mainClock.autoAdvance = true; releaseRefresh.countDown(); container.close(); server.shutdown() }
+    @After fun teardown() {
+        compose.mainClock.autoAdvance = true; releaseRefresh.countDown(); container.close(); server.shutdown()
+        animationScales?.forEach { (key, value) ->
+            val command = if (value == null) "settings delete global $key" else "settings put global $key ${value.toFloat()}"
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(
+                androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+            ).use { it.readBytes() }
+        }
+    }
 
     private fun open() {
         compose.setContent { CurrentMusicApp(container) }
@@ -93,6 +115,137 @@ class PlaylistPagesTest {
         compose.onNodeWithTag("playlist_card_3").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithTag("playlist_song_2").fetchSemanticsNodes().isNotEmpty() }
     }
+    @Test fun depthRibbonFocusDoesNotPlayUntilRequestedAndReturnsToTheList() {
+        open()
+        compose.onNodeWithTag("playlist_depth_ribbon_toggle").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("playlist_depth_ribbon").fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(runBlocking { container.settings.snapshot().playlistDepthRibbon })
+        compose.onNodeWithTag("playlist_top_bar").assertDoesNotExist()
+        compose.onNodeWithText("返回列表").assertDoesNotExist()
+        compose.onNodeWithText("暂停漫游").assertDoesNotExist()
+        compose.onNodeWithText("查看当前歌曲").assertDoesNotExist()
+        compose.onNodeWithText("左右滑动穿行 · 点击封面 · 长按看全景").assertDoesNotExist()
+        compose.onNodeWithTag("mini_player").assertIsDisplayed()
+        compose.onNodeWithTag("depth_ribbon_canvas").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollToIndex) { it(1) }
+        compose.onNodeWithText("Alpha night").assertIsDisplayed()
+        assertEquals(listOf(99L), container.playbackQueue.state.value.songs.map { it.id })
+        compose.onNodeWithTag("depth_ribbon_play").performClick()
+        if (compose.onAllNodesWithText("继续播放").fetchSemanticsNodes().isNotEmpty()) compose.onNodeWithText("继续播放").performClick()
+        compose.waitUntil(5000) { container.playbackQueue.state.value.current?.id == 2L }
+        assertEquals(listOf(1L, 2L, 3L), container.playbackQueue.state.value.songs.map { it.id })
+        compose.runOnUiThread { container.playerController.pause() }
+        compose.onNodeWithTag("depth_ribbon_release").performClick()
+        compose.onNodeWithTag("depth_ribbon_play").assertDoesNotExist()
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            .sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("playlist_song_2").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("playlist_song_2").assertExists()
+        assertFalse(runBlocking { container.settings.snapshot().playlistDepthRibbon })
+    }
+
+    @Test fun depthRibbonDragHoldAndFocusKeepTheOriginalQueue() {
+        // Compose's rule disables platform animators. Enable them only for this real-frame probe.
+        animationScales = listOf("window_animation_scale", "transition_animation_scale", "animator_duration_scale")
+            .associateWith { android.provider.Settings.Global.getString(context.contentResolver, it) }
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.setAnimationScale(1f)
+        compose.waitUntil(5000) { android.animation.ValueAnimator.areAnimatorsEnabled() }
+        longPlaylist = true
+        open()
+        compose.onNodeWithTag("playlist_depth_ribbon_toggle").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("depth_ribbon_canvas").fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.advanceTimeBy(1500)
+        compose.waitForIdle()
+        lateinit var renderer: io.github.currencortex.music.feature.library.DepthRibbonView
+        lateinit var window: android.view.Window
+        fun findRenderer(view: android.view.View): io.github.currencortex.music.feature.library.DepthRibbonView? {
+            if (view is io.github.currencortex.music.feature.library.DepthRibbonView) return view
+            if (view is android.view.ViewGroup) for (i in 0 until view.childCount) findRenderer(view.getChildAt(i))?.let { return it }
+            return null
+        }
+        compose.runOnIdle {
+            window = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).first().window
+            renderer = requireNotNull(findRenderer(window.decorView))
+        }
+        Thread.sleep(700)
+        val drawStart = renderer.renderedFrames
+        val frames = java.util.Collections.synchronizedList(mutableListOf<Long>())
+        val listener = android.view.Window.OnFrameMetricsAvailableListener { _, metrics, _ ->
+            frames.add(metrics.getMetric(android.view.FrameMetrics.TOTAL_DURATION))
+        }
+        compose.runOnUiThread { window.addOnFrameMetricsAvailableListener(listener, android.os.Handler(android.os.Looper.getMainLooper())) }
+        Thread.sleep(2000)
+        compose.runOnUiThread { window.removeOnFrameMetricsAvailableListener(listener) }
+        val sorted = frames.toList().sorted()
+        val detail = listOf("running", "paused", "touching", "focused").associateWith { field ->
+            renderer.javaClass.getDeclaredField(field).apply { isAccessible = true }.get(renderer)
+        }
+        val diagnostic = "nativeDraws=${renderer.renderedFrames - drawStart}, metrics=${sorted.size}, animators=${android.animation.ValueAnimator.areAnimatorsEnabled()}, $detail"
+        File(context.externalCacheDir, "depth-ribbon-diagnostic.txt").writeText(diagnostic)
+        assertTrue("Native ride must continue without Compose recomposition: $diagnostic", sorted.size > 20)
+        File(context.externalCacheDir, "depth-ribbon-frames.txt").writeText(
+            "frames=${sorted.size}, medianMs=${sorted[sorted.size / 2] / 1e6}, p95Ms=${sorted[(sorted.size * .95).toInt()] / 1e6}")
+        val pauseRide = compose.onNodeWithTag("depth_ribbon_canvas").fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsActions.CustomActions].first { it.label == "暂停漫游" }
+        compose.runOnUiThread { assertTrue(pauseRide.action()) }
+        compose.waitForIdle()
+        // The native renderer uses Android's frame clock, independent of Compose test time.
+        Thread.sleep(900)
+        fun screenshot(name: String) {
+            compose.onNodeWithTag("music_window").captureToImage().asAndroidBitmap().let { bitmap ->
+                File(context.externalCacheDir, name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        }
+        screenshot("depth-ribbon-ride.png")
+        var before = 0L
+        compose.runOnUiThread { renderer.setRunning(false); before = renderer.renderedFrames }
+        Thread.sleep(350)
+        compose.runOnUiThread { assertTrue("Background ribbon must stop scheduling frames", renderer.renderedFrames - before <= 1); renderer.setRunning(true) }
+        repeat(5) { compose.onNodeWithTag("depth_ribbon_canvas").performTouchInput { swipe(center, center.copy(x = width * .15f), 400) } }
+        compose.onNodeWithTag("depth_ribbon_canvas").performTouchInput { down(center) }
+        Thread.sleep(android.view.ViewConfiguration.getLongPressTimeout().toLong() + 180)
+        compose.runOnUiThread { assertTrue("Long hold must ease through an intermediate view", renderer.revealFraction in .02f.. .65f) }
+        screenshot("depth-ribbon-overview-transition.png")
+        Thread.sleep(1000)
+        compose.runOnUiThread { assertTrue("Holding completes the pull-back", renderer.revealFraction > .95f) }
+        screenshot("depth-ribbon-overview.png")
+        compose.onNodeWithTag("depth_ribbon_canvas").performTouchInput { up() }
+        Thread.sleep(180)
+        compose.runOnUiThread { assertTrue("Release must ease back instead of snapping", renderer.revealFraction in .4f.. .99f) }
+        Thread.sleep(1500)
+        compose.onNodeWithTag("depth_ribbon_canvas").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollToIndex) { it(59) }
+        compose.onNodeWithText("Playlist track 60").assertIsDisplayed()
+        Thread.sleep(900)
+        screenshot("depth-ribbon-focus.png")
+        assertEquals(listOf(99L), container.playbackQueue.state.value.songs.map { it.id })
+        compose.onNodeWithTag("depth_ribbon_play").performClick()
+        Thread.sleep(200)
+        compose.runOnUiThread { assertTrue("Play opens the sleeve before changing the queue", (renderer.recordFlightProgress ?: 1f) in .01f.. .5f) }
+        assertEquals("Keep the original song during extraction", 99L, container.playbackQueue.state.value.current?.id)
+        compose.onNodeWithTag("mini_title", useUnmergedTree = true).assertTextEquals("Paused test track")
+        assertTrue("Resolve the selected song while the old song remains active", selectedAudioRequested.await(500, TimeUnit.MILLISECONDS))
+        assertTrue("Warm audio bytes before landing", selectedAudioBytesRequested.await(500, TimeUnit.MILLISECONDS))
+        screenshot("depth-ribbon-record-eject.png")
+        compose.runOnUiThread {
+            val beforeRepeat = renderer.recordFlightProgress
+            renderer.ejectRecord(60)
+            assertEquals("Repeated play must not restart or stack records", beforeRepeat, renderer.recordFlightProgress)
+        }
+        Thread.sleep(420)
+        screenshot("depth-ribbon-record-flight.png")
+        Thread.sleep(1200)
+        compose.runOnUiThread { assertNull("The record must finish without locking navigation", renderer.recordFlightProgress) }
+        if (compose.onAllNodesWithText("继续播放").fetchSemanticsNodes().isNotEmpty()) compose.onNodeWithText("继续播放").performClick()
+        compose.waitUntil(5000) { container.playbackQueue.state.value.current?.id == 60L }
+        compose.onNodeWithTag("mini_title", useUnmergedTree = true).assertTextEquals("Playlist track 60")
+        val request = container.audioRequest(container.playbackQueue.state.value.current!!, container.musicSettings.state.value.quality)
+        runBlocking { container.audioSources.resolve(request) }
+        assertEquals("Playback reuses the prefetched source", 1, selectedAudioResolutions.get())
+        assertTrue(runBlocking(kotlinx.coroutines.Dispatchers.IO) { container.audioCache.cachedBytes(request.key, 1024) > 0 })
+        compose.onNodeWithTag("depth_ribbon_release").performClick()
+        compose.onNodeWithTag("depth_ribbon_play").assertDoesNotExist()
+    }
+
     @Test fun searchSortAndSongActionsUseTheVisibleSongsAndPreserveReadonlyOwnership() {
         open()
         compose.onNodeWithTag("playlist_hero").assertIsDisplayed()
@@ -119,7 +272,7 @@ class PlaylistPagesTest {
         compose.waitUntil(5000) { container.playbackQueue.state.value.songs.map { it.id } == listOf(2L, 1L, 3L) }
         assertEquals(PlaybackMode.LIST, container.playbackQueue.state.value.mode)
         assertEquals(2L, container.playbackQueue.state.value.current!!.id)
-        container.playerController.pause()
+        compose.runOnUiThread { container.playerController.pause() }
     }
 
     @Test fun coverHeroAndStickyPlaybackRemainVisibleInLightAndDarkThemes() {

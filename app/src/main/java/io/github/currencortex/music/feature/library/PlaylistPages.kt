@@ -136,6 +136,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val playback by vm.container.playerController.state.collectAsStateWithLifecycle()
     val queue by vm.container.playbackQueue.state.collectAsStateWithLifecycle()
     val busy by library.busy.collectAsStateWithLifecycle()
+    val appearance by vm.container.settings.state.collectAsStateWithLifecycle()
     val room = LocalRoomSongRequest.current
     val editable = vm.editable(state.playlist, account.account?.id ?: 0)
     val cover = state.cover.ifBlank { state.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() }
@@ -167,6 +168,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     val songKeys = remember(songs) { playlistSongKeys(songs) }
     val canPlay = room == null && playback.mode == PlayerMode.LOCAL
+    if (appearance.playlistDepthRibbon && songs.isNotEmpty()) {
+        PlaylistDepthRibbon(songs, canPlay, onPlay = { index -> play(songs, index) },
+            onPrepare = { index -> val job = vm.preloadForPlayback(songs[index]); { job.cancel() } },
+            onClose = { scope.launch { vm.container.settings.edit { it.copy(playlistDepthRibbon = false) } } })
+        return
+    }
     val title = state.title.ifBlank { if (state.loading) "正在加载歌单" else "歌单" }
     val origin = when {
         state.playlist?.source == "ncm" -> "网易云音乐 · 同步歌单只读"
@@ -210,6 +217,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 if (searching) closeSearch() else searching = true
                 scope.launch { list.animateScrollToItem(1) }
             }, Modifier.testTag("playlist_search_toggle"), background = Color.Transparent)
+            PlaylistIconAction(MusicIcons.Image, "立体缎带", {
+                scope.launch { vm.container.settings.edit { it.copy(playlistDepthRibbon = true) } }
+            }, Modifier.testTag("playlist_depth_ribbon_toggle"), background = Color.Transparent)
             PlaylistIconAction(Icons.Default.MoreVert, "歌单操作", { menuOpen = true }, Modifier.testTag("playlist_more"), background = Color.Transparent)
         }
         Box(Modifier.weight(1f).background(backdrop).testTag("playlist_refresh")) {

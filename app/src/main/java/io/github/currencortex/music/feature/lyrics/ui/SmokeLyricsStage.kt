@@ -29,19 +29,25 @@ private data class SmokeFlight(val from: Int, val topFraction: Float)
 /** Current ink stays at the viewport center; auxiliary visibility never moves that anchor. */
 @Composable internal fun SmokeLyricsStage(document: LyricsDocument, target: Int, position: State<Long>,
     onSeek: (Long) -> Unit, modifier: Modifier, canSeek: Boolean, translation: Boolean, romanization: Boolean,
-    fontSize: Float, weightMode: LyricsWeight, display: LyricsDisplayOptions, colors: LyricsSmokeColors?) {
+    fontSize: Float, weightMode: LyricsWeight, display: LyricsDisplayOptions, colors: LyricsSmokeColors?,
+    particles: Boolean = false) {
     val line = document.lines.getOrNull(target) ?: return
     val next = document.lines.getOrNull(target + 1)
-    val geometry = remember(document) { SmokeStageGeometry() }
-    val flight = remember(document, target) {
-        if (geometry.preview == target && geometry.current == target - 1)
+    val geometry = remember(document, particles) { SmokeStageGeometry() }
+    val flight = remember(document, target, particles) {
+        if (!particles && geometry.preview == target && geometry.current == target - 1)
             SmokeFlight(geometry.current, geometry.previewTopFraction) else null
     }
-    val rise = remember(document, target) { Animatable(if (flight == null) 1f else 0f) }
+    val rise = remember(document, target, particles) { Animatable(if (flight == null) 1f else 0f) }
     LaunchedEffect(rise) { rise.animateTo(1f, tween(620, easing = CubicBezierEasing(.22f, 0f, .18f, 1f))) }
     val inFlight by remember(rise) { derivedStateOf { rise.value < 1f } }
-    val oldLine = if (inFlight) flight?.from?.let(document.lines::getOrNull) else null
-    val oldPosition = remember(document, target) { mutableLongStateOf(oldLine?.endTimeMs?.minus(1) ?: 0) }
+    val previous = remember(document, target, particles) { geometry.current.takeIf { it == target - 1 } }
+    val retiring by remember(position, line) { derivedStateOf {
+        position.value in line.startTimeMs until line.startTimeMs + PARTICLE_EXIT_MS
+    } }
+    val oldLine = if (particles) previous?.takeIf { retiring && colors != null }?.let(document.lines::getOrNull)
+        else if (inFlight) flight?.from?.let(document.lines::getOrNull) else null
+    val oldPosition = if (particles) position else remember(document, target) { mutableLongStateOf(oldLine?.endTimeMs?.minus(1) ?: 0) }
     val focused by remember(line, position) { derivedStateOf { position.value in line.startTimeMs until line.endTimeMs } }
     val weight = lyricsFontWeight(weightMode, true, display.fontWeight)
     val previewRevealAt = remember(line) { smokePreviewRevealAt(line) }
@@ -54,7 +60,8 @@ private data class SmokeFlight(val from: Int, val topFraction: Float)
                 Modifier.fillMaxWidth().testTag("lyric_line_$target").semantics { selected = focused }
                     .clickable(enabled = canSeek, role = Role.Button) { onSeek(line.startTimeMs) },
                 fontSize = fontSize, fontWeight = weight, reservedFontWeight = auxiliaryWeight,
-                textAlign = TextAlign.Center, smokeColors = colors,
+                textAlign = TextAlign.Center, smokeColors = colors.takeUnless { particles },
+                particleColors = colors.takeIf { particles },
                 smokeFlight = { flight?.let { LyricsSmokeFlight(it.topFraction * geometry.height - geometry.mainY) } })
         } }
         Column(Modifier.fillMaxWidth().clipToBounds()) {
@@ -78,10 +85,11 @@ private data class SmokeFlight(val from: Int, val topFraction: Float)
                 fontSize = fontSize, fontWeight = weight, reservedFontWeight = auxiliaryWeight,
                 textAlign = TextAlign.Center)
         } }
-        Box(Modifier.fillMaxWidth()) { if (oldLine != null) key(flight!!.from) {
+        Box(Modifier.fillMaxWidth()) { if (oldLine != null) key(oldLine) {
             KaraokeText(oldLine, oldPosition, false, Modifier.fillMaxWidth().clearAndSetSemantics {},
                 fontSize = fontSize, fontWeight = weight, reservedFontWeight = auxiliaryWeight,
-                textAlign = TextAlign.Center, exposeText = false)
+                textAlign = TextAlign.Center, exposeText = false,
+                particleColors = colors.takeIf { particles }, particleExitAt = line.startTimeMs.takeIf { particles })
         } }
     }) { measurables, constraints ->
         val width = constraints.maxWidth
@@ -106,8 +114,8 @@ private data class SmokeFlight(val from: Int, val topFraction: Float)
         layout(width, height) {
             // Retire the previous center line gently while the preview rises into it.
             old.placeRelativeWithLayer(0, (height - old.height) / 2) {
-                alpha = (1f - rise.value * 2.5f).coerceIn(0f, 1f)
-                translationY = -16.dp.toPx() * rise.value
+                alpha = if (particles) 1f else (1f - rise.value * 2.5f).coerceIn(0f, 1f)
+                translationY = if (particles) 0f else -16.dp.toPx() * rise.value
             }
             main.placeRelative(0, mainY)
             auxiliary.placeRelativeWithLayer(0, mainY + main.height + gap) { alpha = rise.value }

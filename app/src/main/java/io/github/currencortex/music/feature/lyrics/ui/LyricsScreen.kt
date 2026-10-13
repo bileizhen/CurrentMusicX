@@ -93,17 +93,18 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     fontSize: Float = LyricsTypography.DEFAULT_SIZE, weightMode: LyricsWeight = LyricsWeight.CURRENT, lyricsOffsetMs: Long = 0,
     display: LyricsDisplayOptions = LyricsDisplayOptions(), minimal: Boolean = false, perspective: Boolean = false,
     cover: String = "") {
-    val smokeColors = if (display.smoke) rememberLyricsSmokeColors(cover) else null
+    val smokeColors = if (display.smoke || display.particles) rememberLyricsSmokeColors(cover) else null
     val size = LyricsTypography.normalize(fontSize)
     val timeline = remember(document) { LyricsSynchronizer(document) }
     val effectivePosition = remember(position, lyricsOffsetMs) { derivedStateOf { LyricsSynchronizer.effectivePosition(position.value, lyricsOffsetMs) } }
     val activeLines by remember(timeline, effectivePosition) { derivedStateOf { timeline.activeLines(effectivePosition.value) } }
     val target by remember(timeline, effectivePosition) { derivedStateOf { timeline.scrollTarget(effectivePosition.value) } }
     val interlude by remember(timeline, effectivePosition) { derivedStateOf { timeline.interlude(effectivePosition.value) } }
-    if (display.smoke) {
+    if (display.smoke || display.particles) {
         SmokeLyricsStage(document, target, effectivePosition, onSeek = { onSeek(LyricsSynchronizer.seekPosition(it, lyricsOffsetMs)) },
             modifier = modifier, canSeek = canSeek, translation = translation, romanization = romanization,
-            fontSize = size, weightMode = weightMode, display = display.normalized(), colors = smokeColors)
+            fontSize = size, weightMode = weightMode, display = display.normalized(), colors = smokeColors,
+            particles = display.particles)
         return
     }
     val list = rememberLazyListState()

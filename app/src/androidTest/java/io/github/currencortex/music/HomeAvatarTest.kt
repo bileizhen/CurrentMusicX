@@ -234,6 +234,74 @@ class HomeAvatarTest {
     @Test fun homeTabReturnsTheAvatarAndFrameToTheMeasuredHomePosition() = verifyDecoratedFlight(false, returnViaBack = false)
     @Test fun systemBackReturnsTheAvatarAndFrameToTheMeasuredHomePosition() = verifyDecoratedFlight(false, returnViaBack = true)
 
+    private fun startInteractiveFlightFixture() {
+        imageGate.countDown()
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            backDispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
+            CurrentMusicApp(container)
+        }
+        pumpUntil { compose.onAllNodesWithTag("home_avatar_image", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.advanceTimeBy(2000)
+        compose.onNodeWithTag("tab_0").assertIsSelected()
+    }
+
+    @Test fun rapidPhysicalTabTapsRetargetTheFlyingAvatarAndKeepTheLatestPage() {
+        startInteractiveFlightFixture()
+        // Semantic performClick bypasses the full-screen pointer layer that caused this regression.
+        compose.onNodeWithTag("tab_2").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(192)
+        compose.onNodeWithTag("home_avatar_transition").assertExists()
+        // Capture at release time: click() advances the clock during its press, so
+        // comparing with a pre-press frame also counts normal forward travel.
+        compose.onNodeWithTag("tab_0").performTouchInput { down(center) }
+        val beforeReverse = greenBounds()
+        compose.onNodeWithTag("tab_0").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(32)
+        compose.onNodeWithTag("tab_0").assertIsSelected()
+        val afterReverse = greenBounds()
+        assertTrue("Reversal must start at the flying photo instead of teleporting to a page anchor: $beforeReverse -> $afterReverse",
+            (afterReverse.center - beforeReverse.center).getDistance() < 40f)
+        listOf(2, 0, 2, 0, 2).forEach { tab ->
+            compose.onNodeWithTag("tab_$tab").performTouchInput { click() }
+            compose.mainClock.advanceTimeBy(96)
+            compose.onNodeWithTag("tab_$tab").assertIsSelected()
+            compose.onNodeWithTag("home_avatar_transition").assertExists()
+        }
+        compose.mainClock.advanceTimeBy(900)
+        compose.onNodeWithTag("profile_screen").assertIsDisplayed()
+        compose.onNodeWithTag("home_avatar_transition").assertDoesNotExist()
+        val landed = greenBounds()
+        val target = compose.onNodeWithTag("my_profile_avatar").fetchSemanticsNode().boundsInRoot
+        assertTrue("The final flight must land on the latest requested page", (landed.center - target.center).getDistance() < 3f)
+        compose.onNodeWithTag("tab_0").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(96)
+        compose.onNodeWithTag("home_avatar_transition").assertExists()
+        compose.onNodeWithTag("tab_3").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(32)
+        compose.onNodeWithTag("tab_3").assertIsSelected()
+        compose.onNodeWithTag("home_avatar_transition").assertDoesNotExist()
+        compose.mainClock.advanceTimeBy(900)
+        compose.onNodeWithTag("settings_screen").assertIsDisplayed()
+        compose.onNodeWithTag("tab_3").assertIsSelected()
+    }
+
+    @Test fun systemBackDuringFlightImmediatelyReturnsHomeAndFinishesThere() {
+        startInteractiveFlightFixture()
+        val home = greenBounds()
+        compose.onNodeWithTag("tab_2").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(144)
+        compose.onNodeWithTag("home_avatar_transition").assertExists()
+        compose.runOnUiThread { backDispatcher.onBackPressed() }
+        compose.mainClock.advanceTimeBy(32)
+        compose.onNodeWithTag("tab_0").assertIsSelected()
+        compose.onNodeWithTag("home_avatar_transition").assertExists()
+        compose.mainClock.advanceTimeBy(900)
+        compose.onNodeWithTag("music_home").assertIsDisplayed()
+        compose.onNodeWithTag("home_avatar_transition").assertDoesNotExist()
+        assertTrue("Interrupted flight must land back on home", (greenBounds().center - home.center).getDistance() < 3f)
+    }
+
     @Test fun hiddenHomeAvatarSkipsFlightAndRestoresNormalTravelAfterScrollingBack() {
         imageGate.countDown()
         compose.mainClock.autoAdvance = false

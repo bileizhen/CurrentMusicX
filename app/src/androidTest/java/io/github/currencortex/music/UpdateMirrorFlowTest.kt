@@ -14,7 +14,6 @@ import java.io.IOException
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
 import okhttp3.OkHttpClient
-import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.*
 import org.junit.Assert.*
 import okhttp3.mockwebserver.MockWebServer
@@ -101,18 +100,16 @@ class UpdateMirrorFlowTest {
         }
     }
 
-    @Test fun liveSignedMirrorPrefixMatchesPublishedApkWhenExplicitlyRequested() = runBlocking<Unit> {
+    @Test fun livePublicMirrorPrefixMatchesPublishedApkWhenExplicitlyRequested() = runBlocking<Unit> {
         val args = InstrumentationRegistry.getArguments()
         val url = args.getString("live_update_url")
         val expected = args.getString("live_update_prefix_sha256")
-        Assume.assumeTrue("Live signed range verification is opt-in", url != null && expected != null)
+        Assume.assumeTrue("Live range verification is opt-in", url != null && expected != null)
         val release = AppRelease(args.getString("live_update_version")!!, "", "https://github.com/bileizhen/CurrentMusicX/releases",
             url, "fixture.apk", false, args.getString("live_update_size")!!.toLong(), args.getString("live_update_sha256")!!)
         val target = UpdateSource.CURRENTMUSIC.url(release)
         val range = "bytes=0-65535"
         val request = okhttp3.Request.Builder().url(target).header("Range", range)
-        val parsed = target.toHttpUrl()
-        UpdateProxy.current.headers(parsed, range = range).forEach { (name, value) -> request.header(name, value) }
         withContext(Dispatchers.IO) {
             OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS).readTimeout(60, TimeUnit.SECONDS).build()
                 .newCall(request.build()).execute().use { response ->

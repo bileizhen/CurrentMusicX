@@ -26,6 +26,8 @@ import kotlin.math.roundToInt
     display: LyricsDisplayOptions, onDisplay: ((LyricsDisplayOptions) -> LyricsDisplayOptions) -> Unit,
     onKaraokeScope: () -> Unit) {
     val ink = MiuixTheme.colorScheme.onSurface
+    val staged = display.smoke || display.particles
+    val effectName = if (display.particles) "星尘歌词" else "流烟歌词"
     var preview by remember(fontSize) { mutableFloatStateOf(fontSize) }
     var strength by remember(display.fontWeight) { mutableIntStateOf(display.fontWeight) }
     Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
@@ -54,7 +56,7 @@ import kotlin.math.roundToInt
                 })
         }
         LyricsToggle("歌词居中对齐", display.centered, { value -> onDisplay { it.copy(centered = value) } }, "lyrics_centered",
-            if (display.smoke) "流烟歌词固定居中" else null, !display.smoke)
+            if (staged) "${effectName}固定居中" else null, !staged)
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
             Text("字体粗细 $strength", fontSize = 14.sp, color = ink)
             Slider(value = strength.toFloat(), onValueChange = { strength = ((it / 100).roundToInt() * 100).coerceIn(400, 900) },
@@ -75,11 +77,13 @@ import kotlin.math.roundToInt
             "仅 Android 12 及以上支持", android.os.Build.VERSION.SDK_INT >= 31)
         LyricsToggle("交错滚动效果", display.stagger, { value -> onDisplay { it.copy(stagger = value) } }, "lyrics_stagger")
         LyricsToggle("3D 倾斜歌词", display.perspective, { value -> onDisplay { it.copy(perspective = value) } },
-            "lyrics_perspective", if (display.smoke) "与流烟歌词互斥，请先关闭流烟歌词" else "横竖屏 3D 透视，近大远小的歌词平面", !display.smoke)
+            "lyrics_perspective", if (staged) "与${effectName}互斥，请先关闭${effectName}" else "横竖屏 3D 透视，近大远小的歌词平面", !staged)
         LyricsToggle("歌词辉光", display.glow, { value -> onDisplay { it.copy(glow = value) } },
             "lyrics_glow", "中长音与强调处渐亮，短音保持正常高亮")
-        LyricsToggle("流烟歌词", display.smoke, { value -> onDisplay { it.copy(smoke = value).normalized() } },
+        LyricsToggle("流烟歌词", display.smoke, { value -> onDisplay { it.copy(smoke = value, particles = if (value) false else it.particles).normalized() } },
             "lyrics_smoke", "自动关闭 3D 并居中显示当前句，下一句在进度条上方预览；颜色随封面变化")
+        LyricsToggle("星尘歌词", display.particles, { value -> onDisplay { it.copy(particles = value, smoke = if (value) false else it.smoke).normalized() } },
+            "lyrics_particles", "文字逐字聚合、散作星尘，颜色随封面变化；与流烟、3D 效果互斥")
         LyricsToggle("翻译歌词", display.translation, { value -> onDisplay { it.copy(translation = value) } },
             "lyrics_translation", "只显示正在播放的歌词翻译")
         LyricsToggle("罗马音", display.romanization, { value -> onDisplay { it.copy(romanization = value) } },

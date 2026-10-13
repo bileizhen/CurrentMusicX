@@ -38,9 +38,14 @@ data class LyricsDisplayOptions(
     val perspective: Boolean = true,
     val glow: Boolean = true, val wordLift: Boolean = true,
     val smoke: Boolean = false,
+    val particles: Boolean = false,
 ) {
     /** Smoke owns a flat, centered stage; also repairs incompatible older preferences. */
-    fun normalized() = if (smoke) copy(centered = true, perspective = false) else this
+    fun normalized() = when {
+        particles -> copy(centered = true, perspective = false, smoke = false)
+        smoke -> copy(centered = true, perspective = false)
+        else -> this
+    }
 }
 
 enum class LyricsWeight(val label: String) {
@@ -82,6 +87,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val glow = booleanPreferencesKey("lyrics.glow")
     private val wordLift = booleanPreferencesKey("lyrics.wordLift")
     private val smoke = booleanPreferencesKey("lyrics.smoke")
+    private val particles = booleanPreferencesKey("lyrics.particles")
     private val neteaseMain = booleanPreferencesKey("library.neteaseMain")
     private val concurrentPlayback = booleanPreferencesKey("music.allowConcurrentPlayback")
     private val transition = stringPreferencesKey("music.transitionMode")
@@ -93,7 +99,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
         LyricsDisplayOptions(p[centered] ?: false, (p[fontWeight] ?: 500).coerceIn(400, 900),
             p[blur] ?: true, p[stagger] ?: true, KaraokeScope.from(p[karaokeScope]), p[hideControls] ?: false,
             p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true,
-            p[perspective] ?: true, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false).normalized(), p[neteaseMain] ?: true,
+            p[perspective] ?: true, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false, p[particles] ?: false).normalized(), p[neteaseMain] ?: true,
         p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12))
     // Read the persisted value directly, without the StateFlow's initial defaults.
     val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: false }.distinctUntilChanged()
@@ -125,6 +131,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[perspective] = value.perspective
             p[glow] = value.glow; p[wordLift] = value.wordLift
             p[smoke] = value.smoke
+            p[particles] = value.particles
         }
     }
     suspend fun setAccount(id: Long, name: String) { store.edit { it[account] = id; it[nickname] = name } }
