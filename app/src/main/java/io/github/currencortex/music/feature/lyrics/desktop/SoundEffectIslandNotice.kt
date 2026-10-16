@@ -2,8 +2,6 @@ package io.github.currencortex.music.feature.lyrics.desktop
 
 import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.togetherWith
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -25,13 +23,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.Layout
@@ -76,36 +78,38 @@ import kotlin.math.roundToInt
         .border(.8.dp, accent.copy(alpha = .55f), RoundedCornerShape(50)) else Modifier)
         .semantics { liveRegion = LiveRegionMode.Polite; stateDescription = "$phase：${notice.message}" }
         .testTag("sound_effect_island_notice")) {
-        Canvas(Modifier.matchParentSize()) {
-            drawRect(Brush.radialGradient(
-                colors = listOf(accent.copy(alpha = .22f * glow.value),
-                    accent.copy(alpha = .08f * glow.value), Color.Transparent),
+        // Cache the stationary gradient, fading its layer instead of allocating
+        // a new shader and repainting it on every animation frame.
+        Box(Modifier.matchParentSize().graphicsLayer { alpha = glow.value }.drawWithCache {
+            val brush = Brush.radialGradient(
+                colors = listOf(accent.copy(alpha = .22f),
+                    accent.copy(alpha = .08f), Color.Transparent),
                 center = Offset(size.width * .5f, size.height * .75f),
-                radius = size.width.coerceAtLeast(size.height) * .65f))
-        }
-        AnimatedContent(notice, contentKey = { it.id to it.phase }, label = "effect notice content",
-            transitionSpec = { (fadeIn(tween(if (motion) 180 else 0)) togetherWith
-                fadeOut(tween(if (motion) 180 else 0))).using(null) }) { current ->
-            Row(Modifier.fillMaxHeight().padding(horizontal = 7.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                val discSize = (height - 14.dp).coerceAtLeast(22.dp)
-                if (current.tier != SoundEffectNoticeTier.STANDARD) {
-                    SoundEffectMembershipDisc(current.tier, Modifier.size(discSize))
-                } else Box(Modifier.size(discSize).background(accent.copy(alpha = .12f), CircleShape), contentAlignment = Alignment.Center) {
-                    Canvas(Modifier.size(16.dp)) {
-                        repeat(5) { index ->
-                            val h = size.height * listOf(.3f, .65f, 1f, .65f, .3f)[index]
-                            val x = size.width * (index + .5f) / 5f
-                            drawLine(accent, Offset(x, (size.height - h) / 2), Offset(x, (size.height + h) / 2), 2.dp.toPx())
-                        }
+                radius = size.width.coerceAtLeast(size.height) * .65f)
+            onDrawBehind { drawRect(brush) }
+        })
+        // A phase change only updates the status label. Crossfading two complete
+        // rows made the unchanged disc/title visibly dim halfway through a fade.
+        val current = notice
+        Row(Modifier.fillMaxHeight().padding(horizontal = 7.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            val discSize = (height - 14.dp).coerceAtLeast(22.dp)
+            if (current.tier != SoundEffectNoticeTier.STANDARD) {
+                SoundEffectMembershipDisc(current.tier, Modifier.size(discSize))
+            } else Box(Modifier.size(discSize).background(accent.copy(alpha = .12f), CircleShape), contentAlignment = Alignment.Center) {
+                Canvas(Modifier.size(16.dp)) {
+                    repeat(5) { index ->
+                        val h = size.height * listOf(.3f, .65f, 1f, .65f, .3f)[index]
+                        val x = size.width * (index + .5f) / 5f
+                        drawLine(accent, Offset(x, (size.height - h) / 2), Offset(x, (size.height + h) / 2), 2.dp.toPx())
                     }
                 }
-                SoundEffectIslandTitle(current.name, accent, font, Modifier.weight(1f, fill = false))
-                // Reserve all four characters during loading/success/failure: no width jump.
-                BasicText(soundEffectPhaseLabel(current.phase), Modifier.width(with(LocalDensity.current) { 40.sp.toDp() }),
-                    style = TextStyle(color = accent.copy(alpha = .85f), fontSize = 9.sp,
-                        textAlign = TextAlign.End), maxLines = 1, softWrap = false)
             }
+            SoundEffectIslandTitle(current.name, accent, font, Modifier.weight(1f, fill = false))
+            // Reserve all four characters during loading/success/failure: no width jump.
+            BasicText(soundEffectPhaseLabel(current.phase), Modifier.width(with(LocalDensity.current) { 40.sp.toDp() }),
+                style = TextStyle(color = accent.copy(alpha = .85f), fontSize = 9.sp,
+                    textAlign = TextAlign.End), maxLines = 1, softWrap = false)
         }
     }
 }
@@ -168,14 +172,26 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
     val expanded = notice != null
     val progress = animateFloatAsState(if (expanded) 1f else 0f,
         tween(if (motion) 420 else 0, easing = FastOutSlowInEasing), label = "island effect morph")
-    val tint by animateColorAsState(soundEffectNoticeAccent(notice), tween(if (motion) 400 else 0), label = "island material tint")
-    val intensity by animateFloatAsState(if (expanded) 1f else 0f, tween(if (motion) 400 else 0), label = "island material strength")
+    val tint = animateColorAsState(soundEffectNoticeAccent(notice ?: retained), tween(if (motion) 400 else 0), label = "island material tint")
+    val intensity = animateFloatAsState(if (expanded) 1f else 0f, tween(if (motion) 400 else 0), label = "island material strength")
     val shape = RoundedCornerShape(50)
     Layout(modifier = modifier.shadow(2.dp, shape, clip = false)
-        .background(Brush.verticalGradient(listOf(Color(0xFF11141B),
-            tint.copy(alpha = .14f * intensity).compositeOver(Color(0xFF080B10)))), shape)
-        .border(.6.dp, Brush.verticalGradient(listOf(tint.copy(alpha = .16f + .39f * intensity),
-            tint.copy(alpha = .035f + .20f * intensity))), shape).clip(shape)
+        .drawWithCache {
+            val base = Brush.verticalGradient(listOf(Color(0xFF11141B), Color(0xFF080B10)))
+            val neutralBorder = Brush.verticalGradient(listOf(Color.White.copy(alpha = .16f), Color.White.copy(alpha = .035f)))
+            val color = tint.value
+            val fill = Brush.verticalGradient(listOf(Color.Transparent, color.copy(alpha = .14f)))
+            val border = Brush.verticalGradient(listOf(color.copy(alpha = .45f), color.copy(alpha = .24f)))
+            val radius = CornerRadius(size.height / 2f)
+            val stroke = Stroke(.6.dp.toPx())
+            onDrawBehind {
+                val amount = intensity.value
+                drawRoundRect(base, cornerRadius = radius)
+                drawRoundRect(fill, cornerRadius = radius, alpha = amount)
+                drawRoundRect(neutralBorder, cornerRadius = radius, style = stroke)
+                drawRoundRect(border, cornerRadius = radius, style = stroke, alpha = amount)
+            }
+        }.clip(shape)
         .testTag("desktop_island_transition"), content = {
         Box { normal() }
         Box { (notice ?: retained)?.let { SoundEffectIslandPill(it, material = false, height = effectHeight, font = font) } }
