@@ -1,0 +1,463 @@
+[
+  {
+    "emotion": "unUsed",
+    "kind": "video",
+    "source": "https://d2.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591721144/b345/e1e2/2c57/51594afdefa976613dba43a6e2a629ac.mp4",
+    "path": "assets/mood_detail_unUsed_video.mp4",
+    "bytes": 877965,
+    "sha256": "d1c42bf31e39e9482ebd1ad68858508bfa86d9873477055f0168f3dcb00151ea"
+  },
+  {
+    "emotion": "unUsed",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/-r7DHJQ6FcsbXF8tF3QPdg==/109951173048590968.png",
+    "path": "assets/mood_detail_unUsed_poster.png",
+    "bytes": 195184,
+    "sha256": "4a8300e8317b9fb5699523a686bc3662edd9f75dc7172fb5715145645d343b92"
+  },
+  {
+    "emotion": "sad",
+    "kind": "video",
+    "source": "https://d1.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591722791/0d71/2b9e/6edc/2f2851bb3864fb4e7f2741710dd43ab6.mp4",
+    "path": "assets/mood_detail_sad_video.mp4",
+    "bytes": 815946,
+    "sha256": "e21aa91a298e1bdad19ee6292cfa41ea4a6cfc90d56be901a99d524f08d07dc8"
+  },
+  {
+    "emotion": "sad",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/eU9lV1aXwdNU_oqmSvFw8Q==/109951173048596902.png",
+    "path": "assets/mood_detail_sad_poster.png",
+    "bytes": 109803,
+    "sha256": "7952436b143931024058477bb4c861d376bd63de9ab0e25e076dd615ffe43c2c"
+  },
+  {
+    "emotion": "confident",
+    "kind": "video",
+    "source": "https://d2.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591720233/8b9f/8c1e/a3cb/529084f3ec2d530b780b8d789bff7b86.mp4",
+    "path": "assets/mood_detail_confident_video.mp4",
+    "bytes": 817524,
+    "sha256": "bb37ee862a042463a23750421cd5925accaabcbe71d59185f29ae250f20b3cc2"
+  },
+  {
+    "emotion": "confident",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/5vEAX4Bz9fIsqPmirYfNAg==/109951173048600601.png",
+    "path": "assets/mood_detail_confident_poster.png",
+    "bytes": 106649,
+    "sha256": "590ebe1479d08bbffd8743c5a1372570bcf32b2f2d9980722af55eeb8ce50ee2"
+  },
+  {
+    "emotion": "joyful",
+    "kind": "video",
+    "source": "https://d2.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591719470/793e/dcbb/c77a/e979dc837a8491d4ef5c27dd7e7cf4f2.mp4",
+    "path": "assets/mood_detail_joyful_video.mp4",
+    "bytes": 1541285,
+    "sha256": "02f47c3909278e7da09724539e333b2133c5739c8173358aaa1a3facf2cb4f32"
+  },
+  {
+    "emotion": "joyful",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/PTrSweW3-RdNKg4KkrW_yg==/109951173048602082.png",
+    "path": "assets/mood_detail_joyful_poster.png",
+    "bytes": 144357,
+    "sha256": "a1bbdb824e108a1278d919232b3516c96139bfa9dbe6a2e7fef3ad7f0f7e08c9"
+  },
+  {
+    "emotion": "passionate",
+    "kind": "video",
+    "source": "https://d2.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591719475/2dc3/9ce3/e7e0/a67ff5a00550b0e923dd911891cb14b7.mp4",
+    "path": "assets/mood_detail_passionate_video.mp4",
+    "bytes": 2079635,
+    "sha256": "a942ba8d06d2f6121d1f4b930d0b26ccba04be6ec025f27bb63fdfaf53709001"
+  },
+  {
+    "emotion": "passionate",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/y-i7d8hHL61KfcjbYKZxYQ==/109951173048601161.png",
+    "path": "assets/mood_detail_passionate_poster.png",
+    "bytes": 125366,
+    "sha256": "615c519d6a93ce77d7452f68535964f30a7ce2bce9363c310680e9952e4d851b"
+  },
+  {
+    "emotion": "sweet",
+    "kind": "video",
+    "source": "https://d2.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591721128/7dba/f696/76e9/198c171503d15bed96e396bce3e4f450.mp4",
+    "path": "assets/mood_detail_sweet_video.mp4",
+    "bytes": 1211420,
+    "sha256": "74cd7c9f189b371c2e0135c1da607919ead2f3ac6aa27763c768ae3a60da3fea"
+  },
+  {
+    "emotion": "sweet",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/ZWFNDhWVpPHz2UXm-nSdlg==/109951173048597342.png",
+    "path": "assets/mood_detail_sweet_poster.png",
+    "bytes": 127288,
+    "sha256": "be533c98eae803cfc0b82c0569b642daee1fc67a1d3bdda25ddc468b7cd97055"
+  },
+  {
+    "emotion": "romantic",
+    "kind": "video",
+    "source": "https://d2.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/80087761547/aec8/2b26/3ba3/447056a0558c780113a041a43fa55ad2.mp4",
+    "path": "assets/mood_detail_romantic_video.mp4",
+    "bytes": 1243172,
+    "sha256": "45dfd7e2ddd037208f7691d58282965dd045c72a51063a1a0d1e09ff18b47183"
+  },
+  {
+    "emotion": "romantic",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/8sQh-tbPdIEYK0Dxu_h-Yw==/109951173188300102.png",
+    "path": "assets/mood_detail_romantic_poster.png",
+    "bytes": 201403,
+    "sha256": "688f2cd49b562afeecde3b2668db3c6550aac8fb619200527588b2e416534594"
+  },
+  {
+    "emotion": "ecstatic",
+    "kind": "video",
+    "source": "https://d1.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591722044/b504/4eb3/a4b6/2ad4ab034a95ae4c4cb910e888116af8.mp4",
+    "path": "assets/mood_detail_ecstatic_video.mp4",
+    "bytes": 1259719,
+    "sha256": "0caf4a9abe28875564ca6a6c658da9cba1400c8def0dd74afc6d852a5475a500"
+  },
+  {
+    "emotion": "ecstatic",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/eEyMajrDFkM7ykthCFlM4w==/109951173048601172.png",
+    "path": "assets/mood_detail_ecstatic_poster.png",
+    "bytes": 157813,
+    "sha256": "a6def3528b64d59b779b6ea66352d8735411ec9125b4ad349dc4633bff358cda"
+  },
+  {
+    "emotion": "energetic",
+    "kind": "video",
+    "source": "https://d1.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591720234/4c87/fe7b/d6ff/9afe6fc64800f0afafc226e719942cd0.mp4",
+    "path": "assets/mood_detail_energetic_video.mp4",
+    "bytes": 1053665,
+    "sha256": "a85eef21e2831f313ad539cc151b141280b29c0679f18ae94491b9800016697f"
+  },
+  {
+    "emotion": "energetic",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/D_CUZVUklqHupyKZj3007g==/109951173048601626.png",
+    "path": "assets/mood_detail_energetic_poster.png",
+    "bytes": 97643,
+    "sha256": "c7083d4f105d9cd60de111101e84266fc729c18f9fccbe8cb11fc90b4ee99939"
+  },
+  {
+    "emotion": "relaxed",
+    "kind": "video",
+    "source": "https://d1.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591719474/d1e0/ab2f/c420/7190bf220fa1eb8f0fa0677c03730be4.mp4",
+    "path": "assets/mood_detail_relaxed_video.mp4",
+    "bytes": 555445,
+    "sha256": "efa77443c59899d9af01e47e8ad692b4e89b4488f204b0427115b9bd87ee8bd9"
+  },
+  {
+    "emotion": "relaxed",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/pdBHuIy-pj5cSJ_X_r1SuA==/109951173048599673.png",
+    "path": "assets/mood_detail_relaxed_poster.png",
+    "bytes": 74641,
+    "sha256": "1ab60375b339a5bfbff0d063088d59f64095ea317677298262cd1bf454082cdd"
+  },
+  {
+    "emotion": "healing",
+    "kind": "video",
+    "source": "https://d2.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591722778/8d03/08ce/7826/26fee3fec5f083cfd97441a1421d5e0d.mp4",
+    "path": "assets/mood_detail_healing_video.mp4",
+    "bytes": 806334,
+    "sha256": "8e9e3c9ace13dbb6787538394b670229fefd2e94ac57af733f6d80e127438f97"
+  },
+  {
+    "emotion": "healing",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/YlNzBCH2UDEaFCrs1oOZIQ==/109951173048599627.png",
+    "path": "assets/mood_detail_healing_poster.png",
+    "bytes": 71217,
+    "sha256": "107d7bc414fba9da5c1d396b73e731df542b13e6bf947a01582066e46ad7fb2e"
+  },
+  {
+    "emotion": "calm",
+    "kind": "video",
+    "source": "https://d2.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/80090485905/8caa/02e9/0baf/db044b1bbf512dc1502ed8c5b14bb515.mp4",
+    "path": "assets/mood_detail_calm_video.mp4",
+    "bytes": 1191109,
+    "sha256": "48c11ff818899574f68732f542b957c3fc779af8099a4dabf9cd0d6e9bedc343"
+  },
+  {
+    "emotion": "calm",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/0_j6S7E0tP5-mm2EqQurwQ==/109951173188742211.png",
+    "path": "assets/mood_detail_calm_poster.png",
+    "bytes": 108217,
+    "sha256": "211e8464b55beb4337ea56b0574793fe12015340a003156a6459c8b6e56f778c"
+  },
+  {
+    "emotion": "nostalgic",
+    "kind": "video",
+    "source": "https://d1.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591721114/f168/2e6e/ad21/a955bacd21394bb1e6ce0b0c027bca5a.mp4",
+    "path": "assets/mood_detail_nostalgic_video.mp4",
+    "bytes": 266453,
+    "sha256": "687e82e7efd1452818ecb3c4a72ff701b62690024ab4b3cfa346bd86631c6cbb"
+  },
+  {
+    "emotion": "nostalgic",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/7r0E4A7RwAbQ1mqzf4U4Dg==/109951173048591432.png",
+    "path": "assets/mood_detail_nostalgic_poster.png",
+    "bytes": 88335,
+    "sha256": "c251caf6633aa88ec64d192267679c89df801b2d96878cca98bbbe24440667b8"
+  },
+  {
+    "emotion": "lonely",
+    "kind": "video",
+    "source": "https://d1.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591722795/4f0a/6130/740b/351de0cbd121269530036c0ab5a249b2.mp4",
+    "path": "assets/mood_detail_lonely_video.mp4",
+    "bytes": 753773,
+    "sha256": "96d977099cc9bfa095fa3d9d94268945e37f155f18db8a6c1d8b8737690d1f09"
+  },
+  {
+    "emotion": "lonely",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/y8MUYqARC4b3d5ef1hHLBw==/109951173048598350.png",
+    "path": "assets/mood_detail_lonely_poster.png",
+    "bytes": 60445,
+    "sha256": "32a666578cae3893c5538335c98d76201e420997726b701af23e9a98a3f42e1d"
+  },
+  {
+    "emotion": "bitter",
+    "kind": "video",
+    "source": "https://d2.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591721112/8f09/fd9c/75d6/7d9569a1a899f6e6ab8ca6dae78a82df.mp4",
+    "path": "assets/mood_detail_bitter_video.mp4",
+    "bytes": 453820,
+    "sha256": "0e914557af09392a944c715cf0340c04ba81553af066f1200d8e543b07db1cbf"
+  },
+  {
+    "emotion": "bitter",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/1bnZ5UJWvl5h-QQT7-_B-A==/109951173048591457.png",
+    "path": "assets/mood_detail_bitter_poster.png",
+    "bytes": 88170,
+    "sha256": "f699b4c9e9b7135ab4da8e99ff69c8c90b69e1de405d0bb10cef4f5b7502ad83"
+  },
+  {
+    "emotion": "depressed",
+    "kind": "video",
+    "source": "https://d1.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/79591720249/c7d5/c3df/3f40/efbe25e3ab6fd30cf1da5ca5c9fdd55a.mp4",
+    "path": "assets/mood_detail_depressed_video.mp4",
+    "bytes": 421055,
+    "sha256": "822d85bdceb5dbc8d1cbe03fae3222983a6ceb39b391c94294b69bcdac11b48e"
+  },
+  {
+    "emotion": "depressed",
+    "kind": "poster",
+    "source": "https://p1.music.126.net/c2nDwSYS-riLnTDK6yLXww==/109951173048591418.png",
+    "path": "assets/mood_detail_depressed_poster.png",
+    "bytes": 119801,
+    "sha256": "47e6d141bea639fe489de9ee9519f4bd38bf8bfac80557396e99be0bfaff78fb"
+  },
+  {
+    "emotion": "default",
+    "kind": "video",
+    "source": "https://d1.music.126.net/dmusic/obj/w5zCg8OAw6HDjzjDgMK_/80172937599/c0cf/9033/377c/27970ca2579435f01f380db75abe17dd.mp4",
+    "path": "assets/mood_detail_default_video.mp4",
+    "bytes": 1530790,
+    "sha256": "263eb27fc7ecbdd84a5e2a3c060d91d20196cb828b2f84eb20bcf924e5aa71ab"
+  },
+  {
+    "emotion": "default",
+    "kind": "poster",
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/80172863643/0cf9/f0ea/7703/9518c4b7a200aa66ebc573842d00391a.png",
+    "path": "assets/mood_detail_default_poster.png",
+    "bytes": 240268,
+    "sha256": "6168d94ca42af235cf65a4a1f810d4af05d1081bf3858954f8b16e5d713b6785"
+  },
+  {
+    "dimension": "loudness",
+    "intensity": "weak",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/2T8yQLgAjppB9crNVA4-rA==/109951173099550830.png",
+    "path": "assets/mood_detail_effect_loudness_weak.png",
+    "bytes": 6329,
+    "sha256": "be5dd0c290d4bc21cf7c40faabac88903548162b6abc00d9deeb4ba82630b8fc"
+  },
+  {
+    "dimension": "loudness",
+    "intensity": "medium",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/nArul2Wkt26SviFfXJnCPA==/109951173099547873.png",
+    "path": "assets/mood_detail_effect_loudness_medium.png",
+    "bytes": 43019,
+    "sha256": "a14f9d4a35fc35a16fe9bbe719b3a05ead00b993dd7186440843663dda18d7bd"
+  },
+  {
+    "dimension": "loudness",
+    "intensity": "strong",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/nArul2Wkt26SviFfXJnCPA==/109951173099547873.png",
+    "path": "assets/mood_detail_effect_loudness_strong.png",
+    "bytes": 43019,
+    "sha256": "a14f9d4a35fc35a16fe9bbe719b3a05ead00b993dd7186440843663dda18d7bd"
+  },
+  {
+    "dimension": "vocal",
+    "intensity": "weak",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/rFItI9M9P3kWZDUtuBo7yQ==/109951173099555741.png",
+    "path": "assets/mood_detail_effect_vocal_weak.png",
+    "bytes": 8251,
+    "sha256": "91373daa9c33c862e39782d6da3d096473fa81f17ae8050ba60dc87273a80f3b"
+  },
+  {
+    "dimension": "vocal",
+    "intensity": "medium",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/wQVABX_n_RcjaXGV0H7j6g==/109951173099550925.png",
+    "path": "assets/mood_detail_effect_vocal_medium.png",
+    "bytes": 9073,
+    "sha256": "d043c141abb3075ea23f04d5bb2387bb2d344276829f342f4fd616a336747cec"
+  },
+  {
+    "dimension": "vocal",
+    "intensity": "strong",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/lA1iAY_6otq8nZePZ-M49g==/109951173099549910.png",
+    "path": "assets/mood_detail_effect_vocal_strong.png",
+    "bytes": 10504,
+    "sha256": "c9748653b8ede8133f26994f38b9e28d21c235a2cc9088a98674c6137b532398"
+  },
+  {
+    "dimension": "high_freq",
+    "intensity": "weak",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/047dBDV0yHZklKmjdvvehA==/109951173099559056.png",
+    "path": "assets/mood_detail_effect_high_freq_weak.png",
+    "bytes": 9457,
+    "sha256": "0eeba29ea46b02cb93976d3bb561a31673f70795fa6879548dc896fd335980a7"
+  },
+  {
+    "dimension": "high_freq",
+    "intensity": "medium",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/4KNFGmX50qyUSsvSJuGMmw==/109951173099563118.png",
+    "path": "assets/mood_detail_effect_high_freq_medium.png",
+    "bytes": 10324,
+    "sha256": "47bb5aa414c9fef4312e4f704cca6728e7e4b10df5739112b603c37477d1e10d"
+  },
+  {
+    "dimension": "high_freq",
+    "intensity": "strong",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/pTvmoYV4CRv3yufSfu4vbw==/109951173099564132.png",
+    "path": "assets/mood_detail_effect_high_freq_strong.png",
+    "bytes": 17229,
+    "sha256": "c624085bae613e3b4792d86c019b93742a6ae51ec5bb3de3476d2fb4d7355956"
+  },
+  {
+    "dimension": "rhythm",
+    "intensity": "weak",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/0CbeGfjg4v5gbXNL1Wn6vg==/109951173099558306.png",
+    "path": "assets/mood_detail_effect_rhythm_weak.png",
+    "bytes": 5758,
+    "sha256": "3f00060a3a9c8dec17a34451c59d64cf1a357a73accba141681b4bb0759bd27b"
+  },
+  {
+    "dimension": "rhythm",
+    "intensity": "medium",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/HO1bbgeT5mmZ7Rq_d-prBw==/109951173099563666.png",
+    "path": "assets/mood_detail_effect_rhythm_medium.png",
+    "bytes": 42968,
+    "sha256": "8127ec2e304f0b7ae2fd4147cfbd4a3bd069f14ea8b5177bb7e8c136432f1223"
+  },
+  {
+    "dimension": "rhythm",
+    "intensity": "strong",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/9bUUsuM4bbKMRa-tug7w6A==/109951173099562208.png",
+    "path": "assets/mood_detail_effect_rhythm_strong.png",
+    "bytes": 59591,
+    "sha256": "04694a85b7fda1dae8bd2aecbe12c7822b0ff23576cfdf8be8a211ea2a111037"
+  },
+  {
+    "dimension": "stereo_width",
+    "intensity": "weak",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/5qx4jKRA2UCgqVF5D4vmRw==/109951173099561240.png",
+    "path": "assets/mood_detail_effect_stereo_width_weak.png",
+    "bytes": 9861,
+    "sha256": "8ed55ae44d53dc6dfd05e4a96f05ce72bfab96e4c574f38fa8690a3cdf8380ac"
+  },
+  {
+    "dimension": "stereo_width",
+    "intensity": "medium",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/2SJChYvDo0j_chKxwKMwUQ==/109951173099566610.png",
+    "path": "assets/mood_detail_effect_stereo_width_medium.png",
+    "bytes": 12153,
+    "sha256": "aa4a3eab8b0951e84959c409c3581fbc68ddeee472b550c9c73692a0ac2ff488"
+  },
+  {
+    "dimension": "stereo_width",
+    "intensity": "strong",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/M1vupZ6xtfq-YuEHPwq4cg==/109951173099563695.png",
+    "path": "assets/mood_detail_effect_stereo_width_strong.png",
+    "bytes": 56879,
+    "sha256": "0a80e310e1ad90f63b59c92c73daa502fc19d47c1cc1a8d0f1044575ff41fdd3"
+  },
+  {
+    "dimension": "space_size",
+    "intensity": "weak",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/9O7RsV_yxipqHWICE4lFrQ==/109951173099558820.png",
+    "path": "assets/mood_detail_effect_space_size_weak.png",
+    "bytes": 22265,
+    "sha256": "b6e3e6a781c4cc254fc80e31d9329d364af2f92b42ca953794c32f368b7bfd1c"
+  },
+  {
+    "dimension": "space_size",
+    "intensity": "medium",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/fLRWLx8olDYsO5lJdcbHaA==/109951173099570014.png",
+    "path": "assets/mood_detail_effect_space_size_medium.png",
+    "bytes": 31202,
+    "sha256": "ad7735d6c01f96ea0cc76b5b5070d43c887f15a409bc896aed007c783c4b7cbd"
+  },
+  {
+    "dimension": "space_size",
+    "intensity": "strong",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/N-asrASXCpBVIzUN2MvcUA==/109951173099566139.png",
+    "path": "assets/mood_detail_effect_space_size_strong.png",
+    "bytes": 38112,
+    "sha256": "d5d6162a8e0354bd451cb7e3d17f2cf5b3c31dbdf60e0a8bad0642970d16bf4f"
+  },
+  {
+    "dimension": "richness",
+    "intensity": "weak",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/qbO0KDlivcaYsbcwROZhEA==/109951173108122770.png",
+    "path": "assets/mood_detail_effect_richness_weak.png",
+    "bytes": 6778,
+    "sha256": "c915e6d8c0b645387a72c30a7ddf299e423ef29400ef1c41a9580b7d07ac60d0"
+  },
+  {
+    "dimension": "richness",
+    "intensity": "medium",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/qbO0KDlivcaYsbcwROZhEA==/109951173108122770.png",
+    "path": "assets/mood_detail_effect_richness_medium.png",
+    "bytes": 6778,
+    "sha256": "c915e6d8c0b645387a72c30a7ddf299e423ef29400ef1c41a9580b7d07ac60d0"
+  },
+  {
+    "dimension": "richness",
+    "intensity": "strong",
+    "kind": "effect",
+    "source": "https://p1.music.126.net/qbO0KDlivcaYsbcwROZhEA==/109951173108122770.png",
+    "path": "assets/mood_detail_effect_richness_strong.png",
+    "bytes": 6778,
+    "sha256": "c915e6d8c0b645387a72c30a7ddf299e423ef29400ef1c41a9580b7d07ac60d0"
+  }
+]

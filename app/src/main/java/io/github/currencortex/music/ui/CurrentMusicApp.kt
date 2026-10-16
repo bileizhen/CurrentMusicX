@@ -244,7 +244,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
         val miniRetainedAvailable = currentSong != null || playerState.mode == PlayerMode.ROOM
         val miniAvailable = !keyboardOpen && miniRetainedAvailable
-        val showMini = miniAvailable && !playerPresented && sceneStack.last() != "lib/video"
+        val showMini = miniAvailable && !playerPresented && sceneStack.last() !in setOf("lib/video", EQUALIZER.toString())
         PreloadMusicCovers(listOf(currentSong?.cover.orEmpty()), 800)
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
         var roomDialogOpen by remember { mutableStateOf(false) }
@@ -367,12 +367,12 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val sceneInsets = remember(miniAvailable, miniHeight) {
             NavEntryDecorator<String> { entry ->
                 val ribbonScene = ribbonEnabled.value && isPlaylistRoute(entry.contentKey.toString())
-                val miniSpace = if (miniAvailable && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video")) miniHeight else 0.dp
+                val miniSpace = if (miniAvailable && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video", EQUALIZER.toString())) miniHeight else 0.dp
                 // Each moving scene must cover the outgoing page and its dim scrim, including
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
                 Box(Modifier.fillMaxSize().background(if (ribbonScene) androidx.compose.ui.graphics.Color(0xFF0A0A0A) else MiuixTheme.colorScheme.background)
                     .testTag("music_scene_${entry.contentKey}")
-                    .then(if (ribbonScene || entry.contentKey in setOf(PLAYER.toString(), "lib/video")) Modifier else Modifier.navigationBarsPadding())) {
+                    .then(if (ribbonScene || entry.contentKey in setOf(PLAYER.toString(), "lib/video", EQUALIZER.toString())) Modifier else Modifier.navigationBarsPadding())) {
                     // Keep the scene viewport full size so the glass samples page content.
                     // Clearance belongs to the end of each scrollable list, not to its bounds.
                     CompositionLocalProvider(LocalMusicBottomInset provides miniSpace) { entry.Content() }
@@ -453,6 +453,12 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
                 }
                 entry(EQUALIZER.toString()) {
+                    val vm: io.github.currencortex.music.feature.settings.SoundEffectsViewModel = viewModel(factory = viewModelFactory {
+                        io.github.currencortex.music.feature.settings.SoundEffectsViewModel(container)
+                    })
+                    io.github.currencortex.music.feature.settings.SoundEffectsScreen(vm, ::navigateBack, { navigateLibrary("sound-equalizer") })
+                }
+                entry("sound-equalizer") {
                     val vm: io.github.currencortex.music.feature.settings.EqualizerViewModel = viewModel(factory = viewModelFactory {
                         io.github.currencortex.music.feature.settings.EqualizerViewModel(container)
                     })
@@ -571,7 +577,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         }
         val dockVisible by remember(keyboardOpen, sceneStack) { derivedStateOf {
-            sceneStack.last() != "lib/video" && playerExpansion.value < .9999f
+            sceneStack.last() !in setOf("lib/video", EQUALIZER.toString()) && playerExpansion.value < .9999f
         } }
         val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
         KeyboardDockOverlay(keyboardOpen) {
