@@ -130,6 +130,54 @@ class UserCapabilitiesTest {
         compose.onNodeWithText("我的").performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithTag("edit_profile").fetchSemanticsNodes().isNotEmpty() }
     }
+    @Test fun firstCountryFocusKeepsTheFormAtTheImeEdge() = verifyFirstKeyboardFocus("binding_country")
+    @Test fun firstPhoneFocusKeepsTheFormAtTheImeEdge() = verifyFirstKeyboardFocus("binding_phone")
+    @Test fun captchaKeyboardKeepsTheFormAtTheImeEdgeAndRetainsInput() = verifyFirstKeyboardFocus("binding_code")
+
+    private fun verifyFirstKeyboardFocus(firstField: String) {
+        val song = io.github.currencortex.music.data.song.Song(99, "Keyboard fixture")
+        container.playbackQueue.replace(listOf(song), 0)
+        container.playerController.state.value = io.github.currencortex.music.core.media.PlayerState(song = song)
+        compose.setContent { CurrentMusicApp(container) }
+        lateinit var window: android.view.Window
+        compose.runOnUiThread {
+            window = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).first().window
+            androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
+        me()
+        compose.onNodeWithTag("open_binding").performScrollTo().performClick()
+        compose.onNodeWithText("手机验证码").performScrollTo().performClick()
+        // This is the very first field touch in a fresh activity/login page, before typing.
+        compose.onNodeWithTag(firstField).performScrollTo().performTouchInput { click() }
+        compose.waitUntil(8000) {
+            androidx.core.view.ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) == true
+        }
+        Thread.sleep(350)
+        compose.waitForIdle()
+        val root = compose.onNodeWithTag("music_window").fetchSemanticsNode().boundsInRoot
+        val list = compose.onNodeWithTag("binding_screen").fetchSemanticsNode().boundsInRoot
+        var ime = 0
+        compose.runOnUiThread { ime = requireNotNull(androidx.core.view.ViewCompat.getRootWindowInsets(window.decorView)).getInsets(androidx.core.view.WindowInsetsCompat.Type.ime()).bottom }
+        assertEquals("First focus ($firstField) must end at the keyboard without a second blank inset", root.bottom - ime, list.bottom,
+            10f * window.decorView.resources.displayMetrics.density)
+        assertTrue("The first focused field remains above the IME", compose.onNodeWithTag(firstField).fetchSemanticsNode().boundsInRoot.bottom <= root.bottom - ime + 1)
+        val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()?.let { bitmap ->
+            java.io.File(context.externalCacheDir, "binding-first-$firstField.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
+        compose.onNodeWithTag("binding_phone").performScrollTo().performTextInput("123456789")
+        compose.onNodeWithTag("binding_code").performScrollTo().performTextInput("1234")
+        compose.onNodeWithTag("binding_screen").performScrollToNode(hasTestTag("confirm_phone_binding"))
+        compose.onNodeWithTag("confirm_phone_binding").assertIsDisplayed()
+        compose.onNodeWithTag("binding_code").performScrollTo().performImeAction()
+        compose.waitUntil(8000) {
+            androidx.core.view.ViewCompat.getRootWindowInsets(window.decorView)?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) != true
+        }
+        compose.onNodeWithTag("binding_code").assertTextContains("1234")
+    }
     @Test fun listeningFilterAndRefreshShowNewListenersAndTheirUpdatedDuration() {
         lateinit var vm: io.github.currencortex.music.feature.profile.DiscoverViewModel
         lateinit var profile: io.github.currencortex.music.feature.profile.ProfileViewModel
