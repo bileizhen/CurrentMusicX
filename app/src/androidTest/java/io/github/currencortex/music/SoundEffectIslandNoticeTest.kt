@@ -75,7 +75,7 @@ class SoundEffectIslandNoticeTest {
         compose.runOnIdle { assertEquals(1, mounted); assertEquals(0, disposed) }
         compose.mainClock.autoAdvance = true
     }
-    @Test fun phaseUpdatesKeepTheExpandedCapsuleGeometryStable() {
+    @Test fun emptyPhasesStayCompactAndVisibleFailureResizesSmoothlyWithoutChangingHeight() {
         var notice by mutableStateOf(SoundEffectNotice(1, "原声黑胶", SoundEffectNoticeTier.SVIP))
         compose.setContent { Box(Modifier.width(340.dp)) {
             DesktopIslandEffectTransition(notice) { Spacer(Modifier.width(120.dp).height(32.dp)) }
@@ -84,6 +84,7 @@ class SoundEffectIslandNoticeTest {
         compose.mainClock.advanceTimeBy(900)
         val initial = compose.onNodeWithTag("desktop_island_transition").getUnclippedBoundsInRoot()
         for (phase in listOf(SoundEffectNoticePhase.FAILED, SoundEffectNoticePhase.READY, SoundEffectNoticePhase.APPLYING)) {
+            val widths = mutableListOf<Float>()
             compose.runOnIdle { notice = notice.copy(phase = phase, message = if (phase == SoundEffectNoticePhase.FAILED)
                 "此音效的会员授权类型尚未接入，需要在网易云客户端使用，请选择其他音效后重试。" else "已启用") }
             repeat(35) {
@@ -91,9 +92,12 @@ class SoundEffectIslandNoticeTest {
                 val current = compose.onNodeWithTag("desktop_island_transition").getUnclippedBoundsInRoot()
                 assertEquals("Status text must not pump the capsule height", (initial.bottom - initial.top).value,
                     (current.bottom - current.top).value, 1f)
-                assertEquals("Status updates must keep the width", (initial.right - initial.left).value,
-                    (current.right - current.left).value, 1f)
+                widths += (current.right - current.left).value
             }
+            if (phase == SoundEffectNoticePhase.FAILED) assertTrue(widths.last() > (initial.right - initial.left).value + 1f)
+            else assertEquals("Empty status must not reserve space", (initial.right - initial.left).value, widths.last(), 1f)
+            if (phase != SoundEffectNoticePhase.APPLYING) assertTrue("Status width must interpolate rather than jump",
+                widths.any { it > widths.min() + 1f && it < widths.max() - 1f })
         }
         compose.mainClock.autoAdvance = true
     }
@@ -169,11 +173,12 @@ class SoundEffectIslandNoticeTest {
         val expanding = width()
         compose.mainClock.advanceTimeBy(600)
         val expanded = width()
-        assertTrue("Expansion must interpolate: $compact -> $expanding -> $expanded", expanding > compact + 1 && expanding < expanded - 1)
+        assertTrue("Effect width must interpolate: $compact -> $expanding -> $expanded",
+            expanding > minOf(compact, expanded) + 1 && expanding < maxOf(compact, expanded) - 1)
         compose.runOnIdle { notices.value = null }
         compose.mainClock.advanceTimeBy(130)
         val shrinking = width()
-        assertTrue("Return must interpolate", shrinking > compact + 1 && shrinking < expanded - 1)
+        assertTrue("Return must interpolate", shrinking > minOf(compact, expanded) + 1 && shrinking < maxOf(compact, expanded) - 1)
         compose.runOnIdle { notices.value = SoundEffectNotice(2, "全景环绕", SoundEffectNoticeTier.VIP) }
         compose.mainClock.advanceTimeBy(80)
         compose.runOnIdle { notices.value = SoundEffectNotice(3, "AI 调音大师", SoundEffectNoticeTier.SVIP) }
@@ -217,6 +222,11 @@ class SoundEffectIslandNoticeTest {
                 compose.onNodeWithText(name).assertIsDisplayed()
                 if (index < 2) compose.onNodeWithTag("sound_effect_island_wordmark").assertIsDisplayed()
                 else compose.onNodeWithTag("sound_effect_island_title").assertIsDisplayed()
+                val title = compose.onNodeWithTag(if (index < 2) "sound_effect_island_wordmark" else "sound_effect_island_title")
+                    .getUnclippedBoundsInRoot()
+                val pill = compose.onNodeWithTag("sound_effect_island_notice").getUnclippedBoundsInRoot()
+                assertEquals("Empty status must leave only the 7 dp trailing inset at font=$font scale=$scale",
+                    7f, (pill.right - title.right).value, 1f)
                 val context = ApplicationProvider.getApplicationContext<android.content.Context>()
                 File(context.getExternalFilesDir(null), "compact-effect-$font-$index.png").outputStream().use {
                     compose.onNodeWithTag("desktop_island_transition").captureToImage().asAndroidBitmap()
