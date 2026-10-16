@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.data.settings.*
@@ -68,11 +69,15 @@ class RefreshRateSettingsTest {
             AppRefreshRateRequest(config.refreshRate)
             LeiTheme(config) { Box(Modifier.fillMaxSize().musicRefreshRate(config.refreshRate)) { AppearanceScreen(vm, {}, {}) } }
         }
-        for (rate in listOf(RefreshRatePreference.HZ120, RefreshRatePreference.HZ90, RefreshRatePreference.HZ60, RefreshRatePreference.SYSTEM)) {
-            compose.onNodeWithTag("appearance_screen").performScrollToNode(hasTestTag("refresh_rate_${rate.hz}"))
-            compose.onNodeWithTag("refresh_rate_${rate.hz}").performClick()
+        val supported = compose.activity.display!!.let { display -> display.supportedModes
+            .filter { it.physicalWidth == display.mode.physicalWidth && it.physicalHeight == display.mode.physicalHeight }
+            .map { kotlin.math.round(it.refreshRate).toInt() } }
+        val options = refreshRateSliderOptions(supported)
+        for (rate in options.asReversed()) {
+            compose.onNodeWithTag("appearance_screen").performScrollToNode(hasTestTag("refresh_rate_slider"))
+            compose.onNodeWithTag("refresh_rate_slider").performSemanticsAction(SemanticsActions.SetProgress) { it(options.indexOf(rate).toFloat()) }
             compose.waitUntil(5000) { container.settings.state.value.refreshRate == rate }
-            compose.onNodeWithTag("refresh_rate_${rate.hz}").assertIsSelected()
+            compose.onNodeWithTag("refresh_rate_selection").assertTextEquals(rate.label)
             assertEquals(rate, runBlocking { container.settings.snapshot() }.refreshRate)
             assertRequest(rate)
             if (rate == RefreshRatePreference.HZ120) {
@@ -87,6 +92,26 @@ class RefreshRateSettingsTest {
             }
         }
         compose.onNodeWithTag("refresh_rate_actual").assertTextContains("屏幕支持", substring = true)
+    }
+
+    @Test fun sliderCanSelect144And165AndReturnToSystemWithoutLosingOtherPreferences() {
+        val supported = listOf(60, 90, 120, 144, 165)
+        val options = refreshRateSliderOptions(supported)
+        compose.setContent {
+            val config by container.settings.state.collectAsState()
+            LeiTheme(config) { RefreshRateSlider(config.refreshRate, supported) { rate ->
+                kotlinx.coroutines.runBlocking { container.settings.edit { it.copy(refreshRate = rate) } }
+            } }
+        }
+        for (hz in listOf(144, 165, 0)) {
+            val rate = RefreshRatePreference(hz)
+            compose.onNodeWithTag("refresh_rate_slider").performSemanticsAction(SemanticsActions.SetProgress) {
+                it(options.indexOf(rate).toFloat())
+            }
+            compose.waitUntil(5000) { container.settings.state.value.refreshRate == rate }
+            compose.onNodeWithTag("refresh_rate_selection").assertTextEquals(rate.label)
+            assertEquals(rate, runBlocking { container.settings.snapshot() }.refreshRate)
+        }
     }
 
     @Test fun backgroundRestoresPolicyAndResumeKeepsSavedSelection() {
