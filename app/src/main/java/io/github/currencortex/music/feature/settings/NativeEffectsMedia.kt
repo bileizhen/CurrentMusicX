@@ -65,28 +65,38 @@ internal object NativeEffectsAssets {
     val state by lifecycle.currentStateFlow.collectAsStateWithLifecycle()
     val videoUri = if (video.contains("://")) NativeEffectsAssets.image(context, video) else NativeEffectsAssets.local(video)
     val posterUri = if (poster.contains("://")) NativeEffectsAssets.image(context, poster) else NativeEffectsAssets.local(poster)
-    var rendered by remember(video) { mutableStateOf(false) }
-    Box(modifier) {
-        if (active && state.isAtLeast(Lifecycle.State.RESUMED)) {
-            val player = remember(video) {
-                ExoPlayer.Builder(context).build().apply {
-                    volume = 0f
-                    setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, false)
-                    trackSelectionParameters = trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build()
-                    repeatMode = Player.REPEAT_MODE_ONE
-                    addListener(object : Player.Listener { override fun onRenderedFirstFrame() { rendered = true } })
-                    setMediaItem(MediaItem.fromUri(videoUri))
-                    prepare(); playWhenReady = true
-                }
+    var rendered by remember { mutableStateOf(false) }
+    var player by remember { mutableStateOf<ExoPlayer?>(null) }
+    val visible = active && state.isAtLeast(Lifecycle.State.RESUMED)
+    // A use/cancel click changes the media item, not the decoder's lifetime.
+    // release() can synchronously wait for the playback thread on the UI thread.
+    LaunchedEffect(visible, videoUri) {
+        if (visible) {
+            val current = player ?: ExoPlayer.Builder(context).build().apply {
+                volume = 0f
+                setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, false)
+                trackSelectionParameters = trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build()
+                repeatMode = Player.REPEAT_MODE_ONE
+                addListener(object : Player.Listener { override fun onRenderedFirstFrame() { rendered = true } })
+            }.also { player = it }
+            if (current.currentMediaItem?.localConfiguration?.uri?.toString() != videoUri) {
+                rendered = false
+                current.setMediaItem(MediaItem.fromUri(videoUri))
+                current.prepare()
             }
-            DisposableEffect(player) { onDispose { player.release(); rendered = false } }
+            current.playWhenReady = true
+        } else player?.pause()
+    }
+    DisposableEffect(Unit) { onDispose { player?.release() } }
+    Box(modifier) {
+        if (visible && player != null) {
             AndroidView(modifier = Modifier.matchParentSize(), factory = {
                 (LayoutInflater.from(it).inflate(R.layout.effects_card_video, null, false) as PlayerView).apply {
                     this.player = player
                 }
             }, update = { it.player = player }, onRelease = { it.player = null })
         }
-        if (!active || !rendered || !state.isAtLeast(Lifecycle.State.RESUMED))
+        if (!visible || !rendered)
             EffectsArtwork(posterUri, Modifier.matchParentSize())
     }
 }
