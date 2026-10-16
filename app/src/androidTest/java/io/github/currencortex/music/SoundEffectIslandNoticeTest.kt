@@ -7,6 +7,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.test.core.app.ApplicationProvider
 import androidx.lifecycle.ViewModelStore
@@ -74,17 +77,21 @@ class SoundEffectIslandNoticeTest {
     @Test fun svipLoadingThenReadyAndRapidFailureShowOnlyTheCurrentIntent() {
         var notice by mutableStateOf(SoundEffectNotice(1, "原声黑胶", SoundEffectNoticeTier.SVIP))
         compose.setContent { SoundEffectIslandPill(notice) }
-        compose.onNodeWithText("SVIP").assertIsDisplayed()
+        compose.onNodeWithText("SVIP").assertDoesNotExist()
         compose.onNodeWithContentDescription("SVIP 唱片").assertIsDisplayed()
         compose.onNodeWithText("正在启用").assertIsDisplayed()
         compose.runOnIdle { notice = notice.copy(phase = SoundEffectNoticePhase.READY, message = "已开启，播放后生效") }
-        compose.onNodeWithText("已开启，播放后生效").assertIsDisplayed()
+        compose.onNodeWithText("已开启，播放后生效").assertDoesNotExist()
+        compose.onNodeWithTag("sound_effect_island_notice").assert(SemanticsMatcher.expectValue(
+            SemanticsProperties.StateDescription, "已启用：已开启，播放后生效"))
         compose.onNodeWithContentDescription("SVIP 唱片").assertIsDisplayed()
         compose.runOnIdle { notice = SoundEffectNotice(2, "另一音效", SoundEffectNoticeTier.VIP,
             SoundEffectNoticePhase.FAILED, "当前账号没有权益") }
         compose.onNodeWithText("原声黑胶").assertDoesNotExist()
         compose.onNodeWithText("未启用").assertIsDisplayed()
-        compose.onNodeWithText("当前账号没有权益").assertIsDisplayed()
+        compose.onNodeWithText("当前账号没有权益").assertDoesNotExist()
+        compose.onNodeWithTag("sound_effect_island_notice").assert(SemanticsMatcher.expectValue(
+            SemanticsProperties.StateDescription, "未启用：当前账号没有权益"))
         compose.onNodeWithContentDescription("VIP 唱片").assertIsDisplayed()
         compose.onNodeWithContentDescription("SVIP 唱片").assertDoesNotExist()
     }
@@ -104,7 +111,7 @@ class SoundEffectIslandNoticeTest {
         compose.runOnIdle { notices.value = SoundEffectNotice(1, "原声黑胶", SoundEffectNoticeTier.SVIP,
             SoundEffectNoticePhase.READY, "已开启，播放后生效") }
         compose.mainClock.advanceTimeBy(1300)
-        compose.onNodeWithText("SVIP").assertIsDisplayed()
+        compose.onNodeWithText("SVIP").assertDoesNotExist()
         compose.onNodeWithTag("desktop_island_fps").assertIsNotDisplayed()
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         File(context.getExternalFilesDir(null), "effect-island-svip.png").outputStream().use {
@@ -152,6 +159,47 @@ class SoundEffectIslandNoticeTest {
         compose.mainClock.advanceTimeBy(900)
         assertEquals(compact, width(), 2f)
         compose.onNodeWithTag("desktop_island_fps").assertIsDisplayed()
+    }
+
+    @Test fun compactNoticesMatchFpsHeightAtBothFontSizesAndUseOriginalMasterWordmarks() {
+        val notices = MutableStateFlow<SoundEffectNotice?>(null)
+        val options = MutableStateFlow(DesktopLyricsSettings(locked = true))
+        var fontScale by mutableFloatStateOf(1f)
+        val player = MutableStateFlow(PlayerState(song = Song(42, "Test")))
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale)) {
+                Box(Modifier.width(340.dp)) {
+                    DesktopLyricsSurface(MutableStateFlow(PlaybackLyricsState()), player, options, {}, {}, {},
+                        defaultFpsMode = true, effectNotices = notices)
+                }
+            }
+        }
+        compose.mainClock.autoAdvance = false
+        fun height(): Float {
+            val b = compose.onNodeWithTag("desktop_island_transition").getUnclippedBoundsInRoot()
+            return b.bottom.value - b.top.value
+        }
+        for ((font, scale) in listOf(14f to 1f, 24f to 1.5f)) {
+            compose.runOnIdle { notices.value = null; fontScale = scale; options.value = options.value.copy(islandFontSize = font) }
+            compose.mainClock.advanceTimeBy(2600)
+            val fpsHeight = height()
+            for ((index, name) in listOf("AI 调音大师", "AI 情绪调音师", "全景环绕").withIndex()) {
+                compose.runOnIdle { notices.value = SoundEffectNotice(index.toLong(), name,
+                    if (index == 2) SoundEffectNoticeTier.VIP else SoundEffectNoticeTier.SVIP) }
+                compose.mainClock.advanceTimeBy(1400)
+                assertEquals("$name at font=$font scale=$scale must match FPS height", fpsHeight, height(), 1f)
+                compose.onNodeWithText(name).assertIsDisplayed()
+                if (index < 2) compose.onNodeWithTag("sound_effect_island_wordmark").assertIsDisplayed()
+                else compose.onNodeWithTag("sound_effect_island_title").assertIsDisplayed()
+                val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+                File(context.getExternalFilesDir(null), "compact-effect-$font-$index.png").outputStream().use {
+                    compose.onNodeWithTag("desktop_island_transition").captureToImage().asAndroidBitmap()
+                        .compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+            }
+        }
+        compose.mainClock.autoAdvance = true
     }
 
     @Test fun realViewModelFailureReachesInAppFallbackWithoutEnablingDesktopOrChangingQueue() {

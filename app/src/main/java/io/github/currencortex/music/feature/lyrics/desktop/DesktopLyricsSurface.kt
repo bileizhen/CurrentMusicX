@@ -123,7 +123,7 @@ import kotlinx.coroutines.flow.StateFlow
             .graphicsLayer {
                 alpha = entrance.value; scaleX = .94f + .06f * entrance.value; scaleY = scaleX
                 transformOrigin = TransformOrigin(.5f, 0f)
-            }) {
+            }, effectHeight = rememberIslandFpsHeight(font), font = font) {
         DesktopIslandFrame(player.song, Modifier.islandAnimatedWidth(width).fillMaxWidth()
             .pointerInput(options.locked) { detectTapGestures(onTap = { toggle() }, onLongPress = { if (!options.locked) revealControls() }) }
             .pointerInput(Unit) {
