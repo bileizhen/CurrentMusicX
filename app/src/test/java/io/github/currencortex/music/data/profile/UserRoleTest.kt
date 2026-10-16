@@ -8,6 +8,22 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UserRoleTest {
+    @Test fun customTitlesArePreservedSeparatelyFromPermissionFlags() {
+        val own = ApiJson.decodeFromString<UserDto>("""{"id":7,"title":"CurrentMusicX开发者","is_admin":0}""")
+        assertEquals("CurrentMusicX开发者", own.title)
+        assertFalse(own.isAdmin || own.isSuper)
+        val square = ApiJson.decodeFromString<SquareUser>("""{"id":7,"title":"后端工程师","is_super":1}""")
+        assertEquals("后端工程师", square.profileUser().title)
+        assertEquals(UserRole.SUPER_ADMIN, square.profileUser().role)
+        val profile = ApiJson.decodeFromString<ProfileUser>("""{"id":7,"title":"创作者"}""")
+        assertEquals("创作者", profile.title)
+        for (field in listOf("", "\"title\":null", "\"title\":\"\"")) {
+            assertEquals("", ApiJson.decodeFromString<UserDto>("{$field}").title)
+            assertEquals("", ApiJson.decodeFromString<ProfileUser>("{$field}").title)
+        }
+        assertEquals("", ApiJson.decodeFromString<SavedAccount>(
+            """{"key":"legacy","id":7,"server":"https://example.com/cm/"}""").account().title)
+    }
     @Test fun liveSquareIntegerFlagsAndProfileBooleanFlagsShareRolePriority() {
         val square = ApiJson.decodeFromString<SquareDto>("""{"users":[
             {"id":5,"is_admin":1,"is_super":1},

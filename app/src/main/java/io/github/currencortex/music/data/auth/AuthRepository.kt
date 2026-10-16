@@ -14,12 +14,13 @@ import kotlinx.coroutines.sync.withLock
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable data class UserDto(val id: Long = 0, val username: String = "", val nickname: String = "", val avatar: String = "",
     @JsonNames("is_admin") @Serializable(with = ApiBooleanSerializer::class) val isAdmin: Boolean = false,
-    @JsonNames("is_super") @Serializable(with = ApiBooleanSerializer::class) val isSuper: Boolean = false)
+    @JsonNames("is_super") @Serializable(with = ApiBooleanSerializer::class) val isSuper: Boolean = false,
+    val title: String = "")
 @Serializable class LoginDto(val token: String, val user: UserDto)
 class RegistrationInput(val username: String, val password: String, val nickname: String,
     val contact: String, val code: String, val phone: Boolean)
 data class Account(val id: Long, val nickname: String, val username: String = "", val avatar: String = "",
-    val isAdmin: Boolean = false, val isSuper: Boolean = false)
+    val isAdmin: Boolean = false, val isSuper: Boolean = false, val title: String = "")
 data class AccountState(val account: Account? = null, val loading: Boolean = false, val offline: Boolean = false, val error: String? = null)
 class AccountRepository(private val store: TokenStore, private val scope: CoroutineScope, private val vault: AccountVault? = null) {
     private val storageMutex = Mutex()
@@ -39,7 +40,7 @@ class AccountRepository(private val store: TokenStore, private val scope: Corout
             val changed = token != this.token || state.value.account?.id != user.id
             vault?.remember(server, user, token)
             withContext(Dispatchers.IO) { store.write(token); this@AccountRepository.token = token }
-            state.value = AccountState(Account(user.id, user.nickname.ifBlank { user.username }, user.username, user.avatar, user.isAdmin, user.isSuper))
+            state.value = AccountState(Account(user.id, user.nickname.ifBlank { user.username }, user.username, user.avatar, user.isAdmin, user.isSuper, user.title))
             if (changed) sessionRevision.update { it + 1 }
         }
     }
