@@ -48,6 +48,29 @@ class NeteaseGatewayTest {
         val bytes = params.chunked(2).map { it.toInt(16).toByte() }.toByteArray()
         return ApiJson.parseToJsonElement(NeteaseCrypto.decryptResponse(bytes).toString(Charsets.UTF_8).split("-36cd479b6b5-")[1]).jsonObject
     }
+    @Test fun accountMembershipUsesCurrentNativeAccountAndAndroidProfileWithoutProxyCredentials() = runBlocking {
+        login()
+        enqueue("""{"code":200,"data":{"userId":42,"redVipLevel":6,"redplus":{"vipCode":300,"expireTime":9999999999999}}}""")
+        assertEquals("黑胶 SVIP · Lv.6", binding.membership().label)
+        val request = upstream.takeRequest()
+        assertEquals("/eapi/music-vip-membership/client/vip/info", request.path)
+        assertTrue(request.getHeader("Cookie")!!.contains("os=android"))
+        assertNull(request.getHeader("Authorization"))
+        assertEquals(42L, payload(request)["userId"]!!.jsonPrimitive.long)
+        assertEquals(0, current.requestCount)
+        enqueue("""{"code":200,"data":{"userId":99}}""")
+        assertEquals(ErrorKind.Parse, (appResult { binding.membership() } as AppResult.Failure).kind)
+    }
+    @Test fun membershipCannotBeReadAnonymouslyOrPublishedAfterLogout() = runBlocking {
+        assertTrue(appResult { binding.membership() } is AppResult.Failure)
+        assertEquals(0, upstream.requestCount)
+        login()
+        upstream.enqueue(response("""{"code":200,"data":{"userId":42}}""").setBodyDelay(300, TimeUnit.MILLISECONDS))
+        val pending = async { appResult { binding.membership() } }
+        withContext(Dispatchers.IO) { assertNotNull(upstream.takeRequest(2, TimeUnit.SECONDS)) }
+        sessions.clear()
+        assertTrue(pending.await() is AppResult.Failure)
+    }
     @Test fun searchBypassesCurrentMusicAndPreservesQueryAndArtistMetadata() = runBlocking {
         login(); enqueue("""{"code":200,"result":{"songCount":10,"songs":[${rawSong(11)}]}}""")
         val result = api.decode<SearchDto>(call("ncm/search", mapOf("keywords" to "Die For You", "offset" to "0")))

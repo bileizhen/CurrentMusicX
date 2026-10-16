@@ -12,10 +12,16 @@ import kotlinx.coroutines.flow.*
 data class BindingUiState(val loading: Boolean = false, val binding: BindingState? = null, val error: String? = null,
     val qrUrl: String? = null, val qrMessage: String = "", val codeUntil: Long = 0,
     val codeFailed: Boolean = false, val phoneBoundRevision: Int = 0)
+data class BindingMembershipState(val ownerId: Long = 0, val loading: Boolean = false,
+    val value: NeteaseMembership? = null, val error: String? = null)
 class BindingViewModel(val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(BindingUiState())
     val busy = MutableStateFlow(false)
     val message = MutableStateFlow<String?>(null)
+    val membership = MutableStateFlow(BindingMembershipState())
+    private var membershipTask: Job? = null
+    private var membershipGeneration = 0L
+    private var membershipOwner: io.github.currencortex.music.core.netease.NeteaseAccountState? = null
     private var task: Job? = null
     private var actionTask: Job? = null
     private var qrKey: String? = null
@@ -24,6 +30,10 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
     private var qrTerminal = false
     private fun session() = RequestSession(container.accountRepository.server, container.accountRepository.token)
     init {
+        viewModelScope.launch {
+            container.neteaseSessions.ready.await()
+            container.neteaseSessions.state.map { it.revision }.distinctUntilChanged().collect { reloadMembership() }
+        }
         viewModelScope.launch {
             container.sessionRestored.await()
             combine(container.accountRepository.sessionRevision,
@@ -35,11 +45,33 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
         }
     }
     fun reload() {
+        reloadMembership()
         task?.cancel(); task = viewModelScope.launch {
             state.update { it.copy(loading = true, error = null) }
             when (val r = appResult { container.bindingRepository.status() }) {
                 is AppResult.Success -> state.update { it.copy(loading = false, binding = r.value) }
                 is AppResult.Failure -> state.update { it.copy(loading = false, error = r.kind.message) }
+            }
+        }
+    }
+    fun reloadMembership() {
+        val owner = container.neteaseSessions.state.value
+        val uid = owner.profile?.uid ?: 0
+        if (container.nativeNetease != null && owner.loggedIn && !owner.stale &&
+            membershipOwner == owner && membership.value.loading) return
+        val token = ++membershipGeneration
+        membershipTask?.cancel()
+        membershipOwner = owner
+        membership.value = BindingMembershipState()
+        if (container.nativeNetease == null || !owner.loggedIn || owner.stale || uid <= 0) return
+        membership.value = BindingMembershipState(uid, loading = true)
+        membershipTask = viewModelScope.launch {
+            val result = appResult { container.bindingRepository.membership() }
+            if (token != membershipGeneration || container.neteaseSessions.state.value != owner) return@launch
+            membership.value = when (result) {
+                is AppResult.Success -> if (result.value.userId == uid) BindingMembershipState(uid, value = result.value)
+                    else BindingMembershipState(uid, error = "会员信息暂不可用")
+                is AppResult.Failure -> BindingMembershipState(uid, error = "会员信息暂不可用")
             }
         }
     }

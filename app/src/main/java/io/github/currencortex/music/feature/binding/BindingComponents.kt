@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import io.github.currencortex.music.data.binding.BindingState
+import io.github.currencortex.music.data.binding.NeteaseMembershipTier
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.SimpleDateFormat
@@ -67,7 +68,7 @@ import java.util.Locale
 
 @Composable internal fun BindingAccountCard(binding: BindingState, busy: Boolean,
     onSync: () -> Unit, onLive: () -> Unit, onRefresh: () -> Unit, onRelogin: () -> Unit, onUnbind: () -> Unit,
-    mainLibrary: Boolean = false) {
+    mainLibrary: Boolean = false, membership: BindingMembershipState = BindingMembershipState(), onMembershipRetry: () -> Unit = {}) {
     Card(Modifier.fillMaxWidth().testTag("binding_account_card")) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -84,6 +85,28 @@ import java.util.Locale
                 Text(if (binding.stale) "需登录" else "已绑定", Modifier.clip(CircleShape)
                     .background(MiuixTheme.colorScheme.primary.copy(alpha = .08f)).padding(horizontal = 10.dp, vertical = 6.dp),
                     fontSize = 11.sp, color = MiuixTheme.colorScheme.primary)
+            }
+            if (!binding.stale && membership.ownerId == binding.profile?.uid) {
+                val member = membership.value
+                when {
+                    membership.loading -> Text("正在读取会员信息…", fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                    member != null -> {
+                        val tint = when (member.tier) {
+                            NeteaseMembershipTier.SVIP -> Color(0xFF9A7529)
+                            NeteaseMembershipTier.VIP -> Color(0xFFC34965)
+                            else -> MiuixTheme.colorScheme.onSurface.copy(alpha = .6f)
+                        }
+                        Text(member.label, Modifier.testTag("binding_membership").clip(RoundedCornerShape(8.dp))
+                            .background(tint.copy(alpha = .10f)).padding(horizontal = 10.dp, vertical = 5.dp),
+                            fontSize = 12.sp, fontWeight = FontWeight.Medium, color = tint)
+                    }
+                    membership.error != null -> Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(membership.error, Modifier.weight(1f), fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                        BindingAction("重试", onMembershipRetry, Modifier.testTag("binding_membership_retry"))
+                    }
+                }
             }
             if (binding.stale) BindingNotice("登录态已失效，请重新登录后继续使用音乐库。")
             else if (mainLibrary) Text("已直接连接网易云我喜欢与歌单", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
