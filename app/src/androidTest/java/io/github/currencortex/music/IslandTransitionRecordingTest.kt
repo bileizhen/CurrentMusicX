@@ -57,6 +57,15 @@ class IslandTransitionRecordingTest {
             }
             error("Missing active UI text: $label")
         }
+        if (context.packageName.endsWith(".verification")) kotlinx.coroutines.runBlocking {
+            val container = (context.applicationContext as CurrentMusicApplication).awaitContainer()
+            container.desktopLyrics.markRecommendationSeen()
+            if (InstrumentationRegistry.getArguments().getString("enableIsolatedIsland") == "true") {
+                check(android.provider.Settings.canDrawOverlays(context))
+                container.desktopLyrics.edit { it.copy(enabled = true, locked = true) }
+                container.playerController.connect()
+            }
+        }
         automation.executeShellCommand("am start -W -n ${context.packageName}/${MainActivity::class.java.name}").use {
             android.os.ParcelFileDescriptor.AutoCloseInputStream(it).use { stream -> stream.readBytes() }
         }
