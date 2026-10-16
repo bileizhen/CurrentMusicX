@@ -271,7 +271,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     else { dismiss(); menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false)) }
                 })
                 MusicDestinationRow("播放音质", summary = if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null)
-                if (onEqualizer != null) MusicDestinationRow("均衡器", onClick = { dismiss(); onEqualizer() },
+                if (onEqualizer != null) MusicDestinationRow("音效", onClick = { dismiss(); onEqualizer() },
                     modifier = Modifier.testTag("open_player_equalizer"))
                 MusicDestinationRow("播放模式", summary = queue.mode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL)
                 MusicDestinationRow("定时关闭", summary = sleepSummary(sleepState), modifier = Modifier.testTag("open_sleep_timer"),

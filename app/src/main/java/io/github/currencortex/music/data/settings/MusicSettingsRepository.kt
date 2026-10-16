@@ -9,7 +9,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 data class MusicSettings(val server: String = ServerDefaults.URL, val quality: AudioQuality = AudioQuality.AUTO,
-                         val warnHighSpec: Boolean = true, val restoreQueue: Boolean = true,
+                         val restoreQueue: Boolean = true,
                          val nickname: String = "", val accountId: Long = 0,
                          val preloadAudio: Boolean = true, val preloadMetered: Boolean = false,
                          val lyricsFontSize: Float = LyricsTypography.DEFAULT_SIZE,
@@ -65,7 +65,6 @@ object LyricsTypography {
 class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: CoroutineScope) {
     private val server = stringPreferencesKey("music.server")
     private val quality = stringPreferencesKey("music.quality")
-    private val warning = booleanPreferencesKey("music.warn")
     private val restore = booleanPreferencesKey("music.restore")
     private val nickname = stringPreferencesKey("account.nickname")
     private val account = longPreferencesKey("account.id")
@@ -93,7 +92,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val transition = stringPreferencesKey("music.transitionMode")
     private val crossfadeSeconds = intPreferencesKey("music.crossfadeSeconds")
     private fun decode(p: Preferences) = MusicSettings(p[server] ?: ServerDefaults.URL, AudioQuality.from(p[quality].orEmpty()),
-        p[warning] ?: true, p[restore] ?: true, p[nickname].orEmpty(), p[account] ?: 0,
+        p[restore] ?: true, p[nickname].orEmpty(), p[account] ?: 0,
         p[preload] ?: true, p[metered] ?: false, LyricsTypography.normalize(p[lyricsSize] ?: LyricsTypography.DEFAULT_SIZE),
         LyricsWeight.from(p[lyricsWeight]), p[lyricsOffset] ?: 0,
         LyricsDisplayOptions(p[centered] ?: false, (p[fontWeight] ?: 500).coerceIn(400, 900),
@@ -111,7 +110,6 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     }
     suspend fun setServer(value: String) { val normalized = ServerUrl.normalize(value); store.edit { it[server] = normalized } }
     suspend fun setQuality(value: AudioQuality) { store.edit { it[quality] = value.value } }
-    suspend fun setWarning(value: Boolean) { store.edit { it[warning] = value } }
     suspend fun setRestore(value: Boolean) { store.edit { it[restore] = value } }
     suspend fun setConcurrentPlayback(value: Boolean) { store.edit { it[concurrentPlayback] = value } }
     suspend fun setTransitionMode(value: MusicTransitionMode) { store.edit { it[transition] = value.name } }

@@ -207,8 +207,7 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                 val settings = container.musicSettings.state.value
                 if (container.audioCache.clearing.value) return@withTimeoutOrNull
                 val audio = container.audioSources.resolve(container.audioRequest(song, settings.quality))
-                if (!audio.source.highSpec || !settings.warnHighSpec)
-                    container.audioCache.preload(audio.key, audio.source)
+                container.audioCache.preload(audio.key, audio.source)
             }
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { container.logger.info("Player", "Selected audio preload unavailable; playback will use the normal load path") }

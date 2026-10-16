@@ -6,7 +6,6 @@ import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import io.github.currencortex.music.core.media.HighSpecWarning
 import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.core.media.PlaybackMode
 import io.github.currencortex.music.core.network.*
@@ -16,7 +15,7 @@ import kotlinx.coroutines.sync.withLock
 
 typealias LyricsUiState = io.github.currencortex.music.feature.lyrics.data.PlaybackLyricsState
 
-data class NavigationPlayback(val mode: PlayerMode, val error: String?, val warning: HighSpecWarning?)
+data class NavigationPlayback(val mode: PlayerMode, val error: String?)
 data class PlayerSongActions(val songId: Long? = null, val likeCount: Long? = null, val commentCount: Long? = null,
     val liked: Boolean? = null, val liking: Boolean = false, val error: String? = null)
 data class PlayerComments(val songId: Long? = null, val total: Long? = null, val hot: List<NeteaseComment> = emptyList(),
@@ -28,8 +27,8 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val state = player.state
     val queue = player.queue.state
     // The navigation host needs only low-frequency state, never the playback position.
-    val navigation = state.map { NavigationPlayback(it.mode, it.error, it.warning) }.distinctUntilChanged()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NavigationPlayback(state.value.mode, state.value.error, state.value.warning))
+    val navigation = state.map { NavigationPlayback(it.mode, it.error) }.distinctUntilChanged()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NavigationPlayback(state.value.mode, state.value.error))
     val currentSong = queue.map { it.current }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), queue.value.current)
     val settings = container.musicSettings.state
@@ -183,7 +182,6 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
         container.musicSettings.setQuality(value)
         player.qualityChanged()
     }
-    fun suppressWarning() = viewModelScope.launch { container.musicSettings.setWarning(false); player.acceptHighSpec() }
     fun lyricsFontSize(value: Float) = viewModelScope.launch { container.musicSettings.setLyricsFontSize(value) }
     fun lyricsWeight(value: io.github.currencortex.music.data.settings.LyricsWeight) = viewModelScope.launch { container.musicSettings.setLyricsWeight(value) }
     fun lyricsDisplay(transform: (io.github.currencortex.music.data.settings.LyricsDisplayOptions) -> io.github.currencortex.music.data.settings.LyricsDisplayOptions) =
