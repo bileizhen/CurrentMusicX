@@ -69,6 +69,20 @@ class NeteaseSoundEffectsRepositoryTest {
         assertEquals("pc", payload(request)["header"]!!.jsonObject["os"]!!.jsonPrimitive.content)
     }
 
+    @Test fun catalogUsesTheMaterialHashAndDoesNotFallBackAfterAnInvalidMaterialList() = runBlocking {
+        enqueue("""{"code":200,"data":[${newOfficial(3595400, 4)},
+            {"id":9,"name":"invalid material","type":4,"soundType":1,
+             "link":"https://d1.music.126.net/parent.ncae","md5":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+             "soundMaterialList":[{"type":1,"link":"https://evil.invalid/file.ncae","md5":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}]}]}""")
+        val rows = repository.catalog()
+        assertEquals("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb", rows[0].presetMd5)
+        assertTrue(rows[0].legacyMemberOriginal)
+        assertFalse(rows[0].legacyVipOriginal)
+        assertEquals(4, rows[0].memberType)
+        assertFalse(rows[1].compatibleOriginalResource)
+        assertFalse(rows[1].legacyMemberOriginal)
+    }
+
     @Test fun androidModelClientProfileIsExplicitAndPreservesSessionAuthentication() = runBlocking {
         val url = server.url("/").toString()
         val transport = NeteaseTransport(sessions, NeteaseEndpoints(url, url, url))
@@ -418,6 +432,27 @@ class NeteaseSoundEffectsRepositoryTest {
         assertEquals(ErrorKind.Forbidden, (runCatching { repo.downloadPreset(effect) }.exceptionOrNull() as ApiException).kind)
         assertEquals(1, cdnCalls)
         assertEquals(2, server.requestCount)
+    }
+
+    @Test fun svipPresetRequiresActiveMatchingRedplusAndCannotUseOnlyBlackVip() = runBlocking {
+        sessions.login(mapOf("MUSIC_U" to "test-user-cookie"), BoundProfile(42), sessions.snapshot())
+        val expires = System.currentTimeMillis() + 300_000
+        var downloads = 0
+        val bytes = "original vinyl preset".toByteArray()
+        val repo = downloader({ bytes.toResponseBody() }, beforeResponse = { downloads++ })
+        val effect = material(bytes).copy(memberType = 4)
+        for ((code, expiry) in listOf(300 to 1L, 100 to expires, 0 to expires)) {
+            enqueue("""{"code":200,"data":{"userId":42,"associator":{"vipCode":100,"expireTime":$expires},
+                "redplus":{"vipCode":$code,"expireTime":$expiry}}}""")
+            assertEquals(ErrorKind.Forbidden, (runCatching { repo.downloadPreset(effect) }.exceptionOrNull() as ApiException).kind)
+            assertEquals(0, downloads)
+        }
+        enqueue("""{"code":200,"data":{"userId":42,"redplus":{"vipCode":300,"expireTime":$expires}}}""")
+        assertArrayEquals(bytes, repo.downloadPreset(effect))
+        assertEquals(1, downloads)
+        enqueue("""{"code":200,"data":{"userId":43,"redplus":{"vipCode":300,"expireTime":$expires}}}""")
+        assertEquals(ErrorKind.Parse, (runCatching { repo.downloadPreset(effect) }.exceptionOrNull() as ApiException).kind)
+        assertEquals(1, downloads)
     }
 
     @Test fun unknownStrategyCannotDownloadEvenWithRealActiveVip() = runBlocking {

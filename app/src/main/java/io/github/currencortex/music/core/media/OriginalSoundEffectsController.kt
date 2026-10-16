@@ -146,43 +146,44 @@ class OriginalSoundEffectsController internal constructor(
                 accountReady.await()
                 val owner = requireNotNull(currentAccount)
                 if (!state.value.available) throw UnsupportedOperationException(state.value.unavailableReason)
-                val effect = candidate ?: catalog().firstOrNull { it.id == id } ?: resolveFromServer(id)
+                val effect = candidate ?: resolveFromServer(id) ?: catalog().firstOrNull { it.id == id }
                     ?: throw UnsupportedOperationException("此音效已从网易云目录移除，未恢复旧预设")
                 if (token != generation || owner != currentAccount) return@launch
                 if (effect.id != id) throw UnsupportedOperationException("网易云返回的音效 ID 与所选项目不一致")
                 originalEffectUnavailableReason(effect, state.value)?.let { throw UnsupportedOperationException(it) }
-                val permission = if (effect.legacyVipOriginal) {
+                val permission = if (effect.legacyMemberOriginal) {
                     mutableState.value = state.value.copy(permissionPending = true)
                     val uid = owner.ownerKey.removePrefix("netease:").toLongOrNull()
                         ?: throw OriginalEffectPermissionException("请先在“我的 → 网易云账号”登录，再核验黑胶会员权益")
                     val rights = entitlement()
                     if (token != generation || owner != currentAccount) return@launch
-                    if (rights.userId != uid || !rights.smartAllowed || rights.expiresAt <= now())
-                        throw OriginalEffectPermissionException("当前账号没有有效的网易云黑胶会员权益，未启用此音效")
-                    rights
+                    val deadline = rights.expiryFor(effect.memberType)
+                    if (rights.userId != uid || deadline <= now())
+                        throw OriginalEffectPermissionException("当前账号没有有效的网易云${if (effect.memberType == 4) "SVIP" else "黑胶会员"}权益，未启用此音效")
+                    deadline
                 } else null
                 mutableState.value = state.value.copy(permissionPending = false)
                 val prepared = prepare(effect)
                 require(prepared.id == effect.id) { "音效资源与所选项目不一致" }
                 if (token != generation || owner != currentAccount) return@launch
-                if (permission != null && permission.expiresAt <= now())
+                if (permission != null && permission <= now())
                     throw OriginalEffectPermissionException("黑胶会员权益已到期，未启用此音效")
                 beforeSelection()
                 if (token != generation || owner != currentAccount) return@launch
-                if (permission != null && permission.expiresAt <= now())
+                if (permission != null && permission <= now())
                     throw OriginalEffectPermissionException("黑胶会员权益已到期，未启用此音效")
                 val previousChoice = selection.value?.let { SavedOriginalSoundEffect(it.id, it.name, owner.ownerKey) }
                 persist(SavedOriginalSoundEffect(effect.id, effect.name, owner.ownerKey), token)
                 if (token != generation || owner != currentAccount) return@launch
-                if (permission != null && permission.expiresAt <= now()) {
+                if (permission != null && permission <= now()) {
                     persist(previousChoice, token)
                     throw OriginalEffectPermissionException("黑胶会员权益已到期，未启用此音效")
                 }
                 mutableSelection.value = prepared
                 mutableState.value = state.value.copy(loading = false, selectedId = effect.id,
                     selectedName = effect.name, requestedName = effect.name, restoring = false, processing = false, error = null,
-                    permissionPending = false, permissionExpiresAt = permission?.expiresAt)
-                watchExpiry(prepared, permission?.expiresAt)
+                    permissionPending = false, permissionExpiresAt = permission)
+                watchExpiry(prepared, permission)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (failure: OriginalEffectPermissionException) {
                 permissionFailed(token, restoring, failure.message.orEmpty())
@@ -282,7 +283,7 @@ class OriginalSoundEffectsController internal constructor(
 
 internal fun originalEffectUnavailableReason(effect: NeteaseSoundEffect, state: OriginalSoundEffectsState): String? = when {
     !effect.legacyOriginalStrategy -> "此音效使用尚未接入的网易云授权策略，需在网易云客户端使用"
-    effect.memberType != 1 && effect.memberType != 3 -> "此音效的会员授权类型尚未接入，需在网易云客户端使用"
+    effect.memberType !in setOf(1, 3, 4) -> "此音效的会员授权类型尚未接入，需在网易云客户端使用"
     effect.soundType != 1 -> "此类音效尚未接入本机播放链"
     !effect.compatibleOriginalResource -> "网易云未提供可验证的兼容预设资源"
     !state.available -> state.unavailableReason ?: "原版音效引擎未载入"

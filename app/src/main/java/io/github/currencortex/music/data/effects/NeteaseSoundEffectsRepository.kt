@@ -31,6 +31,7 @@ data class NeteaseSoundEffect(val id: Long, val name: String, val description: S
     val legacyOriginalStrategy: Boolean get() = strategyCode.isBlank() && !hasVipAuthStrategy
     val publicOriginal: Boolean get() = memberType == 1 && legacyOriginalStrategy && compatibleOriginalResource
     val legacyVipOriginal: Boolean get() = memberType == 3 && legacyOriginalStrategy && compatibleOriginalResource
+    val legacyMemberOriginal: Boolean get() = memberType in 3..4 && legacyOriginalStrategy && compatibleOriginalResource
 }
 
 /** Song descriptors supplied by NetEase, not a NetEase DSP preset or EQ curve. */
@@ -40,7 +41,13 @@ data class NeteaseSongAnalysis(val songId: Long, val emotions: List<String> = em
 
 /** Server-verified current account rights; song classification is not a membership proof. */
 data class NeteaseEffectEntitlement(val userId: Long = 0, val smartAllowed: Boolean = false,
-    val expiresAt: Long = 0)
+    val expiresAt: Long = 0, val svipAllowed: Boolean = false, val svipExpiresAt: Long = 0) {
+    fun expiryFor(memberType: Int): Long = when (memberType) {
+        3 -> if (smartAllowed) expiresAt else 0
+        4 -> if (svipAllowed) svipExpiresAt else 0
+        else -> 0
+    }
+}
 
 /** Direct read-only requests. Original presets are downloaded only after explicit selection. */
 class NeteaseSoundEffectsRepository(private val transport: NeteaseTransport,
@@ -72,11 +79,14 @@ class NeteaseSoundEffectsRepository(private val transport: NeteaseTransport,
             val id = row.long("id") ?: return@mapNotNull null
             val name = row.text("name").trim()
             if (id <= 0 || name.isBlank()) return@mapNotNull null
-            NeteaseSoundEffect(id, name, row.text("subTitle").ifBlank { row.text("playerFloatLayerDesc") },
+            // Android/catalog DTOs carry a logical sound hash as well as the actual
+            // file hash. Never verify a selected material against its parent's hash.
+            parseOriginalSoundEffect(row) ?: NeteaseSoundEffect(id, name, row.text("subTitle").ifBlank { row.text("playerFloatLayerDesc") },
                 row.text("imgUrl").replace("http:", "https:"),
                 (row["type"] as? JsonPrimitive)?.intOrNull ?: 0,
                 (row["soundType"] as? JsonPrimitive)?.intOrNull ?: 1,
-                row.text("link").replace("http:", "https:"), row.text("md5"),
+                if (row["soundMaterialList"] != null && row["soundMaterialList"] != JsonNull) "" else row.text("link").replace("http:", "https:"),
+                if (row["soundMaterialList"] != null && row["soundMaterialList"] != JsonNull) "" else row.text("md5"),
                 when (val strategy = row["newVipStrategyCode"]) {
                     null, JsonNull -> ""
                     is JsonPrimitive -> strategy.contentOrNull?.trim().orEmpty()
@@ -113,16 +123,18 @@ class NeteaseSoundEffectsRepository(private val transport: NeteaseTransport,
     }
 
     suspend fun downloadPreset(effect: NeteaseSoundEffect): ByteArray = withContext(Dispatchers.IO) {
-        require(effect.publicOriginal || effect.legacyVipOriginal) { "Unsupported original effect authorization strategy" }
+        require(effect.publicOriginal || effect.legacyMemberOriginal) { "Unsupported original effect authorization strategy" }
         val owner = transport.sessions.snapshot()
-        val entitlement = if (effect.legacyVipOriginal) {
+        val entitlementDeadline = if (effect.legacyMemberOriginal) {
             val uid = owner.credential.profile?.uid ?: 0
             if (uid <= 0 || owner.credential.stale || owner.credential.cookies["MUSIC_U"].isNullOrBlank())
                 throw ApiException(ErrorKind.NeteaseBindingRequired)
-            originalPresetEntitlement().also {
+            originalPresetEntitlement().let {
                 transport.sessions.check(owner)
-                if (it.userId != uid || !it.smartAllowed || it.expiresAt <= System.currentTimeMillis())
+                val deadline = it.expiryFor(effect.memberType)
+                if (it.userId != uid || deadline <= System.currentTimeMillis())
                     throw ApiException(ErrorKind.Forbidden)
+                deadline
             }
         } else null
         transport.sessions.check(owner)
@@ -158,7 +170,7 @@ class NeteaseSoundEffectsRepository(private val transport: NeteaseTransport,
             }
             currentCoroutineContext().ensureActive()
             transport.sessions.check(owner)
-            if (entitlement != null && entitlement.expiresAt <= System.currentTimeMillis())
+            if (entitlementDeadline != null && entitlementDeadline <= System.currentTimeMillis())
                 throw ApiException(ErrorKind.Forbidden)
             require(bytes.isNotEmpty() && MessageDigest.getInstance("MD5").digest(bytes)
                 .joinToString("") { value -> "%02x".format(value.toInt() and 255) }
@@ -167,7 +179,7 @@ class NeteaseSoundEffectsRepository(private val transport: NeteaseTransport,
         }
     }
 
-    /** An explicit legacy VIP effect selection rechecks rights rather than trusting a previous click. */
+    /** Explicit VIP/SVIP preset selection rechecks the corresponding product, not a previous click. */
     suspend fun originalPresetEntitlement(): NeteaseEffectEntitlement {
         mutex.withLock { cachedSmartEntitlement = null }
         return originalSmartEntitlement()
@@ -201,7 +213,8 @@ class NeteaseSoundEffectsRepository(private val transport: NeteaseTransport,
         if (uid <= 0 || owner.credential.stale || owner.credential.cookies["MUSIC_U"].isNullOrBlank())
             return@withLock NeteaseEffectEntitlement()
         cachedSmartEntitlement?.takeIf { it.expiresAt > now() &&
-            (!it.value.smartAllowed || it.value.expiresAt > System.currentTimeMillis()) }?.let {
+            (!it.value.smartAllowed || it.value.expiresAt > System.currentTimeMillis()) &&
+            (!it.value.svipAllowed || it.value.svipExpiresAt > System.currentTimeMillis()) }?.let {
             transport.sessions.check(owner)
             return@withLock it.value
         }
@@ -212,7 +225,8 @@ class NeteaseSoundEffectsRepository(private val transport: NeteaseTransport,
         val associator = data["associator"] as? JsonObject
         val expires = associator?.long("expireTime") ?: 0
         val allowed = associator?.long("vipCode") == 100L && expires > System.currentTimeMillis()
-        val result = NeteaseEffectEntitlement(uid, allowed, expires.coerceAtLeast(0))
+        val plus = originalSpeakerEntitlement(uid, data)
+        val result = NeteaseEffectEntitlement(uid, allowed, expires.coerceAtLeast(0), plus.canUse, plus.expiresAt)
         currentCoroutineContext().ensureActive()
         transport.sessions.check(owner)
         cachedSmartEntitlement = Cached(result, now() + EMPTY_CACHE_MS)
