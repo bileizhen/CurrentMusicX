@@ -25,6 +25,9 @@ import androidx.room.Room
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.SharingStarted
 import io.github.currencortex.music.core.netease.*
 
 class AppContainer(context: Context, storageNamespace: String = "", externalPlayer: ExternalPlayer? = null,
@@ -46,18 +49,48 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         io.github.currencortex.music.core.update.AndroidUpdateInstaller(context.applicationContext), appScope)
     val logger = AppLogger(context)
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
+    val soundEffectNotices = io.github.currencortex.music.core.media.SoundEffectNoticeCenter(playerScope)
     val desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsPreferences(settingsStore, appScope)
     val desktopLyricsStatus = kotlinx.coroutines.flow.MutableStateFlow(io.github.currencortex.music.feature.lyrics.desktop.DesktopWindowStatus())
     val desktopLyricsSettingsVisible = kotlinx.coroutines.flow.MutableStateFlow(false)
     val equalizerSettings = io.github.currencortex.music.data.settings.EqualizerSettingsRepository(settingsStore, appScope)
     val equalizer = PlaybackEqualizer { logger.warn("Equalizer", it) }
+    val soundEffectsSettings = io.github.currencortex.music.data.settings.SoundEffectsSettingsRepository(settingsStore, appScope)
+    val originalEffectsSettings = io.github.currencortex.music.data.settings.OriginalSoundEffectsSettingsRepository(settingsStore, appScope)
+    val originalSmartSettings = io.github.currencortex.music.data.settings.OriginalSmartSettingsRepository(settingsStore, appScope)
+    val originalMoodSettings = io.github.currencortex.music.data.settings.OriginalMoodSettingsRepository(settingsStore, appScope)
+    val originalAiMasterSettings = io.github.currencortex.music.data.settings.OriginalAiMasterSettingsRepository(settingsStore, appScope)
+    private val originalEngineContext = context.applicationContext
+    init { NeteaseNativeEngine.configure(originalEngineContext) }
+    suspend fun importOriginalApk(uri: android.net.Uri) = importOriginal { NeteaseNativeEngine.installFromApk(originalEngineContext, uri) }
+    suspend fun importInstalledOriginal() = importOriginal { NeteaseNativeEngine.installFromInstalled(originalEngineContext) }
+    private suspend fun importOriginal(action: suspend () -> Unit) {
+        try { action() } finally {
+            // APK extraction may finish after the settings page is dismissed.
+            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable + Dispatchers.Main.immediate) {
+                refreshOriginalEngine()
+            }
+        }
+    }
     val audioSettings = io.github.currencortex.music.data.settings.AudioSourceSettings(settingsStore,
         SecureTokenStore(context, ".leiz$storageSuffix"), appScope)
     val accountVault = EncryptedAccountVault.create(context, storageSuffix, settingsStore, appScope)
     val accountRepository = AccountRepository(SecureTokenStore(context, storageSuffix), appScope, accountVault)
     val neteaseSessions = NeteaseSessionStore(SecureTokenStore(context, ".netease$storageSuffix"), appScope)
-    val nativeNetease = if (useNativeNetease) NeteaseGateway(NeteaseTransport(neteaseSessions, neteaseEndpoints,
-        log = { logger.info("Network", it) })) else null
+    private val neteaseTransport = NeteaseTransport(neteaseSessions, neteaseEndpoints,
+        log = { logger.info("Network", it) })
+    val nativeNetease = if (useNativeNetease) NeteaseGateway(neteaseTransport) else null
+    val neteaseSoundEffects = io.github.currencortex.music.data.effects.NeteaseSoundEffectsRepository(neteaseTransport)
+    val originalMoodModels = io.github.currencortex.music.data.effects.OriginalMoodModelRepository(originalEngineContext, neteaseTransport)
+    val originalAiMasterRepository = io.github.currencortex.music.data.effects.OriginalAiMasterRepository(originalEngineContext, neteaseTransport)
+    val originalSpeakerRepository = io.github.currencortex.music.data.effects.OriginalSpeakerEffectsRepository(neteaseTransport)
+    internal val originalEffectsPageCache by lazy {
+        originalEngineContext.getSharedPreferences("original-effects-page$storageSuffix", Context.MODE_PRIVATE)
+    }
+    internal fun originalEffectsPageAudioManager(): android.media.AudioManager? =
+        originalEngineContext.getSystemService(android.media.AudioManager::class.java)
+    internal suspend fun requestOriginalEffectsPage(path: String, params: kotlinx.serialization.json.JsonObject) =
+        neteaseTransport.request(path, params, clientProfile = NeteaseClientProfile.ANDROID).body
     fun musicSession(authenticated: Boolean = true) = RequestSession(
         accountRepository.server.ifBlank { musicSettings.state.value.server },
         accountRepository.token.takeIf { authenticated }, nativeNetease?.sessions?.state?.value?.revision)
@@ -144,6 +177,75 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val playbackQueue = PlaybackQueue()
     val dockAudioLevel = DockAudioLevel()
     val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)
+    val smartTuning = SmartTuningController(equalizerSettings.state, soundEffectsSettings.state,
+        playerController.state.map { it.song }, neteaseSoundEffects::analyze, playerScope)
+    val originalSoundEffects: OriginalSoundEffectsController = OriginalSoundEffectsController(neteaseSoundEffects, neteaseSessions, originalEffectsSettings, playerScope) {
+        disableOriginalSmart()
+        disableOriginalMood()
+        disableOriginalAdditional()
+        soundEffectsSettings.setSmartEnabled(false)
+        smartTuning.clearManualPreview()
+    }
+    private val originalEngineStatus = kotlinx.coroutines.flow.MutableStateFlow(NeteaseNativeEngine.available())
+    val originalSmartEffects: OriginalSmartEffectsController = OriginalSmartEffectsController(neteaseSoundEffects, neteaseSessions,
+        originalSmartSettings, playerController.state.map { it.song }, originalEngineStatus, playerScope,
+        beforeEnable = {
+            originalSoundEffects.clear()
+            disableOriginalMood()
+            disableOriginalAdditional()
+            soundEffectsSettings.setSmartEnabled(false)
+            smartTuning.clearManualPreview()
+        }, definition = NeteaseNativeEngine::smartDefinition)
+    private fun disableOriginalSmart() = originalSmartEffects.disable()
+    private fun disableOriginalMood() = originalMoodEffects.disable()
+    private val originalMoodEngineStatus = kotlinx.coroutines.flow.MutableStateFlow(NeteaseEngineLibraries.moodAvailable())
+    val originalMoodEffects: OriginalMoodEffectsController = OriginalMoodEffectsController(originalMoodModels, neteaseSessions,
+        originalMoodSettings, playerController.state.map { it.song }, originalMoodEngineStatus, playerScope,
+        beforeEnable = {
+            originalSoundEffects.clear()
+            originalSmartEffects.disable()
+            disableOriginalAdditional()
+            soundEffectsSettings.setSmartEnabled(false)
+            smartTuning.clearManualPreview()
+        }, definition = NeteaseNativeEngine::moodDefinition)
+    private fun disableOriginalAdditional() {
+        originalAiMasterEffects.disable()
+        originalSpeakerEffects.disable()
+    }
+    val originalAiMasterEffects: OriginalAiMasterEffectsController = OriginalAiMasterEffectsController(
+        originalAiMasterRepository, neteaseSessions, originalAiMasterSettings, playerController.state.map { it.song },
+        originalEngineStatus, playerScope, beforeEnable = {
+            originalSoundEffects.clear()
+            originalSmartEffects.disable()
+            originalMoodEffects.disable()
+            originalSpeakerEffects.disable()
+            soundEffectsSettings.setSmartEnabled(false)
+            smartTuning.clearManualPreview()
+        }, definition = { originalEngineContext.assets.open("netease-ai-master-codec.js").use { it.readBytes() } })
+    val originalSpeakerEffects: OriginalSpeakerEffectsController = OriginalSpeakerEffectsController(
+        originalSpeakerRepository, neteaseSessions, OriginalSpeakerEnvironmentObserver(originalEngineContext).state,
+        originalEngineStatus, playerScope, beforeEnable = {
+            originalSoundEffects.clear()
+            originalSmartEffects.disable()
+            originalMoodEffects.disable()
+            originalAiMasterEffects.disable()
+            soundEffectsSettings.setSmartEnabled(false)
+            smartTuning.clearManualPreview()
+        })
+    val originalProcessingPreset = combine(originalSoundEffects.selection, originalSmartEffects.selection,
+        originalMoodEffects.selection, originalAiMasterEffects.selection, originalSpeakerEffects.selection) { single, smart, mood, master, speaker ->
+        speaker ?: master ?: mood ?: smart ?: single
+    }.stateIn(playerScope, SharingStarted.Eagerly, null)
+    internal fun createEffectsAudition(scope: CoroutineScope) = EffectsAuditionController(originalEngineContext, this, scope)
+    fun refreshOriginalEngine() {
+        originalEngineStatus.value = NeteaseNativeEngine.available()
+        originalMoodEngineStatus.value = originalEngineStatus.value && NeteaseEngineLibraries.moodAvailable()
+        originalSoundEffects.refreshAvailability()
+        originalSmartEffects.refresh()
+        originalMoodEffects.refresh()
+        originalAiMasterEffects.refresh()
+        originalSpeakerEffects.refresh()
+    }
     val playbackLyrics = io.github.currencortex.music.feature.lyrics.data.PlaybackLyrics(
         kotlinx.coroutines.flow.combine(playbackQueue.state.map { it.current }.distinctUntilChanged(),
             accountRepository.sessionRevision, neteaseSessions.state.map { it.revision }.distinctUntilChanged(),
@@ -241,6 +343,12 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         logger = logger,
     )
     override fun close() {
+        originalAiMasterEffects.close()
+        originalSpeakerEffects.close()
+        originalMoodEffects.close()
+        originalSmartEffects.close()
+        originalSoundEffects.close()
+        smartTuning.close()
         equalizer.close()
         roomSession.disconnect()
         appScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()

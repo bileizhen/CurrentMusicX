@@ -1,0 +1,119 @@
+{
+  "cmp": {
+    "on": false
+  },
+  "eq": {
+    "on": true,
+    "eqs": [
+      0,
+      0.2,
+      2,
+      0.4,
+      -0.4,
+      0,
+      0,
+      0.8,
+      1.2,
+      0
+    ]
+  },
+  "peq": {
+    "on": true,
+    "gain": 2.3,
+    "f": [
+      {
+        "band": 0,
+        "type": 5,
+        "gain": 0.2,
+        "freq": 4000,
+        "q": 1,
+        "on": true
+      },
+      {
+        "band": 1,
+        "type": 6,
+        "gain": 0.9,
+        "freq": 160,
+        "q": 2,
+        "on": true
+      },
+      {
+        "on": true,
+        "band": 2,
+        "type": 6,
+        "gain": -1.2,
+        "freq": 480,
+        "q": 1.5
+      },
+      {
+        "on": true,
+        "band": 3,
+        "type": 6,
+        "freq": 3200,
+        "q": 1.5,
+        "gain": 0.8
+      },
+      {
+        "on": false,
+        "band": 4
+      },
+      {
+        "on": false,
+        "band": 5
+      },
+      {
+        "on": false,
+        "band": 6
+      },
+      {
+        "on": false,
+        "band": 7
+      },
+      {
+        "on": false,
+        "band": 8
+      }
+    ]
+  },
+  "rvb": {
+    "on": false
+  },
+  "limiter": {
+    "on": false
+  },
+  "se": {
+    "on": true,
+    "presence": 1.5,
+    "stereoizer": 3.5,
+    "sshaper": false,
+    "ambience": 0
+  },
+  "bt": {
+    "on": false
+  },
+  "rotate": {
+    "on": false
+  },
+  "spspatial": {
+    "on": true,
+    "upmix": 1,
+    "lronoff": 0,
+    "lrangle": 5,
+    "otheronoff": 0,
+    "global": 0,
+    "center": 1,
+    "lfe": 0,
+    "fl": 0,
+    "fr": 0,
+    "left": 0,
+    "right": 0,
+    "rl": 0,
+    "rr": 0,
+    "ul": 0,
+    "ur": 0
+  },
+  "alc": {
+    "on": false
+  },
+  "effect_name": "竖屏-居中"
+}

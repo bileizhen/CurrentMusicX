@@ -1,0 +1,119 @@
+{
+  "cmp": {
+    "on": false
+  },
+  "eq": {
+    "on": false
+  },
+  "peq": {
+    "on": true,
+    "gain": -2.4,
+    "f": [
+      {
+        "on": true,
+        "freq": 120,
+        "band": 0,
+        "type": 4,
+        "q": 0.7,
+        "gain": -1.4
+      },
+      {
+        "on": true,
+        "freq": 400,
+        "band": 1,
+        "type": 6,
+        "q": 0.9,
+        "gain": 1.4
+      },
+      {
+        "on": true,
+        "freq": 2800,
+        "band": 2,
+        "type": 6,
+        "q": 1,
+        "gain": -1.8
+      },
+      {
+        "on": true,
+        "freq": 5200,
+        "band": 3,
+        "type": 6,
+        "q": 1.1,
+        "gain": -1.8
+      },
+      {
+        "on": true,
+        "freq": 10500,
+        "band": 4,
+        "type": 8,
+        "q": 0.7,
+        "gain": -2.2
+      },
+      {
+        "on": false,
+        "band": 5
+      },
+      {
+        "on": false,
+        "band": 6
+      },
+      {
+        "on": false,
+        "band": 7
+      },
+      {
+        "on": false,
+        "band": 8
+      }
+    ]
+  },
+  "rvb": {
+    "on": false
+  },
+  "limiter": {
+    "on": false
+  },
+  "se": {
+    "on": false
+  },
+  "bt": {
+    "on": false
+  },
+  "rotate": {
+    "on": false
+  },
+  "spspatial": {
+    "on": false
+  },
+  "alc": {
+    "on": true,
+    "type": 0,
+    "hold": 0.03,
+    "st": 0.02,
+    "lt": 0.6,
+    "attack": 0.01,
+    "release": 0.5,
+    "lookahead": 0,
+    "minisize": 128,
+    "xyknee": 0,
+    "xypoints": [
+      0,
+      0,
+      -10,
+      -9.5,
+      -20,
+      -17.5,
+      -30,
+      -26.5,
+      -40,
+      -33,
+      -50,
+      -39.5,
+      -70,
+      -55,
+      -200,
+      -200
+    ]
+  },
+  "effect_name": "Android助眠"
+}

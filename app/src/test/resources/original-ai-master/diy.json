@@ -1,0 +1,7 @@
+{
+    "en_bass" : {"bt":{"treble":0,"trebleFreq":6000,"on":true,"bass":4.8,"trebleQ":0.5,"bassQ":0.6,"bassFreq":120}},
+    "en_treble" : {"bt":{"treble":3.8,"trebleFreq":6000,"on":true,"bass":0,"trebleQ":0.8,"bassQ":0.5,"bassFreq":120}},
+    "en_vocal" : {"peq":{"f":[{"q":3,"freq":31,"band":0,"type":6,"on":true,"gain":-1.8},{"q":2,"freq":63,"band":1,"type":6,"on":true,"gain":-1.2},{"q":0.8,"freq":250,"band":2,"type":6,"on":true,"gain":2.2},{"q":1,"freq":1000,"band":3,"type":6,"on":true,"gain":3.2},{"q":1.2,"freq":3000,"band":4,"type":6,"on":true,"gain":3.2},{"q":2,"freq":8000,"band":5,"type":6,"on":true,"gain":2.4},{"band":6,"on":false},{"band":7,"on":false},{"band":8,"on":false}],"gain":0,"on":true}},
+    "en_vibe" : {"se":{"presence":3.6,"sshaper":true,"ambience":1,"on":true,"stereoizer":2.8},"cmp":{"attack":0,"on":true,"pregain":-2,"release":0,"range":0,"ratio":1,"postgain":0,"threshold":0}},
+    "en_live" : {"rvb":{"rvb":{"pdelay":25,"hfdamping":2.79,"rshape":40,"density":60,"swidth":150,"q":8,"diffusion":80,"on":true,"dtime":1.5},"on":true,"er":{"pattern":4,"on":true,"sdelay":40,"rsize":70},"tc":{"f":[{"insert":3,"band":1,"q":1,"gain":-1,"freq":200,"curve":0,"name":"滤波器1"},{"insert":3,"band":2,"q":0.5,"gain":-3,"freq":2000,"curve":1,"name":"滤波器2"},{"insert":3,"band":3,"q":0.5,"gain":-5,"freq":8000,"curve":2,"name":"滤波器3"}],"on":true},"il":{"center":0,"lfe":0},"ol":{"dry":0,"er":-23,"rvb":-20},"useable":true,"rl":{"lfe":0,"front":0,"rear":0,"center":0}}}
+}

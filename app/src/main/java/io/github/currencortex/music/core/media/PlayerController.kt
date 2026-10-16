@@ -28,6 +28,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         private set
     private var generation = 0L
     private var transportGeneration = 0L
+    internal val commandRevision: Long get() = transportGeneration
     private var commandIntent: Boolean? = null
     fun queueForPersistence() = beforeExternal ?: beforeVideo ?: queue.state.value
     override suspend fun beginExternal(mode: PlayerMode, controls: ExternalPlayback): Boolean {

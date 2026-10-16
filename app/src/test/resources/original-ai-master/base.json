@@ -1,0 +1,132 @@
+{
+  "key_bright": {
+    "name": "清亮",
+    "effect": {"eq":{"eqs":[-3,-2,-1,0,1,1.8,2.8,3.6,3,2.4],"on":true}}
+  },
+  "key_brilliant": {
+    "name": "明亮",
+    "effect": {"eq":{"eqs":[-4,-2.5,-1.5,0,1.5,2.2,3.2,4.6,3,2],"on":true}}
+  },
+  "key_transparent": {
+    "name": "通透",
+    "effect": {"eq":{"eqs":[-2,-0.40,0.6,-2.4,-1,2,-1,2,1.6,1.6],"on":true}}
+  },
+  "key_pure": {
+    "name": "纯净",
+    "effect": {"eq":{"eqs":[-2.2,-2,-1.2,-1,0,2,2.4,2,0,0],"on":true}}
+  },
+  "key_light": {
+    "name": "轻盈",
+    "effect": {"eq":{"eqs":[-3,-3,-2,-1,0,0,2,3,5,6],"on":true}}
+  },
+  "key_clear": {
+    "name": "清晰",
+    "effect": {"eq":{"eqs":[-2,-1.5,-1,-1.6,0,1.9,2.4,2.8,2.2,1],"on":true}}
+  },
+  "key_balanced": {
+    "name": "平衡",
+    "effect": {
+      "eq":{"eqs": [-0.5, -0.5, -0.5, 0.5, 0.5, 1, 1, 0.5, 0.5, 0.5],"on":true}
+    }
+  },
+  "key_mellow": {
+    "name": "醇厚",
+    "effect": {"eq":{"eqs":[1.5,1.9,2.9,2.1,0.90,0,1,-0.5,1,2],"on":true}}
+  },
+  "key_soft": {
+    "name": "柔和",
+    "effect": {"eq":{"eqs":[2,3,3,2,1,0,-1,-2,-2,-1],"on":true}}
+  },
+  "key_deep": {
+    "name": "深沉",
+    "effect": {"eq":{"eqs": [2.6, 2, 0.8, 0, 1.4, 1.2, 1, -1.6, -2.4, -3],"on":true}}
+  },
+  "key_warm": {
+    "name": "温润",
+    "effect": {"rvb":{"rvb":{"pdelay":30,"hfdamping":2,"rshape":30,"density":80,"swidth":90,"q":6,"diffusion":30,"on":true,"dtime":1.1},"on":true,"er":{"on":false},"tc":{"on":false},"il":{"center":0,"lfe":0},"ol":{"dry":0,"er":-30,"rvb":-25},"rl":{"lfe":0,"front":0,"rear":0,"center":0}},"eq":{"eqs":[1,2,2.6,2,1,0.4,0,-0.6,-0.8,0],"on":true}}
+  },
+  "key_full": {
+    "name": "饱满",
+    "effect": {"eq":{"eqs":[1,3,2.2,1.4,-0.20,2,1,2,1,0],"on":true}}
+  },
+  "key_thick": {
+    "name": "厚重",
+    "effect": {"eq":{"eqs":[1.8,2.8,2.2,1.4,1,1,0,-0.4,-0.6,-1],"on":true}}
+  },
+  "key_ethereal": {
+    "name": "空灵",
+    "effect": {"rvb":{"rvb":{"pdelay":130,"hfdamping":3.5,"rshape":100,"density":80,"swidth":75,"q":6,"diffusion":30,"on":true,"dtime":3.5},"on":true,"er":{"on":false},"tc":{"on":false},"il":{"center":0,"lfe":0},"ol":{"dry":0,"er":-40,"rvb":-32},"rl":{"lfe":0,"front":0,"rear":0,"center":0}},"eq":{"eqs":[-3,-1,0,0,0,0.4,1.2,1.8,2.4,3],"on":true}}
+  },
+  "key_agile": {
+    "name": "灵动",
+    "effect": {"eq":{"eqs":[-0.5,-0.5,-1,0,0.8,1.2,2.2,3,1.2,1],"on":true}}
+  },
+  "key_delicate": {
+    "name": "细腻",
+    "effect": {"eq":{"eqs":[-2,-1,0,0,1,1,2,2,2,1],"on":true}}
+  },
+  "key_tight": {
+    "name": "紧凑",
+    "effect": {"eq":{"eqs":[-4,-3,-2,0,2,3,2,1,0,-1],"on":true}}
+  },
+  "key_spacious": {
+    "name": "舒展",
+    "effect": {"rvb":{"rvb":{"pdelay":40,"hfdamping":3.5,"rshape":100,"density":80,"swidth":180,"q":6,"diffusion":40,"on":true,"dtime":2.5},"on":true,"er":{"on":false},"tc":{"on":false},"il":{"center":0,"lfe":0},"ol":{"dry":0,"er":-30,"rvb":-22},"rl":{"lfe":0,"front":0,"rear":0,"center":0}},"eq":{"eqs":[1,2,2,0,0,1,1,2,3,4],"on":true}}
+  },
+  "key_intimate": {
+    "name": "贴耳感",
+    "effect": {"eq":{"eqs":[-2.4,-2.6,-1.6,1,2.2,3.2,2.8,1.8,-0.4,-1.2],"on":true}}
+  },
+  "key_open": {
+    "name": "开阔",
+    "effect": {"rvb":{"rvb":{"pdelay":50,"hfdamping":4,"rshape":50,"density":50,"swidth":120,"q":3,"diffusion":50,"on":true,"dtime":2.5},"ol":{"dry":0,"er":-40,"rvb":-32},"on":true,"er":{"on":false}},"eq":{"eqs":[1.6,2.6,1.1,0,1,1.6,2.1,2.6,3,2.4],"on":true}}
+  },
+  "key_spatial": {
+    "name": "空间感",
+    "effect": {"rvb":{"rvb":{"pdelay":130,"hfdamping":3.5,"rshape":100,"density":80,"swidth":100,"q":6,"diffusion":45,"on":true,"dtime":3.5},"on":true,"er":{"on":false},"tc":{"on":false},"il":{"center":0,"lfe":0},"ol":{"dry":0,"er":-40,"rvb":-32},"rl":{"lfe":0,"front":0,"rear":0,"center":0}},"eq":{"eqs":[-1.2,-0.4,2,0.4,-0.6,1,1.2,1.8,2.4,1.4],"on":true}}
+  },
+  "key_surround": {
+    "name": "包围感",
+    "effect": {"rvb":{"rvb":{"pdelay":40,"hfdamping":3.5,"rshape":100,"density":80,"swidth":100,"q":6,"diffusion":40,"on":true,"dtime":2.5},"on":true,"er":{"on":false},"tc":{"on":false},"il":{"center":0,"lfe":0},"ol":{"dry":0,"er":-42,"rvb":-32},"rl":{"lfe":0,"front":0,"rear":0,"center":0}},"eq":{"eqs":[-2.6,-1.8,-1,0,1,1.8,2.6,2.6,1,-1],"on":true}}
+  },
+  "key_depth": {
+    "name": "纵深",
+    "effect": {"rvb":{"rvb":{"pdelay":60,"hfdamping":5.5,"rshape":40,"density":40,"swidth":100,"q":8,"diffusion":50,"on":true,"dtime":2},"on":true,"er":{"on":false},"tc":{"on":false},"il":{"center":0,"lfe":0},"ol":{"dry":0,"er":-33,"rvb":-35},"rl":{"lfe":0,"front":0,"rear":0,"center":0}},"eq":{"eqs":[-2,0,2,3,1.6,0,-2,0,1.6,2.4],"on":true}}
+  },
+  "key_layered": {
+    "name": "层次",
+    "effect": {"rvb":{"rvb":{"pdelay":60,"hfdamping":5.5,"rshape":40,"density":40,"swidth":80,"q":8,"diffusion":40,"on":true,"dtime":2},"on":true,"er":{"on":false},"tc":{"on":false},"il":{"center":0,"lfe":0},"ol":{"dry":0,"er":-33,"rvb":-28},"rl":{"lfe":0,"front":0,"rear":0,"center":0}},"eq":{"eqs":[-2,0,2,3,1.6,0,-2,0,1.6,2.4],"on":true}}
+  },
+  "key_wide": {
+    "name": "宽阔",
+    "effect": {"rvb":{"rvb":{"pdelay":20,"hfdamping":3.5,"rshape":100,"density":80,"swidth":120,"q":6,"diffusion":60,"on":true,"dtime":3.5},"on":true,"er":{"pattern":15,"rsize":100,"on":true,"sdelay":40},"tc":{"f":[{"insert":3,"band":1,"q":1,"gain":2,"freq":125,"curve":0,"name":"滤波器1"},{"insert":3,"band":2,"q":0.5,"gain":-6,"freq":2000,"curve":1,"name":"滤波器2"},{"insert":3,"band":3,"q":0.5,"gain":-4,"freq":8000,"curve":2,"name":"滤波器3"}],"on":true},"il":{"center":0,"lfe":0},"ol":{"dry":0,"er":-33,"rvb":-28},"rl":{"lfe":0,"front":0,"rear":0,"center":0}},"eq":{"eqs":[1,2,2,1,0,1,3,3,2,1],"on":true}}
+  },
+  "key_textured": {
+    "name": "颗粒感",
+    "effect": {"eq":{"eqs":[-3,-2,-1,-1,0,0.8,3.2,3.2,1.2,-2],"on":true},"cmp":{"attack":0.005,"on":true,"pregain":0,"release":0.12,"range":-4,"ratio":2,"postgain":1.5,"threshold":-8}}
+  },
+  "key_smooth": {
+    "name": "顺滑感",
+    "effect": {"rvb":{"rvb":{"pdelay":10,"hfdamping":5,"rshape":35,"density":40,"swidth":80,"q":8,"diffusion":50,"on":true,"dtime":1.2},"on":true,"er":{"pattern":13,"on":true,"sdelay":5,"rsize":50},"tc":{"on":false},"il":{"center":0,"lfe":0},"ol":{"dry":0,"er":-20,"rvb":-24},"rl":{"lfe":0,"front":0,"rear":0,"center":0}},"eq":{"eqs":[0,0,0,0.8,1.2,1.8,1.2,0,-2,-2.4],"on":true}}
+  },
+  "key_quality": {
+    "name": "质感",
+    "effect": {"eq":{"eqs":[0,0,-1,1,1.5,2,4,1,3,2],"on":true}}
+  },
+  "key_rhythmic": {
+    "name": "节奏感",
+    "effect": {"eq":{"eqs":[-1.4,4,2,2,-3,2,3,3,2.4,1.4],"on":true}}
+  },
+  "key_colorful": {
+    "name": "多彩感",
+    "effect": {"rvb":{"rvb":{"pdelay":25,"hfdamping":2,"rshape":80,"density":60,"swidth":180,"q":6,"diffusion":80,"on":true,"dtime":2.4},"on":true,"er":{"on":false},"tc":{"f":[{"insert":3,"band":1,"q":1,"gain":-2,"freq":160,"curve":0,"name":"滤波器1"},{"insert":3,"band":2,"q":0.5,"gain":-2.5,"freq":2000,"curve":1,"name":"滤波器2"},{"insert":3,"band":3,"q":0.5,"gain":-3,"freq":8000,"curve":2,"name":"滤波器3"}],"on":true},"il":{"center":0,"lfe":0},"ol":{"dry":0,"er":-45,"rvb":-35},"rl":{"lfe":0,"front":0,"rear":0,"center":0}},"eq":{"eqs":[1,2,2,0,0,1,2,3,3,3],"on":true}}
+  },
+  "key_presence": {
+    "name": "临场感",
+    "effect": {"rvb":{"rvb":{"pdelay":5,"hfdamping":5,"rshape":50,"density":50,"swidth":100,"q":1,"diffusion":50,"on":true,"dtime":1.2},"ol":{"dry":0,"er":-14,"rvb":-25},"on":true,"er":{"pattern":4,"on":true,"sdelay":0,"rsize":15}},"eq":{"eqs":[2,3,1.5,0,-1,1,2.5,3,4,-1],"on":true}}
+  },
+  "key_silky": {
+    "name": "丝滑感",
+    "effect": {"rvb":{"rvb":{"pdelay":10,"hfdamping":5,"rshape":35,"density":40,"swidth":80,"q":8,"diffusion":50,"on":true,"dtime":1.2},"on":true,"er":{"pattern":13,"on":true,"sdelay":5,"rsize":50},"tc":{"on":false},"il":{"center":0,"lfe":0},"ol":{"dry":0,"er":-20,"rvb":-24},"rl":{"lfe":0,"front":0,"rear":0,"center":0}},"eq":{"eqs":[0,0,0,0.8,1.2,1.8,1.2,0,-2,-2.4],"on":true}}
+  }
+}

@@ -37,7 +37,9 @@ class MusicService : MediaSessionService() {
     private lateinit var audioFocus: PlaybackAudioFocus
     private lateinit var audioFocusReady: Deferred<Unit>
     private var refreshSession: () -> Unit = {}
-    private data class PlayerSlot(val meter: DockAudioLevel, val equalizer: PlaybackEqualizer)
+    private data class PlayerSlot(val meter: DockAudioLevel, val equalizer: PlaybackEqualizer,
+        var originalProcessed: NeteaseOriginalPreset? = null,
+        var originalFailed: Pair<NeteaseOriginalPreset, String>? = null)
     private val playerSlots = mutableMapOf<ExoPlayer, PlayerSlot>()
     private var desktopLyrics: io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost? = null
     private var session: MediaSession? = null
@@ -111,7 +113,9 @@ class MusicService : MediaSessionService() {
                 wasExternal = external
             }
         }
-        scope.launch { container.equalizerSettings.state.collect { settings ->
+        scope.launch { combine(container.smartTuning.effective, container.originalProcessingPreset, container.originalSpeakerEffects.state) { settings, original, speaker ->
+            if (original == null && !speaker.requestedEnabled) settings else settings.copy(enabled = false)
+        }.collect { settings ->
             container.equalizer.configure(settings)
             playerSlots.values.forEach { it.equalizer.configure(settings) }
         } }
@@ -182,8 +186,30 @@ class MusicService : MediaSessionService() {
     }
     private fun createPlaybackPlayer(probe: TrackEnergyProbe): ExoPlayer {
         val meter = DockAudioLevel()
-        val secondaryEqualizer = PlaybackEqualizer().apply { configure(container.equalizerSettings.state.value) }
-        val source = ExoPlayer.Builder(this, DockRenderersFactory(this, meter, probe))
+        val secondaryEqualizer = PlaybackEqualizer().apply {
+            val settings = container.smartTuning.effective.value
+            configure(if (container.originalProcessingPreset.value == null && !container.originalSpeakerEffects.state.value.requestedEnabled) settings else settings.copy(enabled = false))
+        }
+        val source = ExoPlayer.Builder(this, DockRenderersFactory(this, meter, probe,
+            originalPreset = { container.originalProcessingPreset.value },
+            originalFailure = { failedPreset, message -> scope.launch {
+                val slot = playerSlots.values.firstOrNull { it.meter === meter } ?: return@launch
+                if (failedPreset != null) {
+                    slot.originalFailed = failedPreset to message
+                    if (slot.originalProcessed === failedPreset) slot.originalProcessed = null
+                    if (::transitions.isInitialized && playerSlots[player] === slot)
+                        reportOriginalFailure(failedPreset, message)
+                }
+            } },
+            originalProcessing = { processedPreset -> scope.launch {
+                val slot = playerSlots.values.firstOrNull { it.meter === meter }
+                if (slot != null) {
+                    slot.originalProcessed = processedPreset
+                    slot.originalFailed = null
+                    if (::transitions.isInitialized && playerSlots[player] === slot)
+                        acknowledgeOriginalProcessing(processedPreset)
+                }
+            } }))
             .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory)).build().apply {
                 setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
                 setHandleAudioBecomingNoisy(true)
@@ -223,6 +249,26 @@ class MusicService : MediaSessionService() {
         })
         return source
     }
+    private fun acknowledgeOriginalProcessing(preset: NeteaseOriginalPreset) {
+        if (container.originalProcessingPreset.value !== preset) return
+        when {
+            container.originalAiMasterEffects.selection.value === preset -> container.originalAiMasterEffects.reportProcessing(preset.id)
+            container.originalSpeakerEffects.selection.value === preset -> container.originalSpeakerEffects.reportProcessing(preset.id)
+            container.originalMoodEffects.selection.value === preset -> container.originalMoodEffects.reportProcessing(preset.id)
+            container.originalSmartEffects.selection.value === preset -> container.originalSmartEffects.reportProcessing(preset.id)
+            container.originalSoundEffects.selection.value === preset -> container.originalSoundEffects.reportProcessing(preset.id)
+        }
+    }
+    private fun reportOriginalFailure(preset: NeteaseOriginalPreset, message: String) {
+        if (container.originalProcessingPreset.value !== preset) return
+        when {
+            container.originalAiMasterEffects.selection.value === preset -> container.originalAiMasterEffects.reportFailure(message)
+            container.originalSpeakerEffects.selection.value === preset -> container.originalSpeakerEffects.reportFailure(message)
+            container.originalMoodEffects.selection.value === preset -> container.originalMoodEffects.reportFailure(message)
+            container.originalSmartEffects.selection.value === preset -> container.originalSmartEffects.reportFailure(message)
+            container.originalSoundEffects.selection.value === preset -> container.originalSoundEffects.reportFailure(message)
+        }
+    }
     private fun transitionOffer(): TransitionOffer? {
         val state = container.playerController.state.value
         val from = container.playbackQueue.state.value.current ?: return null
@@ -248,6 +294,12 @@ class MusicService : MediaSessionService() {
             durationMs = incoming.duration.coerceAtLeast(0), bufferedPositionMs = incoming.bufferedPosition,
             anchorRealtimeMs = SystemClock.elapsedRealtime())
         session?.setPlayer(sessionPlayer())
+        // A staged sink can produce its first native PCM before becoming primary.
+        // Reuse that exact-preset evidence on promotion, including a staged failure.
+        playerSlots[incoming]?.let { slot ->
+            slot.originalFailed?.let { (preset, message) -> reportOriginalFailure(preset, message) }
+            slot.originalProcessed?.let(::acknowledgeOriginalProcessing)
+        }
         // Media3 publishes this timeline handoff as AUTO; PlayerController counts that event once.
         updateListening(incoming.isPlaying)
     }

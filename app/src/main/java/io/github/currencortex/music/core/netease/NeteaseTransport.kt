@@ -15,6 +15,7 @@ import kotlin.coroutines.resumeWithException
 data class NeteaseEndpoints(val web: String = "https://music.163.com/", val desktop: String = "https://interfacepc.music.163.com/",
     val clientLog: String = "https://clientlog.music.163.com/")
 internal enum class NeteaseEncoding { WEB, DESKTOP, LOG }
+internal enum class NeteaseClientProfile { DESKTOP, ANDROID }
 internal class NeteaseResponse(val body: JsonObject, val cookies: Map<String, String>) {
     override fun toString() = "NeteaseResponse([redacted])"
 }
@@ -27,16 +28,21 @@ class NeteaseTransport(val sessions: NeteaseSessionStore, private val endpoints:
     private val http = client.newBuilder().followRedirects(false).retryOnConnectionFailure(false).build()
     internal suspend fun request(path: String, data: JsonObject = buildJsonObject {},
         encoding: NeteaseEncoding = NeteaseEncoding.DESKTOP, session: NeteaseSession? = null,
-        cookieOverride: Map<String, String>? = null, saveCookies: Boolean = true): NeteaseResponse = withContext(Dispatchers.IO) {
+        cookieOverride: Map<String, String>? = null, saveCookies: Boolean = true,
+        clientProfile: NeteaseClientProfile = NeteaseClientProfile.DESKTOP): NeteaseResponse = withContext(Dispatchers.IO) {
         val expected = session ?: sessions.snapshot()
         val cookies = cookieOverride ?: expected.credential.cookies
         require(path.startsWith("/api/") && '?' !in path && '#' !in path)
         sessions.check(expected)
-        val common = mapOf("os" to "pc", "appver" to "3.1.17.204416", "osver" to "Microsoft-Windows-10-Professional-build-19045-64bit",
+        val platform = if (clientProfile == NeteaseClientProfile.ANDROID)
+            mapOf("os" to "android", "appver" to "9.5.30") else
+            mapOf("os" to "pc", "appver" to "3.1.17.204416", "osver" to "Microsoft-Windows-10-Professional-build-19045-64bit")
+        val common = platform + mapOf(
             "deviceId" to expected.credential.deviceId, "channel" to "netease", "__remember_me" to "true") + cookies +
             (if (encoding == NeteaseEncoding.LOG) mapOf("os" to "osx") else emptyMap())
+        val requestCommon = if (clientProfile == NeteaseClientProfile.ANDROID) common + platform else common
         val header = buildJsonObject {
-            common.forEach { (key, value) -> put(key, value) }
+            requestCommon.forEach { (key, value) -> put(key, value) }
             put("__csrf", cookies["__csrf"].orEmpty())
             put("requestId", "${System.currentTimeMillis()}_${java.util.concurrent.ThreadLocalRandom.current().nextInt(1000, 10000)}")
         }
@@ -53,7 +59,7 @@ class NeteaseTransport(val sessions: NeteaseSessionStore, private val endpoints:
         val request = Request.Builder().url(url).post(body).header("Accept", "application/json")
             .header("Referer", "https://music.163.com/")
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36")
-            .header("Cookie", common.entries.joinToString("; ") { "${it.key}=${it.value}" }).build()
+            .header("Cookie", requestCommon.entries.joinToString("; ") { "${it.key}=${it.value}" }).build()
         val response = suspendCancellableCoroutine<Response> { cont ->
             val call = http.newCall(request)
             cont.invokeOnCancellation { call.cancel() }
