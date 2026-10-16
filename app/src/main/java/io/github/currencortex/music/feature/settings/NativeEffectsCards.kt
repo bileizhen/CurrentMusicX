@@ -19,6 +19,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -80,7 +81,7 @@ import java.util.Locale
             val title = when (kind) { 0 -> "AI 情绪调音师"; 1 -> "AI 调音大师"; else -> "外放音效" }
             val target = when (kind) { 0 -> SoundEffectKind.MOOD; 1 -> SoundEffectKind.AI_MASTER; else -> SoundEffectKind.SPEAKER }
             val label = when (kind) { 0 -> "mood"; 1 -> "ai"; else -> "speaker" }
-            Box(Modifier.fillMaxWidth().aspectRatio(1.495f).graphicsLayer {
+            Box(Modifier.fillMaxWidth().aspectRatio(1.37f).graphicsLayer {
                 val distance = abs((pager.currentPage - index) + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
                 scaleY = 1f - distance * .12f
             }.clip(RoundedCornerShape(12.dp)).background(if (dark) Color(0xFF302B58) else Color(0xFFE0DDF8))
@@ -101,7 +102,9 @@ import java.util.Locale
                         Modifier.size(84.dp).align(Alignment.CenterEnd).offset(x = 16.dp), scale = ContentScale.Fit)
                     EffectsArtwork(songCover, Modifier.size(80.dp).clip(RoundedCornerShape(3.dp)))
                 }
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 14.dp, vertical = 14.dp),
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                    .padding(horizontal = if (isUsing) 14.dp else 8.dp)
+                    .padding(top = 14.dp, bottom = if (isUsing) 14.dp else 20.dp),
                     horizontalAlignment = if (isUsing) Alignment.Start else Alignment.CenterHorizontally) {
                     if (isUsing && isReady) Text(if (kind == 2) "外放 · ${speakerScene.label}" else
                         song?.let { "${if (playing) "正在播放" else "在听"}《$it》" } ?: "已开启 · 播放后自动匹配", fontSize = 15.sp,
@@ -109,13 +112,19 @@ import java.util.Locale
                         color = if (dark) Color.White else Color(0xFF64512F))
                     else if (kind == 0) EffectsArtwork(NativeEffectsAssets.local("emotion_title_icon_${side}_url.png"),
                         Modifier.size(137.dp, 20.dp), title, ContentScale.Fit)
+                    else if (kind == 1 && !isUsing) EffectsArtwork(NativeEffectsAssets.local("ai_model_title_icon_url.png"),
+                        Modifier.fillMaxWidth(.5f).aspectRatio(7.2f), title, ContentScale.Fit)
                     else Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                         color = if (dark) Color.White else Color(0xFF182B43))
-                    Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom,
+                        horizontalArrangement = Arrangement.spacedBy(if (isUsing) 10.dp else 2.dp)) {
                         Text(when (kind) { 0 -> moodStatus; 1 -> masterStatus; else -> speakerStatus },
-                            Modifier.padding(top = 4.dp).then(if (isUsing) Modifier.weight(1f) else Modifier),
-                            fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            color = if (dark) Color.White.copy(alpha = .8f) else Color(0xCC64512F))
+                            Modifier.weight(1f).padding(top = if (isUsing) 4.dp else 8.dp),
+                            fontSize = if (isUsing) 10.sp else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                            textAlign = if (isUsing) TextAlign.Start else TextAlign.Center,
+                            color = if (dark || kind == 1 && !isUsing) Color.White.copy(alpha = .85f) else Color(0xCC64512F))
+                        if (!isUsing) Text("›", fontSize = 16.sp,
+                            color = if (dark || kind == 1) Color.White.copy(alpha = .85f) else Color(0xCC64512F))
                         if (isUsing) NativeEffectsAction(if (isLoading) "取消加载" else "取消", {
                             when (kind) { 0 -> onMood(); 1 -> onMaster(); else -> onSpeaker() }
                         }, Modifier.width(66.dp).then(if (focused) Modifier.testTag(
@@ -124,9 +133,10 @@ import java.util.Locale
                     }
                     if (!isUsing) NativeEffectsAction("立即使用", {
                         when (kind) { 0 -> onMood(); 1 -> onMaster(); else -> onSpeaker() }
-                    }, Modifier.padding(top = 8.dp).width(160.dp).then(if (focused) Modifier.testTag(
+                    }, Modifier.padding(top = 14.dp).width(164.dp).then(if (focused) Modifier.testTag(
                         when (kind) { 0 -> "sound_original_mood_action"; 1 -> "sound_master_ai_action"; else -> "sound_master_speaker_action" }) else Modifier),
-                        enabled = focused && enabled)
+                        enabled = focused && enabled,
+                        background = if (kind == 1) Color(0xFFE8D2A0) else Color.White)
                 }
             }
         }
@@ -154,7 +164,7 @@ private val MASTER_CARD_EMOTIONS = setOf("ecstatic", "passionate", "energetic", 
                     EffectsMembership(tile?.membership ?: 3)
                 }
                 Text(status ?: tile?.description ?: "基于曲风自动匹配最佳音效参数，听感更丰富",
-                    Modifier.testTag("sound_original_smart_status"), fontSize = 11.sp, color = Color.White.copy(alpha = .8f),
+                    Modifier.testTag("sound_original_smart_status"), fontSize = 12.sp, color = Color.White.copy(alpha = .8f),
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             NativeEffectsAction(if (chosen) (if (loading) "取消加载" else "取消") else "使用", onApply,
@@ -163,9 +173,10 @@ private val MASTER_CARD_EMOTIONS = setOf("ecstatic", "passionate", "energetic", 
     }
 }
 
-@Composable internal fun NativeEffectsAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true) {
+@Composable internal fun NativeEffectsAction(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
+    enabled: Boolean = true, background: Color = Color.White) {
     Box(modifier.heightIn(min = 32.dp).clip(RoundedCornerShape(32.dp))
-        .background(Color.White.copy(alpha = if (enabled) 1f else .5f))
+        .background(background.copy(alpha = if (enabled) 1f else .5f))
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(horizontal = 8.dp, vertical = 6.dp),
         contentAlignment = Alignment.Center) {
         Text(text, color = Color(0xFF0F0F24).copy(alpha = if (enabled) 1f else .5f), fontSize = 13.sp, fontWeight = FontWeight.Bold,

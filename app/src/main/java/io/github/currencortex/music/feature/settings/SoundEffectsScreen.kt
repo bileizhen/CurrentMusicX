@@ -202,10 +202,14 @@ import kotlinx.serialization.json.*
                 }
             }
             item {
-                Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 12.dp).height(28.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
                     Text("官方精选音效", Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    MusicTextAction(if (expandedCatalog) "收起" else "更多 ›", { expandedCatalog = !expandedCatalog },
-                        Modifier.testTag("sound_catalog_expand"))
+                    Text(if (expandedCatalog) "收起" else "更多 ›",
+                        Modifier.testTag("sound_catalog_expand").clip(RoundedCornerShape(8.dp))
+                            .clickable(role = Role.Button) { expandedCatalog = !expandedCatalog }
+                            .padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
+                        fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
                 }
             }
             if (smartFailed) item {
