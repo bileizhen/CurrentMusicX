@@ -43,13 +43,14 @@ import kotlinx.coroutines.flow.StateFlow
     maxIslandWidth: () -> Float = { 640f }, editRequest: Int = 0, onEditingChanged: (Boolean) -> Unit = {},
     onIslandSize: (IntSize) -> Unit = {}, islandTapRequest: Int = 0, onIslandModeChanged: (Boolean) -> Unit = {},
     changeSong: (Int) -> Unit = {}, onIslandTop: (Int) -> Unit = {},
-    togglePlayback: () -> Unit = {}, onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {}) {
+    togglePlayback: () -> Unit = {}, onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
+    defaultFpsMode: Boolean = false) {
     val content by lyrics.collectAsStateWithLifecycle()
     val player by playback.collectAsStateWithLifecycle()
     val options by preferences.collectAsStateWithLifecycle()
     val hasLyrics = player.song != null && content.songId == player.song?.id &&
         remember(content.document) { desktopIslandHasLyrics(content.document) }
-    var selectedFps by remember(player.song?.id, player.song?.musicSource) { mutableStateOf(false) }
+    var selectedFps by remember(player.song?.id, player.song?.musicSource, defaultFpsMode) { mutableStateOf(defaultFpsMode) }
     val fpsMode = !hasLyrics || selectedFps
     SideEffect { onIslandModeChanged(fpsMode) }
     val toggle by rememberUpdatedState({ if (hasLyrics) selectedFps = !selectedFps })

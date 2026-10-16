@@ -79,6 +79,7 @@ class NativeCapabilitiesTest {
         container.musicSettings.setServer(server.url("/cm/").toString())
         container.accountRepository.server = server.url("/cm/").toString()
         container.musicSettings.setQuality(AudioQuality.STANDARD)
+        container.desktopLyrics.markRecommendationSeen()
         container.updateSettings.setAutoCheck(false)
         container.settings.edit { AppearanceSettings(blur = false) }
         withContext(Dispatchers.Main) { container.playerController.clear() }
