@@ -366,10 +366,15 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val rootFloating = (settings.floatingBar || wideLayout) && !keyboardOpen
         val rootTabSpace = if (!wideLayout && !keyboardOpen && !settings.floatingBar) 92.dp else 0.dp
         val ribbonEnabled = androidx.compose.runtime.rememberUpdatedState(settings.playlistDepthRibbon)
-        val sceneInsets = remember(miniAvailable, miniHeight) {
+        val availableMini = androidx.compose.runtime.rememberUpdatedState(miniAvailable)
+        val miniInset = androidx.compose.runtime.rememberUpdatedState(miniHeight)
+        val pageInteractive = androidx.compose.runtime.rememberUpdatedState(!playerPresented && !searchPresented)
+        val activeScene = androidx.compose.runtime.rememberUpdatedState(sceneStack.last())
+        // Update layout values without replacing the decorator that retains each page.
+        val sceneInsets = remember {
             NavEntryDecorator<String> { entry ->
                 val ribbonScene = ribbonEnabled.value && isPlaylistRoute(entry.contentKey.toString())
-                val miniSpace = if (miniAvailable && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video", EQUALIZER.toString())) miniHeight else 0.dp
+                val miniSpace = if (availableMini.value && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video", EQUALIZER.toString())) miniInset.value else 0.dp
                 // Each moving scene must cover the outgoing page and its dim scrim, including
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
                 Box(Modifier.fillMaxSize().background(if (ribbonScene) androidx.compose.ui.graphics.Color(0xFF0A0A0A) else MiuixTheme.colorScheme.background)
@@ -377,7 +382,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     .then(if (ribbonScene || entry.contentKey in setOf(PLAYER.toString(), "lib/video", EQUALIZER.toString())) Modifier else Modifier.navigationBarsPadding())) {
                     // Keep the scene viewport full size so the glass samples page content.
                     // Clearance belongs to the end of each scrollable list, not to its bounds.
-                    CompositionLocalProvider(LocalMusicBottomInset provides miniSpace) { entry.Content() }
+                    CompositionLocalProvider(LocalMusicBottomInset provides miniSpace,
+                        LocalMusicPageActive provides (pageInteractive.value && entry.contentKey == activeScene.value)) { entry.Content() }
                 }
             }
         }

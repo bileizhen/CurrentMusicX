@@ -143,6 +143,51 @@ class PlaylistPagesTest {
         assertFalse(runBlocking { container.settings.snapshot().playlistDepthRibbon })
     }
 
+    @Test fun firstPlaybackAndPlayerReturnRetainTheSameRibbonAndTravelPosition() {
+        longPlaylist = true
+        container.playbackQueue.clear()
+        container.playerController.state.value = PlayerState()
+        open()
+        compose.onNodeWithTag("playlist_depth_ribbon_toggle").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("depth_ribbon_canvas").fetchSemanticsNodes().isNotEmpty() }
+        fun renderer(): io.github.currencortex.music.feature.library.DepthRibbonView {
+            lateinit var result: io.github.currencortex.music.feature.library.DepthRibbonView
+            compose.runOnUiThread {
+                fun find(view: android.view.View): io.github.currencortex.music.feature.library.DepthRibbonView? {
+                    if (view is io.github.currencortex.music.feature.library.DepthRibbonView) return view
+                    if (view is android.view.ViewGroup) for (i in 0 until view.childCount) find(view.getChildAt(i))?.let { return it }
+                    return null
+                }
+                val activity = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).first()
+                result = requireNotNull(find(activity.window.decorView))
+            }
+            return result
+        }
+        val original = renderer()
+        // Return to the first song after a full loop, so resetting to zero is observable.
+        compose.onNodeWithTag("depth_ribbon_canvas").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollBy) { it(-8850f, 0f) }
+        compose.onNodeWithTag("depth_ribbon_canvas").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollToIndex) { it(0) }
+        compose.runOnUiThread { assertEquals(60f, original.travelPosition, .001f) }
+        compose.onNodeWithTag("depth_ribbon_play").performClick()
+        if (compose.onAllNodesWithText("继续播放").fetchSemanticsNodes().isNotEmpty()) compose.onNodeWithText("继续播放").performClick()
+        compose.waitUntil(5000) { container.playbackQueue.state.value.current?.id == 1L }
+        compose.onNodeWithTag("mini_player").assertIsDisplayed()
+        compose.waitForIdle()
+        assertSame("The first mini player must not recreate the gallery", original, renderer())
+        compose.onNodeWithTag("depth_ribbon_play").assertIsDisplayed()
+        repeat(2) {
+            compose.onNodeWithTag("mini_song_gesture").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("player_screen").fetchSemanticsNodes().isNotEmpty() }
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("player_screen").fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithTag("mini_player").assertIsDisplayed()
+            assertSame("Closing the player must keep the retained renderer", original, renderer())
+            compose.runOnUiThread { assertEquals(60f, original.travelPosition, .001f) }
+            compose.onNodeWithTag("depth_ribbon_play").assertIsDisplayed()
+        }
+    }
+
     @Test fun depthRibbonDragHoldAndFocusKeepTheOriginalQueue() {
         // Compose's rule disables platform animators. Enable them only for this real-frame probe.
         animationScales = listOf("window_animation_scale", "transition_animation_scale", "animator_duration_scale")

@@ -26,6 +26,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** End-of-list clearance for controls drawn over scrolling page content. */
 val LocalMusicBottomInset = staticCompositionLocalOf { 0.dp }
+/** Retained navigation pages yield input and animation while a sheet covers them. */
+val LocalMusicPageActive = staticCompositionLocalOf { true }
 
 @Composable fun musicScrollPadding(padding: PaddingValues = PaddingValues(20.dp)): PaddingValues {
     val direction = LocalLayoutDirection.current

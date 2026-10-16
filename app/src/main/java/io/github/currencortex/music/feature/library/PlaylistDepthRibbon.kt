@@ -42,6 +42,7 @@ import coil3.request.allowHardware
 import coil3.toBitmap
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.LocalMusicBottomInset
+import io.github.currencortex.music.ui.component.LocalMusicPageActive
 import io.github.currencortex.music.ui.component.LocalRefreshRatePreference
 import io.github.currencortex.music.ui.component.applyViewRefreshRate
 import io.github.currencortex.music.ui.component.coverRequestUrl
@@ -58,23 +59,28 @@ internal val LocalRecordFlightTarget = staticCompositionLocalOf<() -> Rect?> { {
     onPlay: (Int) -> Unit, onPrepare: (Int) -> (() -> Unit), onClose: () -> Unit) {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
+    val pageActive by rememberUpdatedState(LocalMusicPageActive.current)
     var selected by remember(songs) { mutableStateOf<Int?>(null) }
     var paused by remember { mutableStateOf(!ValueAnimator.areAnimatorsEnabled()) }
     val renderer = remember(context) { DepthRibbonView(context) }
     val refreshRate = LocalRefreshRatePreference.current
     val landing by rememberUpdatedState(LocalRecordFlightTarget.current)
-    SideEffect { renderer.recordTarget = { landing() } }
+    SideEffect {
+        renderer.recordTarget = { landing() }
+        renderer.setRunning(pageActive && owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+    }
     val currentSelection by rememberUpdatedState<(Int?) -> Unit>({ selected = it })
     DisposableEffect(renderer, owner) {
         renderer.onFocus = { currentSelection(it) }
         val observer = LifecycleEventObserver { _, _ ->
-            renderer.setRunning(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+            renderer.setRunning(pageActive && owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
         }
         owner.lifecycle.addObserver(observer)
-        renderer.setRunning(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
-        onDispose { owner.lifecycle.removeObserver(observer); renderer.dispose() }
+        renderer.setRunning(pageActive && owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        onDispose { owner.lifecycle.removeObserver(observer) }
     }
-    BackHandler { if (selected != null) renderer.releaseFocus() else onClose() }
+    DisposableEffect(renderer) { onDispose { renderer.dispose() } }
+    BackHandler(enabled = pageActive) { if (selected != null) renderer.releaseFocus() else onClose() }
     Box(Modifier.fillMaxSize().background(Color(0xFF0A0A0A)).testTag("playlist_depth_ribbon")) {
         AndroidView(factory = { renderer }, update = { it.configure(songs, paused); applyViewRefreshRate(it, refreshRate) },
             modifier = Modifier.fillMaxSize().testTag("depth_ribbon_canvas")
@@ -130,6 +136,7 @@ internal class DepthRibbonView(context: Context) : View(context) {
     private var songs = emptyList<Song>()
     private var path = DepthRibbonPath(1)
     private var position = 0f
+    internal val travelPosition get() = position
     private var velocity = 0f
     private var paused = false
     private var running = false
