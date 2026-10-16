@@ -54,6 +54,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
     fun finishInput() { focus.clearFocus(); keyboard?.hide() }
     val state by vm.state.collectAsPageState()
     val membership by vm.membership.collectAsPageState()
+    val medals by vm.medals.collectAsPageState()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val musicSettings by vm.container.musicSettings.state.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
@@ -129,6 +130,10 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                 BindingAccountCard(binding, busy, { if (musicSettings.neteaseMainLibrary || vm.container.nativeNetease != null) vm.reloadMusic() else vm.sync() }, vm::live, vm::refresh,
                     { finishInput(); reauthenticate = true; revealLogin = true }, { unbind = true }, musicSettings.neteaseMainLibrary || vm.container.nativeNetease != null,
                     membership, vm::reloadMembership)
+                if (!binding.stale && medals.ownerId == binding.profile?.uid) {
+                    Spacer(Modifier.height(16.dp))
+                    BindingMedalsCard(medals, vm::reloadMedals)
+                }
             } else item {
                 Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("连接你的音乐库", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)

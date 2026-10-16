@@ -76,6 +76,14 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         expected: NeteaseSession): JsonElement {
         val current = expected.credential
         when (path) {
+            "ncmbind/medals" -> {
+                val uid = current.profile?.uid?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.NeteaseBindingRequired)
+                val raw = official("/api/medal/user/page", buildJsonObject { put("uid", uid) },
+                    expected = expected, authenticated = true, clientProfile = NeteaseClientProfile.ANDROID)
+                sessions.check(expected)
+                val medals = raw["data"] as? JsonObject ?: throw ApiException(ErrorKind.Parse)
+                return ApiJson.encodeToJsonElement(NeteaseMedals.serializer(), parseNeteaseMedals(medals, uid))
+            }
             "ncmbind/membership" -> {
                 val uid = current.profile?.uid?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.NeteaseBindingRequired)
                 val raw = official("/api/music-vip-membership/client/vip/info", buildJsonObject { put("userId", uid) },

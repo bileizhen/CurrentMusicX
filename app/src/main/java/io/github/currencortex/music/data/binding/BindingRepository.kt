@@ -38,6 +38,12 @@ class BindingRepository(private val api: ApiClient, private val session: () -> R
         return value
     }
     suspend fun status() = statusMutex.withLock { readStatus() }
+    suspend fun medals(): NeteaseMedals {
+        val expected = session()
+        val value = api.decode<NeteaseMedals>(api.request("GET", "ncmbind/medals", authenticated = true, expectedSession = expected))
+        if (expected != session()) throw ApiException(ErrorKind.NeteaseSessionChanged)
+        return value
+    }
     suspend fun membership(): NeteaseMembership {
         val expected = session()
         val value = api.decode<NeteaseMembership>(api.request("GET", "ncmbind/membership", authenticated = true, expectedSession = expected))
