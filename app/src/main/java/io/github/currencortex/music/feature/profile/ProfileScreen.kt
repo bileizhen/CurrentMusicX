@@ -189,12 +189,13 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
                         UserAvatar(user, vm.container, 64.dp, flightState = avatarFlight)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text(user.nickname.ifBlank { user.username }, Modifier.align(Alignment.CenterVertically), fontSize = 23.sp,
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(user.nickname.ifBlank { user.username }, Modifier.weight(1f), fontSize = 23.sp,
                                 fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            UserRoleBadge(user.role, Modifier.align(Alignment.CenterVertically))
-                            UserTitleBadge(user.title, Modifier.align(Alignment.CenterVertically))
+                            UserRoleBadge(user.role)
                         }
+                        UserTitleBadge(user.title)
                         Text(if (state.loading && state.profile == null) "正在加载资料…" else user.bio.ifBlank { "还没有填写简介" }, fontSize = 13.sp, maxLines = 2,
                             color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
                         if (own) Row {
@@ -393,18 +394,20 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
         }
         items(state.users, key = { it.id }) { user ->
             Card(Modifier.fillMaxWidth().clickable { navigate("user/profile/${user.id}") }.testTag("discover_user_${user.id}")) {
-                Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 108.dp).padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     UserAvatar(user.profileUser(), vm.container, 44.dp, reserveOverlay = false)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(user.nickname, Modifier.align(Alignment.CenterVertically), fontSize = 16.sp,
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Text(user.nickname, Modifier.weight(1f), fontSize = 16.sp,
                                 fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            UserRoleBadge(user.role, Modifier.align(Alignment.CenterVertically))
-                            UserTitleBadge(user.title, Modifier.align(Alignment.CenterVertically))
+                            UserRoleBadge(user.role)
                         }
+                        UserTitleBadge(user.title)
                         if (user.bio.isNotBlank()) Text(user.bio, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-                        Text("${user.days} 天 · ${listeningDuration(user.listenMs)}", fontSize = 12.sp,
+                        Text("${user.days} 天 · ${listeningDuration(user.listenMs)}", fontSize = 11.sp,
                             color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
                         user.current?.let { Text("正在听：${it.name}", fontSize = 12.sp, color = MiuixTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     }

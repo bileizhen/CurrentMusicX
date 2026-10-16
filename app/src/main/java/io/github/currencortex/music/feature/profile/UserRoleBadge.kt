@@ -20,15 +20,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     if (role == null) return
     val tint = if (role == UserRole.SUPER_ADMIN) Color(0xffb78324) else MiuixTheme.colorScheme.primary
     Text(role.label, modifier.testTag("user_role_${role.name.lowercase()}")
-        .background(tint.copy(alpha = .12f), RoundedCornerShape(6.dp)).padding(horizontal = 7.dp, vertical = 3.dp),
-        color = tint, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+        .background(tint.copy(alpha = .10f), RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+        color = tint, fontSize = 10.sp, fontWeight = FontWeight.Medium, maxLines = 1)
 }
 
 @Composable internal fun UserTitleBadge(title: String, modifier: Modifier = Modifier) {
     val label = title.trim()
     if (label.isEmpty()) return
     val tint = Color(0xFF9A7025)
-    Text(label, modifier.testTag("user_title").widthIn(max = 240.dp)
-        .background(tint.copy(alpha = .09f), RoundedCornerShape(6.dp)).padding(horizontal = 7.dp, vertical = 3.dp),
-        color = tint, fontSize = 11.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    Text(label, modifier.testTag("user_title").widthIn(max = 240.dp),
+        color = tint, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
