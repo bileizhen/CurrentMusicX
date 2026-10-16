@@ -40,7 +40,7 @@ class UserCapabilitiesTest {
     @Volatile private var listeningUser = false
     private val receivedListenMs = AtomicLong()
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
-    private fun user(id: Int = 7): String = """{"id":$id,"username":"user$id","nickname":"${if (id == 7) nickname else "Second user"}","bio":"Profile bio","avatarDecoration":"$decoration","publicSquare":true,"isAdmin":true,"isSuper":false,"stat":{"likes":3,"favs":2,"playDays":5,"listenMs":${7200000 + receivedListenMs.get()}}}"""
+    private fun user(id: Int = 7): String = """{"id":$id,"username":"user$id","nickname":"${if (id == 7) nickname else "Second user"}","title":"${if (id == 7) "创作者" else ""}","bio":"Profile bio","avatarDecoration":"$decoration","publicSquare":true,"isAdmin":true,"isSuper":false,"stat":{"likes":3,"favs":2,"playDays":5,"listenMs":${7200000 + receivedListenMs.get()}}}"""
     @Before fun prepare() = runBlocking {
         namespace = "user-test-${UUID.randomUUID()}"
         container = AppContainer(ApplicationProvider.getApplicationContext<CurrentMusicApplication>(), namespace)
@@ -229,6 +229,7 @@ class UserCapabilitiesTest {
         compose.waitUntil(15000) { compose.onAllNodesWithText("首页").fetchSemanticsNodes().isNotEmpty() }
         me()
         compose.onNodeWithTag("user_role_admin").assertIsDisplayed()
+        compose.onNodeWithText("创作者").assertIsDisplayed()
         compose.onNodeWithText("2 小时 0 分").assertExists()
         compose.onNodeWithTag("edit_profile").performClick()
         compose.onNodeWithTag("profile_nickname").performTextReplacement("Updated user")
@@ -244,6 +245,7 @@ class UserCapabilitiesTest {
         compose.waitUntil(10000) { compose.onAllNodesWithText("Public user").fetchSemanticsNodes().isNotEmpty() }
         compose.mainClock.advanceTimeBy(1000)
         compose.onNodeWithTag("user_role_super_admin").assertIsDisplayed()
+        compose.onNodeWithTag("user_title").assertDoesNotExist()
         compose.onNodeWithTag("edit_profile").assertDoesNotExist()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("Public user").assertExists()

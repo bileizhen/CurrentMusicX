@@ -146,7 +146,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     }
     val user = state.profile?.user ?: account.account?.takeIf { onBack == null }?.let {
         ProfileUser(id = it.id, username = it.username, nickname = it.nickname, avatar = it.avatar,
-            isAdmin = it.isAdmin, isSuper = it.isSuper)
+            isAdmin = it.isAdmin, isSuper = it.isSuper, title = it.title)
     }
     val own = user != null && user.id == account.account?.id
     val bottomInset = LocalMusicBottomInset.current
@@ -189,10 +189,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
                         UserAvatar(user, vm.container, 64.dp, flightState = avatarFlight)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(user.nickname.ifBlank { user.username }, Modifier.weight(1f, fill = false), fontSize = 23.sp,
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text(user.nickname.ifBlank { user.username }, Modifier.align(Alignment.CenterVertically), fontSize = 23.sp,
                                 fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            UserRoleBadge(user.role)
+                            UserRoleBadge(user.role, Modifier.align(Alignment.CenterVertically))
+                            UserTitleBadge(user.title, Modifier.align(Alignment.CenterVertically))
                         }
                         Text(if (state.loading && state.profile == null) "正在加载资料…" else user.bio.ifBlank { "还没有填写简介" }, fontSize = 13.sp, maxLines = 2,
                             color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
@@ -395,10 +396,11 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
                 Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     UserAvatar(user.profileUser(), vm.container, 44.dp, reserveOverlay = false)
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(user.nickname, Modifier.weight(1f, fill = false), fontSize = 16.sp,
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(user.nickname, Modifier.align(Alignment.CenterVertically), fontSize = 16.sp,
                                 fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            UserRoleBadge(user.role)
+                            UserRoleBadge(user.role, Modifier.align(Alignment.CenterVertically))
+                            UserTitleBadge(user.title, Modifier.align(Alignment.CenterVertically))
                         }
                         if (user.bio.isNotBlank()) Text(user.bio, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))

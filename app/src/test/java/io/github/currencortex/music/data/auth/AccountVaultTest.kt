@@ -72,11 +72,15 @@ class AccountVaultTest {
                 val vault = EncryptedAccountVault(MemoryPreferences(), scope) { stores.getOrPut(it) { Store() } }
                 val active = Store(); val accounts = AccountRepository(active, scope, vault)
                 val base = server.url("/cm/").toString(); accounts.server = base
-                accounts.save("credential-one", UserDto(7, "one", "One")); val first = vault.current()!!
+                accounts.save("credential-one", UserDto(7, "one", "One", title = "创作者")); val first = vault.current()!!
+                assertEquals("创作者", first.account().title)
                 accounts.save("credential-two", UserDto(8, "two", "Two")); val second = vault.current()!!
+                assertEquals("", accounts.state.value.account!!.title)
                 val auth = AuthRepository(ApiClient({ accounts.server }, { accounts.token }, accounts::expired), accounts, "device") { _, _ -> }
-                server.enqueue(MockResponse().setBody("""{"id":7,"username":"one","nickname":"One"}"""))
+                server.enqueue(MockResponse().setBody("""{"id":7,"username":"one","nickname":"One","title":"开发者"}"""))
                 assertTrue(auth.switchAccount(first.key) is AppResult.Success)
+                assertEquals("开发者", accounts.state.value.account!!.title)
+                assertEquals("开发者", vault.current()!!.account().title)
                 assertEquals("Bearer credential-one", server.takeRequest().getHeader("Authorization"))
                 accounts.expired(RequestSession(base, "credential-one"))
                 withTimeout(3000) { while (vault.credential(first.key) != null) delay(10) }

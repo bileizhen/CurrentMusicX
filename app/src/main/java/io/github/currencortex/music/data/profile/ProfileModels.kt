@@ -24,7 +24,8 @@ fun userRole(isAdmin: Boolean, isSuper: Boolean): UserRole? = when {
     val publicSquare: Boolean? = null, val public: Boolean? = null,
     @SerialName("public_square") val legacyPublic: Boolean? = null,
     @JsonNames("is_admin") @Serializable(with = ApiBooleanSerializer::class) val isAdmin: Boolean = false,
-    @JsonNames("is_super") @Serializable(with = ApiBooleanSerializer::class) val isSuper: Boolean = false) {
+    @JsonNames("is_super") @Serializable(with = ApiBooleanSerializer::class) val isSuper: Boolean = false,
+    val title: String = "") {
     val role get() = userRole(isAdmin, isSuper)
     val decoration get() = avatarDecoration.ifBlank { legacyDecoration }
     val visible get() = publicSquare ?: public ?: legacyPublic
@@ -36,10 +37,11 @@ fun userRole(isAdmin: Boolean, isSuper: Boolean): UserRole? = when {
     val avatarDecoration: String = "", @SerialName("avatar_decoration") val legacyDecoration: String = "",
     val likes: Int = 0, val playlists: Int = 0, val days: Int = 0, val listenMs: Long = 0, val current: SongDto? = null,
     @JsonNames("is_admin") @Serializable(with = ApiBooleanSerializer::class) val isAdmin: Boolean = false,
-    @JsonNames("is_super") @Serializable(with = ApiBooleanSerializer::class) val isSuper: Boolean = false) {
+    @JsonNames("is_super") @Serializable(with = ApiBooleanSerializer::class) val isSuper: Boolean = false,
+    val title: String = "") {
     val role get() = userRole(isAdmin, isSuper)
     fun profileUser() = ProfileUser(id = id, nickname = nickname, avatar = avatar, bio = bio,
-        avatarDecoration = avatarDecoration.ifBlank { legacyDecoration }, isAdmin = isAdmin, isSuper = isSuper)
+        avatarDecoration = avatarDecoration.ifBlank { legacyDecoration }, isAdmin = isAdmin, isSuper = isSuper, title = title)
 }
 @Serializable data class SquareStats(val users: Int = 0, val listening: Int = 0)
 @Serializable data class SquareDto(val total: Int = 0, val users: List<SquareUser> = emptyList(), val stats: SquareStats = SquareStats())
