@@ -32,7 +32,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.layout.Layout
@@ -43,6 +42,13 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.text
+import io.github.currencortex.music.feature.lyrics.ui.LyricsFontFamily
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.constrainHeight
@@ -53,22 +59,22 @@ import io.github.currencortex.music.core.media.*
 import kotlin.math.sin
 import kotlin.math.roundToInt
 
-/** Finite pulse/flow, no perpetual particles, blur or extra window permission. */
-@Composable internal fun SoundEffectIslandPill(notice: SoundEffectNotice, modifier: Modifier = Modifier, material: Boolean = true) {
+/** One compact row with a finite highlight; detailed feedback stays accessible to screen readers. */
+@Composable internal fun SoundEffectIslandPill(notice: SoundEffectNotice, modifier: Modifier = Modifier,
+    material: Boolean = true, height: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE) {
     val motion = rememberDesktopMotion()
     val flow = remember { Animatable(0f) }
     LaunchedEffect(notice.id, notice.phase) {
         flow.snapTo(0f); flow.animateTo(1f, tween(if (motion) 1250 else 0))
     }
     val accent by animateColorAsState(soundEffectNoticeAccent(notice), tween(if (motion) 320 else 0), label = "effect content tint")
-    Box(modifier.widthIn(max = 340.dp).fillMaxWidth().then(if (material) Modifier.graphicsLayer {
-        val pulse = sin(flow.value * Math.PI).toFloat()
-        scaleX = 1f + .015f * pulse; scaleY = scaleX
-    }.clip(RoundedCornerShape(28.dp))
+    val phase = soundEffectPhaseLabel(notice.phase)
+    Box(modifier.widthIn(max = 340.dp).height(height).then(if (material) Modifier.clip(RoundedCornerShape(50))
         .background(Brush.linearGradient(listOf(Color(0xFF11141B),
             accent.copy(alpha = .14f).compositeOver(Color(0xFF080B10)), Color(0xFF080B10))))
-        .border(.8.dp, accent.copy(alpha = .55f), RoundedCornerShape(28.dp)) else Modifier)
-        .semantics { liveRegion = LiveRegionMode.Polite }.testTag("sound_effect_island_notice")) {
+        .border(.8.dp, accent.copy(alpha = .55f), RoundedCornerShape(50)) else Modifier)
+        .semantics { liveRegion = LiveRegionMode.Polite; stateDescription = "$phase：${notice.message}" }
+        .testTag("sound_effect_island_notice")) {
         Canvas(Modifier.matchParentSize()) {
             if (motion && flow.value < 1f) {
                 val x = (size.width + size.height * 2f) * flow.value - size.height
@@ -79,53 +85,67 @@ import kotlin.math.roundToInt
         AnimatedContent(notice, contentKey = { it.id to it.phase }, label = "effect notice content",
             transitionSpec = { (fadeIn(tween(if (motion) 180 else 0)) togetherWith
                 fadeOut(tween(if (motion) 180 else 0))).using(null) }) { current ->
-        val failed = current.phase == SoundEffectNoticePhase.FAILED
-        val phase = when (current.phase) {
-            SoundEffectNoticePhase.APPLYING -> "正在启用"; SoundEffectNoticePhase.READY -> "已启用"
-            SoundEffectNoticePhase.WAITING -> "待生效"; SoundEffectNoticePhase.FAILED -> "未启用"
-        }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 9.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (current.tier != SoundEffectNoticeTier.STANDARD) {
-                SoundEffectMembershipDisc(current.tier)
-            } else Box(Modifier.size(32.dp).background(accent.copy(alpha = .12f), CircleShape), contentAlignment = Alignment.Center) {
-                Canvas(Modifier.size(19.dp)) {
-                    if (failed) {
-                        drawLine(accent, Offset(size.width * .3f, size.height * .3f), Offset(size.width * .7f, size.height * .7f), 2.dp.toPx())
-                        drawLine(accent, Offset(size.width * .7f, size.height * .3f), Offset(size.width * .3f, size.height * .7f), 2.dp.toPx())
-                    } else repeat(5) { index ->
-                        val h = size.height * listOf(.3f, .65f, 1f, .65f, .3f)[index]
-                        val x = size.width * (index + .5f) / 5f
-                        drawLine(accent, Offset(x, (size.height - h) / 2), Offset(x, (size.height + h) / 2), 2.dp.toPx())
+            Row(Modifier.fillMaxHeight().padding(horizontal = 7.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                val discSize = (height - 14.dp).coerceAtLeast(22.dp)
+                if (current.tier != SoundEffectNoticeTier.STANDARD) {
+                    SoundEffectMembershipDisc(current.tier, Modifier.size(discSize))
+                } else Box(Modifier.size(discSize).background(accent.copy(alpha = .12f), CircleShape), contentAlignment = Alignment.Center) {
+                    Canvas(Modifier.size(16.dp)) {
+                        repeat(5) { index ->
+                            val h = size.height * listOf(.3f, .65f, 1f, .65f, .3f)[index]
+                            val x = size.width * (index + .5f) / 5f
+                            drawLine(accent, Offset(x, (size.height - h) / 2), Offset(x, (size.height + h) / 2), 2.dp.toPx())
+                        }
                     }
                 }
+                SoundEffectIslandTitle(current.name, accent, font, Modifier.weight(1f, fill = false))
+                // Reserve all four characters during loading/success/failure: no width jump.
+                BasicText(soundEffectPhaseLabel(current.phase), Modifier.width(with(LocalDensity.current) { 40.sp.toDp() }),
+                    style = TextStyle(color = accent.copy(alpha = .85f), fontSize = 9.sp,
+                        textAlign = TextAlign.End), maxLines = 1, softWrap = false)
             }
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                BasicText(current.name, style = TextStyle(color = accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-                BasicText(current.message, style = TextStyle(color = Color.White.copy(alpha = .72f), fontSize = 10.sp),
-                    minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            }
-            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (current.tier != SoundEffectNoticeTier.STANDARD) BasicText(current.tier.name,
-                    Modifier.background(accent.copy(alpha = .13f), CircleShape).padding(horizontal = 6.dp, vertical = 2.dp),
-                    style = TextStyle(color = accent, fontSize = 9.sp, fontWeight = FontWeight.Bold))
-                BasicText(phase, style = TextStyle(color = accent.copy(alpha = .85f), fontSize = 9.sp))
-            }
-        }
         }
     }
 }
 
+private fun soundEffectPhaseLabel(phase: SoundEffectNoticePhase) = when (phase) {
+    SoundEffectNoticePhase.APPLYING -> "正在启用"; SoundEffectNoticePhase.READY -> "已启用"
+    SoundEffectNoticePhase.WAITING -> "待生效"; SoundEffectNoticePhase.FAILED -> "未启用"
+}
+
+/** The two master wordmarks are the exact local artwork used by their main cards. */
+@Composable private fun SoundEffectIslandTitle(name: String, accent: Color, font: Float, modifier: Modifier) {
+    val asset = when (name) {
+        "AI 调音大师" -> "ai_model_title_icon_url.png"
+        "AI 情绪调音师" -> "emotion_title_icon_dark_url.png"
+        else -> null
+    }
+    if (asset == null) BasicText(name, modifier.testTag("sound_effect_island_title"),
+        style = TextStyle(fontFamily = LyricsFontFamily, color = accent, fontSize = font.sp,
+            lineHeight = (font * 1.2f).sp, fontWeight = FontWeight.Medium),
+        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+    else {
+        val assets = LocalContext.current.assets
+        val bitmap = remember(assets, asset) {
+            assets.open("netease-effects-ui/assets/$asset").use { BitmapFactory.decodeStream(it) }.asImageBitmap()
+        }
+        val titleHeight = with(LocalDensity.current) { (font * 1.2f).sp.toDp() }
+        Image(BitmapPainter(bitmap), null, modifier.height(titleHeight)
+            .width(titleHeight * bitmap.width / bitmap.height)
+            .testTag("sound_effect_island_wordmark").semantics { text = AnnotatedString(name) })
+    }
+}
+
 /** Crop only the disc from the same local artwork used by the native membership badges. */
-@Composable private fun SoundEffectMembershipDisc(tier: SoundEffectNoticeTier) {
+@Composable private fun SoundEffectMembershipDisc(tier: SoundEffectNoticeTier, modifier: Modifier) {
     val assets = LocalContext.current.assets
     val painter = remember(assets, tier) {
         val name = if (tier == SoundEffectNoticeTier.SVIP) "svip_icon_url.png" else "vip_icon_url.png"
         val bitmap = assets.open("netease-effects-ui/assets/$name").use { BitmapFactory.decodeStream(it) }.asImageBitmap()
         BitmapPainter(bitmap, srcSize = IntSize(bitmap.height, bitmap.height))
     }
-    Image(painter, "${tier.name} 唱片", Modifier.size(32.dp).clip(CircleShape))
+    Image(painter, "${tier.name} 唱片", modifier.clip(CircleShape))
 }
 
 private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
@@ -140,7 +160,7 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
  * No delayed incoming fade or AnimatedContent size correction can leave an empty capsule.
  */
 @Composable internal fun DesktopIslandEffectTransition(notice: SoundEffectNotice?, modifier: Modifier = Modifier,
-    normal: @Composable () -> Unit) {
+    effectHeight: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE, normal: @Composable () -> Unit) {
     val motion = rememberDesktopMotion()
     var retained by remember { mutableStateOf(notice) }
     SideEffect { if (notice != null) retained = notice }
@@ -157,7 +177,7 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
             tint.copy(alpha = .035f + .20f * intensity))), shape).clip(shape)
         .testTag("desktop_island_transition"), content = {
         Box { normal() }
-        Box { (notice ?: retained)?.let { SoundEffectIslandPill(it, material = false) } }
+        Box { (notice ?: retained)?.let { SoundEffectIslandPill(it, material = false, height = effectHeight, font = font) } }
     }) { children, constraints ->
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
         val compact = children[0].measure(loose)
@@ -177,13 +197,15 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
 @Composable internal fun SoundEffectIslandFallback(container: AppContainer) {
     val notice by container.soundEffectNotices.state.collectAsStateWithLifecycle()
     val desktop by container.desktopLyricsStatus.collectAsStateWithLifecycle()
+    val options by container.desktopLyrics.state.collectAsStateWithLifecycle()
     Box(Modifier.fillMaxSize().statusBarsPadding().padding(top = 8.dp, start = 20.dp, end = 20.dp),
         contentAlignment = Alignment.TopCenter) {
         AnimatedVisibility(notice != null && !desktop.visible,
             enter = fadeIn(tween(160)) + scaleIn(tween(260), initialScale = .88f),
             exit = fadeOut(tween(140, 380)) + scaleOut(tween(180, 300), targetScale = .88f)) {
-            DesktopIslandEffectTransition(notice.takeUnless { desktop.visible }) {
-                Spacer(Modifier.width(112.dp).height(30.dp))
+            DesktopIslandEffectTransition(notice.takeUnless { desktop.visible },
+                effectHeight = rememberIslandFpsHeight(options.displayFontSize), font = options.displayFontSize) {
+                Spacer(Modifier.width(112.dp).height(rememberIslandFpsHeight(options.displayFontSize)))
             }
         }
     }

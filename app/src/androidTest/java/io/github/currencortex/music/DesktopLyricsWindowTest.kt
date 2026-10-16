@@ -57,9 +57,15 @@ class DesktopLyricsWindowTest {
                         42 -> notices.value = io.github.currencortex.music.core.media.SoundEffectNotice(2, "全景环绕",
                             io.github.currencortex.music.core.media.SoundEffectNoticeTier.VIP)
                     }
+                    // StateFlow delivery to the main-thread host is asynchronous. Wait for
+                    // adoption before sampling; a fixed 16 ms delay can race a busy frame.
+                    if (step == 0 || step == 42) withTimeout(2000) {
+                        while (container.desktopLyricsStatus.value.islandTouchable) delay(10)
+                    }
                     delay(16)
                     val s = container.desktopLyricsStatus.value
                     assertEquals("Native buffer cannot resize during use/cancel", geometry(baseline), geometry(s))
+                    assertEquals("Compact effect feedback stays at the FPS height", baseline.contentHeight.toFloat(), s.contentHeight.toFloat(), 1f)
                     assertTrue(s.contentTop >= 0 && s.contentTop + s.contentHeight <= s.height)
                     if (notices.value != null) assertFalse("No input-window resize during effect morph", s.islandTouchable)
                     minWidth = minOf(minWidth, s.contentWidth); maxWidth = maxOf(maxWidth, s.contentWidth)
