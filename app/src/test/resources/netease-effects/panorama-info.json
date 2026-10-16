@@ -1,0 +1,51 @@
+{
+  "code": 200,
+  "msg": "",
+  "data": {
+    "soundList": [
+      {
+        "soundId": 3600400,
+        "soundType": 8,
+        "soundMobileDetailDTO": {
+          "id": 3600400,
+          "name": "全景环绕",
+          "title": "全景环绕",
+          "deviceName": "",
+          "deviceModel": "",
+          "subTitle": "戴上耳机，人声在耳边，乐器在身后，环境声从四周涌来，像坐在舞台中间听一场私人 Live。",
+          "playerFloatLayerDesc": "闭上眼睛，声音在你身边转动",
+          "useCount": 566870,
+          "trackCount": 0,
+          "type": 3,
+          "freeBeginTime": null,
+          "freeEndTime": null,
+          "size": 0,
+          "md5": "d01b1da78d594d5dee0e0d19f070fa3d",
+          "link": "http://d1.music.126.net/dmusic/obj/w57Cg8KTwrbClD_CmMK-/80952664736/b695/7fc2/8b31/9564dd306959d052bda5694f44fb75b5.ncae",
+          "soundMaterialList": [
+            {
+              "size": 375,
+              "md5": "9564dd306959d052bda5694f44fb75b5",
+              "link": "http://d1.music.126.net/dmusic/obj/w57Cg8KTwrbClD_CmMK-/80952664736/b695/7fc2/8b31/9564dd306959d052bda5694f44fb75b5.ncae"
+            }
+          ],
+          "soundType": 1,
+          "imgUrl": "",
+          "animation": [],
+          "music": [],
+          "newAdd": 0
+        },
+        "earAgeVo": null,
+        "earPrintVo": null,
+        "auditoryPreferenceVo": null,
+        "intelligenceVo": null,
+        "headPhoneSoundCDTO": null,
+        "beatVibration": null,
+        "lightFlashing": null,
+        "outerSoundDetailInfo": null,
+        "pcSoundDetail": null
+      }
+    ]
+  },
+  "success": true
+}

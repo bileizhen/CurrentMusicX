@@ -1,0 +1,105 @@
+{
+  "cmp": {
+    "on": false
+  },
+  "eq": {
+    "on": true,
+    "eqs": [
+      -1,
+      -1,
+      -0.6,
+      0,
+      0,
+      1,
+      1.6,
+      2,
+      2.4,
+      2
+    ]
+  },
+  "peq": {
+    "on": false
+  },
+  "rvb": {
+    "er": {
+      "on": false
+    },
+    "il": {
+      "center": 0,
+      "lfe": 0
+    },
+    "ol": {
+      "dry": 0,
+      "er": -30,
+      "rvb": -23.8
+    },
+    "on": true,
+    "rl": {
+      "center": 0,
+      "front": 0,
+      "lfe": 0,
+      "rear": 0
+    },
+    "rvb": {
+      "pdelay": 20,
+      "dtime": 2.2,
+      "hfdamping": 3.5,
+      "density": 100,
+      "rshape": 20,
+      "q": 6,
+      "diffusion": 20,
+      "swidth": 50,
+      "on": true
+    },
+    "tc": {
+      "on": false
+    },
+    "useable": true
+  },
+  "limiter": {
+    "on": false
+  },
+  "se": {
+    "on": false
+  },
+  "bt": {
+    "on": false
+  },
+  "rotate": {
+    "on": false
+  },
+  "spspatial": {
+    "on": false
+  },
+  "alc": {
+    "on": true,
+    "type": 0,
+    "hold": 0.05,
+    "st": 0.02,
+    "lt": 0.5,
+    "attack": 0.005,
+    "release": 0.2,
+    "lookahead": 0,
+    "minisize": 128,
+    "xyknee": 0,
+    "xypoints": [
+      0,
+      0,
+      -10,
+      -7.5,
+      -20,
+      -18,
+      -30,
+      -28,
+      -40,
+      -39,
+      -50,
+      -51,
+      -70,
+      -72,
+      -200,
+      -200
+    ]
+  },
+  "effect_name": "浴室"
+}

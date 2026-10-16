@@ -228,3 +228,22 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+
+## Rhino 1.8.1
+
+The local audio-parameter codecs run in Mozilla Rhino 1.8.1,
+https://github.com/mozilla/rhino (Mozilla Public License 2.0).
+Rhino is used without browser or Java object access. The MPL 2.0 text is included
+in the offline notices as MPL-2.0.txt. Rhino source is available at the link above.
+
+## NetEase sound-effect interoperability resources
+
+The native sound-effect page uses NetEase Music 9.5.30 reference artwork and
+local audio-parameter algorithms. NetEase retains the rights to its resources.
+Artwork source URLs and hashes are recorded in the bundled
+netease-effects-ui/resource-manifest.json; the two local parameter codecs are
+hash-verified before execution. These resources do not imply endorsement.
+The release does not bundle the vendor native audio engine or user account data;
+compatible native libraries are imported only from a user-selected installation
+or APK. Member functions require the current account's actual entitlement.

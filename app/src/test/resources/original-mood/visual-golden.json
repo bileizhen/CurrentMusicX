@@ -1,0 +1,80 @@
+{
+  "dimensions": [
+    {
+      "name": "space_size",
+      "value": [
+        0.254,
+        0.661
+      ],
+      "change": 0.407,
+      "fx_activation": 0.424,
+      "rank": 1,
+      "visual": true,
+      "intensity": "strong"
+    },
+    {
+      "name": "stereo_width",
+      "value": [
+        0.309,
+        0.537
+      ],
+      "change": 0.228,
+      "fx_activation": 0.272,
+      "rank": 2,
+      "visual": true,
+      "intensity": "medium"
+    },
+    {
+      "name": "rhythm",
+      "value": [
+        0.298,
+        0.455
+      ],
+      "change": 0.157,
+      "fx_activation": 0.232,
+      "rank": 3,
+      "visual": true,
+      "intensity": "medium"
+    },
+    {
+      "name": "loudness",
+      "value": [
+        0.44,
+        0.534
+      ],
+      "change": 0.094,
+      "fx_activation": 0.616,
+      "rank": 4,
+      "visual": false
+    },
+    {
+      "name": "vocal",
+      "value": [
+        0.829,
+        0.9
+      ],
+      "change": 0.071,
+      "fx_activation": 0.386,
+      "rank": 5,
+      "visual": false
+    },
+    {
+      "name": "high_freq",
+      "value": [
+        0.562,
+        0.472
+      ],
+      "change": -0.09,
+      "fx_activation": 0.381,
+      "rank": 6,
+      "visual": false
+    }
+  ],
+  "copywriting": {
+    "emotion": "nostalgic",
+    "keyword": "思念藏在歌里",
+    "description": "开阔空间混响结合全景立体声场，打造极具纵深感的回忆结界，满是想念",
+    "descriptionKey": "space_size+stereo_width",
+    "matchLevel": "matched_rank_order"
+  }
+}

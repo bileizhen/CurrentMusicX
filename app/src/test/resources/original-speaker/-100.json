@@ -1,0 +1,60 @@
+{
+  "cmp": {
+    "on": false
+  },
+  "eq": {
+    "on": true,
+    "eqs": [
+      -0.5,
+      -1,
+      1.2,
+      1.4,
+      -0.2,
+      1,
+      0.3,
+      0.4,
+      1.8,
+      1.4
+    ]
+  },
+  "peq": {
+    "on": false
+  },
+  "rvb": {
+    "on": false
+  },
+  "limiter": {
+    "on": false
+  },
+  "se": {
+    "on": false
+  },
+  "bt": {
+    "on": false
+  },
+  "rotate": {
+    "on": false
+  },
+  "spspatial": {
+    "on": true,
+    "upmix": 1,
+    "lronoff": 0,
+    "lrangle": 10,
+    "otheronoff": 0,
+    "global": 0,
+    "center": 1.5,
+    "lfe": 0,
+    "fl": 3.2,
+    "fr": 3.2,
+    "left": 0,
+    "right": 0,
+    "rl": 0,
+    "rr": 0,
+    "ul": 0,
+    "ur": 0
+  },
+  "alc": {
+    "on": false
+  },
+  "effect_name": "横屏基线2-v2"
+}

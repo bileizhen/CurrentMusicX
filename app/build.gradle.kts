@@ -1,4 +1,5 @@
 import java.util.Properties
+import java.security.MessageDigest
 
 plugins {
     id("com.android.application")
@@ -14,6 +15,11 @@ val keystoreProperties = rootProject.file("keystore.properties").takeIf { it.isF
     Properties().apply { file.inputStream().use(::load) }
 }
 
+// Local interoperability preview. Vendor binaries are kept in the ignored evidence
+// directory, never silently copied into ordinary builds or public releases.
+val originalEffectsPreview = providers.gradleProperty("neteaseOriginalEffects").orNull == "true"
+val originalEffectsLibs = rootProject.file(".verification/sound-effects/port/runtime-libs")
+
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 android {
@@ -28,9 +34,24 @@ android {
         versionCode = 18
         versionName = "1.1.11"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("boolean", "NETEASE_ORIGINAL_EFFECTS", originalEffectsPreview.toString())
     }
 
     buildFeatures { compose = true; buildConfig = true }
+    if (originalEffectsPreview) {
+        check(originalEffectsLibs.resolve("arm64-v8a/libneaudioeffects.so").isFile) { "Prepare the local original-effects preview libraries first" }
+        val engineDigest = MessageDigest.getInstance("SHA-256")
+            .digest(originalEffectsLibs.resolve("arm64-v8a/libneaudioeffects.so").readBytes())
+            .joinToString("") { "%02x".format(it.toInt() and 255) }
+        check(engineDigest == "3f8e2eec659080cb8e90bbfc672d327a180e4e0b6c051818e38625c5f01fcbd1") {
+            "The preview adapter only supports the verified NetEase 9.5.30 arm64 engine"
+        }
+        sourceSets.getByName("main").jniLibs.srcDir(originalEffectsLibs)
+        sourceSets.getByName("main").assets.srcDir(rootProject.file(".verification/sound-effects/port/runtime-assets"))
+    }
+    if (originalEffectsPreview || providers.gradleProperty("neteaseOriginalTestAssets").orNull == "true") {
+        sourceSets.getByName("androidTest").assets.srcDir(rootProject.file(".verification/sound-effects/port/test-assets"))
+    }
     signingConfigs {
         if (keystoreProperties != null) {
             create("release") {
@@ -58,6 +79,7 @@ android {
 }
 
 dependencies {
+    implementation("org.mozilla:rhino:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
     implementation("io.coil-kt.coil3:coil-compose:3.3.0")
