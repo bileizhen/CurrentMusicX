@@ -54,6 +54,11 @@ class SoundEffectsMiniPlayerTest {
             compose.onNodeWithTag("native_sound_effects_page").assertIsDisplayed()
             compose.onNodeWithTag("mini_player").assertIsDisplayed()
             compose.onNodeWithTag("mini_title", useUnmergedTree = true).assertTextEquals("浮光")
+            val list = compose.onNodeWithTag("sound_effects_screen").fetchSemanticsNode().boundsInRoot
+            val window = compose.onNodeWithTag("music_window").fetchSemanticsNode().boundsInRoot
+            val player = compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot
+            assertTrue("Content must extend behind the whole player: $list / $player", list.bottom >= player.bottom)
+            assertEquals("No blank bottom strip may truncate the scrolling viewport", window.bottom, list.bottom, 1f)
             compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_local_jazz"))
             compose.onNodeWithTag("sound_effects_screen").performTouchInput { swipeUp() }
             val last = compose.onNodeWithTag("sound_local_jazz").fetchSemanticsNode().boundsInRoot

@@ -136,7 +136,7 @@ import kotlinx.serialization.json.*
         else -> "等待连接播放器"
     }
     Box(Modifier.fillMaxSize().background(background), contentAlignment = Alignment.TopCenter) {
-    Column(Modifier.widthIn(max = 680.dp).fillMaxSize().statusBarsPadding().navigationBarsPadding().testTag("native_sound_effects_page")) {
+    Column(Modifier.widthIn(max = 680.dp).fillMaxSize().statusBarsPadding().testTag("native_sound_effects_page")) {
         Box(Modifier.fillMaxWidth().height(48.dp)) {
             IconButton({ if (expandedCatalog) expandedCatalog = false else onBack() }, Modifier.align(Alignment.CenterStart).padding(start = 4.dp).size(48.dp)
                 .testTag("sound_effects_back")) {
@@ -151,7 +151,8 @@ import kotlinx.serialization.json.*
             }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("sound_effects_screen"), state = if (expandedCatalog) catalogListState else listState,
-            contentPadding = musicScrollPadding(PaddingValues(bottom = 20.dp)), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            contentPadding = musicScrollPadding(PaddingValues(bottom = 20.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())),
+            verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!expandedCatalog) {
             item { Text("大师音效", Modifier.padding(horizontal = 16.dp), fontSize = 16.sp, fontWeight = FontWeight.Bold) }
             item(key = "masters") {
@@ -409,7 +410,6 @@ import kotlinx.serialization.json.*
 
             }
         }
-        Spacer(Modifier.height(LocalMusicBottomInset.current))
     }
     }
     tileDetails?.let { tile -> MusicDialog(tile.name, onDismiss = { tileDetails = null }) {
