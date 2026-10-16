@@ -114,7 +114,7 @@ import kotlin.math.roundToInt
 }
 
 private fun soundEffectPhaseLabel(phase: SoundEffectNoticePhase) = when (phase) {
-    SoundEffectNoticePhase.APPLYING -> ""; SoundEffectNoticePhase.READY -> "已使用"
+    SoundEffectNoticePhase.APPLYING, SoundEffectNoticePhase.READY -> ""
     SoundEffectNoticePhase.WAITING -> "待生效"; SoundEffectNoticePhase.FAILED -> "未启用"
 }
 
