@@ -246,7 +246,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
         val miniRetainedAvailable = currentSong != null || playerState.mode == PlayerMode.ROOM
         val miniAvailable = !keyboardOpen && miniRetainedAvailable
-        val showMini = miniAvailable && !playerPresented && sceneStack.last() !in setOf("lib/video", EQUALIZER.toString())
+        val showMini = miniAvailable && !playerPresented && sceneStack.last() != "lib/video"
         PreloadMusicCovers(listOf(currentSong?.cover.orEmpty()), 800)
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
         var roomDialogOpen by remember { mutableStateOf(false) }
@@ -374,7 +374,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val sceneInsets = remember {
             NavEntryDecorator<String> { entry ->
                 val ribbonScene = ribbonEnabled.value && isPlaylistRoute(entry.contentKey.toString())
-                val miniSpace = if (availableMini.value && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video", EQUALIZER.toString())) miniInset.value else 0.dp
+                val miniSpace = if (availableMini.value && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video")) miniInset.value else 0.dp
                 // Each moving scene must cover the outgoing page and its dim scrim, including
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
                 Box(Modifier.fillMaxSize().background(if (ribbonScene) androidx.compose.ui.graphics.Color(0xFF0A0A0A) else MiuixTheme.colorScheme.background)
@@ -585,7 +585,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         }
         val dockVisible by remember(keyboardOpen, sceneStack) { derivedStateOf {
-            sceneStack.last() !in setOf("lib/video", EQUALIZER.toString()) && playerExpansion.value < .9999f
+            sceneStack.last() != "lib/video" && playerExpansion.value < .9999f
         } }
         val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
         KeyboardDockOverlay(keyboardOpen) {

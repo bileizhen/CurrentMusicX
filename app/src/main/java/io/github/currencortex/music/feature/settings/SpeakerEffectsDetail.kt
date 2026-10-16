@@ -35,6 +35,8 @@ import io.github.currencortex.music.core.media.OriginalSpeakerState
 import io.github.currencortex.music.data.effects.OriginalSpeakerScene
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
+import io.github.currencortex.music.ui.component.LocalMusicBottomInset
+import io.github.currencortex.music.ui.component.musicScrollPadding
 import io.github.currencortex.music.ui.component.MusicDialog
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Text
@@ -84,7 +86,7 @@ import top.yukonga.miuix.kmp.basic.Text
                 }
             }
             LazyColumn(Modifier.fillMaxSize().statusBarsPadding().testTag("sound_speaker_detail_scroll"), state = scroll,
-                contentPadding = PaddingValues(bottom = 140.dp)) {
+                contentPadding = musicScrollPadding(PaddingValues(bottom = 140.dp))) {
                 item(key = "speaker-hero") { Spacer(Modifier.height(heroHeight)) }
                 item(key = "speaker-heading") {
                     Column(Modifier.fillMaxWidth().padding(horizontal = 28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -149,7 +151,7 @@ import top.yukonga.miuix.kmp.basic.Text
                     }
                 }
             }
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Brush.verticalGradient(
+            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = LocalMusicBottomInset.current).background(Brush.verticalGradient(
                 listOf(art.base.copy(alpha = 0f), art.base.copy(alpha = .95f), art.base)))
                 .navigationBarsPadding().padding(start = 40.dp, end = 40.dp, top = 28.dp, bottom = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally) {
