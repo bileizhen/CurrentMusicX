@@ -32,6 +32,29 @@ import org.junit.Test
 /** Presentation only; never changes the real account, audio or island preferences. */
 class SoundEffectIslandNoticeTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun phaseUpdatesKeepOneFullyLitDiscAndWordmarkInsteadOfCrossfadingWholeRows() {
+        var notice by mutableStateOf(SoundEffectNotice(1, "AI 调音大师", SoundEffectNoticeTier.SVIP))
+        compose.setContent { SoundEffectIslandPill(notice) }
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(1000)
+        fun discBrightness(): Double {
+            val bitmap = compose.onNodeWithContentDescription("SVIP 唱片").captureToImage().asAndroidBitmap()
+            val pixels = IntArray(bitmap.width * bitmap.height)
+            bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+            return pixels.sumOf { pixel -> ((pixel shr 16 and 255) + (pixel shr 8 and 255) + (pixel and 255)).toDouble() }
+        }
+        val initialBrightness = discBrightness()
+        for (phase in listOf(SoundEffectNoticePhase.READY, SoundEffectNoticePhase.WAITING, SoundEffectNoticePhase.APPLYING)) {
+            compose.runOnIdle { notice = notice.copy(phase = phase) }
+            repeat(6) {
+                compose.mainClock.advanceTimeBy(32)
+                compose.onAllNodesWithContentDescription("SVIP 唱片").assertCountEquals(1)
+                compose.onAllNodesWithTag("sound_effect_island_wordmark").assertCountEquals(1)
+                assertTrue("An unchanged disc must not dim during a status update", discBrightness() >= initialBrightness * .97)
+            }
+        }
+        compose.mainClock.autoAdvance = true
+    }
     @Test fun expandingAndReturningKeepsTheNormalBodyAlive() {
         var notice by mutableStateOf<SoundEffectNotice?>(null)
         var mounted = 0
