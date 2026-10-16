@@ -225,8 +225,8 @@ class SoundEffectIslandNoticeTest {
                 val title = compose.onNodeWithTag(if (index < 2) "sound_effect_island_wordmark" else "sound_effect_island_title")
                     .getUnclippedBoundsInRoot()
                 val pill = compose.onNodeWithTag("sound_effect_island_notice").getUnclippedBoundsInRoot()
-                assertEquals("Empty status must leave only the 7 dp trailing inset at font=$font scale=$scale",
-                    7f, (pill.right - title.right).value, 1f)
+                assertEquals("Text needs a 14 dp trailing inset clear of the capsule curve at font=$font scale=$scale",
+                    14f, (pill.right - title.right).value, 1f)
                 val context = ApplicationProvider.getApplicationContext<android.content.Context>()
                 File(context.getExternalFilesDir(null), "compact-effect-$font-$index.png").outputStream().use {
                     compose.onNodeWithTag("desktop_island_transition").captureToImage().asAndroidBitmap()

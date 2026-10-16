@@ -92,7 +92,7 @@ import kotlin.math.roundToInt
         // A phase change only updates the status label. Crossfading two complete
         // rows made the unchanged disc/title visibly dim halfway through a fade.
         val current = notice
-        Row(Modifier.fillMaxHeight().padding(horizontal = 7.dp),
+        Row(Modifier.fillMaxHeight().padding(start = 7.dp, end = 14.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             val discSize = (height - 14.dp).coerceAtLeast(22.dp)
             if (current.tier != SoundEffectNoticeTier.STANDARD) {
