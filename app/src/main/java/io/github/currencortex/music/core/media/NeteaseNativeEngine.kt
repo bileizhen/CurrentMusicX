@@ -13,7 +13,7 @@ internal class NeteaseNativeEngine(sampleRate: Int, channels: Int, preset: Netea
     init {
         check(available()) { "原版音效引擎未加载" }
         require(sampleRate in 8_000..192_000 && channels in 1..2)
-        val parameters = if (preset.type == 1) NeteasePresetParameters.fromJson(preset.bytes.toString(Charsets.UTF_8))
+        val parameters = if (preset.type == 1) NeteasePresetParameters.fromJson(preset.bytes.toString(Charsets.UTF_8), channels = channels)
             else { require(preset.type == 2); NeteasePresetParameters.fromFir(preset.bytes) }
         effects = AudioEffects()
         try {

@@ -27,13 +27,13 @@ class NeteasePresetParameters private constructor(
         private const val MAX_FIR_BYTES = 8 * 1024 * 1024
 
         private val moduleNames = setOf("eq", "bt", "se", "rvb", "rotate", "peq", "cmp", "limiter",
-            "spatial", "spspatial", "alc", "noise", "chorus", "flanger", "dly", "channelDelay", "earFinger", "hearAudio")
+            "spatial", "spspatial", "alc", "noise", "chorus", "flanger", "dly", "channelDelay", "channeldelay", "earFinger", "hearAudio")
 
         /** Mirrors AudioEffectManager's whole-package aev2 replacement, rather than merging curves.
          * The compatible 9.5.30 engine supports the new configuration. Legacy callers may opt out.
          * External HRTF paths must be explicitly resolved into a verified local resource by the owner.
          */
-        fun fromJson(text: String, preferAev2: Boolean = true, soundType: Int = 1,
+        fun fromJson(text: String, preferAev2: Boolean = true, soundType: Int = 1, channels: Int = 2,
             resolveResource: (String) -> String? = { null }): NeteasePresetParameters {
             require(text.length <= MAX_JSON_BYTES && text.toByteArray(Charsets.UTF_8).size <= MAX_JSON_BYTES) {
                 "音效参数文件过大"
@@ -52,7 +52,18 @@ class NeteasePresetParameters private constructor(
                     '}', ']' -> depth--
                 }
             }
-            val document = JSONObject(text)
+            val envelope = JSONObject(text)
+            require(channels in 1..12) { "音效声道数量无效" }
+            val version = envelope.opt("version")
+            require(version == null || version is String && version in setOf("v1", "v2", "v3")) { "音效参数版本无效" }
+            // Current full-surround materials contain separate stereo / 5.1 / 7.1.4
+            // plans. Select the sink's plan; never merge their delays or EQ bands.
+            val document = if (version == "v3") {
+                require(envelope.keys().asSequence().all { it in setOf("0", "2", "6", "12", "version", "effect_name") }) { "音效包含未知声道配置" }
+                val key = if (channels == 1) "2" else channels.toString()
+                val selected = if (envelope.has(key)) envelope.opt(key) else envelope.opt("0")
+                selected as? JSONObject ?: throw IllegalArgumentException("音效缺少当前声道的参数")
+            } else JSONObject(envelope.toString()).apply { remove("version") }
             require(document.keys().asSequence().all { it in moduleNames || it == "aev2" || it == "order" || it == "effect_name" }) { "音效包含未知处理模块" }
             val newer = if (document.has("aev2") && !document.isNull("aev2"))
                 document.opt("aev2") as? JSONObject ?: throw IllegalArgumentException("aev2 格式无效") else null
@@ -93,7 +104,9 @@ class NeteasePresetParameters private constructor(
                 }
                 require(order.distinct().size == order.size) { "音效链包含重复模块" }
                 if (order.isNotEmpty()) call("setCustomEffectChainOrder", order.toList()) {
-                    check(it.setCustomEffectChainOrder(order)) { "原版引擎不支持此音效链顺序" }
+                    // The original Java applier also continues when this optional
+                    // order is rejected (e.g. vendor lists containing effect_name).
+                    it.setCustomEffectChainOrder(order)
                 }
             }
             root.module("eq")?.let(::equalizer)
@@ -111,7 +124,8 @@ class NeteasePresetParameters private constructor(
             root.module("chorus")?.let(::chorus)
             root.module("flanger")?.let(::flanger)
             root.module("dly")?.let(::delay)
-            root.module("channelDelay")?.let(::channelDelay)
+            require(!(root.has("channelDelay") && root.has("channeldelay"))) { "重复的声道延迟模块" }
+            (root.module("channelDelay") ?: root.module("channeldelay"))?.let(::channelDelay)
             root.module("earFinger")?.let(::earFinger)
             root.module("hearAudio")?.let(::hearing)
             return NeteasePresetParameters(root.keys().asSequence().filter { it != "order" }.toSet(), result.toList(), usesAev2)
@@ -137,13 +151,15 @@ class NeteasePresetParameters private constructor(
                 call("setBassTrebleParams", bass, treble) { it.setBassTrebleParams(bass, treble) }
                 val extra = listOf("bassFreq", "bassQ", "trebleFreq", "trebleQ")
                 if (extra.any(o::has)) {
-                    require(extra.all(o::has)) { "低高音扩展参数不完整" }
-                    val bf = o.f("bassFreq", 1f, 192_000f)
-                    val bq = o.f("bassQ", 0.1f, 10f)
-                    val tf = o.f("trebleFreq", 1f, 192_000f)
-                    val tq = o.f("trebleQ", 0.1f, 10f)
-                    // Same order and units as the original Java package applier.
-                    call("setBassTrebleExtraParams", bf, bq, tf, tq) { it.setBassTrebleExtraParams(bf, bq, tf, tq) }
+                    val bf = o.finite("bassFreq")
+                    val bq = o.finite("bassQ")
+                    val tf = o.finite("trebleFreq")
+                    val tq = o.finite("trebleQ")
+                    // Lao0/a.g leaves native defaults intact for zero-Q beans.
+                    // Its final bound is on treble gain, not treble Q.
+                    if (bq in 0.1f..10f && tq >= 0.1f && treble <= 10f) {
+                        call("setBassTrebleExtraParams", bf, bq, tf, tq) { it.setBassTrebleExtraParams(bf, bq, tf, tq) }
+                    }
                 }
             } else o.validateNumbers()
             call("setBassTrebleON", on) { it.setBassTrebleON(on) }
@@ -262,7 +278,8 @@ class NeteasePresetParameters private constructor(
                     val freq = if (b.has("freq")) b.f("freq", if (enabled) 1f else 0f, 192_000f) else 0f
                     val q = if (b.has("q")) b.f("q", 0f, 100f) else 0f
                     require(!enabled || freq > 0f) { "启用的均衡器滤波器频率必须大于零" }
-                    require(!enabled || q > 0f) { "启用的均衡器滤波器 Q 必须大于零" }
+                    // Original low/high-pass and shelving presets legitimately use
+                    // Q=0; the native filter interprets it according to its type.
                     call("setParametricEQFilterParams", band, type, gain, freq, q, enabled) { e -> e.setParametricEQFilterParams(band, type, gain, freq, q, enabled) }
                 } else b.validateNumbers()
             }
@@ -353,7 +370,12 @@ class NeteasePresetParameters private constructor(
             val on = o.on()
             val peq = o.module("peq")?.also { it.only("f") }
             val filters = peq?.arrayOrNull("f")?.objects(32)
-            filters?.forEach { it.only("type", "gain", "freq", "q", "on") }
+            filters?.forEach {
+                // NoiseBand has no native band slot; the original handler uses
+                // each entry's list index, and defaults absent bean fields to zero.
+                it.only("band", "type", "gain", "freq", "q", "on")
+                if (it.has("band")) it.i("band", 0, 31)
+            }
             if (on) {
                 val type = o.integer("type"); val link = o.integer("link")
                 val wet = o.finite("wet"); val dry = o.finite("dry"); val st = o.finite("stime"); val lt = o.finite("ltime")
@@ -362,7 +384,8 @@ class NeteasePresetParameters private constructor(
                 val peqOn = o.b("peqonoff")
                 call("setNoiseGenPeqOnOff", peqOn) { it.setNoiseGenPeqOnOff(peqOn) }
                 filters?.forEachIndexed { index, b ->
-                    val t = b.i("type", 0, 10); val g = b.finite("gain"); val f = b.finite("freq"); val q = b.finite("q"); val enabled = b.on()
+                    val t = if (b.has("type")) b.i("type", 0, 10) else 0
+                    val g = b.finite("gain"); val f = b.finite("freq"); val q = b.finite("q"); val enabled = b.on()
                     call("setNoiseGenPeqFilterParams", index, t, g, f, q, enabled) { it.setNoiseGenPeqFilterParams(index, t, g, f, q, enabled) }
                 }
             }
