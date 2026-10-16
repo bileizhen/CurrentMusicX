@@ -73,13 +73,20 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
 
 data class DesktopWindowStatus(val attached: Boolean = false, val visible: Boolean = false,
     val error: String? = null, val alpha: Float = 0f, val width: Int = 0, val height: Int = 0, val x: Int = 0, val y: Int = 0,
-    val contentWidth: Int = 0, val contentHeight: Int = 0, val editing: Boolean = false,
+    val contentWidth: Int = 0, val contentHeight: Int = 0, val contentTop: Int = 0, val editing: Boolean = false,
     val islandFps: Boolean = false, val islandTouchable: Boolean = false)
 data class DesktopSafeArea(val left: Int, val top: Int, val right: Int, val bottom: Int) {
     val width get() = (right - left).coerceAtLeast(1)
     val height get() = (bottom - top).coerceAtLeast(1)
 }
 data class DesktopPlacement(val x: Int, val y: Int, val width: Int, val height: Int)
+
+/** Space for editing chrome, two lyric lines and the largest effect notice.
+ * Depends on display configuration only, never on an animated content measurement.
+ */
+internal fun desktopIslandSurfaceHeight(density: Float, fontScale: Float, safeHeight: Int): Int =
+    ((112f + 96f * fontScale.coerceAtLeast(1f)) * density).toInt().coerceIn(1, safeHeight.coerceAtLeast(1))
+
 internal fun desktopWindowAlpha(opacity: Float, locked: Boolean, maximum: Float): Float =
     opacity.finite(.85f).coerceIn(.35f, 1f).let { if (locked) minOf(it, (maximum - .01f).coerceIn(0f, 1f)) else it }
 

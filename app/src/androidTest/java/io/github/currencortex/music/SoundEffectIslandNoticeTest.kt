@@ -29,6 +29,26 @@ import org.junit.Test
 /** Presentation only; never changes the real account, audio or island preferences. */
 class SoundEffectIslandNoticeTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun expandingAndReturningKeepsTheNormalBodyAlive() {
+        var notice by mutableStateOf<SoundEffectNotice?>(null)
+        var mounted = 0
+        var disposed = 0
+        compose.setContent { Box(Modifier.width(340.dp)) {
+            DesktopIslandEffectTransition(notice) {
+                DisposableEffect(Unit) { mounted++; onDispose { disposed++ } }
+                Spacer(Modifier.width(120.dp).height(32.dp))
+            }
+        } }
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { notice = SoundEffectNotice(1, "AI 调音大师", SoundEffectNoticeTier.SVIP) }
+        compose.mainClock.advanceTimeBy(240)
+        compose.onNodeWithContentDescription("SVIP 唱片").assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(600)
+        compose.runOnIdle { assertEquals(1, mounted); assertEquals(0, disposed); notice = null }
+        compose.mainClock.advanceTimeBy(600)
+        compose.runOnIdle { assertEquals(1, mounted); assertEquals(0, disposed) }
+        compose.mainClock.autoAdvance = true
+    }
     @Test fun phaseUpdatesKeepTheExpandedCapsuleGeometryStable() {
         var notice by mutableStateOf(SoundEffectNotice(1, "原声黑胶", SoundEffectNoticeTier.SVIP))
         compose.setContent { Box(Modifier.width(340.dp)) {
@@ -85,7 +105,7 @@ class SoundEffectIslandNoticeTest {
             SoundEffectNoticePhase.READY, "已开启，播放后生效") }
         compose.mainClock.advanceTimeBy(1300)
         compose.onNodeWithText("SVIP").assertIsDisplayed()
-        compose.onNodeWithTag("desktop_island_fps").assertDoesNotExist()
+        compose.onNodeWithTag("desktop_island_fps").assertIsNotDisplayed()
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         File(context.getExternalFilesDir(null), "effect-island-svip.png").outputStream().use {
             compose.onNodeWithTag("sound_effect_island_notice").captureToImage().asAndroidBitmap()

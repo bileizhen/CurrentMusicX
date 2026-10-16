@@ -4,6 +4,21 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class DesktopGeometryTest {
+    @Test fun fixedSurfaceAccommodatesNoticeAndEditingAtLargeFontsWithoutExceedingScreen() {
+        assertEquals(624, desktopIslandSurfaceHeight(3f, 1f, 2400))
+        assertEquals(912, desktopIslandSurfaceHeight(3f, 2f, 2400))
+        assertEquals(480, desktopIslandSurfaceHeight(3f, 2f, 480))
+        // The logical pill still reaches the bottom; the fixed surface provides
+        // an internal offset rather than changing native geometry for every frame.
+        val screen = DesktopSafeArea(0, 0, 1080, 2400)
+        val surface = desktopIslandPlacement(screen, 1000, desktopIslandSurfaceHeight(3f, 1f, 2400), 1f, 540)
+        for (content in listOf(96, 128, 168, 240)) {
+            val logical = desktopIslandPlacement(screen, 1000, content, 1f, 540)
+            val offset = logical.y - surface.y
+            assertTrue(offset >= 0)
+            assertEquals(2400, surface.y + offset + content)
+        }
+    }
     @Test fun rotationAndOversizedWindowsAlwaysRemainInsideSafeArea() {
         for (area in listOf(DesktopSafeArea(20, 90, 1080, 2300), DesktopSafeArea(90, 20, 2300, 1080))) {
             for (x in listOf(-4f, 0f, .5f, 1f, 8f, Float.NaN)) {

@@ -24,6 +24,53 @@ class DesktopLyricsWindowTest {
     private fun shell(command: String) = instrumentation.uiAutomation.executeShellCommand(command).use { p ->
         java.io.FileInputStream(p.fileDescriptor).bufferedReader().use { it.readText() }
     }
+    @Test fun effectMorphKeepsTheNativeBufferFixedAndRestoresTouchAtTopAndBottom(): Unit = runBlocking {
+        check(context.packageName.endsWith(".verification"))
+        assumeTrue(Settings.canDrawOverlays(context))
+        context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        val container = AppContainer(context, "island-effect-buffer-${UUID.randomUUID()}", useNativeNetease = false)
+        val notices = MutableStateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?>(null)
+        var host: DesktopLyricsHost? = null
+        val samples = StringBuilder("elapsed,width,height,x,y,contentWidth,contentHeight,contentTop,touchable\n")
+        try {
+            container.ready.await(); container.desktopLyrics.ready.await()
+            withContext(Dispatchers.Main) { host = DesktopLyricsHost(context, MutableStateFlow(PlaybackLyricsState()),
+                MutableStateFlow(PlayerState()), container.desktopLyrics, container.desktopLyricsStatus,
+                effectNotices = notices) }
+            suspend fun awaitInput() = withTimeout(8000) {
+                while (!container.desktopLyricsStatus.value.islandTouchable) delay(25)
+            }
+            for (y in listOf(.05f, 1f)) {
+                container.desktopLyrics.edit { it.copy(enabled = true, locked = true, islandY = y) }
+                awaitInput(); delay(800)
+                val baseline = container.desktopLyricsStatus.value
+                fun geometry(s: DesktopWindowStatus) = listOf(s.width, s.height, s.x, s.y)
+                val start = SystemClock.elapsedRealtime()
+                var minWidth = Int.MAX_VALUE; var maxWidth = 0
+                for (step in 0..90) {
+                    when (step) {
+                        0 -> notices.value = io.github.currencortex.music.core.media.SoundEffectNotice(1, "AI 调音大师",
+                            io.github.currencortex.music.core.media.SoundEffectNoticeTier.SVIP)
+                        20 -> notices.value = notices.value!!.copy(phase = io.github.currencortex.music.core.media.SoundEffectNoticePhase.READY,
+                            message = "已开启，播放后生效")
+                        35, 60 -> notices.value = null
+                        42 -> notices.value = io.github.currencortex.music.core.media.SoundEffectNotice(2, "全景环绕",
+                            io.github.currencortex.music.core.media.SoundEffectNoticeTier.VIP)
+                    }
+                    delay(16)
+                    val s = container.desktopLyricsStatus.value
+                    assertEquals("Native buffer cannot resize during use/cancel", geometry(baseline), geometry(s))
+                    assertTrue(s.contentTop >= 0 && s.contentTop + s.contentHeight <= s.height)
+                    if (notices.value != null) assertFalse("No input-window resize during effect morph", s.islandTouchable)
+                    minWidth = minOf(minWidth, s.contentWidth); maxWidth = maxOf(maxWidth, s.contentWidth)
+                    samples.append("${SystemClock.elapsedRealtime() - start},${s.width},${s.height},${s.x},${s.y},${s.contentWidth},${s.contentHeight},${s.contentTop},${s.islandTouchable}\n")
+                }
+                assertTrue("Visible pill still morphs inside the buffer", maxWidth > minWidth + 40)
+                awaitInput()
+            }
+            java.io.File(context.getExternalFilesDir(null), "island-effect-buffer.csv").writeText(samples.toString())
+        } finally { withContext(Dispatchers.Main) { host?.close() }; container.close() }
+    }
     @Test fun realIslandTrackChangesKeepIntermediateHeightsWithoutMovingTheNativeWindow(): Unit = runBlocking {
         check(context.packageName.endsWith(".verification"))
         assumeTrue("Grant the isolated app overlay permission in system settings first", Settings.canDrawOverlays(context))
@@ -106,12 +153,12 @@ class DesktopLyricsWindowTest {
             }
             fun tap() {
                 val s = container.desktopLyricsStatus.value
-                shell("input tap ${s.x + s.width / 2} ${s.y + s.height - s.contentHeight / 2}")
+                shell("input tap ${s.x + s.width / 2} ${s.y + s.contentTop + s.contentHeight / 2}")
             }
             fun tapCover() {
                 val s = container.desktopLyricsStatus.value
                 val x = s.x + (s.width - s.contentWidth) / 2 + s.contentHeight / 2 - 4 * context.resources.displayMetrics.density
-                shell("input tap ${x.toInt()} ${s.y + s.height - s.contentHeight / 2}")
+                shell("input tap ${x.toInt()} ${s.y + s.contentTop + s.contentHeight / 2}")
             }
             suspend fun awaitInputWindowRemoved() {
                 withTimeout(5000) {
@@ -162,7 +209,7 @@ class DesktopLyricsWindowTest {
             fun swipe(left: Boolean) {
                 val s = container.desktopLyricsStatus.value
                 val distance = (s.contentWidth * .35f).toInt()
-                val x = s.x + s.width / 2; val y = s.y + s.height - s.contentHeight / 2
+                val x = s.x + s.width / 2; val y = s.y + s.contentTop + s.contentHeight / 2
                 shell("input swipe ${x + if (left) distance else -distance} $y ${x + if (left) -distance else distance} $y 250")
             }
             swipe(true); swipe(false)
@@ -216,7 +263,8 @@ class DesktopLyricsWindowTest {
             val editHeight = container.desktopLyricsStatus.value.height
             val density = context.resources.displayMetrics.density
             assertTrue("Island width remains bounded", container.desktopLyricsStatus.value.width >= 160 * density)
-            withTimeout(10000) { while (container.desktopLyricsStatus.value.height >= editHeight - 30 * density) delay(50) }
+            withTimeout(10000) { while (container.desktopLyricsStatus.value.editing) delay(50) }
+            assertEquals("Editing chrome shrinks inside the fixed native buffer", editHeight, container.desktopLyricsStatus.value.height)
             instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
                 java.io.FileOutputStream(java.io.File(context.getExternalFilesDir(null), "desktop-island-portrait.png")).use {
                     bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
@@ -287,7 +335,7 @@ class DesktopLyricsWindowTest {
                 assertTrue("Adaptive shell remains bounded", frame.height in (30 * density).toInt()..(70 * density).toInt())
                 assertTrue("Every width transition stays centered", kotlin.math.abs(frame.x + frame.width / 2 - context.getSystemService(android.view.WindowManager::class.java).maximumWindowMetrics.bounds.centerX()) <= 2)
             }
-            assertTrue("Translation grows the shell only when visible", container.desktopLyricsStatus.value.height > beforeSwitch.height + 5 * density)
+            assertTrue("Translation grows the shell only when visible", container.desktopLyricsStatus.value.contentHeight > beforeSwitch.contentHeight + 5 * density)
             container.desktopLyrics.edit { it.copy(islandY = DESKTOP_ISLAND_HEIGHT) }
             shell("input keyevent 3")
             delay(350)
