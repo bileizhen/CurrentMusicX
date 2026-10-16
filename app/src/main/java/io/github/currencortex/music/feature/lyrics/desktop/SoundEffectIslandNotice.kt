@@ -56,16 +56,17 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.media.*
-import kotlin.math.sin
 import kotlin.math.roundToInt
 
-/** One compact row with a finite highlight; detailed feedback stays accessible to screen readers. */
+/** One compact row with a stationary, fading glow; details stay accessible to screen readers. */
 @Composable internal fun SoundEffectIslandPill(notice: SoundEffectNotice, modifier: Modifier = Modifier,
     material: Boolean = true, height: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE) {
     val motion = rememberDesktopMotion()
-    val flow = remember { Animatable(0f) }
-    LaunchedEffect(notice.id, notice.phase) {
-        flow.snapTo(0f); flow.animateTo(1f, tween(if (motion) 1250 else 0))
+    val glow = remember { Animatable(0f) }
+    LaunchedEffect(motion) {
+        // Keep the glow continuous across loading/success and rapid selections.
+        // The shared shell already fades it out when returning to FPS/lyrics.
+        glow.animateTo(1f, tween(if (motion) 720 else 0, easing = FastOutSlowInEasing))
     }
     val accent by animateColorAsState(soundEffectNoticeAccent(notice), tween(if (motion) 320 else 0), label = "effect content tint")
     val phase = soundEffectPhaseLabel(notice.phase)
@@ -76,11 +77,11 @@ import kotlin.math.roundToInt
         .semantics { liveRegion = LiveRegionMode.Polite; stateDescription = "$phase：${notice.message}" }
         .testTag("sound_effect_island_notice")) {
         Canvas(Modifier.matchParentSize()) {
-            if (motion && flow.value < 1f) {
-                val x = (size.width + size.height * 2f) * flow.value - size.height
-                drawLine(accent.copy(alpha = .18f * sin(flow.value * Math.PI).toFloat()),
-                    Offset(x, size.height), Offset(x + size.height * .7f, 0f), size.height * .38f)
-            }
+            drawRect(Brush.radialGradient(
+                colors = listOf(accent.copy(alpha = .22f * glow.value),
+                    accent.copy(alpha = .08f * glow.value), Color.Transparent),
+                center = Offset(size.width * .5f, size.height * .75f),
+                radius = size.width.coerceAtLeast(size.height) * .65f))
         }
         AnimatedContent(notice, contentKey = { it.id to it.phase }, label = "effect notice content",
             transitionSpec = { (fadeIn(tween(if (motion) 180 else 0)) togetherWith
