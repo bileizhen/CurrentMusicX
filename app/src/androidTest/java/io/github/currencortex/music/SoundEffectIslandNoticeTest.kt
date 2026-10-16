@@ -102,11 +102,13 @@ class SoundEffectIslandNoticeTest {
         compose.setContent { SoundEffectIslandPill(notice) }
         compose.onNodeWithText("SVIP").assertDoesNotExist()
         compose.onNodeWithContentDescription("SVIP 唱片").assertIsDisplayed()
-        compose.onNodeWithText("正在启用").assertIsDisplayed()
+        compose.onNodeWithText("正在启用").assertDoesNotExist()
+        compose.onNodeWithText("已使用").assertDoesNotExist()
         compose.runOnIdle { notice = notice.copy(phase = SoundEffectNoticePhase.READY, message = "已开启，播放后生效") }
         compose.onNodeWithText("已开启，播放后生效").assertDoesNotExist()
         compose.onNodeWithTag("sound_effect_island_notice").assert(SemanticsMatcher.expectValue(
-            SemanticsProperties.StateDescription, "已启用：已开启，播放后生效"))
+            SemanticsProperties.StateDescription, "已使用：已开启，播放后生效"))
+        compose.onNodeWithText("已使用").assertIsDisplayed()
         compose.onNodeWithContentDescription("SVIP 唱片").assertIsDisplayed()
         compose.runOnIdle { notice = SoundEffectNotice(2, "另一音效", SoundEffectNoticeTier.VIP,
             SoundEffectNoticePhase.FAILED, "当前账号没有权益") }
