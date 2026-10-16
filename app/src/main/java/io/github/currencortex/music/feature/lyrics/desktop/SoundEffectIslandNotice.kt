@@ -2,6 +2,7 @@ package io.github.currencortex.music.feature.lyrics.desktop
 
 import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
@@ -72,7 +73,8 @@ import kotlin.math.roundToInt
     }
     val accent by animateColorAsState(soundEffectNoticeAccent(notice), tween(if (motion) 320 else 0), label = "effect content tint")
     val phase = soundEffectPhaseLabel(notice.phase)
-    Box(modifier.widthIn(max = 340.dp).height(height).then(if (material) Modifier.clip(RoundedCornerShape(50))
+    Box(modifier.animateContentSize(tween(if (motion) 320 else 0, easing = FastOutSlowInEasing))
+        .widthIn(max = 340.dp).height(height).then(if (material) Modifier.clip(RoundedCornerShape(50))
         .background(Brush.verticalGradient(listOf(Color(0xFF11141B), Color(0xFF080B10))))
         .border(.8.dp, Color.White.copy(alpha = .2f), RoundedCornerShape(50)) else Modifier)
         .semantics { liveRegion = LiveRegionMode.Polite; stateDescription = if (phase.isEmpty()) notice.message else "$phase：${notice.message}" }
@@ -105,8 +107,9 @@ import kotlin.math.roundToInt
                 }
             }
             SoundEffectIslandTitle(current.name, accent, font, Modifier.weight(1f, fill = false))
-            // Reserve all four characters during loading/success/failure: no width jump.
-            BasicText(soundEffectPhaseLabel(current.phase), Modifier.width(with(LocalDensity.current) { 40.sp.toDp() }),
+            // Empty status has no node, width or inter-item gap. A visible error
+            // uses only its actual text width; the pill animates that size change.
+            if (phase.isNotEmpty()) BasicText(phase,
                 style = TextStyle(color = accent.copy(alpha = .85f), fontSize = 9.sp,
                     textAlign = TextAlign.End), maxLines = 1, softWrap = false)
         }
