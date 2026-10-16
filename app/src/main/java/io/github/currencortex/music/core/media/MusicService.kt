@@ -42,9 +42,6 @@ class MusicService : MediaSessionService() {
     private var desktopLyrics: io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost? = null
     private var session: MediaSession? = null
     private var loading: Job? = null
-    private var pendingPosition = 0L
-    private var pendingPlay = true
-    private var approvedSong: Long? = null
     private val listening = ListeningTracker()
     private var trackedSong: Song? = null
     private var trackedSession = RequestSession("", null)
@@ -52,7 +49,7 @@ class MusicService : MediaSessionService() {
     private var lastFlush = 0L
     private var videoView: PlayerView? = null
     private val readyForPreload = MutableStateFlow(false)
-    private data class PreloadPlan(val request: AudioRequest, val warn: Boolean, val metered: Boolean)
+    private data class PreloadPlan(val request: AudioRequest, val metered: Boolean)
     private fun currentSession(song: Song? = container.playbackQueue.state.value.current) =
         if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.session() else container.musicSession()
     private fun audioRequest(song: Song, quality: AudioQuality) = container.audioRequest(song, quality)
@@ -98,8 +95,7 @@ class MusicService : MediaSessionService() {
         transitions = PlaybackTransitions(createPlaybackPlayer(probe), probe, scope, ::createPlaybackPlayer,
             ::transitionOffer, resolve = { offer ->
                 val resolved = container.audioSources.resolve(offer.request)
-                if (resolved.source.highSpec && container.musicSettings.snapshot().warnHighSpec) null
-                else MediaItemFactory.create(offer.next, resolved.source.url, resolved.key.takeIf(String::isNotBlank))
+                MediaItemFactory.create(offer.next, resolved.source.url, resolved.key.takeIf(String::isNotBlank))
             }, promote = ::promoteTransition, discard = { playerSlots.remove(it)?.equalizer?.close() },
             currentSong = { container.playbackQueue.state.value.current })
         audioFocus = PlaybackAudioFocus(player, container.musicSettings.concurrentPlaybackEnabled, scope)
@@ -149,7 +145,7 @@ class MusicService : MediaSessionService() {
                     }
                     val state = container.playerController.state.value
                     if (player.currentMediaItem == item && item.mediaId == queue.state.value.current?.id?.toString() &&
-                        state.mode == PlayerMode.LOCAL && !state.resolving && state.warning == null)
+                        state.mode == PlayerMode.LOCAL && !state.resolving)
                         container.playerController.state.value = state.copy(audioFullyCached = complete)
                 }
                 persistQueue()
@@ -164,9 +160,9 @@ class MusicService : MediaSessionService() {
             .combine(container.navidrome.state) { data, _ -> data }
             .combine(container.playerController.state) { (settings, account), state ->
                 val next = if (settings.preloadAudio && (account != null || container.nativeNetease != null || container.navidrome.state.value.configured) && state.mode == PlayerMode.LOCAL && state.playing &&
-                    !state.loading && !state.resolving && state.warning == null &&
+                    !state.loading && !state.resolving &&
                     player.currentMediaItem?.mediaId == container.playbackQueue.state.value.current?.id?.toString()) container.playbackQueue.previewNext() else null
-                next?.let { PreloadPlan(audioRequest(it, settings.quality), settings.warnHighSpec, settings.preloadMetered) }
+                next?.let { PreloadPlan(audioRequest(it, settings.quality), settings.preloadMetered) }
             }.combine(readyForPreload) { plan, ready -> plan.takeIf { ready } }
                 .combine(preloadNetwork(this@MusicService)) { plan, network -> plan.takeIf { network == 2 || network == 1 && it?.metered == true } }
                 .combine(container.audioCache.clearing) { plan, clearing -> plan.takeUnless { clearing } }
@@ -176,10 +172,8 @@ class MusicService : MediaSessionService() {
                     NextAudioPreloader(
                         resolve = { refresh -> container.audioSources.resolve(plan.request, refresh) },
                         preload = { resolved ->
-                            if (resolved.source.highSpec && plan.warn) false else {
-                                container.audioCache.preload(resolved.key, resolved.source)
-                                true
-                            }
+                            container.audioCache.preload(resolved.key, resolved.source)
+                            true
                         },
                         onFailure = { container.logger.info("Player", "Next audio preload unavailable; foreground playback is unaffected") },
                     ).run()
@@ -232,7 +226,7 @@ class MusicService : MediaSessionService() {
     private fun transitionOffer(): TransitionOffer? {
         val state = container.playerController.state.value
         val from = container.playbackQueue.state.value.current ?: return null
-        if (state.mode != PlayerMode.LOCAL || state.resolving || state.error != null || state.warning != null || from.video ||
+        if (state.mode != PlayerMode.LOCAL || state.resolving || state.error != null || from.video ||
             container.sleepTimer.state.value.waitingForSongEnd || container.audioCache.clearing.value ||
             player.currentMediaItem?.mediaId != from.id.toString()) return null
         val next = container.playbackQueue.previewNext()?.takeUnless { it.video } ?: return null
@@ -311,12 +305,8 @@ class MusicService : MediaSessionService() {
                 container.playerController.external?.let { it.play(playWhenReady); return Futures.immediateVoidFuture() }
                 if (!playWhenReady) {
                     transitions.pauseCompanion()
-                    pendingPlay = false
                     loading?.cancel()
                     container.playerController.state.value = container.playerController.state.value.copy(playing = false, playRequested = false, loading = false, resolving = false)
-                } else if (container.playerController.state.value.warning != null) {
-                    pendingPlay = true
-                    return Futures.immediateVoidFuture()
                 } else if (player.currentMediaItem?.mediaId != container.playbackQueue.state.value.current?.id?.toString()) {
                     prepareSong(true, container.playbackQueue.state.value.positionMs)
                     return Futures.immediateVoidFuture()
@@ -361,12 +351,7 @@ class MusicService : MediaSessionService() {
                 is AppResult.Success -> {
                     if (container.playbackQueue.state.value.current?.id != song.id) return@launch
                     val source = result.value.source
-                    if (source.highSpec && container.musicSettings.snapshot().warnHighSpec && approvedSong != song.id) {
-                        pendingPlay = play; pendingPosition = position
-                        container.playerController.state.value = container.playerController.state.value.copy(loading = false, resolving = false, warning = HighSpecWarning(song.id, source))
-                        return@launch
-                    }
-                    container.playerController.state.value = container.playerController.state.value.copy(resolving = false, warning = null, error = null,
+                    container.playerController.state.value = container.playerController.state.value.copy(resolving = false, error = null,
                         audioFullyCached = source.url.startsWith("cache://audio/"))
                     player.setMediaItem(MediaItemFactory.create(song, source.url, result.value.key.takeIf(String::isNotBlank)), position)
                     player.prepare(); player.playWhenReady = play
@@ -377,7 +362,7 @@ class MusicService : MediaSessionService() {
     inner class MusicSessionCallback : MediaSession.Callback {
         override fun onConnect(session: MediaSession, controller: MediaSession.ControllerInfo): MediaSession.ConnectionResult {
             val commands = MediaSession.ConnectionResult.DEFAULT_SESSION_COMMANDS.buildUpon()
-                .add(SessionCommand(LOAD, Bundle.EMPTY)).add(SessionCommand(ACCEPT_SPEC, Bundle.EMPTY)).build()
+                .add(SessionCommand(LOAD, Bundle.EMPTY)).build()
             val remoteCommands = commands.buildUpon().add(SessionCommand(QUIESCE, Bundle.EMPTY))
                 .add(SessionCommand(ROOM_TRACK, Bundle.EMPTY)).add(SessionCommand(ROOM_SYNC, Bundle.EMPTY)).build()
             return MediaSession.ConnectionResult.AcceptedResultBuilder(session).setAvailableSessionCommands(remoteCommands).build()
@@ -402,10 +387,6 @@ class MusicService : MediaSessionService() {
                     player.setPlaybackSpeed(args.getFloat("speed", 1f)); player.playWhenReady = args.getBoolean("play")
                 }
                 LOAD -> prepareSong(args.getBoolean("play", true), args.getLong("position", 0))
-                ACCEPT_SPEC -> {
-                    approvedSong = container.playerController.state.value.warning?.songId
-                    prepareSong(pendingPlay, pendingPosition)
-                }
                 else -> return@future SessionResult(SessionError.ERROR_NOT_SUPPORTED)
             }
             SessionResult(SessionResult.RESULT_SUCCESS)
@@ -429,7 +410,7 @@ class MusicService : MediaSessionService() {
         super.onDestroy()
     }
     companion object {
-        const val LOAD = "currentmusic.load"; const val ACCEPT_SPEC = "currentmusic.acceptSpec"
+        const val LOAD = "currentmusic.load"
         const val QUIESCE = "currentmusic.quiesce"; const val ROOM_TRACK = "currentmusic.roomTrack"; const val ROOM_SYNC = "currentmusic.roomSync"
         const val VIDEO_SURFACE = "io.github.currencortex.music.VIDEO_SURFACE"
     }

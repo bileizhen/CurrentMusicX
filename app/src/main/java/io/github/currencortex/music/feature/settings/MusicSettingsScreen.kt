@@ -139,8 +139,6 @@ import kotlin.math.roundToInt
         item { Card { MusicDestinationRow("默认音质", { qualityOpen = true },
             Modifier.testTag("default_quality"), summary = settings.quality.label) } }
         item { Card {
-            SettingsSwitch("高规格音频提醒", settings.warnHighSpec, vm::warning,
-                summary = "音源超出当前音质档位时先询问")
             SettingsSwitch("恢复播放队列", settings.restoreQueue, vm::restore,
                 summary = "重新打开应用时回到上次的播放位置")
         } }

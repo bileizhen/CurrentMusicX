@@ -106,7 +106,6 @@ import io.github.currencortex.music.feature.settings.MusicSettingsScreen
 import io.github.currencortex.music.ui.component.MusicDialog
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.feature.library.*
 import io.github.currencortex.music.data.song.Song
 import java.net.URLDecoder
@@ -636,7 +635,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         PlayerSheetHost(open = playerOpen, motion = playerSheetMotion, expansion = playerExpansion,
             origin = playerOrigin, viewport = navigationBounds, artwork = artworkTransition,
             artworkUrl = currentSong?.cover.orEmpty(), predictiveBack = predictiveBack,
-            backEnabled = !showLogs && pendingPlay == null && playerState.warning == null && !updateDialogVisible && !announcementVisible &&
+            backEnabled = !showLogs && pendingPlay == null && !updateDialogVisible && !announcementVisible &&
                 !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null &&
                 !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
             onBack = ::navigateBack, onSettled = { playerSheetMotion = PlayerSheetMotion.NONE }) {
@@ -664,7 +663,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !playerPresented && !searchPresented && !predictiveBack && !showLogs &&
-                pendingPlay == null && playerState.warning == null && !updateDialogVisible && !announcementVisible && !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
+                pendingPlay == null && !updateDialogVisible && !announcementVisible && !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }
@@ -696,15 +695,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 if (Build.VERSION.SDK_INT >= 33) permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
             })
             TextButton("继续播放", onClick = { explained = true; val action = pendingPlay; pendingPlay = null; action?.invoke() })
-        }
-        if (playerState.warning != null) MusicDialog("高规格音频", onDismiss = {
-            container.playerController.pause()
-            container.playerController.state.value = container.playerController.state.value.copy(warning = null)
-        }) {
-            Text("当前音频为高规格音频，部分设备可能出现断音、爆音或兼容问题。")
-            TextButton("继续播放", onClick = { container.playerController.acceptHighSpec() })
-            TextButton("切换无损", onClick = { playerVm.quality(AudioQuality.LOSSLESS) })
-            TextButton("以后不提示", onClick = { playerVm.suppressWarning() })
         }
         }
         AvatarFlightOverlay(avatarFlight)

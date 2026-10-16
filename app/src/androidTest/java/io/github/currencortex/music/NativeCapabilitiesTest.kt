@@ -79,7 +79,6 @@ class NativeCapabilitiesTest {
         container.musicSettings.setServer(server.url("/cm/").toString())
         container.accountRepository.server = server.url("/cm/").toString()
         container.musicSettings.setQuality(AudioQuality.STANDARD)
-        container.musicSettings.setWarning(false)
         container.updateSettings.setAutoCheck(false)
         container.settings.edit { AppearanceSettings(blur = false) }
         withContext(Dispatchers.Main) { container.playerController.clear() }
@@ -92,7 +91,6 @@ class NativeCapabilitiesTest {
         container.musicSettings.setServer(originalMusic.server)
         container.accountRepository.server = originalMusic.server
         container.musicSettings.setQuality(originalMusic.quality)
-        container.musicSettings.setWarning(originalMusic.warnHighSpec)
         container.musicSettings.setRestore(originalMusic.restoreQueue)
         container.musicSettings.setAccount(originalMusic.accountId, originalMusic.nickname)
         container.settings.edit { originalAppearance }
@@ -214,19 +212,15 @@ class NativeCapabilitiesTest {
             assertFalse(java.io.File(app.noBackupFilesDir, "session.aes").readBytes().toString(Charsets.UTF_8).contains("instrumentation-secret"))
         } finally { store.clear() }
     }
-    @Test fun highSpecRequiresDecisionAndLosslessChoiceResumesPlayback() {
+    @Test fun highSpecStartsWithoutDecisionOrChangingSelectedQuality() {
         highSpec = true
-        runBlocking { container.musicSettings.setWarning(true) }
         compose.setContent { CurrentMusicApp(container) }
         compose.mainClock.autoAdvance = false
         compose.runOnUiThread { container.playerController.playList(listOf(io.github.currencortex.music.data.song.Song(1, "High spec")), 0) }
-        compose.waitUntil(20000) { container.playerController.state.value.warning != null }
-        compose.mainClock.advanceTimeBy(800)
-        assertFalse(container.playerController.state.value.playing)
-        compose.onNodeWithText("切换无损").performClick()
         compose.waitUntil(20000) { container.playerController.state.value.playing }
-        assertEquals(AudioQuality.LOSSLESS, container.musicSettings.state.value.quality)
-        assertNull(container.playerController.state.value.warning)
+        assertEquals(AudioQuality.STANDARD, container.musicSettings.state.value.quality)
+        compose.onNodeWithText("高规格音频").assertDoesNotExist()
+        compose.onNodeWithText("切换无损").assertDoesNotExist()
     }
     @Test fun activityRecreationRetainsSearchAccountAndPlayingService() {
         runBlocking { container.authRepository.login("user", "pass") }

@@ -37,7 +37,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         val epoch = ++generation
         ++transportGeneration; commandIntent = null
         beforeExternal = saved; external = controls
-        state.value = state.value.copy(mode = mode, playing = false, playRequested = false, resolving = false, loading = false, warning = null,
+        state.value = state.value.copy(mode = mode, playing = false, playRequested = false, resolving = false, loading = false,
             canControlPlayback = mode != PlayerMode.ROOM, bufferedPositionMs = 0, audioFullyCached = false)
         // Await this command before telling a TV to play: it cancels pending source resolution too.
         try { connect().sendCustomCommand(SessionCommand(MusicService.QUIESCE, Bundle.EMPTY), Bundle.EMPTY).await() }
@@ -123,12 +123,12 @@ class PlayerController(private val context: Context, override val queue: Playbac
         val old = state.value
         val next = old.copy(song = queue.state.value.current, playing = player.isPlaying && commandIntent != false,
             playbackSpeed = player.playbackParameters.speed,
-            playRequested = commandIntent ?: if (state.value.resolving || state.value.warning != null) state.value.playRequested else player.playWhenReady,
+            playRequested = commandIntent ?: if (state.value.resolving) state.value.playRequested else player.playWhenReady,
             loading = state.value.resolving || player.playbackState == Player.STATE_BUFFERING,
-            bufferedPositionMs = if (matches && !state.value.resolving && state.value.warning == null && player.playbackState != Player.STATE_IDLE)
+            bufferedPositionMs = if (matches && !state.value.resolving && player.playbackState != Player.STATE_IDLE)
                 player.bufferedPosition.coerceAtLeast(0) else 0,
             audioFullyCached = state.value.audioFullyCached && state.value.song?.id == queue.state.value.current?.id &&
-                state.value.mode == PlayerMode.LOCAL && !state.value.resolving && state.value.warning == null,
+                state.value.mode == PlayerMode.LOCAL && !state.value.resolving,
             positionMs = if (matches && !state.value.resolving) player.currentPosition.coerceAtLeast(0)
                 else if (state.value.song?.id == queue.state.value.current?.id) state.value.positionMs else queue.state.value.positionMs,
             durationMs = if (matches) player.duration.takeIf { it > 0 } ?: queue.state.value.current?.durationMs ?: 0
@@ -143,7 +143,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         val action = ++transportGeneration
         commandIntent = play
         state.value = state.value.copy(song = queue.state.value.current, playing = false, playRequested = play,
-            loading = true, resolving = true, positionMs = position, error = null, warning = null, bufferedPositionMs = 0, audioFullyCached = false)
+            loading = true, resolving = true, positionMs = position, error = null, bufferedPositionMs = 0, audioFullyCached = false)
         try {
             val connected = connect()
             if (epoch != generation || action != transportGeneration || state.value.mode != PlayerMode.LOCAL) return@launch
@@ -212,9 +212,6 @@ class PlayerController(private val context: Context, override val queue: Playbac
     }
     fun qualityChanged() { if (localOnly()) load(state.value.showPause,
         if (state.value.song?.id == queue.state.value.current?.id) state.value.positionMs else queue.state.value.positionMs) }
-    fun acceptHighSpec() = scope.launch {
-        connect().sendCustomCommand(SessionCommand(MusicService.ACCEPT_SPEC, Bundle.EMPTY), Bundle.EMPTY).await()
-    }
     fun dismissError() { state.value = state.value.copy(error = null) }
     fun disconnect() { ++transportGeneration; commandIntent = null; controller?.release(); controller = null; connecting?.cancel(); connecting = null }
 }
