@@ -414,7 +414,7 @@ import kotlinx.serialization.json.*
         MusicTextAction("返回音效页", { tileDetails = null })
     } }
     if (showEngine) MusicDialog("原版音效引擎", onDismiss = { showEngine = false }) {
-        Text(if (original.available && originalMood.available) "引擎已就绪，支持原版音效和 AI 情绪调音师。"
+        Text(if (original.available && originalMood.available) "引擎已就绪，支持原版音效和 AI 情绪调音师，无需额外导入。"
             else "从本机网易云音乐或安装包导入兼容引擎。会员音效使用时会核验当前账号权益。",
             fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
         engineImport.message?.let { Text(it, Modifier.testTag("sound_engine_import_status"), fontSize = 13.sp,

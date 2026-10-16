@@ -12,7 +12,7 @@ import java.io.InputStream
 import java.security.MessageDigest
 import java.util.zip.ZipFile
 
-/** Explicit, version-bound import of the user's client libraries; account data is never read. */
+/** Bundled, version-bound native libraries, with explicit import retained as a fallback. */
 internal object NeteaseEngineLibraries {
     private const val ENGINE_HASH = "3f8e2eec659080cb8e90bbfc672d327a180e4e0b6c051818e38625c5f01fcbd1"
     private const val RUNTIME_HASH = "3e6d529147ffd66bd31fab85c8902b526abd1c06e43554ce64b97519e255e4b3"
@@ -35,6 +35,8 @@ internal object NeteaseEngineLibraries {
 
     @Synchronized fun moodAvailable(): Boolean {
         val owner = context ?: return false
+        if (BuildConfig.NETEASE_ORIGINAL_EFFECTS) return "arm64-v8a" in Build.SUPPORTED_ABIS.orEmpty() &&
+            moodLibraries.keys.all { File(owner.applicationInfo.nativeLibraryDir, it).isFile }
         return moodLibraries.all { (name, hash) -> verified(File(directory(owner), name), hash) }
     }
 
@@ -48,7 +50,10 @@ internal object NeteaseEngineLibraries {
         check(available()) { "请先导入兼容的网易云原版引擎" }
         val owner = checkNotNull(context)
         check(moodAvailable()) { "请重新导入网易云安装包以补充原版情绪模型引擎" }
-        moodLibraries.keys.forEach { System.load(File(directory(owner), it).absolutePath) }
+        moodLibraries.keys.forEach {
+            if (BuildConfig.NETEASE_ORIGINAL_EFFECTS) System.loadLibrary(it.removePrefix("lib").removeSuffix(".so"))
+            else System.load(File(directory(owner), it).absolutePath)
+        }
         moodLoaded = true
     }
 

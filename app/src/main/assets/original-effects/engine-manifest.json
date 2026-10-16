@@ -1,0 +1,30 @@
+{
+  "engineVersion": "NetEase 9.5.30",
+  "abi": "arm64-v8a",
+  "libraries": [
+    {
+      "name": "libc++_shared.so",
+      "sha256": "3e6d529147ffd66bd31fab85c8902b526abd1c06e43554ce64b97519e255e4b3"
+    },
+    {
+      "name": "libCore_MNN_JNI.so",
+      "sha256": "fec5363885343072c9aaf395a8560b217def8600404fa2ab9c940509215e0bef"
+    },
+    {
+      "name": "libcurrentmusic_netease_bridge.so",
+      "sha256": "56cf3e2cf764a7489dbaa6a3ec934f4e3516d0eb6e3c0ea3e691cf5b4692e275"
+    },
+    {
+      "name": "libMNN.so",
+      "sha256": "be7ad29454cfeecfb30399e32c3f600f963e69c7dd914f0001021fc78435249d"
+    },
+    {
+      "name": "libMNN_Express.so",
+      "sha256": "e095c40a22d3dbb83894c74b3735db857e5137079109cab25797864921d4de57"
+    },
+    {
+      "name": "libneaudioeffects.so",
+      "sha256": "3f8e2eec659080cb8e90bbfc672d327a180e4e0b6c051818e38625c5f01fcbd1"
+    }
+  ]
+}

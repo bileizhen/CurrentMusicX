@@ -24,8 +24,9 @@ class NeteaseOriginalEffectsTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val fixture = instrumentation.context.assets.list("").orEmpty().contains("netease-engine-fixture.apk")
         assumeTrue(BuildConfig.NETEASE_ORIGINAL_EFFECTS || fixture)
+        assumeTrue(instrumentation.context.assets.list("original-effects").orEmpty().contains("1001.ncae"))
         NeteaseNativeEngine.configure(instrumentation.targetContext)
-        if (fixture) {
+        if (fixture && !BuildConfig.NETEASE_ORIGINAL_EFFECTS) {
             val copy = File(instrumentation.targetContext.cacheDir, "netease-engine-fixture.apk")
             try {
                 instrumentation.context.assets.open(copy.name).use { input -> copy.outputStream().use(input::copyTo) }
