@@ -167,7 +167,7 @@ import kotlinx.serialization.json.*
                         else "AI 大模型分析歌曲内容，为每一首歌定制专属音效",
                     onMaster = { if (masterChosen) vm.turnOff() else vm.originalAiMasterEnabled(true) },
                     speakerChosen = speakerChosen, speakerReady = originalSpeaker.enabled && !originalSpeaker.loading, speakerLoading = originalSpeaker.loading, speakerStatus = if (speakerChosen) originalSpeaker.message
-                        else "开启外放沉浸式体验，多场景自由聆听",
+                        else "开启外放沉浸式体验，多场景自由调节",
                     onSpeaker = { if (speakerChosen) vm.turnOff() else vm.originalSpeakerEnabled(true) },
                     moodEmotion = originalMood.emotion, songCover = currentSong?.cover, playing = playback.playing,
                     speakerScene = originalSpeaker.scene, onDetails = onDetails)

@@ -93,9 +93,9 @@ import java.util.Locale
                     .clip(RoundedCornerShape(6.dp)).background(Color.White.copy(alpha = .13f)).padding(horizontal = 8.dp, vertical = 5.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Text(if (kind == 2) "$title · ${speakerScene.label}" else title, Modifier.weight(1f), fontSize = 10.sp,
-                        color = if (dark) Color.White else Color(0xFF64512F), maxLines = 1)
+                        color = if (dark || kind == 2) Color.White else Color(0xFF64512F), maxLines = 1)
                     Text(if (kind == 2) "切换环境 ›" else "查看 ›", fontSize = 10.sp,
-                        color = if (dark) Color.White.copy(alpha = .85f) else Color(0xFF64512F))
+                        color = if (dark || kind == 2) Color.White.copy(alpha = .85f) else Color(0xFF64512F))
                 } else EffectsMembership(4, Modifier.align(Alignment.TopEnd).padding(top = 12.dp, end = 16.dp))
                 if (kind == 1 && isUsing && !songCover.isNullOrBlank()) Box(Modifier.align(Alignment.Center).offset(y = (-7).dp).size(85.dp)) {
                     EffectsArtwork(NativeEffectsAssets.local("ai_model_black_pan_url.png"),
@@ -109,22 +109,22 @@ import java.util.Locale
                     if (isUsing && isReady) Text(if (kind == 2) "外放 · ${speakerScene.label}" else
                         song?.let { "${if (playing) "正在播放" else "在听"}《$it》" } ?: "已开启 · 播放后自动匹配", fontSize = 15.sp,
                         fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                        color = if (dark) Color.White else Color(0xFF64512F))
+                        color = if (dark || kind == 2) Color.White else Color(0xFF64512F))
                     else if (kind == 0) EffectsArtwork(NativeEffectsAssets.local("emotion_title_icon_${side}_url.png"),
                         Modifier.size(137.dp, 20.dp), title, ContentScale.Fit)
                     else if (kind == 1 && !isUsing) EffectsArtwork(NativeEffectsAssets.local("ai_model_title_icon_url.png"),
                         Modifier.fillMaxWidth(.5f).aspectRatio(7.2f), title, ContentScale.Fit)
-                    else Text(title, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                        color = if (dark) Color.White else Color(0xFF182B43))
+                    else Text(title, fontSize = if (kind == 2 && !isUsing) 16.sp else 18.sp, fontWeight = FontWeight.Bold,
+                        color = if (dark || kind == 2) Color.White else Color(0xFF182B43))
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom,
-                        horizontalArrangement = Arrangement.spacedBy(if (isUsing) 10.dp else 2.dp)) {
+                        horizontalArrangement = Arrangement.spacedBy(if (isUsing) 10.dp else 2.dp, Alignment.CenterHorizontally)) {
                         Text(when (kind) { 0 -> moodStatus; 1 -> masterStatus; else -> speakerStatus },
-                            Modifier.weight(1f).padding(top = if (isUsing) 4.dp else 8.dp),
+                            Modifier.weight(1f, fill = isUsing || kind != 2).padding(top = if (isUsing) 4.dp else 8.dp),
                             fontSize = if (isUsing) 10.sp else 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                             textAlign = if (isUsing) TextAlign.Start else TextAlign.Center,
-                            color = if (dark || kind == 1 && !isUsing) Color.White.copy(alpha = .85f) else Color(0xCC64512F))
+                            color = if (dark || kind == 2 || kind == 1 && !isUsing) Color.White.copy(alpha = .85f) else Color(0xCC64512F))
                         if (!isUsing) Text("›", fontSize = 16.sp,
-                            color = if (dark || kind == 1) Color.White.copy(alpha = .85f) else Color(0xCC64512F))
+                            color = if (dark || kind == 1 || kind == 2) Color.White.copy(alpha = .85f) else Color(0xCC64512F))
                         if (isUsing) NativeEffectsAction(if (isLoading) "取消加载" else "取消", {
                             when (kind) { 0 -> onMood(); 1 -> onMaster(); else -> onSpeaker() }
                         }, Modifier.width(66.dp).then(if (focused) Modifier.testTag(
