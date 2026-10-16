@@ -3,6 +3,8 @@ package io.github.currencortex.music
 import androidx.compose.runtime.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.asAndroidBitmap
@@ -27,6 +29,28 @@ import org.junit.Test
 /** Presentation only; never changes the real account, audio or island preferences. */
 class SoundEffectIslandNoticeTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun phaseUpdatesKeepTheExpandedCapsuleGeometryStable() {
+        var notice by mutableStateOf(SoundEffectNotice(1, "原声黑胶", SoundEffectNoticeTier.SVIP))
+        compose.setContent { Box(Modifier.width(340.dp)) {
+            DesktopIslandEffectTransition(notice) { Spacer(Modifier.width(120.dp).height(32.dp)) }
+        } }
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(900)
+        val initial = compose.onNodeWithTag("desktop_island_transition").getUnclippedBoundsInRoot()
+        for (phase in listOf(SoundEffectNoticePhase.FAILED, SoundEffectNoticePhase.READY, SoundEffectNoticePhase.APPLYING)) {
+            compose.runOnIdle { notice = notice.copy(phase = phase, message = if (phase == SoundEffectNoticePhase.FAILED)
+                "此音效的会员授权类型尚未接入，需要在网易云客户端使用，请选择其他音效后重试。" else "已启用") }
+            repeat(35) {
+                compose.mainClock.advanceTimeByFrame()
+                val current = compose.onNodeWithTag("desktop_island_transition").getUnclippedBoundsInRoot()
+                assertEquals("Status text must not pump the capsule height", (initial.bottom - initial.top).value,
+                    (current.bottom - current.top).value, 1f)
+                assertEquals("Status updates must keep the width", (initial.right - initial.left).value,
+                    (current.right - current.left).value, 1f)
+            }
+        }
+        compose.mainClock.autoAdvance = true
+    }
     @Test fun svipLoadingThenReadyAndRapidFailureShowOnlyTheCurrentIntent() {
         var notice by mutableStateOf(SoundEffectNotice(1, "原声黑胶", SoundEffectNoticeTier.SVIP))
         compose.setContent { SoundEffectIslandPill(notice) }

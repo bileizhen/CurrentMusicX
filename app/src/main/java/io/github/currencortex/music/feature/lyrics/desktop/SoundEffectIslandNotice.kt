@@ -75,7 +75,7 @@ import kotlin.math.sin
         }
         AnimatedContent(notice, contentKey = { it.id to it.phase }, label = "effect notice content",
             transitionSpec = { (fadeIn(tween(if (motion) 200 else 0, if (motion) 70 else 0)) togetherWith
-                fadeOut(tween(if (motion) 120 else 0))).using(SizeTransform(clip = false) { _, _ -> tween(if (motion) 280 else 0) }) }) { current ->
+                fadeOut(tween(if (motion) 120 else 0))).using(null) }) { current ->
         val failed = current.phase == SoundEffectNoticePhase.FAILED
         val phase = when (current.phase) {
             SoundEffectNoticePhase.APPLYING -> "正在启用"; SoundEffectNoticePhase.READY -> "已启用"
@@ -101,7 +101,7 @@ import kotlin.math.sin
                 BasicText(current.name, style = TextStyle(color = accent, fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 BasicText(current.message, style = TextStyle(color = Color.White.copy(alpha = .72f), fontSize = 10.sp),
-                    maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 if (current.tier != SoundEffectNoticeTier.STANDARD) BasicText(current.tier.name,
@@ -157,7 +157,7 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
                     tween(if (motion) 460 else 0, easing = FastOutSlowInEasing)
                 })
         }) { showNotice ->
-        if (showNotice) retained?.let { SoundEffectIslandPill(it, material = false) } else normal()
+        if (showNotice) (notice ?: retained)?.let { SoundEffectIslandPill(it, material = false) } else normal()
     }
 }
 
