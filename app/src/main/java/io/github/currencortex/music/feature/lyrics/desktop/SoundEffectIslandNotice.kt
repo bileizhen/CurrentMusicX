@@ -3,7 +3,6 @@ package io.github.currencortex.music.feature.lyrics.desktop
 import android.graphics.BitmapFactory
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.scaleIn
@@ -36,6 +35,7 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -44,11 +44,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.constrainWidth
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.media.*
 import kotlin.math.sin
+import kotlin.math.roundToInt
 
 /** Finite pulse/flow, no perpetual particles, blur or extra window permission. */
 @Composable internal fun SoundEffectIslandPill(notice: SoundEffectNotice, modifier: Modifier = Modifier, material: Boolean = true) {
@@ -74,8 +77,8 @@ import kotlin.math.sin
             }
         }
         AnimatedContent(notice, contentKey = { it.id to it.phase }, label = "effect notice content",
-            transitionSpec = { (fadeIn(tween(if (motion) 200 else 0, if (motion) 70 else 0)) togetherWith
-                fadeOut(tween(if (motion) 120 else 0))).using(null) }) { current ->
+            transitionSpec = { (fadeIn(tween(if (motion) 180 else 0)) togetherWith
+                fadeOut(tween(if (motion) 180 else 0))).using(null) }) { current ->
         val failed = current.phase == SoundEffectNoticePhase.FAILED
         val phase = when (current.phase) {
             SoundEffectNoticePhase.APPLYING -> "正在启用"; SoundEffectNoticePhase.READY -> "已启用"
@@ -133,31 +136,40 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
     else -> Color(0xFF8DBFFF)
 }
 
-/** One continuously measured shell owns both bodies. Retargeting never resets its geometry. */
+/** Keep the normal body alive; measure both at their final width, then morph only the shell.
+ * No delayed incoming fade or AnimatedContent size correction can leave an empty capsule.
+ */
 @Composable internal fun DesktopIslandEffectTransition(notice: SoundEffectNotice?, modifier: Modifier = Modifier,
     normal: @Composable () -> Unit) {
     val motion = rememberDesktopMotion()
-    var appeared by remember { mutableStateOf(false) }
     var retained by remember { mutableStateOf(notice) }
-    LaunchedEffect(Unit) { appeared = true }
     SideEffect { if (notice != null) retained = notice }
-    val expanded = appeared && notice != null
+    val expanded = notice != null
+    val progress = animateFloatAsState(if (expanded) 1f else 0f,
+        tween(if (motion) 420 else 0, easing = FastOutSlowInEasing), label = "island effect morph")
     val tint by animateColorAsState(soundEffectNoticeAccent(notice), tween(if (motion) 400 else 0), label = "island material tint")
     val intensity by animateFloatAsState(if (expanded) 1f else 0f, tween(if (motion) 400 else 0), label = "island material strength")
     val shape = RoundedCornerShape(50)
-    AnimatedContent(expanded, modifier.shadow(2.dp, shape, clip = false)
+    Layout(modifier = modifier.shadow(2.dp, shape, clip = false)
         .background(Brush.verticalGradient(listOf(Color(0xFF11141B),
             tint.copy(alpha = .14f * intensity).compositeOver(Color(0xFF080B10)))), shape)
         .border(.6.dp, Brush.verticalGradient(listOf(tint.copy(alpha = .16f + .39f * intensity),
             tint.copy(alpha = .035f + .20f * intensity))), shape).clip(shape)
-        .testTag("desktop_island_transition"), contentAlignment = Alignment.Center,
-        label = "island effect morph", transitionSpec = {
-            (fadeIn(tween(if (motion) 220 else 0, if (motion) 100 else 0)) togetherWith
-                fadeOut(tween(if (motion) 140 else 0))).using(SizeTransform(clip = false) { _, _ ->
-                    tween(if (motion) 460 else 0, easing = FastOutSlowInEasing)
-                })
-        }) { showNotice ->
-        if (showNotice) (notice ?: retained)?.let { SoundEffectIslandPill(it, material = false) } else normal()
+        .testTag("desktop_island_transition"), content = {
+        Box { normal() }
+        Box { (notice ?: retained)?.let { SoundEffectIslandPill(it, material = false) } }
+    }) { children, constraints ->
+        val loose = constraints.copy(minWidth = 0, minHeight = 0)
+        val compact = children[0].measure(loose)
+        val effect = children[1].measure(loose)
+        val p = progress.value
+        val width = constraints.constrainWidth((compact.width + (effect.width - compact.width) * p).roundToInt())
+        val height = constraints.constrainHeight((compact.height + (effect.height - compact.height) * p).roundToInt())
+        layout(width, height) {
+            // Complementary fades share the geometry clock, including interrupted reversals.
+            if (p < 1f) compact.placeWithLayer((width - compact.width) / 2, (height - compact.height) / 2) { alpha = 1f - p }
+            if (p > 0f) effect.placeWithLayer((width - effect.width) / 2, (height - effect.height) / 2) { alpha = p }
+        }
     }
 }
 
