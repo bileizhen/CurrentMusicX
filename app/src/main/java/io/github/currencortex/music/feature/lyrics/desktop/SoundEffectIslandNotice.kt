@@ -31,7 +31,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
-import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.testTag
@@ -64,23 +63,23 @@ import kotlin.math.roundToInt
 @Composable internal fun SoundEffectIslandPill(notice: SoundEffectNotice, modifier: Modifier = Modifier,
     material: Boolean = true, height: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE) {
     val motion = rememberDesktopMotion()
+    val ready = notice.phase == SoundEffectNoticePhase.READY
     val glow = remember { Animatable(0f) }
-    LaunchedEffect(motion) {
-        // Keep the glow continuous across loading/success and rapid selections.
-        // The shared shell already fades it out when returning to FPS/lyrics.
-        glow.animateTo(1f, tween(if (motion) 720 else 0, easing = FastOutSlowInEasing))
+    LaunchedEffect(motion, ready) {
+        // Preparation never glows; acknowledgement fades in only after success.
+        if (ready) glow.animateTo(1f, tween(if (motion) 720 else 0, easing = FastOutSlowInEasing))
+        else glow.snapTo(0f)
     }
     val accent by animateColorAsState(soundEffectNoticeAccent(notice), tween(if (motion) 320 else 0), label = "effect content tint")
     val phase = soundEffectPhaseLabel(notice.phase)
     Box(modifier.widthIn(max = 340.dp).height(height).then(if (material) Modifier.clip(RoundedCornerShape(50))
-        .background(Brush.linearGradient(listOf(Color(0xFF11141B),
-            accent.copy(alpha = .14f).compositeOver(Color(0xFF080B10)), Color(0xFF080B10))))
-        .border(.8.dp, accent.copy(alpha = .55f), RoundedCornerShape(50)) else Modifier)
-        .semantics { liveRegion = LiveRegionMode.Polite; stateDescription = "$phase：${notice.message}" }
+        .background(Brush.verticalGradient(listOf(Color(0xFF11141B), Color(0xFF080B10))))
+        .border(.8.dp, Color.White.copy(alpha = .2f), RoundedCornerShape(50)) else Modifier)
+        .semantics { liveRegion = LiveRegionMode.Polite; stateDescription = if (phase.isEmpty()) notice.message else "$phase：${notice.message}" }
         .testTag("sound_effect_island_notice")) {
         // Cache the stationary gradient, fading its layer instead of allocating
         // a new shader and repainting it on every animation frame.
-        Box(Modifier.matchParentSize().graphicsLayer { alpha = glow.value }.drawWithCache {
+        Box(Modifier.matchParentSize().graphicsLayer { alpha = if (ready) glow.value else 0f }.drawWithCache {
             val brush = Brush.radialGradient(
                 colors = listOf(accent.copy(alpha = .22f),
                     accent.copy(alpha = .08f), Color.Transparent),
@@ -115,7 +114,7 @@ import kotlin.math.roundToInt
 }
 
 private fun soundEffectPhaseLabel(phase: SoundEffectNoticePhase) = when (phase) {
-    SoundEffectNoticePhase.APPLYING -> "正在启用"; SoundEffectNoticePhase.READY -> "已启用"
+    SoundEffectNoticePhase.APPLYING -> ""; SoundEffectNoticePhase.READY -> "已使用"
     SoundEffectNoticePhase.WAITING -> "待生效"; SoundEffectNoticePhase.FAILED -> "未启用"
 }
 
@@ -173,7 +172,9 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
     val progress = animateFloatAsState(if (expanded) 1f else 0f,
         tween(if (motion) 420 else 0, easing = FastOutSlowInEasing), label = "island effect morph")
     val tint = animateColorAsState(soundEffectNoticeAccent(notice ?: retained), tween(if (motion) 400 else 0), label = "island material tint")
-    val intensity = animateFloatAsState(if (expanded) 1f else 0f, tween(if (motion) 400 else 0), label = "island material strength")
+    val ready = notice?.phase == SoundEffectNoticePhase.READY
+    val retainedReady = (notice ?: retained)?.phase == SoundEffectNoticePhase.READY
+    val intensity = animateFloatAsState(if (ready) 1f else 0f, tween(if (motion) 400 else 0), label = "island material strength")
     val shape = RoundedCornerShape(50)
     Layout(modifier = modifier.shadow(2.dp, shape, clip = false)
         .drawWithCache {
@@ -185,7 +186,7 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
             val radius = CornerRadius(size.height / 2f)
             val stroke = Stroke(.6.dp.toPx())
             onDrawBehind {
-                val amount = intensity.value
+                val amount = if (retainedReady) intensity.value else 0f
                 drawRoundRect(base, cornerRadius = radius)
                 drawRoundRect(fill, cornerRadius = radius, alpha = amount)
                 drawRoundRect(neutralBorder, cornerRadius = radius, style = stroke)
