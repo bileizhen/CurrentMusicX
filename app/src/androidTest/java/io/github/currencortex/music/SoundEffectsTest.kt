@@ -25,6 +25,8 @@ import java.io.File
 import java.net.URLDecoder
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.math.roundToInt
 
 /** Isolated stores, a loopback NetEase protocol server and a silent native audio session. */
@@ -39,6 +41,10 @@ class SoundEffectsTest {
     private lateinit var track: AudioTrack
     private val analysisRequests = AtomicInteger()
     @Volatile private var failCatalog = false
+    @Volatile private var resolvedMaterial: String? = null
+    private val resolveRequests = AtomicInteger()
+    private var resolveRelease = CountDownLatch(0)
+    private var resolveFinished = CountDownLatch(0)
 
     @Before fun setup() = runBlocking {
         check(context.packageName.endsWith(".verification"))
@@ -54,6 +60,12 @@ class SoundEffectsTest {
                 "/eapi/usertool/sound/queryAllSound" -> json("""{"code":200,"data":[
                     {"id":1001,"name":"3D环绕","soundCategory":1,"type":1,"exposeDescText":"戴上耳机，沉浸式拥抱音乐"},
                     {"id":1005,"name":"超重低音","soundCategory":1,"type":3,"exposeDescText":"网易云官方音效"}]}""")
+                "/eapi/usertool/home/sound/info" -> {
+                    resolveRequests.incrementAndGet()
+                    resolveRelease.await(5, TimeUnit.SECONDS)
+                    resolveFinished.countDown()
+                    resolvedMaterial?.let(::json) ?: MockResponse().setResponseCode(404)
+                }
                 "/eapi/vip-rights/emotion/audio/effect/get" -> {
                     analysisRequests.incrementAndGet()
                     val encoded = request.body.readUtf8().substringAfter("params=").substringBefore('&')
@@ -84,6 +96,7 @@ class SoundEffectsTest {
         }
     }
     @After fun finish() {
+        resolveRelease.countDown()
         scope.cancel(); container.close(); track.release(); server.shutdown()
     }
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
@@ -308,7 +321,7 @@ class SoundEffectsTest {
         assertTrue(vm.preferences.value.smartEnabled)
     }
 
-    @Test fun catalogRemainsVisibleAfterRefreshFailsAndUnavailableApplyExplainsWhy() = runBlocking<Unit> {
+    @Test fun catalogRemainsVisibleAfterRefreshFailsAndApplyRechecksTheServer() = runBlocking<Unit> {
         open()
         waitFor { vm.catalog.value.items.size == 2 }
         failCatalog = true
@@ -320,9 +333,11 @@ class SoundEffectsTest {
         // The target is inside a horizontal lazy item; reveal its lower action with a real vertical gesture.
         compose.onNodeWithTag("sound_effects_screen").performTouchInput { swipeUp() }
         compose.onNodeWithTag("sound_apply_1001").performClick()
+        waitFor { vm.actionError.value != null }
+        assertTrue(resolveRequests.get() > 0)
+        compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_tile_error"))
         capture("refresh-unavailable")
-        compose.onNodeWithText("网易云未提供可验证的兼容预设资源").assertExists()
-        compose.onNodeWithTag("sound_use_original").assertDoesNotExist()
+        compose.onNodeWithTag("sound_tile_error").assertExists()
         assertNull(vm.original.value.requestedId)
         assertFalse(vm.manual.value.enabled)
     }
@@ -408,6 +423,64 @@ class SoundEffectsTest {
         waitFor { vm.manual.value.enabled && vm.runtime.value.active }
         assertEquals(saved, container.equalizerSettings.snapshot())
         nativeMatchesSaved()
+    }
+
+    private fun currentMaterial(strategy: String = "requires-current-authorization") = """{"code":200,"data":{"soundList":[
+        {"soundMobileDetailDTO":{"id":1001,"name":"最新目录音效","type":1,"soundType":1,
+        "newVipStrategyCode":"$strategy","soundMaterialList":[{"type":1,
+        "link":"https://d1.music.126.net/current.ncae","md5":"0123456789abcdef0123456789abcdef"}]}}]}}"""
+
+    @Test fun catalogDetailsCanRecheckLatestMaterialWithoutUsingStaleAuthorization() = runBlocking<Unit> {
+        container.equalizerSettings.select(EqualizerPreset.BASS)
+        container.equalizerSettings.setEnabled(true)
+        waitFor { vm.manual.value.enabled && !vm.catalog.value.loading }
+        val saved = container.equalizerSettings.snapshot()
+        resolvedMaterial = currentMaterial()
+        open()
+        compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_official_1001"))
+        compose.onNodeWithTag("sound_official_1001").performClick()
+        compose.onNodeWithTag("sound_use_original").assertTextContains("重新检查并使用").performClick()
+        waitFor { vm.actionError.value != null }
+        assertEquals(1, resolveRequests.get())
+        assertTrue(vm.actionError.value!!.contains("授权策略"))
+        assertEquals(saved, container.equalizerSettings.snapshot())
+        assertNull(vm.original.value.requestedId)
+    }
+
+    @Test fun knownNativeTileResolvesCurrentMetadataAndKeepsTheManualEffectWhenRejected() = runBlocking<Unit> {
+        container.equalizerSettings.select(EqualizerPreset.VOCAL)
+        container.equalizerSettings.setEnabled(true)
+        waitFor { vm.manual.value.enabled && !vm.catalog.value.loading }
+        val saved = container.equalizerSettings.snapshot()
+        resolvedMaterial = currentMaterial()
+        compose.runOnUiThread { vm.useTile(io.github.currencortex.music.data.effects.NativeEffectTile(
+            1001L, "旧目录标题", "旧目录没有素材", 1, 1, "", "", "", "")) }
+        waitFor { vm.actionError.value != null }
+        assertEquals(1, resolveRequests.get())
+        assertTrue(vm.actionError.value!!.contains("授权策略"))
+        assertEquals(saved, container.equalizerSettings.snapshot())
+        assertNull(vm.original.value.requestedId)
+        assertNull(vm.tileLoading.value)
+    }
+
+    @Test fun closingWhileCurrentMaterialResolvesCancelsTheLateSelection() = runBlocking<Unit> {
+        waitFor { !vm.catalog.value.loading }
+        resolvedMaterial = currentMaterial(strategy = "")
+        resolveRelease = CountDownLatch(1)
+        resolveFinished = CountDownLatch(1)
+        val oldMetadata = vm.catalog.value.items.first { it.id == 1001L }
+        compose.runOnUiThread { vm.useOriginal(oldMetadata) }
+        waitFor { resolveRequests.get() == 1 && vm.tileLoading.value == 1001L }
+        compose.runOnUiThread { vm.turnOff() }
+        resolveRelease.countDown()
+        assertTrue(resolveFinished.await(5, TimeUnit.SECONDS))
+        compose.waitForIdle()
+        assertNull(vm.tileLoading.value)
+        assertNull(vm.actionError.value)
+        assertNull(vm.original.value.requestedId)
+        assertNull(container.originalSoundEffects.selection.value)
+        assertFalse(vm.manual.value.enabled)
+        assertFalse(vm.preferences.value.smartEnabled)
     }
 
     @Test fun unresolvedNativeTileKeepsTheCurrentManualEffectAndShowsAnError() = runBlocking<Unit> {

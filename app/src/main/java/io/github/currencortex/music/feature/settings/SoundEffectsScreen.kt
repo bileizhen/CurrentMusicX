@@ -271,7 +271,7 @@ import kotlinx.serialization.json.*
                                     tileLoading == effect.id || original.loading && chosen -> "加载中…"
                                     original.error != null && chosen -> "加载失败"
                                     chosen -> if (original.processing && playback.playing) "使用中" else "已选择"
-                                    effect.legacyVipOriginal -> "VIP"
+                                    effect.legacyMemberOriginal -> if (effect.memberType == 4) "SVIP" else "VIP"
                                     else -> "免费"
                                 }, enabled = playback.mode != PlayerMode.CAST || chosen,
                                 tile = page.featured.firstOrNull { it.id == effect.id }, dark = dark,
@@ -283,7 +283,6 @@ import kotlinx.serialization.json.*
                                     when {
                                         chosen -> vm.turnOff()
                                         catalog.items.none { it.id == effect.id } -> page.featured.firstOrNull { it.id == effect.id }?.let(vm::useTile)
-                                        vm.originalUnavailableReason(effect) != null -> { vm.notifyUnavailable(effect); launchError = null; selectedEffect = effect }
                                         else -> vm.useOriginal(effect)
                                     }
                                 })
@@ -440,13 +439,13 @@ import kotlinx.serialization.json.*
         val unavailable = vm.originalUnavailableReason(effect)
         MusicDialog(effect.name, onDismiss = { selectedEffect = null }) {
             Text(effect.description, fontSize = 15.sp)
-            Text(unavailable ?: if (effect.legacyVipOriginal)
-                "此音效需要有效的网易云黑胶会员。使用前会向网易云核验当前账号权益，到期自动关闭；可在“我的 → 网易云账号”登录。选择会保存，重启后重新核验。"
+            Text(unavailable ?: if (effect.legacyMemberOriginal)
+                "此音效需要有效的网易云${if (effect.memberType == 4) "SVIP" else "黑胶会员"}。使用前会向网易云核验当前账号权益，到期自动关闭；可在“我的 → 网易云账号”登录。选择会保存，重启后重新核验。"
                 else "使用网易云公开的原版预设与原生音效引擎。选择会保存，重启后重新下载并校验；启用后暂时替代本机智能调音和均衡器。",
                 color = colors.onSurfaceVariantSummary, fontSize = 13.sp)
             if (playback.mode == PlayerMode.CAST) Text("请结束投屏后使用本机原版音效", color = colors.onSurfaceVariantSummary, fontSize = 13.sp)
-            if (unavailable == null && playback.mode != PlayerMode.CAST) {
-                MusicTextAction(if (effect.legacyVipOriginal) "核验权益并使用" else if (original.selectedId == effect.id) "重新载入原版音效" else "使用原版音效", {
+            if (playback.mode != PlayerMode.CAST) {
+                MusicTextAction(if (unavailable != null) "重新检查并使用" else if (effect.legacyMemberOriginal) "核验权益并使用" else if (original.selectedId == effect.id) "重新载入原版音效" else "使用原版音效", {
                     vm.useOriginal(effect)
                     selectedEffect = null
                 }, Modifier.testTag("sound_use_original"))
