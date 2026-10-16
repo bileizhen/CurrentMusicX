@@ -5,16 +5,25 @@ package io.github.currencortex.music.feature.settings
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import android.os.Build
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.data.settings.ThemeMode
+import io.github.currencortex.music.data.settings.RefreshRatePreference
+import io.github.currencortex.music.ui.component.rememberDisplayRefreshStatus
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.SettingsSwitch
 import io.github.currencortex.music.ui.theme.LocalDarkTheme
@@ -66,6 +75,29 @@ fun AppearanceScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSca
                 SettingsSwitch("底栏律动光效", config.navigationGlow, { value -> viewModel.edit { it.copy(navigationGlow = value) } },
                 summary = "封面色雾从底边缓缓晕开，随音乐起伏流动",
                     startAction = { SettingIcon(MusicIcons.Blur) }, modifier = Modifier.testTag("setting_navigation_glow"))
+            }
+            Card(Modifier.padding(top = 12.dp).fillMaxWidth()) {
+                val display by rememberDisplayRefreshStatus()
+                BasicComponent(title = "应用刷新率", summary = "持续请求所选刷新率；系统省电、温控仍可能限制。高刷会增加耗电。",
+                    modifier = Modifier.testTag("setting_refresh_rate"), bottomAction = {
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                RefreshRatePreference.entries.forEach { option ->
+                                    val selected = config.refreshRate == option
+                                    Box(Modifier.weight(1f).heightIn(min = 44.dp).clip(RoundedCornerShape(12.dp))
+                                        .background(if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.secondaryContainer)
+                                        .testTag("refresh_rate_${option.hz}")
+                                        .selectable(selected, role = Role.RadioButton) { viewModel.edit { it.copy(refreshRate = option) } }
+                                        .padding(horizontal = 4.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+                                        Text(option.label, color = if (selected) MiuixTheme.colorScheme.onPrimary else MiuixTheme.colorScheme.onSurface,
+                                            fontSize = 13.sp, maxLines = 1)
+                                    }
+                                }
+                            }
+                            Text("当前刷新率：${display.current.roundToInt()} Hz · 屏幕支持：${display.supported.joinToString(" / ")} Hz",
+                                modifier = Modifier.testTag("refresh_rate_actual"), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                        }
+                    })
             }
             Card(Modifier.padding(top = 12.dp).fillMaxWidth()) {
                 SettingsSwitch("歌单立体缎带", config.playlistDepthRibbon, { value -> viewModel.edit { it.copy(playlistDepthRibbon = value) } },
