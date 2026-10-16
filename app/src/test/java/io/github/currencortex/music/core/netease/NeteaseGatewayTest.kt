@@ -61,6 +61,25 @@ class NeteaseGatewayTest {
         enqueue("""{"code":200,"data":{"userId":99}}""")
         assertEquals(ErrorKind.Parse, (appResult { binding.membership() } as AppResult.Failure).kind)
     }
+    @Test fun earnedMedalsBelongToTheCurrentNativeAccountAndNeverUseProxyCredentials(): Unit = runBlocking {
+        assertTrue(appResult { binding.medals() } is AppResult.Failure)
+        assertEquals(0, upstream.requestCount)
+        login()
+        enqueue("""{"code":200,"data":{"medalNum":1,"obtainMedals":[{"medalCode":1,"medalName":"音乐达人","medalPicUrl":"https://p1.music.126.net/m.png"}]}}""")
+        val medals = binding.medals()
+        assertEquals(42L, medals.userId)
+        assertEquals("音乐达人", medals.medals.single().name)
+        val request = upstream.takeRequest()
+        assertEquals("/eapi/medal/user/page", request.path)
+        assertEquals(42L, payload(request)["uid"]!!.jsonPrimitive.long)
+        assertNull(request.getHeader("Authorization"))
+        assertEquals(0, current.requestCount)
+        upstream.enqueue(response("""{"code":200,"data":{"obtainMedals":[]}}""").setBodyDelay(300, TimeUnit.MILLISECONDS))
+        val pending = async { appResult { binding.medals() } }
+        withContext(Dispatchers.IO) { assertNotNull(upstream.takeRequest(2, TimeUnit.SECONDS)) }
+        sessions.clear()
+        assertTrue(pending.await() is AppResult.Failure)
+    }
     @Test fun membershipCannotBeReadAnonymouslyOrPublishedAfterLogout() = runBlocking {
         assertTrue(appResult { binding.membership() } is AppResult.Failure)
         assertEquals(0, upstream.requestCount)

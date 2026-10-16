@@ -14,11 +14,17 @@ data class BindingUiState(val loading: Boolean = false, val binding: BindingStat
     val codeFailed: Boolean = false, val phoneBoundRevision: Int = 0)
 data class BindingMembershipState(val ownerId: Long = 0, val loading: Boolean = false,
     val value: NeteaseMembership? = null, val error: String? = null)
+data class BindingMedalsState(val ownerId: Long = 0, val loading: Boolean = false,
+    val value: NeteaseMedals? = null, val error: String? = null)
 class BindingViewModel(val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(BindingUiState())
     val busy = MutableStateFlow(false)
     val message = MutableStateFlow<String?>(null)
     val membership = MutableStateFlow(BindingMembershipState())
+    val medals = MutableStateFlow(BindingMedalsState())
+    private var medalsTask: Job? = null
+    private var medalsGeneration = 0L
+    private var medalsOwner: io.github.currencortex.music.core.netease.NeteaseAccountState? = null
     private var membershipTask: Job? = null
     private var membershipGeneration = 0L
     private var membershipOwner: io.github.currencortex.music.core.netease.NeteaseAccountState? = null
@@ -32,7 +38,9 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
     init {
         viewModelScope.launch {
             container.neteaseSessions.ready.await()
-            container.neteaseSessions.state.map { it.revision }.distinctUntilChanged().collect { reloadMembership() }
+            container.neteaseSessions.state.map { it.revision }.distinctUntilChanged().collect {
+                reloadMembership(); reloadMedals()
+            }
         }
         viewModelScope.launch {
             container.sessionRestored.await()
@@ -46,6 +54,7 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
     }
     fun reload() {
         reloadMembership()
+        reloadMedals()
         task?.cancel(); task = viewModelScope.launch {
             state.update { it.copy(loading = true, error = null) }
             when (val r = appResult { container.bindingRepository.status() }) {
@@ -72,6 +81,27 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
                 is AppResult.Success -> if (result.value.userId == uid) BindingMembershipState(uid, value = result.value)
                     else BindingMembershipState(uid, error = "会员信息暂不可用")
                 is AppResult.Failure -> BindingMembershipState(uid, error = "会员信息暂不可用")
+            }
+        }
+    }
+    fun reloadMedals() {
+        val owner = container.neteaseSessions.state.value
+        val uid = owner.profile?.uid ?: 0
+        if (container.nativeNetease != null && owner.loggedIn && !owner.stale &&
+            medalsOwner == owner && medals.value.loading) return
+        val generation = ++medalsGeneration
+        medalsTask?.cancel()
+        medalsOwner = owner
+        medals.value = BindingMedalsState()
+        if (container.nativeNetease == null || !owner.loggedIn || owner.stale || uid <= 0) return
+        medals.value = BindingMedalsState(uid, loading = true)
+        medalsTask = viewModelScope.launch {
+            val result = appResult { container.bindingRepository.medals() }
+            if (generation != medalsGeneration || container.neteaseSessions.state.value != owner) return@launch
+            medals.value = when (result) {
+                is AppResult.Success -> if (result.value.userId == uid) BindingMedalsState(uid, value = result.value)
+                    else BindingMedalsState(uid, error = "勋章暂时无法加载")
+                is AppResult.Failure -> BindingMedalsState(uid, error = "勋章暂时无法加载")
             }
         }
     }
