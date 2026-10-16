@@ -1,8 +1,25 @@
 package io.github.currencortex.music.data.settings
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
-enum class RefreshRatePreference(val hz: Int, val label: String) {
-    SYSTEM(0, "跟随系统"), HZ60(60, "60 Hz"), HZ90(90, "90 Hz"), HZ120(120, "120 Hz")
+/** Device-reported rates are not limited to a fixed list of 60/90/120 Hz. */
+data class RefreshRatePreference(val hz: Int) {
+    init { require(hz in 0..1000) }
+    val label: String get() = if (hz == 0) "跟随系统" else "$hz Hz"
+    // Preserve the existing preference payload, including SYSTEM/HZ60/HZ90/HZ120.
+    val name: String get() = if (hz == 0) "SYSTEM" else "HZ$hz"
+    companion object {
+        val SYSTEM = RefreshRatePreference(0)
+        val HZ60 = RefreshRatePreference(60)
+        val HZ90 = RefreshRatePreference(90)
+        val HZ120 = RefreshRatePreference(120)
+        fun valueOf(name: String): RefreshRatePreference {
+            if (name == "SYSTEM") return SYSTEM
+            require(name.startsWith("HZ"))
+            val hz = name.removePrefix("HZ").toInt()
+            require(hz in 1..1000)
+            return RefreshRatePreference(hz)
+        }
+    }
 }
 
 data class AppearanceSettings(
