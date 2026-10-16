@@ -44,7 +44,9 @@ import kotlinx.coroutines.flow.StateFlow
     onIslandSize: (IntSize) -> Unit = {}, islandTapRequest: Int = 0, onIslandModeChanged: (Boolean) -> Unit = {},
     changeSong: (Int) -> Unit = {}, onIslandTop: (Int) -> Unit = {},
     togglePlayback: () -> Unit = {}, onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
-    defaultFpsMode: Boolean = false) {
+    defaultFpsMode: Boolean = false,
+    effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = remember { kotlinx.coroutines.flow.MutableStateFlow(null) }) {
+    val effectNotice by effectNotices.collectAsStateWithLifecycle()
     val content by lyrics.collectAsStateWithLifecycle()
     val player by playback.collectAsStateWithLifecycle()
     val options by preferences.collectAsStateWithLifecycle()
@@ -113,9 +115,16 @@ import kotlinx.coroutines.flow.StateFlow
                 style = TextStyle(fontSize = 12.sp, color = Color.White.copy(.75f)))
             DesktopAction("设置", settings); DesktopAction("锁定", lock); DesktopAction("关闭", close)
         }
-        DesktopIslandFrame(player.song, Modifier.islandAnimatedWidth(width).fillMaxWidth().align(Alignment.CenterHorizontally)
-            .padding(vertical = desktopIslandDrawingSpace).onSizeChanged(onIslandSize)
+        LaunchedEffect(effectNotice?.id) { if (effectNotice != null) onCoverBounds(androidx.compose.ui.geometry.Rect.Zero) }
+        DesktopIslandEffectTransition(effectNotice, Modifier.align(Alignment.CenterHorizontally)
+            .widthIn(max = maxIslandWidth().dp).padding(vertical = desktopIslandDrawingSpace)
+            .onSizeChanged(onIslandSize)
             .onGloballyPositioned { onIslandTop(kotlin.math.round(it.positionInRoot().y).toInt()) }
+            .graphicsLayer {
+                alpha = entrance.value; scaleX = .94f + .06f * entrance.value; scaleY = scaleX
+                transformOrigin = TransformOrigin(.5f, 0f)
+            }) {
+        DesktopIslandFrame(player.song, Modifier.islandAnimatedWidth(width).fillMaxWidth()
             .pointerInput(options.locked) { detectTapGestures(onTap = { toggle() }, onLongPress = { if (!options.locked) revealControls() }) }
             .pointerInput(Unit) {
                 var dx = 0f; var dy = 0f
@@ -123,12 +132,9 @@ import kotlinx.coroutines.flow.StateFlow
                 detectDragGestures(onDragStart = { dx = 0f; dy = 0f }, onDragEnd = {
                     if (kotlin.math.abs(dx) >= threshold && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.25f) navigate(if (dx < 0f) 1 else -1)
                 }, onDrag = { change, amount -> change.consume(); dx += amount.x; dy += amount.y })
-            }.graphicsLayer {
-                alpha = entrance.value; scaleX = .94f + .06f * entrance.value; scaleY = scaleX
-                transformOrigin = TransformOrigin(.5f, 0f)
             }, metadata = size.metadata, presentation = reveal, coverPosition = position, motion = motion,
             durationMs = player.durationMs.takeIf { it > 0 } ?: player.song?.durationMs ?: 0L, transition = coverTransition,
-            coverPlaying = player.showPause, onCoverBounds = onCoverBounds,
+            coverPlaying = player.showPause, onCoverBounds = onCoverBounds, material = false,
             onCoverTap = { if (player.song != null && player.canControlPlayback) togglePlayback() }) {
             DesktopIslandDisplay(fpsMode, motion, lyrics = {
                 if (line != null) {
@@ -138,6 +144,7 @@ import kotlinx.coroutines.flow.StateFlow
                     }
                 } else Spacer(Modifier.height(0.dp))
             }, fps = { DesktopIslandFrameRate(frameRate.rate, font, Color(options.textColor.toInt())) })
+        }
         }
     }
 }

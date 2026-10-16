@@ -44,7 +44,7 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
     durationMs: Long = song?.durationMs ?: 0L,
     transition: DesktopIslandCoverTransition? = null,
     onCoverTap: (() -> Unit)? = null, coverPlaying: Boolean = false,
-    onCoverBounds: (Rect) -> Unit = {},
+    onCoverBounds: (Rect) -> Unit = {}, material: Boolean = true,
     content: @Composable () -> Unit) {
     val shape = RoundedCornerShape(50)
     val reveal = presentation.coerceIn(0f, 1f)
@@ -57,9 +57,10 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
         // same layout pass. No onSizeChanged state or next-frame size correction.
         @Suppress("DEPRECATION")
         MultiMeasureLayout(Modifier.fillMaxWidth()
-            .shadow(2.dp, shape, clip = false)
-            .background(Brush.verticalGradient(listOf(Color(0xFF11141B), Color(0xFF080B10))), shape)
-            .border(.6.dp, Brush.verticalGradient(listOf(Color.White.copy(.16f), Color.White.copy(.035f))), shape)
+            .then(if (material) Modifier.shadow(2.dp, shape, clip = false)
+                .background(Brush.verticalGradient(listOf(Color(0xFF11141B), Color(0xFF080B10))), shape)
+                .border(.6.dp, Brush.verticalGradient(listOf(Color.White.copy(.16f), Color.White.copy(.035f))), shape)
+                else Modifier)
             // Cover radius + 5 dp inset equals the pill end radius: concentric.
             .padding(start = 5.dp, end = 5.dp, top = 1.dp, bottom = 1.dp),
             content = {
