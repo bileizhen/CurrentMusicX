@@ -151,7 +151,7 @@ import kotlinx.serialization.json.*
             }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("sound_effects_screen"), state = if (expandedCatalog) catalogListState else listState,
-            contentPadding = PaddingValues(bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            contentPadding = musicScrollPadding(PaddingValues(bottom = 20.dp)), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!expandedCatalog) {
             item { Text("大师音效", Modifier.padding(horizontal = 16.dp), fontSize = 16.sp, fontWeight = FontWeight.Bold) }
             item(key = "masters") {

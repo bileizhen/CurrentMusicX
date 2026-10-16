@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import io.github.currencortex.music.ui.component.MusicIcons
+import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -82,7 +83,7 @@ private val masterDiyOptions = listOf(
         .testTag("sound_ai_master_detail")) {
         val pageWidth = maxWidth.coerceAtMost(600.dp)
         Column(Modifier.align(Alignment.TopCenter).widthIn(max = 600.dp).fillMaxSize()
-            .statusBarsPadding().navigationBarsPadding()) {
+            .statusBarsPadding().navigationBarsPadding().padding(bottom = LocalMusicBottomInset.current)) {
             Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 MasterDetailIcon("返回音效", "sound_ai_master_back", onBack) {
@@ -165,7 +166,7 @@ private val masterDiyOptions = listOf(
                 Spacer(Modifier.height(24.dp))
             }
         }
-        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().background(Brush.verticalGradient(
+        Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = LocalMusicBottomInset.current).background(Brush.verticalGradient(
             listOf(Color.Transparent, Color(0xF20E0900)))).navigationBarsPadding().padding(top = 28.dp, bottom = 22.dp),
             contentAlignment = Alignment.Center) {
             Row(Modifier.width((pageWidth * .64f).coerceAtMost(320.dp)).height(49.dp).clip(CircleShape)

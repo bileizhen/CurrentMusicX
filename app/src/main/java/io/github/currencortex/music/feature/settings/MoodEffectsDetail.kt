@@ -1,6 +1,7 @@
 package io.github.currencortex.music.feature.settings
 
 import androidx.activity.compose.BackHandler
+import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.Animatable
@@ -110,7 +111,7 @@ import kotlin.math.sin
                     .72f to Color.Black, 1f to Color.Black)))
             }
         }
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(bottom = LocalMusicBottomInset.current)) {
             Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 MoodDetailIcon("返回", onBack) { Icon(Icons.Default.ArrowBack, null, tint = Color.White, modifier = Modifier.size(21.dp)) }
