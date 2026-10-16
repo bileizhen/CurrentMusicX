@@ -197,6 +197,43 @@ class OriginalSoundEffectsControllerTest {
         fixture.controller.close()
     }
 
+    @Test fun svipSelectionUsesItsOwnProductExpiryAndRevokesItEvenWhileBlackVipRemainsActive() = runTest {
+        val fixture = Fixture(backgroundScope)
+        fixture.rights = NeteaseEffectEntitlement(10, true, 9000, false, 0)
+        runCurrent()
+        val vinyl = effect(3595400, "原声黑胶").copy(memberType = 4)
+        assertNull(originalEffectUnavailableReason(vinyl, fixture.controller.state.value))
+        fixture.controller.select(vinyl)
+        runCurrent()
+        assertTrue(fixture.controller.state.value.error!!.contains("SVIP"))
+        assertTrue(fixture.prepared.isEmpty())
+        fixture.rights = NeteaseEffectEntitlement(10, true, 9000, true, 1100)
+        fixture.controller.select(vinyl)
+        runCurrent()
+        assertEquals(3595400L, fixture.controller.selection.value!!.id)
+        assertEquals(1100L, fixture.controller.state.value.permissionExpiresAt)
+        fixture.clock = 1100
+        advanceTimeBy(1000); runCurrent()
+        assertNull(fixture.controller.selection.value)
+        assertNull(fixture.saved)
+        fixture.controller.close()
+    }
+
+    @Test fun otherAccountSvipAndUnknownAuthorizationStrategiesCannotPreparePresets() = runTest {
+        val fixture = Fixture(backgroundScope)
+        runCurrent()
+        val vinyl = effect(3595400).copy(memberType = 4)
+        fixture.rights = NeteaseEffectEntitlement(20, false, 0, true, 9000)
+        fixture.controller.select(vinyl); runCurrent()
+        assertTrue(fixture.prepared.isEmpty())
+        assertNull(fixture.controller.selection.value)
+        val strategy = vinyl.copy(strategyCode = "not-integrated")
+        assertNotNull(originalEffectUnavailableReason(strategy, fixture.controller.state.value))
+        fixture.controller.select(strategy); runCurrent()
+        assertTrue(fixture.prepared.isEmpty())
+        fixture.controller.close()
+    }
+
     @Test fun activeBlackVipPresetExpiresAndRevokesPersistedChoiceWithoutAnotherPlaybackEvent() = runTest {
         val fixture = Fixture(backgroundScope)
         fixture.rights = NeteaseEffectEntitlement(10, true, 1100)
