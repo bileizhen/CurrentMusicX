@@ -44,13 +44,14 @@ class NeteaseGateway(val transport: NeteaseTransport) {
     private fun params(vararg values: Pair<String, JsonElement>) = JsonObject(values.toMap())
     private fun data(vararg values: Pair<String, String>) = JsonObject(values.associate { it.first to JsonPrimitive(it.second) })
     private suspend fun official(path: String, body: JsonObject = buildJsonObject {}, web: Boolean = false,
-        expected: NeteaseSession? = null, authenticated: Boolean = false, clientLog: Boolean = false): JsonObject {
+        expected: NeteaseSession? = null, authenticated: Boolean = false, clientLog: Boolean = false,
+        clientProfile: NeteaseClientProfile = NeteaseClientProfile.DESKTOP): JsonObject {
         val owner = expected ?: sessions.snapshot()
         if (authenticated && (owner.credential.cookies["MUSIC_U"].isNullOrBlank() || owner.credential.stale))
             throw ApiException(ErrorKind.NeteaseBindingRequired)
         val raw = transport.request(path, body, when {
             clientLog -> NeteaseEncoding.LOG; web -> NeteaseEncoding.WEB; else -> NeteaseEncoding.DESKTOP
-        }, session = owner).body
+        }, session = owner, clientProfile = clientProfile).body
         val code = (raw["code"] as? JsonPrimitive)?.intOrNull ?: 200
         if (code != 200) {
             if (code in setOf(301, 401) && authenticated) sessions.markStale(owner)
@@ -75,6 +76,14 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         expected: NeteaseSession): JsonElement {
         val current = expected.credential
         when (path) {
+            "ncmbind/membership" -> {
+                val uid = current.profile?.uid?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.NeteaseBindingRequired)
+                val raw = official("/api/music-vip-membership/client/vip/info", buildJsonObject { put("userId", uid) },
+                    expected = expected, authenticated = true, clientProfile = NeteaseClientProfile.ANDROID)
+                sessions.check(expected)
+                val member = raw["data"] as? JsonObject ?: throw ApiException(ErrorKind.Parse)
+                return ApiJson.encodeToJsonElement(NeteaseMembership.serializer(), parseNeteaseMembership(member, uid))
+            }
             "ncmbind" -> {
                 if (method == "DELETE") sessions.clear()
                 val state = sessions.state.value
