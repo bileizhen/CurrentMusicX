@@ -42,6 +42,8 @@ import coil3.request.allowHardware
 import coil3.toBitmap
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.LocalMusicBottomInset
+import io.github.currencortex.music.ui.component.LocalRefreshRatePreference
+import io.github.currencortex.music.ui.component.applyViewRefreshRate
 import io.github.currencortex.music.ui.component.coverRequestUrl
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Semaphore
@@ -59,6 +61,7 @@ internal val LocalRecordFlightTarget = staticCompositionLocalOf<() -> Rect?> { {
     var selected by remember(songs) { mutableStateOf<Int?>(null) }
     var paused by remember { mutableStateOf(!ValueAnimator.areAnimatorsEnabled()) }
     val renderer = remember(context) { DepthRibbonView(context) }
+    val refreshRate = LocalRefreshRatePreference.current
     val landing by rememberUpdatedState(LocalRecordFlightTarget.current)
     SideEffect { renderer.recordTarget = { landing() } }
     val currentSelection by rememberUpdatedState<(Int?) -> Unit>({ selected = it })
@@ -73,7 +76,7 @@ internal val LocalRecordFlightTarget = staticCompositionLocalOf<() -> Rect?> { {
     }
     BackHandler { if (selected != null) renderer.releaseFocus() else onClose() }
     Box(Modifier.fillMaxSize().background(Color(0xFF0A0A0A)).testTag("playlist_depth_ribbon")) {
-        AndroidView(factory = { renderer }, update = { it.configure(songs, paused) },
+        AndroidView(factory = { renderer }, update = { it.configure(songs, paused); applyViewRefreshRate(it, refreshRate) },
             modifier = Modifier.fillMaxSize().testTag("depth_ribbon_canvas")
                 .onGloballyPositioned { renderer.rootOffset = it.boundsInRoot().topLeft }.semantics {
                 contentDescription = "歌曲立体缎带，左右滑动浏览，点击封面查看歌曲，长按查看全景"

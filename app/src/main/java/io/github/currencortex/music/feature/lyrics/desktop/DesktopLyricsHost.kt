@@ -20,13 +20,22 @@ import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.feature.lyrics.data.PlaybackLyricsState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import io.github.currencortex.music.data.settings.AppearanceSettings
+import io.github.currencortex.music.ui.component.musicRefreshRate
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.Modifier
+import io.github.currencortex.music.ui.component.applyWindowRefreshRate
 
 /** One visual window, with a transparent pill-sized input window while the island is idle. */
 class DesktopLyricsHost(private val context: Context, private val lyrics: StateFlow<PlaybackLyricsState>,
     private val playback: StateFlow<PlayerState>, private val preferences: DesktopLyricsPreferences,
     private val status: MutableStateFlow<DesktopWindowStatus>,
     private val settingsVisible: StateFlow<Boolean> = MutableStateFlow(false),
-    private val changeSong: (Int) -> Unit = {}, private val togglePlayback: () -> Unit = {}) : AutoCloseable {
+    private val changeSong: (Int) -> Unit = {}, private val togglePlayback: () -> Unit = {},
+    private val appearance: StateFlow<AppearanceSettings> = MutableStateFlow(AppearanceSettings())) : AutoCloseable {
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val visual = if (Build.VERSION.SDK_INT >= 30) context.createDisplayContext(context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
         .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null) else context
@@ -53,6 +62,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private val islandTapRequest = androidx.compose.runtime.mutableIntStateOf(0)
     private var editing = true
     private var current = DesktopLyricsSettings()
+    private var refreshRate = appearance.value.refreshRate
     private var noticeKey: Pair<Boolean, Boolean>? = null
     private val screen = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -80,6 +90,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         displays.registerDisplayListener(display, handler)
         scope.launch { preferences.ready.await(); combine(preferences.state, settingsVisible) { settings, _ -> settings }
             .collect { current = it; reconcile() } }
+        scope.launch { appearance.map { it.refreshRate }.distinctUntilChanged().collect { refreshRate = it; updateWindow() } }
     }
     private fun reconcile() {
         if (closed) return
@@ -112,7 +123,10 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         val compose = ComposeView(visual).apply {
             setViewTreeLifecycleOwner(life); setViewTreeSavedStateRegistryOwner(life)
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
-            setContent { DesktopLyricsSurface(lyrics, playback, preferences.state, lock = { scope.launch { preferences.edit { it.copy(locked = true) } } },
+            setContent {
+                val config by appearance.collectAsState()
+                Box(Modifier.musicRefreshRate(config.refreshRate), propagateMinConstraints = true) {
+                DesktopLyricsSurface(lyrics, playback, preferences.state, lock = { scope.launch { preferences.edit { it.copy(locked = true) } } },
                 close = { scope.launch { preferences.edit { it.copy(enabled = false) } } }, settings = {
                     context.startActivity(settingsIntent(context))
                 }, maxIslandWidth = { islandMaximumWidth.floatValue }, editRequest = editRequest.intValue,
@@ -131,7 +145,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                         status.value = status.value.copy(contentWidth = size.width, contentHeight = size.height)
                         updateIslandTouchWindow()
                     }
-                }) }
+                }) } }
         }
         val root = object : android.widget.FrameLayout(visual) {
             override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
@@ -187,7 +201,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         islandMaximumWidth.floatValue = width / density
         val maximum = if (Build.VERSION.SDK_INT >= 31) context.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch else .8f
         val alpha = desktopWindowAlpha(current.displayOpacity, touchThrough(), maximum)
-        if (p.x != placement.x || p.y != placement.y || p.width != width || p.flags != flags() || p.alpha != alpha) {
+        val refreshChanged = applyWindowRefreshRate(p, v.display, refreshRate)
+        if (refreshChanged || p.x != placement.x || p.y != placement.y || p.width != width || p.flags != flags() || p.alpha != alpha) {
             p.width = width; p.x = placement.x; p.y = placement.y; p.flags = flags(); p.alpha = alpha
             try { window.updateViewLayout(v, p) } catch (_: RuntimeException) { remove(); return }
         }

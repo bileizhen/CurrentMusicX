@@ -147,6 +147,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     }
     LaunchedEffect(animateLaunch) { if (!animateLaunch) launchFinished = true }
     val settings by container.settings.state.collectAsStateWithLifecycle()
+    AppRefreshRateRequest(settings.refreshRate)
     val settingsVm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container.settings) })
     val updateVm: UpdateSettingsViewModel = viewModel(factory = viewModelFactory { UpdateSettingsViewModel(container.updateSettings) })
     val announcementVm: io.github.currencortex.music.feature.announcement.AnnouncementViewModel =
@@ -204,8 +205,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val playlistPage = isPlaylistRoute(backStack.last())
     LeiTheme(settings, darkSystemBars = if (miniQueueOpen || (playlistPage && settings.playlistDepthRibbon) || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
         darkStatusBars = if (playlistPage) true else null) {
-        CompositionLocalProvider(LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight) {
-        Box(Modifier.fillMaxSize()) {
+        CompositionLocalProvider(LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight,
+            LocalRefreshRatePreference provides settings.refreshRate) {
+        Box(Modifier.fillMaxSize().musicRefreshRate(settings.refreshRate)) {
         var selected by rememberSaveable { mutableIntStateOf(HOME_TAB) }
         var startupRouted by rememberSaveable { mutableStateOf(false) }
         LaunchedEffect(container) {

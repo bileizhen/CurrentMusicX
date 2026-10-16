@@ -16,6 +16,7 @@ internal object SettingsPreferences {
     private val PREDICTIVE = booleanPreferencesKey("predictive_back")
     private val DEPTH_RIBBON = booleanPreferencesKey("playlist_depth_ribbon")
     private val NAVIGATION_GLOW = booleanPreferencesKey("navigation_glow")
+    private val REFRESH_RATE = stringPreferencesKey("refresh_rate")
 
     fun read(p: Preferences) = AppearanceSettings(
         themeMode = runCatching { ThemeMode.valueOf(p[THEME] ?: ThemeMode.SYSTEM.name) }.getOrDefault(ThemeMode.SYSTEM),
@@ -27,6 +28,7 @@ internal object SettingsPreferences {
         predictiveBack = p[PREDICTIVE] ?: true,
         navigationGlow = p[NAVIGATION_GLOW] ?: true,
         playlistDepthRibbon = p[DEPTH_RIBBON] ?: false,
+        refreshRate = runCatching { RefreshRatePreference.valueOf(p[REFRESH_RATE] ?: RefreshRatePreference.SYSTEM.name) }.getOrDefault(RefreshRatePreference.SYSTEM),
     ).normalized()
 
     fun write(p: MutablePreferences, s: AppearanceSettings) {
@@ -40,5 +42,6 @@ internal object SettingsPreferences {
         p[PREDICTIVE] = v.predictiveBack
         p[NAVIGATION_GLOW] = v.navigationGlow
         p[DEPTH_RIBBON] = v.playlistDepthRibbon
+        p[REFRESH_RATE] = v.refreshRate.name
     }
 }
