@@ -120,19 +120,32 @@ class OriginalSoundEffectsController internal constructor(
 
     fun select(effect: NeteaseSoundEffect) {
         if (closed) return
-        val reason = originalEffectUnavailableReason(effect, state.value)
+        val checked = state.value.copy(unsupported = state.value.unsupported - effect.id)
+        val reason = originalEffectUnavailableReason(effect, checked)
         if (reason != null) {
             mutableState.value = state.value.copy(error = reason)
             return
         }
+        mutableState.value = checked
         startLoad(effect, effect.id, effect.name, restoring = false)
     }
 
     fun retry() {
         val value = state.value
         val id = value.requestedId ?: return
-        if (closed || value.loading || value.unsupported.containsKey(id)) return
+        if (closed || value.loading) return
+        mutableState.value = value.copy(unsupported = value.unsupported - id)
         startLoad(null, id, value.requestedName.orEmpty(), restoring = value.restoring)
+    }
+
+    /** Cancel a superseded preparation without removing the currently audible preset. */
+    fun cancelPendingSelection() {
+        if (closed || !state.value.loading) return
+        generation++
+        pending?.cancel()
+        pending = null
+        mutableState.value = state.value.copy(loading = false, requestedId = selection.value?.id,
+            requestedName = selection.value?.name, restoring = false, permissionPending = false, error = null)
     }
 
     private fun startLoad(candidate: NeteaseSoundEffect?, id: Long, name: String, restoring: Boolean) {

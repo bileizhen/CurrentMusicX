@@ -173,6 +173,46 @@ class OriginalSoundEffectsControllerTest {
         fixture.controller.close()
     }
 
+    @Test fun restartPrefersFreshAndroidMaterialOverAnIncompleteLegacyCatalogEntry() = runTest {
+        val fixture = Fixture(backgroundScope, SavedOriginalSoundEffect(3595400, "old name", "netease:10"))
+        fixture.rows = listOf(effect(3595400).copy(presetMd5 = ""))
+        fixture.resolve = { effect(it, "fresh vinyl") }
+        runCurrent()
+        assertEquals(listOf(3595400L), fixture.prepared)
+        assertEquals("fresh vinyl", fixture.controller.selection.value!!.name)
+        fixture.controller.close()
+    }
+
+    @Test fun explicitRetryCanRevalidateAnIdAfterUnsupportedMaterialWasReplaced() = runTest {
+        val fixture = Fixture(backgroundScope)
+        runCurrent()
+        fixture.load = { throw UnsupportedOperationException("old material") }
+        fixture.controller.select(effect()); runCurrent()
+        assertTrue(fixture.controller.state.value.unsupported.containsKey(1001))
+        fixture.resolve = { effect(it).copy(presetMd5 = "b".repeat(32)) }
+        fixture.load = { preset(it) }
+        fixture.controller.retry(); runCurrent()
+        assertEquals(1001L, fixture.controller.selection.value!!.id)
+        assertTrue(fixture.controller.state.value.unsupported.isEmpty())
+        fixture.controller.close()
+    }
+
+    @Test fun cancellingSupersededPreparationPreservesActivePresetAndRejectsLateResult() = runTest {
+        val fixture = Fixture(backgroundScope, SavedOriginalSoundEffect(1001, "active", "netease:10"))
+        runCurrent()
+        val active = fixture.controller.selection.value
+        val late = CompletableDeferred<NeteaseOriginalPreset>()
+        fixture.load = { withContext(NonCancellable) { late.await() } }
+        fixture.controller.select(effect(1008)); runCurrent()
+        fixture.controller.cancelPendingSelection(); runCurrent()
+        assertSame(active, fixture.controller.selection.value)
+        assertFalse(fixture.controller.state.value.loading)
+        late.complete(preset(effect(1008))); runCurrent()
+        assertSame(active, fixture.controller.selection.value)
+        assertEquals(1001L, fixture.saved!!.effectId)
+        fixture.controller.close()
+    }
+
     @Test fun legacyMemberPresetRequiresLoginAndRealMatchingBlackVipRights() = runTest {
         val fixture = Fixture(backgroundScope)
         fixture.account.value = OriginalEffectsAccount("anonymous", 0)

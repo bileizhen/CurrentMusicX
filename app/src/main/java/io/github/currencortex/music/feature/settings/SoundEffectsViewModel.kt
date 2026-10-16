@@ -170,39 +170,45 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
     private fun cancelTile() { auditionController.stop(); ++tileGeneration; tileRequest?.cancel(); tileRequest = null; tileLoading.value = null }
     fun useTile(tile: NativeEffectTile) {
         actionError.value = null
+        if (playback.value.mode == io.github.currencortex.music.core.media.PlayerMode.CAST) return
         when (tile.id) {
             104L -> { originalAiMasterEnabled(true); return }
             105L -> { originalSpeakerEnabled(true); return }
             106L -> { originalMoodEnabled(true); return }
         }
         if (tile.smart) originalSmartEnabled(true)
-        else {
-            val known = catalog.value.items.firstOrNull { it.id == tile.id }
-            if (known != null) {
-                originalUnavailableReason(known)?.let { actionError.value = it; failureNotice(tile.name, tile.membership, it); return }
-                useOriginal(known)
-            }
-            else {
-                cancelTile()
-                val generation = tileGeneration
-                tileLoading.value = tile.id
-                notice(tile.name, tile.membership, flow { kotlinx.coroutines.awaitCancellation() })
-                tileRequest = viewModelScope.launch {
-                    try {
-                        val effect = container.neteaseSoundEffects.resolve(tile.id) ?: error("此音效尚无兼容的原版素材")
-                        currentCoroutineContext().ensureActive()
-                        originalUnavailableReason(effect)?.let { error(it) }
-                        tileRequest = null
-                        tileLoading.value = null
-                        useOriginal(effect)
-                    } catch (cancelled: CancellationException) { throw cancelled }
-                    catch (failure: Exception) {
-                        val message = failure.message?.take(180) ?: "音效启用失败"
-                        actionError.value = message; failureNotice(tile.name, tile.membership, message)
-                    }
-                    finally { if (generation == tileGeneration) tileLoading.value = null }
+        else resolveAndUseOriginal(tile.id, tile.name, tile.membership)
+    }
+    private fun resolveAndUseOriginal(id: Long, name: String, membership: Int) {
+        if (playback.value.mode == io.github.currencortex.music.core.media.PlayerMode.CAST) return
+        cancelTile()
+        container.originalSoundEffects.cancelPendingSelection()
+        actionError.value = null
+        userSelected = true
+        val generation = tileGeneration
+        tileLoading.value = id
+        notice(name, membership, flow { kotlinx.coroutines.awaitCancellation() })
+        tileRequest = viewModelScope.launch {
+            try {
+                // Catalog/presentation metadata can be stale. Explicit use always reads the
+                // current Android material and authorization fields, without stopping old DSP.
+                val effect = container.neteaseSoundEffects.resolve(id) ?: error("此音效尚无兼容的原版素材")
+                currentCoroutineContext().ensureActive()
+                if (generation != tileGeneration) return@launch
+                originalEffectUnavailableReason(effect, original.value.copy(unsupported = original.value.unsupported - id))?.let { error(it) }
+                if (playback.value.mode == io.github.currencortex.music.core.media.PlayerMode.CAST) return@launch
+                // Applying must not cancel this successful resolver or fetch the same ID twice.
+                tileRequest = null
+                tileLoading.value = null
+                applyResolvedOriginal(effect)
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) {
+                if (generation == tileGeneration) {
+                    val message = failure.message?.take(180) ?: "音效启用失败"
+                    actionError.value = message; failureNotice(name, membership, message)
                 }
             }
+            finally { if (generation == tileGeneration) { tileRequest = null; tileLoading.value = null } }
         }
     }
     fun refreshCatalog() {
@@ -229,13 +235,12 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
             localNotice(local.smartEnabled, engine.active, engine.error, engine.supported)
         }) else clearFeedback()
     }
-    fun useOriginal(effect: NeteaseSoundEffect) {
-        cancelTile()
-        userSelected = true
+    fun useOriginal(effect: NeteaseSoundEffect) = resolveAndUseOriginal(effect.id, effect.name, originalMembership(effect))
+    private fun applyResolvedOriginal(effect: NeteaseSoundEffect) {
         lastSelection.value = SoundEffectSelection(SoundEffectKind.ORIGINAL, effect.name, effect.id)
         localRequest?.cancel()
-        container.originalMoodEffects.disable(); disableAdditional()
-        container.originalSmartEffects.disable()
+        // The controller's beforeSelection callback switches other modes only after the
+        // new preset has downloaded, passed membership checks and decoded successfully.
         container.originalSoundEffects.select(effect)
         notice(effect.name, originalMembership(effect), original.map { value -> when {
             value.error != null -> SoundEffectNoticeResult(SoundEffectNoticePhase.FAILED, value.error)
