@@ -171,7 +171,10 @@ import kotlinx.serialization.json.*
                     moodEmotion = originalMood.emotion, songCover = currentSong?.cover, playing = playback.playing,
                     speakerScene = originalSpeaker.scene, onDetails = onDetails)
             }
-            if (masterChosen || originalMaster.message != io.github.currencortex.music.core.media.OriginalAiMasterState().message) item {
+            // Normal progress/success already lives in the master card and island.
+            // Inserting a retry row on every successful use used to jump the list.
+            if (!originalMaster.loading && !originalMaster.enabled &&
+                originalMaster.message != io.github.currencortex.music.core.media.OriginalAiMasterState().message) item {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(originalMaster.message, Modifier.weight(1f).testTag("sound_master_status"), fontSize = 12.sp,
                         color = colors.onSurfaceVariantSummary)
@@ -179,7 +182,8 @@ import kotlinx.serialization.json.*
                     if (!originalMaster.available) MusicTextAction("导入引擎", { showEngine = true })
                 }
             }
-            if (speakerChosen || originalSpeaker.message != io.github.currencortex.music.core.media.OriginalSpeakerState().message) item {
+            if (!originalSpeaker.loading && !originalSpeaker.enabled &&
+                originalSpeaker.message != io.github.currencortex.music.core.media.OriginalSpeakerState().message) item {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(originalSpeaker.message, Modifier.weight(1f).testTag("sound_speaker_status"), fontSize = 12.sp,
                         color = colors.onSurfaceVariantSummary)
