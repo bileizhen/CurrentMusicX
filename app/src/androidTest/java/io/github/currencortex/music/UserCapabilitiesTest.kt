@@ -194,6 +194,7 @@ class UserCapabilitiesTest {
             }
         }
         compose.waitUntil(10000) { !vm.state.value.loading && vm.state.value.users.isNotEmpty() }
+        compose.onNodeWithText("用户").performClick()
         compose.onNodeWithText("仅显示正在听歌").performScrollTo().performClick()
         compose.waitUntil(10000) { vm.state.value.listening && !vm.state.value.loading && vm.state.value.users.isEmpty() }
         compose.onNodeWithText("当前没有正在听歌的用户").assertExists()
@@ -238,6 +239,7 @@ class UserCapabilitiesTest {
         compose.waitUntil(10000) { compose.onAllNodesWithText("关闭").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("关闭").performClick()
         compose.onNodeWithText("发现").performClick()
+        compose.onNodeWithText("用户").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithTag("discover_user_9").fetchSemanticsNodes().isNotEmpty() }
         compose.mainClock.advanceTimeBy(1000)
         compose.onNodeWithTag("user_role_super_admin", useUnmergedTree = true).performScrollTo().assertIsDisplayed()
