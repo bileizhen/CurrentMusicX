@@ -710,6 +710,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             })
             TextButton("继续播放", onClick = { explained = true; val action = pendingPlay; pendingPlay = null; action?.invoke() })
         }
+        io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsRecommendation(container,
+            eligible = launchFinished && announcements.isEmpty() && !updateDialogVisible && pendingPlay == null)
         }
         AvatarFlightOverlay(avatarFlight)
         val landingOnHome = selected == HOME_TAB && backStack.last() == ROOT.toString()

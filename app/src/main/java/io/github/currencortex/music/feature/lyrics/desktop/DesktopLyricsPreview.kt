@@ -33,7 +33,7 @@ import androidx.compose.ui.graphics.Color
     val content by container.playbackLyrics.state.collectAsStateWithLifecycle()
     val hasLyrics = playback.song != null && content.songId == playback.song?.id &&
         remember(content.document) { desktopIslandHasLyrics(content.document) }
-    var selectedFps by remember(playback.song?.id, playback.song?.musicSource) { mutableStateOf(false) }
+    var selectedFps by remember(playback.song?.id, playback.song?.musicSource) { mutableStateOf(true) }
     val fpsMode = !hasLyrics || selectedFps
     val toggle by rememberUpdatedState({ if (hasLyrics) selectedFps = !selectedFps })
     val frameRate = rememberIslandFrameRate()

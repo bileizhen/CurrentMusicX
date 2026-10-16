@@ -44,6 +44,7 @@ class PlaylistPagesTest {
     @Before fun setup(): Unit = runBlocking {
         container = AppContainer(context, "playlist-ui-${UUID.randomUUID()}")
         container.ready.await(); container.sessionRestored.await()
+        container.desktopLyrics.markRecommendationSeen()
         val image = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.assets
             .open("release-preview.png").use { it.readBytes() }
         val artwork = File(context.cacheDir, "playlist-preview.png").apply { writeBytes(image) }.toURI().toString()

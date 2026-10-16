@@ -37,6 +37,30 @@ import org.junit.Test
 class DesktopLyricsIslandTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun appDefaultsToFpsAllowsLyricsAndResetsWhenReturningFromDesktop() {
+        val inApp = mutableStateOf(true)
+        val lyrics = MutableStateFlow(PlaybackLyricsState(LyricsDocument(listOf(
+            LyricLine(0, 100000, "前台与桌面切换"))), songId = 42))
+        val player = MutableStateFlow(PlayerState(song = Song(42, "Music"), positionMs = 1000))
+        val options = MutableStateFlow(DesktopLyricsSettings())
+        compose.setContent { Box(Modifier.width(340.dp)) {
+            DesktopLyricsSurface(lyrics, player, options, {}, {}, {}, defaultFpsMode = inApp.value)
+        } }
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(2600)
+        compose.onNodeWithTag("desktop_island_fps").assertIsDisplayed()
+        compose.onNodeWithTag("desktop_island").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithTag("desktop_island_fps").assertDoesNotExist()
+        compose.onNodeWithText("前台与桌面切换").assertExists()
+        compose.runOnIdle { inApp.value = false }
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithTag("desktop_island_fps").assertDoesNotExist()
+        compose.runOnIdle { inApp.value = true }
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithTag("desktop_island_fps").assertIsDisplayed()
+    }
+
     @Test fun coverTapsOnlyTogglePlaybackAndCoverSwipesStillChangeTracks() {
         val lyrics = MutableStateFlow(PlaybackLyricsState(LyricsDocument(listOf(
             LyricLine(0, 100000, "点击封面播放或暂停", translation = "Cover playback controls"))), songId = 42))

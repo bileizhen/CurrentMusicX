@@ -7,6 +7,14 @@ import androidx.activity.enableEdgeToEdge
 import io.github.currencortex.music.ui.CurrentMusicApp
 
 class MainActivity : ComponentActivity() {
+    override fun onStart() {
+        super.onStart()
+        (application as CurrentMusicApplication).container.appForeground.value = true
+    }
+    override fun onStop() {
+        if (!isChangingConfigurations) (application as CurrentMusicApplication).container.appForeground.value = false
+        super.onStop()
+    }
     private val desktopRequest = androidx.compose.runtime.mutableIntStateOf(0)
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)

@@ -17,6 +17,24 @@ import org.junit.Test
 
 
 class DesktopPreferencesTest {
+    @Test fun recommendationIsOptionalAndHandledChoiceSurvivesRecreation(): Unit = runBlocking {
+        val store = object : DataStore<Preferences> {
+            override val data = MutableStateFlow<Preferences>(emptyPreferences())
+            override suspend fun updateData(transform: suspend (Preferences) -> Preferences) =
+                transform(data.value).also { data.value = it }
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val preferences = DesktopLyricsPreferences(store, scope)
+            assertTrue(preferences.shouldRecommend())
+            preferences.edit { it.copy(enabled = true) }
+            assertFalse(preferences.shouldRecommend())
+            preferences.edit { it.copy(enabled = false) }
+            preferences.markRecommendationSeen()
+            assertFalse(DesktopLyricsPreferences(store, scope).shouldRecommend())
+            assertFalse(preferences.state.first { !it.enabled }.enabled)
+        } finally { scope.coroutineContext[Job]!!.cancelAndJoin() }
+    }
     @Test fun previousPayloadRetainsWindowSettingsAndDefaultsNewEffects(): Unit = runBlocking {
         val store = object : DataStore<Preferences> {
             override val data = MutableStateFlow(preferencesOf(stringPreferencesKey("desktopLyrics.preferences.v1") to

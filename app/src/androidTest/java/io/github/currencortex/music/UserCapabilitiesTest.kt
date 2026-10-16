@@ -45,6 +45,7 @@ class UserCapabilitiesTest {
         namespace = "user-test-${UUID.randomUUID()}"
         container = AppContainer(ApplicationProvider.getApplicationContext<CurrentMusicApplication>(), namespace)
         container.ready.await(); container.sessionRestored.await()
+        container.desktopLyrics.markRecommendationSeen()
         server = MockWebServer()
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {

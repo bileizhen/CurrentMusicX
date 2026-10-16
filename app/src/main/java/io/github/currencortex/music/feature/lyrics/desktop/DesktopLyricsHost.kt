@@ -34,7 +34,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private val status: MutableStateFlow<DesktopWindowStatus>,
     private val settingsVisible: StateFlow<Boolean> = MutableStateFlow(false),
     private val changeSong: (Int) -> Unit = {}, private val togglePlayback: () -> Unit = {},
-    private val appearance: StateFlow<AppearanceSettings> = MutableStateFlow(AppearanceSettings())) : AutoCloseable {
+    private val appearance: StateFlow<AppearanceSettings> = MutableStateFlow(AppearanceSettings()),
+    private val appForeground: StateFlow<Boolean> = MutableStateFlow(false)) : AutoCloseable {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val visual = if (Build.VERSION.SDK_INT >= 30) context.createDisplayContext(context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
@@ -126,6 +127,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
             setContent {
                 val config by appearance.collectAsState()
                 Box(Modifier.musicRefreshRate(config.refreshRate), propagateMinConstraints = true) {
+                val inApp by appForeground.collectAsState()
                 DesktopLyricsSurface(lyrics, playback, preferences.state, lock = { scope.launch { preferences.edit { it.copy(locked = true) } } },
                 close = { scope.launch { preferences.edit { it.copy(enabled = false) } } }, settings = {
                     context.startActivity(settingsIntent(context))
@@ -135,7 +137,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                 togglePlayback = togglePlayback,
                 onCoverBounds = { coverBounds = it },
                 onIslandTop = { top -> if (islandTop != top) { islandTop = top; updateIslandTouchWindow() } },
-                onIslandModeChanged = { fps -> status.value = status.value.copy(islandFps = fps) },
+                onIslandModeChanged = { fps -> status.value = status.value.copy(islandFps = fps) }, defaultFpsMode = inApp,
                 onEditingChanged = { active ->
                     if (editing != active) { editing = active; updateWindow(); notification() }
                 }, onIslandSize = { size ->

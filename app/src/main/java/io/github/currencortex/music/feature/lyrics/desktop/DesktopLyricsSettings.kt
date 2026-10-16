@@ -36,6 +36,7 @@ private fun Float.finite(fallback: Float) = takeIf(Float::isFinite) ?: fallback
 /** Separate namespace; editing desktop effects cannot change application lyric preferences. */
 class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope: CoroutineScope) {
     private val payload = stringPreferencesKey("desktopLyrics.preferences.v1")
+    private val recommendationSeen = booleanPreferencesKey("desktopLyrics.recommendationSeen.v1")
     val ready = CompletableDeferred<Unit>()
     private val mutable = MutableStateFlow(DesktopLyricsSettings())
     val state = mutable.asStateFlow()
@@ -43,6 +44,11 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
     suspend fun edit(change: (DesktopLyricsSettings) -> DesktopLyricsSettings) {
         store.edit { preferences -> preferences[payload] = encode(change(decode(preferences[payload])).normalized()) }
     }
+    suspend fun shouldRecommend(): Boolean {
+        val saved = store.data.first()
+        return saved[recommendationSeen] != true && !decode(saved[payload]).enabled
+    }
+    suspend fun markRecommendationSeen() { store.edit { it[recommendationSeen] = true } }
     private fun encode(s: DesktopLyricsSettings) = listOf(s.enabled, s.locked, s.effect.name, s.appearance.name,
         s.translation, s.fontSize, s.opacity, s.offsetMs, s.x, s.y, s.snapEdges,
         s.glowEnabled, s.glowStrength, s.glowSpread, s.textColor, s.glowColor, s.islandFontSize, s.islandY, s.islandOpacity).joinToString("|")
