@@ -714,6 +714,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             eligible = launchFinished && announcements.isEmpty() && !updateDialogVisible && pendingPlay == null)
         }
         AvatarFlightOverlay(avatarFlight)
+        io.github.currencortex.music.feature.lyrics.desktop.SoundEffectIslandFallback(container)
         val landingOnHome = selected == HOME_TAB && backStack.last() == ROOT.toString()
         val pageReady = launchReady && startupRouted && (!account.loading || container.nativeNetease != null) &&
             (!landingOnHome || (libraryHome.loaded && !libraryHome.loading))

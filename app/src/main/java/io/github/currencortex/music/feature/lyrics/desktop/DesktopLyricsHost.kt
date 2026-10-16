@@ -35,8 +35,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private val settingsVisible: StateFlow<Boolean> = MutableStateFlow(false),
     private val changeSong: (Int) -> Unit = {}, private val togglePlayback: () -> Unit = {},
     private val appearance: StateFlow<AppearanceSettings> = MutableStateFlow(AppearanceSettings()),
-    private val appForeground: StateFlow<Boolean> = MutableStateFlow(false)) : AutoCloseable {
-
+    private val appForeground: StateFlow<Boolean> = MutableStateFlow(false),
+    private val effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = MutableStateFlow(null)) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val visual = if (Build.VERSION.SDK_INT >= 30) context.createDisplayContext(context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
         .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null) else context
@@ -128,7 +128,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                 val config by appearance.collectAsState()
                 Box(Modifier.musicRefreshRate(config.refreshRate), propagateMinConstraints = true) {
                 val inApp by appForeground.collectAsState()
-                DesktopLyricsSurface(lyrics, playback, preferences.state, lock = { scope.launch { preferences.edit { it.copy(locked = true) } } },
+                DesktopLyricsSurface(lyrics, playback, preferences.state, effectNotices = effectNotices, lock = { scope.launch { preferences.edit { it.copy(locked = true) } } },
                 close = { scope.launch { preferences.edit { it.copy(enabled = false) } } }, settings = {
                     context.startActivity(settingsIntent(context))
                 }, maxIslandWidth = { islandMaximumWidth.floatValue }, editRequest = editRequest.intValue,
@@ -251,6 +251,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                     override fun onScroll(first: MotionEvent?, last: MotionEvent, dx: Float, dy: Float) = true
                 }).apply { setOnDoubleTapListener(null) }
                 setOnTouchListener { _, event ->
+                    // A transient effect result never controls the song or changes the saved display mode.
+                    if (effectNotices.value != null) return@setOnTouchListener true
                     gestures.onTouchEvent(event)
                     if (event.actionMasked == MotionEvent.ACTION_UP && !held) {
                         val dx = event.rawX - startX; val dy = event.rawY - startY
