@@ -26,6 +26,7 @@ import java.util.Locale
     val settings by vm.settings.collectAsStateWithLifecycle()
     val runtime by vm.runtime.collectAsStateWithLifecycle()
     val playback by vm.playback.collectAsStateWithLifecycle()
+    val soundPreferences by vm.soundPreferences.collectAsStateWithLifecycle()
     val hint = MiuixTheme.colorScheme.onSurfaceVariantSummary
     val accent = MiuixTheme.colorScheme.primary
     var preview by remember(settings.gains) { mutableStateOf(settings.gains) }
@@ -33,6 +34,7 @@ import java.util.Locale
         !runtime.supported -> "此设备未提供均衡器"
         runtime.error != null -> runtime.error!!
         playback.mode == PlayerMode.CAST -> "投屏音效由接收设备处理"
+        soundPreferences.smartEnabled -> "智能调音正在使用；以下为手动参数，调整后切回手动"
         !settings.enabled -> "已关闭，保留你的调节参数"
         runtime.active -> "已连接本机播放器"
         else -> "开始本机播放后自动生效"

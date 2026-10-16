@@ -1,0 +1,312 @@
+[
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/32582124119/201b/4a2b/636c/1d1dbc6b0766e867f992f24974bd9e8d.png",
+    "path": "assets/vip_icon_url.png",
+    "sha256": "8ae4e37577370c6809717730c6d3e40d7f6fddef0d6a49ba546dd04871d23dc2"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/32582306080/a905/24c9/63cd/1d065fb7c32a5fe002d223f9ed8945f3.png",
+    "path": "assets/svip_icon_url.png",
+    "sha256": "4f44aef3e7e99693b5ec2af62c8006e5d8133b14180d1fa5c2802789104e000c"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/32582121501/716e/a8fc/18c0/91d296e4135822e84b1bfa3a3eb86cd5.png",
+    "path": "assets/vip_icon_limit_free_url.png",
+    "sha256": "51cf617489314a6d1209e49cb12b86bb643778b8b69ef692eceb8cdc826a0a8b"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/32582407960/0808/b864/1234/953e02cffadd7a9e465ddb590d16726f.png",
+    "path": "assets/svip_icon_limit_free_url.png",
+    "sha256": "24e48905c9c3ae78d78ddb2812eaa67d22f3d11f2d26f62104cc79322b73f5ea"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/61824726600/d5c4/98d6/2b4f/d1e58fa19a86cbbd30cc1b31173ba123.png",
+    "path": "assets/personal_item_bg_url_dark.png",
+    "sha256": "e730f0ac5fb603a3608a569211925ea2a4abf0aa5573f65743f9d49e1aa0a298"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/61824987475/69b8/3ce4/386e/fa99fbedbd0e3c0f100241b21fd72133.png",
+    "path": "assets/twinkle_item_bg_url_dark.png",
+    "sha256": "bde5e572a0b4bdc664d09e472f8480e331e077e081388516f5aa1da9a3a37fb6"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/61497783841/a81f/dc51/e4a9/4a1e511155dc34d80c718321a1f3208c.png",
+    "path": "assets/personal_item_ear_print_light_url.png",
+    "sha256": "e0815b2f202db6be24c219d9e3e6f36b8f7dbeee08c67b492618cbb6d8fb3776"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/61497789054/d1da/55dd/3c37/9746e991072ac3c8ad4948ba1d2d6b91.png",
+    "path": "assets/personal_item_ear_age_light_url.png",
+    "sha256": "7bfb32b4d778a336b5b5679ac811e2197b4bde2caa35e0a4ddc454e1dbe1c0f5"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/61497791982/7006/b55b/e3b6/1329d96750f826a43fb3517f2dccbca7.png",
+    "path": "assets/personal_item_eq_light_url.png",
+    "sha256": "f68df5c38379e112424966dd5c5cae612c674272e601cea8c3bc731544aeb034"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/61711170901/c8e9/0a63/7fd1/1d755383e7b7128aa8750a43f6910c27.png",
+    "path": "assets/personal_item_ear_print_dark_url.png",
+    "sha256": "46639877ceebdafb7634e19df5141eba55ddf0757d70b217cf3a21aea999d76f"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/61711197592/9ebd/a4a3/3ebb/691fae372695619390853e1c1b6febf0.png",
+    "path": "assets/personal_item_ear_age_dark_url.png",
+    "sha256": "81bb74568951924a89bb6208e221c70024a2362870099aac89db5be11ae85a06"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/61711202304/f75f/8176/8d70/432e81ee87251b006066ab09274103fa.png",
+    "path": "assets/personal_item_eq_dark_url.png",
+    "sha256": "0353054b00046cfbb71f778ea880055b98d3679a3a42ad93a4c817f78ee522b1"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/77218913204/528a/6c1d/860e/e8dd5d8cff0dd949f0ef9730afe48ac2.png",
+    "path": "assets/ai_model_light_unuse_bg_url.png",
+    "sha256": "98676c29607b469ef5505f25fa191465073f36b8b409cbdf3d8b6c67f045d4c3"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/77218907715/cd6d/45b7/f252/7d77421eac4fd81861215dca218a3cfa.png",
+    "path": "assets/ai_model_light_use_bg_url.png",
+    "sha256": "ac5e41044a1e96950e949fc613d2f6b7c7d24a101296068ee5e10b691edb6b46"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/77218915482/630f/1cb4/89af/3cd165b66e264102067f22648dde68f3.png",
+    "path": "assets/ai_model_dark_unuse_bg_url.png",
+    "sha256": "95e8ba47081cdeb7fa95b5c4e28b6066894c00504665b119a938d8edee178a36"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/77218910669/2a39/834a/0111/35aae70bb54b9189a8e152958970b08d.png",
+    "path": "assets/ai_model_dark_use_bg_url.png",
+    "sha256": "722fe07386f2c886167de7a8d8f528fd9214f8ed9cf7c31ed43b8b830da93fac"
+  },
+  {
+    "source": "https://d1.music.126.net/dmusic/6124/47a3/ae4f/c05aaa17cc61e2db358796b34d3f29b8.mp4?infoId=4450599",
+    "path": "assets/ai_model_dark_unuse_video_bg_url.mp4",
+    "sha256": "1e33dafad8a07b779fc5572e406fd7cdda7721441f62a1d5d42a55b1093511df"
+  },
+  {
+    "source": "https://d1.music.126.net/dmusic/c79b/163e/e448/ad61e68d2259d7dcfe8c73cb2ff83a7c.mp4?infoId=4450598",
+    "path": "assets/ai_model_dark_use_video_bg_url.mp4",
+    "sha256": "944d5b0bbb95576281db6dac355898a02b30d108c2f0ea072e6cecd7afe94072"
+  },
+  {
+    "source": "https://d1.music.126.net/dmusic/61f5/1991/bd6c/de712a34713960af7c91bb43045c36f2.mp4?infoId=4451621",
+    "path": "assets/ai_model_light_unuse_video_bg_url.mp4",
+    "sha256": "8496cfdbe141b436e0b4d23e2ae58e5dd44ff0d5c00afc8442bf501fd7e75a0c"
+  },
+  {
+    "source": "https://d1.music.126.net/dmusic/4ee7/121c/178e/ee49ad4135fcc6e3533d6ef65978791e.mp4?infoId=4451622",
+    "path": "assets/ai_model_light_use_video_bg_url.mp4",
+    "sha256": "e0b4fe15ab53316712f5f9f96606b5dc813c4286e4366c639d6bca430c583455"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/77172406287/5abc/76b6/7828/82fb6532b455c4d1ad2e64f9e41bd1c8.png",
+    "path": "assets/ai_model_title_icon_url.png",
+    "sha256": "6a7b5f3fb364428b206e738c4e0a8a80930f28c026c6f70bf7815729d1b68bb1"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/61982198451/775a/7de7/c0e9/e01204bd431db744a3168825ae426065.png",
+    "path": "assets/ai_model_black_pan_url.png",
+    "sha256": "1dc954127135c95152f28ede0e58a47264c32e412b6cd5e6b1ee5643e9780408"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/78034576499/13bd/93c5/8d5e/8f71b387cbf87b9da10a0eca26853387.png",
+    "path": "assets/speakerphone_model_normal_used_bg_url.png",
+    "sha256": "b0ae772ae656bd38bc1ab2721e0c04fb9c5c658566c750302fc64a808fb6967a"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/78034576507/7280/3e03/3239/85b8b5f44cd1ba8aa92f621f33275ca9.png",
+    "path": "assets/speakerphone_model_normal_used_dark_bg_url.png",
+    "sha256": "a554744bb073f1136251379839368518f96f05a22aaab624e8379cd34bdcdefb"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/78034578442/e197/b9ba/20ac/d8d5bee27dfbb556524f765ec058126a.png",
+    "path": "assets/speakerphone_model_normal_unused_bg_url.png",
+    "sha256": "be33ce60dd091b238553afb3187f0633e1003efe317d23241d3e2b68bb1fac96"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/78034579523/bf43/776c/cbcf/f707ae7db525e27e2e5715e16267b849.png",
+    "path": "assets/speakerphone_model_normal_unused_dark_bg_url.png",
+    "sha256": "b14cff4dc323d31cfe59b74ef85398e24ee3e73d8bb3ef8f26071e3fa2e8479e"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/77901459618/8d11/f549/afdc/5cda85f8255c43616c9c87bc4a7523a1.png",
+    "path": "assets/speakerphone_model_shower_used_bg_url.png",
+    "sha256": "2cf17b0705c03f29ac1ede023e865e87c420aedac19b4b903c1a17ae56eb9375"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/77901465788/7272/dd03/6815/084ef37ed210155f65108c9c3433cab0.png",
+    "path": "assets/speakerphone_model_shower_used_dark_bg_url.png",
+    "sha256": "c7c66b951516f48ca66a078029fb4156d0de73024d4881d5aef19dc208db6d43"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/77901463306/685c/7435/8d88/2a17f541c6e1b4fa272abfee46635753.png",
+    "path": "assets/speakerphone_model_sleep_used_bg_url.png",
+    "sha256": "f3816d3737fc28b564380b674764d458eb0f0b935582eccd63d1a13c9adec6ce"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/77901465790/2304/3e53/d37b/69cf7dd20ba0383f8bfc7d8947f2a7e0.png",
+    "path": "assets/speakerphone_model_sleep_used_dark_bg_url.png",
+    "sha256": "4aabe1b167ae0b1e3162cbdf33734b85e7b4b8e6a5dad55e9440daccbdf7084b"
+  },
+  {
+    "source": "http://vodkgeyttp9.vod.126.net/vodkgeyttp8/9e104051ce7ed6ebb3e27cd630a873eb.mp4?wsSecret=17ab969a3af5dfadd5c2a3fb05222e00&wsTime=2084845768",
+    "path": "assets/speakerphone_model_normal_used_video_url.mp4",
+    "sha256": "346591a9cfafe8630cb48569771029f82bd68b8a102ac59c6645ba715bd87fe9"
+  },
+  {
+    "source": "http://vodkgeyttp9.vod.126.net/vodkgeyttp8/432db5c3b59236460486aec3a9e82e77.mp4?wsSecret=f0278640666b4380227cff55d3047353&wsTime=2084845789",
+    "path": "assets/speakerphone_model_normal_used_dark_video_url.mp4",
+    "sha256": "c173f8edef87c51e436b2987783a36a3b80ee6b8a3e8d20c42cd20cbe472fd91"
+  },
+  {
+    "source": "http://vodkgeyttp9.vod.126.net/vodkgeyttp8/74247a3892e50832cc133fbb110a52b3.mp4?wsSecret=787ef0e749c5a0189469010f5fcc8938&wsTime=2084845798",
+    "path": "assets/speakerphone_model_normal_unused_video_url.mp4",
+    "sha256": "a210c2b8b7dbab8ed92436e610fab2ca7331b0af42f4e4ab1fd5fd8a899fac2f"
+  },
+  {
+    "source": "http://vodkgeyttp9.vod.126.net/vodkgeyttp8/228ac88ba5d78c51dbc155b6a3d7eca7.mp4?wsSecret=2abd014df8e5bd7730ccfc12d1d184c2&wsTime=2084845806",
+    "path": "assets/speakerphone_model_normal_unused_dark_video_url.mp4",
+    "sha256": "2f2cea439b1c170c2d346162c1a77ff6785ea57572d7186de5d9fc4fbb090521"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/62279612660/0c43/f383/207b/cf4e8a8ccc924be0fafba8f05dde03c1.png",
+    "path": "assets/ai_model_song_cover_default_light_url.png",
+    "sha256": "fd1d5faeccfedc3e3747215a257ffe320d4a5b6f6fce6e1bf75e183795977dfa"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/62279618012/28eb/f7cf/b860/1976659052c64b29cd433cdbba6c4695.png",
+    "path": "assets/ai_model_song_cover_default_dark_url.png",
+    "sha256": "334bbeb65f1ec15db8ceeecc5b42d726998fdba9dde32b32205a1252ba0205bd"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/80214711334/d705/caf2/0fc8/3e4d80fc3f38be0b5e65934cdf8bb857.png",
+    "path": "assets/emotion_title_icon_dark_url.png",
+    "sha256": "231d1b87fad5e00c6614fe0e908377e6df44f596e3df534f00cab4d062793932"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/80213037382/9bc7/4c0a/4eee/25bca4db11f15cd1765056f635930895.png",
+    "path": "assets/emotion_title_icon_light_url.png",
+    "sha256": "d6a681e38607e00b2b72dae43b6e46b6a89504fdc5447a8e739dba379cf1cf01"
+  },
+  {
+    "source": "http://vodkgeyttp8.vod.126.net/vodkgeyttp8/330b46c21b2249d6201acc4bed9647b9.mp4?wsSecret=9283066e6e13bf855fa2da70e7a9df78&wsTime=2093398567",
+    "path": "assets/emotion_light_unuse_video_bg_url.mp4",
+    "sha256": "2073c6b30049af80fc5e3dc1b5326fc6017d1a95a083019622b29694b59fa6c5"
+  },
+  {
+    "source": "http://vodkgeyttp9.vod.126.net/vodkgeyttp8/739b0dc30f9488628e124ee32d9b8393.mp4?wsSecret=6d2cbc02f4d864068707a84698244649&wsTime=2092717288",
+    "path": "assets/emotion_dark_unuse_video_bg_url.mp4",
+    "sha256": "637e9c9e25401e6544cb03a3345b1ddea598acddc8464df8a2f2a8247b22ba49"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/80046318464/7027/683e/94a1/977c8c72de8ec7c894e774bbecdbc01d.png",
+    "path": "assets/emotion_light_unuse_bg_url.png",
+    "sha256": "6a27d91bdfddbdd042909076298601fe693978e42000f0d2c19f7f43856f99a4"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/79877490828/e155/5d26/664b/892bbeaf8dca04c19ca4728ffef8cef8.jpg",
+    "path": "assets/emotion_dark_unuse_bg_url.jpg",
+    "sha256": "f29941d2c8b9b81da3a2ebd2f967555c0e83a1e5b2eebc413777a16e08d71b9f"
+  },
+  {
+    "source": "http://vodkgeyttp8.vod.126.net/vodkgeyttp8/88469f07e1aba62eecb54d5fb10e046a.mp4?wsSecret=fbd81fbfed67edf1cde64066464f2aca&wsTime=2093940802",
+    "path": "assets/emotion_video_map_default_light_video.mp4",
+    "sha256": "2f2aba8b66eef3dc2333105228d964ad709798e844e90211e6266844c4f6b391"
+  },
+  {
+    "source": "https://p6.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/80175282272/2545/94cb/9f42/7be280e37b5dd0d7176741e2154bfa2d.png",
+    "path": "assets/emotion_default_light_poster.png",
+    "sha256": "b4512082ad56cffc76e021a82797f619f1a00328157a616cbb1dbe90c0ce803f"
+  },
+  {
+    "source": "http://vodkgeyttp9.vod.126.net/vodkgeyttp8/4590679dce30ecd7fed5b88c7b7635d2.mp4?wsSecret=65932c63f50123e0f0664d43f00452dd&wsTime=2093940813",
+    "path": "assets/emotion_video_map_default_dark_video.mp4",
+    "sha256": "b116ce1b1e41bc2dc17d66543f3de9b37058c6e2fd71702f5b0ebb78ba8cda67"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wonDlsKUwrLClGjCm8Kx/80175281904/6e5e/017b/a50e/dba9676f9e99012180e6b5156c978ab9.png",
+    "path": "assets/emotion_default_dark_poster.png",
+    "sha256": "56cbe2710220e8cf69b1862245b2f789645c415d4f9e3e4b33f262b8f09e00e8"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wovDmcKXw6PCn2_CmsOk/77324048106/486a/64a3/4774/748c3103932efc1d1b2b2e35098b3842.png",
+    "path": "assets/banner-100-dark-poster.png",
+    "sha256": "096523d4121257ab0f2446fc7649a29db8b23f3abc652810900af57ecdc16c43"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wovDmcKXw6PCn2_CmsOk/77324049318/c212/c778/ba17/8269e28e27354c37a34c3d2869ec5686.webp",
+    "path": "assets/banner-100-dark-animation.webp",
+    "sha256": "391bd90187b56de4a52faa42f6981f98bfa0b792b04b15bfe96c412b272b45e3"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wovDmcKXw6PCn2_CmsOk/77324041971/f696/4dcf/e1ed/74601589c115295864549487bccb064f.png",
+    "path": "assets/banner-100-light-poster.png",
+    "sha256": "db641d9356f1498138573fcf91c980ae818c6d0a8c9784a372f9fd8b58c8d541"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wovDmcKXw6PCn2_CmsOk/77324047236/f794/7daa/2a19/714e46d6331b5cd8299f32d9e352f6f3.webp",
+    "path": "assets/banner-100-light-animation.webp",
+    "sha256": "99b0c0a531dbf8c7bf0199d1cff9d0907a8a71bcca95648dec709591114d8568"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wovDmcKXw6PCn2_CmsOk/82462386944/1076/116a/8ca9/5c4d23420dc340cc2cad1a4eab61f9ce.png",
+    "path": "assets/featured-3601400-dark-poster.png",
+    "sha256": "a23c33d4f3dbf5569d28939c32bcd31c551d847b69db4d57b1986734be4587ee"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wovDmcKXw6PCn2_CmsOk/82462384090/a6f2/c89a/4522/022f5009fe81f558bd58f2b993fd74df.png",
+    "path": "assets/featured-3601400-light-poster.png",
+    "sha256": "2a277c06866fa968dab879607997dc7183d54f5c81d4d37ca03d3ecf22518a7b"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wovDmcKXw6PCn2_CmsOk/81979048703/c3e5/d30b/b4af/1ab874069643b629475cc652118c1be6.png",
+    "path": "assets/featured-3600400-dark-poster.png",
+    "sha256": "9f0bfc06358fb4dcc8fe609440a5643d93cceb2d48c36720b60327dec44bd7ed"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wovDmcKXw6PCn2_CmsOk/81979037112/e83b/9ffe/6bc4/aafac2faa4e036dc9cd6d9b3ccb9bcf8.png",
+    "path": "assets/featured-3600400-light-poster.png",
+    "sha256": "d455f761752b86d02f41d7b1055b0b8c35cdd2e93dd2a9cb834a043fcfd47812"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wovDmcKXw6PCn2_CmsOk/79593001556/e137/42c7/3273/dac9ca70be28a4c7f765be22c0c51274.png",
+    "path": "assets/featured-3595400-dark-poster.png",
+    "sha256": "92b7a12c796944d812209221a4438163d04e0d44845f98ecdca644b6d48c59e1"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wovDmcKXw6PCn2_CmsOk/79592891040/bc00/57ef/8980/ecff349b082ce5df3fa32f2a8e8eb12d.png",
+    "path": "assets/featured-3595400-light-poster.png",
+    "sha256": "21e55e6c4e0b3aa421c5bc71225913852e14379be8f612e04932d3cacd5083a9"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wo7DmMOIwrXClD_DgMK-/77320409595/2459/854a/0623/4fa25339a318e4d54c51b4b0ec9791fc.png",
+    "path": "assets/featured-2058600-dark-poster.png",
+    "sha256": "b5fc1c058c748481a8c3e2dee55a71db02b4310ade8cb9c655689c6011df33eb"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wo7DmMOIwrXClD_DgMK-/77320407606/e280/8fd7/a136/c077faa4c28d94bfb95589881fe62df5.png",
+    "path": "assets/featured-2058600-light-poster.png",
+    "sha256": "59feb54f46632eac5b84e585312cad492408a1fd610a1adf19a5569b6c24f076"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wo7DmMOIwrXClD_DgMK-/77320408775/c7f5/3ab5/5927/a4dce80ceea0e096f211ef5d8dc48091.png",
+    "path": "assets/featured-13000-dark-poster.png",
+    "sha256": "32cf74637aa33e1ec1e386d1a07a129db85d9f73ee63a0ff9709f2cd864ecdcb"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wo7DmMOIwrXClD_DgMK-/77320402469/bd48/8341/5618/444d10e6d19cc82da0981d02eb3cde2a.png",
+    "path": "assets/featured-13000-light-poster.png",
+    "sha256": "4740cdc17ddf786d13217c7f7c6199f1401e9740644850e8d78ffa8b1f51a02c"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wo7DmMOIwrXClD_DgMK-/77320400764/ed02/ab08/ab95/f06cd9d51d4ccb2b153b2aca87b3e015.png",
+    "path": "assets/featured-1035400-dark-poster.png",
+    "sha256": "25a8fe9b12c9e40f25e5b4d834d3b7e89b273d7f98dcf08b2e08067d55471401"
+  },
+  {
+    "source": "https://p5.music.126.net/obj/wo7DmMOIwrXClD_DgMK-/77320395633/e9af/3697/f5b5/bbf75c8f7754f62b1028499f4ccdbb44.png",
+    "path": "assets/featured-1035400-light-poster.png",
+    "sha256": "7a22918fe315160122bacd1d283ab4054082e9de27890f054f893a8e666fa5c0"
+  }
+]

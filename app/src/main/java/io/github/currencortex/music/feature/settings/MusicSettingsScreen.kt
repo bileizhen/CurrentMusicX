@@ -134,8 +134,8 @@ import kotlin.math.roundToInt
                 modifier = Modifier.testTag("allow_concurrent_playback"))
         } }
         item { Card { MusicDestinationRow("桌面悬浮歌词", onDesktopLyrics, Modifier.testTag("open_desktop_lyrics"), summary = "后台同步 · 精致与舞台效果 · 触摸穿透") } }
-        item { Card { MusicDestinationRow("均衡器", onEqualizer, Modifier.testTag("open_equalizer"),
-            summary = "五段调节 · 音效预设") } }
+        item { Card { MusicDestinationRow("音效", onEqualizer, Modifier.testTag("open_equalizer"),
+            summary = "网易云分析 · 智能调音 · 均衡器") } }
         item { Card { MusicDestinationRow("默认音质", { qualityOpen = true },
             Modifier.testTag("default_quality"), summary = settings.quality.label) } }
         item { Card {
