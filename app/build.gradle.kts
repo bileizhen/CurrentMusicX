@@ -15,10 +15,10 @@ val keystoreProperties = rootProject.file("keystore.properties").takeIf { it.isF
     Properties().apply { file.inputStream().use(::load) }
 }
 
-// Local interoperability preview. Vendor binaries are kept in the ignored evidence
-// directory, never silently copied into ordinary builds or public releases.
-val originalEffectsPreview = providers.gradleProperty("neteaseOriginalEffects").orNull == "true"
-val originalEffectsLibs = rootProject.file(".verification/sound-effects/port/runtime-libs")
+// Ordinary builds include the verified arm64 engine, JNI bridge and MNN runtime.
+// The opt-out is retained only for import-path interoperability tests.
+val originalEffectsBundled = providers.gradleProperty("neteaseOriginalEffects").orNull != "false"
+val originalEffectsLibs = file("src/main/jniLibs/arm64-v8a")
 
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
@@ -34,22 +34,27 @@ android {
         versionCode = 19
         versionName = "1.1.12"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("boolean", "NETEASE_ORIGINAL_EFFECTS", originalEffectsPreview.toString())
+        buildConfigField("boolean", "NETEASE_ORIGINAL_EFFECTS", originalEffectsBundled.toString())
     }
 
     buildFeatures { compose = true; buildConfig = true }
-    if (originalEffectsPreview) {
-        check(originalEffectsLibs.resolve("arm64-v8a/libneaudioeffects.so").isFile) { "Prepare the local original-effects preview libraries first" }
-        val engineDigest = MessageDigest.getInstance("SHA-256")
-            .digest(originalEffectsLibs.resolve("arm64-v8a/libneaudioeffects.so").readBytes())
-            .joinToString("") { "%02x".format(it.toInt() and 255) }
-        check(engineDigest == "3f8e2eec659080cb8e90bbfc672d327a180e4e0b6c051818e38625c5f01fcbd1") {
-            "The preview adapter only supports the verified NetEase 9.5.30 arm64 engine"
+    sourceSets.getByName("main").jniLibs.setSrcDirs(if (originalEffectsBundled) listOf(file("src/main/jniLibs")) else emptyList<File>())
+    if (originalEffectsBundled) {
+        val pinned = mapOf(
+            "libneaudioeffects.so" to "3f8e2eec659080cb8e90bbfc672d327a180e4e0b6c051818e38625c5f01fcbd1",
+            "libc++_shared.so" to "3e6d529147ffd66bd31fab85c8902b526abd1c06e43554ce64b97519e255e4b3",
+            "libMNN.so" to "be7ad29454cfeecfb30399e32c3f600f963e69c7dd914f0001021fc78435249d",
+            "libMNN_Express.so" to "e095c40a22d3dbb83894c74b3735db857e5137079109cab25797864921d4de57",
+            "libCore_MNN_JNI.so" to "fec5363885343072c9aaf395a8560b217def8600404fa2ab9c940509215e0bef")
+        pinned.forEach { (name, expected) ->
+            val binary = originalEffectsLibs.resolve(name)
+            check(binary.isFile && MessageDigest.getInstance("SHA-256").digest(binary.readBytes())
+                .joinToString("") { "%02x".format(it.toInt() and 255) } == expected) {
+                "Bundled NetEase 9.5.30 library failed verification: $name"
+            }
         }
-        sourceSets.getByName("main").jniLibs.srcDir(originalEffectsLibs)
-        sourceSets.getByName("main").assets.srcDir(rootProject.file(".verification/sound-effects/port/runtime-assets"))
     }
-    if (originalEffectsPreview || providers.gradleProperty("neteaseOriginalTestAssets").orNull == "true") {
+    if (providers.gradleProperty("neteaseOriginalTestAssets").orNull == "true") {
         sourceSets.getByName("androidTest").assets.srcDir(rootProject.file(".verification/sound-effects/port/test-assets"))
     }
     signingConfigs {
@@ -76,6 +81,9 @@ android {
     }
     kotlin { compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) } }
     packaging { resources.excludes += setOf("META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/AL2.0", "META-INF/LGPL2.1") }
+    // Extract version-bound vendor libraries to the app's native library directory.
+    packaging.jniLibs.useLegacyPackaging = true
+    packaging.jniLibs.keepDebugSymbols += "**/*.so"
 }
 
 dependencies {

@@ -16,9 +16,11 @@ class OriginalMoodEffectsTest {
         val i = InstrumentationRegistry.getInstrumentation()
         org.junit.Assume.assumeTrue(i.context.assets.list("").orEmpty().contains("netease-engine-fixture.apk"))
         NeteaseNativeEngine.configure(i.targetContext)
-        val apk = File(i.targetContext.cacheDir, "mood-engine-fixture.apk")
-        i.context.assets.open("netease-engine-fixture.apk").use { source -> apk.outputStream().use(source::copyTo) }
-        try { NeteaseEngineLibraries.installFile(i.targetContext, apk) } finally { apk.delete() }
+        if (!BuildConfig.NETEASE_ORIGINAL_EFFECTS) {
+            val apk = File(i.targetContext.cacheDir, "mood-engine-fixture.apk")
+            i.context.assets.open("netease-engine-fixture.apk").use { source -> apk.outputStream().use(source::copyTo) }
+            try { NeteaseEngineLibraries.installFile(i.targetContext, apk) } finally { apk.delete() }
+        }
         assertTrue(NeteaseEngineLibraries.moodAvailable())
         val model = File(i.targetContext.cacheDir, "emofxnet-test.mnn")
         i.context.assets.open("original-mood/emofxnet.mnn").use { source -> model.outputStream().use(source::copyTo) }
