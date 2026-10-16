@@ -1,0 +1,264 @@
+{
+  "2": {
+    "peq": {
+      "f": [
+        {
+          "on": false,
+          "band": 0
+        },
+        {
+          "on": true,
+          "freq": 500,
+          "band": 1,
+          "type": 6,
+          "q": 2.5,
+          "gain": -0.2
+        },
+        {
+          "on": true,
+          "freq": 1500,
+          "band": 2,
+          "type": 6,
+          "q": 3,
+          "gain": 0.2
+        },
+        {
+          "on": true,
+          "freq": 3500,
+          "band": 3,
+          "type": 6,
+          "q": 2.5,
+          "gain": 3
+        },
+        {
+          "on": true,
+          "freq": 4000,
+          "band": 4,
+          "type": 5,
+          "q": 1,
+          "gain": 3
+        },
+        {
+          "on": true,
+          "freq": 100,
+          "band": 5,
+          "type": 6,
+          "q": 4,
+          "gain": 0.4
+        },
+        {
+          "on": false,
+          "band": 6
+        },
+        {
+          "on": false,
+          "band": 7
+        },
+        {
+          "on": false,
+          "band": 8
+        }
+      ],
+      "gain": 1.5,
+      "on": true,
+      "useable": true
+    },
+    "channeldelay": {
+      "channelCount": 2,
+      "delayMs": [
+        0,
+        32
+      ],
+      "dryWet": [
+        0.8,
+        1
+      ],
+      "on": true,
+      "useable": true
+    }
+  },
+  "6": {
+    "peq": {
+      "f": [
+        {
+          "on": false,
+          "band": 0
+        },
+        {
+          "on": true,
+          "freq": 500,
+          "band": 1,
+          "type": 6,
+          "q": 2.5,
+          "gain": -0.2
+        },
+        {
+          "on": true,
+          "freq": 1500,
+          "band": 2,
+          "type": 6,
+          "q": 3,
+          "gain": 0.2
+        },
+        {
+          "on": true,
+          "freq": 3500,
+          "band": 3,
+          "type": 6,
+          "q": 2.5,
+          "gain": 3
+        },
+        {
+          "on": true,
+          "freq": 4000,
+          "band": 4,
+          "type": 5,
+          "q": 1,
+          "gain": 3
+        },
+        {
+          "on": true,
+          "freq": 100,
+          "band": 5,
+          "type": 6,
+          "q": 4,
+          "gain": 0.4
+        },
+        {
+          "on": false,
+          "band": 6
+        },
+        {
+          "on": false,
+          "band": 7
+        },
+        {
+          "on": false,
+          "band": 8
+        }
+      ],
+      "gain": 1.5,
+      "on": true,
+      "useable": true
+    },
+    "channeldelay": {
+      "on": true,
+      "channelCount": 6,
+      "delayMs": [
+        0,
+        32,
+        3,
+        0,
+        0,
+        0
+      ],
+      "dryWet": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "12": {
+    "peq": {
+      "f": [
+        {
+          "on": false,
+          "band": 0
+        },
+        {
+          "on": true,
+          "freq": 500,
+          "band": 1,
+          "type": 6,
+          "q": 2.5,
+          "gain": -0.2
+        },
+        {
+          "on": true,
+          "freq": 1500,
+          "band": 2,
+          "type": 6,
+          "q": 3,
+          "gain": 0.2
+        },
+        {
+          "on": true,
+          "freq": 3500,
+          "band": 3,
+          "type": 6,
+          "q": 2.5,
+          "gain": 3
+        },
+        {
+          "on": true,
+          "freq": 4000,
+          "band": 4,
+          "type": 5,
+          "q": 1,
+          "gain": 3
+        },
+        {
+          "on": true,
+          "freq": 100,
+          "band": 5,
+          "type": 6,
+          "q": 4,
+          "gain": 0.4
+        },
+        {
+          "on": false,
+          "band": 6
+        },
+        {
+          "on": false,
+          "band": 7
+        },
+        {
+          "on": false,
+          "band": 8
+        }
+      ],
+      "gain": 1.5,
+      "on": true,
+      "useable": true
+    },
+    "channeldelay": {
+      "on": true,
+      "channelCount": 12,
+      "delayMs": [
+        0,
+        32,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "dryWet": [
+        0.9,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "version": "v3",
+  "effect_name": ""
+}

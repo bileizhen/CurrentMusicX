@@ -19,6 +19,49 @@ import kotlin.math.sin
 
 /** Opt-in use of the phone's actual session. Never exports credentials or changes playback/settings. */
 class NeteaseMemberEffectsTest {
+    @Test fun actualSvipVinylPresetVerifiesRightsAndProcessesPcm() = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("svipVinyl") == "true")
+        val app = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        check(app.packageName == "com.bileizhen.currentmusic")
+        val foreground = androidx.test.core.app.ActivityScenario.launch(MainActivity::class.java)
+        try {
+            val container = app.container
+            container.ready.await(); container.neteaseSessions.ready.await()
+            val account = container.neteaseSessions.state.value
+            assertTrue("Log in on the phone before this opt-in verification", account.loggedIn && !account.stale)
+            val queue = container.playbackQueue.state.value
+            val rights = container.neteaseSoundEffects.originalPresetEntitlement()
+            assertEquals(account.profile!!.uid, rights.userId)
+            assertTrue("Active SVIP must be verified by NetEase", rights.expiryFor(4) > System.currentTimeMillis())
+            val resolved = requireNotNull(container.neteaseSoundEffects.resolve(3595400))
+            assertEquals(4, resolved.memberType)
+            assertTrue(resolved.legacyMemberOriginal)
+            assertTrue(NeteaseNativeEngine.available())
+            val decoded = NcaeDecoder.decode(container.neteaseSoundEffects.downloadPreset(resolved))
+            File(app.getExternalFilesDir(null), "verified-vinyl-preset.json").writeBytes(decoded.bytes)
+            val preset = NeteaseOriginalPreset(resolved.id, resolved.name, decoded.type, decoded.bytes)
+            var produced = 0
+            withContext(Dispatchers.Default) {
+                NeteaseNativeEngine(48000, 2, preset).use { engine ->
+                    val output = ByteBuffer.allocateDirect(32768)
+                    repeat(20) { block ->
+                        val input = ByteBuffer.allocateDirect(2048).order(ByteOrder.nativeOrder())
+                        repeat(512) { frame -> repeat(2) {
+                            input.putShort((1000 * sin(2 * PI * 997 * (block * 512 + frame) / 48000)).toInt().toShort())
+                        } }
+                        input.flip(); output.clear()
+                        produced += engine.process(input, output)
+                    }
+                }
+            }
+            assertTrue("Original vinyl engine must produce PCM", produced > 0)
+            assertEquals(queue.songs, container.playbackQueue.state.value.songs)
+            File(app.getExternalFilesDir(null), "svip-vinyl-verification.txt").writeText(
+                "effect=3595400\nmemberType=4\nmatchingAccountSvip=true\nmaterialChecksumVerified=true\n" +
+                "decodedType=${decoded.type}\npcmBytes=$produced\nqueueSongsUnchanged=true\n")
+        } finally { foreground.close() }
+    }
+
     @Test fun actualMemberRightsAndOriginalPresetCompatibility() = runBlocking {
         assumeTrue(InstrumentationRegistry.getArguments().getString("memberSoundEffects") == "true")
         val app = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()

@@ -32,6 +32,29 @@ class NeteasePresetParametersTest {
         assertEquals(8, plan.parameterCalls.size)
     }
 
+    @Test fun vinylNoisePeqBandMetadataDoesNotReplaceTheActualFilterList() {
+        fun document(band: Int) = """{"noise":{"on":true,"type":1,"link":0,"wet":0.5,"dry":1,
+            "stime":1,"ltime":2,"attack":3,"release":4,"peqonoff":true,
+            "peq":{"f":[{"band":$band,"type":6,"gain":2,"freq":1000,"q":1,"on":true},{"on":false}]}}}"""
+        val plan = NeteasePresetParameters.fromJson(document(4))
+        val filters = plan.parameterCalls.filter { it.first == "setNoiseGenPeqFilterParams" }
+        assertEquals(listOf(listOf(0, 6, 2f, 1000f, 1f, true), listOf(1, 0, 0f, 0f, 0f, false)), filters.map { it.second })
+        assertEquals("setNoiseGenON" to listOf(true), plan.parameterCalls.last())
+        assertThrows(IllegalArgumentException::class.java) { NeteasePresetParameters.fromJson(document(33)) }
+        assertThrows(IllegalArgumentException::class.java) { NeteasePresetParameters.fromJson(document(-1)) }
+    }
+
+    @Test fun actualVerifiedVinylMaterialParsesEveryNoiseFilterIncludingDisabledPlaceholders() {
+        val json = checkNotNull(javaClass.getResourceAsStream("/netease-effects/original-vinyl.json"))
+            .bufferedReader().use { it.readText() }
+        val plan = NeteasePresetParameters.fromJson(json)
+        val filters = plan.parameterCalls.filter { it.first == "setNoiseGenPeqFilterParams" }
+        assertEquals(5, filters.size)
+        assertEquals(listOf(0, 5, -10f, 2000f, 1f, true), filters.first().second)
+        assertTrue(filters.drop(1).all { it.second.last() == false })
+        assertTrue(plan.modules.contains("noise"))
+    }
+
     @Test fun unknownParametersAreRejectedBeforeAnyNativeCall() {
         assertThrows(IllegalArgumentException::class.java) {
             NeteasePresetParameters.fromJson("""{"se":{"on":true,"presence":6,"stereoizer":4,"sshaper":true,"ambience":1,"unknownProcessor":3}}""")
@@ -54,7 +77,7 @@ class NeteasePresetParametersTest {
             """{"rotate":{"on":true,"velocity":"1"}}""",
             """{"rotate":{"on":1,"velocity":1}}""",
             """{"peq":{"on":true,"gain":0,"f":[{"band":999,"type":6,"gain":0,"freq":1000,"q":1,"on":true}]}}""",
-            """{"peq":{"on":true,"gain":0,"f":[{"band":1,"type":6,"gain":0,"freq":1000,"q":0,"on":true}]}}""",
+            """{"peq":{"on":true,"gain":0,"f":[{"band":1,"type":6,"gain":0,"freq":1000,"q":-1,"on":true}]}}""",
         ).forEach { text -> assertThrows(RuntimeException::class.java) { NeteasePresetParameters.fromJson(text) } }
     }
 
@@ -63,6 +86,40 @@ class NeteasePresetParametersTest {
             {"bt":{"on":true,"bass":2,"treble":1,"bassFreq":200,"bassQ":0.5,"trebleFreq":6000,"trebleQ":0.8}}
         """.trimIndent())
         assertEquals(listOf(200f, 0.5f, 6000f, 0.8f), plan.parameterCalls.first { it.first == "setBassTrebleExtraParams" }.second)
+    }
+
+    private fun fixture(name: String) = checkNotNull(javaClass.getResourceAsStream("/netease-effects/$name.json"))
+        .bufferedReader().use { it.readText() }
+
+    @Test fun originalZeroQBeansLeaveBassTrebleExtensionsAtNativeDefaults() {
+        val plan = NeteasePresetParameters.fromJson(fixture("original-psychedelic"))
+        assertTrue(plan.usesAev2)
+        assertEquals(listOf(1f, 2f), plan.parameterCalls.first { it.first == "setBassTrebleParams" }.second)
+        assertTrue(plan.parameterCalls.none { it.first == "setBassTrebleExtraParams" })
+    }
+
+    @Test fun originalCassetteAndArtistShelvesAllowNativeZeroQ() {
+        for (name in listOf("original-cassette", "original-huachenyu")) {
+            val plan = NeteasePresetParameters.fromJson(fixture(name))
+            assertTrue(plan.parameterCalls.any { it.first == "setParametricEQFilterParams" &&
+                it.second[4] == 0f && it.second[5] == true })
+        }
+    }
+
+    @Test fun fullSurroundV3SelectsOnlyTheSinkChannelPlanAndMapsItsDelay() {
+        val json = fixture("original-surround-v3")
+        val stereo = NeteasePresetParameters.fromJson(json)
+        assertEquals(listOf(listOf(0f, 32f), listOf(.8f, 1f)),
+            stereo.parameterCalls.first { it.first == "setChannelDelayParams" }.second)
+        val surround = NeteasePresetParameters.fromJson(json, channels = 6)
+        assertEquals(listOf(0f, 32f, 3f, 0f, 0f, 0f),
+            surround.parameterCalls.first { it.first == "setChannelDelayParams" }.second[0])
+        assertEquals(stereo.parameterCalls, NeteasePresetParameters.fromJson(json, channels = 1).parameterCalls)
+        assertThrows(IllegalArgumentException::class.java) { NeteasePresetParameters.fromJson(json, channels = 8) }
+        assertThrows(IllegalArgumentException::class.java) { NeteasePresetParameters.fromJson(json.replace("v3", "v99")) }
+        assertThrows(IllegalArgumentException::class.java) {
+            NeteasePresetParameters.fromJson("""{"channeldelay":{"on":false},"channelDelay":{"on":false}}""")
+        }
     }
 
     @Test fun disabledLimiterUsesOriginalFallbackCurve() {

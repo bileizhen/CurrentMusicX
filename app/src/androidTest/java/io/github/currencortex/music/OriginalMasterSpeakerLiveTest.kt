@@ -104,6 +104,23 @@ class OriginalMasterSpeakerLiveTest {
             withContext(Dispatchers.Main) { speaker!!.disable() }
             assertNull(speaker!!.selection.value)
             note("speakerRouteResumesAndDisableClears=true")
+
+            // The normal scene has six distinct orientation / volume materials;
+            // changing just the scene at mid-volume covers only one of them.
+            val verified = mutableSetOf<Long>()
+            for (landscape in listOf(false, true)) for (volume in listOf(.1f, .5f, .9f)) {
+                val expected = originalSpeakerId(OriginalSpeakerScene.NORMAL, landscape, volume)
+                withContext(Dispatchers.Main) {
+                    environment.value = OriginalSpeakerEnvironment(true, landscape, volume)
+                    speaker!!.setEnabled(true, OriginalSpeakerScene.NORMAL)
+                }
+                val ready = withTimeout(90_000) { speaker!!.state.first { !it.loading && it.enabled && it.modelId == expected } }
+                assertTrue(ready.message, ready.enabled)
+                val preset = requireNotNull(speaker!!.selection.value)
+                note("speakerMaterial=${preset.id},landscape=$landscape,volume=$volume,pcmBytes=${process(preset)}")
+                verified += preset.id
+            }
+            assertEquals(6, verified.size)
         } finally {
             withContext(Dispatchers.Main) { master?.close(); speaker?.close() }
             scope.coroutineContext[Job]!!.cancelAndJoin()

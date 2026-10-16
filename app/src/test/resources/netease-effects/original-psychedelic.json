@@ -1,0 +1,98 @@
+{
+  "rvb": {
+    "on": false
+  },
+  "se": {
+    "on": false
+  },
+  "peq": {
+    "on": false
+  },
+  "limiter": {
+    "on": false
+  },
+  "bt": {
+    "treble": 2,
+    "trebleFreq": 0,
+    "on": true,
+    "trebleQ": 0,
+    "bass": 3,
+    "bassQ": 0,
+    "useable": true,
+    "bassFreq": 0
+  },
+  "eq": {
+    "eqs": [5, 6.09, 2.2, 0, -1.6, 1.5, 0, 1, 2.57, 3.77],
+    "useable": true,
+    "on": true
+  },
+  "cmp": {
+    "on": false
+  },
+"aev2":{
+  "rvb": {
+    "rvb": {
+      "pdelay": 80,
+      "hfdamping": 2,
+      "rshape": 90,
+      "density": 60,
+      "swidth": 60,
+      "q": 6,
+      "diffusion": 30,
+      "on": true,
+      "dtime": 1.8
+    },
+    "on": true,
+    "er": {
+      "on": false
+    },
+    "tc": {
+      "on": false
+    },
+    "il": {
+      "center": 0,
+      "lfe": 0
+    },
+    "ol": {
+      "dry": 0,
+      "er": -30,
+      "rvb": -28
+    },
+    "useable": true,
+    "rl": {
+      "lfe": 0,
+      "front": 0,
+      "rear": 0,
+      "center": 0
+    }
+  },
+  "se": {
+    "on": false
+  },
+  "rotate": {
+    "on": false
+  },
+  "peq": {
+    "on": false
+  },
+  "limiter": {
+    "on": false
+  },
+  "bt": {
+    "treble": 2,
+    "trebleFreq": 0,
+    "on": true,
+    "bass": 1,
+    "trebleQ": 0,
+    "bassQ": 0,
+    "bassFreq": 0
+  },
+  "eq": {
+    "eqs": [2, 2, 1, 0, -1.6, 1.5, 0, 1, 2.57, 3.77],
+    "on": true
+  },
+  "cmp": {
+    "on": false
+  }
+}
+}

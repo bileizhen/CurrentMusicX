@@ -1,0 +1,67 @@
+{
+  "rvb": {
+    "on": false
+  },
+  "se": {
+    "on": false
+  },
+  "peq": {
+    "f": [
+      {
+        "band": 0,
+        "on": false
+      },
+      {
+        "on": true,
+        "freq": 12000,
+        "band": 1,
+        "type": 0,
+        "q": 0,
+        "gain": 0
+      },
+      {
+        "band": 2,
+        "on": false
+      },
+      {
+        "band": 3,
+        "on": false
+      },
+      {
+        "band": 4,
+        "on": false
+      },
+      {
+        "band": 5,
+        "on": false
+      },
+      {
+        "band": 6,
+        "on": false
+      },
+      {
+        "band": 7,
+        "on": false
+      },
+      {
+        "band": 8,
+        "on": false
+      }
+    ],
+    "gain": 0,
+    "on": true
+  },
+  "limiter": {
+    "on": false
+  },
+  "bt": {
+    "on": false
+  },
+  "eq": {
+    "eqs": [-3, -1, 0, 0, 0, 1, 2, 1, -1, 0],
+    "on": true
+  },
+  "cmp": {
+    "on": false
+  }
+}
