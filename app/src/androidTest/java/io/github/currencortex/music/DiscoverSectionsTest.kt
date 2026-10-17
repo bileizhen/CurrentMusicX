@@ -37,6 +37,7 @@ class DiscoverSectionsTest {
     private val streamOpened = java.util.concurrent.atomic.AtomicBoolean()
     @Volatile private var failChatSend = false
     private lateinit var directory: io.github.currencortex.music.feature.profile.DiscoverViewModel
+    private var keyboard: androidx.compose.ui.platform.SoftwareKeyboardController? = null
     private val user = """{"id":7,"nickname":"Tester","title":"创作者","ip_region":"安徽","is_owner":1}"""
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
     private fun post(id: Int, content: String) = buildJsonObject {
@@ -155,6 +156,7 @@ class DiscoverSectionsTest {
     }
     private fun open() {
         compose.setContent {
+            keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
             directory = androidx.lifecycle.viewmodel.compose.viewModel(factory = io.github.currencortex.music.ui.util.viewModelFactory {
                 io.github.currencortex.music.feature.profile.DiscoverViewModel(container)
             })
@@ -189,6 +191,44 @@ class DiscoverSectionsTest {
         compose.onNodeWithTag("chat_confirm_delete").performClick()
         compose.waitUntil(10_000) { !chatMessages.containsKey(13) && compose.onAllNodesWithTag("chat_message_13").fetchSemanticsNodes().isEmpty() }
         assertEquals(3, chatWrites.get())
+    }
+    @Test fun chatAlignsComposerControlsAndKeepsLongMessagesInsideTheViewport() {
+        chatMessages[2] = chatMessage(2, "最近在听电影原声。\n旋律从轻快到安静，配上路上的风景刚刚好。\n也欢迎大家分享自己的歌单，一起发现更多好听的音乐。")
+        open(); compose.onNodeWithText("Chat").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat_message_3").fetchSemanticsNodes().isNotEmpty() }
+        fun bounds(tag: String) = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val composer = bounds("chat_composer")
+        val header = bounds("chat_header")
+        assertEquals(header.left, composer.left, 1f)
+        assertEquals(header.right, composer.right, 1f)
+        val photo = bounds("chat_pick_image")
+        val send = bounds("chat_send")
+        assertEquals(photo.width, send.width, 1f)
+        assertEquals(photo.center.y, send.center.y, 1f)
+        compose.onNodeWithTag("chat_send").assertIsNotEnabled()
+        compose.onNodeWithTag("chat_input").performTextInput("第一行\n第二行\n第三行")
+        compose.onNodeWithTag("chat_send").assertIsEnabled()
+        assertEquals(bounds("chat_pick_image").bottom, bounds("chat_send").bottom, 1f)
+        compose.onNodeWithTag("chat_input").performTextClearance()
+        compose.runOnIdle { keyboard?.hide() }
+        compose.waitForIdle()
+        // Both sides use the same gutter; timestamps share the bubble's inner text edge.
+        compose.onNodeWithTag("chat_avatar_2", useUnmergedTree = true).performScrollTo()
+        val bubble = bounds("chat_bubble_2")
+        assertTrue(bubble.left >= composer.left && bubble.right <= composer.right)
+        assertTrue(bounds("chat_body_2").right <= bubble.right)
+        assertEquals(composer.right, bounds("chat_avatar_2").right, 1f)
+        compose.onNodeWithTag("chat_message_3").performScrollTo()
+        assertEquals(bounds("chat_body_3").left, bounds("chat_time_3").left, 1f)
+        assertEquals(composer.left, bounds("chat_avatar_3").left, 1f)
+        compose.onNodeWithTag("discover_chat").captureToImage().asAndroidBitmap().let { bitmap ->
+            val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+            java.io.File(context.getExternalFilesDir(null), "chat-alignment.png").outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            bitmap.recycle()
+        }
+        assertEquals("Visual checks must not publish chat messages", 0, chatWrites.get())
     }
     @Test fun tabsSeparateMusicUsersAndPostsAndKeepUserSearchWhenReturning() {
         open()

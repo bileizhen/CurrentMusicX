@@ -81,6 +81,10 @@ object MusicIcons {
         moveTo(12f, 15f); lineTo(12f, 3f); moveTo(7f, 8f); lineTo(12f, 3f); lineTo(17f, 8f)
         moveTo(4f, 15f); lineTo(4f, 20f); lineTo(20f, 20f); lineTo(20f, 15f)
     }
+    val ArrowUp = icon("ArrowUp") {
+        moveTo(12f, 20f); lineTo(12f, 4f)
+        moveTo(5f, 11f); lineTo(12f, 4f); lineTo(19f, 11f)
+    }
     val Share = icon("Share") {
         moveTo(9f, 8f); lineTo(9f, 5f); lineTo(21f, 5f); lineTo(21f, 17f); lineTo(17f, 17f)
         moveTo(3f, 9f); lineTo(15f, 9f); lineTo(15f, 21f); lineTo(3f, 21f); close()
