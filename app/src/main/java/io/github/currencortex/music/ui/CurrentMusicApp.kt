@@ -165,6 +165,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val updateRequested by container.updates.dialogVisible.collectAsStateWithLifecycle()
     var updateTransitionVisible by remember { mutableStateOf(false) }
     var updateLaunchOrigin by remember { mutableStateOf<io.github.currencortex.music.feature.update.UpdatePageOrigin?>(null) }
+    var updatePreviewVersion by rememberSaveable { mutableStateOf(BuildConfig.UPDATE_ANIMATION_PREVIEW_VERSION) }
+    var showUpdatePreview by rememberSaveable { mutableStateOf(false) }
     val updateDialogVisible = updateRequested || updateTransitionVisible
     val updateTransferState by container.updateTransfer.state.collectAsStateWithLifecycle()
     val announcementVisible = launchFinished && announcements.isNotEmpty() && !updateDialogVisible
@@ -292,11 +294,17 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         LaunchedEffect(memberFocus) { memberFocus?.let { shownMember = it } }
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         val context = androidx.compose.ui.platform.LocalContext.current
-        val openUpdates: (io.github.currencortex.music.feature.update.UpdatePageOrigin?) -> Unit = { origin ->
-            updateLaunchOrigin = origin
+        fun launchUpdates() {
             if (container.updateTransfer.state.value.download !is io.github.currencortex.music.core.update.UpdateDownloadState.Idle)
                 container.updates.reopenDownload()
             else scope.launch { container.updates.present() }
+        }
+        val openUpdates: (io.github.currencortex.music.feature.update.UpdatePageOrigin?) -> Unit = { origin ->
+            updateLaunchOrigin = origin
+            if (BuildConfig.UPDATE_ANIMATION_PREVIEW_VERSION.isNotBlank() &&
+                container.updateTransfer.state.value.download is io.github.currencortex.music.core.update.UpdateDownloadState.Idle)
+                showUpdatePreview = true
+            else launchUpdates()
         }
         var pendingPlay by remember { mutableStateOf<(() -> Unit)?>(null) }
         var explained by rememberSaveable { mutableStateOf(false) }
@@ -702,11 +710,16 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 if (container.desktopLyrics.state.value.enabled) container.playerController.connect()
             }
         }
+        if (showUpdatePreview) io.github.currencortex.music.feature.update.UpdatePreviewDialog(updatePreviewVersion,
+            onDismiss = { showUpdatePreview = false }, onConfirm = { version ->
+                updatePreviewVersion = version
+                launchUpdates()
+            })
         if (!launchBrand.active && !announcementVisible) UpdatePage(container.updates, container.updateTransfer,
             currentSong?.cover.orEmpty(), origin = updateLaunchOrigin, onPresentedChanged = { presented ->
                 if (updateTransitionVisible && !presented) updateLaunchOrigin = null
                 updateTransitionVisible = presented
-            })
+            }, versionPreview = updatePreviewVersion)
         LibraryDialogs(libraryVm)
         ProfileDialogs(profileVm, authVm)
         if (profileMessage != null) MusicDialog("账号操作", onDismiss = { profileVm.message.value = null }) {
