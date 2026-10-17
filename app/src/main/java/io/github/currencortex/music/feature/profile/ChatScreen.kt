@@ -5,6 +5,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,6 +22,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -43,6 +47,8 @@ import coil3.compose.AsyncImage
 import io.github.currencortex.music.data.profile.ChatMessage
 import io.github.currencortex.music.data.profile.ProfileUser
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.util.rememberBlurBackdrop
+import top.yukonga.miuix.kmp.blur.layerBackdrop
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -65,6 +71,10 @@ import java.util.Locale
     var confirming by remember { mutableStateOf<ChatMessage?>(null) }
     var preview by remember { mutableStateOf<String?>(null) }
     val bottom = LocalMusicComposerBottomInset.current
+    val density = LocalDensity.current
+    var headerHeight by remember { mutableStateOf(60.dp) }
+    var composerHeight by remember { mutableStateOf(64.dp) }
+    val backdrop = rememberBlurBackdrop(true)
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri?.let { vm.upload(context.contentResolver, it) }
     }
@@ -75,31 +85,13 @@ import java.util.Locale
     LaunchedEffect(active) { if (!active) { keyboard?.hide(); membersOpen = false; selected = null; confirming = null; preview = null } }
     LaunchedEffect(state.messages.lastOrNull()?.id) { if (nearBottom) list.animateScrollToItem(0) }
     LaunchedEffect(state.scrollRequest) { if (state.scrollRequest > 0) list.animateScrollToItem(0) }
-    Column(Modifier.fillMaxSize().padding(bottom = bottom).testTag("discover_chat")) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp).testTag("chat_header"),
-            verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("公共聊天室", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                Text(if (state.connected) "实时消息" else if (state.loaded) "正在连接…" else "与大家聊聊音乐",
-                    fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .45f))
-            }
-            Row(Modifier.clip(CircleShape).background(MiuixTheme.colorScheme.surfaceContainer)
-                .clickable(role = Role.Button) { membersOpen = true }.heightIn(min = 40.dp)
-                .padding(horizontal = 12.dp).testTag("chat_members"),
-                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                Icon(MusicIcons.Account, null, Modifier.size(16.dp), tint = MiuixTheme.colorScheme.primary)
-                Text("成员 ${state.members.size}", fontSize = 12.sp, color = MiuixTheme.colorScheme.primary)
-            }
-        }
-        if (state.error != null) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(state.error.orEmpty(), Modifier.weight(1f), fontSize = 12.sp)
-            MusicTextAction("重试", vm::retry, Modifier.testTag("chat_retry"))
-        }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            // Reverse layout puts older hidden messages at the top of the viewport.
-            LazyColumn(Modifier.fillMaxSize().scrollEdgeBlur(list.canScrollForward, list.canScrollBackward, radial = true)
+    Box(Modifier.fillMaxSize().padding(bottom = bottom).testTag("discover_chat")) {
+        Box(Modifier.fillMaxSize()) {
+            // The messages extend behind the two fixed controls; only their backdrops blur.
+            LazyColumn(Modifier.fillMaxSize().then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
                 .testTag("chat_messages"), state = list, reverseLayout = true,
-                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = headerHeight + 16.dp, bottom = composerHeight + 16.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 items(state.messages.asReversed(), key = { it.id }) { message ->
                     ChatMessageRow(message, mine = message.userId == account.account?.id, vm,
                         onProfile = { id -> keyboard?.hide(); navigate("user/profile/$id") },
@@ -116,46 +108,78 @@ import java.util.Locale
             else if (state.loaded && state.messages.isEmpty()) Text("还没有消息，来聊聊音乐吧", Modifier.align(Alignment.Center),
                 fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .45f))
             if (!nearBottom && state.messages.isNotEmpty()) MusicTextAction("回到最新消息", { scope.launch { list.animateScrollToItem(0) } },
-                Modifier.align(Alignment.BottomEnd).padding(8.dp).background(MiuixTheme.colorScheme.surface, RoundedCornerShape(20.dp)))
+                Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = composerHeight + 8.dp)
+                    .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(20.dp)))
         }
-        state.actionError?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), fontSize = 12.sp,
-            color = MiuixTheme.colorScheme.error) }
-        if (state.image.isNotEmpty()) Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            AsyncImage(vm.repository.imageUrl(vm.container.audioSession().server, state.image), "待发送图片",
-                Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop)
-            MusicTextAction("移除图片", vm::removeImage, enabled = !state.sending)
-        }
-        if (account.account == null) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("登录 CurrentMusic 后即可聊天", Modifier.weight(1f), fontSize = 13.sp)
-            MusicTextAction("去登录", { navigate("user/login") }, Modifier.testTag("chat_login"))
-        } else {
-            val fragment = state.draft.substringAfterLast('@', "").takeIf {
-                state.draft.contains('@') && it.length <= 12 && it.none(Char::isWhitespace)
-            }
-            if (fragment != null) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                state.members.filter { it.nickname.contains(fragment, ignoreCase = true) }.take(3).forEach { member ->
-                    MusicTextAction("@${member.nickname}", { vm.mention(member) }, Modifier.weight(1f))
+        ChatBackdropPanel(backdrop, atTop = true,
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().height(headerHeight + 24.dp).testTag("chat_header_backdrop"))
+        ChatBackdropPanel(backdrop, atTop = false,
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(composerHeight + 24.dp).testTag("chat_composer_backdrop"))
+        Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().pointerInput(Unit) { detectTapGestures {} }.onSizeChanged {
+            headerHeight = with(density) { it.height.toDp() }
+        }) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp).testTag("chat_header"),
+                verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("公共聊天室", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(if (state.connected) "实时消息" else if (state.loaded) "正在连接…" else "与大家聊聊音乐",
+                        fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .45f))
+                }
+                Row(Modifier.clip(CircleShape).background(MiuixTheme.colorScheme.surfaceContainer)
+                    .clickable(role = Role.Button) { membersOpen = true }.heightIn(min = 40.dp)
+                    .padding(horizontal = 12.dp).testTag("chat_members"),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Icon(MusicIcons.Account, null, Modifier.size(16.dp), tint = MiuixTheme.colorScheme.primary)
+                    Text("成员 ${state.members.size}", fontSize = 12.sp, color = MiuixTheme.colorScheme.primary)
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("chat_composer"),
-                verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ChatComposerAction(if (state.uploading) "正在处理图片" else "选择图片", MusicIcons.Image, {
-                    picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }, Modifier.testTag("chat_pick_image"), enabled = !state.uploading && !state.sending, busy = state.uploading)
-                val colors = MiuixTheme.colorScheme
-                BasicTextField(state.draft, vm::draft, Modifier.weight(1f).heightIn(min = 48.dp)
-                        .clip(RoundedCornerShape(24.dp)).background(colors.surfaceContainer).testTag("chat_input")
-                        .semantics { contentDescription = "聊天消息" }.padding(horizontal = 14.dp, vertical = 13.dp),
-                        textStyle = TextStyle(fontSize = 14.sp, lineHeight = 21.sp, color = colors.onSurface),
-                        cursorBrush = SolidColor(colors.primary), maxLines = 5,
-                        decorationBox = { inner -> Box {
-                            if (state.draft.isEmpty()) Text("聊聊正在听的音乐…", Modifier.clearAndSetSemantics {},
-                                fontSize = 14.sp, lineHeight = 21.sp, color = colors.onSurface.copy(alpha = .4f))
-                            inner()
-                        } })
-                ChatComposerAction(if (state.sending) "发送中" else "发送", MusicIcons.ArrowUp, vm::send,
-                    Modifier.testTag("chat_send"), primary = true, busy = state.sending,
-                    enabled = !state.sending && !state.uploading && (state.draft.isNotBlank() || state.image.isNotBlank()))
+            if (state.error != null) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(state.error.orEmpty(), Modifier.weight(1f), fontSize = 12.sp)
+                MusicTextAction("重试", vm::retry, Modifier.testTag("chat_retry"))
+            }
+        }
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().pointerInput(Unit) { detectTapGestures {} }.onSizeChanged {
+            composerHeight = with(density) { it.height.toDp() }
+        }) {
+            state.actionError?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.error) }
+            if (state.image.isNotEmpty()) Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                AsyncImage(vm.repository.imageUrl(vm.container.audioSession().server, state.image), "待发送图片",
+                    Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop)
+                MusicTextAction("移除图片", vm::removeImage, enabled = !state.sending)
+            }
+            if (account.account == null) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("登录 CurrentMusic 后即可聊天", Modifier.weight(1f), fontSize = 13.sp)
+                MusicTextAction("去登录", { navigate("user/login") }, Modifier.testTag("chat_login"))
+            } else {
+                val fragment = state.draft.substringAfterLast('@', "").takeIf {
+                    state.draft.contains('@') && it.length <= 12 && it.none(Char::isWhitespace)
+                }
+                if (fragment != null) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    state.members.filter { it.nickname.contains(fragment, ignoreCase = true) }.take(3).forEach { member ->
+                        MusicTextAction("@${member.nickname}", { vm.mention(member) }, Modifier.weight(1f))
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("chat_composer"),
+                    verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChatComposerAction(if (state.uploading) "正在处理图片" else "选择图片", MusicIcons.Image, {
+                        picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }, Modifier.testTag("chat_pick_image"), enabled = !state.uploading && !state.sending, busy = state.uploading)
+                    val colors = MiuixTheme.colorScheme
+                    BasicTextField(state.draft, vm::draft, Modifier.weight(1f).heightIn(min = 48.dp)
+                            .clip(RoundedCornerShape(24.dp)).background(colors.surfaceContainer).testTag("chat_input")
+                            .semantics { contentDescription = "聊天消息" }.padding(horizontal = 14.dp, vertical = 13.dp),
+                            textStyle = TextStyle(fontSize = 14.sp, lineHeight = 21.sp, color = colors.onSurface),
+                            cursorBrush = SolidColor(colors.primary), maxLines = 5,
+                            decorationBox = { inner -> Box {
+                                if (state.draft.isEmpty()) Text("聊聊正在听的音乐…", Modifier.clearAndSetSemantics {},
+                                    fontSize = 14.sp, lineHeight = 21.sp, color = colors.onSurface.copy(alpha = .4f))
+                                inner()
+                            } })
+                    ChatComposerAction(if (state.sending) "发送中" else "发送", MusicIcons.ArrowUp, vm::send,
+                        Modifier.testTag("chat_send"), primary = true, busy = state.sending,
+                        enabled = !state.sending && !state.uploading && (state.draft.isNotBlank() || state.image.isNotBlank()))
+                }
             }
         }
     }

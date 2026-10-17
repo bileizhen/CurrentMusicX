@@ -199,6 +199,12 @@ class DiscoverSectionsTest {
         fun bounds(tag: String) = compose.onNodeWithTag(tag, useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         val composer = bounds("chat_composer")
         val header = bounds("chat_header")
+        val messages = bounds("chat_messages")
+        assertTrue("Messages must pass behind the header", messages.top < header.bottom)
+        assertTrue("Messages must pass behind the composer", messages.bottom > composer.top)
+        assertFalse("Fixed bars must blur their backdrop instead of filtering the message viewport",
+            compose.onNodeWithTag("chat_messages").fetchSemanticsNode().config.contains(
+                io.github.currencortex.music.ui.component.ScrollEdgeBlurKey))
         assertEquals(header.left, composer.left, 1f)
         assertEquals(header.right, composer.right, 1f)
         val photo = bounds("chat_pick_image")
