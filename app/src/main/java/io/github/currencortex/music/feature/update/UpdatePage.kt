@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -21,6 +22,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -28,6 +31,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -186,10 +191,23 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                                 Text("CurrentMusic ${release?.version ?: BuildConfig.VERSION_NAME}" +
                                     (release?.let { " · ${updateSize(it.size)}" } ?: ""), fontSize = 12.sp, color = pageMuted)
                                 HorizontalDivider(color = Color.White.copy(alpha = .12f))
-                                Row(Modifier.fillMaxWidth().clickable { expanded = false }.padding(vertical = 4.dp),
+                                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp),
                                     verticalAlignment = Alignment.CenterVertically) {
-                                    Text("更新说明", color = pageWhite, fontSize = 16.sp, modifier = Modifier.weight(1f))
-                                    Text("收起 ⌃", color = pageMuted, fontSize = 12.sp)
+                                    Text("更新说明", color = pageWhite, fontSize = 16.sp,
+                                        fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                                    IconButton(onClick = { expanded = false }, modifier = Modifier.size(44.dp)
+                                        .background(Color.White.copy(alpha = .08f), CircleShape)
+                                        .border(1.dp, Color.White.copy(alpha = .04f), CircleShape)
+                                        .semantics { contentDescription = "收起更新说明" }
+                                        .testTag("update_collapse_notes")) {
+                                        Canvas(Modifier.size(18.dp)) {
+                                            val left = Offset(size.width * .12f, size.height * .34f)
+                                            val tip = Offset(size.width * .5f, size.height * .72f)
+                                            val right = Offset(size.width * .88f, size.height * .34f)
+                                            drawLine(pageWhite, left, tip, 2.dp.toPx(), StrokeCap.Round)
+                                            drawLine(pageWhite, tip, right, 2.dp.toPx(), StrokeCap.Round)
+                                        }
+                                    }
                                 }
                                 MarkdownText(release?.notes?.ifBlank {
                                     if (release.version.substringBefore('-') == BuildConfig.VERSION_NAME.substringBefore('-')) installedNotes else ""
