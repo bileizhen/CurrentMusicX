@@ -136,6 +136,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val playback by vm.container.playerController.state.collectAsStateWithLifecycle()
     val queue by vm.container.playbackQueue.state.collectAsStateWithLifecycle()
     val busy by library.busy.collectAsStateWithLifecycle()
+    val importState by vm.container.playlistLikeImporter.state.collectAsStateWithLifecycle()
+    var importOpen by rememberSaveable(vm.route) { mutableStateOf(false) }
     val appearance by vm.container.settings.state.collectAsStateWithLifecycle()
     val room = LocalRoomSongRequest.current
     val editable = vm.editable(state.playlist, account.account?.id ?: 0)
@@ -330,6 +332,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     if (menuOpen) MusicDialog("歌单操作", onDismiss = { menuOpen = false }) {
         MusicDestinationRow("歌单信息", { menuOpen = false; infoOpen = true }, modifier = Modifier.testTag("playlist_menu_info"), chevron = false)
         MusicDestinationRow("刷新歌单", { menuOpen = false; vm.reload(force = true) }, chevron = false)
+        if (state.playlist?.editable(account.account?.id ?: 0) == true) {
+            MusicDestinationRow(if (importState.running) "查看网易云导入进度" else "一键导入网易云我喜欢", {
+                menuOpen = false
+                if (!importState.running) vm.container.playlistLikeImporter.start(vm.id, state.title)
+                importOpen = true
+            }, enabled = !state.loading && state.songs.isNotEmpty(),
+                modifier = Modifier.testTag("playlist_import_netease_likes"), chevron = false)
+        }
         if (editable) {
             MusicDestinationRow("重命名", { menuOpen = false; onRename() }, enabled = !busy, modifier = Modifier.testTag("rename_playlist"), chevron = false)
             MusicDestinationRow("删除歌单", { menuOpen = false; onDelete() }, enabled = !busy, modifier = Modifier.testTag("delete_playlist"), chevron = false)
@@ -342,6 +352,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         Text(state.description.ifBlank { "暂无歌单介绍" }, Modifier.heightIn(max = 240.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()), fontSize = 14.sp)
         TextButton("关闭", onClick = { infoOpen = false })
     }
+    if (importOpen) PlaylistLikeImportDialog(importState, onClose = { importOpen = false },
+        onStop = vm.container.playlistLikeImporter::stop,
+        onRetry = { vm.container.playlistLikeImporter.start(importState.playlistId, importState.name) })
 }
 
 internal fun playlistDurationLabel(songs: List<Song>): String {

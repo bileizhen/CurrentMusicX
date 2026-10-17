@@ -33,6 +33,10 @@ class PlaylistPagesTest {
     @Volatile private var longPlaylist = false
     @Volatile private var refreshedTracks = false
     @Volatile private var refreshFailure = false
+    @Volatile private var customPlaylist = false
+    private val importedLikes = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>().apply { add(2L) }
+    private val importWrites = java.util.concurrent.CopyOnWriteArrayList<Long>()
+    private val sourcePlaylistReads = java.util.concurrent.atomic.AtomicInteger()
     private val refreshEntered = CountDownLatch(1)
     private val releaseRefresh = CountDownLatch(1)
     private val selectedAudioRequested = CountDownLatch(1)
@@ -53,6 +57,7 @@ class PlaylistPagesTest {
         server = MockWebServer()
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.requestUrl!!.encodedPath == "/cm/playlists/3") sourcePlaylistReads.incrementAndGet()
                 if (request.requestUrl!!.encodedPath == "/cm/ncm/song/url" && request.requestUrl!!.queryParameter("id") == "60") {
                     selectedAudioResolutions.incrementAndGet(); selectedAudioRequested.countDown()
                     return json("""{"url":"${server.url("/selected.wav")}","level":"standard","sr":44100,"ch":2,"type":"wav"}""")
@@ -68,6 +73,15 @@ class PlaylistPagesTest {
                 if (request.requestUrl!!.encodedPath == "/cm/playlists/3" && refreshFailure)
                     return MockResponse().setResponseCode(502)
                 val cover = artwork
+                val source = if (customPlaylist) "currentmusic" else "ncm"
+                if (request.requestUrl!!.encodedPath.startsWith("/cm/ncmbind/like/")) {
+                    val id = request.requestUrl!!.pathSegments.last().toLong()
+                    assertEquals("POST", request.method)
+                    val body = io.github.currencortex.music.core.network.ApiJson.parseToJsonElement(request.body.readUtf8()).toString()
+                    assertTrue(body.contains("\"like\":true"))
+                    importedLikes += id; importWrites += id
+                    return json("""{"code":200,"like":true}""")
+                }
                 val tracks = """{"ncm_id":1,"name":"Library track","artists":"Artist","album":"Moonlight","pic":"$cover","duration":110000},
                     {"ncm_id":2,"name":"Alpha night","artists":"Second artist","album":"City lights","pic":"$cover","duration":190000},
                     {"ncm_id":3,"name":"Zulu sunset","artists":"Third artist","album":"Ocean","pic":"$cover","duration":240000}"""
@@ -77,10 +91,11 @@ class PlaylistPagesTest {
                 } else tracks
                 return when (request.requestUrl!!.encodedPath) {
                     "/cover.png" -> MockResponse().setHeader("Content-Type", "image/png").setBody(Buffer().write(image))
-                    "/cm/playlists" -> json("""{"playlists":[{"id":3,"name":"夜晚的音乐收藏","cover":"$cover","source":"ncm","user_id":7,"track_count":3}]}""")
-                    "/cm/playlists/3" -> json("""{"id":3,"name":"夜晚的音乐收藏","cover":"$cover","description":"让旋律陪伴每一个安静的夜晚。","source":"ncm","user_id":7,"tracks":[$allTracks]}""")
+                    "/cm/playlists" -> json("""{"playlists":[{"id":3,"name":"夜晚的音乐收藏","cover":"$cover","source":"$source","user_id":7,"track_count":3}]}""")
+                    "/cm/playlists/3" -> json("""{"id":3,"name":"夜晚的音乐收藏","cover":"$cover","description":"让旋律陪伴每一个安静的夜晚。","source":"$source","user_id":7,"tracks":[$allTracks]}""")
                     "/cm/daily" -> json("""{"daily":[],"forYou":[]}""")
-                    "/cm/ncmbind" -> json("""{"bound":false}""")
+                    "/cm/ncmbind" -> json(if (customPlaylist) """{"bound":true,"profile":{"uid":9}}""" else """{"bound":false}""")
+                    "/cm/ncmbind/likelist" -> json("""{"ids":[${importedLikes.sorted().joinToString(",")}]}""")
                     "/cm/plays/recent", "/cm/likes/mine" -> json("""{"songs":[]}""")
                     "/cm/songs/status" -> json("""{"liked":[2],"faved":[]}""")
                     "/cm/room/active" -> json("""{"room":null}""")
@@ -116,6 +131,32 @@ class PlaylistPagesTest {
         compose.onNodeWithTag("playlist_card_3").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithTag("playlist_song_2").fetchSemanticsNodes().isNotEmpty() }
     }
+    @Test fun importsCustomPlaylistIntoNeteaseLikesAndRepeatingOnlySkips() {
+        customPlaylist = true
+        runBlocking { container.musicSettings.setNeteaseMainLibrary(false) }
+        open()
+        val readsBefore = sourcePlaylistReads.get()
+        compose.onNodeWithTag("playlist_more").performClick()
+        compose.onNodeWithTag("playlist_import_netease_likes").performClick()
+        compose.waitUntil(10_000) { !container.playlistLikeImporter.state.value.running }
+        compose.onNodeWithText("成功 2 · 跳过 1 · 失败 0").assertIsDisplayed()
+        assertEquals(listOf(1L, 3L), importWrites.toList())
+        assertEquals(setOf(1L, 2L, 3L), importedLikes.toSet())
+        assertEquals("Only refresh the source once, not after each imported heart", 1,
+            sourcePlaylistReads.get() - readsBefore)
+        compose.onNodeWithTag("playlist_like_import").captureToImage().asAndroidBitmap().let { bitmap ->
+            File(context.getExternalFilesDir(null), "playlist-like-import-result.png").outputStream().use {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
+        compose.onNodeWithText("关闭").performClick()
+        compose.onNodeWithTag("playlist_more").performClick()
+        compose.onNodeWithTag("playlist_import_netease_likes").performClick()
+        compose.waitUntil(10_000) { !container.playlistLikeImporter.state.value.running }
+        compose.onNodeWithText("成功 0 · 跳过 3 · 失败 0").assertIsDisplayed()
+        assertEquals(2, importWrites.size)
+    }
+
     @Test fun depthRibbonFocusDoesNotPlayUntilRequestedAndReturnsToTheList() {
         open()
         compose.onNodeWithTag("playlist_depth_ribbon_toggle").performClick()
