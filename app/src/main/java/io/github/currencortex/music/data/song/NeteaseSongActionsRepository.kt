@@ -11,8 +11,9 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
 @Serializable data class NeteaseCommentUser(val nickname: String = "", val avatarUrl: String = "")
+@Serializable data class NeteaseCommentReply(val content: String? = null, val user: NeteaseCommentUser? = null)
 @Serializable data class NeteaseComment(val commentId: Long, val content: String = "", val time: Long = 0,
-    val likedCount: Long = 0, val user: NeteaseCommentUser = NeteaseCommentUser())
+    val likedCount: Long = 0, val user: NeteaseCommentUser = NeteaseCommentUser(), val beReplied: List<NeteaseCommentReply> = emptyList())
 @Serializable data class NeteaseCommentsPage(val total: Long? = null, val more: Boolean = false,
     val hotComments: List<NeteaseComment> = emptyList(), val comments: List<NeteaseComment> = emptyList())
 data class NeteaseHeartList(val playlistId: Long, val songs: List<Song>)

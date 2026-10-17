@@ -116,6 +116,7 @@ class PlayerSongActionsTest {
             assertEquals(3, mutations.get())
             compose.onNodeWithTag("player_comments").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("网易云热门评论").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("comments_latest").performClick()
             compose.onNodeWithText("网易云最新评论").assertIsDisplayed()
             compose.onNodeWithTag("more_comments").performScrollTo().performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("下一页网易云评论").fetchSemanticsNodes().isNotEmpty() }
