@@ -26,6 +26,13 @@ val originalEffectsLibs = file("src/main/jniLibs/arm64-v8a")
 
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
+// The installed version can show its own notes even when GitHub has no newer release.
+val bundleReleaseHistory by tasks.registering(Copy::class) {
+    from(rootProject.file("CHANGELOG.md"))
+    into(layout.buildDirectory.dir("generated/releaseHistory"))
+    rename { "release-history.md" }
+}
+
 android {
     namespace = "io.github.currencortex.music"
     compileSdk = 37
@@ -44,6 +51,7 @@ android {
     }
 
     buildFeatures { compose = true; buildConfig = true }
+    sourceSets.getByName("main").assets.srcDir(bundleReleaseHistory.map { it.destinationDir })
     sourceSets.getByName("main").jniLibs.setSrcDirs(if (originalEffectsBundled) listOf(file("src/main/jniLibs")) else emptyList<File>())
     if (originalEffectsBundled) {
         val pinned = mapOf(
@@ -96,6 +104,8 @@ android {
     packaging.jniLibs.useLegacyPackaging = true
     packaging.jniLibs.keepDebugSymbols += "**/*.so"
 }
+
+tasks.named("preBuild") { dependsOn(bundleReleaseHistory) }
 
 dependencies {
     implementation("org.mozilla:rhino:1.8.1")
