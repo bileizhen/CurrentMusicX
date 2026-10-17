@@ -32,7 +32,7 @@ import org.junit.Test
 /** Presentation only; never changes the real account, audio or island preferences. */
 class SoundEffectIslandNoticeTest {
     @get:Rule val compose = createComposeRule()
-    @Test fun downloadProgressKeepsFpsHeightAndStableWidthThroughCompletion() {
+    @Test fun downloadProgressKeepsStableWidthAndTerminalNoticesRemoveUnusedStatusSpace() {
         var installs = 0
         var notice by mutableStateOf(SoundEffectNotice(-1, "更新下载", SoundEffectNoticeTier.STANDARD,
             kind = IslandNoticeKind.UPDATE_DOWNLOAD, progress = 1))
@@ -48,7 +48,18 @@ class SoundEffectIslandNoticeTest {
         compose.onNodeWithContentDescription("CurrentMusic", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("update_island_notice").performClick()
         compose.runOnIdle { assertEquals(1, installs) }
-        assertEquals(initial, compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot)
+        val completed = compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot
+        assertEquals(initial.height, completed.height, 1f)
+        assertTrue("Only completion reserves room for the install label", completed.width > initial.width)
+        compose.runOnIdle { notice = notice.copy(name = "已取消下载", phase = SoundEffectNoticePhase.WAITING) }
+        compose.onNodeWithText("点击安装", useUnmergedTree = true).assertDoesNotExist()
+        val cancelled = compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot
+        val title = compose.onNodeWithText("已取消下载", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        val density = ApplicationProvider.getApplicationContext<android.content.Context>().resources.displayMetrics.density
+        assertEquals(initial.height, cancelled.height, 1f)
+        assertTrue("Cancellation must collapse the unused status and gap", cancelled.width < initial.width)
+        assertEquals("Only the end inset should follow the cancellation title", 12f * density,
+            cancelled.right - title.right, 1f)
         compose.onAllNodesWithTag("sound_effect_island_notice").assertCountEquals(0)
     }
 
