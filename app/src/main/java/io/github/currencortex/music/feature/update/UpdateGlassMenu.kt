@@ -102,23 +102,24 @@ internal val UpdateMenuInteractionKey = SemanticsPropertyKey<UpdateMenuInteracti
         val highlightAlpha by animateFloatAsState(if (selected >= 0) 1f else 0f,
             tween(if (selected >= 0) 90 else 160), label = "menu highlight alpha")
         Box(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing)
-            .padding(top = 64.dp, end = 16.dp).width(204.dp)) {
+            .padding(top = 64.dp, end = 16.dp)
+            .widthIn(min = 120.dp, max = 192.dp).width(IntrinsicSize.Max)) {
         Box(Modifier.fillMaxWidth()
             .graphicsLayer {
                 val p = expansion.value
                 transformOrigin = TransformOrigin(1f, 0f)
                 scaleX = (.80f + .20f * p) * pressure; scaleY = scaleX
                 translationX = dx; translationY = -6.dp.toPx() * (1f - p) + dy; alpha = p
-                shape = RoundedCornerShape(24.dp); shadowElevation = 12.dp.toPx()
+                shape = RoundedCornerShape(20.dp); shadowElevation = 12.dp.toPx()
                 ambientShadowColor = Color.Black.copy(alpha = .18f)
                 spotShadowColor = Color.Black.copy(alpha = .20f)
             }
-            .updateGlass(backdrop, RoundedCornerShape(24.dp), .72f)
+            .updateGlass(backdrop, RoundedCornerShape(20.dp), .80f, neutral = true)
             .drawBehind {
                 if (lastHighlight.width > 0f) drawRoundRect(Color.White.copy(alpha = .12f * highlightAlpha),
                     topLeft = Offset(inset, highlightTop),
                     size = androidx.compose.ui.geometry.Size((size.width - inset * 2).coerceAtLeast(0f), highlightHeight),
-                    cornerRadius = CornerRadius(22.dp.toPx()))
+                    cornerRadius = CornerRadius(18.dp.toPx()))
             }
             .onGloballyPositioned { panelCoordinates = it }
             .pointerInput(open) {
@@ -169,9 +170,9 @@ internal val UpdateMenuInteractionKey = SemanticsPropertyKey<UpdateMenuInteracti
             }) {
             Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                 actions.forEachIndexed { index, action ->
-                    if (action.dividerBefore) Box(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+                    if (action.dividerBefore) Box(Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
                         .fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .08f)))
-                    Box(Modifier.fillMaxWidth().heightIn(min = 48.dp)
+                    Box(Modifier.fillMaxWidth().heightIn(min = 44.dp)
                         .onGloballyPositioned { row ->
                             panelCoordinates?.takeIf { it.isAttached && row.isAttached }?.let {
                                 val bounds = it.localBoundingBoxOf(row, clipBounds = false)
@@ -181,7 +182,7 @@ internal val UpdateMenuInteractionKey = SemanticsPropertyKey<UpdateMenuInteracti
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
                             role = Role.Button, onClick = { if (open) action.onClick() })
                         .testTag("update_menu_action_$index")
-                        .padding(horizontal = 20.dp, vertical = 14.dp), contentAlignment = Alignment.CenterStart) {
+                        .padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
                         Text(action.label, color = Color(0xFFF7F4FF), fontSize = 14.sp,
                             maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
@@ -192,15 +193,16 @@ internal val UpdateMenuInteractionKey = SemanticsPropertyKey<UpdateMenuInteracti
     }
 }
 
-@Composable private fun Modifier.updateGlass(backdrop: Backdrop?, shape: Shape, tint: Float): Modifier =
-    if (Build.VERSION.SDK_INT >= 33 && backdrop != null) highApiUpdateGlass(backdrop, shape, tint)
-    else background(Color(0xFF242332).copy(alpha = .94f), shape)
+@Composable private fun Modifier.updateGlass(backdrop: Backdrop?, shape: Shape, tint: Float, neutral: Boolean = false): Modifier =
+    if (Build.VERSION.SDK_INT >= 33 && backdrop != null) highApiUpdateGlass(backdrop, shape, tint, neutral)
+    else background(Color(if (neutral) 0xFF24262B else 0xFF242332).copy(alpha = .94f), shape)
         .border(1.dp, Color.White.copy(alpha = .13f), shape)
 
 @RequiresApi(33)
-private fun Modifier.highApiUpdateGlass(backdrop: Backdrop, shape: Shape, tint: Float): Modifier =
+private fun Modifier.highApiUpdateGlass(backdrop: Backdrop, shape: Shape, tint: Float, neutral: Boolean): Modifier =
     drawBackdrop(backdrop, shape = { shape }, effects = {
-        vibrancy(); blur(8.dp.toPx(), 8.dp.toPx())
+        if (neutral) colorControls(brightness = 0f, contrast = 1f, saturation = .12f) else vibrancy()
+        blur(8.dp.toPx(), 8.dp.toPx())
         lens(refractionHeight = 12.dp.toPx(), refractionAmount = 14.dp.toPx())
     }, highlight = { iosIndicatorSpecular.copy(alpha = .75f) },
-        onDrawSurface = { drawRect(Color(0xFF171624).copy(alpha = tint)) })
+        onDrawSurface = { drawRect(Color(if (neutral) 0xFF1D1F24 else 0xFF171624).copy(alpha = tint)) })
