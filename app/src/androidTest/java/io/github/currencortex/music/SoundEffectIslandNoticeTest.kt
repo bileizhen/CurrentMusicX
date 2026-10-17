@@ -32,6 +32,45 @@ import org.junit.Test
 /** Presentation only; never changes the real account, audio or island preferences. */
 class SoundEffectIslandNoticeTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun downloadAndEffectInterpolateBothWaysAndRapidReversalKeepsLatestNotice() {
+        val completed = SoundEffectNotice(-1, "下载完成", SoundEffectNoticeTier.STANDARD,
+            SoundEffectNoticePhase.READY, kind = IslandNoticeKind.UPDATE_DOWNLOAD)
+        val effect = SoundEffectNotice(1, "原声黑胶", SoundEffectNoticeTier.SVIP, SoundEffectNoticePhase.READY)
+        var notice by mutableStateOf(completed)
+        compose.setContent { Box(Modifier.width(340.dp)) {
+            DesktopIslandEffectTransition(notice) { Spacer(Modifier.width(120.dp).height(32.dp)) }
+        } }
+        compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(1000)
+        fun bounds() = compose.onNodeWithTag("desktop_island_transition").getUnclippedBoundsInRoot()
+        val initial = bounds()
+        for (target in listOf(effect, completed)) {
+            compose.runOnIdle { notice = target }
+            val widths = (1..30).map {
+                compose.mainClock.advanceTimeByFrame()
+                val current = bounds()
+                assertEquals("Kind changes keep the FPS height", (initial.bottom - initial.top).value,
+                    (current.bottom - current.top).value, 1f)
+                (current.right - current.left).value
+            }
+            assertTrue("Both directions must include intermediate widths",
+                widths.any { it > widths.min() + 1f && it < widths.max() - 1f })
+        }
+        compose.runOnIdle { notice = effect }
+        compose.mainClock.advanceTimeBy(120)
+        compose.runOnIdle { notice = completed }
+        compose.mainClock.advanceTimeBy(80)
+        compose.runOnIdle { notice = effect.copy(id = 2) }
+        compose.mainClock.advanceTimeBy(80)
+        compose.runOnIdle { notice = completed }
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithText("点击安装", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("SVIP 唱片", useUnmergedTree = true).assertIsNotDisplayed()
+        val restored = bounds()
+        assertEquals((initial.right - initial.left).value, (restored.right - restored.left).value, 1f)
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun downloadProgressKeepsStableWidthAndTerminalNoticesRemoveUnusedStatusSpace() {
         var installs = 0
         var notice by mutableStateOf(SoundEffectNotice(-1, "更新下载", SoundEffectNoticeTier.STANDARD,
