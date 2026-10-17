@@ -47,7 +47,7 @@ class MusicRepository(private val api: ApiClient,
             return source
         }
         val query = mapOf("id" to "$id", "level" to quality.value)
-        val dto = if (session == null) api.get<SongUrlDto>("ncm/song/url", query)
+        val dto = if (session == null) api.get<SongUrlDto>("ncm/song/url", query, authenticated = true)
             else ApiJson.decodeFromJsonElement<SongUrlDto>(api.request("GET", "ncm/song/url", query,
                 authenticated = true, expectedSession = session))
         val url = dto.url?.toHttpUrlOrNull() ?: throw ApiException(ErrorKind.NotFound)

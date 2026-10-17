@@ -35,6 +35,7 @@ class AudioCacheTest {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 requests++
+                assertNull(request.getHeader("Authorization"))
                 assertNull(request.getHeader("Token"))
                 assertNull(request.getHeader("x-api-key"))
                 val match = Regex("bytes=(\\d+)-(\\d*)").find(request.getHeader("Range").orEmpty())
