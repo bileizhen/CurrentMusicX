@@ -56,9 +56,11 @@ class AndroidUpdateInstaller(private val context: Context) : UpdateInstall {
             ?.map { it.toCharsString() }?.toSet().orEmpty()
 
     companion object {
-        val RELEASE_PACKAGE = BuildConfig.APPLICATION_ID.removeSuffix(".debug")
+        val RELEASE_PACKAGE = updateReleasePackage(BuildConfig.APPLICATION_ID)
         fun installIntent(context: Context, file: File): Intent = Intent(Intent.ACTION_VIEW)
             .setDataAndType(FileProvider.getUriForFile(context, "${context.packageName}.files", file), "application/vnd.android.package-archive")
             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 }
+
+internal fun updateReleasePackage(applicationId: String) = applicationId.removeSuffix(".verification").removeSuffix(".debug")
