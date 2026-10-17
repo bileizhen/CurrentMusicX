@@ -111,6 +111,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     val checking = state == UpdateState.Checking || state == UpdateState.Idle
     var expanded by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    var menuAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var showSources by remember { mutableStateOf(false) }
     var confirmCancel by remember { mutableStateOf(false) }
@@ -278,7 +279,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
             }
         }
         }
-        UpdateGlassMenu(menu, glassBackdrop, onDismiss = { menu = false }, actions = buildList {
+        UpdateGlassMenu(menu, glassBackdrop, onDismiss = { menu = false }, anchor = menuAnchor, actions = buildList {
             add(UpdateMenuAction("更新设置") { menu = false; showSettings = true })
             add(UpdateMenuAction("下载源") { menu = false; showSources = true })
             add(UpdateMenuAction("重新检查", dividerBefore = true) { menu = false; onRetry() })
@@ -293,7 +294,8 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = pageWhite) }
                 Text(if (expanded) "更新说明" else "软件更新", fontSize = 19.sp, color = pageWhite,
                     fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                UpdateGlassButton(glassBackdrop, "update_menu", "更多", onClick = { menu = !menu }) {
+                UpdateGlassButton(glassBackdrop, "update_menu", "更多", onClick = { menu = !menu },
+                    onBoundsChanged = { menuAnchor = it }) {
                     Icon(Icons.Default.MoreVert, null, tint = pageWhite)
                 }
             }

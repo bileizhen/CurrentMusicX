@@ -21,6 +21,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -32,6 +33,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -41,19 +43,21 @@ import io.github.currencortex.music.ui.component.iosIndicatorSpecular
 import io.github.currencortex.music.ui.component.liquid.lens
 import io.github.currencortex.music.ui.component.liquid.vibrancy
 import top.yukonga.miuix.kmp.blur.*
+import kotlinx.coroutines.launch
 
 @Composable internal fun rememberUpdateBackdrop() =
     if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported())
         rememberLayerBackdrop() else null
 
 @Composable internal fun UpdateGlassButton(backdrop: Backdrop?, tag: String, description: String,
-    onClick: () -> Unit, content: @Composable () -> Unit) {
+    onClick: () -> Unit, onBoundsChanged: (Rect) -> Unit = {}, content: @Composable () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .92f else 1f,
         spring(dampingRatio = .64f, stiffness = 650f), label = "update glass press")
     val light by animateFloatAsState(if (pressed) .09f else 0f, tween(120), label = "update glass light")
-    Box(Modifier.size(48.dp).graphicsLayer { scaleX = scale; scaleY = scale }
+    Box(Modifier.size(48.dp).onGloballyPositioned { onBoundsChanged(it.boundsInWindow()) }
+        .graphicsLayer { scaleX = scale; scaleY = scale }
         .updateGlass(backdrop, CircleShape, .23f)
         .drawBehind { drawCircle(Color.White.copy(alpha = light)) }
         .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
@@ -63,14 +67,22 @@ import top.yukonga.miuix.kmp.blur.*
 internal data class UpdateMenuAction(val label: String, val dividerBefore: Boolean = false, val onClick: () -> Unit)
 internal data class UpdateMenuInteraction(val selected: Int, val displacement: Offset, val highlight: Rect)
 internal val UpdateMenuInteractionKey = SemanticsPropertyKey<UpdateMenuInteraction>("UpdateMenuInteraction")
+internal data class UpdateMenuWaves(val path: Float, val scale: Float, val opacity: Float)
+internal val UpdateMenuWavesKey = SemanticsPropertyKey<UpdateMenuWaves>("UpdateMenuWaves")
 
-/** The panel is anchored below the overflow button; its drawing and touch shield share one clock. */
+/** Keep the shield until every closing wave settles, including an interrupted close. */
 @Composable internal fun BoxScope.UpdateGlassMenu(open: Boolean, backdrop: Backdrop?,
-    onDismiss: () -> Unit, toolbar: @Composable () -> Unit, actions: List<UpdateMenuAction>) {
-    val expansion = remember { Animatable(0f) }
-    LaunchedEffect(open) { expansion.animateTo(if (open) 1f else 0f,
-        tween(if (open) 280 else 180, easing = FastOutSlowInEasing)) }
-    val shown by remember(open) { derivedStateOf { open || expansion.value > .001f || expansion.isRunning } }
+    onDismiss: () -> Unit, toolbar: @Composable () -> Unit, actions: List<UpdateMenuAction>,
+    anchor: Rect? = null) {
+    val motion = remember { UpdateMenuMotion() }
+    val targetOpen by rememberUpdatedState(open)
+    LaunchedEffect(motion) {
+        snapshotFlow { targetOpen }.collect { target ->
+            // Let animateTo interrupt each wave: cancelling its owner first would erase velocity.
+            launch { motion.animate(target) }
+        }
+    }
+    val shown by remember(open) { derivedStateOf { open || motion.visible } }
     if (shown) {
         Box(Modifier.matchParentSize().testTag("update_menu_dismiss")
             .semantics { contentDescription = "关闭更新菜单" }
@@ -86,11 +98,14 @@ internal val UpdateMenuInteractionKey = SemanticsPropertyKey<UpdateMenuInteracti
         val dragLimit = with(density) { 7.dp.toPx() }
         val inset = with(density) { 6.dp.toPx() }
         var panelCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+        var panelBounds by remember { mutableStateOf(Rect.Zero) }
+        val geometry = updateMenuGeometry(anchor, panelBounds)
         val rows = remember { mutableStateMapOf<Int, Rect>() }
         var selected by remember { mutableIntStateOf(-1) }
         var lastHighlight by remember { mutableStateOf(Rect.Zero) }
         var snapHighlight by remember { mutableStateOf(true) }
         var displacement by remember { mutableStateOf(Offset.Zero) }
+        var spot by remember { mutableStateOf(Offset.Unspecified) }
         val dx by animateFloatAsState(displacement.x, spring(.68f, 520f), label = "menu follow x")
         val dy by animateFloatAsState(displacement.y, spring(.68f, 520f), label = "menu follow y")
         val pressure by animateFloatAsState(if (selected >= 0) 1.012f else 1f,
@@ -103,19 +118,28 @@ internal val UpdateMenuInteractionKey = SemanticsPropertyKey<UpdateMenuInteracti
             tween(if (selected >= 0) 90 else 160), label = "menu highlight alpha")
         Box(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(top = 64.dp, end = 16.dp)
-            .widthIn(min = 120.dp, max = 192.dp).width(IntrinsicSize.Max)) {
+            .widthIn(min = 120.dp, max = 192.dp).width(IntrinsicSize.Max)
+            .onGloballyPositioned { panelBounds = it.boundsInWindow() }) {
         Box(Modifier.fillMaxWidth()
             .graphicsLayer {
-                val p = expansion.value
-                transformOrigin = TransformOrigin(1f, 0f)
-                scaleX = (.80f + .20f * p) * pressure; scaleY = scaleX
-                translationX = dx; translationY = -6.dp.toPx() * (1f - p) + dy; alpha = p
-                shape = RoundedCornerShape(20.dp); shadowElevation = 12.dp.toPx()
+                val travel = geometry.translation(motion.path.value)
+                transformOrigin = geometry.origin
+                scaleX = motion.scale.value.coerceAtLeast(0f) * pressure; scaleY = scaleX
+                translationX = travel.x + dx; translationY = travel.y + dy
+                alpha = motion.opacity.value.coerceIn(0f, 1f)
+                shape = RoundedCornerShape(24.dp); shadowElevation = 16.dp.toPx()
                 ambientShadowColor = Color.Black.copy(alpha = .18f)
                 spotShadowColor = Color.Black.copy(alpha = .20f)
             }
-            .updateGlass(backdrop, RoundedCornerShape(20.dp), .80f, neutral = true)
+            .updateGlass(backdrop, RoundedCornerShape(24.dp), .68f, neutral = true)
             .drawBehind {
+                // A local light follows the finger; it fades with the shared selection mask.
+                if (spot.isSpecified && highlightAlpha > .001f) {
+                    drawRoundRect(Brush.radialGradient(
+                        listOf(Color.White.copy(alpha = .09f * highlightAlpha), Color.Transparent),
+                        center = spot, radius = size.width * .8f),
+                        cornerRadius = CornerRadius(24.dp.toPx()))
+                }
                 if (lastHighlight.width > 0f) drawRoundRect(Color.White.copy(alpha = .12f * highlightAlpha),
                     topLeft = Offset(inset, highlightTop),
                     size = androidx.compose.ui.geometry.Size((size.width - inset * 2).coerceAtLeast(0f), highlightHeight),
@@ -128,6 +152,7 @@ internal val UpdateMenuInteractionKey = SemanticsPropertyKey<UpdateMenuInteracti
                     var cancelled = !open || down.isConsumed
                     down.consume()
                     fun track(position: Offset) {
+                        spot = position
                         val hit = rows.entries.firstOrNull { it.value.contains(position) }?.key ?: -1
                         if (hit != selected && hit >= 0) {
                             // Retarget one capsule instead of flashing a separate background on each row.
@@ -165,10 +190,11 @@ internal val UpdateMenuInteractionKey = SemanticsPropertyKey<UpdateMenuInteracti
             .testTag("update_overflow_panel")
             .semantics {
                 paneTitle = "更新菜单"
+                this[UpdateMenuWavesKey] = UpdateMenuWaves(motion.path.value, motion.scale.value, motion.opacity.value)
                 this[UpdateMenuInteractionKey] = UpdateMenuInteraction(selected, Offset(dx, dy),
                     Rect(lastHighlight.left, highlightTop, lastHighlight.right, highlightTop + highlightHeight))
             }) {
-            Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 actions.forEachIndexed { index, action ->
                     if (action.dividerBefore) Box(Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
                         .fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .08f)))
@@ -182,8 +208,8 @@ internal val UpdateMenuInteractionKey = SemanticsPropertyKey<UpdateMenuInteracti
                         .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null,
                             role = Role.Button, onClick = { if (open) action.onClick() })
                         .testTag("update_menu_action_$index")
-                        .padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.CenterStart) {
-                        Text(action.label, color = Color(0xFFF7F4FF), fontSize = 14.sp,
+                        .padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.CenterStart) {
+                        Text(action.label, color = Color(0xFFF7F4FF), fontSize = 16.sp,
                             maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
                 }
@@ -195,14 +221,14 @@ internal val UpdateMenuInteractionKey = SemanticsPropertyKey<UpdateMenuInteracti
 
 @Composable private fun Modifier.updateGlass(backdrop: Backdrop?, shape: Shape, tint: Float, neutral: Boolean = false): Modifier =
     if (Build.VERSION.SDK_INT >= 33 && backdrop != null) highApiUpdateGlass(backdrop, shape, tint, neutral)
-    else background(Color(if (neutral) 0xFF24262B else 0xFF242332).copy(alpha = .94f), shape)
+    else background(Color(if (neutral) 0xFF242424 else 0xFF242332).copy(alpha = .96f), shape)
         .border(1.dp, Color.White.copy(alpha = .13f), shape)
 
 @RequiresApi(33)
 private fun Modifier.highApiUpdateGlass(backdrop: Backdrop, shape: Shape, tint: Float, neutral: Boolean): Modifier =
     drawBackdrop(backdrop, shape = { shape }, effects = {
         if (neutral) colorControls(brightness = 0f, contrast = 1f, saturation = .12f) else vibrancy()
-        blur(8.dp.toPx(), 8.dp.toPx())
+        blur((if (neutral) 20.dp else 8.dp).toPx(), (if (neutral) 20.dp else 8.dp).toPx())
         lens(refractionHeight = 12.dp.toPx(), refractionAmount = 14.dp.toPx())
     }, highlight = { iosIndicatorSpecular.copy(alpha = .75f) },
-        onDrawSurface = { drawRect(Color(if (neutral) 0xFF1D1F24 else 0xFF171624).copy(alpha = tint)) })
+        onDrawSurface = { drawRect(Color(if (neutral) 0xFF262626 else 0xFF171624).copy(alpha = tint)) })
