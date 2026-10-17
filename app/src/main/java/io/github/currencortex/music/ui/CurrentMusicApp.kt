@@ -78,7 +78,6 @@ import io.github.currencortex.music.feature.settings.SettingsScreen
 import io.github.currencortex.music.feature.settings.StorageScreen
 import io.github.currencortex.music.feature.settings.StorageViewModel
 import io.github.currencortex.music.feature.settings.SettingsViewModel
-import io.github.currencortex.music.feature.settings.UpdateSettingsViewModel
 import io.github.currencortex.music.ui.component.PlainFloatingBar
 import io.github.currencortex.music.ui.component.StandardNavigationBar
 import io.github.currencortex.music.ui.component.HighApiFloatingNavigation
@@ -163,7 +162,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     }
     val announcements by announcementVm.items.collectAsStateWithLifecycle()
     val suppressReadAnnouncements by announcementVm.suppressRead.collectAsStateWithLifecycle()
-    val updateDialogVisible by container.updates.dialogVisible.collectAsStateWithLifecycle()
+    val updateRequested by container.updates.dialogVisible.collectAsStateWithLifecycle()
+    var updateTransitionVisible by remember { mutableStateOf(false) }
+    var updateLaunchOrigin by remember { mutableStateOf<io.github.currencortex.music.feature.update.UpdatePageOrigin?>(null) }
+    val updateDialogVisible = updateRequested || updateTransitionVisible
     val updateTransferState by container.updateTransfer.state.collectAsStateWithLifecycle()
     val announcementVisible = launchFinished && announcements.isNotEmpty() && !updateDialogVisible
 
@@ -290,7 +292,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         LaunchedEffect(memberFocus) { memberFocus?.let { shownMember = it } }
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         val context = androidx.compose.ui.platform.LocalContext.current
-        val openUpdates: () -> Unit = {
+        val openUpdates: (io.github.currencortex.music.feature.update.UpdatePageOrigin?) -> Unit = { origin ->
+            updateLaunchOrigin = origin
             if (container.updateTransfer.state.value.download !is io.github.currencortex.music.core.update.UpdateDownloadState.Idle)
                 container.updates.reopenDownload()
             else scope.launch { container.updates.present() }
@@ -699,7 +702,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 if (container.desktopLyrics.state.value.enabled) container.playerController.connect()
             }
         }
-        if (!launchBrand.active && !announcementVisible) UpdatePage(container.updates, container.updateTransfer, currentSong?.cover.orEmpty())
+        if (!launchBrand.active && !announcementVisible) UpdatePage(container.updates, container.updateTransfer,
+            currentSong?.cover.orEmpty(), origin = updateLaunchOrigin, onPresentedChanged = { presented ->
+                if (updateTransitionVisible && !presented) updateLaunchOrigin = null
+                updateTransitionVisible = presented
+            })
         LibraryDialogs(libraryVm)
         ProfileDialogs(profileVm, authVm)
         if (profileMessage != null) MusicDialog("账号操作", onDismiss = { profileVm.message.value = null }) {
