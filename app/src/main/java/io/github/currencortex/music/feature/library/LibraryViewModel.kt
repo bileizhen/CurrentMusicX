@@ -220,8 +220,10 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
     private val kind = route.split('/')[1]
     val id = route.substringAfterLast('/').toLongOrNull() ?: 0
     fun editable(playlist: Playlist?, accountId: Long) = playlist?.let {
-        if (it.source == "netease") container.nativeNetease != null && it.nativeOwned && !it.nativeLiked &&
-            it.ownerId == container.neteaseSessions.state.value.profile?.uid
+        if (it.source == "netease") it.nativeOwned && !it.nativeLiked &&
+            container.bindingRepository.state.value?.let { binding ->
+                binding.bound && !binding.stale && it.ownerId == binding.profile?.uid
+            } == true
         else it.editable(accountId)
     } == true
     suspend fun rename(name: String) {

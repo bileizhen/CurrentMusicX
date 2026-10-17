@@ -281,7 +281,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         if (nativeNetease != null) appScope.launch {
             neteaseSessions.ready.await()
             neteaseSessions.state.collect {
-                bindingRepository.clearSession(); bindingRepository.status()
+                bindingRepository.clearSession()
+                // Cloud binding reads can fail offline; a background refresh must not
+                // terminate the app or prevent the other libraries from being invalidated.
+                appResult { bindingRepository.status() }
                 libraryRepository.clearSession(); neteaseLibrary.invalidate(); neteaseSongActions.clearSession()
             }
         }

@@ -16,7 +16,7 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
     val revision = MutableStateFlow(0L)
     private val reads = SessionReadCache(session, { revision.value + actions.revision.value })
     private val writeMutex = Mutex()
-    val directAvailable get() = api.netease != null
+    val directAvailable get() = api.hasLocalNeteaseLogin
     fun invalidate() { reads.clear(); revision.update { it + 1 } }
     private suspend fun owner(fresh: Boolean = false): Long {
         val bound = if (fresh) binding.status() else binding.cachedStatus()
@@ -164,10 +164,10 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
 class PrimaryMusicLibrary(private val current: LibraryRepository, private val netease: NeteaseLibraryRepository,
     private val binding: BindingRepository, private val settings: MusicSettingsRepository, scope: CoroutineScope) {
     val identity = combine(binding.state, settings.state.map { it.neteaseMainLibrary }.distinctUntilChanged()) { bound, preferred ->
-        Triple(preferred && (netease.directAvailable || bound?.bound == true), bound?.profile?.uid ?: 0, bound?.stale == true)
+        Triple(preferred && bound?.bound == true, bound?.profile?.uid ?: 0, bound?.stale == true)
     }.stateIn(scope, SharingStarted.Eagerly, Triple(false, 0L, false))
     val usesNetease = identity.map { it.first }.stateIn(scope, SharingStarted.Eagerly, false)
-    suspend fun resolveNetease(): Boolean = settings.snapshot().neteaseMainLibrary && (netease.directAvailable || binding.cachedStatus().bound)
+    suspend fun resolveNetease(): Boolean = settings.snapshot().neteaseMainLibrary && binding.cachedStatus().bound
     suspend fun playlists(fresh: Boolean = false): List<Playlist> = if (resolveNetease()) {
         if (netease.directAvailable && !binding.cachedStatus().bound) emptyList() else netease.playlists(fresh)
     } else {

@@ -141,12 +141,12 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
         "音乐库已更新"
     }
     private suspend fun afterBinding(expected: RequestSession): String {
-        if (container.musicSettings.snapshot().neteaseMainLibrary || container.nativeNetease != null) {
+        if (container.musicSettings.snapshot().neteaseMainLibrary || container.apiClient.hasLocalNeteaseLogin) {
             val status = appResult { container.bindingRepository.status() }
             container.neteaseLibrary.invalidate()
             container.libraryRepository.invalidate()
             return if (status is AppResult.Success) {
-                if (container.nativeNetease != null) "绑定成功，网易云直连已就绪" else "绑定成功，已使用网易云音乐库"
+                if (container.apiClient.hasLocalNeteaseLogin) "绑定成功，网易云直连已就绪" else "绑定成功，已使用网易云音乐库"
             }
                 else "绑定成功；暂时无法读取音乐库，请刷新重试"
         }
@@ -155,8 +155,10 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
             is AppResult.Failure -> "绑定成功；${failureMessage(result, "歌单同步")}，可再次同步"
         }
     }
-    fun unbind() = action { expected -> container.bindingRepository.unbind(expected); clearQr();
-        if (container.nativeNetease != null) "本机网易云账号已退出" else "网易云已解绑，已导入歌单保留为快照" }
+    fun unbind() = action { expected ->
+        val local = container.apiClient.hasLocalNeteaseLogin
+        container.bindingRepository.unbind(expected); clearQr()
+        if (local) "本机网易云账号已退出，云端绑定保留" else "网易云已解绑，已导入歌单保留为快照" }
     fun code(phone: String, country: String, alternate: Boolean = false) {
         if (SystemClock.elapsedRealtime() < state.value.codeUntil) return
         action(if (alternate) "备用验证码发送" else "验证码发送") { expected ->
