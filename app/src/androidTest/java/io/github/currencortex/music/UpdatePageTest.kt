@@ -141,7 +141,7 @@ class UpdatePageTest {
         } }
         compose.onNodeWithTag("update_source").assertDoesNotExist()
         compose.onNodeWithTag("update_menu").performClick()
-        compose.onNodeWithText("下载源 · ${UpdateSource.GITHUB.label}").performClick()
+        compose.onNodeWithText("下载源").performClick()
         compose.onNodeWithText(UpdateSource.DPIK.label).performClick()
         compose.runOnIdle { assertEquals(UpdateSource.DPIK, selected) }
         compose.onNodeWithTag("update_menu").performClick()
@@ -151,6 +151,36 @@ class UpdatePageTest {
         compose.onNodeWithTag("update_menu").performClick()
         compose.onNodeWithText("忽略此版本").performClick()
         compose.runOnIdle { assertTrue(ignored) }
+    }
+
+    @Test fun overflowMenuAnimatesFromButtonAndOutsideTapDoesNotActivatePage() {
+        var downloads = 0
+        compose.mainClock.autoAdvance = false
+        compose.setContent { TestTheme {
+            UpdatePageContent(UpdateState.Available(release), onDownload = { downloads++ })
+        } }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("update_menu").performClick()
+        compose.mainClock.advanceTimeBy(90)
+        compose.onNodeWithTag("update_overflow_panel").assertExists()
+        capture("update-menu-opening.png")
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithText("更新设置").assertIsDisplayed()
+        capture("update-menu-glass.png")
+        compose.onNodeWithTag("update_menu_dismiss").performTouchInput {
+            click(androidx.compose.ui.geometry.Offset(center.x, height * .85f))
+        }
+        compose.mainClock.advanceTimeBy(70)
+        compose.onNodeWithTag("update_overflow_panel").assertExists()
+        compose.runOnIdle { assertEquals("Dismissal must not trigger download underneath", 0, downloads) }
+        // The button remains available while the closing panel retargets its animation.
+        compose.onNodeWithTag("update_menu").performClick()
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithText("发布记录").assertIsDisplayed()
+        compose.onNodeWithTag("update_back").performClick()
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithTag("update_overflow_panel").assertDoesNotExist()
+        compose.onNodeWithTag("update_download").assertIsDisplayed()
     }
 
     @Composable private fun TestTheme(content: @Composable () -> Unit) {
