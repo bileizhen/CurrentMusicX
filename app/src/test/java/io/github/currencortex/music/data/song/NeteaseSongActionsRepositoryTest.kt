@@ -70,6 +70,45 @@ class NeteaseSongActionsRepositoryTest {
             assertTrue(paths.containsAll(listOf("/cm/ncmbind/likelist","/cm/ncm/likelist","/cm/ncmbind/like/11","/cm/ncm/like")))
         }
     }
+    @Test fun cloudReadFailureUsesTheGenericListButPermissionFailuresDoNot(): Unit = runBlocking {
+        for (status in listOf(502, 503, 403)) MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"bound":true,"profile":{"uid":7}}"""))
+            server.enqueue(MockResponse().setResponseCode(status))
+            if (status != 403) server.enqueue(MockResponse().setBody("""{"code":200,"ids":[11,12]}"""))
+            val owner = RequestSession(server.url("/cm/").toString(), "project-token")
+            val repo = NeteaseSongActionsRepository(ApiClient({ owner.server }, { owner.token }, {})) { owner }
+            if (status == 403) assertTrue(appResult { repo.likedIds() } is AppResult.Failure)
+            else assertEquals(setOf(11L,12L), repo.likedIds())
+            server.takeRequest(); server.takeRequest()
+            if (status == 403) assertEquals(2, server.requestCount)
+            else {
+                val fallback = server.takeRequest()
+                assertEquals("GET", fallback.method)
+                assertEquals("/cm/ncm/likelist", fallback.requestUrl!!.encodedPath)
+                assertEquals("7", fallback.requestUrl!!.queryParameter("uid"))
+                assertEquals("Bearer project-token", fallback.getHeader("Authorization"))
+                assertNull(fallback.getHeader("Cookie"))
+            }
+        }
+    }
+    @Test fun bothCloudListFailuresReadOnlyTheOwnersHeartPlaylist(): Unit = runBlocking {
+        for (uid in listOf(7L, 99L)) MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"bound":true,"profile":{"uid":7}}"""))
+            repeat(2) { server.enqueue(MockResponse().setResponseCode(502)) }
+            server.enqueue(MockResponse().setBody("""{"playlist":[{"id":88,"specialType":5,"creator":{"userId":$uid}}]}"""))
+            if (uid == 7L) server.enqueue(MockResponse().setBody("""{"playlist":{"id":88,"trackIds":[{"id":12},{"id":11}]}}"""))
+            val owner = RequestSession(server.url("/cm/").toString(), "project-token")
+            val repo = NeteaseSongActionsRepository(ApiClient({ owner.server }, { owner.token }, {})) { owner }
+            if (uid == 7L) assertEquals(setOf(11L,12L), repo.likedIds())
+            else assertEquals(ErrorKind.NeteaseLikedPlaylistUnavailable, (appResult { repo.likedIds() } as AppResult.Failure).kind)
+            assertEquals(if (uid == 7L) 5 else 4, server.requestCount)
+            repeat(server.requestCount) {
+                val request = server.takeRequest()
+                assertEquals("GET", request.method)
+                assertNull(request.getHeader("Cookie"))
+            }
+        }
+    }
     @Test fun countsUseNeteaseTotalsAndPersonalLikesCanToggleWithoutCurrentMusicLikes() = runBlocking {
         val server = MockWebServer()
         var liked = true

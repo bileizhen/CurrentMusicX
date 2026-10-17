@@ -67,8 +67,16 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
             val value = try {
                 api.request("GET", "ncmbind/likelist", mapOf("timestamp" to "${System.currentTimeMillis()}"), authenticated = true, expectedSession = expected)
             } catch (failure: ApiException) {
-                if (failure.kind != ErrorKind.NotFound) throw failure
-                request("likelist", mapOf("uid" to "${bound.profile!!.uid}", "timestamp" to "${System.currentTimeMillis()}"), expected)
+                // Some cloud servers expose the binding route but return 502 while
+                // their generic read route is healthy. Only retry this idempotent read.
+                val cloudReadFailure = !api.hasLocalNeteaseLogin && failure.kind == ErrorKind.Server
+                if (failure.kind != ErrorKind.NotFound && !cloudReadFailure) throw failure
+                try {
+                    request("likelist", mapOf("uid" to "${bound.profile!!.uid}", "timestamp" to "${System.currentTimeMillis()}"), expected)
+                } catch (generic: ApiException) {
+                    if (api.hasLocalNeteaseLogin || generic.kind !in setOf(ErrorKind.NotFound, ErrorKind.Server)) throw generic
+                    cloudLikedPlaylistIds(bound.profile!!.uid, expected)
+                }
             }
             LikedSnapshot(bound.profile!!.uid, api.decode<NeteaseLikes>(value).ids?.toSet() ?: throw ApiException(ErrorKind.Parse))
         }
@@ -84,6 +92,32 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
             }
         }
         ids.toSet().also { likedState.value = it }
+    }
+    /** The owner's heart playlist is a read-only fallback when both cloud list adapters fail. */
+    private suspend fun cloudLikedPlaylistIds(uid: Long, expected: RequestSession): JsonObject {
+        var offset = 0
+        do {
+            val response = request("user/playlist", mapOf("uid" to "$uid", "limit" to "100", "offset" to "$offset"), expected).jsonObject
+            val page = response["playlist"] as? JsonArray ?: throw ApiException(ErrorKind.Parse)
+            val liked = page.mapNotNull { it as? JsonObject }.firstOrNull {
+                val creator = it["creator"] as? JsonObject
+                val owner = creator?.get("userId")?.jsonPrimitive?.longOrNull ?: it["userId"]?.jsonPrimitive?.longOrNull
+                owner == uid && it["specialType"]?.jsonPrimitive?.intOrNull == 5 &&
+                    it["subscribed"]?.jsonPrimitive?.booleanOrNull != true
+            }
+            if (liked != null) {
+                val id = liked["id"]?.jsonPrimitive?.longOrNull?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.Parse)
+                val detail = request("playlist/detail", mapOf("id" to "$id", "s" to "0"), expected).jsonObject["playlist"] as? JsonObject
+                    ?: throw ApiException(ErrorKind.Parse)
+                if (detail["id"]?.jsonPrimitive?.longOrNull != id) throw ApiException(ErrorKind.Parse)
+                val tracks = detail["trackIds"] as? JsonArray ?: throw ApiException(ErrorKind.Parse)
+                val ids = tracks.map { (it as? JsonObject)?.get("id")?.jsonPrimitive?.longOrNull?.takeIf { value -> value > 0 }
+                    ?: throw ApiException(ErrorKind.Parse) }
+                return buildJsonObject { put("ids", JsonArray(ids.distinct().map(::JsonPrimitive))) }
+            }
+            offset += page.size
+        } while (page.isNotEmpty() && response["more"]?.jsonPrimitive?.booleanOrNull == true)
+        throw ApiException(ErrorKind.NeteaseLikedPlaylistUnavailable)
     }
     suspend fun isLiked(id: Long, fresh: Boolean = false): Boolean = id in likedIds(fresh)
     suspend fun toggleLiked(id: Long, song: Song? = null): Boolean {
