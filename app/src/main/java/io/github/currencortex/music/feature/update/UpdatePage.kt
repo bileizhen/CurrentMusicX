@@ -66,13 +66,16 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
     transferState: UpdateTransferState, onDownload: (UpdateSource) -> Unit,
     onInstall: () -> Unit, onCancel: () -> Unit, onChangeSource: (UpdateSource) -> Unit,
     downloadExperience: Boolean, settings: UpdateSettings, onAutoCheck: (Boolean) -> Unit,
-    onChannel: (UpdateChannel) -> Unit, cover: String) {
+    onChannel: (UpdateChannel) -> Unit, cover: String, origin: UpdatePageOrigin? = null,
+    onPresentedChanged: (Boolean) -> Unit = {}) {
     var entryCheckFinished by remember(visible) { mutableStateOf(false) }
     LaunchedEffect(visible) {
         if (visible) { delay(2000); entryCheckFinished = true }
     }
-    AnimatedVisibility(visible, enter = fadeIn(tween(280)) + slideInHorizontally(tween(420)) { it / 5 },
-        exit = fadeOut(tween(220)) + slideOutHorizontally(tween(320)) { it / 5 }) {
+    var exitCheckFinished by remember { mutableStateOf(false) }
+    SideEffect { if (visible) exitCheckFinished = entryCheckFinished }
+    val showResult = if (visible) entryCheckFinished else exitCheckFinished
+    UpdateContainerTransform(visible, origin, onPresentedChanged) {
         val context = LocalContext.current
         val notes by produceState("正在读取更新说明…") {
             value = withContext(Dispatchers.IO) {
@@ -80,8 +83,8 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
                     BuildConfig.VERSION_NAME) }.getOrDefault("此版本未附带更新说明，可查看完整发布记录。")
             }
         }
-        UpdatePageContent(if (entryCheckFinished) state else UpdateState.Checking,
-            if (entryCheckFinished) transferState else UpdateTransferState(), notes, onDismiss, onRetry, onIgnore, onOpenRelease,
+        UpdatePageContent(if (showResult) state else UpdateState.Checking,
+            if (showResult) transferState else UpdateTransferState(), notes, onDismiss, onRetry, onIgnore, onOpenRelease,
             onDownload, onInstall, onCancel, onChangeSource, downloadExperience, settings, onAutoCheck, onChannel,
             cover = cover, backgroundActive = visible)
     }

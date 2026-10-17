@@ -6,15 +6,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.LayoutCoordinates
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.MusicIcons
+import io.github.currencortex.music.feature.update.UpdatePageOrigin
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
-                   onStorage: () -> Unit, onLogs: () -> Unit, onAbout: () -> Unit, onUpdates: () -> Unit,
+                   onStorage: () -> Unit, onLogs: () -> Unit, onAbout: () -> Unit, onUpdates: (UpdatePageOrigin?) -> Unit,
                    onDesktopLyrics: () -> Unit = {},
                    updateTransfer: io.github.currencortex.music.core.update.UpdateTransferState = io.github.currencortex.music.core.update.UpdateTransferState()) {
     LazyColumn(Modifier.fillMaxSize().testTag("settings_screen"),
@@ -22,7 +26,9 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Text("设置", fontSize = 32.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
         item {
-            Card(Modifier.fillMaxWidth()) {
+            var origin by remember { mutableStateOf<LayoutCoordinates?>(null) }
+            val color = MiuixTheme.colorScheme.surface
+            Card(Modifier.fillMaxWidth().onGloballyPositioned { origin = it }) {
                 val progress = updateTransfer.download
                 val updateTitle = when (progress) {
                     is io.github.currencortex.music.core.update.UpdateDownloadState.Downloading -> "更新下载中 · ${(progress.received.toDouble() / progress.total.coerceAtLeast(1) * 100).toInt()}%"
@@ -30,9 +36,12 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
                     is io.github.currencortex.music.core.update.UpdateDownloadState.Failed -> "更新下载失败"
                     else -> "检查更新"
                 }
-                ArrowPreference(title = updateTitle, summary = if (progress is io.github.currencortex.music.core.update.UpdateDownloadState.Idle)
-                    "查看版本和更新说明" else "查看下载进度、切换来源或安装",
-                    startAction = { SettingIcon(MusicIcons.Download) }, onClick = onUpdates, modifier = Modifier.testTag("open_updates"))
+                val summary = if (progress is io.github.currencortex.music.core.update.UpdateDownloadState.Idle)
+                    "查看版本和更新说明" else "查看下载进度、切换来源或安装"
+                ArrowPreference(title = updateTitle, summary = summary,
+                    startAction = { SettingIcon(MusicIcons.Download) }, onClick = {
+                        onUpdates(origin?.takeIf { it.isAttached }?.let { UpdatePageOrigin(it, color, updateTitle, summary) })
+                    }, modifier = Modifier.testTag("open_updates"))
             }
         }
         item {
