@@ -84,6 +84,15 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     settings: UpdateSettings = UpdateSettings(), onAutoCheck: (Boolean) -> Unit = {},
     onChannel: (UpdateChannel) -> Unit = {}) {
     val release = (state as? UpdateState.Available)?.release
+    val installedVersion = BuildConfig.VERSION_NAME.substringBefore('-')
+    var heroVersion by remember { mutableStateOf(installedVersion) }
+    LaunchedEffect(state) {
+        when (state) {
+            is UpdateState.Available -> heroVersion = state.release.version
+            UpdateState.UpToDate -> heroVersion = installedVersion
+            else -> Unit // Rechecking must not first morph back to the installed version.
+        }
+    }
     val checking = state == UpdateState.Checking || state == UpdateState.Idle
     var expanded by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
@@ -148,13 +157,9 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 Column(Modifier.fillMaxWidth().offset(y = heroY).graphicsLayer {
                     alpha = 1f - detail; scaleX = 1f - .18f * detail; scaleY = scaleX
                 }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    AnimatedContent(release?.version ?: BuildConfig.VERSION_NAME.substringBefore('-'),
-                        transitionSpec = { (fadeIn(tween(420)) + slideInVertically(tween(420)) { it / 5 }) togetherWith
-                            (fadeOut(tween(240)) + slideOutVertically(tween(420)) { -it / 5 }) }, label = "update_version_change") { version ->
-                    Text(version, color = pageWhite,
-                        fontSize = if (width < 360.dp) 66.sp else 78.sp, fontWeight = FontWeight.Light,
-                        letterSpacing = (-3).sp, maxLines = 1, modifier = Modifier.testTag("update_hero_version"))
-                    }
+                    MorphingVersionNumber(heroVersion, installedVersion,
+                        fontSize = if (width < 360.dp) 66.sp else 78.sp, color = pageWhite,
+                        modifier = Modifier.testTag("update_hero_version"))
                     Text("CurrentMusic", color = pageWhite, fontSize = 25.sp, fontWeight = FontWeight.Light)
                     Text(if (release?.prerelease == true || settings.channel == UpdateChannel.PRERELEASE) "预发布版" else "正式版",
                         color = pageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
