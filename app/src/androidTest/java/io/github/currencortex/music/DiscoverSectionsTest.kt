@@ -7,11 +7,14 @@ import io.github.currencortex.music.core.network.ApiJson
 import io.github.currencortex.music.data.auth.UserDto
 import io.github.currencortex.music.ui.CurrentMusicApp
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import okhttp3.mockwebserver.*
 import org.junit.*
 import org.junit.Assert.*
 import java.util.UUID
+import java.util.concurrent.ConcurrentLinkedQueue
 
 /** All community writes go to an isolated local server, never the real community. */
 class DiscoverSectionsTest {
@@ -22,6 +25,11 @@ class DiscoverSectionsTest {
     @Volatile private var deleted = false
     @Volatile private var published = ""
     @Volatile private var reply = ""
+    @Volatile private var pagingUsers = false
+    @Volatile private var failUsers = false
+    @Volatile private var failNextUserPage = true
+    private val userRequests = ConcurrentLinkedQueue<Map<String, String>>()
+    private lateinit var directory: io.github.currencortex.music.feature.profile.DiscoverViewModel
     private val user = """{"id":7,"nickname":"Tester","title":"创作者"}"""
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
     private fun post(id: Int, content: String) = buildJsonObject {
@@ -37,7 +45,23 @@ class DiscoverSectionsTest {
                 val path = request.requestUrl!!.encodedPath
                 return when {
                     path == "/cm/auth/me" -> json(user)
-                    path == "/cm/users/square" -> json("""{"total":1,"users":[$user],"stats":{"users":1}}""")
+                    path == "/cm/users/square" -> {
+                        val query = request.requestUrl!!
+                        val offset = query.queryParameter("offset")!!.toInt()
+                        userRequests.add(listOf("query", "sort", "offset", "listening").associateWith { query.queryParameter(it).orEmpty() })
+                        when {
+                            failUsers -> MockResponse().setResponseCode(503)
+                            pagingUsers && offset == 3 && failNextUserPage -> { failNextUserPage = false; MockResponse().setResponseCode(503) }
+                            pagingUsers -> {
+                                val ids = when (offset) { 0 -> listOf(7, 8, 9); 3 -> listOf(9, 10, 11); else -> listOf(12) }
+                                json(buildJsonObject {
+                                    put("total", 7); put("users", JsonArray(ids.map { id -> buildJsonObject { put("id", id); put("nickname", "User $id") } }))
+                                    put("stats", buildJsonObject { put("users", 7) })
+                                }.toString())
+                            }
+                            else -> json("""{"total":1,"users":[$user],"stats":{"users":1}}""")
+                        }
+                    }
                     path == "/cm/decorations/scales" -> json("""{"scales":{}}""")
                     path == "/cm/posts" && request.method == "POST" -> {
                         assertEquals("Bearer isolated-token", request.getHeader("Authorization"))
@@ -74,7 +98,12 @@ class DiscoverSectionsTest {
         if (::server.isInitialized) server.shutdown()
     }
     private fun open() {
-        compose.setContent { CurrentMusicApp(container) }
+        compose.setContent {
+            directory = androidx.lifecycle.viewmodel.compose.viewModel(factory = io.github.currencortex.music.ui.util.viewModelFactory {
+                io.github.currencortex.music.feature.profile.DiscoverViewModel(container)
+            })
+            CurrentMusicApp(container)
+        }
         compose.waitUntil(15_000) { compose.onAllNodesWithText("首页").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("发现").performClick()
         compose.onNodeWithTag("discover_music").assertExists()
@@ -114,5 +143,57 @@ class DiscoverSectionsTest {
         assertFalse(deleted)
         compose.onNodeWithTag("post_confirm_delete").performClick()
         compose.waitUntil(10_000) { deleted && compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isEmpty() }
+    }
+
+    @Test fun userSortAndListeningFilterDoNotSubmitAnUnsentSearchDraft() {
+        open(); compose.onNodeWithText("用户").performClick()
+        compose.waitUntil(10_000) { directory.state.value.loaded && !directory.state.value.loading }
+        compose.onNodeWithTag("discover_query").performTextInput("unsent")
+        compose.onNodeWithTag("discover_sort").performClick()
+        compose.onNodeWithTag("discover_sort_name").performClick()
+        compose.waitUntil(10_000) { directory.state.value.sort == "name" && !directory.state.value.loading }
+        assertEquals("", userRequests.last()["query"])
+        compose.onNodeWithTag("discover_query").assertTextEquals("unsent")
+        compose.onNodeWithTag("discover_listening").performClick().assertIsOn()
+        compose.waitUntil(10_000) { directory.state.value.listening && !directory.state.value.loading }
+        assertEquals("", userRequests.last()["query"])
+        assertEquals("1", userRequests.last()["listening"])
+        compose.onNodeWithTag("discover_query").performClick().performImeAction()
+        compose.waitUntil(10_000) { directory.state.value.submitted == "unsent" && !directory.state.value.loading }
+        assertEquals("unsent", userRequests.last()["query"])
+        compose.onNodeWithTag("discover_clear").performClick()
+        compose.waitUntil(10_000) { directory.state.value.submitted.isEmpty() && !directory.state.value.loading }
+        compose.onNodeWithTag("discover_query").assertTextEquals("")
+    }
+
+    @Test fun automaticPaginationUsesServerOffsetsAndRetryPreservesLoadedUsers(): Unit = runBlocking {
+        pagingUsers = true
+        open(); compose.onNodeWithText("用户").performClick()
+        compose.waitUntil(10_000) { directory.state.value.failedMore }
+        assertEquals(listOf(7L, 8L, 9L), directory.state.value.users.map { it.id })
+        assertEquals(1, userRequests.count { it["offset"] == "3" })
+        compose.onNodeWithTag("discover_retry").performScrollTo().performClick()
+        compose.waitUntil(10_000) { !directory.state.value.loading && !directory.state.value.hasMore }
+        assertEquals(listOf(7L, 8L, 9L, 10L, 11L, 12L), directory.state.value.users.map { it.id })
+        assertEquals(7, directory.state.value.nextOffset)
+        assertEquals(2, userRequests.count { it["offset"] == "3" })
+        failUsers = true
+        withContext(Dispatchers.Main) { directory.refresh() }
+        compose.waitUntil(10_000) { !directory.state.value.loading && directory.state.value.error != null }
+        assertFalse(directory.state.value.failedMore)
+        assertEquals(6, directory.state.value.users.size)
+    }
+
+    @Test fun pullingTheUserListRefreshesAndRetainsRowsOnFailure() {
+        open(); compose.onNodeWithText("用户").performClick()
+        compose.waitUntil(10_000) { directory.state.value.loaded && !directory.state.value.loading }
+        failUsers = true
+        compose.onNodeWithTag("discover_users_list").performTouchInput {
+            swipeDown(startY = 100f, endY = height - 80f, durationMillis = 800)
+        }
+        compose.waitUntil(10_000) { !directory.state.value.loading && directory.state.value.error != null }
+        assertEquals(1, directory.state.value.users.size)
+        compose.onNodeWithTag("discover_user_7").assertExists()
+        compose.onNodeWithTag("discover_retry").assertExists()
     }
 }

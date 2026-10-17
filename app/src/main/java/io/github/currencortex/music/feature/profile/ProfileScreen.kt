@@ -356,62 +356,6 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     }
 }
 
-@Composable internal fun DiscoverUsersPage(vm: DiscoverViewModel, navigate: (String) -> Unit, active: Boolean) {
-    val state by vm.state.collectAsPageState()
-    val bottomInset = LocalMusicBottomInset.current
-    val owner = LocalLifecycleOwner.current
-    LaunchedEffect(vm, owner, active) { if (active) owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.pollStats() } }
-    LazyColumn(Modifier.fillMaxSize().testTag("discover_users"), contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 20.dp + bottomInset), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item {
-            Text("${state.stats.users} 位用户 · ${state.stats.listening} 人正在听歌", fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-        }
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextField(state.query, vm::query, singleLine = true, modifier = Modifier.weight(1f).testTag("discover_query"),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { vm.submit() }))
-                MusicTextAction("搜索", { vm.submit() }, Modifier.testTag("discover_submit"), enabled = !state.loading)
-            }
-        }
-        item { Card(Modifier.fillMaxWidth()) { SettingsSwitch("仅显示正在听歌", state.listening, vm::filter) } }
-        item { LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            items(listOf("reg" to "最新注册", "reg_asc" to "最早注册", "name" to "昵称", "days" to "听歌天数", "listen" to "听歌时长", "likes" to "点赞数")) { (key, label) ->
-                TextButton((if (state.sort == key) "✓ " else "") + label, onClick = { vm.sort(key) })
-            }
-        } }
-        if (state.loading && state.users.isEmpty()) item { LoadingSongList(4) }
-        state.error?.let { item { Text(it, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f)); TextButton("重试", onClick = { vm.submit() }) } }
-        if (!state.loading && state.users.isEmpty() && state.error == null) item {
-            Text(if (state.listening) "当前没有正在听歌的用户" else "没有匹配的用户", fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-        }
-        items(state.users, key = { it.id }) { user ->
-            Card(Modifier.fillMaxWidth().clickable { navigate("user/profile/${user.id}") }.testTag("discover_user_${user.id}")) {
-                Row(Modifier.fillMaxWidth().heightIn(min = 108.dp).padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    UserAvatar(user.profileUser(), vm.container, 44.dp, reserveOverlay = false)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Text(user.nickname, Modifier.weight(1f), fontSize = 16.sp,
-                                fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            UserRoleBadge(user.role)
-                        }
-                        UserTitleBadge(user.title)
-                        if (user.bio.isNotBlank()) Text(user.bio, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-                        Text("${user.days} 天 · ${listeningDuration(user.listenMs)}", fontSize = 11.sp,
-                            color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
-                        user.current?.let { Text("正在听：${it.name}", fontSize = 12.sp, color = MiuixTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis) }
-                    }
-                }
-            }
-        }
-        if (state.users.size < state.total) item { TextButton("加载更多", onClick = { vm.submit(true) }, enabled = !state.loading) }
-    }
-}
-
 @Composable fun DecorationScreen(vm: DecorationViewModel) {
     val state by vm.state.collectAsPageState()
     val busy by vm.busy.collectAsStateWithLifecycle()
