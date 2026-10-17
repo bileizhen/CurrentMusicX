@@ -4,6 +4,7 @@ import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.PathMeasure
 import android.graphics.Typeface
+import android.os.Build
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -14,16 +15,25 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
+import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.min
+
+internal val VersionMorphBlurKey = SemanticsPropertyKey<Float>("VersionMorphBlur")
 
 /** Font outlines share an arc-length sampling grid, including counters (0/6/8/9).
  * Missing contours collapse to a point, so holes and additional digits grow in-place.
@@ -35,6 +45,7 @@ internal fun MorphingVersionNumber(version: String, initialVersion: String, font
     var from by remember { mutableStateOf(glyphs.outline(initialVersion)) }
     var to by remember { mutableStateOf(from) }
     val progress = remember { Animatable(1f) }
+    val blur = remember { Animatable(0f) }
     LaunchedEffect(version) {
         if (to.version != version) {
             // Cancellation leaves progress at the currently drawn pose, rather than an endpoint.
@@ -42,7 +53,14 @@ internal fun MorphingVersionNumber(version: String, initialVersion: String, font
             progress.snapTo(0f)
             from = visible
             to = glyphs.outline(version)
-            progress.animateTo(1f, tween(960, easing = FastOutSlowInEasing))
+            coroutineScope {
+                // Retarget from the visible blur, too: interrupted morphs must not flash sharp.
+                launch {
+                    blur.animateTo(3f, tween(280, easing = FastOutSlowInEasing))
+                    blur.animateTo(0f, tween(680, easing = FastOutSlowInEasing))
+                }
+                progress.animateTo(1f, tween(960, easing = FastOutSlowInEasing))
+            }
         }
     }
     val density = LocalDensity.current
@@ -53,7 +71,11 @@ internal fun MorphingVersionNumber(version: String, initialVersion: String, font
     val counter = remember { Path() }
     val components = remember { VersionPathComponents() }
     val paint = remember { Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL } }
-    Canvas(modifier.fillMaxWidth().height(height).semantics { text = AnnotatedString(version) }) {
+    Canvas(modifier.fillMaxWidth().height(height).graphicsLayer {
+        val radius = blur.value.dp.toPx()
+        renderEffect = if (Build.VERSION.SDK_INT >= 31 && radius > .01f)
+            BlurEffect(radius, radius, TileMode.Decal) else null
+    }.semantics { text = AnnotatedString(version); this[VersionMorphBlurKey] = blur.value }) {
         val amount = progress.value
         val width = mix(from.width, to.width, amount)
         val scale = min(textPixels / VersionGlyphs.EM, (size.width - 24).coerceAtLeast(1f) / width.coerceAtLeast(1f))
