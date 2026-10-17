@@ -111,8 +111,11 @@ private fun DrawScope.drawCanvasHorizon(warm: Color, cool: Color, time: Float, i
     }
     drawCircle(Color(0xFF0A0A0A), radius, center)
     drawCircle(warm.copy(alpha = .07f * intro), radius, center, style = Stroke(size.width * .006f))
-    drawCircle(Brush.radialGradient(listOf(warm.copy(alpha = .035f * intro), Color.Transparent), sunlight, size.width * .24f),
-        size.width * .24f, sunlight)
+    drawCircle(Brush.radialGradient(listOf(warm.copy(alpha = .20f * intro), Color.Transparent), sunlight, size.width * .30f),
+        size.width * .30f, sunlight)
+    drawCircle(Brush.radialGradient(listOf(lerp(warm, Color.White, .55f).copy(alpha = .65f * intro),
+        warm.copy(alpha = .12f * intro), Color.Transparent), sunlight, size.width * .045f),
+        size.width * .045f, sunlight)
 }
 
 // Independently authored AGSL; no React/WebView runtime or third-party shader source.
@@ -151,7 +154,10 @@ half4 main(float2 coord) {
     float rim = exp(-abs(d) * 110.) * sunlight;
     float near = exp(-depth * 18.) * .045;
     float cloud = .80 + .12 * sin(p.x * 42. + time * .19) * sin(p.x * 19. - time * .13);
-    float flare = exp(-length(p - sun) * 10.) * .022;
+    float flare = exp(-length(p - sun) * 10.) * .13;
+    float sunDistance = length((p - sun) * float2(1., 2.5));
+    float highlight = exp(-sunDistance * 75.) * .68;
+    float rimLight = exp(-abs(d) * 200.) * exp(-abs(p.x - sunX) * 14.) * .18;
     float3 warm = float3(warmColor.rgb);
     float3 cool = float3(coolColor.rgb);
     float3 color = float3(.0392);
@@ -160,6 +166,8 @@ half4 main(float2 coord) {
     color += outside * rise * cool * sky;
     color += outside * rise * (cool * (haze + airglow) + warm * near * cloud) * sunlight;
     color += rise * warm * (rim * .075 + flare);
+    // Local sun crest and bloom stay distinct from the dim edge around the rest of the planet.
+    color += rise * mix(warm, float3(1.), .55) * (highlight + rimLight);
 
     float2 cell = floor(coord / 9.);
     float random = hash(cell);
