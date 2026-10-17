@@ -96,7 +96,9 @@ import java.util.Locale
             MusicTextAction("重试", vm::retry, Modifier.testTag("chat_retry"))
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            LazyColumn(Modifier.fillMaxSize().testTag("chat_messages"), state = list, reverseLayout = true,
+            // Reverse layout puts older hidden messages at the top of the viewport.
+            LazyColumn(Modifier.fillMaxSize().scrollEdgeBlur(list.canScrollForward, list.canScrollBackward, radial = true)
+                .testTag("chat_messages"), state = list, reverseLayout = true,
                 contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 items(state.messages.asReversed(), key = { it.id }) { message ->
                     ChatMessageRow(message, mine = message.userId == account.account?.id, vm,
