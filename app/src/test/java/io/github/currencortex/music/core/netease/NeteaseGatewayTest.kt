@@ -169,7 +169,7 @@ class NeteaseGatewayTest {
         upstream.enqueue(response("""{"code":200,"profile":{"userId":42,"nickname":"Native"}}""").addHeader("Set-Cookie", "MUSIC_U=confirmed-native; Path=/"))
         binding.bindPhone("13800000000", "123456", "86", owner())
         assertTrue(binding.status().bound)
-        binding.unbind(owner()); assertFalse(binding.status().bound); assertFalse(sessions.state.value.loggedIn)
+        binding.unbind(owner()); assertFalse(binding.state.value!!.bound); assertFalse(sessions.state.value.loggedIn)
         assertEquals(1, upstream.requestCount); assertEquals(0, current.requestCount)
     }
     @Test fun sms502IsSingleAttemptAndDoesNotInvalidateCurrentMusic() = runBlocking {
@@ -178,9 +178,37 @@ class NeteaseGatewayTest {
         assertEquals(ErrorKind.Server, failure.kind); assertEquals(502, failure.status)
         assertEquals(1, upstream.requestCount); assertEquals(0, expired); assertEquals(0, current.requestCount)
     }
-    @Test fun privateDataRequiresNeteaseLoginWithoutFallback() = runBlocking {
-        val failure = appResult { call("ncm/user/playlist", mapOf("uid" to "42")) } as AppResult.Failure
-        assertEquals(ErrorKind.NeteaseBindingRequired, failure.kind); assertEquals(0, upstream.requestCount); assertEquals(0, current.requestCount)
+    @Test fun cloudBindingAndLibraryWorkWithoutCopyingCredentialsToTheDevice() = runBlocking {
+        current.enqueue(response("""{"bound":true,"profile":{"uid":700,"nickname":"Cloud account"}}"""))
+        assertEquals(700L, binding.status().profile!!.uid)
+        current.enqueue(response("""{"code":200,"playlist":[]}"""))
+        call("ncm/user/playlist", mapOf("uid" to "700"))
+        repeat(2) {
+            val request = current.takeRequest()
+            assertEquals("Bearer current-secret", request.getHeader("Authorization"))
+            assertNull(request.getHeader("Cookie"))
+        }
+        assertFalse(sessions.state.value.loggedIn)
+        assertFalse(vault.value!!.contains("MUSIC_U"))
+        assertEquals(0, upstream.requestCount)
+    }
+    @Test fun unboundCloudAccountDoesNotBecomeANativeLoginOrLogOutCurrentMusic() = runBlocking {
+        current.enqueue(response("""{"bound":false}"""))
+        assertFalse(binding.status().bound)
+        current.enqueue(MockResponse().setResponseCode(401).setBody("需要绑定网易云账号"))
+        assertTrue(appResult { call("ncmbind/likelist") } is AppResult.Failure)
+        assertEquals(0, expired); assertEquals(0, upstream.requestCount)
+    }
+    @Test fun localBindingTakesPriorityButSnapshotSyncStillUsesTheProjectServer() = runBlocking {
+        login()
+        assertEquals(42L, binding.status().profile!!.uid)
+        assertEquals(0, current.requestCount)
+        current.enqueue(response("""{"imported":2,"tracks":10}"""))
+        assertEquals(2, binding.sync(owner()).imported)
+        val request = current.takeRequest()
+        assertEquals("/cm/ncmbind/sync", request.path)
+        assertEquals("Bearer current-secret", request.getHeader("Authorization"))
+        assertNull(request.getHeader("Cookie")); assertEquals(0, upstream.requestCount)
     }
     @Test fun expiredNativeLoginDoesNotLogOutCurrentMusic() = runBlocking {
         login(); enqueue("""{"code":301}""")

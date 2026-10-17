@@ -127,8 +127,8 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
         } }
         state.binding?.let { binding ->
             if (binding.bound) item {
-                BindingAccountCard(binding, busy, { if (musicSettings.neteaseMainLibrary || vm.container.nativeNetease != null) vm.reloadMusic() else vm.sync() }, vm::live, vm::refresh,
-                    { finishInput(); reauthenticate = true; revealLogin = true }, { unbind = true }, musicSettings.neteaseMainLibrary || vm.container.nativeNetease != null,
+                BindingAccountCard(binding, busy, { if (musicSettings.neteaseMainLibrary || vm.container.apiClient.hasLocalNeteaseLogin) vm.reloadMusic() else vm.sync() }, vm::live, vm::refresh,
+                    { finishInput(); reauthenticate = true; revealLogin = true }, { unbind = true }, musicSettings.neteaseMainLibrary || vm.container.apiClient.hasLocalNeteaseLogin,
                     membership, vm::reloadMembership)
                 if (!binding.stale && medals.ownerId == binding.profile?.uid) {
                     Spacer(Modifier.height(16.dp))
@@ -143,7 +143,11 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
             }
         }
         if (vm.container.nativeNetease != null) item {
-            Text("手机直接连接网易云，登录信息加密保存在此设备。原服务器绑定需要在这里重新扫码登录一次。",
+            Text(if (vm.container.apiClient.hasLocalNeteaseLogin)
+                "当前使用本机网易云登录，登录信息加密保存在此设备。CurrentMusic 云端资产独立同步。"
+                else if (state.binding?.bound == true)
+                    "已复用当前 CurrentMusic 账号的云端网易云绑定，无需再次扫码。本机登录可用于直连和原版音效。"
+                else "登录 CurrentMusic 后可复用云端网易云绑定，也可在此单独登录，凭据加密保存在此设备。",
                 fontSize = 12.sp, lineHeight = 19.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f),
                 modifier = Modifier.testTag("netease_direct_notice"))
         }
@@ -210,7 +214,8 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
     }
     }
     if (unbind) MusicDialog("解绑网易云音乐？", { if (!busy) unbind = false }) {
-        Text("已导入歌单会保留为本地快照，不再随网易云更新。")
+        Text(if (vm.container.apiClient.hasLocalNeteaseLogin) "将退出本机网易云账号，云端绑定和歌单会保留。"
+            else "将解除当前 CurrentMusic 账号的云端网易云绑定，已导入歌单会保留为快照。")
         TextButton("确认解绑", onClick = { unbind = false; vm.unbind() }, enabled = !busy, modifier = Modifier.testTag("confirm_unbind"))
         BindingAction("取消", { unbind = false }, enabled = !busy)
     }

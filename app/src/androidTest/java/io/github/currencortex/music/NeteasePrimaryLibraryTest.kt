@@ -33,6 +33,7 @@ class NeteasePrimaryLibraryTest {
     @Before fun setup(): Unit = runBlocking {
         container = AppContainer(ApplicationProvider.getApplicationContext<CurrentMusicApplication>(), "native-main-${UUID.randomUUID()}")
         container.ready.await(); container.sessionRestored.await()
+        container.desktopLyrics.markRecommendationSeen()
         server = MockWebServer()
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {

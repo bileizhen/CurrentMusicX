@@ -25,12 +25,26 @@ class ApiClient(
 ) {
     private val http = client.newBuilder().addInterceptor(AuthInterceptor()).build()
     private val singleAttemptHttp = http.newBuilder().retryOnConnectionFailure(false).build()
+    val hasLocalNeteaseLogin get() = netease?.sessions?.state?.value?.loggedIn == true
+    private fun useNative(path: String, authenticated: Boolean, projectToken: String?): Boolean {
+        if (netease?.handles(path) != true) return false
+        // Imported snapshots belong to the project account, even with a local NetEase login.
+        if (path == "ncmbind/sync") return false
+        // New logins remain device-local; membership/medal adapters are local-only routes.
+        if (path.startsWith("ncmbind/phone/") || path.startsWith("ncmbind/qr/") ||
+            path in setOf("ncmbind/membership", "ncmbind/medals", "ncm/captcha/sent/v1")) return true
+        // Without a local credential, the project server can use its own saved binding.
+        return hasLocalNeteaseLogin || !authenticated || projectToken.isNullOrBlank()
+    }
     suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
                         body: JsonElement? = null, authenticated: Boolean = false, expectedSession: RequestSession? = null,
                         retryConnection: Boolean = true, callTimeoutMillis: Long? = null): JsonElement = withContext(Dispatchers.IO) {
         val session = RequestSession(server(), if (authenticated) token() else null)
         if (expectedSession != null && (expectedSession.server != session.server || expectedSession.token != session.token)) throw ApiException(ErrorKind.Unauthorized)
-        if (netease?.handles(path) == true) {
+        if (netease?.handles(path) == true && expectedSession?.neteaseRevision != null &&
+            expectedSession.neteaseRevision != netease.sessions.state.value.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
+        if (useNative(path, authenticated, session.token)) {
+            val netease = requireNotNull(netease)
             if (expectedSession?.neteaseRevision != null && expectedSession.neteaseRevision != netease.sessions.state.value.revision)
                 throw ApiException(ErrorKind.NeteaseSessionChanged)
             val response = netease.request(method, path, query, body, expectedSession?.neteaseRevision)
@@ -58,6 +72,10 @@ class ApiClient(
             })
         }
         response.use {
+            if (expectedSession != null && (expectedSession.server != server() || expectedSession.token != if (authenticated) token() else null))
+                throw ApiException(ErrorKind.Unauthorized)
+            if (netease?.handles(path) == true && expectedSession?.neteaseRevision != null &&
+                expectedSession.neteaseRevision != netease.sessions.state.value.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
             log("$method $path HTTP ${it.code}")
             if (!it.isSuccessful) {
                 // Older NCM gateway also uses 401 for missing NCM binding. Only a project-session
