@@ -106,7 +106,9 @@ class UpdatePageTest {
             UpdatePageContent(UpdateState.Available(release), state.value, onChangeSource = { selected = it },
                 onChannel = { channel = it }, onIgnore = { ignored = true })
         } }
-        compose.onNodeWithTag("update_source").performClick()
+        compose.onNodeWithTag("update_source").assertDoesNotExist()
+        compose.onNodeWithTag("update_menu").performClick()
+        compose.onNodeWithText("下载源 · ${UpdateSource.GITHUB.label}").performClick()
         compose.onNodeWithText(UpdateSource.DPIK.label).performClick()
         compose.runOnIdle { assertEquals(UpdateSource.DPIK, selected) }
         compose.onNodeWithTag("update_menu").performClick()
