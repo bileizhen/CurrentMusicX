@@ -55,6 +55,7 @@ import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.LocalContentColor
 import top.yukonga.miuix.kmp.theme.darkColorScheme
+import top.yukonga.miuix.kmp.blur.layerBackdrop
 
 private val pageWhite = Color(0xFFF7F4FF)
 private val pageMuted = Color(0xFFC6BDD9)
@@ -134,6 +135,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
             else -> onDismiss()
         }
     }
+    val glassBackdrop = rememberUpdateBackdrop()
     val colors = remember { darkColorScheme(primary = Color(0xFFB8A6FF), onBackground = pageWhite,
         background = Color(0xFF100D29), surface = Color(0xFF201C35), surfaceContainer = Color(0xFF29253F)) }
     MiuixTheme(colors = colors) {
@@ -142,21 +144,10 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
         .pointerInput(Unit) { detectTapGestures {
             menu = false
         } }) {
+        Box(Modifier.matchParentSize().then(if (glassBackdrop != null) Modifier.layerBackdrop(glassBackdrop) else Modifier)) {
         NeonRevealBackground(palette, Modifier.matchParentSize(), active = backgroundActive)
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
-            Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = { if (expanded) expanded = false else onDismiss() },
-                    modifier = Modifier.background(Color.White.copy(alpha = .09f), CircleShape).testTag("update_back")) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = pageWhite)
-                }
-                Text(if (expanded) "更新说明" else "软件更新", fontSize = 19.sp, color = pageWhite,
-                    fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f).padding(start = 8.dp))
-                IconButton(onClick = { menu = !menu },
-                    modifier = Modifier.background(Color.White.copy(alpha = .09f), CircleShape).testTag("update_menu")) {
-                    Icon(Icons.Default.MoreVert, "更多", tint = pageWhite)
-                }
-            }
+            Spacer(Modifier.fillMaxWidth().height(60.dp))
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                 val width = maxWidth
                 val height = maxHeight
@@ -288,17 +279,27 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 }
             }
         }
-        if (menu) {
-            Column(Modifier.align(Alignment.TopEnd).statusBarsPadding().padding(top = 56.dp, end = 20.dp)
-                .width(180.dp).clip(RoundedCornerShape(20.dp)).background(Color(0xFF29243F))
-                .border(1.dp, Color.White.copy(alpha = .12f), RoundedCornerShape(20.dp))) {
-                MenuItem("重新检查") { menu = false; onRetry() }
-                MenuItem("更新设置") { menu = false; showSettings = true }
-                MenuItem("下载源 · ${source.label}") { menu = false; showSources = true }
-                MenuItem("发布记录") { menu = false; onOpenRelease(AppMetadata.RELEASES_URL) }
-                if (release != null && transferState.download is UpdateDownloadState.Idle)
-                    MenuItem("忽略此版本") { menu = false; onIgnore() }
+        }
+        UpdateGlassMenu(menu, glassBackdrop, onDismiss = { menu = false }, toolbar = {
+            Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing).height(60.dp)
+                .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                UpdateGlassButton(glassBackdrop, "update_back", "返回", onClick = {
+                    if (menu) menu = false else if (expanded) expanded = false else onDismiss()
+                }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = pageWhite) }
+                Text(if (expanded) "更新说明" else "软件更新", fontSize = 19.sp, color = pageWhite,
+                    fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f).padding(start = 8.dp))
+                UpdateGlassButton(glassBackdrop, "update_menu", "更多", onClick = { menu = !menu }) {
+                    Icon(Icons.Default.MoreVert, null, tint = pageWhite)
+                }
             }
+        }) {
+            MenuItem("更新设置") { menu = false; showSettings = true }
+            MenuItem("下载源") { menu = false; showSources = true }
+            HorizontalDivider(color = Color.White.copy(alpha = .08f), modifier = Modifier.padding(horizontal = 16.dp))
+            MenuItem("重新检查") { menu = false; onRetry() }
+            MenuItem("发布记录") { menu = false; onOpenRelease(AppMetadata.RELEASES_URL) }
+            if (release != null && transferState.download is UpdateDownloadState.Idle)
+                MenuItem("忽略此版本") { menu = false; onIgnore() }
         }
         if (showSources) MusicDialog("下载来源", { showSources = false }) {
             Text(if (transferState.download is UpdateDownloadState.Downloading) "切换来源会从头重新下载" else "失败时自动尝试其他来源",
