@@ -60,7 +60,8 @@ internal fun NeonRevealBackground(palette: ArtworkGlowPalette, modifier: Modifie
     }
     val density = LocalDensity.current
     val inset = WindowInsets.safeDrawing
-    val top = (inset.getTop(density) + with(density) { 10.dp.toPx() }) / 2f
+    // Keep the emitter beyond the physical screen; only its downward spill is visible.
+    val top = -with(density) { 24.dp.toPx() } / 2f
     val bottom = (inset.getBottom(density) + with(density) { 10.dp.toPx() }) / 2f
     val thickness = with(density) { 3.dp.toPx() } / 2f
     val hardware = LocalView.current.isHardwareAccelerated
