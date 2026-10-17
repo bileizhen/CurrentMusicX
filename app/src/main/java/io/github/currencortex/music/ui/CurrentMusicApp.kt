@@ -233,9 +233,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         var miniArtworkOrigin by remember { mutableStateOf<(() -> PlayerArtworkOrigin?)?>(null) }
         val playerOpen = backStack.last() == PLAYER.toString()
         val playerPresented by remember(playerOpen) { derivedStateOf { playerOpen || playerExpansion.value > .0001f } }
-        SideEffect {
-            container.desktopIslandPageHidden.value = updateDialogVisible || playerPresented || backStack.last() == "lib/video"
-        }
+        val hideDesktopIsland = updateDialogVisible || playerPresented || backStack.last() == "lib/video"
+        SideEffect { container.desktopIslandPageHidden.value = hideDesktopIsland }
         androidx.compose.runtime.DisposableEffect(container) { onDispose { container.desktopIslandPageHidden.value = false } }
         val searchOpen = SEARCH.toString() in backStack
         val searchSheet = remember { io.github.currencortex.music.feature.search.SearchSheetState(searchOpen) }

@@ -13,6 +13,20 @@ import org.junit.Test
 import java.util.UUID
 
 class DesktopIslandPageVisibilityTest {
+    @Test fun openingUpdatePageFromExistingActivityPublishesVisibilityGate(): Unit = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        check(context.packageName.endsWith(".verification"))
+        val scenario = androidx.test.core.app.ActivityScenario.launch(MainActivity::class.java)
+        try {
+            context.container.ready.await()
+            scenario.onActivity { context.container.updates.reopenDownload() }
+            withTimeout(10000) { while (!context.container.desktopIslandPageHidden.value) delay(25) }
+            assertTrue(context.container.appForeground.value)
+            scenario.onActivity { context.container.updates.dismissDialog() }
+            withTimeout(10000) { while (context.container.desktopIslandPageHidden.value) delay(25) }
+        } finally { scenario.onActivity { context.container.updates.dismissDialog() }; scenario.close() }
+    }
+
     @Test fun immersivePagesHideBothWindowsAndRestoreOnExitOrBackground(): Unit = runBlocking {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         check(context.packageName.endsWith(".verification"))
