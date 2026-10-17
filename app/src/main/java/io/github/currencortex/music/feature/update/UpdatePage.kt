@@ -148,8 +148,8 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 val compact = height < 400.dp
                 val targetHeight = when {
                     transferState.download is UpdateDownloadState.Ready -> if (downloadExperience) 274.dp else 222.dp
-                    busy -> 288.dp
-                    release != null -> 232.dp
+                    busy -> 248.dp
+                    release != null -> 192.dp
                     state is UpdateState.Failed -> 236.dp
                     else -> 192.dp
                 } + (80 * (fontScale - 1).coerceAtLeast(0f)).dp
@@ -222,7 +222,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                         }
                         if (!checking || busy) {
                             if (release != null) {
-                                TransferSummary(transferState, source, onSources = { showSources = true })
+                                TransferSummary(transferState)
                                 val downloading = transferState.download is UpdateDownloadState.Downloading
                                 val ready = transferState.download is UpdateDownloadState.Ready
                                 PageButton(when {
@@ -258,6 +258,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 .border(1.dp, Color.White.copy(alpha = .12f), RoundedCornerShape(20.dp))) {
                 MenuItem("重新检查") { menu = false; onRetry() }
                 MenuItem("更新设置") { menu = false; showSettings = true }
+                MenuItem("下载源 · ${source.label}") { menu = false; showSources = true }
                 MenuItem("发布记录") { menu = false; onOpenRelease(AppMetadata.RELEASES_URL) }
                 if (release != null && transferState.download is UpdateDownloadState.Idle)
                     MenuItem("忽略此版本") { menu = false; onIgnore() }
@@ -294,7 +295,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     }
 }
 
-@Composable private fun TransferSummary(state: UpdateTransferState, source: UpdateSource, onSources: () -> Unit) {
+@Composable private fun TransferSummary(state: UpdateTransferState) {
     when (val download = state.download) {
         is UpdateDownloadState.Downloading -> {
             val progress by animateFloatAsState((download.received.toDouble() / download.total.coerceAtLeast(1)).toFloat().coerceIn(0f, 1f),
@@ -309,13 +310,6 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
         UpdateDownloadState.Idle -> Unit
     }
     state.message?.let { Text(it, fontSize = 12.sp, color = pageMuted, maxLines = 2, overflow = TextOverflow.Ellipsis) }
-    if (state.download !is UpdateDownloadState.Ready) Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp))
-        .clickable(role = Role.Button, enabled = !state.installing, onClick = onSources).padding(vertical = 10.dp)
-        .testTag("update_source")) {
-        Text("下载源", color = pageMuted, fontSize = 12.sp, modifier = Modifier.weight(1f))
-        Text("${state.activeSource?.label ?: source.label}  ›", color = pageWhite, fontSize = 12.sp,
-            maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(2f))
-    }
 }
 
 @Composable private fun PageButton(label: String, tag: String, primary: Boolean = true, enabled: Boolean = true, onClick: () -> Unit) {
