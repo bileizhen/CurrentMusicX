@@ -280,7 +280,14 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
             }
         }
         }
-        UpdateGlassMenu(menu, glassBackdrop, onDismiss = { menu = false }, toolbar = {
+        UpdateGlassMenu(menu, glassBackdrop, onDismiss = { menu = false }, actions = buildList {
+            add(UpdateMenuAction("更新设置") { menu = false; showSettings = true })
+            add(UpdateMenuAction("下载源") { menu = false; showSources = true })
+            add(UpdateMenuAction("重新检查", dividerBefore = true) { menu = false; onRetry() })
+            add(UpdateMenuAction("发布记录") { menu = false; onOpenRelease(AppMetadata.RELEASES_URL) })
+            if (release != null && transferState.download is UpdateDownloadState.Idle)
+                add(UpdateMenuAction("忽略此版本") { menu = false; onIgnore() })
+        }, toolbar = {
             Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing).height(60.dp)
                 .padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 UpdateGlassButton(glassBackdrop, "update_back", "返回", onClick = {
@@ -292,15 +299,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                     Icon(Icons.Default.MoreVert, null, tint = pageWhite)
                 }
             }
-        }) {
-            MenuItem("更新设置") { menu = false; showSettings = true }
-            MenuItem("下载源") { menu = false; showSources = true }
-            HorizontalDivider(color = Color.White.copy(alpha = .08f), modifier = Modifier.padding(horizontal = 16.dp))
-            MenuItem("重新检查") { menu = false; onRetry() }
-            MenuItem("发布记录") { menu = false; onOpenRelease(AppMetadata.RELEASES_URL) }
-            if (release != null && transferState.download is UpdateDownloadState.Idle)
-                MenuItem("忽略此版本") { menu = false; onIgnore() }
-        }
+        })
         if (showSources) MusicDialog("下载来源", { showSources = false }) {
             Text(if (transferState.download is UpdateDownloadState.Downloading) "切换来源会从头重新下载" else "失败时自动尝试其他来源",
                 fontSize = 13.sp, color = pageMuted)
