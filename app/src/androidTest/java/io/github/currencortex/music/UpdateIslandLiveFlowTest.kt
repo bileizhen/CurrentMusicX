@@ -139,7 +139,7 @@ class UpdateIslandLiveFlowTest {
                 .first { it.id == 4202 }.notification
             scenario.close()
             notification.contentIntent.send()
-            awaitCondition { containsText(if (BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE) "再次下载" else "请求安装") }
+            awaitCondition { containsText("请求安装") }
             screenshot("06-notification-opened")
             withContext(Dispatchers.Main) { container.updateTransfer.cancel(); container.updates.dismissDialog() }
             awaitCondition { container.islandNotices.value == null && container.desktopLyricsStatus.value.islandTouchable }

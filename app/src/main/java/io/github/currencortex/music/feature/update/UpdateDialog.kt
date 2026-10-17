@@ -113,7 +113,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
             fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(14.dp))
-        if (downloadExperience) Text("可重复下载，体验灵动岛进度；下载完成后可点灵动岛安装。", fontSize = 13.sp,
+        if (downloadExperience) Text("下载进度优先显示在灵动岛；完成后可点击查看更新详情。", fontSize = 13.sp,
             color = MiuixTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 10.dp))
         val message = when (state) {
             UpdateState.Idle, UpdateState.Checking -> "正在检查更新…"
@@ -177,7 +177,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                     Regex("[a-f0-9]{64}").matches(release.sha256)
                 val label = when {
                     transferState.installing -> "请求安装…"
-                    ready -> if (downloadExperience) "再次下载" else "请求安装"
+                    ready -> "请求安装"
                     !verifiedAsset && !preview -> "查看发布"
                     transferState.download is UpdateDownloadState.Failed -> "重试下载"
                     downloading -> "取消下载"
@@ -191,7 +191,6 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                             repeat(10) { delay(120); previewProgress = (it + 1) / 10f }
                         }
                     } else if (downloading) onCancel()
-                    else if (ready && downloadExperience) onDownload?.invoke(source)
                     else if (ready) onInstall()
                     else if (verifiedAsset && onDownload != null) onDownload(source)
                     else onOpenRelease(release.pageUrl)

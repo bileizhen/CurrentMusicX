@@ -31,20 +31,20 @@ class UpdateMirrorFlowTest {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     @After fun close() { scope.cancel() }
 
-    @Test fun downloadExperienceOffersRepeatDownloadInsteadOfInstallation() {
+    @Test fun completedExperienceOffersInstallationWithoutRepeatDownload() {
         val release = AppRelease("99.0.0", "Experience fixture", "https://github.com/bileizhen/CurrentMusicX/releases/tag/v99.0.0",
             "https://github.com/bileizhen/CurrentMusicX/releases/download/v99.0.0/app.apk", "app.apk", false, 100, "0".repeat(64))
         var downloads = 0
-        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
+        var installs = 0
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { top.yukonga.miuix.kmp.basic.Scaffold {
             UpdateDialogContent(UpdateState.Available(release), {}, {}, {}, {},
                 transferState = UpdateTransferState(UpdateDownloadState.Ready(File("fixture.apk"))),
-                onDownload = { downloads++ }, onInstall = { error("Experience must not request installation") },
+                onDownload = { downloads++ }, onInstall = { installs++ },
                 downloadExperience = true)
-        } }
-        compose.onNodeWithTag("update_download").assertTextContains("再次下载").performClick()
-        compose.onNodeWithTag("update_download").performClick()
-        compose.runOnIdle { assertEquals(2, downloads) }
-        compose.onAllNodesWithText("请求安装").assertCountEquals(0)
+        } } }
+        compose.onNodeWithTag("update_download").assertTextContains("请求安装").performClick()
+        compose.runOnIdle { assertEquals(0, downloads); assertEquals(1, installs) }
+        compose.onAllNodesWithText("再次下载").assertCountEquals(0)
     }
 
     @Test fun closingDialogKeepsDownloadAndReopeningShowsTheSameProgress() {

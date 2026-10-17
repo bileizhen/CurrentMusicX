@@ -102,7 +102,7 @@ class UpdatePageTest {
         compose.runOnIdle { assertEquals(1, cancels) }
     }
 
-    @Test fun completedDownloadNeedsInstallTapAndExperienceCanRedownload() {
+    @Test fun completedDownloadNeedsInstallTapAndHasNoRepeatDownloadButton() {
         var installs = 0; var downloads = 0
         compose.setContent { TestTheme {
             UpdatePageContent(UpdateState.Available(release), UpdateTransferState(UpdateDownloadState.Ready(File("fixture.apk"))),
@@ -110,8 +110,9 @@ class UpdatePageTest {
         } }
         compose.runOnIdle { assertEquals(0, installs) }
         compose.onNodeWithTag("update_download").assertIsDisplayed().assertTextContains("点击安装").performClick()
-        compose.onNodeWithTag("update_redownload").assertIsDisplayed().performClick()
-        compose.runOnIdle { assertEquals(1, installs); assertEquals(1, downloads) }
+        compose.onNodeWithTag("update_redownload").assertDoesNotExist()
+        compose.onNodeWithText("再次下载").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(1, installs); assertEquals(0, downloads) }
         capture("update-page-completed.png")
     }
 
