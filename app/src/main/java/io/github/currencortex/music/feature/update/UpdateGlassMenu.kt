@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
@@ -23,6 +24,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.isSpecified
 import androidx.compose.ui.graphics.*
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.changedToUp
@@ -44,6 +46,10 @@ import io.github.currencortex.music.ui.component.liquid.lens
 import io.github.currencortex.music.ui.component.liquid.vibrancy
 import top.yukonga.miuix.kmp.blur.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+
+internal val UpdateButtonGlowKey = SemanticsPropertyKey<Float>("UpdateButtonGlow")
 
 @Composable internal fun rememberUpdateBackdrop() =
     if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported())
@@ -55,13 +61,50 @@ import kotlinx.coroutines.launch
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .92f else 1f,
         spring(dampingRatio = .64f, stiffness = 650f), label = "update glass press")
-    val light by animateFloatAsState(if (pressed) .09f else 0f, tween(120), label = "update glass light")
+    val light = remember { Animatable(0f) }
+    var lightCenter by remember { mutableStateOf(Offset.Unspecified) }
+    LaunchedEffect(interaction) {
+        var pulse: Job? = null
+        interaction.interactions.collect { event ->
+            when (event) {
+                is PressInteraction.Press -> {
+                    lightCenter = event.pressPosition
+                    pulse?.cancel()
+                    pulse = launch { light.animateTo(1f, tween(55)) }
+                }
+                is PressInteraction.Release -> {
+                    pulse?.cancel()
+                    pulse = launch {
+                        // Complete a visible pulse even when down/up occur in a single frame.
+                        light.animateTo(1f, tween(40))
+                        delay(40)
+                        light.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
+                    }
+                }
+                is PressInteraction.Cancel -> {
+                    pulse?.cancel()
+                    pulse = launch { light.animateTo(0f, tween(90)) }
+                }
+            }
+        }
+    }
     Box(Modifier.size(48.dp).onGloballyPositioned { onBoundsChanged(it.boundsInWindow()) }
         .graphicsLayer { scaleX = scale; scaleY = scale }
         .updateGlass(backdrop, CircleShape, .23f)
-        .drawBehind { drawCircle(Color.White.copy(alpha = light)) }
+        .drawBehind {
+            val strength = light.value
+            if (strength > .001f) {
+                drawCircle(Color.White.copy(alpha = .10f * strength))
+                drawCircle(Brush.radialGradient(listOf(Color.White.copy(alpha = .08f * strength), Color.Transparent),
+                    center = if (lightCenter.isSpecified) lightCenter else center, radius = size.width * .8f))
+                val edge = 1.dp.toPx()
+                drawCircle(Color.White.copy(alpha = .24f * strength), radius = (size.minDimension - edge) / 2,
+                    style = Stroke(edge))
+            }
+        }
         .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
-        .semantics { contentDescription = description }.testTag(tag), contentAlignment = Alignment.Center) { content() }
+        .semantics { contentDescription = description; this[UpdateButtonGlowKey] = light.value }
+        .testTag(tag), contentAlignment = Alignment.Center) { content() }
 }
 
 internal data class UpdateMenuAction(val label: String, val dividerBefore: Boolean = false, val onClick: () -> Unit)
@@ -115,7 +158,7 @@ internal val UpdateMenuWavesKey = SemanticsPropertyKey<UpdateMenuWaves>("UpdateM
         val highlightHeight by animateFloatAsState(lastHighlight.height,
             if (snapHighlight) snap() else spring(.8f, 900f), label = "menu highlight height")
         val highlightAlpha by animateFloatAsState(if (selected >= 0) 1f else 0f,
-            tween(if (selected >= 0) 90 else 160), label = "menu highlight alpha")
+            tween(if (selected >= 0) 55 else 200), label = "menu highlight alpha")
         Box(Modifier.align(Alignment.TopEnd).windowInsetsPadding(WindowInsets.safeDrawing)
             .padding(top = 64.dp, end = 16.dp)
             .widthIn(min = 120.dp, max = 192.dp).width(IntrinsicSize.Max)
@@ -140,7 +183,7 @@ internal val UpdateMenuWavesKey = SemanticsPropertyKey<UpdateMenuWaves>("UpdateM
                         center = spot, radius = size.width * .8f),
                         cornerRadius = CornerRadius(24.dp.toPx()))
                 }
-                if (lastHighlight.width > 0f) drawRoundRect(Color.White.copy(alpha = .12f * highlightAlpha),
+                if (lastHighlight.width > 0f) drawRoundRect(Color.White.copy(alpha = .17f * highlightAlpha),
                     topLeft = Offset(inset, highlightTop),
                     size = androidx.compose.ui.geometry.Size((size.width - inset * 2).coerceAtLeast(0f), highlightHeight),
                     cornerRadius = CornerRadius(18.dp.toPx()))
