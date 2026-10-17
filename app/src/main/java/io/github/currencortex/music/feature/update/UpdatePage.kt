@@ -161,7 +161,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 val fontScale = LocalDensity.current.fontScale
                 val compact = height < 400.dp
                 val targetHeight = when {
-                    transferState.download is UpdateDownloadState.Ready -> if (downloadExperience) 274.dp else 222.dp
+                    transferState.download is UpdateDownloadState.Ready -> 222.dp
                     busy -> 248.dp
                     release != null -> 192.dp
                     state is UpdateState.Failed -> 236.dp
@@ -272,9 +272,6 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                                         verifiedUpdate(release) -> onDownload(source)
                                         else -> onOpenRelease(release.pageUrl)
                                     }
-                                }
-                                if (ready && downloadExperience) PageButton("再次下载", "update_redownload", primary = false) {
-                                    onDownload(source)
                                 }
                             } else if (state is UpdateState.Failed || !expanded) {
                                 PageButton(if (state is UpdateState.Failed) "重新检查" else "检查更新", "update_retry", onClick = onRetry)

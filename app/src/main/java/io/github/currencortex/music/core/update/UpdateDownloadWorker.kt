@@ -132,8 +132,7 @@ open class UpdateDownloadWorker(context: Context, params: WorkerParameters) : Co
     }
     private fun completeNotification(release: AppRelease, success: Boolean) {
         val notification = notification(release).setSmallIcon(if (success) android.R.drawable.stat_sys_download_done else android.R.drawable.stat_notify_error)
-            .setContentText(if (!success) "下载失败，点击查看并重试" else if (io.github.currencortex.music.BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE)
-                "下载完成，点击再次体验下载" else "下载完成，点击查看并安装").setAutoCancel(true).build()
+            .setContentText(if (!success) "下载失败，点击查看并重试" else "下载完成，点击查看").setAutoCancel(true).build()
         runCatching { applicationContext.getSystemService(NotificationManager::class.java).notify(COMPLETE, notification) }
     }
     companion object {
