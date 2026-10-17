@@ -8,35 +8,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.currencortex.music.core.update.UpdateChannel
-import io.github.currencortex.music.ui.component.SettingsSwitch
 import io.github.currencortex.music.ui.component.MusicIcons
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.preference.ArrowPreference
-import top.yukonga.miuix.kmp.preference.OverlaySpinnerPreference
 
 @Composable
-fun SettingsScreen(updateViewModel: UpdateSettingsViewModel, onAppearance: () -> Unit, onNetwork: () -> Unit,
+fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
                    onStorage: () -> Unit, onLogs: () -> Unit, onAbout: () -> Unit, onUpdates: () -> Unit,
                    onDesktopLyrics: () -> Unit = {},
                    updateTransfer: io.github.currencortex.music.core.update.UpdateTransferState = io.github.currencortex.music.core.update.UpdateTransferState()) {
-    val settings by updateViewModel.settings.collectAsStateWithLifecycle()
     LazyColumn(Modifier.fillMaxSize().testTag("settings_screen"),
         contentPadding = musicScrollPadding(PaddingValues(12.dp, 30.dp, 12.dp, 32.dp)),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Text("设置", fontSize = 32.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
         item {
             Card(Modifier.fillMaxWidth()) {
-                SettingsSwitch("启动时自动检查更新", settings.autoCheckOnLaunch, updateViewModel::setAutoCheck,
-                    summary = "打开应用后检查 GitHub 最新发布", startAction = { SettingIcon(MusicIcons.Update) })
-                OverlaySpinnerPreference(title = "更新渠道", summary = "接收的版本类型",
-                    startAction = { SettingIcon(MusicIcons.Rocket) },
-                    items = listOf(DropdownItem("正式版", summary = "仅接收稳定发布"),
-                        DropdownItem("预发布", summary = "提前获取 rc 测试版本")),
-                    selectedIndex = settings.channel.ordinal,
-                    onSelectedIndexChange = { updateViewModel.setChannel(UpdateChannel.entries[it]) },
-                    modifier = Modifier.testTag("update_channel"))
                 val progress = updateTransfer.download
                 val updateTitle = when (progress) {
                     is io.github.currencortex.music.core.update.UpdateDownloadState.Downloading -> "更新下载中 · ${(progress.received.toDouble() / progress.total.coerceAtLeast(1) * 100).toInt()}%"
