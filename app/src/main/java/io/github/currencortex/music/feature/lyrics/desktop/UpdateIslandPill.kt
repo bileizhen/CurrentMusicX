@@ -10,12 +10,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.graphics.StrokeCap
@@ -43,6 +49,12 @@ import io.github.currencortex.music.core.media.SoundEffectNoticePhase
     val downloading = notice.phase == SoundEffectNoticePhase.APPLYING
     val failed = notice.phase == SoundEffectNoticePhase.FAILED
     val ready = notice.phase == SoundEffectNoticePhase.READY
+    val motion = rememberDesktopMotion()
+    val glow = remember { Animatable(0f) }
+    LaunchedEffect(ready, motion) {
+        if (ready) glow.animateTo(1f, tween(if (motion) 720 else 0, easing = FastOutSlowInEasing))
+        else glow.snapTo(0f)
+    }
     val tint = if (failed) Color(0xFFFF9B91) else Color(0xFF8DBFFF)
     val shape = RoundedCornerShape(50)
     val iconSize = 23.dp.coerceAtMost(height)
@@ -65,6 +77,13 @@ import io.github.currencortex.music.core.media.SoundEffectNoticePhase
     val pillWidth = (iconInset + iconSize + 18.dp + titleWidth + statusWidth + 12.dp).coerceAtMost(340.dp)
     Row(modifier.width(pillWidth).height(height).then(if (material) Modifier.clip(shape)
         .background(Color(0xFF11141B)).border(.8.dp, Color.White.copy(alpha = .2f), shape) else Modifier)
+        .drawWithCache {
+            val brush = Brush.radialGradient(
+                listOf(tint.copy(alpha = .40f), tint.copy(alpha = .16f), Color.Transparent),
+                center = Offset(size.width * .5f, size.height * 1.15f),
+                radius = size.width * .65f)
+            onDrawBehind { if (ready) drawRect(brush, alpha = glow.value) }
+        }
         .semantics(mergeDescendants = true) {
             stateDescription = notice.message
             if (downloading) progressBarRangeInfo = notice.progress?.let { ProgressBarRangeInfo(it / 100f, 0f..1f) }
