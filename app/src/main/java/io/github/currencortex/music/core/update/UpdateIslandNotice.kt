@@ -47,7 +47,9 @@ class UpdateIslandNotice(downloads: Flow<UpdateDownloadState>, enabled: Flow<Boo
     } }
 }
 
-/** Keep effect notices independent so their callbacks cannot overwrite an active download. */
+/** A user-triggered effect acknowledgement briefly interrupts the persistent download status.
+ * The latest download remains intact and becomes visible again when the effect notice expires.
+ */
 internal fun prioritizedIslandNotices(download: StateFlow<SoundEffectNotice?>, effects: StateFlow<SoundEffectNotice?>,
     scope: CoroutineScope): StateFlow<SoundEffectNotice?> =
-    combine(download, effects) { update, effect -> update ?: effect }.stateIn(scope, SharingStarted.Eagerly, null)
+    combine(download, effects) { update, effect -> effect ?: update }.stateIn(scope, SharingStarted.Eagerly, null)
