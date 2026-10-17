@@ -21,6 +21,8 @@ data class PlayerSongActions(val songId: Long? = null, val likeCount: Long? = nu
 data class PlayerComments(val songId: Long? = null, val total: Long? = null, val hot: List<NeteaseComment> = emptyList(),
     val latest: List<NeteaseComment> = emptyList(), val more: Boolean = false, val nextOffset: Int = 0,
     val loading: Boolean = false, val error: String? = null)
+data class PlayerCommentComposer(val draft: String = "", val replyTo: NeteaseComment? = null,
+    val sending: Boolean = false, val error: String? = null, val message: String? = null)
 class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val player = container.playerController
     val sleepTimer = container.sleepTimer
@@ -39,10 +41,14 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val actions = _actions.asStateFlow()
     private val _comments = MutableStateFlow(PlayerComments())
     val comments = _comments.asStateFlow()
+    val commentComposer = MutableStateFlow(PlayerCommentComposer())
     private val _heartLoading = MutableStateFlow(false)
     val heartLoading = _heartLoading.asStateFlow()
     private var actionEpoch = 0L
     private var commentsJob: Job? = null
+    private var commentSendJob: Job? = null
+    private var commentsEpoch = 0L
+    private var commentsOwner: Pair<Long?, RequestSession>? = null
     private var heartStartJob: Job? = null
     private val heartMutex = Mutex()
     private val netease = container.neteaseSongActions
@@ -52,12 +58,18 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
                 container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged(),
                 netease.revision, container.libraryRepository.revision, container.primaryLibrary.identity,
                 container.navidrome.likes.map { if (queue.value.current?.musicSource == MusicSource.NAVIDROME) it else emptyMap() }.distinctUntilChanged(),
-                container.navidrome.state.map { if (queue.value.current?.musicSource == MusicSource.NAVIDROME) it.revision else "" }.distinctUntilChanged()) { values ->
+                container.navidrome.state.map { if (queue.value.current?.musicSource == MusicSource.NAVIDROME) it.revision else "" }.distinctUntilChanged(),
+                container.neteaseSessions.state.map { it.revision }.distinctUntilChanged()) { values ->
                     values.first() as Long? to values.drop(1)
                 }.collectLatest { (id, _) ->
                 actionEpoch++
-                commentsJob?.cancel()
-                _comments.value = PlayerComments(songId = id)
+                val owner = id to container.musicSession()
+                if (owner != commentsOwner) {
+                    commentsOwner = owner; commentsEpoch++
+                    commentsJob?.cancel(); commentSendJob?.cancel()
+                    _comments.value = PlayerComments(songId = id)
+                    commentComposer.value = PlayerCommentComposer()
+                }
                 _actions.value = PlayerSongActions(songId = id)
                 if (id == null) return@collectLatest
                 if (queue.value.current?.musicSource == MusicSource.NAVIDROME) {
@@ -127,20 +139,43 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     fun loadComments(more: Boolean = false) {
         val id = NeteaseSongActionsRepository.songId(queue.value.current) ?: return
         if (_comments.value.loading || more && !_comments.value.more) return
-        val epoch = actionEpoch
+        val epoch = commentsEpoch
         val previous = _comments.value
-        _comments.value = if (more) previous.copy(loading = true, error = null) else PlayerComments(songId = id, loading = true)
+        _comments.value = previous.copy(songId = id, loading = true, error = null)
         commentsJob = viewModelScope.launch {
             val offset = if (more) previous.nextOffset else 0
             when (val result = appResult { netease.comments(id, offset, fresh = true) }) {
-                is AppResult.Success -> if (epoch == actionEpoch) {
+                is AppResult.Success -> if (epoch == commentsEpoch) {
                     val page = result.value
                     _comments.value = PlayerComments(id, page.total, if (more) previous.hot else page.hotComments,
                         ((if (more) previous.latest else emptyList()) + page.comments).distinctBy { it.commentId },
                         page.more && page.comments.isNotEmpty(), offset + page.comments.size)
                     _actions.update { it.copy(commentCount = page.total?.takeIf { n -> n >= 0 }) }
                 }
-                is AppResult.Failure -> if (epoch == actionEpoch) _comments.update { it.copy(loading = false, error = result.kind.message) }
+                is AppResult.Failure -> if (epoch == commentsEpoch) _comments.update { it.copy(loading = false, error = result.kind.message) }
+            }
+        }
+    }
+    fun editComment(value: String) { if (!commentComposer.value.sending) commentComposer.update { it.copy(draft = value.take(1000), error = null, message = null) } }
+    fun replyTo(comment: NeteaseComment?) { if (!commentComposer.value.sending) commentComposer.update { it.copy(replyTo = comment, error = null, message = null) } }
+    fun sendComment() {
+        val id = NeteaseSongActionsRepository.songId(queue.value.current) ?: return
+        val draft = commentComposer.value
+        if (draft.sending || draft.draft.isBlank()) return
+        val epoch = commentsEpoch
+        commentComposer.update { it.copy(sending = true, error = null, message = null) }
+        commentSendJob = viewModelScope.launch {
+            val result = appResult { netease.sendComment(id, draft.draft, draft.replyTo?.commentId) }
+            if (epoch != commentsEpoch) return@launch
+            when (result) {
+                is AppResult.Success -> {
+                    commentComposer.value = PlayerCommentComposer(message = "评论已发送")
+                    commentsJob?.cancel(); _comments.update { it.copy(loading = false) }; loadComments()
+                }
+                is AppResult.Failure -> commentComposer.update { it.copy(sending = false, error =
+                    if (result.kind in setOf(ErrorKind.Timeout, ErrorKind.Network, ErrorKind.Server))
+                        "发送结果未确认，请先刷新评论核对后再重试"
+                    else "发送失败：${result.kind.message}") }
             }
         }
     }

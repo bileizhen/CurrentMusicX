@@ -59,6 +59,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val settings by vm.settings.collectAsStateWithLifecycle()
     val songActions by vm.actions.collectAsStateWithLifecycle()
     val comments by vm.comments.collectAsStateWithLifecycle()
+    val commentComposer by vm.commentComposer.collectAsStateWithLifecycle()
     val heartLoading by vm.heartLoading.collectAsStateWithLifecycle()
     val sleepState by vm.sleepTimer.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -239,7 +240,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss)
         when (overlay) {
             PlayerOverlay.NONE -> Unit
-            PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) })
+            PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) },
+                commentComposer, vm::editComment, vm::replyTo, vm::sendComment)
             PlayerOverlay.QUEUE -> Unit
             PlayerOverlay.MODE -> MusicDialog("播放模式", dismiss) {
                 PlaybackMode.entries.forEach { mode -> TextButton((if (mode == queue.mode) "✓ " else "") + mode.label,
