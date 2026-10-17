@@ -9,6 +9,8 @@ import io.github.currencortex.music.core.update.*
 import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.feature.update.UpdatePageContent
 import io.github.currencortex.music.feature.update.UpdatePageHost
+import io.github.currencortex.music.feature.update.UpdateMenuInteractionKey
+import androidx.compose.ui.geometry.Offset
 import io.github.currencortex.music.data.update.UpdateSettings
 import io.github.currencortex.music.ui.theme.LeiTheme
 import java.io.File
@@ -181,6 +183,53 @@ class UpdatePageTest {
         compose.mainClock.advanceTimeBy(300)
         compose.onNodeWithTag("update_overflow_panel").assertDoesNotExist()
         compose.onNodeWithTag("update_download").assertIsDisplayed()
+    }
+
+    @Test fun menuDragTracksOneCapsuleAndOnlyRunsTheReleasedOption() {
+        var retries = 0
+        var releases = 0
+        compose.mainClock.autoAdvance = false
+        compose.setContent { TestTheme {
+            UpdatePageContent(UpdateState.Available(release), onRetry = { retries++ }, onOpenRelease = { releases++ })
+        } }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("update_menu").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(400)
+        val panel = compose.onNodeWithTag("update_overflow_panel")
+        fun point(index: Int): Offset = compose.onNodeWithTag("update_menu_action_$index")
+            .fetchSemanticsNode().boundsInRoot.center - panel.fetchSemanticsNode().boundsInRoot.topLeft
+        val first = point(0)
+        val third = point(2)
+        panel.performTouchInput { down(first) }
+        compose.mainClock.advanceTimeBy(100)
+        assertEquals(0, panel.fetchSemanticsNode().config[UpdateMenuInteractionKey].selected)
+        panel.performTouchInput { moveTo(third, delayMillis = 180) }
+        compose.mainClock.advanceTimeBy(300)
+        val drag = panel.fetchSemanticsNode().config[UpdateMenuInteractionKey]
+        assertEquals(2, drag.selected)
+        assertTrue("The capsule follows the selected row", drag.highlight.top > first.y)
+        assertTrue("The glass panel should respond subtly to the finger", drag.displacement.getDistance() > .1f)
+        compose.runOnIdle { assertEquals(0, retries); assertEquals(0, releases) }
+        capture("update-menu-drag-highlight.png")
+        panel.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(400)
+        compose.runOnIdle { assertEquals(1, retries); assertEquals(0, releases) }
+        panel.assertDoesNotExist()
+
+        compose.onNodeWithTag("update_menu").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(400)
+        val selected = point(3)
+        panel.performTouchInput { down(selected); moveTo(Offset(-60f, selected.y), delayMillis = 150); up() }
+        compose.mainClock.advanceTimeBy(400)
+        panel.assertIsDisplayed()
+        assertEquals(-1, panel.fetchSemanticsNode().config[UpdateMenuInteractionKey].selected)
+        compose.runOnIdle { assertEquals("Dragging outside must cancel the option", 0, releases) }
+
+        panel.performTouchInput { down(point(3)); cancel() }
+        compose.mainClock.advanceTimeBy(400)
+        panel.assertIsDisplayed()
+        assertEquals(-1, panel.fetchSemanticsNode().config[UpdateMenuInteractionKey].selected)
+        compose.runOnIdle { assertEquals("A cancelled gesture must not run the option", 0, releases) }
     }
 
     @Composable private fun TestTheme(content: @Composable () -> Unit) {
