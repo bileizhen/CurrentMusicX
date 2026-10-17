@@ -144,10 +144,15 @@ class UpdatePageTest {
         compose.onNodeWithTag("update_source").assertDoesNotExist()
         compose.onNodeWithTag("update_menu").performClick()
         compose.onNodeWithText("下载源").performClick()
+        compose.onNodeWithText(UpdateSource.GITHUB.label).assertIsSelected()
+        capture("update-source-sheet.png")
         compose.onNodeWithText(UpdateSource.DPIK.label).performClick()
         compose.runOnIdle { assertEquals(UpdateSource.DPIK, selected) }
         compose.onNodeWithTag("update_menu").performClick()
         compose.onNodeWithText("更新设置").performClick()
+        compose.onNode(hasText("正式版") and hasAnyAncestor(hasTestTag("update_options_sheet"))).assertIsSelected()
+        compose.onNodeWithContentDescription("关闭更新设置").assertIsDisplayed()
+        capture("update-settings-sheet.png")
         compose.onNodeWithText("预发布版").performClick()
         compose.runOnIdle { assertEquals(UpdateChannel.PRERELEASE, channel); state.value = UpdateTransferState() }
         compose.onNodeWithTag("update_menu").performClick()
