@@ -195,7 +195,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
                                 fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             UserRoleBadge(user.role)
                         }
-                        UserTitleBadge(user.title)
+                        UserIdentityDetails(user.title, user.ipRegion)
                         Text(if (state.loading && state.profile == null) "正在加载资料…" else user.bio.ifBlank { "还没有填写简介" }, fontSize = 13.sp, maxLines = 2,
                             color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
                         if (own) Row {

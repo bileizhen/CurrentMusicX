@@ -1,6 +1,7 @@
 package io.github.currencortex.music
 
 import androidx.compose.ui.test.*
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.core.network.ApiJson
@@ -30,7 +31,7 @@ class DiscoverSectionsTest {
     @Volatile private var failNextUserPage = true
     private val userRequests = ConcurrentLinkedQueue<Map<String, String>>()
     private lateinit var directory: io.github.currencortex.music.feature.profile.DiscoverViewModel
-    private val user = """{"id":7,"nickname":"Tester","title":"创作者"}"""
+    private val user = """{"id":7,"nickname":"Tester","title":"创作者","ip_region":"安徽","is_owner":1}"""
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
     private fun post(id: Int, content: String) = buildJsonObject {
         put("id", id); put("content", content); put("author", ApiJson.parseToJsonElement(user))
@@ -120,6 +121,30 @@ class DiscoverSectionsTest {
         compose.onNodeWithTag("discover_query").assertTextEquals("Tester")
         compose.onNodeWithText("音乐").performClick()
         compose.onNodeWithTag("discover_music").assertExists()
+    }
+    @Test fun titlesAndPublicRegionsAppearInUsersAndPostsAndMissingFieldsLeaveNoBadge() {
+        open(); compose.onNodeWithText("用户").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("discover_user_7").fetchSemanticsNodes().isNotEmpty() }
+        fun inUser(text: String) = compose.onNode(hasText(text) and hasAnyAncestor(hasTestTag("discover_user_7")), useUnmergedTree = true)
+        inUser("创作者").assertIsDisplayed()
+        inUser("IP属地：安徽").assertIsDisplayed()
+        inUser("站长").assertIsDisplayed()
+        compose.onNodeWithTag("discover_user_7").captureToImage().asAndroidBitmap().let { bitmap ->
+            val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+            java.io.File(context.getExternalFilesDir(null), "discover-user-labels.png").outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
+        compose.onNodeWithText("帖子").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasText("创作者") and hasAnyAncestor(hasTestTag("post_1")), useUnmergedTree = true).assertIsDisplayed()
+        compose.onNode(hasText("IP属地：安徽") and hasAnyAncestor(hasTestTag("post_1")), useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("用户").performClick()
+        pagingUsers = true
+        compose.runOnIdle { directory.refresh() }
+        compose.waitUntil(10_000) { directory.state.value.users.firstOrNull()?.nickname == "User 7" && !directory.state.value.loading }
+        compose.onNode(hasTestTag("user_title") and hasAnyAncestor(hasTestTag("discover_user_7")), useUnmergedTree = true).assertDoesNotExist()
+        compose.onNode(hasTestTag("user_ip_region") and hasAnyAncestor(hasTestTag("discover_user_7")), useUnmergedTree = true).assertDoesNotExist()
     }
     @Test fun postLikesCommentsPublishingAndConfirmedDeletionWorkAgainstTheFixture() {
         open(); compose.onNodeWithText("帖子").performClick()

@@ -74,7 +74,7 @@ private fun postTime(seconds: Long) = if (seconds <= 0) "" else
                                     fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 UserRoleBadge(post.author.role)
                             }
-                            UserTitleBadge(post.author.title)
+                            UserIdentityDetails(post.author.title, post.author.ipRegion)
                             Text(postTime(post.createdAt), fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .45f))
                         }
                     }
@@ -143,6 +143,7 @@ private fun postTime(seconds: Long) = if (seconds <= 0) "" else
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(comment.author.nickname, Modifier.clickable { vm.comments(null); navigate("user/profile/${comment.author.id}") },
                             fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        UserIdentityDetails(comment.author.title, comment.author.ipRegion)
                         Text(comment.content, fontSize = 14.sp)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(postTime(comment.createdAt), Modifier.weight(1f), fontSize = 11.sp,
