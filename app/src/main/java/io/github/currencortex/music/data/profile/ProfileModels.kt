@@ -8,8 +8,9 @@ import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.ExperimentalSerializationApi
 import io.github.currencortex.music.core.network.ApiBooleanSerializer
 
-enum class UserRole(val label: String) { ADMIN("管理员"), SUPER_ADMIN("超级管理员") }
-fun userRole(isAdmin: Boolean, isSuper: Boolean): UserRole? = when {
+enum class UserRole(val label: String) { ADMIN("管理员"), SUPER_ADMIN("超级管理员"), OWNER("站长") }
+fun userRole(isAdmin: Boolean, isSuper: Boolean, isOwner: Boolean = false): UserRole? = when {
+    isOwner -> UserRole.OWNER
     isSuper -> UserRole.SUPER_ADMIN
     isAdmin -> UserRole.ADMIN
     else -> null
@@ -25,8 +26,9 @@ fun userRole(isAdmin: Boolean, isSuper: Boolean): UserRole? = when {
     @SerialName("public_square") val legacyPublic: Boolean? = null,
     @JsonNames("is_admin") @Serializable(with = ApiBooleanSerializer::class) val isAdmin: Boolean = false,
     @JsonNames("is_super") @Serializable(with = ApiBooleanSerializer::class) val isSuper: Boolean = false,
-    val title: String = "") {
-    val role get() = userRole(isAdmin, isSuper)
+    val title: String = "", @JsonNames("ip_region") val ipRegion: String = "",
+    @JsonNames("is_owner") @Serializable(with = ApiBooleanSerializer::class) val isOwner: Boolean = false) {
+    val role get() = userRole(isAdmin, isSuper, isOwner)
     val decoration get() = avatarDecoration.ifBlank { legacyDecoration }
     val visible get() = publicSquare ?: public ?: legacyPublic
 }
@@ -38,10 +40,12 @@ fun userRole(isAdmin: Boolean, isSuper: Boolean): UserRole? = when {
     val likes: Int = 0, val playlists: Int = 0, val days: Int = 0, val listenMs: Long = 0, val current: SongDto? = null,
     @JsonNames("is_admin") @Serializable(with = ApiBooleanSerializer::class) val isAdmin: Boolean = false,
     @JsonNames("is_super") @Serializable(with = ApiBooleanSerializer::class) val isSuper: Boolean = false,
-    val title: String = "") {
-    val role get() = userRole(isAdmin, isSuper)
+    val title: String = "", @JsonNames("ip_region") val ipRegion: String = "",
+    @JsonNames("is_owner") @Serializable(with = ApiBooleanSerializer::class) val isOwner: Boolean = false) {
+    val role get() = userRole(isAdmin, isSuper, isOwner)
     fun profileUser() = ProfileUser(id = id, nickname = nickname, avatar = avatar, bio = bio,
-        avatarDecoration = avatarDecoration.ifBlank { legacyDecoration }, isAdmin = isAdmin, isSuper = isSuper, title = title)
+        avatarDecoration = avatarDecoration.ifBlank { legacyDecoration }, isAdmin = isAdmin, isSuper = isSuper,
+        title = title, ipRegion = ipRegion, isOwner = isOwner)
 }
 @Serializable data class SquareStats(val users: Int = 0, val listening: Int = 0)
 @Serializable data class SquareDto(val total: Int = 0, val users: List<SquareUser> = emptyList(), val stats: SquareStats = SquareStats())
