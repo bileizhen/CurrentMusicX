@@ -64,7 +64,7 @@ class SoundEffectIslandNoticeTest {
         compose.mainClock.advanceTimeBy(80)
         compose.runOnIdle { notice = completed }
         compose.mainClock.advanceTimeBy(700)
-        compose.onNodeWithText("点击安装", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("点击查看", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("SVIP 唱片", useUnmergedTree = true).assertIsNotDisplayed()
         val restored = bounds()
         assertEquals((initial.right - initial.left).value, (restored.right - restored.left).value, 1f)
@@ -83,15 +83,15 @@ class SoundEffectIslandNoticeTest {
             assertEquals(initial, compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot)
         }
         compose.runOnIdle { notice = notice.copy(name = "下载完成", phase = SoundEffectNoticePhase.READY) }
-        compose.onNodeWithText("点击安装", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("点击查看", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithContentDescription("CurrentMusic", useUnmergedTree = true).assertIsDisplayed()
         compose.onNodeWithTag("update_island_notice").performClick()
         compose.runOnIdle { assertEquals(1, installs) }
         val completed = compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot
         assertEquals(initial.height, completed.height, 1f)
-        assertTrue("Only completion reserves room for the install label", completed.width > initial.width)
+        assertTrue("Only completion reserves room for the view label", completed.width > initial.width)
         compose.runOnIdle { notice = notice.copy(name = "已取消下载", phase = SoundEffectNoticePhase.WAITING) }
-        compose.onNodeWithText("点击安装", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithText("点击查看", useUnmergedTree = true).assertDoesNotExist()
         val cancelled = compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot
         val title = compose.onNodeWithText("已取消下载", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         val density = ApplicationProvider.getApplicationContext<android.content.Context>().resources.displayMetrics.density

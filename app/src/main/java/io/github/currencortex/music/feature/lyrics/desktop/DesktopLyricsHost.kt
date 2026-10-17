@@ -313,7 +313,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                 try { window.updateViewLayout(target, p) } catch (_: RuntimeException) { removeIslandTouchWindow() }
             }
         }
-        islandTouchView?.contentDescription = if (effectNotices.value.isUpdateInstallNotice()) "CurrentMusic 更新下载完成，点击安装"
+        islandTouchView?.contentDescription = if (effectNotices.value.isUpdateInstallNotice()) "CurrentMusic 更新下载完成，点击查看"
             else "灵动岛：点击封面播放或暂停，点击歌词切换帧率，左右滑动切歌，未锁定时长按编辑"
     }
     private fun placement(area: DesktopSafeArea, width: Int, height: Int): DesktopPlacement {
