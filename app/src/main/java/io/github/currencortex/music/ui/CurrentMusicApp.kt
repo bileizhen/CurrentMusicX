@@ -150,7 +150,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val settings by container.settings.state.collectAsStateWithLifecycle()
     AppRefreshRateRequest(settings.refreshRate)
     val settingsVm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container.settings) })
-    val updateVm: UpdateSettingsViewModel = viewModel(factory = viewModelFactory { UpdateSettingsViewModel(container.updateSettings) })
     val announcementVm: io.github.currencortex.music.feature.announcement.AnnouncementViewModel =
         viewModel(factory = viewModelFactory { io.github.currencortex.music.feature.announcement.AnnouncementViewModel(container) })
     val announcementLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -429,7 +428,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                 DISCOVER_TAB -> DiscoverScreen(discoverVm, ::navigateLibrary)
                                 ME_TAB -> MeScreen(profileVm, authVm, ::navigateLibrary, { selectTab(SETTINGS_TAB) },
                                     play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
-                                SETTINGS_TAB -> SettingsScreen(updateViewModel = updateVm,
+                                SETTINGS_TAB -> SettingsScreen(
                                     onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
                                     onStorage = { navigateTo(STORAGE) },
                                     onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
@@ -456,7 +455,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 entry(SETTINGS.toString()) {
                     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                         TextButton("返回", onClick = ::navigateBack)
-                        Box(Modifier.weight(1f)) { SettingsScreen(updateViewModel = updateVm,
+                        Box(Modifier.weight(1f)) { SettingsScreen(
                             onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
                             onStorage = { navigateTo(STORAGE) },
                             onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
