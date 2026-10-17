@@ -64,7 +64,8 @@ import io.github.currencortex.music.core.media.SoundEffectNoticePhase
         }
         BasicText(notice.name, Modifier.weight(1f), style = TextStyle(color = Color.White,
             fontSize = font.sp, fontWeight = FontWeight.Medium), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
-        BasicText(if (downloading) notice.progress?.let { "$it%" } ?: "连接中" else if (ready) "待安装" else "",
+        BasicText(if (downloading) notice.progress?.let { "$it%" } ?: "连接中" else if (ready)
+            if (io.github.currencortex.music.BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE) "再下载" else "待安装" else "",
             Modifier.width(44.dp), style = TextStyle(color = tint, fontSize = (font - 1).sp,
                 fontFeatureSettings = "tnum", textAlign = TextAlign.End), maxLines = 1, softWrap = false)
     }
