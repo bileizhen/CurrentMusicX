@@ -8,6 +8,19 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NeteaseSongActionsRepositoryTest {
+    @Test fun importPinsTheDestinationAndStopsOnBusinessRateLimits() = runBlocking {
+        for (uid in listOf(8L, 7L)) MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"bound":true,"profile":{"uid":$uid}}"""))
+            if (uid == 7L) server.enqueue(MockResponse().setBody("""{"code":429}"""))
+            val owner = RequestSession(server.url("/cm/").toString(), "personal")
+            val repo = NeteaseSongActionsRepository(ApiClient({ owner.server }, { owner.token }, {})) { owner }
+            val result = appResult { repo.setLiked(11, true, owner, Song(11, "Track"), expectedUid = 7) }
+            assertEquals(if (uid == 7L) ErrorKind.RateLimited else ErrorKind.NeteaseSessionChanged,
+                (result as AppResult.Failure).kind)
+            assertEquals(if (uid == 7L) 2 else 1, server.requestCount)
+            assertTrue(repo.likedState.value.isEmpty())
+        }
+    }
     @Test fun delayedListsCannotUndoConfirmedRemovalAndOverridesAreScopedAndExpire()=runBlocking {
         MockWebServer().use { server ->
             var uid=7L; var clock=0L
