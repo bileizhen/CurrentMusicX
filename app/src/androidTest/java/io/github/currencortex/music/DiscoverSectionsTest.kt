@@ -30,6 +30,12 @@ class DiscoverSectionsTest {
     @Volatile private var failUsers = false
     @Volatile private var failNextUserPage = true
     private val userRequests = ConcurrentLinkedQueue<Map<String, String>>()
+    private val chatMessages = java.util.concurrent.ConcurrentHashMap<Long, JsonObject>()
+    private val chatEvents = ConcurrentLinkedQueue<JsonObject>()
+    private val chatSeq = java.util.concurrent.atomic.AtomicLong()
+    private val chatWrites = java.util.concurrent.atomic.AtomicInteger()
+    private val streamOpened = java.util.concurrent.atomic.AtomicBoolean()
+    @Volatile private var failChatSend = false
     private lateinit var directory: io.github.currencortex.music.feature.profile.DiscoverViewModel
     private val user = """{"id":7,"nickname":"Tester","title":"创作者","ip_region":"安徽","is_owner":1}"""
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
@@ -38,13 +44,62 @@ class DiscoverSectionsTest {
         put("likeCount", if (liked) 1 else 0); put("likedByMe", liked); put("commentCount", if (reply.isBlank()) 0 else 1)
         put("canDelete", true)
     }
+    private fun chatMessage(id: Long, content: String, uid: Long = 7) = buildJsonObject {
+        put("id", id); put("userId", uid); put("content", content); put("createdAt", 1_790_000_000)
+        put("user", if (uid == 7L) ApiJson.parseToJsonElement(user) else buildJsonObject {
+            put("id", uid); put("nickname", "Friend"); put("title", "听众")
+        })
+    }
+    private fun chatEvent(type: String, payload: JsonObject) = buildJsonObject {
+        put("seq", chatSeq.incrementAndGet()); put("type", type); put("payload", payload)
+    }.also { chatEvents.add(it) }
     @Before fun setup(): Unit = runBlocking {
         container = AppContainer(ApplicationProvider.getApplicationContext<CurrentMusicApplication>(), "discover-${UUID.randomUUID()}")
         container.ready.await(); container.sessionRestored.await(); container.desktopLyrics.markRecommendationSeen()
+        chatMessages[1] = chatMessage(1, "欢迎来到 Chat", 8)
+        chatMessages[2] = chatMessage(2, "自己的历史消息")
         server = MockWebServer().apply { dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
                 val path = request.requestUrl!!.encodedPath
                 return when {
+                    path == "/cm/chat/messages" && request.method == "GET" -> {
+                        val before = request.requestUrl!!.queryParameter("before")?.toLongOrNull() ?: Long.MAX_VALUE
+                        json(buildJsonObject { put("messages", JsonArray(chatMessages.values.filter { it["id"]!!.jsonPrimitive.long < before }
+                            .sortedBy { it["id"]!!.jsonPrimitive.long }.takeLast(30))) }.toString())
+                    }
+                    path == "/cm/chat/messages" && request.method == "POST" -> {
+                        chatWrites.incrementAndGet()
+                        assertEquals("Bearer isolated-token", request.getHeader("Authorization"))
+                        if (failChatSend) MockResponse().setResponseCode(502) else {
+                            val content = ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject["content"]!!.jsonPrimitive.content
+                            val id = 10L + chatWrites.get()
+                            val message = chatMessage(id, content)
+                            chatMessages[id] = message; chatEvent("message", message)
+                            json(message.toString())
+                        }
+                    }
+                    path.startsWith("/cm/chat/messages/") && request.method == "DELETE" -> {
+                        val id = path.substringAfterLast('/').toLong()
+                        chatMessages.remove(id); chatEvent("delete", buildJsonObject { put("id", id) }); json("{}")
+                    }
+                    path == "/cm/chat/members" -> json("""{"members":[$user,{"id":8,"nickname":"Friend"}]}""")
+                    path == "/cm/chat/live" -> {
+                        val since = request.requestUrl!!.queryParameter("since")?.toLongOrNull() ?: 0
+                        json(buildJsonObject {
+                            put("events", JsonArray(chatEvents.filter { it["seq"]!!.jsonPrimitive.long > since }))
+                            put("latestSeq", chatSeq.get())
+                        }.toString())
+                    }
+                    path == "/cm/live/chat" -> {
+                        if (streamOpened.compareAndSet(false, true)) {
+                            val message = chatMessage(3, "来自实时连接的消息", 8)
+                            chatMessages[3] = message
+                            val event = chatEvent("message", message)
+                            MockResponse().setHeader("Content-Type", "text/event-stream")
+                                .setBody("event: message\ndata: $event\n\n")
+                                .setBodyDelay(200, java.util.concurrent.TimeUnit.MILLISECONDS)
+                        } else MockResponse().setHeader("Content-Type", "text/event-stream").setBody(": ping\n\n")
+                    }
                     path == "/cm/auth/me" -> json(user)
                     path == "/cm/users/square" -> {
                         val query = request.requestUrl!!
@@ -108,6 +163,32 @@ class DiscoverSectionsTest {
         compose.waitUntil(15_000) { compose.onAllNodesWithText("首页").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("发现").performClick()
         compose.onNodeWithTag("discover_music").assertExists()
+    }
+    @Test fun chatSupportsLiveMessagesMentionsExplicitRetryAndOwnMessageDeletion() {
+        open(); compose.onNodeWithText("Chat").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat_message_3").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("chat_input").performTextInput("你好 Chat")
+        compose.onNodeWithTag("chat_send").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat_message_11").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(1, chatWrites.get())
+        compose.onNodeWithTag("chat_members").performClick()
+        compose.onNodeWithTag("chat_mention_8").performClick()
+        compose.onNodeWithTag("chat_input").assertTextEquals("@Friend ")
+        compose.onNodeWithTag("chat_input").performTextReplacement("失败时保留草稿")
+        failChatSend = true
+        compose.onNodeWithTag("chat_send").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("服务器异常，草稿已保留，请确认后重试").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("chat_input").assertTextEquals("失败时保留草稿")
+        assertEquals(2, chatWrites.get())
+        failChatSend = false
+        compose.onNodeWithTag("chat_send").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat_message_13").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("chat_menu_13").performClick()
+        compose.onNodeWithTag("chat_delete").performClick()
+        assertTrue(chatMessages.containsKey(13))
+        compose.onNodeWithTag("chat_confirm_delete").performClick()
+        compose.waitUntil(10_000) { !chatMessages.containsKey(13) && compose.onAllNodesWithTag("chat_message_13").fetchSemanticsNodes().isEmpty() }
+        assertEquals(3, chatWrites.get())
     }
     @Test fun tabsSeparateMusicUsersAndPostsAndKeepUserSearchWhenReturning() {
         open()
