@@ -34,6 +34,8 @@ import io.github.currencortex.music.core.media.SoundEffectNoticePhase
     val ready = notice.phase == SoundEffectNoticePhase.READY
     val tint = if (failed) Color(0xFFFF9B91) else Color(0xFF8DBFFF)
     val shape = RoundedCornerShape(50)
+    val iconSize = 23.dp.coerceAtMost(height)
+    val iconInset = (height - iconSize) / 2
     Row(modifier.width(216.dp).height(height).then(if (material) Modifier.clip(shape)
         .background(Color(0xFF11141B)).border(.8.dp, Color.White.copy(alpha = .2f), shape) else Modifier)
         .semantics(mergeDescendants = true) {
@@ -41,9 +43,9 @@ import io.github.currencortex.music.core.media.SoundEffectNoticePhase
             if (downloading) progressBarRangeInfo = notice.progress?.let { ProgressBarRangeInfo(it / 100f, 0f..1f) }
                 ?: ProgressBarRangeInfo.Indeterminate
             else liveRegion = LiveRegionMode.Polite
-        }.testTag("update_island_notice").padding(horizontal = 12.dp),
+        }.testTag("update_island_notice").padding(start = iconInset, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
-        Canvas(Modifier.size(23.dp)) {
+        Canvas(Modifier.size(iconSize)) {
             val stroke = 1.8.dp.toPx()
             if (downloading) {
                 drawCircle(tint.copy(alpha = .22f), style = Stroke(stroke))
