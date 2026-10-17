@@ -27,6 +27,9 @@ class PlayerCommentsTest {
     private val posted = CopyOnWriteArrayList<JsonObject>()
     @Volatile private var failure = false
     @Volatile private var slow = false
+    @Volatile private var richComments = false
+    @Volatile private var readFailure = false
+    private val longComment = "这是值得反复听的一首歌。\n".repeat(18)
     @Before fun setup(): Unit = runBlocking {
         server = MockWebServer()
         server.dispatcher = object : Dispatcher() {
@@ -39,7 +42,20 @@ class PlayerCommentsTest {
                         if (failure) return MockResponse().setResponseCode(502)
                         return MockResponse().setBody("""{"code":200}""").apply { if (slow) setBodyDelay(600, TimeUnit.MILLISECONDS) }
                     }
-                    "/cm/ncm/comment/music" -> """{"code":200,"total":1,"comments":[{"commentId":1,"content":"原评论","user":{"nickname":"听友"}}]}"""
+                    "/cm/ncm/comment/music" -> {
+                        if (readFailure) return MockResponse().setResponseCode(503)
+                        if (richComments) buildJsonObject {
+                            put("code", 200); put("total", 2)
+                            putJsonArray("hotComments") { addJsonObject { put("commentId", 1); put("content", "原评论") } }
+                            putJsonArray("comments") { addJsonObject {
+                                put("commentId", 2); put("content", longComment); put("time", 1729044000000); put("likedCount", 125)
+                                putJsonObject("user") { put("nickname", "认真听歌的听友") }
+                                putJsonArray("beReplied") { addJsonObject {
+                                    put("content", "被回复的内容"); putJsonObject("user") { put("nickname", "另一位听友") }
+                                } }
+                            } }
+                        }.toString() else """{"code":200,"total":1,"comments":[{"commentId":1,"content":"原评论","user":{"nickname":"听友"}}]}"""
+                    }
                     "/cm/ncmbind/likelist" -> """{"ids":[]}"""
                     "/cm/daily" -> "{}"
                     "/cm/playlists" -> """{"playlists":[]}"""
@@ -110,5 +126,40 @@ class PlayerCommentsTest {
         assertEquals("", vm.commentComposer.value.draft)
         assertNull(vm.commentComposer.value.message)
         assertFalse(vm.commentComposer.value.sending)
+    }
+    @Test fun tabsExpandLongCommentsAndReplyWithoutLosingDraft() {
+        richComments = true
+        compose.onNodeWithTag("refresh_comments").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("comments_latest").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("comments_hot").assertIsSelected()
+        compose.onNodeWithTag("comments_latest").performClick()
+        compose.onNodeWithText("认真听歌的听友").assertIsDisplayed()
+        compose.onNodeWithTag("expand_comment_2").performScrollTo().performClick()
+        compose.onNodeWithTag("expand_comment_2").assertTextEquals("收起").performClick()
+        compose.onNodeWithText("另一位听友：被回复的内容").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("reply_comment_2").performScrollTo().performClick()
+        compose.onNodeWithTag("player_comment_draft").assertIsFocused().performTextInput("保留这条回复草稿")
+        compose.onNodeWithTag("cancel_comment_reply").performClick()
+        compose.onNodeWithTag("player_comment_draft").assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("保留这条回复草稿")))
+        compose.onNodeWithTag("close_comments").performClick()
+        compose.onNodeWithTag("player_comments").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("player_comment_draft").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("player_comment_draft").assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("保留这条回复草稿")))
+        assertTrue(posted.isEmpty())
+    }
+    @Test fun refreshFailureKeepsLoadedCommentsAndDraft() {
+        compose.onNodeWithTag("player_comment_draft").performTextInput("还没写完")
+        readFailure = true
+        compose.onNodeWithTag("refresh_comments").performClick()
+        compose.waitUntil(5000) { vm.comments.value.error != null }
+        compose.onNodeWithText("原评论").assertExists()
+        assertEquals("还没写完", vm.commentComposer.value.draft)
+        readFailure = false
+        compose.onNodeWithTag("retry_comments").performScrollTo().performClick()
+        compose.waitUntil(5000) { !vm.comments.value.loading && vm.comments.value.error == null }
+        assertEquals("还没写完", vm.commentComposer.value.draft)
+        assertTrue(posted.isEmpty())
     }
 }
