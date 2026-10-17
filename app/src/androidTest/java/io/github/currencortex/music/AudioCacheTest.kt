@@ -70,6 +70,7 @@ class AudioCacheTest {
         val source = source()
         cache.rememberSource(key, source)
         cache.preload(key, source, 64 * 1024L)
+        assertEquals(1, cache.entries.value)
         assertEquals(64 * 1024L, cache.cachedBytes(key, payload.size.toLong()))
         assertArrayEquals(payload.copyOfRange(0, 64 * 1024), read(key, source("/one?signature=new"), length = 64 * 1024L))
         assertEquals(1, requests)
@@ -109,6 +110,36 @@ class AudioCacheTest {
         assertTrue(resolver.resolve(request).source.url.startsWith("cache://audio/"))
         session = RequestSession(session.server, "different-account-token")
         try { resolver.resolve(request); fail("Stale session must not resolve") } catch (e: ApiException) { assertEquals(ErrorKind.Unauthorized, e.kind) }
+    }
+    @Test fun uncachedMediaDoesNotOpenOrScanTheMusicCache(): Unit = runBlocking(Dispatchers.IO) {
+        assertFalse(directory.exists())
+        assertArrayEquals(payload, read(null, source()))
+        assertFalse("Uncached MV/room media must not initialize or scan the audio library", directory.exists())
+    }
+    @Test fun highRatePcmGetsTwentySecondsOfBufferBeforeByteLimitsStopLoading(): Unit = runBlocking(Dispatchers.IO) {
+        val frames = 192000 * 30
+        payload = java.nio.ByteBuffer.allocate(44 + frames * 4).order(java.nio.ByteOrder.LITTLE_ENDIAN).apply {
+            put("RIFF".toByteArray()); putInt(36 + frames * 4); put("WAVEfmt ".toByteArray()); putInt(16)
+            putShort(1); putShort(2); putInt(192000); putInt(192000 * 4); putShort(4); putShort(16)
+            put("data".toByteArray()); putInt(frames * 4)
+        }.array()
+        val source = source("/high-rate.wav").copy(format = "wav", sampleRate = 192000, channelCount = 2)
+        cache.rememberSource(key, source)
+        val player = withContext(Dispatchers.Main) {
+            androidx.media3.exoplayer.ExoPlayer.Builder(context).setLoadControl(playbackLoadControl())
+                .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(cache.dataSourceFactory)).build().apply {
+                    setMediaItem(MediaItemFactory.create(io.github.currencortex.music.data.song.Song(1, "Silent high-rate fixture"), source.url, key))
+                    playWhenReady = false; prepare()
+                }
+        }
+        try {
+            withTimeout(20_000) { while (withContext(Dispatchers.Main) { player.bufferedPosition < 20_000 && player.playerError == null }) delay(50) }
+            withContext(Dispatchers.Main) {
+                assertNull(player.playerError)
+                assertTrue(player.bufferedPosition >= 20_000)
+                assertFalse(player.isPlaying)
+            }
+        } finally { withContext(Dispatchers.Main) { player.release() } }
     }
     @Test fun returningToFullyCachedSongAfterUrlExpirySkipsSourceAndCdnRequests() = runBlocking(Dispatchers.IO) {
         val session = RequestSession("https://fixture/cm", "fixture-token")

@@ -33,6 +33,9 @@ class AudioCache(context: Context, directory: File,
     private val upstream = OkHttpDataSource.Factory(client)
     private val writers = ConcurrentHashMap.newKeySet<CacheWriter>()
     private val writeLock = Mutex()
+    private val usageLock = Any()
+    private var usageInitialized = false
+    private val cachedKeys = mutableSetOf<String>()
     val bytes = MutableStateFlow(0L)
     /** Cached track count, for the storage page. */
     val entries = MutableStateFlow(0)
@@ -64,14 +67,22 @@ class AudioCache(context: Context, directory: File,
         override fun getResponseHeaders(): Map<String, List<String>> = delegate?.responseHeaders.orEmpty()
         override fun close() { try { delegate?.close() } finally {
             delegate = null
-            activeKey?.let { runCatching { forgetRedirect(it) } }; activeKey = null
-            runCatching { refreshUsage() }
+            activeKey?.let { key -> runCatching { forgetRedirect(key); updateUsage(key) } }; activeKey = null
         } }
     } }
 
-    fun refreshUsage() {
+    fun refreshUsage() = synchronized(usageLock) {
+        cachedKeys.clear()
+        cache.keys.filterTo(cachedKeys) { cache.getCachedSpans(it).any { span -> span.length > 0 } }
+        usageInitialized = true
         bytes.value = cache.cacheSpace
-        entries.value = cache.keys.count { cache.getCachedSpans(it).any { span -> span.length > 0 } }
+        entries.value = cachedKeys.size
+    }
+    private fun updateUsage(key: String) = synchronized(usageLock) {
+        if (!usageInitialized) refreshUsage()
+        if (cache.getCachedSpans(key).any { it.length > 0 }) cachedKeys.add(key) else cachedKeys.remove(key)
+        bytes.value = cache.cacheSpace
+        entries.value = cachedKeys.size
     }
     fun cachedSource(key: String): AudioSource? = runCatching {
         cache.getContentMetadata(key).get(SOURCE, "")?.takeIf { it.isNotBlank() }?.let { ApiJson.decodeFromString<AudioSource>(it) }
@@ -83,7 +94,7 @@ class AudioCache(context: Context, directory: File,
         val metadata = ContentMetadataMutations().set(SOURCE, ApiJson.encodeToString(source.copy(url = "cache://audio/${key.substringAfter(PREFIX)}")))
         ContentMetadataMutations.setRedirectedUri(metadata, null)
         cache.applyContentMetadataMutations(key, metadata)
-        refreshUsage()
+        updateUsage(key)
     }
     fun completeSource(key: String): AudioSource? = runCatching {
         val length = ContentMetadata.getContentLength(cache.getContentMetadata(key))
@@ -91,6 +102,7 @@ class AudioCache(context: Context, directory: File,
     }.getOrNull()
     fun cachedBytes(key: String, length: Long): Long = cache.getCachedBytes(key, 0, length)
     private fun forgetRedirect(key: String) {
+        if (ContentMetadata.getRedirectedUri(cache.getContentMetadata(key)) == null) return
         val metadata = ContentMetadataMutations()
         ContentMetadataMutations.setRedirectedUri(metadata, null)
         cache.applyContentMetadataMutations(key, metadata)
@@ -118,7 +130,7 @@ class AudioCache(context: Context, directory: File,
                         withContext(NonCancellable) { task.join() }
                     }
                 }
-            } finally { writers -= writer; runCatching { forgetRedirect(key) }; refreshUsage() }
+            } finally { writers -= writer; runCatching { forgetRedirect(key) }; updateUsage(key) }
         }
     }
     suspend fun clear() {

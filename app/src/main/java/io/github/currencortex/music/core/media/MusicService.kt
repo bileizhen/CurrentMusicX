@@ -158,16 +158,21 @@ class MusicService : MediaSessionService() {
         }
         scope.launch { container.playbackQueue.state.collectLatest { persistQueue() } }
         scope.launch {
+            val preloadBudget = AudioPreloadBudget()
             combine(container.playbackQueue.state, container.musicSettings.state, container.accountRepository.state) { _, settings, account ->
                 settings to account.account
             }.combine(container.audioSettings.state) { data, _ -> data }
             .combine(container.neteaseSessions.state) { data, _ -> data }
             .combine(container.navidrome.state) { data, _ -> data }
             .combine(container.playerController.state) { (settings, account), state ->
-                val next = if (settings.preloadAudio && (account != null || container.nativeNetease != null || container.navidrome.state.value.configured) && state.mode == PlayerMode.LOCAL && state.playing &&
+                val next = if (settings.preloadAudio && state.song?.video != true && (account != null || container.nativeNetease != null || container.navidrome.state.value.configured) && state.mode == PlayerMode.LOCAL && state.playing &&
                     !state.loading && !state.resolving &&
                     player.currentMediaItem?.mediaId == container.playbackQueue.state.value.current?.id?.toString()) container.playbackQueue.previewNext() else null
-                next?.let { PreloadPlan(audioRequest(it, settings.quality), settings.preloadMetered) }
+                if (next == null) { preloadBudget.reset(); null } else {
+                    val request = audioRequest(next, settings.quality)
+                    if (preloadBudget.allow("${state.song?.id}:${request.key}", state.positionMs, state.bufferedPositionMs, state.durationMs))
+                        PreloadPlan(request, settings.preloadMetered) else null
+                }
             }.combine(readyForPreload) { plan, ready -> plan.takeIf { ready } }
                 .combine(preloadNetwork(this@MusicService)) { plan, network -> plan.takeIf { network == 2 || network == 1 && it?.metered == true } }
                 .combine(container.audioCache.clearing) { plan, clearing -> plan.takeUnless { clearing } }
@@ -211,6 +216,7 @@ class MusicService : MediaSessionService() {
                         acknowledgeOriginalProcessing(processedPreset)
                 }
             } }))
+            .setLoadControl(playbackLoadControl())
             .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory)).build().apply {
                 setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
                 setHandleAudioBecomingNoisy(true)
