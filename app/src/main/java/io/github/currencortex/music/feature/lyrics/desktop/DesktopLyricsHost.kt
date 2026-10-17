@@ -58,6 +58,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private var islandTop: Int? = null
     private var coverBounds = androidx.compose.ui.geometry.Rect.Zero
     private var systemVisible = true
+    private var requestedVisible: Boolean? = null
     private var owner: WindowOwner? = null
     private var params: WindowManager.LayoutParams? = null
     private var closed = false
@@ -322,14 +323,49 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         return desktopIslandPlacement(screen, width, height, current.islandY, (screen.left + screen.right) / 2)
     }
     private fun visibility() {
-        val screenHidden = screenHidden()
-        val visible = view != null && systemVisible && !screenHidden
-        // A system-hidden window must retain VISIBLE on its own view, otherwise the
-        // app's GONE state would prevent WindowManager from making it visible again.
-        view?.visibility = if (screenHidden) View.GONE else View.VISIBLE
-        owner?.lifecycleRegistry?.currentState = if (visible) Lifecycle.State.STARTED else Lifecycle.State.CREATED
+        val root = view ?: return
+        val hardHidden = !power.isInteractive || keyguard.isKeyguardLocked || settingsVisible.value
+        val pageConcealed = appForeground.value && pageHidden.value
+        val visible = systemVisible && !hardHidden && !pageConcealed
+        if (!visible) removeIslandTouchWindow()
         status.value = status.value.copy(visible = visible)
+        // Remove the touch window at the start of a fade, before any pixels disappear.
         updateIslandTouchWindow()
+        if (hardHidden || !systemVisible) {
+            root.animate().cancel(); requestedVisible = visible
+            // System-hidden windows keep their own view visible so WindowManager can restore them.
+            root.visibility = if (hardHidden || pageConcealed) View.GONE else View.VISIBLE
+            root.alpha = 1f; root.scaleX = 1f; root.scaleY = 1f; root.translationY = 0f
+            owner?.lifecycleRegistry?.currentState = Lifecycle.State.CREATED
+            status.value = status.value.copy(visibilityAnimating = false)
+            return
+        }
+        if (requestedVisible == visible) return
+        requestedVisible = visible
+        root.animate().cancel()
+        root.pivotX = root.width / 2f
+        root.pivotY = (composition?.top ?: 0) + (islandTop ?: 0) + islandSize.height / 2f
+        if (visible && root.visibility != View.VISIBLE) {
+            root.alpha = 0f; root.scaleX = .94f; root.scaleY = .94f
+            root.translationY = -4f * visual.resources.displayMetrics.density
+        }
+        root.visibility = View.VISIBLE
+        owner?.lifecycleRegistry?.currentState = Lifecycle.State.STARTED
+        status.value = status.value.copy(visibilityAnimating = true)
+        root.animate().alpha(if (visible) 1f else 0f)
+            .scaleX(if (visible) 1f else .94f).scaleY(if (visible) 1f else .94f)
+            .translationY(if (visible) 0f else -4f * visual.resources.displayMetrics.density)
+            .setDuration(if (visible) 220L else 180L)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .withEndAction {
+                if (view === root && requestedVisible == visible) {
+                    if (!visible && screenHidden()) {
+                        root.visibility = View.GONE
+                        owner?.lifecycleRegistry?.currentState = Lifecycle.State.CREATED
+                    }
+                    status.value = status.value.copy(visibilityAnimating = false)
+                }
+            }.start()
     }
     private fun screenHidden() = !power.isInteractive || keyguard.isKeyguardLocked || settingsVisible.value ||
         (appForeground.value && pageHidden.value)
@@ -352,7 +388,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private fun remove() {
         removeIslandTouchWindow(); islandSize = androidx.compose.ui.unit.IntSize.Zero; islandTop = null; coverBounds = androidx.compose.ui.geometry.Rect.Zero; islandTapRequest.intValue = 0
         val v = view
-        view = null; params = null; noticeKey = null; editing = true
+        v?.animate()?.cancel()
+        view = null; params = null; noticeKey = null; editing = true; requestedVisible = null
         if (v != null) runCatching { window.removeViewImmediate(v) }
         composition?.disposeComposition(); composition = null; systemVisible = true
         owner?.lifecycleRegistry?.currentState = Lifecycle.State.DESTROYED; owner = null
