@@ -186,7 +186,7 @@ internal val UpdateMenuWavesKey = SemanticsPropertyKey<UpdateMenuWaves>("UpdateM
                 if (lastHighlight.width > 0f) drawRoundRect(Color.White.copy(alpha = .17f * highlightAlpha),
                     topLeft = Offset(inset, highlightTop),
                     size = androidx.compose.ui.geometry.Size((size.width - inset * 2).coerceAtLeast(0f), highlightHeight),
-                    cornerRadius = CornerRadius(18.dp.toPx()))
+                    cornerRadius = CornerRadius(highlightHeight.coerceAtLeast(0f) / 2f))
             }
             .onGloballyPositioned { panelCoordinates = it }
             .pointerInput(open) {
