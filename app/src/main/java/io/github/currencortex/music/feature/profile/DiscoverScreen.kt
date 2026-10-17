@@ -18,13 +18,14 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
 
 @Composable fun DiscoverScreen(vm: DiscoverViewModel, navigate: (String) -> Unit) {
-    val pager = rememberPagerState { 3 }
+    val pager = rememberPagerState { 4 }
     val scope = rememberCoroutineScope()
     val posts: PostsViewModel = viewModel(factory = viewModelFactory { PostsViewModel(vm.container) })
+    val chat: ChatViewModel = viewModel(factory = viewModelFactory { ChatViewModel(vm.container) })
     LaunchedEffect(pager.settledPage) { if (pager.settledPage == 2) posts.ensureLoaded() }
     Column(Modifier.fillMaxSize().testTag("discover_screen")) {
         Text("发现", Modifier.padding(start = 20.dp, top = 20.dp, bottom = 14.dp), fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
-        TabRow(listOf("音乐", "用户", "帖子"), pager.targetPage,
+        TabRow(listOf("音乐", "用户", "帖子", "Chat"), pager.targetPage,
             onTabSelected = { index -> scope.launch { pager.animateScrollToPage(index) } },
             modifier = Modifier.padding(horizontal = 20.dp).testTag("discover_tabs"), height = 44.dp)
         Spacer(Modifier.height(12.dp))
@@ -33,6 +34,7 @@ import top.yukonga.miuix.kmp.basic.*
                 0 -> DiscoverMusicPage(vm, navigate)
                 1 -> DiscoverUsersPage(vm, navigate, pager.settledPage == 1)
                 2 -> PostsScreen(posts, navigate)
+                3 -> ChatScreen(chat, navigate, pager.settledPage == 3 && LocalMusicPageActive.current)
             }
         }
     }
