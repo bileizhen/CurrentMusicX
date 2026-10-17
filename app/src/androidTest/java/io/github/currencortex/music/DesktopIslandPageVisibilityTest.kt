@@ -43,7 +43,16 @@ class DesktopIslandPageVisibilityTest {
                 host = DesktopLyricsHost(context, MutableStateFlow(PlaybackLyricsState()), MutableStateFlow(PlayerState()),
                     container.desktopLyrics, container.desktopLyricsStatus, appForeground = foreground, pageHidden = hidden)
             }
-            await { container.desktopLyricsStatus.value.visible && container.desktopLyricsStatus.value.islandTouchable }
+            await { container.desktopLyricsStatus.value.visible && container.desktopLyricsStatus.value.islandTouchable &&
+                !container.desktopLyricsStatus.value.visibilityAnimating }
+            hidden.value = true
+            await { !container.desktopLyricsStatus.value.visible }
+            assertFalse(container.desktopLyricsStatus.value.islandTouchable)
+            if (Settings.Global.getFloat(context.contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) > 0f)
+                assertTrue("Page hide must fade before the visual window disappears", container.desktopLyricsStatus.value.visibilityAnimating)
+            await { !container.desktopLyricsStatus.value.visibilityAnimating }
+            hidden.value = false
+            await { container.desktopLyricsStatus.value.visible && !container.desktopLyricsStatus.value.visibilityAnimating }
             repeat(3) {
                 hidden.value = true
                 await { !container.desktopLyricsStatus.value.visible && !container.desktopLyricsStatus.value.islandTouchable }
@@ -59,7 +68,8 @@ class DesktopIslandPageVisibilityTest {
             foreground.value = true
             await { !container.desktopLyricsStatus.value.visible && !container.desktopLyricsStatus.value.islandTouchable }
             hidden.value = false
-            await { container.desktopLyricsStatus.value.visible && container.desktopLyricsStatus.value.islandTouchable }
+            await { container.desktopLyricsStatus.value.visible && container.desktopLyricsStatus.value.islandTouchable &&
+                !container.desktopLyricsStatus.value.visibilityAnimating }
         } finally { withContext(Dispatchers.Main) { host?.close() }; container.close() }
     }
 }
