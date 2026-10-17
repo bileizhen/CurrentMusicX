@@ -199,7 +199,8 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                             transitionSpec = { fadeIn(tween(300, delayMillis = 90)) togetherWith fadeOut(tween(180)) },
                             contentAlignment = Alignment.TopStart) { showDetails ->
                         if (showDetails) {
-                            Column(Modifier.fillMaxSize().verticalScroll(notesScroll).testTag("update_message"),
+                            Column(Modifier.fillMaxSize().updateNotesEdges(notesScroll)
+                                .verticalScroll(notesScroll).testTag("update_message"),
                                 verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                 Text("软件版本", fontSize = 16.sp, color = pageWhite, fontWeight = FontWeight.Medium)
                                 Text("CurrentMusic ${release?.version ?: BuildConfig.VERSION_NAME}" +
