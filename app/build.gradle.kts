@@ -19,6 +19,12 @@ val keystoreProperties = rootProject.file("keystore.properties").takeIf { it.isF
 // The opt-out is retained only for import-path interoperability tests.
 val originalEffectsBundled = providers.gradleProperty("neteaseOriginalEffects").orNull != "false"
 val updateDownloadExperience = providers.gradleProperty("updateDownloadExperience").orNull == "true"
+val updateAnimationPreviewVersion = providers.gradleProperty("updateAnimationPreviewVersion").orNull.orEmpty()
+require(updateAnimationPreviewVersion.isEmpty() ||
+    (providers.gradleProperty("isolatedDebug").orNull == "true" &&
+        updateAnimationPreviewVersion.matches(Regex("[0-9]+\\.[0-9]+\\.[0-9]+")))) {
+    "Version animation preview requires isolatedDebug and a numeric version"
+}
 require(!updateDownloadExperience || providers.gradleProperty("isolatedDebug").orNull == "true") {
     "Download experience requires the isolated debug package"
 }
@@ -47,6 +53,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "NETEASE_ORIGINAL_EFFECTS", originalEffectsBundled.toString())
         buildConfigField("boolean", "UPDATE_DOWNLOAD_EXPERIENCE", "false")
+        buildConfigField("String", "UPDATE_ANIMATION_PREVIEW_VERSION", "\"\"")
         manifestPlaceholders["appLabel"] = "@string/app_name"
     }
 
@@ -83,6 +90,7 @@ android {
     }
     buildTypes {
         getByName("debug") {
+            buildConfigField("String", "UPDATE_ANIMATION_PREVIEW_VERSION", "\"$updateAnimationPreviewVersion\"")
             // Keep instrumentation separate from the user's signed release installation.
             if (providers.gradleProperty("isolatedDebug").orNull == "true") applicationIdSuffix = ".verification"
             if (updateDownloadExperience) {

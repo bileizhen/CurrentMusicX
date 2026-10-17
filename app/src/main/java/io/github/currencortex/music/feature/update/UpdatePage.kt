@@ -85,7 +85,8 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
         UpdatePageContent(if (showResult) state else UpdateState.Checking,
             if (showResult) transferState else UpdateTransferState(), notes, onDismiss, onRetry, onIgnore, onOpenRelease,
             onDownload, onInstall, onCancel, onChangeSource, downloadExperience, settings, onAutoCheck, onChannel,
-            cover = cover, backgroundActive = visible)
+            cover = cover, backgroundActive = visible,
+            versionPreview = if (showResult) BuildConfig.UPDATE_ANIMATION_PREVIEW_VERSION else "")
     }
 }
 
@@ -97,11 +98,17 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     onDownload: (UpdateSource) -> Unit = {}, onInstall: () -> Unit = {}, onCancel: () -> Unit = {},
     onChangeSource: (UpdateSource) -> Unit = {}, downloadExperience: Boolean = false,
     settings: UpdateSettings = UpdateSettings(), onAutoCheck: (Boolean) -> Unit = {},
-    onChannel: (UpdateChannel) -> Unit = {}, cover: String = "", backgroundActive: Boolean = true) {
+    onChannel: (UpdateChannel) -> Unit = {}, cover: String = "", backgroundActive: Boolean = true,
+    versionPreview: String = "") {
     val release = (state as? UpdateState.Available)?.release
     val installedVersion = BuildConfig.VERSION_NAME.substringBefore('-')
     var heroVersion by remember { mutableStateOf(installedVersion) }
-    LaunchedEffect(state) {
+    LaunchedEffect(state, versionPreview) {
+        // Isolated visual preview only; release/download metadata continues to identify the real APK.
+        if (versionPreview.isNotBlank()) {
+            heroVersion = versionPreview
+            return@LaunchedEffect
+        }
         when (state) {
             is UpdateState.Available -> heroVersion = state.release.version
             UpdateState.UpToDate -> heroVersion = installedVersion
