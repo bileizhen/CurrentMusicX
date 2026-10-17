@@ -17,6 +17,7 @@ import io.github.currencortex.music.MainActivity
 import io.github.currencortex.music.R
 import io.github.currencortex.music.core.media.MusicService
 import io.github.currencortex.music.core.media.PlayerState
+import io.github.currencortex.music.core.media.isUpdateInstallNotice
 import io.github.currencortex.music.feature.lyrics.data.PlaybackLyricsState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -36,7 +37,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private val changeSong: (Int) -> Unit = {}, private val togglePlayback: () -> Unit = {},
     private val appearance: StateFlow<AppearanceSettings> = MutableStateFlow(AppearanceSettings()),
     private val appForeground: StateFlow<Boolean> = MutableStateFlow(false),
-    private val effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = MutableStateFlow(null)) : AutoCloseable {
+    private val effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = MutableStateFlow(null),
+    private val installUpdate: () -> Unit = {}) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val visual = if (Build.VERSION.SDK_INT >= 30) context.createDisplayContext(context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
         .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null) else context
@@ -93,7 +95,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         scope.launch { preferences.ready.await(); combine(preferences.state, settingsVisible) { settings, _ -> settings }
             .collect { current = it; reconcile() } }
         scope.launch { appearance.map { it.refreshRate }.distinctUntilChanged().collect { refreshRate = it; updateWindow() } }
-        scope.launch { effectNotices.map { it != null }.distinctUntilChanged().collectLatest { showing ->
+        scope.launch { effectNotices.map { it != null && !it.isUpdateInstallNotice() }.distinctUntilChanged().collectLatest { showing ->
             effectTransitioning = true
             removeIslandTouchWindow()
             // No input-window resize transactions while the visual capsule morphs.
@@ -135,7 +137,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                 val config by appearance.collectAsState()
                 Box(Modifier.musicRefreshRate(config.refreshRate), propagateMinConstraints = true) {
                 val inApp by appForeground.collectAsState()
-                DesktopLyricsSurface(lyrics, playback, preferences.state, effectNotices = effectNotices, lock = { scope.launch { preferences.edit { it.copy(locked = true) } } },
+                DesktopLyricsSurface(lyrics, playback, preferences.state, effectNotices = effectNotices, installUpdate = installUpdate,
+                lock = { scope.launch { preferences.edit { it.copy(locked = true) } } },
                 close = { scope.launch { preferences.edit { it.copy(enabled = false) } } }, settings = {
                     context.startActivity(settingsIntent(context))
                 }, maxIslandWidth = { islandMaximumWidth.floatValue }, editRequest = editRequest.intValue,
@@ -248,14 +251,21 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         val target = islandTouchView
         if (target == null) {
             val input = View(visual).apply {
-                setOnClickListener { islandTapRequest.intValue++ }
-                setOnLongClickListener { if (!current.locked) editRequest.intValue++; true }
+                setOnClickListener {
+                    if (effectNotices.value.isUpdateInstallNotice()) installUpdate()
+                    else if (effectNotices.value == null) islandTapRequest.intValue++
+                }
+                setOnLongClickListener { if (effectNotices.value == null && !current.locked) editRequest.intValue++; true }
                 var startX = 0f; var startY = 0f; var held = false
                 val gestures = GestureDetector(visual, object : GestureDetector.SimpleOnGestureListener() {
                     override fun onDown(e: MotionEvent): Boolean {
                         startX = e.rawX; startY = e.rawY; held = false; return true
                     }
                     override fun onSingleTapUp(e: MotionEvent): Boolean {
+                        if (effectNotices.value != null) {
+                            if (effectNotices.value.isUpdateInstallNotice()) performClick()
+                            return true
+                        }
                         val origin = params ?: return false
                         if (coverBounds.contains(androidx.compose.ui.geometry.Offset(e.rawX - origin.x,
                                 e.rawY - origin.y - (composition?.top ?: 0)))) {
@@ -269,11 +279,11 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                 }).apply { setOnDoubleTapListener(null) }
                 setOnTouchListener { _, event ->
                     // A transient effect result never controls the song or changes the saved display mode.
-                    if (effectNotices.value != null) return@setOnTouchListener true
+                    if (effectNotices.value != null && !effectNotices.value.isUpdateInstallNotice()) return@setOnTouchListener true
                     gestures.onTouchEvent(event)
                     if (event.actionMasked == MotionEvent.ACTION_UP && !held) {
                         val dx = event.rawX - startX; val dy = event.rawY - startY
-                        if (kotlin.math.abs(dx) >= 32 * resources.displayMetrics.density &&
+                        if (effectNotices.value == null && kotlin.math.abs(dx) >= 32 * resources.displayMetrics.density &&
                             kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.25f && playback.value.song != null && playback.value.canControlPlayback)
                             changeSong(if (dx < 0f) 1 else -1)
                     }
@@ -299,6 +309,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                 try { window.updateViewLayout(target, p) } catch (_: RuntimeException) { removeIslandTouchWindow() }
             }
         }
+        islandTouchView?.contentDescription = if (effectNotices.value.isUpdateInstallNotice()) "CurrentMusic 更新下载完成，点击安装"
+            else "灵动岛：点击封面播放或暂停，点击歌词切换帧率，左右滑动切歌，未锁定时长按编辑"
     }
     private fun placement(area: DesktopSafeArea, width: Int, height: Int): DesktopPlacement {
         // The pill may cross bar and cutout insets; only the physical bounds keep it on screen.

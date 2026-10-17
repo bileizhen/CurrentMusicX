@@ -6,7 +6,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
-/** Download progress has no timeout; terminal acknowledgements briefly retain the same capsule. */
+/** Progress and verified downloads stay visible until cleared, installed or the island is disabled. */
 class UpdateIslandNotice(downloads: Flow<UpdateDownloadState>, enabled: Flow<Boolean>, scope: CoroutineScope) {
     private val mutable = MutableStateFlow<SoundEffectNotice?>(null)
     val state = mutable.asStateFlow()
@@ -26,16 +26,21 @@ class UpdateIslandNotice(downloads: Flow<UpdateDownloadState>, enabled: Flow<Boo
                         kind = IslandNoticeKind.UPDATE_DOWNLOAD, progress = percent)
                     return@collectLatest
                 }
-                // Do not replay an old completed task when the app/island is opened later.
+                if (download is UpdateDownloadState.Ready) {
+                    if (!active) { sequence--; active = true }
+                    mutable.value = SoundEffectNotice(sequence, "下载完成", SoundEffectNoticeTier.STANDARD,
+                        SoundEffectNoticePhase.READY, "CurrentMusic 更新已校验，点击安装",
+                        IslandNoticeKind.UPDATE_DOWNLOAD, 100)
+                    return@collectLatest
+                }
                 if (!active) { mutable.value = null; return@collectLatest }
                 val (name, phase, message) = when (download) {
-                    is UpdateDownloadState.Ready -> Triple("下载完成", SoundEffectNoticePhase.READY, "更新已校验，可从通知或设置安装")
                     is UpdateDownloadState.Failed -> Triple("下载失败", SoundEffectNoticePhase.FAILED, download.message)
                     else -> Triple("已取消下载", SoundEffectNoticePhase.WAITING, "更新下载已取消")
                 }
                 mutable.value = SoundEffectNotice(sequence, name, SoundEffectNoticeTier.STANDARD, phase, message,
-                    IslandNoticeKind.UPDATE_DOWNLOAD, if (download is UpdateDownloadState.Ready) 100 else null)
-                delay(if (download is UpdateDownloadState.Failed) 5_000 else if (download is UpdateDownloadState.Ready) 3_600 else 1_800)
+                    IslandNoticeKind.UPDATE_DOWNLOAD)
+                delay(if (download is UpdateDownloadState.Failed) 5_000 else 1_800)
                 mutable.value = null
                 active = false
             }

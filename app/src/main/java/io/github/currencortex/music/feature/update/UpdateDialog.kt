@@ -103,7 +103,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
             fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(14.dp))
-        if (downloadExperience) Text("可重复下载，体验灵动岛进度；此测试入口不会请求安装。", fontSize = 13.sp,
+        if (downloadExperience) Text("可重复下载，体验灵动岛进度；下载完成后可点灵动岛安装。", fontSize = 13.sp,
             color = MiuixTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 10.dp))
         val message = when (state) {
             UpdateState.Idle, UpdateState.Checking -> "正在检查更新…"

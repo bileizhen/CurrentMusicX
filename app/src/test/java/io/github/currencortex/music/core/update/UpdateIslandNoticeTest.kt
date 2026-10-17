@@ -10,7 +10,7 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UpdateIslandNoticeTest {
-    @Test fun downloadKeepsPriorityBeyondEffectTimeoutAndRestoresCurrentEffectAfterCompletion() = runTest {
+    @Test fun verifiedDownloadKeepsPriorityUntilExplicitlyCleared() = runTest {
         val download = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
         val enabled = MutableStateFlow(true)
         val controller = UpdateIslandNotice(download, enabled, backgroundScope)
@@ -27,11 +27,14 @@ class UpdateIslandNoticeTest {
         assertEquals(99, visible.value!!.progress)
         download.value = UpdateDownloadState.Ready(File("verified.apk")); runCurrent()
         assertEquals("下载完成", visible.value!!.name)
-        advanceTimeBy(3_601); runCurrent()
+        advanceTimeBy(120_000); runCurrent()
+        assertTrue(visible.value.isUpdateInstallNotice())
+        download.value = UpdateDownloadState.Idle; runCurrent()
+        advanceTimeBy(1_801); runCurrent()
         assertEquals(effects.value, visible.value)
     }
 
-    @Test fun disabledIslandDoesNotShowDownloadsOrReplayOldCompletions() = runTest {
+    @Test fun enablingIslandRestoresTheVerifiedDownloadAndDisablingHidesIt() = runTest {
         val download = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Downloading(1, 100))
         val enabled = MutableStateFlow(false)
         val controller = UpdateIslandNotice(download, enabled, backgroundScope)
@@ -39,7 +42,15 @@ class UpdateIslandNoticeTest {
         enabled.value = true; runCurrent(); assertEquals(1, controller.state.value!!.progress)
         enabled.value = false; runCurrent(); assertNull(controller.state.value)
         download.value = UpdateDownloadState.Ready(File("verified.apk")); runCurrent()
-        enabled.value = true; runCurrent(); assertNull(controller.state.value)
+        enabled.value = true; runCurrent(); assertTrue(controller.state.value.isUpdateInstallNotice())
+        enabled.value = false; runCurrent(); assertNull(controller.state.value)
+    }
+
+    @Test fun completedDownloadIsRestoredWithoutANewDownloadEvent() = runTest {
+        val controller = UpdateIslandNotice(MutableStateFlow(UpdateDownloadState.Ready(File("verified.apk"))),
+            MutableStateFlow(true), backgroundScope)
+        runCurrent(); assertTrue(controller.state.value.isUpdateInstallNotice())
+        advanceTimeBy(120_000); runCurrent(); assertTrue(controller.state.value.isUpdateInstallNotice())
     }
 
     @Test fun retryCancelsOldFailureExpiryAndCancellationReturnsToNormal() = runTest {
