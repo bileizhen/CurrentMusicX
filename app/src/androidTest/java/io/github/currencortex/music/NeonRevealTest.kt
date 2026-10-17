@@ -74,14 +74,14 @@ class NeonRevealTest {
         assertFalse(paused.sameAs(image()))
     }
 
-    @Test fun canvasFallbackDrawsMirroredTubes() {
+    @Test fun canvasFallbackKeepsTopTubeOutsideScreen() {
         compose.setContent { NeonRevealBackground(ArtworkGlowPalette(0xffffd3a8.toInt(), 0xffff4d6d.toInt()),
             Modifier.fillMaxSize(), active = false, preferShader = false) }
-        assertMirroredTubes(image())
+        assertTubePlacement(image())
         capture("neon-canvas-fallback.png")
     }
 
-    @Test fun centreOutRevealLeavesBrightMirroredTubes() {
+    @Test fun centreOutRevealKeepsBottomTubeAndTopSpill() {
         compose.mainClock.autoAdvance = false
         compose.setContent { NeonRevealBackground(ArtworkGlowPalette(0xffffd3a8.toInt(), 0xffff4d6d.toInt()),
             Modifier.fillMaxSize()) }
@@ -93,19 +93,21 @@ class NeonRevealTest {
         capture("neon-opening.png")
         compose.mainClock.advanceTimeBy(2600)
         val lit = image()
-        assertMirroredTubes(lit)
+        assertTubePlacement(lit)
         // The horizontal lit span grows from the middle toward both ends.
         fun brightWidth(b: Bitmap): Int {
-            val y = (0 until b.height / 8).maxBy { b.getPixel(b.width / 2, it) and 255 }
+            val y = (b.height * 7 / 8 until b.height).maxBy { b.getPixel(b.width / 2, it) and 255 }
             return (0 until b.width).count { (b.getPixel(it, y) and 255) > 190 }
         }
         assertTrue(brightWidth(lit) > brightWidth(opening) * 1.3)
         capture("neon-revealed.png")
     }
 
-    private fun assertMirroredTubes(bitmap: Bitmap) {
+    private fun assertTubePlacement(bitmap: Bitmap) {
         fun peak(range: IntRange) = range.maxOf { bitmap.getPixel(bitmap.width / 2, it) and 255 }
-        assertTrue("Top tube must have a bright core", peak(0..bitmap.height / 8) > 190)
+        assertTrue("No white tube core may remain in the header", peak(0..bitmap.height / 8) < 235)
+        assertTrue("Keep coloured light spilling down from outside the screen",
+            (bitmap.getPixel(bitmap.width / 2, bitmap.height / 16) ushr 16 and 255) > 50)
         assertTrue("Bottom tube must have a bright core", peak(bitmap.height * 7 / 8 until bitmap.height) > 190)
         val center = bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)
         assertTrue("Coloured light should reach the centre", (center ushr 16 and 255) > 50)
