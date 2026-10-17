@@ -3,6 +3,7 @@
 package io.github.currencortex.music.ui
 
 import android.os.Build
+import io.github.currencortex.music.BuildConfig
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -690,6 +691,12 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         LogExportDialog(showLogs, container.logger) { showLogs = false }
         if (announcementVisible) io.github.currencortex.music.feature.announcement.AnnouncementDialog(announcements,
             suppressByDefault = suppressReadAnnouncements, onDismiss = announcementVm::dismiss)
+        LaunchedEffect(container) {
+            if (BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE) {
+                container.desktopLyrics.ready.await()
+                if (container.desktopLyrics.state.value.enabled) container.playerController.connect()
+            }
+        }
         if (!launchBrand.active && !announcementVisible) UpdateDialog(container.updates, container.updateTransfer)
         LibraryDialogs(libraryVm)
         ProfileDialogs(profileVm, authVm)

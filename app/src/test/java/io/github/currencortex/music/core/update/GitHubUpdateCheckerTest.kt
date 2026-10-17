@@ -14,6 +14,13 @@ class GitHubUpdateCheckerTest {
         .put("assets", JSONArray().put(JSONObject().put("name", "app.apk")
             .put("browser_download_url", "https://github.com/example/app/releases/download/$tag/app.apk")))
 
+    @Test fun downloadExperienceCanOfferTheStableAssetRepeatedlyWithoutChangingNormalEligibility() {
+        val response = release("v1.0.0").toString()
+        val experience = GitHubUpdateChecker("example", "app", "1.0.0-alpha.0", "Experience/Test")
+        repeat(2) { assertEquals("1.0.0", experience.parseResponse(response, UpdateChannel.STABLE)?.version) }
+        assertNull(checker.parseResponse(response, UpdateChannel.STABLE))
+    }
+
     @Test fun stableRejectsDraftsPrereleasesAndOlderVersions() {
         listOf(release("v1.2.0-rc.1", true), release("v1.2.0", draft = true), release("v1.0.0")).forEach {
             assertNull(checker.parseResponse(it.toString(), UpdateChannel.STABLE))

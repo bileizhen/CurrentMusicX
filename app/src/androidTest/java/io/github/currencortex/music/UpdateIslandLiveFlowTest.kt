@@ -138,7 +138,7 @@ class UpdateIslandLiveFlowTest {
                 .first { it.id == 4202 }.notification
             scenario.close()
             notification.contentIntent.send()
-            awaitCondition { containsText("请求安装") }
+            awaitCondition { containsText(if (BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE) "再次下载" else "请求安装") }
             screenshot("06-notification-opened")
             File(directory, "result.txt").writeText("Verified ${release.size} bytes; source=${result.activeSource}; progress on home; restored FPS; notification reopened install prompt; no installation requested.\n")
         } finally {

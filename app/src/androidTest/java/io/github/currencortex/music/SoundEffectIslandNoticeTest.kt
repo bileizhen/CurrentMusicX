@@ -43,7 +43,7 @@ class SoundEffectIslandNoticeTest {
             assertEquals(initial, compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot)
         }
         compose.runOnIdle { notice = notice.copy(name = "下载完成", phase = SoundEffectNoticePhase.READY) }
-        compose.onNodeWithText("待安装", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText(if (BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE) "再下载" else "待安装", useUnmergedTree = true).assertIsDisplayed()
         assertEquals(initial, compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot)
         compose.onAllNodesWithTag("sound_effect_island_notice").assertCountEquals(0)
     }

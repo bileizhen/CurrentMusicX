@@ -18,6 +18,10 @@ val keystoreProperties = rootProject.file("keystore.properties").takeIf { it.isF
 // Ordinary builds include the verified arm64 engine, JNI bridge and MNN runtime.
 // The opt-out is retained only for import-path interoperability tests.
 val originalEffectsBundled = providers.gradleProperty("neteaseOriginalEffects").orNull != "false"
+val updateDownloadExperience = providers.gradleProperty("updateDownloadExperience").orNull == "true"
+require(!updateDownloadExperience || providers.gradleProperty("isolatedDebug").orNull == "true") {
+    "Download experience requires the isolated debug package"
+}
 val originalEffectsLibs = file("src/main/jniLibs/arm64-v8a")
 
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
@@ -35,6 +39,8 @@ android {
         versionName = "1.1.14"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "NETEASE_ORIGINAL_EFFECTS", originalEffectsBundled.toString())
+        buildConfigField("boolean", "UPDATE_DOWNLOAD_EXPERIENCE", "false")
+        manifestPlaceholders["appLabel"] = "@string/app_name"
     }
 
     buildFeatures { compose = true; buildConfig = true }
@@ -71,6 +77,11 @@ android {
         getByName("debug") {
             // Keep instrumentation separate from the user's signed release installation.
             if (providers.gradleProperty("isolatedDebug").orNull == "true") applicationIdSuffix = ".verification"
+            if (updateDownloadExperience) {
+                versionNameSuffix = "-alpha.0"
+                buildConfigField("boolean", "UPDATE_DOWNLOAD_EXPERIENCE", "true")
+                manifestPlaceholders["appLabel"] = "CurrentMusic 下载体验"
+            }
         }
         getByName("release") { signingConfig = keystoreProperties?.let { signingConfigs.getByName("release") } }
     }

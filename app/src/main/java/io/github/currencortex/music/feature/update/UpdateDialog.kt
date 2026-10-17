@@ -25,6 +25,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.update.*
+import io.github.currencortex.music.BuildConfig
 import io.github.currencortex.music.ui.util.openExternalLink
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -58,8 +59,11 @@ fun UpdateDialog(service: UpdateService, transfer: UpdateTransfer) {
         onRetry = { scope.launch { service.check(manual = true) } },
         onIgnore = { scope.launch { service.ignoreCurrentRelease() } },
         onOpenRelease = { openExternalLink(context, it) }, transferState = download,
-        onDownload = transfer::download, onInstall = transfer::install, onCancel = transfer::cancel,
-        onChangeSource = transfer::changeSource)
+        onDownload = { source ->
+            if (BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE && transfer.state.value.download is UpdateDownloadState.Ready) transfer.cancel()
+            transfer.download(source)
+        }, onInstall = transfer::install, onCancel = transfer::cancel,
+        onChangeSource = transfer::changeSource, downloadExperience = BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE)
 }
 
 @Composable
@@ -67,7 +71,8 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                         onIgnore: () -> Unit, onOpenRelease: (String) -> Unit, preview: Boolean = false,
                         transferState: UpdateTransferState = UpdateTransferState(),
                         onDownload: ((UpdateSource) -> Unit)? = null, onInstall: () -> Unit = {},
-                        onCancel: () -> Unit = {}, onChangeSource: ((UpdateSource) -> Unit)? = null) {
+                        onCancel: () -> Unit = {}, onChangeSource: ((UpdateSource) -> Unit)? = null,
+                        downloadExperience: Boolean = false) {
     val release = (state as? UpdateState.Available)?.release
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -88,7 +93,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
             (LocalConfiguration.current.screenHeightDp * .82f).dp.coerceAtMost(680.dp))) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text(if (release != null) "发现新版本" else "检查更新", fontSize = 20.sp,
+            Text(if (release != null && downloadExperience) "下载体验" else if (release != null) "发现新版本" else "检查更新", fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             if (release != null) Text("v${release.version}", fontSize = 14.sp,
                 fontWeight = FontWeight.Medium, color = MiuixTheme.colorScheme.primary,
@@ -98,6 +103,8 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
             fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(14.dp))
+        if (downloadExperience) Text("可重复下载，体验灵动岛进度；此测试入口不会请求安装。", fontSize = 13.sp,
+            color = MiuixTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 10.dp))
         val message = when (state) {
             UpdateState.Idle, UpdateState.Checking -> "正在检查更新…"
             UpdateState.UpToDate -> "当前已是最新版本"
@@ -160,7 +167,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                     Regex("[a-f0-9]{64}").matches(release.sha256)
                 val label = when {
                     transferState.installing -> "请求安装…"
-                    ready -> "请求安装"
+                    ready -> if (downloadExperience) "再次下载" else "请求安装"
                     !verifiedAsset && !preview -> "查看发布"
                     transferState.download is UpdateDownloadState.Failed -> "重试下载"
                     downloading -> "取消下载"
@@ -174,6 +181,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                             repeat(10) { delay(120); previewProgress = (it + 1) / 10f }
                         }
                     } else if (downloading) onCancel()
+                    else if (ready && downloadExperience) onDownload?.invoke(source)
                     else if (ready) onInstall()
                     else if (verifiedAsset && onDownload != null) onDownload(source)
                     else onOpenRelease(release.pageUrl)
