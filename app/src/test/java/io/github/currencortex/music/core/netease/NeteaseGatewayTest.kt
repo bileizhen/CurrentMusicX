@@ -250,6 +250,18 @@ class NeteaseGatewayTest {
         assertEquals("Bearer current-secret", request.getHeader("Authorization")); assertNull(request.getHeader("Cookie"))
         assertEquals("lossless", request.requestUrl!!.queryParameter("level")); assertEquals(0, upstream.requestCount)
     }
+    @Test fun protectedMediaFamiliesAndMvResolutionUseProjectAuthentication(): Unit = runBlocking {
+        login()
+        for (path in listOf("ncm/song/url/v1", "ncm/song/url/match", "ncm/mv/url", "ncm/video/url", "ncm/song/cloud/download", "ncm/voice/detail"))
+            assertFalse(path, gateway.handles(path))
+        current.enqueue(response("""{"data":{"url":"https://example.com/video.mp4"}}"""))
+        val library = LibraryRepository(api, { 7 }, ::owner)
+        library.mvSource(11)
+        val request = current.takeRequest()
+        assertEquals("/cm/ncm/mv/url", request.requestUrl!!.encodedPath)
+        assertEquals("Bearer current-secret", request.getHeader("Authorization"))
+        assertNull(request.getHeader("Cookie")); assertEquals(0, upstream.requestCount)
+    }
     @Test fun listeningDeltasProduceOneQualifiedListenAndOneStart() = runBlocking {
         login(); enqueue("""{"code":200}"""); enqueue("""{"code":200}""")
         gateway.recordPlay(11)

@@ -6,6 +6,19 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 class MusicRepositoryTest {
+    @Test fun implicitAndExplicitAudioRequestsCarryTheCurrentMusicLogin(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            val owner = RequestSession(server.url("/cm/").toString(), "project-user")
+            val repo = MusicRepository(ApiClient({ owner.server }, { owner.token }, {}))
+            for (session in listOf(null, owner)) {
+                server.enqueue(MockResponse().setBody("""{"url":"https://example.com/audio"}"""))
+                repo.source(7, AudioQuality.LOSSLESS, session)
+                val request = server.takeRequest()
+                assertEquals("Bearer project-user", request.getHeader("Authorization"))
+                assertEquals("lossless", request.requestUrl!!.queryParameter("level"))
+            }
+        }
+    }
     @Test fun preservesReportedSourceLifetimeAndUsesBoundedCurrentMusicFallback() = runBlocking {
         MockWebServer().use { server ->
             val repo = MusicRepository(ApiClient({ server.url("/cm/").toString() }, { null }, {}))

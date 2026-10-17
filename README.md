@@ -25,7 +25,7 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 
 圆形封面、封面取色背景、逐字歌词与跟手拖拽共同组成播放体验。绑定网易云后，可以直接使用网易云我喜欢和自己的歌单；也可以保留 CurrentMusic 音乐库，在两种方式之间切换。
 
-应用源码位于本仓库的 `main` 分支，同时维护于 [CurrentMusic 的 app 分支](https://github.com/backrooms-yrc/CurrentMusic/tree/app)。音乐资料与本机登录的网易云音乐库由手机直连网易云；未在本机登录时，可复用 CurrentMusic 账号的云端网易云绑定。歌曲音源与网易云歌词继续使用 CurrentMusic。歌曲与音质的可用性取决于所选音源和账号权限。自建曲库可独立连接 Navidrome，音频直接从自己的服务器播放。
+应用源码位于本仓库的 `main` 分支，同时维护于 [CurrentMusic 的 app 分支](https://github.com/backrooms-yrc/CurrentMusic/tree/app)。音乐资料与本机登录的网易云音乐库由手机直连网易云；未在本机登录时，可复用 CurrentMusic 账号的云端网易云绑定。歌曲音源、MV 取流与网易云歌词继续使用 CurrentMusic；歌曲与 MV 音源解析需要登录 CurrentMusic 站内账号。歌曲与音质的可用性取决于所选音源和账号权限。自建曲库可独立连接 Navidrome，音频直接从自己的服务器播放。
 
 ## 功能特性
 
@@ -70,7 +70,7 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 - 歌单封面网格、取色头部、歌单内搜索、排序、随机播放与继续播放
 - 后台刷新对比歌曲变化，保留已有内容和滚动位置，新增歌曲通过动画显示
 - 网易云账号支持扫码和手机验证码绑定，二维码在切到后台时保留
-- 本机网易云登录后，搜索、网易云歌单、收藏、每日推荐、艺人与 MV 原生直连网易云；歌曲音源和网易云歌词走 CurrentMusic（默认 `https://music.20110208.xyz/cm/`），歌词包含逐字时间、翻译与罗马音，增强接口不可用时回退同服务的普通歌词接口
+- 本机网易云登录后，搜索、网易云歌单、收藏、每日推荐、艺人与 MV 资料原生直连网易云；歌曲音源、MV 取流和网易云歌词走 CurrentMusic（默认 `https://music.20110208.xyz/cm/`），歌词包含逐字时间、翻译与罗马音，增强接口不可用时回退同服务的普通歌词接口
 - 网易云登录凭据加密保存在本机；没有本机网易云登录时，CurrentMusic 登录后可直接使用服务器已绑定的网易云账号，无需再次扫码，凭据仍留在服务器。自己的普通歌单支持创建、重命名、删除和移出歌曲
 - 登录 CurrentMusic 后，最近播放读取该账号的云端记录；歌单页同时保留 CurrentMusic 自建／已导入歌单和所选网易云音乐库，跨账号切换会重新加载
 - 可将网易云设为主音乐库，“我的 → 我喜欢”直接打开网易云我喜欢的音乐
@@ -154,7 +154,7 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 
 从 [Releases](https://github.com/bileizhen/CurrentMusicX/releases/latest) 下载 `CurrentMusic-Android-v版本号.apk`，按系统提示安装。正式版沿用同一签名，可覆盖升级。
 
-1. 打开应用即可搜索和播放有权限的歌曲，无需先登录 CurrentMusic。
+1. 打开应用即可浏览、搜索；使用 CurrentMusic 音源播放或下载歌曲／MV 前，先在“我的”登录 CurrentMusic 站内账号。本机网易云登录不替代站内取流鉴权。
 2. 在首页搜索歌曲，或打开每日推荐、歌单和最近播放。
 3. 需要使用网易云收藏时，在网易云账户绑定页通过扫码或手机验证码完成绑定。
 4. 按需要开启“网易云作为主音乐库”，并在设置中调整音质、歌词与外观。

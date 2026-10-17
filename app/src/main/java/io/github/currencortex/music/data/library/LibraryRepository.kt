@@ -135,7 +135,7 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     suspend fun mv(id: Long) = api.get<MvDetailDto>("ncm/mv/detail", mapOf("mvid" to "$id")).data
     suspend fun mvSource(id: Long, resolution: Int = 1080): String {
         require(resolution in listOf(240, 480, 720, 1080))
-        val url = api.get<MvUrlDto>("ncm/mv/url", mapOf("id" to "$id", "r" to "$resolution")).data.url
+        val url = read<MvUrlDto>("ncm/mv/url", session(), mapOf("id" to "$id", "r" to "$resolution")).data.url
         return url?.toHttpUrlOrNull()?.toString() ?: throw ApiException(ErrorKind.NotFound)
     }
     companion object {
