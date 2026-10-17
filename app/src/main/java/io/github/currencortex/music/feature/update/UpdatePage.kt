@@ -44,8 +44,6 @@ import io.github.currencortex.music.BuildConfig
 import io.github.currencortex.music.core.config.AppMetadata
 import io.github.currencortex.music.core.update.*
 import io.github.currencortex.music.data.update.UpdateSettings
-import io.github.currencortex.music.ui.component.MusicDialog
-import io.github.currencortex.music.ui.component.SettingsSwitch
 import io.github.currencortex.music.ui.component.ArtworkGlowPalette
 import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
 import kotlinx.coroutines.Dispatchers
@@ -300,28 +298,29 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 }
             }
         })
-        if (showSources) MusicDialog("下载来源", { showSources = false }) {
-            Text(if (transferState.download is UpdateDownloadState.Downloading) "切换来源会从头重新下载" else "失败时自动尝试其他来源",
-                fontSize = 13.sp, color = pageMuted)
-            UpdateSource.available.forEach { candidate ->
-                MenuItem((if (candidate == source) "✓  " else "") + candidate.label) {
+        if (showSources) UpdateOptionsDialog("下载来源",
+            summary = if (transferState.download is UpdateDownloadState.Downloading) "切换来源会从头重新下载" else "失败时自动尝试其他来源",
+            onDismiss = { showSources = false }) {
+            UpdateOptionGroup { UpdateSource.available.forEach { candidate ->
+                UpdateChoiceRow(candidate.label, selected = candidate == source) {
                     if (source != candidate) {
                         source = candidate
                         if (transferState.download is UpdateDownloadState.Downloading) onChangeSource(candidate)
                     }
                     showSources = false
                 }
-            }
+            } }
         }
-        if (showSettings) MusicDialog("更新设置", { showSettings = false }) {
-            SettingsSwitch("启动时自动检查", settings.autoCheckOnLaunch, onAutoCheck)
-            listOf(UpdateChannel.STABLE to "正式版", UpdateChannel.PRERELEASE to "预发布版").forEach { (channel, label) ->
-                MenuItem((if (settings.channel == channel) "✓  " else "") + label) {
+        if (showSettings) UpdateOptionsDialog("更新设置", onDismiss = { showSettings = false }) {
+            UpdateOptionGroup { UpdateAutoCheckRow(settings.autoCheckOnLaunch, onAutoCheck) }
+            UpdateOptionSectionLabel("更新渠道")
+            UpdateOptionGroup { listOf(UpdateChannel.STABLE to "正式版", UpdateChannel.PRERELEASE to "预发布版").forEach { (channel, label) ->
+                UpdateChoiceRow(label, selected = settings.channel == channel) {
                     showSettings = false; onChannel(channel)
                 }
-            }
+            } }
         }
-        if (confirmCancel) MusicDialog("取消下载？", { confirmCancel = false }) {
+        if (confirmCancel) UpdateOptionsDialog("取消下载？", onDismiss = { confirmCancel = false }) {
             Text("返回页面后仍会在后台下载。只有取消下载才会停止当前任务。", fontSize = 14.sp)
             PageButton("继续下载", "update_keep_download") { confirmCancel = false }
             PageButton("取消下载", "update_confirm_cancel", primary = false) { confirmCancel = false; onCancel() }
@@ -370,11 +369,6 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
         Text(label, fontSize = 15.sp, fontWeight = FontWeight.Medium,
             color = (if (primary) Color(0xFF201934) else pageWhite).copy(alpha = if (enabled) 1f else .5f))
     }
-}
-
-@Composable private fun MenuItem(label: String, onClick: () -> Unit) {
-    Text(label, color = pageWhite, fontSize = 14.sp, modifier = Modifier.fillMaxWidth()
-        .clickable(role = Role.Button, onClick = onClick).padding(horizontal = 20.dp, vertical = 16.dp))
 }
 
 private fun verifiedUpdate(release: AppRelease) = release.apkUrl != null &&
