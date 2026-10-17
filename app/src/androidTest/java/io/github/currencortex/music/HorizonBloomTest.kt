@@ -90,8 +90,10 @@ class HorizonBloomTest {
         assertEquals("Limb should sit at two thirds of the portrait", .66f,
             middle.toFloat() / bitmap.height, .012f)
         assertTrue("Planet must have a shallow curve", edge > middle && edge - middle < bitmap.height * .04f)
-        val rim = bitmap.getPixel(bitmap.width / 2, middle) ushr 16 and 255
-        assertTrue("The reference has a soft edge, not a bright neon ring", rim in 20..85)
+        val highlight = bitmap.getPixel(bitmap.width / 2, middle) ushr 16 and 255
+        val rim = bitmap.getPixel((bitmap.width * .05).toInt(), edge) ushr 16 and 255
+        assertTrue("The sun must have a visible local highlight", highlight > 130)
+        assertTrue("The rest of the rim must stay dim", rim in 20..85 && highlight > rim * 3)
         val sky = bitmap.getPixel(bitmap.width / 2, (bitmap.height * .3).toInt())
         assertTrue("Cool atmosphere must reach the upper sky", (sky and 255) > (sky ushr 16 and 255) + 4)
         capture("horizon-portrait-reference.png")
