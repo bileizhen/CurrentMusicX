@@ -35,7 +35,7 @@ import top.yukonga.miuix.kmp.preference.OverlaySpinnerPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-fun UpdateDialog(service: UpdateService, transfer: UpdateTransfer) {
+fun UpdatePage(service: UpdateService, transfer: UpdateTransfer) {
     val visible by service.dialogVisible.collectAsStateWithLifecycle()
     val state by service.state.collectAsStateWithLifecycle()
     val download by transfer.state.collectAsStateWithLifecycle()
@@ -52,10 +52,15 @@ fun UpdateDialog(service: UpdateService, transfer: UpdateTransfer) {
     }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    if (!visible) return
+    // Restored background work intentionally stores compact metadata, without release notes.
+    LaunchedEffect(visible, selectedRelease?.version) {
+        if (visible && selectedRelease?.notes?.isBlank() == true && state == UpdateState.Idle)
+            service.check()
+    }
     val shownState = if (selectedRelease != null && download.download !is UpdateDownloadState.Idle)
         UpdateState.Available(selectedRelease!!) else state
-    UpdateDialogContent(shownState, onDismiss = service::dismissDialog,
+    val settings by service.settings.state.collectAsStateWithLifecycle()
+    UpdatePageHost(visible, shownState, onDismiss = service::dismissDialog,
         onRetry = { scope.launch { service.check(manual = true) } },
         onIgnore = { scope.launch { service.ignoreCurrentRelease() } },
         onOpenRelease = { openExternalLink(context, it) }, transferState = download,
@@ -63,7 +68,9 @@ fun UpdateDialog(service: UpdateService, transfer: UpdateTransfer) {
             if (BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE && transfer.state.value.download is UpdateDownloadState.Ready) transfer.cancel()
             transfer.download(source)
         }, onInstall = transfer::install, onCancel = transfer::cancel,
-        onChangeSource = transfer::changeSource, downloadExperience = BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE)
+        onChangeSource = transfer::changeSource, downloadExperience = BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE,
+        settings = settings, onAutoCheck = { scope.launch { service.settings.setAutoCheck(it) } },
+        onChannel = { scope.launch { service.settings.setChannel(it); service.check(manual = true) } })
 }
 
 @Composable

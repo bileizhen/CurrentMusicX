@@ -68,7 +68,7 @@ import io.github.currencortex.music.feature.about.LegalDocument
 import io.github.currencortex.music.feature.about.LegalDocumentScreen
 import io.github.currencortex.music.feature.about.MemberFocus
 import io.github.currencortex.music.feature.about.MemberDetailDialog
-import io.github.currencortex.music.feature.update.UpdateDialog
+import io.github.currencortex.music.feature.update.UpdatePage
 import io.github.currencortex.music.feature.home.HomeScreen
 import io.github.currencortex.music.feature.home.MusicHomeScreen
 import io.github.currencortex.music.feature.logs.LogExportDialog
@@ -205,8 +205,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
     var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
     val playlistPage = isPlaylistRoute(backStack.last())
-    LeiTheme(settings, darkSystemBars = if (miniQueueOpen || (playlistPage && settings.playlistDepthRibbon) || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
-        darkStatusBars = if (playlistPage) true else null) {
+    LeiTheme(settings, darkSystemBars = if (updateDialogVisible || miniQueueOpen || (playlistPage && settings.playlistDepthRibbon) || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
+        darkStatusBars = if (updateDialogVisible || playlistPage) true else null) {
         CompositionLocalProvider(LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight,
             LocalRefreshRatePreference provides settings.refreshRate) {
         Box(Modifier.fillMaxSize().musicRefreshRate(settings.refreshRate)) {
@@ -394,7 +394,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             }
         }
         val page: @Composable () -> Unit = {
-        Box(Modifier.fillMaxSize().then(if (launchBrand.active || playerPresented || miniQueueOpen) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
+        Box(Modifier.fillMaxSize().then(if (launchBrand.active || playerPresented || miniQueueOpen || updateDialogVisible) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
         Column(Modifier.fillMaxSize().then(if (searchPresented) Modifier else Modifier.imePadding())) {
         NavDisplay(
             backStack = sceneStack,
@@ -697,7 +697,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 if (container.desktopLyrics.state.value.enabled) container.playerController.connect()
             }
         }
-        if (!launchBrand.active && !announcementVisible) UpdateDialog(container.updates, container.updateTransfer)
+        if (!launchBrand.active && !announcementVisible) UpdatePage(container.updates, container.updateTransfer)
         LibraryDialogs(libraryVm)
         ProfileDialogs(profileVm, authVm)
         if (profileMessage != null) MusicDialog("账号操作", onDismiss = { profileVm.message.value = null }) {
