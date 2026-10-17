@@ -53,12 +53,20 @@ class ChatBackdropPanelTest {
         fun pixel(bitmap: android.graphics.Bitmap, x: Int, y: Int) = bitmap.getPixel((x * density).toInt(), (y * density).toInt())
         val first = node.captureToImage().asAndroidBitmap()
         assertTrue(android.graphics.Color.red(pixel(first, 140, 120)) < 10)
-        // Both bars show a blurred and tinted copy of the black source, not a flat cover.
+        // Keep the source contrast instead of whitening messages with a translucent veil.
         for (y in listOf(24, 216)) {
             val red = android.graphics.Color.red(pixel(first, 140, y))
-            assertTrue("The fixed bar must sample the source behind it", red in 100..235)
+            assertTrue("The fixed bar must preserve the source colors without a white veil", red < 150)
             assertTrue("Gaussian blur must soften the stripe's outer edge",
                 android.graphics.Color.red(pixel(first, 126, y)) < 244)
+        }
+        for (atTop in listOf(true, false)) {
+            fun edgeRed(y: Int) = android.graphics.Color.red(pixel(first, 126, if (atTop) y else 240 - y))
+            val strong = edgeRed(16)
+            val middle = edgeRed(36)
+            val weak = edgeRed(56)
+            assertTrue("Blur opacity must fade across the whole panel, without an opaque plateau",
+                strong < middle && middle < weak)
         }
         first.recycle()
         compose.runOnIdle { ink.value = Color(0xFF0060FF) }
