@@ -244,7 +244,10 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
             var identity: List<Any?>? = null
             combine(container.accountRepository.state.map { it.account?.id }.distinctUntilChanged(),
                 container.musicSettings.state.map { it.server }.distinctUntilChanged(), container.libraryRepository.revision,
-                container.primaryLibrary.identity, container.neteaseLibrary.revision, container.neteaseSongActions.revision) { keys -> keys.toList() }
+                container.primaryLibrary.identity, container.neteaseLibrary.revision,
+                // Native heart changes update the row icons directly. They do not change
+                // a CurrentMusic playlist's membership, including during bulk imports.
+                container.neteaseSongActions.revision.map { if (kind == "playlist") 0L else it }.distinctUntilChanged()) { keys -> keys.toList() }
                 .combine(container.neteaseSessions.state.map { it.profile?.uid }.distinctUntilChanged()) { keys, uid -> keys + uid }
                 .collectLatest { keys ->
                     val nextIdentity = keys.take(2) + keys.last()
