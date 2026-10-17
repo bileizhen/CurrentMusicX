@@ -8,6 +8,8 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.currencortex.music.core.update.*
 import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.feature.update.UpdatePageContent
+import io.github.currencortex.music.feature.update.UpdatePageHost
+import io.github.currencortex.music.data.update.UpdateSettings
 import io.github.currencortex.music.ui.theme.LeiTheme
 import java.io.File
 import org.junit.Assert.*
@@ -21,6 +23,32 @@ class UpdatePageTest {
         (1..25).joinToString("\n") { "- 第 $it 项更新：优化播放与操作体验" },
         "https://github.com/bileizhen/CurrentMusicX/releases/tag/v1.2.0",
         "https://github.com/bileizhen/CurrentMusicX/releases/download/v1.2.0/app.apk", "fixture.apk", false, 100, "0".repeat(64))
+
+    @Test fun everyEntryHoldsCheckingForTwoSecondsEvenWhenResultArrivesEarly() {
+        val visible = mutableStateOf(true)
+        val result = mutableStateOf<UpdateState>(UpdateState.UpToDate)
+        compose.mainClock.autoAdvance = false
+        compose.setContent { TestTheme {
+            UpdatePageHost(visible.value, result.value, {}, {}, {}, {}, UpdateTransferState(), {}, {}, {}, {},
+                false, UpdateSettings(), {}, {}, "")
+        } }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithText("正在检查更新").assertIsDisplayed()
+        compose.runOnIdle { result.value = UpdateState.Failed("测试网络失败") }
+        compose.mainClock.advanceTimeBy(900)
+        compose.onNodeWithText("正在检查更新").assertIsDisplayed()
+        compose.onNodeWithText("测试网络失败").assertDoesNotExist()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithText("测试网络失败").assertIsDisplayed()
+        compose.runOnIdle { visible.value = false }
+        compose.mainClock.advanceTimeBy(500)
+        compose.runOnIdle { result.value = UpdateState.Checking; visible.value = true }
+        compose.mainClock.advanceTimeBy(3000)
+        compose.onNodeWithText("正在检查更新").assertIsDisplayed()
+        compose.runOnIdle { result.value = UpdateState.UpToDate }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithText("已是最新版本").assertIsDisplayed()
+    }
 
     @Test fun checkingAndDetailsMorphContinuouslyAndCanBeReversed() {
         val state = mutableStateOf<UpdateState>(UpdateState.Checking)

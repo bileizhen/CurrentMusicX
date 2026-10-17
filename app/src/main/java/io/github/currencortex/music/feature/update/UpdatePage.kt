@@ -46,6 +46,7 @@ import io.github.currencortex.music.ui.component.SettingsSwitch
 import io.github.currencortex.music.ui.component.ArtworkGlowPalette
 import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -63,6 +64,10 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
     onInstall: () -> Unit, onCancel: () -> Unit, onChangeSource: (UpdateSource) -> Unit,
     downloadExperience: Boolean, settings: UpdateSettings, onAutoCheck: (Boolean) -> Unit,
     onChannel: (UpdateChannel) -> Unit, cover: String) {
+    var entryCheckFinished by remember(visible) { mutableStateOf(false) }
+    LaunchedEffect(visible) {
+        if (visible) { delay(2000); entryCheckFinished = true }
+    }
     AnimatedVisibility(visible, enter = fadeIn(tween(280)) + slideInHorizontally(tween(420)) { it / 5 },
         exit = fadeOut(tween(220)) + slideOutHorizontally(tween(320)) { it / 5 }) {
         val context = LocalContext.current
@@ -72,7 +77,8 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
                     BuildConfig.VERSION_NAME) }.getOrDefault("此版本未附带更新说明，可查看完整发布记录。")
             }
         }
-        UpdatePageContent(state, transferState, notes, onDismiss, onRetry, onIgnore, onOpenRelease,
+        UpdatePageContent(if (entryCheckFinished) state else UpdateState.Checking,
+            if (entryCheckFinished) transferState else UpdateTransferState(), notes, onDismiss, onRetry, onIgnore, onOpenRelease,
             onDownload, onInstall, onCancel, onChangeSource, downloadExperience, settings, onAutoCheck, onChannel,
             cover = cover, backgroundActive = visible)
     }
