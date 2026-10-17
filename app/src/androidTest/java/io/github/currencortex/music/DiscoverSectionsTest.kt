@@ -202,7 +202,7 @@ class DiscoverSectionsTest {
         val messages = bounds("chat_messages")
         assertTrue("Messages must pass behind the header", messages.top < header.bottom)
         assertTrue("Messages must pass behind the composer", messages.bottom > composer.top)
-        assertFalse("Fixed bars must blur their backdrop instead of filtering the message viewport",
+        assertFalse("Fading messages must not filter the fixed header or composer",
             compose.onNodeWithTag("chat_messages").fetchSemanticsNode().config.contains(
                 io.github.currencortex.music.ui.component.ScrollEdgeBlurKey))
         assertEquals(header.left, composer.left, 1f)
