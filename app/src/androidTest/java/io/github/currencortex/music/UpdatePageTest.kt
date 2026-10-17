@@ -10,6 +10,7 @@ import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.feature.update.UpdatePageContent
 import io.github.currencortex.music.feature.update.UpdatePageHost
 import io.github.currencortex.music.feature.update.UpdateMenuInteractionKey
+import io.github.currencortex.music.feature.update.UpdateMenuWavesKey
 import androidx.compose.ui.geometry.Offset
 import io.github.currencortex.music.data.update.UpdateSettings
 import io.github.currencortex.music.ui.theme.LeiTheme
@@ -185,9 +186,49 @@ class UpdatePageTest {
         compose.mainClock.advanceTimeBy(400)
         compose.onNodeWithText("发布记录").assertIsDisplayed()
         compose.onNodeWithTag("update_back").performClick()
-        compose.mainClock.advanceTimeBy(300)
+        compose.mainClock.advanceTimeBy(600)
         compose.onNodeWithTag("update_overflow_panel").assertDoesNotExist()
         compose.onNodeWithTag("update_download").assertIsDisplayed()
+    }
+
+    @Test fun menuUsesSeparateWavesAndReversesWithoutRestartingOrDroppingShield() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { TestTheme { UpdatePageContent(UpdateState.Available(release)) } }
+        compose.mainClock.advanceTimeBy(1000)
+        val button = compose.onNodeWithTag("update_menu")
+        val panel = compose.onNodeWithTag("update_overflow_panel")
+        button.performClick()
+        compose.mainClock.advanceTimeBy(96)
+        val opening = panel.fetchSemanticsNode().config[UpdateMenuWavesKey]
+        assertTrue("Scale and path must not share a single tween", kotlin.math.abs(opening.path - opening.scale) > .02f)
+        assertTrue(opening.opacity > .1f && opening.scale > .1f)
+        button.performClick()
+        compose.mainClock.advanceTimeBy(16)
+        val turning = panel.fetchSemanticsNode().config[UpdateMenuWavesKey]
+        // Semantics clicks can pump recomposition frames; exact continuity is covered with
+        // a controlled frame clock in UpdateMenuMotionTest, rather than a wall-clock delta here.
+        assertTrue("Retargeting must not hide the panel: $opening -> $turning", turning.scale > .01f)
+        compose.mainClock.advanceTimeBy(112)
+        val closing = panel.fetchSemanticsNode().config[UpdateMenuWavesKey]
+        assertTrue("The reversed wave should now be closing: $opening -> $closing",
+            closing.scale > .001f && closing.scale < opening.scale)
+        compose.onNodeWithTag("update_menu_dismiss").assertExists()
+        capture("update-menu-spring-closing.png")
+        button.performClick()
+        compose.mainClock.advanceTimeBy(16)
+        val reversed = panel.fetchSemanticsNode().config[UpdateMenuWavesKey]
+        assertTrue("Reopening keeps the current scale instead of snapping to zero", reversed.scale > .01f)
+        compose.mainClock.advanceTimeBy(800)
+        val settled = panel.fetchSemanticsNode().config[UpdateMenuWavesKey]
+        assertEquals(1f, settled.scale, .002f)
+        capture("update-menu-spring-open.png")
+        button.performClick()
+        compose.mainClock.advanceTimeBy(32)
+        panel.assertExists()
+        compose.onNodeWithTag("update_menu_dismiss").assertExists()
+        compose.mainClock.advanceTimeBy(800)
+        panel.assertDoesNotExist()
+        compose.onNodeWithTag("update_menu_dismiss").assertDoesNotExist()
     }
 
     @Test fun menuDragTracksOneCapsuleAndOnlyRunsTheReleasedOption() {
@@ -217,7 +258,7 @@ class UpdatePageTest {
         compose.runOnIdle { assertEquals(0, retries); assertEquals(0, releases) }
         capture("update-menu-drag-highlight.png")
         panel.performTouchInput { up() }
-        compose.mainClock.advanceTimeBy(400)
+        compose.mainClock.advanceTimeBy(600)
         compose.runOnIdle { assertEquals(1, retries); assertEquals(0, releases) }
         panel.assertDoesNotExist()
 
