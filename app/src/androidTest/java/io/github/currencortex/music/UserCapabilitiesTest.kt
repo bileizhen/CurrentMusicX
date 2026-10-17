@@ -195,7 +195,7 @@ class UserCapabilitiesTest {
         }
         compose.waitUntil(10000) { !vm.state.value.loading && vm.state.value.users.isNotEmpty() }
         compose.onNodeWithText("用户").performClick()
-        compose.onNodeWithText("仅显示正在听歌").performScrollTo().performClick()
+        compose.onNodeWithTag("discover_listening").performClick()
         compose.waitUntil(10000) { vm.state.value.listening && !vm.state.value.loading && vm.state.value.users.isEmpty() }
         compose.onNodeWithText("当前没有正在听歌的用户").assertExists()
         val song = io.github.currencortex.music.data.song.Song(11, "Playing track")

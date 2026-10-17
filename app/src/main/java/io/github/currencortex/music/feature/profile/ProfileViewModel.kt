@@ -131,11 +131,16 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
 
 data class DiscoverState(val query: String = "", val submitted: String = "", val sort: String = "reg",
     val listening: Boolean = false, val loading: Boolean = false, val users: List<SquareUser> = emptyList(),
-    val total: Int = 0, val stats: SquareStats = SquareStats(), val error: String? = null)
+    val total: Int = 0, val stats: SquareStats = SquareStats(), val error: String? = null,
+    val loaded: Boolean = false, val nextOffset: Int = 0, val hasMore: Boolean = true,
+    val loadingMore: Boolean = false, val failedMore: Boolean = false)
+internal val userSortOptions = listOf("reg" to "最新注册", "reg_asc" to "最早注册", "name" to "昵称",
+    "days" to "听歌天数", "listen" to "听歌时长", "likes" to "点赞数")
 class DiscoverViewModel(val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(DiscoverState())
     val styles = MutableStateFlow(io.github.currencortex.music.feature.style.StyleCatalogState())
     private var styleTask: Job? = null
+    private var scalesTask: Job? = null
     private val styleCoverTasks = mutableMapOf<Long, Job>()
     private val styleCoverPermits = Semaphore(3)
     private var styleGeneration = 0
@@ -147,10 +152,11 @@ class DiscoverViewModel(val container: AppContainer) : ViewModel() {
             container.ready.await()
             container.musicSettings.state.map { it.server }.distinctUntilChanged().collect {
                 styleTask?.cancel(); styles.value = io.github.currencortex.music.feature.style.StyleCatalogState(); loadStyles()
+                scalesTask?.cancel(); scalesTask = viewModelScope.launch { appResult { container.profileRepository.loadScales() } }
             }
         }
         viewModelScope.launch { container.musicSettings.state.map { it.server }.distinctUntilChanged().drop(1).collect {
-            task?.cancel(); state.value = DiscoverState(); submit()
+            ++requestGeneration; task?.cancel(); state.value = DiscoverState(); submit()
         } }
     }
     fun loadStyles() {
@@ -178,21 +184,39 @@ class DiscoverViewModel(val container: AppContainer) : ViewModel() {
         }
     }
     fun query(value: String) { state.update { it.copy(query = value) } }
-    fun sort(value: String) { state.update { it.copy(sort = value) }; submit() }
-    fun filter(value: Boolean) { state.update { it.copy(listening = value) }; submit() }
-    fun submit(more: Boolean = false) {
-        if (more && state.value.loading) return
+    fun sort(value: String) {
+        if (value == state.value.sort || userSortOptions.none { it.first == value }) return
+        state.update { it.copy(sort = value) }; submit(useDraft = false)
+    }
+    fun filter(value: Boolean) {
+        if (value == state.value.listening) return
+        state.update { it.copy(listening = value) }; submit(useDraft = false)
+    }
+    fun clearQuery() { val applied = state.value.submitted.isNotEmpty(); query(""); if (applied) submit() }
+    fun refresh() = submit(useDraft = false, preserve = true)
+    fun retry() { if (state.value.failedMore) submit(more = true) else refresh() }
+    fun submit(more: Boolean = false, useDraft: Boolean = !more, preserve: Boolean = false) {
+        if (more && (state.value.loading || !state.value.hasMore)) return
         task?.cancel()
-        ++requestGeneration
-        val request = state.value.copy(submitted = if (more) state.value.submitted else state.value.query.trim())
-        state.value = request.copy(loading = true, error = null)
+        val generation = ++requestGeneration
+        val server = container.musicSettings.state.value.server
+        val request = state.value.copy(submitted = if (useDraft) state.value.query.trim() else state.value.submitted)
+        state.value = request.copy(loading = true, loadingMore = more, error = null, failedMore = false,
+            users = if (more || preserve) request.users else emptyList(),
+            loaded = (more || preserve) && request.loaded,
+            nextOffset = if (more || preserve) request.nextOffset else 0)
         task = viewModelScope.launch {
-            appResult { container.profileRepository.loadScales() }
             when (val r = appResult { container.profileRepository.square(request.submitted, request.sort,
-                if (more) request.users.size else 0, request.listening) }) {
-                is AppResult.Success -> state.update { it.copy(loading = false, users = if (more)
-                    (request.users + r.value.users).distinctBy(SquareUser::id) else r.value.users, total = r.value.total, stats = r.value.stats) }
-                is AppResult.Failure -> state.update { it.copy(loading = false, error = r.kind.message) }
+                if (more) request.nextOffset else 0, request.listening) }) {
+                is AppResult.Success -> if (generation == requestGeneration && server == container.musicSettings.state.value.server) {
+                    val offset = (if (more) request.nextOffset else 0) + r.value.users.size
+                    state.update { it.copy(loading = false, loadingMore = false, loaded = true, users =
+                        (if (more) request.users + r.value.users else r.value.users).distinctBy(SquareUser::id),
+                        total = r.value.total, stats = r.value.stats, nextOffset = offset,
+                        hasMore = r.value.users.isNotEmpty() && offset < r.value.total) }
+                }
+                is AppResult.Failure -> if (generation == requestGeneration && server == container.musicSettings.state.value.server)
+                    state.update { it.copy(loading = false, loadingMore = false, error = r.kind.message, failedMore = more) }
             }
         }
     }
@@ -205,13 +229,19 @@ class DiscoverViewModel(val container: AppContainer) : ViewModel() {
     suspend fun refreshUsers() {
         val before = state.value
         val generation = requestGeneration
-        val server = container.accountRepository.server
-        if (!before.loading) when (val r = appResult { container.profileRepository.square(before.submitted, before.sort, 0,
-            before.listening, limit = before.users.size.coerceAtLeast(30)) }) {
-            is AppResult.Success -> if (server == container.accountRepository.server &&
+        val server = container.musicSettings.state.value.server
+        if (before.loaded && !before.loading && before.error == null) when (val r = appResult { container.profileRepository.square(before.submitted, before.sort, 0,
+            before.listening, limit = before.nextOffset.coerceAtLeast(30)) }) {
+            is AppResult.Success -> if (server == container.musicSettings.state.value.server &&
                 generation == requestGeneration && !state.value.loading && before.sort == state.value.sort &&
-                before.submitted == state.value.submitted && before.listening == state.value.listening)
-                state.update { it.copy(users = r.value.users, total = r.value.total, stats = r.value.stats) }
+                before.submitted == state.value.submitted && before.listening == state.value.listening) {
+                val updates = r.value.users.associateBy(SquareUser::id)
+                val previousIds = before.users.map { it.id }.toSet()
+                // Keep rows under the user's finger in place; an explicit refresh reapplies the ranking.
+                val users = before.users.mapNotNull { updates[it.id] } + r.value.users.filter { it.id !in previousIds }
+                state.update { it.copy(users = users.distinctBy(SquareUser::id), total = r.value.total, stats = r.value.stats,
+                    nextOffset = r.value.users.size, hasMore = r.value.users.isNotEmpty() && r.value.users.size < r.value.total) }
+            }
             is AppResult.Failure -> Unit
         }
     }
