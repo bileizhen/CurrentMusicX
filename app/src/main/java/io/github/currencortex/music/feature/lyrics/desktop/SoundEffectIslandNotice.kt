@@ -204,8 +204,7 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
         }.clip(shape)
         .testTag("desktop_island_transition"), content = {
         Box { normal() }
-        Box { (notice ?: retained)?.let { SoundEffectIslandPill(it, material = false, height = effectHeight, font = font,
-            onUpdateInstall = onUpdateInstall) } }
+        DesktopIslandNoticeTransition(notice ?: retained, effectHeight, font, onUpdateInstall)
     }) { children, constraints ->
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
         val compact = children[0].measure(loose)
