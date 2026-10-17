@@ -64,7 +64,7 @@ import java.util.Locale
     var selected by remember { mutableStateOf<ChatMessage?>(null) }
     var confirming by remember { mutableStateOf<ChatMessage?>(null) }
     var preview by remember { mutableStateOf<String?>(null) }
-    val bottom = LocalMusicBottomInset.current
+    val bottom = LocalMusicComposerBottomInset.current
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri?.let { vm.upload(context.contentResolver, it) }
     }
