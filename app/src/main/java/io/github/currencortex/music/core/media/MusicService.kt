@@ -94,7 +94,8 @@ class MusicService : MediaSessionService() {
                 if (direction > 0) controller.next(controller.state.value.showPause) else controller.previous(controller.state.value.showPause)
             }, togglePlayback = { container.playerController.toggle() }, appearance = container.settings.state,
             appForeground = container.appForeground, effectNotices = container.islandNotices,
-            installUpdate = { io.github.currencortex.music.core.update.UpdateInstallAction.open(this) })
+            installUpdate = { io.github.currencortex.music.core.update.UpdateInstallAction.open(this) },
+            pageHidden = container.desktopIslandPageHidden)
         val probe = TrackEnergyProbe()
         transitions = PlaybackTransitions(createPlaybackPlayer(probe), probe, scope, ::createPlaybackPlayer,
             ::transitionOffer, resolve = { offer ->

@@ -222,6 +222,8 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
 
 /** No existing island: briefly grow from a compact capsule, then shrink before fading away. */
 @Composable internal fun SoundEffectIslandFallback(container: AppContainer) {
+    val pageHidden by container.desktopIslandPageHidden.collectAsStateWithLifecycle()
+    if (pageHidden) return
     val context = LocalContext.current
     val notice by container.islandNotices.collectAsStateWithLifecycle()
     val desktop by container.desktopLyricsStatus.collectAsStateWithLifecycle()

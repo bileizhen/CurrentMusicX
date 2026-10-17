@@ -38,7 +38,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private val appearance: StateFlow<AppearanceSettings> = MutableStateFlow(AppearanceSettings()),
     private val appForeground: StateFlow<Boolean> = MutableStateFlow(false),
     private val effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = MutableStateFlow(null),
-    private val installUpdate: () -> Unit = {}) : AutoCloseable {
+    private val installUpdate: () -> Unit = {},
+    private val pageHidden: StateFlow<Boolean> = MutableStateFlow(false)) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val visual = if (Build.VERSION.SDK_INT >= 30) context.createDisplayContext(context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
         .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null) else context
@@ -95,6 +96,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         scope.launch { preferences.ready.await(); combine(preferences.state, settingsVisible) { settings, _ -> settings }
             .collect { current = it; reconcile() } }
         scope.launch { appearance.map { it.refreshRate }.distinctUntilChanged().collect { refreshRate = it; updateWindow() } }
+        scope.launch { combine(appForeground, pageHidden) { foreground, hidden -> foreground && hidden }
+            .distinctUntilChanged().collect { visibility() } }
         scope.launch { effectNotices.map { it != null && !it.isUpdateInstallNotice() }.distinctUntilChanged().collectLatest { showing ->
             effectTransitioning = true
             removeIslandTouchWindow()
@@ -171,7 +174,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
             }
             override fun onWindowVisibilityChanged(visibility: Int) {
                 super.onWindowVisibilityChanged(visibility)
-                val screenHidden = !power.isInteractive || keyguard.isKeyguardLocked || settingsVisible.value
+                val screenHidden = screenHidden()
                 handler.post { if (!closed && view === this) {
                     if (visibility == View.VISIBLE) systemVisible = true
                     else if (!screenHidden) systemVisible = false
@@ -319,7 +322,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         return desktopIslandPlacement(screen, width, height, current.islandY, (screen.left + screen.right) / 2)
     }
     private fun visibility() {
-        val screenHidden = !power.isInteractive || keyguard.isKeyguardLocked || settingsVisible.value
+        val screenHidden = screenHidden()
         val visible = view != null && systemVisible && !screenHidden
         // A system-hidden window must retain VISIBLE on its own view, otherwise the
         // app's GONE state would prevent WindowManager from making it visible again.
@@ -328,6 +331,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         status.value = status.value.copy(visible = visible)
         updateIslandTouchWindow()
     }
+    private fun screenHidden() = !power.isInteractive || keyguard.isKeyguardLocked || settingsVisible.value ||
+        (appForeground.value && pageHidden.value)
     private fun notification() {
         val key = current.locked to editing
         if (view == null || noticeKey == key) return
