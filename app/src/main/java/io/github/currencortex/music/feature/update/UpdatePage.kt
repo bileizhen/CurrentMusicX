@@ -289,7 +289,6 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
         UpdateGlassMenu(menu, glassBackdrop, onDismiss = { menu = false }, anchor = menuAnchor, actions = buildList {
             add(UpdateMenuAction("更新设置") { menu = false; showSettings = true })
             add(UpdateMenuAction("下载源") { menu = false; showSources = true })
-            add(UpdateMenuAction("重新检查", dividerBefore = true) { menu = false; onRetry() })
             add(UpdateMenuAction("发布记录") { menu = false; onOpenRelease(AppMetadata.RELEASES_URL) })
             if (release != null && transferState.download is UpdateDownloadState.Idle)
                 add(UpdateMenuAction("忽略此版本") { menu = false; onIgnore() })

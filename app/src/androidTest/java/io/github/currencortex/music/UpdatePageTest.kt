@@ -174,6 +174,7 @@ class UpdatePageTest {
         capture("update-menu-opening.png")
         compose.mainClock.advanceTimeBy(300)
         compose.onNodeWithText("更新设置").assertIsDisplayed()
+        compose.onNodeWithText("重新检查").assertDoesNotExist()
         capture("update-menu-glass.png")
         compose.onNodeWithTag("update_menu_dismiss").performTouchInput {
             click(androidx.compose.ui.geometry.Offset(center.x, height * .85f))
@@ -259,23 +260,23 @@ class UpdatePageTest {
         capture("update-menu-drag-highlight.png")
         panel.performTouchInput { up() }
         compose.mainClock.advanceTimeBy(600)
-        compose.runOnIdle { assertEquals(1, retries); assertEquals(0, releases) }
+        compose.runOnIdle { assertEquals(0, retries); assertEquals(1, releases) }
         panel.assertDoesNotExist()
 
         compose.onNodeWithTag("update_menu").performTouchInput { click() }
         compose.mainClock.advanceTimeBy(400)
-        val selected = point(3)
+        val selected = point(2)
         panel.performTouchInput { down(selected); moveTo(Offset(-60f, selected.y), delayMillis = 150); up() }
         compose.mainClock.advanceTimeBy(400)
         panel.assertIsDisplayed()
         assertEquals(-1, panel.fetchSemanticsNode().config[UpdateMenuInteractionKey].selected)
-        compose.runOnIdle { assertEquals("Dragging outside must cancel the option", 0, releases) }
+        compose.runOnIdle { assertEquals("Dragging outside must cancel the option", 1, releases) }
 
-        panel.performTouchInput { down(point(3)); cancel() }
+        panel.performTouchInput { down(point(2)); cancel() }
         compose.mainClock.advanceTimeBy(400)
         panel.assertIsDisplayed()
         assertEquals(-1, panel.fetchSemanticsNode().config[UpdateMenuInteractionKey].selected)
-        compose.runOnIdle { assertEquals("A cancelled gesture must not run the option", 0, releases) }
+        compose.runOnIdle { assertEquals("A cancelled gesture must not run the option", 1, releases) }
     }
 
     @Composable private fun TestTheme(content: @Composable () -> Unit) {

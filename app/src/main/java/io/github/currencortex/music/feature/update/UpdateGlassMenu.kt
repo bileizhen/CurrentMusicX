@@ -107,7 +107,7 @@ internal val UpdateButtonGlowKey = SemanticsPropertyKey<Float>("UpdateButtonGlow
         .testTag(tag), contentAlignment = Alignment.Center) { content() }
 }
 
-internal data class UpdateMenuAction(val label: String, val dividerBefore: Boolean = false, val onClick: () -> Unit)
+internal data class UpdateMenuAction(val label: String, val onClick: () -> Unit)
 internal data class UpdateMenuInteraction(val selected: Int, val displacement: Offset, val highlight: Rect)
 internal val UpdateMenuInteractionKey = SemanticsPropertyKey<UpdateMenuInteraction>("UpdateMenuInteraction")
 internal data class UpdateMenuWaves(val path: Float, val scale: Float, val opacity: Float)
@@ -239,8 +239,6 @@ internal val UpdateMenuWavesKey = SemanticsPropertyKey<UpdateMenuWaves>("UpdateM
             }) {
             Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                 actions.forEachIndexed { index, action ->
-                    if (action.dividerBefore) Box(Modifier.padding(horizontal = 16.dp, vertical = 2.dp)
-                        .fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .08f)))
                     Box(Modifier.fillMaxWidth().heightIn(min = 44.dp)
                         .onGloballyPositioned { row ->
                             panelCoordinates?.takeIf { it.isAttached && row.isAttached }?.let {
