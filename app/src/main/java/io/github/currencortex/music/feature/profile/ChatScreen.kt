@@ -5,25 +5,32 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,13 +76,20 @@ import java.util.Locale
     LaunchedEffect(state.messages.lastOrNull()?.id) { if (nearBottom) list.animateScrollToItem(0) }
     LaunchedEffect(state.scrollRequest) { if (state.scrollRequest > 0) list.animateScrollToItem(0) }
     Column(Modifier.fillMaxSize().padding(bottom = bottom).testTag("discover_chat")) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 6.dp).testTag("chat_header"),
+            verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("公共聊天室", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 Text(if (state.connected) "实时消息" else if (state.loaded) "正在连接…" else "与大家聊聊音乐",
                     fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .45f))
             }
-            MusicTextAction("成员 ${state.members.size}", { membersOpen = true }, Modifier.testTag("chat_members"))
+            Row(Modifier.clip(CircleShape).background(MiuixTheme.colorScheme.surfaceContainer)
+                .clickable(role = Role.Button) { membersOpen = true }.heightIn(min = 40.dp)
+                .padding(horizontal = 12.dp).testTag("chat_members"),
+                verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Icon(MusicIcons.Account, null, Modifier.size(16.dp), tint = MiuixTheme.colorScheme.primary)
+                Text("成员 ${state.members.size}", fontSize = 12.sp, color = MiuixTheme.colorScheme.primary)
+            }
         }
         if (state.error != null) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(state.error.orEmpty(), Modifier.weight(1f), fontSize = 12.sp)
@@ -83,7 +97,7 @@ import java.util.Locale
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(Modifier.fillMaxSize().testTag("chat_messages"), state = list, reverseLayout = true,
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                 items(state.messages.asReversed(), key = { it.id }) { message ->
                     ChatMessageRow(message, mine = message.userId == account.account?.id, vm,
                         onProfile = { id -> keyboard?.hide(); navigate("user/profile/$id") },
@@ -121,13 +135,24 @@ import java.util.Locale
                     MusicTextAction("@${member.nickname}", { vm.mention(member) }, Modifier.weight(1f))
                 }
             }
-            Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
+            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("chat_composer"),
                 verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                MusicTextAction(if (state.uploading) "处理中" else "图片", {
+                ChatComposerAction(if (state.uploading) "正在处理图片" else "选择图片", MusicIcons.Image, {
                     picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                }, Modifier.testTag("chat_pick_image"), enabled = !state.uploading && !state.sending)
-                TextField(state.draft, vm::draft, Modifier.weight(1f).heightIn(max = 120.dp).testTag("chat_input"))
-                MusicTextAction(if (state.sending) "发送中" else "发送", vm::send, Modifier.testTag("chat_send"),
+                }, Modifier.testTag("chat_pick_image"), enabled = !state.uploading && !state.sending, busy = state.uploading)
+                val colors = MiuixTheme.colorScheme
+                BasicTextField(state.draft, vm::draft, Modifier.weight(1f).heightIn(min = 48.dp)
+                        .clip(RoundedCornerShape(24.dp)).background(colors.surfaceContainer).testTag("chat_input")
+                        .semantics { contentDescription = "聊天消息" }.padding(horizontal = 14.dp, vertical = 13.dp),
+                        textStyle = TextStyle(fontSize = 14.sp, lineHeight = 21.sp, color = colors.onSurface),
+                        cursorBrush = SolidColor(colors.primary), maxLines = 5,
+                        decorationBox = { inner -> Box {
+                            if (state.draft.isEmpty()) Text("聊聊正在听的音乐…", Modifier.clearAndSetSemantics {},
+                                fontSize = 14.sp, lineHeight = 21.sp, color = colors.onSurface.copy(alpha = .4f))
+                            inner()
+                        } })
+                ChatComposerAction(if (state.sending) "发送中" else "发送", MusicIcons.ArrowUp, vm::send,
+                    Modifier.testTag("chat_send"), primary = true, busy = state.sending,
                     enabled = !state.sending && !state.uploading && (state.draft.isNotBlank() || state.image.isNotBlank()))
             }
         }
@@ -163,40 +188,67 @@ import java.util.Locale
     } }
 }
 
+@Composable private fun ChatComposerAction(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, primary: Boolean = false, busy: Boolean = false) {
+    val colors = MiuixTheme.colorScheme
+    Box(modifier.size(48.dp).clip(CircleShape)
+        .background(if (primary && enabled) colors.primary else colors.surfaceContainer)
+        .clickable(enabled = enabled, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+        if (busy) CircularProgressIndicator(Modifier.size(20.dp).semantics { contentDescription = label })
+        else Icon(icon, label, Modifier.size(22.dp), tint = when {
+            !enabled -> colors.onSurface.copy(alpha = .25f)
+            primary -> colors.onPrimary
+            else -> colors.onSurface.copy(alpha = .65f)
+        })
+    }
+}
+
 @Composable private fun ChatMessageRow(message: ChatMessage, mine: Boolean, vm: ChatViewModel,
     onProfile: (Long) -> Unit, onImage: (String) -> Unit, onMenu: () -> Unit) {
     val user = message.user ?: ProfileUser(id = message.userId, nickname = "已注销用户")
     val color = MiuixTheme.colorScheme
-    Row(Modifier.fillMaxWidth().testTag("chat_message_${message.id}"),
-        horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Top) {
-        if (!mine) Box(Modifier.padding(end = 8.dp).clickable(enabled = user.id > 0) { onProfile(user.id) }) {
-            UserAvatar(user, vm.container, 32.dp, reserveOverlay = false)
-        }
-        Column(Modifier.widthIn(max = 270.dp), horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
-            verticalArrangement = Arrangement.spacedBy(5.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(user.nickname.ifBlank { user.username }, Modifier.weight(1f, fill = false).clickable(enabled = user.id > 0) { onProfile(user.id) },
-                    fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                UserRoleBadge(user.role)
-                Icon(Icons.Default.MoreVert, "消息操作", Modifier.size(22.dp).clickable(onClick = onMenu).testTag("chat_menu_${message.id}"),
-                    tint = color.onSurface.copy(alpha = .4f))
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // Avatar, gap, and a small opposite gutter; long messages retain their reading width.
+        val messageWidth = (maxWidth - 36.dp - 10.dp - 12.dp).coerceIn(0.dp, 360.dp)
+        Row(Modifier.fillMaxWidth().testTag("chat_message_${message.id}"),
+            horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Top) {
+            if (!mine) Box(Modifier.padding(end = 10.dp).testTag("chat_avatar_${message.id}")
+                .clickable(enabled = user.id > 0) { onProfile(user.id) }) {
+                UserAvatar(user, vm.container, 36.dp, reserveOverlay = false)
             }
-            UserIdentityDetails(user.title, user.ipRegion)
-            Column(Modifier.clip(RoundedCornerShape(if (mine) 16.dp else 4.dp, if (mine) 4.dp else 16.dp, 16.dp, 16.dp))
-                .background(if (mine) color.primary.copy(alpha = .12f) else color.surface).padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (message.content.isNotEmpty()) SelectionContainer { Text(message.content, fontSize = 14.sp) }
-                vm.repository.imageUrl(vm.container.audioSession().server, message.image)?.let { url ->
-                    AsyncImage(url, "聊天图片", Modifier.width(230.dp).heightIn(min = 120.dp, max = 240.dp)
-                        .clip(RoundedCornerShape(10.dp)).clickable { onImage(url) }, contentScale = ContentScale.Fit)
+            Column(Modifier.widthIn(max = messageWidth), horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
+                verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(user.nickname.ifBlank { user.username }, Modifier.weight(1f, fill = false).clickable(enabled = user.id > 0) { onProfile(user.id) },
+                        fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    UserRoleBadge(user.role)
+                    Box(Modifier.size(32.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onMenu)
+                        .testTag("chat_menu_${message.id}"), contentAlignment = Alignment.Center) {
+                        Icon(MusicIcons.More, "消息操作", Modifier.size(18.dp).rotate(90f), tint = color.onSurface.copy(alpha = .4f))
+                    }
                 }
+                UserIdentityDetails(user.title, user.ipRegion)
+                Column(Modifier.testTag("chat_bubble_${message.id}")
+                    .clip(RoundedCornerShape(if (mine) 18.dp else 6.dp, if (mine) 6.dp else 18.dp, 18.dp, 18.dp))
+                    .background(if (mine) color.primary.copy(alpha = .10f) else color.surfaceContainer).padding(horizontal = 12.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    if (message.content.isNotEmpty()) SelectionContainer {
+                        Text(message.content, Modifier.testTag("chat_body_${message.id}"), fontSize = 14.sp, lineHeight = 21.sp)
+                    }
+                    vm.repository.imageUrl(vm.container.audioSession().server, message.image)?.let { url ->
+                        AsyncImage(url, "聊天图片", Modifier.widthIn(max = 230.dp).fillMaxWidth().heightIn(min = 120.dp, max = 240.dp)
+                            .clip(RoundedCornerShape(10.dp)).clickable { onImage(url) }, contentScale = ContentScale.Fit)
+                    }
+                }
+                if (message.createdAt > 0) Text(remember(message.createdAt) {
+                    SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(message.createdAt * 1000))
+                }, Modifier.padding(horizontal = 12.dp).testTag("chat_time_${message.id}"),
+                    fontSize = 10.sp, color = color.onSurface.copy(alpha = .4f))
             }
-            if (message.createdAt > 0) Text(remember(message.createdAt) {
-                SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(message.createdAt * 1000))
-            }, fontSize = 10.sp, color = color.onSurface.copy(alpha = .4f))
-        }
-        if (mine) Box(Modifier.padding(start = 8.dp).clickable(enabled = user.id > 0) { onProfile(user.id) }) {
-            UserAvatar(user, vm.container, 32.dp, reserveOverlay = false)
+            if (mine) Box(Modifier.padding(start = 10.dp).testTag("chat_avatar_${message.id}")
+                .clickable(enabled = user.id > 0) { onProfile(user.id) }) {
+                UserAvatar(user, vm.container, 36.dp, reserveOverlay = false)
+            }
         }
     }
 }
