@@ -36,7 +36,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun UpdatePage(service: UpdateService, transfer: UpdateTransfer, cover: String = "",
-    origin: UpdatePageOrigin? = null, onPresentedChanged: (Boolean) -> Unit = {}) {
+    origin: UpdatePageOrigin? = null, onPresentedChanged: (Boolean) -> Unit = {},
+    versionPreview: String = BuildConfig.UPDATE_ANIMATION_PREVIEW_VERSION) {
     val visible by service.dialogVisible.collectAsStateWithLifecycle()
     val state by service.state.collectAsStateWithLifecycle()
     val download by transfer.state.collectAsStateWithLifecycle()
@@ -72,7 +73,7 @@ fun UpdatePage(service: UpdateService, transfer: UpdateTransfer, cover: String =
         onChangeSource = transfer::changeSource, downloadExperience = BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE,
         settings = settings, onAutoCheck = { scope.launch { service.settings.setAutoCheck(it) } },
         onChannel = { scope.launch { service.settings.setChannel(it); service.check(manual = true) } }, cover = cover,
-        origin = origin, onPresentedChanged = onPresentedChanged)
+        origin = origin, onPresentedChanged = onPresentedChanged, versionPreview = versionPreview)
 }
 
 @Composable
