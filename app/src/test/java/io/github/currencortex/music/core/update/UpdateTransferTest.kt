@@ -17,6 +17,64 @@ class UpdateTransferTest {
             return if (permission) UpdateInstallResult.STARTED else UpdateInstallResult.PERMISSION_REQUIRED
         }
     }
+    private class Background : UpdateBackground {
+        override val events = kotlinx.coroutines.flow.MutableSharedFlow<UpdateBackgroundEvent>(replay = 1)
+        var starts = 0
+        var cancels = 0
+        override fun start(release: AppRelease, source: UpdateSource) = "task-${++starts}"
+        override fun cancel() { cancels++ }
+    }
+    @Test fun recreatedObserverRestoresDurableProgressAndDoesNotStartAnotherDownload() = runBlocking {
+        val backend = Background()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val restoredScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val neverLocal = UpdateDownload { _, _, _ -> error("Network belongs to the worker") }
+        try {
+            val transfer = UpdateTransfer(neverLocal, Installer(), scope, backend)
+            transfer.selectRelease(release); transfer.download(UpdateSource.GITHUB); transfer.download(UpdateSource.GITHUB)
+            assertEquals(1, backend.starts)
+            backend.events.emit(UpdateBackgroundEvent("task-1", release, UpdateTransferState(UpdateDownloadState.Downloading(4, 10))))
+            scope.cancel() // An Activity/app collector can disappear without cancelling the persisted worker.
+            val restored = UpdateTransfer(neverLocal, Installer(), restoredScope, backend)
+            assertEquals(UpdateDownloadState.Downloading(4, 10), restored.state.value.download)
+            assertEquals(release, restored.selectedRelease.value)
+            assertEquals(0, backend.cancels)
+            backend.events.emit(UpdateBackgroundEvent("task-1", release, UpdateTransferState(UpdateDownloadState.Ready(File("verified.apk")))))
+            assertTrue(restored.state.value.download is UpdateDownloadState.Ready)
+            assertEquals(1, backend.starts)
+        } finally { scope.cancel(); restoredScope.cancel() }
+    }
+    @Test fun changingSourcesCancelsOnlyTheOldTaskAndIgnoresItsLateCompletion() = runBlocking {
+        val backend = Background()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val installer = Installer()
+        try {
+            val transfer = UpdateTransfer(UpdateDownload { _, _, _ -> error("Worker owns download") }, installer, scope, backend)
+            transfer.selectRelease(release); transfer.download(UpdateSource.CURRENTMUSIC)
+            transfer.changeSource(UpdateSource.GITHUB)
+            backend.events.emit(UpdateBackgroundEvent("task-1", release, UpdateTransferState(UpdateDownloadState.Ready(File("stale.apk")))))
+            assertEquals(UpdateDownloadState.Downloading(0, 10), transfer.state.value.download)
+            backend.events.emit(UpdateBackgroundEvent("task-2", release, UpdateTransferState(UpdateDownloadState.Downloading(7, 10))))
+            assertEquals(UpdateDownloadState.Downloading(7, 10), transfer.state.value.download)
+            transfer.cancel()
+            backend.events.emit(UpdateBackgroundEvent("task-2", release, UpdateTransferState(UpdateDownloadState.Ready(File("late.apk")))))
+            assertEquals(UpdateDownloadState.Idle, transfer.state.value.download)
+            assertEquals(2, backend.starts); assertEquals(2, backend.cancels); assertEquals(0, installer.requests)
+        } finally { scope.cancel() }
+    }
+    @Test fun refreshedReleaseNotesDoNotCancelAnIdenticalAsset() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val finish = CompletableDeferred<Unit>()
+        try {
+            val transfer = UpdateTransfer(UpdateDownload { _, _, progress -> progress(5, 10); finish.await(); File("verified.apk") }, Installer(), scope)
+            transfer.selectRelease(release); transfer.download(UpdateSource.GITHUB)
+            transfer.selectRelease(release.copy(notes = "Updated release notes"))
+            assertEquals(UpdateDownloadState.Downloading(5, 10), transfer.state.value.download)
+            finish.complete(Unit)
+            assertEquals(UpdateDownloadState.Ready(File("verified.apk")), transfer.state.value.download)
+            assertEquals("Updated release notes", transfer.selectedRelease.value?.notes)
+        } finally { scope.cancel() }
+    }
     @Test fun downloadsAreDeduplicatedAndCancelResetsProgress() = runBlocking {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
         var calls = 0

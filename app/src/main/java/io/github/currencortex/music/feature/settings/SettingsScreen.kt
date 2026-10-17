@@ -19,7 +19,8 @@ import top.yukonga.miuix.kmp.preference.OverlaySpinnerPreference
 @Composable
 fun SettingsScreen(updateViewModel: UpdateSettingsViewModel, onAppearance: () -> Unit, onNetwork: () -> Unit,
                    onStorage: () -> Unit, onLogs: () -> Unit, onAbout: () -> Unit, onUpdates: () -> Unit,
-                   onDesktopLyrics: () -> Unit = {}) {
+                   onDesktopLyrics: () -> Unit = {},
+                   updateTransfer: io.github.currencortex.music.core.update.UpdateTransferState = io.github.currencortex.music.core.update.UpdateTransferState()) {
     val settings by updateViewModel.settings.collectAsStateWithLifecycle()
     LazyColumn(Modifier.fillMaxSize().testTag("settings_screen"),
         contentPadding = musicScrollPadding(PaddingValues(12.dp, 30.dp, 12.dp, 32.dp)),
@@ -36,8 +37,16 @@ fun SettingsScreen(updateViewModel: UpdateSettingsViewModel, onAppearance: () ->
                     selectedIndex = settings.channel.ordinal,
                     onSelectedIndexChange = { updateViewModel.setChannel(UpdateChannel.entries[it]) },
                     modifier = Modifier.testTag("update_channel"))
-                ArrowPreference(title = "检查更新", summary = "查看版本和更新说明",
-                    startAction = { SettingIcon(MusicIcons.Download) }, onClick = onUpdates)
+                val progress = updateTransfer.download
+                val updateTitle = when (progress) {
+                    is io.github.currencortex.music.core.update.UpdateDownloadState.Downloading -> "更新下载中 · ${(progress.received.toDouble() / progress.total.coerceAtLeast(1) * 100).toInt()}%"
+                    is io.github.currencortex.music.core.update.UpdateDownloadState.Ready -> "更新已下载"
+                    is io.github.currencortex.music.core.update.UpdateDownloadState.Failed -> "更新下载失败"
+                    else -> "检查更新"
+                }
+                ArrowPreference(title = updateTitle, summary = if (progress is io.github.currencortex.music.core.update.UpdateDownloadState.Idle)
+                    "查看版本和更新说明" else "查看下载进度、切换来源或安装",
+                    startAction = { SettingIcon(MusicIcons.Download) }, onClick = onUpdates, modifier = Modifier.testTag("open_updates"))
             }
         }
         item {

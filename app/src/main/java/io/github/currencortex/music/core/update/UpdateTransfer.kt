@@ -6,6 +6,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.collect
 
 sealed interface UpdateDownloadState {
     data object Idle : UpdateDownloadState
@@ -18,28 +19,53 @@ data class UpdateTransferState(val download: UpdateDownloadState = UpdateDownloa
     val activeSource: UpdateSource? = null, val attempt: Int = 0, val totalSources: Int = 0)
 
 class UpdateTransfer(private val downloader: UpdateDownload, private val installer: UpdateInstall,
-                     private val scope: CoroutineScope) {
+                     private val scope: CoroutineScope, private val background: UpdateBackground? = null) {
     private val mutable = MutableStateFlow(UpdateTransferState())
     val state = mutable.asStateFlow()
     private var job: Job? = null
     private var release: AppRelease? = null
     private var generation = 0
+    private var backgroundId: String? = null
+    private val selected = MutableStateFlow<AppRelease?>(null)
+    val selectedRelease = selected.asStateFlow()
+
+    init {
+        if (background != null) scope.launch {
+            background.events.collect { event ->
+                if (backgroundId == event.id || backgroundId == null && (release == null || release!!.sameAsset(event.release))) {
+                    backgroundId = event.id
+                    // Keep full release notes when already checked; restored tasks carry compact metadata.
+                    if (release == null) { release = event.release; selected.value = event.release }
+                    mutable.update { event.transfer.copy(installing = it.installing,
+                        permissionRequired = it.permissionRequired, message = it.message) }
+                }
+            }
+        }
+    }
 
     fun selectRelease(value: AppRelease) {
-        if (release == value) return
+        if (release?.sameAsset(value) == true) { selected.value = value; return }
         generation++
         job?.cancel()
+        if (release != null) { backgroundId = ""; background?.cancel() }
         job = null
         release = value
+        selected.value = value
         mutable.value = UpdateTransferState()
     }
     fun download(source: UpdateSource) {
         val value = release ?: return
-        if (job?.isActive == true || mutable.value.installing || mutable.value.download is UpdateDownloadState.Ready) return
+        if (job?.isActive == true || mutable.value.installing || mutable.value.download is UpdateDownloadState.Ready ||
+            mutable.value.download is UpdateDownloadState.Downloading) return
         val request = ++generation
         val sources = source.fallbacks()
         mutable.value = UpdateTransferState(UpdateDownloadState.Downloading(0, value.size),
             activeSource = sources.first(), attempt = 1, totalSources = sources.size)
+        if (background != null) {
+            try { backgroundId = background.start(value, source) }
+            catch (error: Exception) { mutable.update { it.copy(download = UpdateDownloadState.Failed(error.message ?: "无法开始后台下载")) } }
+            return
+        }
         job = scope.launch {
             try {
                 val failures = mutableListOf<String>()
@@ -70,7 +96,14 @@ class UpdateTransfer(private val downloader: UpdateDownload, private val install
             }
         }
     }
-    fun cancel() { job?.cancel() }
+    fun cancel() {
+        generation++
+        backgroundId = ""
+        job?.cancel(); job = null
+        background?.cancel()
+        mutable.value = UpdateTransferState()
+    }
+    fun changeSource(source: UpdateSource) { cancel(); download(source) }
     fun install() {
         val value = release ?: return
         val file = (mutable.value.download as? UpdateDownloadState.Ready)?.file ?: return

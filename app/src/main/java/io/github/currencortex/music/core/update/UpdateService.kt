@@ -38,6 +38,8 @@ class UpdateService(
         if (mutableState.value == UpdateState.Checking) promptAllowed = false
     }
 
+    fun reopenDownload() { mutableDialogVisible.value = true }
+
     suspend fun ignoreCurrentRelease() {
         val release = (mutableState.value as? UpdateState.Available)?.release ?: return
         try {

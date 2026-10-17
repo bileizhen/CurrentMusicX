@@ -38,6 +38,7 @@ fun UpdateDialog(service: UpdateService, transfer: UpdateTransfer) {
     val visible by service.dialogVisible.collectAsStateWithLifecycle()
     val state by service.state.collectAsStateWithLifecycle()
     val download by transfer.state.collectAsStateWithLifecycle()
+    val selectedRelease by transfer.selectedRelease.collectAsStateWithLifecycle()
     val owner = LocalLifecycleOwner.current
     DisposableEffect(owner, transfer) {
         val observer = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_RESUME) transfer.onResume() }
@@ -45,22 +46,28 @@ fun UpdateDialog(service: UpdateService, transfer: UpdateTransfer) {
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
     val release = (state as? UpdateState.Available)?.release
-    LaunchedEffect(release) { if (release != null) transfer.selectRelease(release) }
+    LaunchedEffect(release) {
+        if (release != null && (download.download is UpdateDownloadState.Idle || selectedRelease?.sameAsset(release) == true)) transfer.selectRelease(release)
+    }
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     if (!visible) return
-    UpdateDialogContent(state, onDismiss = { transfer.cancel(); service.dismissDialog() },
+    val shownState = if (selectedRelease != null && download.download !is UpdateDownloadState.Idle)
+        UpdateState.Available(selectedRelease!!) else state
+    UpdateDialogContent(shownState, onDismiss = service::dismissDialog,
         onRetry = { scope.launch { service.check(manual = true) } },
         onIgnore = { scope.launch { service.ignoreCurrentRelease() } },
         onOpenRelease = { openExternalLink(context, it) }, transferState = download,
-        onDownload = transfer::download, onInstall = transfer::install)
+        onDownload = transfer::download, onInstall = transfer::install, onCancel = transfer::cancel,
+        onChangeSource = transfer::changeSource)
 }
 
 @Composable
 fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -> Unit,
                         onIgnore: () -> Unit, onOpenRelease: (String) -> Unit, preview: Boolean = false,
                         transferState: UpdateTransferState = UpdateTransferState(),
-                        onDownload: ((UpdateSource) -> Unit)? = null, onInstall: () -> Unit = {}) {
+                        onDownload: ((UpdateSource) -> Unit)? = null, onInstall: () -> Unit = {},
+                        onCancel: () -> Unit = {}, onChangeSource: ((UpdateSource) -> Unit)? = null) {
     val release = (state as? UpdateState.Available)?.release
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -69,6 +76,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
     val previewDownloading = previewProgress in 0f..<1f
     val downloading = transferState.download is UpdateDownloadState.Downloading || previewDownloading
     val ready = transferState.download is UpdateDownloadState.Ready || previewProgress >= 1f
+    LaunchedEffect(transferState.activeSource) { transferState.activeSource?.let { source = it } }
     val animatedProgress by animateFloatAsState(targetValue = when (val value = transferState.download) {
         is UpdateDownloadState.Downloading -> (value.received.toDouble() / value.total.coerceAtLeast(1)).toFloat().coerceIn(0f, 1f)
         is UpdateDownloadState.Ready -> 1f
@@ -105,11 +113,15 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
             if (preview) Text("测试预览", fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             Spacer(Modifier.height(12.dp))
             HorizontalDivider()
-            OverlaySpinnerPreference(title = "下载源 · ${source.compactLabel()}", items = UpdateSource.available.map { DropdownItem(it.label) },
+            OverlaySpinnerPreference(title = "下载源 · ${source.compactLabel()}", summary = if (downloading) "切换来源会从头重新下载" else null,
+                items = UpdateSource.available.map { DropdownItem(it.label) },
                 selectedIndex = UpdateSource.available.indexOf(source).coerceAtLeast(0),
                 showValue = false, insideMargin = PaddingValues(vertical = 8.dp),
-                enabled = !downloading && !ready && !transferState.installing,
-                onSelectedIndexChange = { source = UpdateSource.available[it] }, modifier = Modifier.testTag("update_source"))
+                enabled = (!downloading || onChangeSource != null) && !ready && !transferState.installing,
+                onSelectedIndexChange = {
+                    val next = UpdateSource.available[it]
+                    if (next != source) { source = next; if (downloading) onChangeSource?.invoke(next) }
+                }, modifier = Modifier.testTag("update_source"))
             when {
                 previewDownloading -> {
                     Text("${formatReceived((release.size * previewProgress).toLong())} / ${formatSize(release.size)}", fontSize = 13.sp)
@@ -125,6 +137,8 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                         Text("${formatReceived(download.received)} / ${formatSize(download.total)} · ${(animatedProgress * 100).toInt()}%", fontSize = 13.sp)
                         LinearProgressIndicator(progress = animatedProgress,
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
+                        Text("关闭弹窗后继续下载，可从设置或通知查看进度", fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary, modifier = Modifier.padding(top = 6.dp))
                     }
                     is UpdateDownloadState.Ready -> Text("下载完成，已校验安装包", fontSize = 13.sp,
                         color = MiuixTheme.colorScheme.primary)
@@ -136,7 +150,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
             transferState.message?.let { Text(it, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis) }
         }
         Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(if (downloading) "取消下载" else "关闭", onClick = onDismiss,
+            TextButton(if (downloading) "后台下载" else "关闭", onClick = onDismiss,
                 enabled = !transferState.installing, minHeight = 48.dp, cornerRadius = 16.dp,
                 insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                 textStyle = MiuixTheme.textStyles.body1.copy(fontSize = 15.sp),
@@ -149,6 +163,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                     ready -> "请求安装"
                     !verifiedAsset && !preview -> "查看发布"
                     transferState.download is UpdateDownloadState.Failed -> "重试下载"
+                    downloading -> "取消下载"
                     else -> "下载更新"
                 }
                 Button(onClick = {
@@ -158,10 +173,11 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                             previewProgress = 0f
                             repeat(10) { delay(120); previewProgress = (it + 1) / 10f }
                         }
-                    } else if (ready) onInstall()
+                    } else if (downloading) onCancel()
+                    else if (ready) onInstall()
                     else if (verifiedAsset && onDownload != null) onDownload(source)
                     else onOpenRelease(release.pageUrl)
-                }, enabled = !downloading && !transferState.installing,
+                }, enabled = !previewDownloading && !transferState.installing,
                     minHeight = 48.dp, cornerRadius = 16.dp, insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                     colors = ButtonDefaults.buttonColorsPrimary(), modifier = Modifier.weight(1f).testTag("update_download")) {
                     Text(label, fontSize = 15.sp, fontWeight = FontWeight.Medium)

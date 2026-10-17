@@ -3,6 +3,7 @@ package io.github.currencortex.music
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.test.*
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.currencortex.music.core.update.*
@@ -29,6 +30,37 @@ class UpdateMirrorFlowTest {
     @get:Rule val compose = createComposeRule()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     @After fun close() { scope.cancel() }
+
+    @Test fun closingDialogKeepsDownloadAndReopeningShowsTheSameProgress() {
+        val release = AppRelease("99.0.0", "Background fixture", "https://github.com/bileizhen/CurrentMusicX/releases/tag/v99.0.0",
+            "https://github.com/bileizhen/CurrentMusicX/releases/download/v99.0.0/app.apk", "app.apk", false, 100, "0".repeat(64))
+        val finish = CompletableDeferred<Unit>()
+        var calls = 0
+        val visible = androidx.compose.runtime.mutableStateOf(true)
+        val transfer = UpdateTransfer(UpdateDownload { _, _, progress -> calls++; progress(42, 100); finish.await(); File("fixture.apk") },
+            object : UpdateInstall {
+                override fun canInstall() = false
+                override suspend fun request(file: File, release: AppRelease) = error("No automatic installation")
+            }, scope)
+        transfer.selectRelease(release)
+        compose.setContent {
+            val state by transfer.state.collectAsState()
+            LeiTheme(AppearanceSettings(blur = false)) { top.yukonga.miuix.kmp.basic.Scaffold {
+                top.yukonga.miuix.kmp.basic.TextButton("重新打开", { visible.value = true }, modifier = androidx.compose.ui.Modifier.testTag("reopen_update"))
+                if (visible.value) UpdateDialogContent(UpdateState.Available(release), onDismiss = { visible.value = false },
+                    onRetry = {}, onIgnore = {}, onOpenRelease = {}, transferState = state, onDownload = transfer::download, onCancel = transfer::cancel)
+            } }
+        }
+        compose.onNodeWithTag("update_download").performClick()
+        compose.onNodeWithTag("update_close").assertTextContains("后台下载").performClick()
+        compose.runOnIdle { assertEquals(1, calls); assertEquals(UpdateDownloadState.Downloading(42, 100), transfer.state.value.download) }
+        compose.onNodeWithTag("reopen_update").performClick()
+        compose.onNodeWithTag("update_download").assertTextContains("取消下载")
+        compose.runOnIdle { finish.complete(Unit) }
+        compose.waitUntil(5000) { transfer.state.value.download is UpdateDownloadState.Ready }
+        compose.onNodeWithTag("update_download").assertTextContains("请求安装")
+        compose.runOnIdle { assertEquals(1, calls) }
+    }
 
     @Test fun fallbackSourceIsVisibleAndInstallationRequiresExplicitAction() {
         val release = AppRelease("99.0.0", "Fixture update", "https://github.com/bileizhen/CurrentMusicX/releases/tag/v99.0.0",

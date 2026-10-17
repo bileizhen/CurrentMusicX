@@ -46,7 +46,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
 
     val updateTransfer = io.github.currencortex.music.core.update.UpdateTransfer(
         io.github.currencortex.music.core.update.UpdateDownloader(okhttp3.OkHttpClient(), java.io.File(context.cacheDir, "updates")),
-        io.github.currencortex.music.core.update.AndroidUpdateInstaller(context.applicationContext), appScope)
+        io.github.currencortex.music.core.update.AndroidUpdateInstaller(context.applicationContext), playerScope,
+        if (storageNamespace.isEmpty()) io.github.currencortex.music.core.update.WorkManagerUpdateBackground(context) else null)
     val logger = AppLogger(context)
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
     val soundEffectNotices = io.github.currencortex.music.core.media.SoundEffectNoticeCenter(playerScope)
