@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
@@ -33,6 +34,8 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -167,7 +170,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 val summaryHeight by animateDpAsState(targetHeight
                     .coerceAtMost((height - 24.dp).coerceAtLeast(120.dp)), tween(480), label = "update_transfer_card_height")
                 val compactTop = (height - summaryHeight - 20.dp).coerceAtLeast(12.dp)
-                val checkingTop = (height - 88.dp).coerceAtLeast(12.dp)
+                val checkingTop = (height - 96.dp).coerceAtLeast(12.dp)
                 val statusTop = checkingTop + (compactTop - checkingTop) * settled
                 val top = statusTop + (12.dp - statusTop) * detail
                 val heroY = height * (.30f - .15f * settled) - 100.dp * detail
@@ -181,11 +184,16 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                     Text(if (release?.prerelease == true || settings.channel == UpdateChannel.PRERELEASE) "预发布版" else "正式版",
                         color = pageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
                 }
-                Box(Modifier.align(Alignment.TopCenter).padding(horizontal = 20.dp).offset(y = top).widthIn(max = 620.dp).fillMaxWidth()
-                    .height((height - top - 20.dp).coerceAtLeast(56.dp)).clip(glassShape)
-                    .background(Color(0xB516151D)).border(1.dp, Color.White.copy(alpha = .14f), glassShape)
+                val statusShape = RoundedCornerShape((36f - 10f * settled).dp)
+                val bottomSpace = (32f - 12f * settled).dp
+                Box(Modifier.align(Alignment.TopCenter).padding(horizontal = (16f + 4f * settled).dp)
+                    .offset(y = top).widthIn(max = 620.dp).fillMaxWidth()
+                    .height((height - top - bottomSpace).coerceAtLeast(56.dp)).clip(statusShape)
+                    .background(androidx.compose.ui.graphics.lerp(Color(0xD9100F1D), Color(0xB516151D), settled))
+                    .border(1.dp, Color.White.copy(alpha = .10f + .04f * settled), statusShape)
                     .testTag("update_status_card")) {
-                    Column(Modifier.fillMaxSize().padding(18.dp)
+                    Column(Modifier.fillMaxSize().padding(horizontal = (22f - 4f * settled).dp,
+                        vertical = (16f + 2f * settled).dp)
                         .then(if (compact && !expanded) Modifier.verticalScroll(rememberScrollState()) else Modifier)) {
                         AnimatedContent(expanded, if (compact && !expanded) Modifier.fillMaxWidth().heightIn(min = 62.dp) else Modifier.weight(1f), label = "update_card_content",
                             transitionSpec = { fadeIn(tween(300, delayMillis = 90)) togetherWith fadeOut(tween(180)) },
@@ -223,7 +231,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                             }
                         } else {
                             Column(Modifier.fillMaxWidth().then(if (compact) Modifier else Modifier.fillMaxHeight().verticalScroll(rememberScrollState())),
-                                verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                                verticalArrangement = if (checking) Arrangement.Center else Arrangement.spacedBy(5.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(when {
                                         transferState.download is UpdateDownloadState.Ready -> "下载完成"
@@ -233,9 +241,10 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                                         state is UpdateState.Failed -> "暂时无法检查更新"
                                         release != null -> if (downloadExperience) "下载体验" else "发现新版本"
                                         else -> "已是最新版本"
-                                    }, color = pageWhite, fontSize = 18.sp, fontWeight = FontWeight.Medium,
+                                    }, color = pageWhite, fontSize = if (checking) 16.sp else 18.sp,
+                                        fontWeight = if (checking) FontWeight.Normal else FontWeight.Medium,
                                         modifier = Modifier.weight(1f))
-                                    if (checking) CircularProgressIndicator(Modifier.size(20.dp))
+                                    if (checking) UpdateCheckingSpinner()
                                 }
                                 if (!checking) Text(release?.let { "v${it.version} · ${updateSize(it.size)}" }
                                     ?: "当前版本 ${BuildConfig.VERSION_NAME}", color = pageMuted, fontSize = 12.sp)
@@ -316,6 +325,20 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
         }
     }
     }
+    }
+}
+
+@Composable private fun UpdateCheckingSpinner() {
+    val rotation by rememberInfiniteTransition(label = "update check rotation").animateFloat(0f, 360f,
+        infiniteRepeatable(tween(1100, easing = LinearEasing)), label = "update check angle")
+    Canvas(Modifier.size(20.dp).graphicsLayer { rotationZ = rotation }
+        .semantics { progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate }
+        .testTag("update_check_spinner")) {
+        val stroke = 1.3.dp.toPx()
+        drawArc(pageWhite.copy(alpha = .9f), 35f, 285f, false,
+            topLeft = Offset(stroke, stroke),
+            size = androidx.compose.ui.geometry.Size(size.width - stroke * 2, size.height - stroke * 2),
+            style = Stroke(stroke, cap = StrokeCap.Round))
     }
 }
 

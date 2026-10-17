@@ -56,6 +56,9 @@ class UpdatePageTest {
             UpdatePageContent(state.value)
         } }
         compose.mainClock.autoAdvance = false
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithTag("update_check_spinner").assertIsDisplayed()
+        capture("update-checking-refined.png")
         val initial = compose.onNodeWithTag("update_status_card").getUnclippedBoundsInRoot().top
         compose.runOnIdle { state.value = UpdateState.Available(release) }
         compose.mainClock.advanceTimeBy(300)
