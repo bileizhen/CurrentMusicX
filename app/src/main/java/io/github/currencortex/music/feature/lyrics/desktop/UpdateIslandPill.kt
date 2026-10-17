@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -60,7 +61,7 @@ import io.github.currencortex.music.core.media.SoundEffectNoticePhase
         if (ready) {
             val context = LocalContext.current
             val icon = remember(context) { context.applicationInfo.loadIcon(context.packageManager).toBitmap(96, 96).asImageBitmap() }
-            Image(BitmapPainter(icon), "CurrentMusic", Modifier.size(iconSize).clip(RoundedCornerShape(6.dp)))
+            Image(BitmapPainter(icon), "CurrentMusic", Modifier.size(iconSize).clip(CircleShape))
         } else Canvas(Modifier.size(iconSize)) {
             val stroke = 1.8.dp.toPx()
             if (downloading) {
