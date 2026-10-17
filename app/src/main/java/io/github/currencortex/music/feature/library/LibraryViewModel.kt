@@ -113,7 +113,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                     }
                     return@launch
                 }
-                val current = if (container.nativeNetease != null && container.primaryLibrary.resolveNetease()) AppResult.Success(emptyList())
+                val current = if (container.accountRepository.token == null) AppResult.Success(emptyList())
                     else appResult { container.libraryRepository.playlists().filter { it.editable(container.accountRepository.state.value.account?.id ?: 0) } }
                 val native = appResult {
                     if (container.bindingRepository.cachedStatus().bound) container.neteaseLibrary.playlists(fresh = true).filter { it.nativeOwned }

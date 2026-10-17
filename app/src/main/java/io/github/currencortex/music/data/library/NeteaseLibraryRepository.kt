@@ -168,11 +168,20 @@ class PrimaryMusicLibrary(private val current: LibraryRepository, private val ne
     }.stateIn(scope, SharingStarted.Eagerly, Triple(false, 0L, false))
     val usesNetease = identity.map { it.first }.stateIn(scope, SharingStarted.Eagerly, false)
     suspend fun resolveNetease(): Boolean = settings.snapshot().neteaseMainLibrary && binding.cachedStatus().bound
-    suspend fun playlists(fresh: Boolean = false): List<Playlist> = if (resolveNetease()) {
-        if (netease.directAvailable && !binding.cachedStatus().bound) emptyList() else netease.playlists(fresh)
-    } else {
+    suspend fun playlists(fresh: Boolean = false): List<Playlist> = coroutineScope {
         if (fresh) current.clearReads()
-        current.playlists()
+        // Both collections can contain the same numeric ID in different namespaces.
+        // Do not hide cloud-created/imported playlists behind the primary-heart preference.
+        val cloud = async { appResult { if (current.hasCurrentMusicAccount) current.playlists() else emptyList() } }
+        val native = appResult { if (resolveNetease()) netease.playlists(fresh) else emptyList() }
+        val saved = cloud.await()
+        if (saved is AppResult.Failure && native is AppResult.Failure) throw ApiException(saved.kind, saved.status)
+        val combined = (saved as? AppResult.Success)?.value.orEmpty() + (native as? AppResult.Success)?.value.orEmpty()
+        if (combined.isEmpty()) {
+            if (saved is AppResult.Failure) throw ApiException(saved.kind, saved.status)
+            if (native is AppResult.Failure) throw ApiException(native.kind, native.status)
+        }
+        combined.distinctBy { it.source to it.id }
     }
     suspend fun likedPlaylist(fresh: Boolean = false): Playlist? = if (resolveNetease()) netease.likedPlaylist(fresh) else null
 }
