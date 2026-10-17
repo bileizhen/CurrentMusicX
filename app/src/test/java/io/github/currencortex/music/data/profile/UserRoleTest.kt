@@ -8,6 +8,26 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UserRoleTest {
+    @Test fun publicLocationAliasesAndOwnerTitleSurviveDirectoryToProfileMapping() {
+        for (regionKey in listOf("ip_region", "ipRegion")) {
+            val square = ApiJson.decodeFromString<SquareUser>(
+                """{"id":5,"title":"后端工程师","$regionKey":"安徽","is_owner":1,"is_super":1}""")
+            assertEquals("安徽", square.ipRegion)
+            assertEquals("安徽", square.profileUser().ipRegion)
+            assertEquals("后端工程师", square.profileUser().title)
+            assertEquals(UserRole.OWNER, square.profileUser().role)
+        }
+        val both = ApiJson.decodeFromString<ProfileUser>(
+            """{"ip_region":"旧值","ipRegion":"广东","isOwner":true}""")
+        assertEquals("广东", both.ipRegion)
+        assertEquals(UserRole.OWNER, both.role)
+        for (payload in listOf("{}", """{"ipRegion":null,"title":null}""")) {
+            val user = ApiJson.decodeFromString<ProfileUser>(payload)
+            assertEquals("", user.ipRegion)
+            assertEquals("", user.title)
+            assertNull(user.role)
+        }
+    }
     @Test fun customTitlesArePreservedSeparatelyFromPermissionFlags() {
         val own = ApiJson.decodeFromString<UserDto>("""{"id":7,"title":"CurrentMusicX开发者","is_admin":0}""")
         assertEquals("CurrentMusicX开发者", own.title)
