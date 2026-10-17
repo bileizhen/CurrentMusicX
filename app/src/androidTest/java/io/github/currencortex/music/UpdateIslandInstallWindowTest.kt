@@ -7,8 +7,14 @@ import android.view.MotionEvent
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.currencortex.music.core.media.PlayerState
+import io.github.currencortex.music.core.media.SoundEffectNoticeCenter
+import io.github.currencortex.music.core.media.SoundEffectNoticeTier
+import io.github.currencortex.music.core.media.SoundEffectNoticePhase
+import io.github.currencortex.music.core.media.SoundEffectNoticeResult
+import io.github.currencortex.music.core.media.isUpdateInstallNotice
 import io.github.currencortex.music.core.update.UpdateDownloadState
 import io.github.currencortex.music.core.update.UpdateIslandNotice
+import io.github.currencortex.music.core.update.prioritizedIslandNotices
 import io.github.currencortex.music.feature.lyrics.data.PlaybackLyricsState
 import io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost
 import java.io.File
@@ -16,6 +22,7 @@ import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.*
 import org.junit.Assume.assumeTrue
 import org.junit.Test
@@ -30,22 +37,36 @@ class UpdateIslandInstallWindowTest {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
         val notice = UpdateIslandNotice(MutableStateFlow(UpdateDownloadState.Ready(File("verified-fixture.apk"))),
             MutableStateFlow(true), scope)
+        val effects = SoundEffectNoticeCenter(scope)
+        val visible = prioritizedIslandNotices(notice.state, effects.state, scope)
         val installs = AtomicInteger()
         var host: DesktopLyricsHost? = null
         try {
             container.desktopLyrics.ready.await()
             withContext(Dispatchers.Main) {
                 host = DesktopLyricsHost(app, MutableStateFlow(PlaybackLyricsState()), MutableStateFlow(PlayerState()),
-                    container.desktopLyrics, container.desktopLyricsStatus, effectNotices = notice.state,
+                    container.desktopLyrics, container.desktopLyricsStatus, effectNotices = visible,
                     installUpdate = { installs.incrementAndGet() })
             }
             container.desktopLyrics.edit { it.copy(enabled = true, locked = true, islandY = .15f) }
             withTimeout(8_000) { while (!container.desktopLyricsStatus.value.islandTouchable) delay(25) }
             delay(5_000)
+            val token = effects.begin("AI 调音大师", SoundEffectNoticeTier.SVIP)
+            effects.complete(token, SoundEffectNoticeResult(SoundEffectNoticePhase.READY, "音效已生效"))
+            withTimeout(3_000) { visible.first { it?.name == "AI 调音大师" } }
+            withTimeout(3_000) { while (container.desktopLyricsStatus.value.islandTouchable) delay(25) }
+            delay(800)
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
+                File(app.getExternalFilesDir(null), "update-interrupted-by-effect-native.png").outputStream().use {
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+                }; bitmap.recycle()
+            }
+            withTimeout(6_000) { visible.first { it.isUpdateInstallNotice() } }
+            withTimeout(3_000) { while (!container.desktopLyricsStatus.value.islandTouchable) delay(25) }
             val status = container.desktopLyricsStatus.value
             assertTrue(status.visible && status.islandTouchable)
             assertEquals("下载完成", notice.state.value?.name)
-            val instrumentation = InstrumentationRegistry.getInstrumentation()
             instrumentation.uiAutomation.takeScreenshot()?.let { bitmap ->
                 File(app.getExternalFilesDir(null), "update-ready-native.png").outputStream().use {
                     bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)

@@ -10,28 +10,53 @@ import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class UpdateIslandNoticeTest {
-    @Test fun verifiedDownloadKeepsPriorityUntilExplicitlyCleared() = runTest {
+    @Test fun effectTemporarilyInterruptsDownloadThenRestoresItsLatestState() = runTest {
         val download = MutableStateFlow<UpdateDownloadState>(UpdateDownloadState.Idle)
         val enabled = MutableStateFlow(true)
         val controller = UpdateIslandNotice(download, enabled, backgroundScope)
-        val effects = MutableStateFlow<SoundEffectNotice?>(null)
-        val visible = prioritizedIslandNotices(controller.state, effects, backgroundScope)
+        val effects = SoundEffectNoticeCenter(backgroundScope)
+        val visible = prioritizedIslandNotices(controller.state, effects.state, backgroundScope)
         runCurrent()
         download.value = UpdateDownloadState.Downloading(1, 100); runCurrent()
         val id = visible.value!!.id
         advanceTimeBy(45_000); runCurrent()
-        effects.value = SoundEffectNotice(9, "原声黑胶", SoundEffectNoticeTier.SVIP); runCurrent()
-        assertEquals(IslandNoticeKind.UPDATE_DOWNLOAD, visible.value!!.kind)
+        val token = effects.begin("原声黑胶", SoundEffectNoticeTier.SVIP); runCurrent()
+        assertEquals(IslandNoticeKind.SOUND_EFFECT, visible.value!!.kind)
+        assertEquals("原声黑胶", visible.value!!.name)
         download.value = UpdateDownloadState.Downloading(99, 100); runCurrent()
+        assertEquals("原声黑胶", visible.value!!.name)
+        effects.complete(token, SoundEffectNoticeResult(SoundEffectNoticePhase.READY, "音效已生效")); runCurrent()
+        advanceTimeBy(3_601); runCurrent()
         assertEquals(id, visible.value!!.id)
         assertEquals(99, visible.value!!.progress)
         download.value = UpdateDownloadState.Ready(File("verified.apk")); runCurrent()
         assertEquals("下载完成", visible.value!!.name)
         advanceTimeBy(120_000); runCurrent()
         assertTrue(visible.value.isUpdateInstallNotice())
+        val next = effects.begin("全景环绕", SoundEffectNoticeTier.VIP); runCurrent()
+        assertEquals("全景环绕", visible.value!!.name)
+        effects.complete(next, SoundEffectNoticeResult(SoundEffectNoticePhase.READY, "音效已生效")); runCurrent()
+        advanceTimeBy(3_601); runCurrent()
+        assertTrue(visible.value.isUpdateInstallNotice())
         download.value = UpdateDownloadState.Idle; runCurrent()
         advanceTimeBy(1_801); runCurrent()
-        assertEquals(effects.value, visible.value)
+        assertNull(visible.value)
+    }
+
+    @Test fun failedEffectReturnsToVerifiedDownloadWithoutClearingItsInstallAction() = runTest {
+        val controller = UpdateIslandNotice(MutableStateFlow(UpdateDownloadState.Ready(File("verified.apk"))),
+            MutableStateFlow(true), backgroundScope)
+        val effects = SoundEffectNoticeCenter(backgroundScope)
+        val visible = prioritizedIslandNotices(controller.state, effects.state, backgroundScope)
+        runCurrent()
+        val completed = visible.value
+        val token = effects.begin("AI 调音大师", SoundEffectNoticeTier.SVIP); runCurrent()
+        effects.complete(token, SoundEffectNoticeResult(SoundEffectNoticePhase.FAILED, "网络异常")); runCurrent()
+        assertEquals(SoundEffectNoticePhase.FAILED, visible.value!!.phase)
+        assertFalse(visible.value.isUpdateInstallNotice())
+        advanceTimeBy(5_001); runCurrent()
+        assertEquals(completed, visible.value)
+        assertTrue(visible.value.isUpdateInstallNotice())
     }
 
     @Test fun enablingIslandRestoresTheVerifiedDownloadAndDisablingHidesIt() = runTest {
