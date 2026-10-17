@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.Intent
 import io.github.currencortex.music.MainActivity
 
-/** A user tap brings the app foreground before it requests the system installer. */
+/** Legacy intent key retained for overlay callers; tapping only opens the update page. */
 object UpdateInstallAction {
     const val EXTRA = "install_downloaded_update"
     fun open(context: Context) {

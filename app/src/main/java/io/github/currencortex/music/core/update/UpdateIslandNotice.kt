@@ -29,7 +29,7 @@ class UpdateIslandNotice(downloads: Flow<UpdateDownloadState>, enabled: Flow<Boo
                 if (download is UpdateDownloadState.Ready) {
                     if (!active) { sequence--; active = true }
                     mutable.value = SoundEffectNotice(sequence, "下载完成", SoundEffectNoticeTier.STANDARD,
-                        SoundEffectNoticePhase.READY, "CurrentMusic 更新已校验，点击安装",
+                        SoundEffectNoticePhase.READY, "CurrentMusic 更新已校验，点击查看",
                         IslandNoticeKind.UPDATE_DOWNLOAD, 100)
                     return@collectLatest
                 }

@@ -5,14 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import io.github.currencortex.music.ui.CurrentMusicApp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.lifecycleScope
-import androidx.lifecycle.withStateAtLeast
-import io.github.currencortex.music.core.update.UpdateDownloadState
 import io.github.currencortex.music.core.update.UpdateInstallAction
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 
 class MainActivity : ComponentActivity() {
     override fun onStart() {
@@ -26,7 +19,7 @@ class MainActivity : ComponentActivity() {
     private val desktopRequest = androidx.compose.runtime.mutableIntStateOf(0)
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
-        handleUpdateInstall(intent)
+        handleUpdateView(intent)
         if (intent.getBooleanExtra(io.github.currencortex.music.core.update.WorkManagerUpdateBackground.OPEN, false)) {
             (application as CurrentMusicApplication).container.updates.reopenDownload()
             intent.removeExtra(io.github.currencortex.music.core.update.WorkManagerUpdateBackground.OPEN)
@@ -50,20 +43,11 @@ class MainActivity : ComponentActivity() {
         }
         val animateLaunch = app.consumeLaunchAnimation() && savedInstanceState == null
         setContent { CurrentMusicApp(app.container, animateLaunch = animateLaunch, launchWindowReady = launchWindowReady.value, openDesktopRequest = desktopRequest.intValue) }
-        handleUpdateInstall(intent)
+        handleUpdateView(intent)
     }
-    private fun handleUpdateInstall(request: android.content.Intent) {
+    private fun handleUpdateView(request: android.content.Intent) {
         if (!request.getBooleanExtra(UpdateInstallAction.EXTRA, false)) return
         request.removeExtra(UpdateInstallAction.EXTRA)
-        lifecycleScope.launch {
-            lifecycle.withStateAtLeast(Lifecycle.State.RESUMED) { Unit }
-            val container = (application as CurrentMusicApplication).container
-            // WorkManager may still be restoring a completed download after process recreation.
-            val ready = withTimeoutOrNull(5_000) {
-                container.updateTransfer.state.first { it.download is UpdateDownloadState.Ready }
-            }
-            container.updates.reopenDownload()
-            if (ready != null) container.updateTransfer.install()
-        }
+        (application as CurrentMusicApplication).container.updates.reopenDownload()
     }
 }

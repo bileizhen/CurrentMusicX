@@ -65,7 +65,7 @@ import io.github.currencortex.music.core.media.SoundEffectNoticePhase
     val statusStyle = TextStyle(color = tint, fontSize = (font - 1).sp,
         fontFeatureSettings = "tnum", textAlign = TextAlign.End)
     val status = if (downloading) notice.progress?.let { "$it%" } ?: "连接中"
-        else if (ready) "点击安装" else ""
+        else if (ready) "点击查看" else ""
     // Percentages share one compact slot; terminal notices have no status slot at all.
     val titleWidth = with(LocalDensity.current) {
         textMeasurer.measure(notice.name, titleStyle, maxLines = 1, softWrap = false).size.width.toDp() + 2.dp
@@ -92,7 +92,7 @@ import io.github.currencortex.music.core.media.SoundEffectNoticePhase
             if (downloading) progressBarRangeInfo = notice.progress?.let { ProgressBarRangeInfo(it / 100f, 0f..1f) }
                 ?: ProgressBarRangeInfo.Indeterminate
             else liveRegion = LiveRegionMode.Polite
-        }.then(if (ready) Modifier.clickable(role = Role.Button, onClickLabel = "点击安装", onClick = onInstall) else Modifier)
+        }.then(if (ready) Modifier.clickable(role = Role.Button, onClickLabel = "点击查看", onClick = onInstall) else Modifier)
         .testTag("update_island_notice").padding(start = iconInset, end = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(9.dp)) {
         if (ready) {

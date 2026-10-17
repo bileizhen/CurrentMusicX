@@ -31,6 +31,7 @@ class UpdateIslandNoticeTest {
         assertEquals(99, visible.value!!.progress)
         download.value = UpdateDownloadState.Ready(File("verified.apk")); runCurrent()
         assertEquals("下载完成", visible.value!!.name)
+        assertEquals("CurrentMusic 更新已校验，点击查看", visible.value!!.message)
         advanceTimeBy(120_000); runCurrent()
         assertTrue(visible.value.isUpdateInstallNotice())
         val next = effects.begin("全景环绕", SoundEffectNoticeTier.VIP); runCurrent()
