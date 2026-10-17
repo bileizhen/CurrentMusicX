@@ -131,16 +131,21 @@ class UpdateIslandLiveFlowTest {
             delay(650)
             screenshot("04-completed")
             assertFalse(container.updateTransfer.state.value.installing)
-            awaitCondition { container.islandNotices.value == null && container.desktopLyricsStatus.value.islandTouchable }
-            delay(650)
-            screenshot("05-restored-fps")
+            delay(5_000)
+            assertEquals(SoundEffectNoticePhase.READY, container.islandNotices.value?.phase)
+            assertTrue(container.desktopLyricsStatus.value.islandTouchable)
+            screenshot("05-ready-persistent")
             val notification = app.getSystemService(NotificationManager::class.java).activeNotifications
                 .first { it.id == 4202 }.notification
             scenario.close()
             notification.contentIntent.send()
             awaitCondition { containsText(if (BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE) "再次下载" else "请求安装") }
             screenshot("06-notification-opened")
-            File(directory, "result.txt").writeText("Verified ${release.size} bytes; source=${result.activeSource}; progress on home; restored FPS; notification reopened install prompt; no installation requested.\n")
+            withContext(Dispatchers.Main) { container.updateTransfer.cancel(); container.updates.dismissDialog() }
+            awaitCondition { container.islandNotices.value == null && container.desktopLyricsStatus.value.islandTouchable }
+            delay(650)
+            screenshot("07-explicit-clear-restores-fps")
+            File(directory, "result.txt").writeText("Verified ${release.size} bytes; source=${result.activeSource}; progress on home; persistent install notice; notification reopened; explicit clear restored FPS; no installation requested.\n")
         } finally {
             scenario.close()
             withContext(Dispatchers.Main) { container.updateTransfer.cancel(); container.updates.dismissDialog() }

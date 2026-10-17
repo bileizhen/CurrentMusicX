@@ -17,6 +17,9 @@ data class SoundEffectNotice(val id: Long, val name: String, val tier: SoundEffe
     val kind: IslandNoticeKind = IslandNoticeKind.SOUND_EFFECT, val progress: Int? = null)
 data class SoundEffectNoticeResult(val phase: SoundEffectNoticePhase, val message: String)
 
+internal fun SoundEffectNotice?.isUpdateInstallNotice() =
+    this?.kind == IslandNoticeKind.UPDATE_DOWNLOAD && phase == SoundEffectNoticePhase.READY
+
 /** One transient, latest-intent-wins notice shared by the in-app and desktop island. */
 class SoundEffectNoticeCenter(private val scope: CoroutineScope) {
     private val mutable = MutableStateFlow<SoundEffectNotice?>(null)

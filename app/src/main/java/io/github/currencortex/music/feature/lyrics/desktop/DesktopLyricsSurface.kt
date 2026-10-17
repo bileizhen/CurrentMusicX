@@ -45,7 +45,8 @@ import kotlinx.coroutines.flow.StateFlow
     changeSong: (Int) -> Unit = {}, onIslandTop: (Int) -> Unit = {},
     togglePlayback: () -> Unit = {}, onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     defaultFpsMode: Boolean = false,
-    effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = remember { kotlinx.coroutines.flow.MutableStateFlow(null) }) {
+    effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = remember { kotlinx.coroutines.flow.MutableStateFlow(null) },
+    installUpdate: () -> Unit = {}) {
     val effectNotice by effectNotices.collectAsStateWithLifecycle()
     val content by lyrics.collectAsStateWithLifecycle()
     val player by playback.collectAsStateWithLifecycle()
@@ -123,7 +124,7 @@ import kotlinx.coroutines.flow.StateFlow
             .graphicsLayer {
                 alpha = entrance.value; scaleX = .94f + .06f * entrance.value; scaleY = scaleX
                 transformOrigin = TransformOrigin(.5f, 0f)
-            }, effectHeight = rememberIslandFpsHeight(font), font = font) {
+            }, effectHeight = rememberIslandFpsHeight(font), font = font, onUpdateInstall = installUpdate) {
         DesktopIslandFrame(player.song, Modifier.islandAnimatedWidth(width).fillMaxWidth()
             .pointerInput(options.locked) { detectTapGestures(onTap = { toggle() }, onLongPress = { if (!options.locked) revealControls() }) }
             .pointerInput(Unit) {

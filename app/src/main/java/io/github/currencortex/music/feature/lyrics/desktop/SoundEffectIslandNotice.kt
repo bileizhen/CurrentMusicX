@@ -62,9 +62,10 @@ import kotlin.math.roundToInt
 
 /** One compact row with a stationary, fading glow; details stay accessible to screen readers. */
 @Composable internal fun SoundEffectIslandPill(notice: SoundEffectNotice, modifier: Modifier = Modifier,
-    material: Boolean = true, height: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE) {
+    material: Boolean = true, height: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE,
+    onUpdateInstall: () -> Unit = {}) {
     if (notice.kind == IslandNoticeKind.UPDATE_DOWNLOAD) {
-        UpdateIslandPill(notice, modifier, material, height, font)
+        UpdateIslandPill(notice, modifier, material, height, font, onUpdateInstall)
         return
     }
     val motion = rememberDesktopMotion()
@@ -171,7 +172,8 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
  * No delayed incoming fade or AnimatedContent size correction can leave an empty capsule.
  */
 @Composable internal fun DesktopIslandEffectTransition(notice: SoundEffectNotice?, modifier: Modifier = Modifier,
-    effectHeight: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE, normal: @Composable () -> Unit) {
+    effectHeight: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE,
+    onUpdateInstall: () -> Unit = {}, normal: @Composable () -> Unit) {
     val motion = rememberDesktopMotion()
     var retained by remember { mutableStateOf(notice) }
     SideEffect { if (notice != null) retained = notice }
@@ -202,7 +204,8 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
         }.clip(shape)
         .testTag("desktop_island_transition"), content = {
         Box { normal() }
-        Box { (notice ?: retained)?.let { SoundEffectIslandPill(it, material = false, height = effectHeight, font = font) } }
+        Box { (notice ?: retained)?.let { SoundEffectIslandPill(it, material = false, height = effectHeight, font = font,
+            onUpdateInstall = onUpdateInstall) } }
     }) { children, constraints ->
         val loose = constraints.copy(minWidth = 0, minHeight = 0)
         val compact = children[0].measure(loose)
@@ -220,6 +223,7 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
 
 /** No existing island: briefly grow from a compact capsule, then shrink before fading away. */
 @Composable internal fun SoundEffectIslandFallback(container: AppContainer) {
+    val context = LocalContext.current
     val notice by container.islandNotices.collectAsStateWithLifecycle()
     val desktop by container.desktopLyricsStatus.collectAsStateWithLifecycle()
     val options by container.desktopLyrics.state.collectAsStateWithLifecycle()
@@ -229,7 +233,8 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
             enter = fadeIn(tween(160)) + scaleIn(tween(260), initialScale = .88f),
             exit = fadeOut(tween(140, 380)) + scaleOut(tween(180, 300), targetScale = .88f)) {
             DesktopIslandEffectTransition(notice.takeUnless { desktop.visible },
-                effectHeight = rememberIslandFpsHeight(options.displayFontSize), font = options.displayFontSize) {
+                effectHeight = rememberIslandFpsHeight(options.displayFontSize), font = options.displayFontSize,
+                onUpdateInstall = { io.github.currencortex.music.core.update.UpdateInstallAction.open(context) }) {
                 Spacer(Modifier.width(112.dp).height(rememberIslandFpsHeight(options.displayFontSize)))
             }
         }

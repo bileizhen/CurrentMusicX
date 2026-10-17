@@ -33,9 +33,10 @@ import org.junit.Test
 class SoundEffectIslandNoticeTest {
     @get:Rule val compose = createComposeRule()
     @Test fun downloadProgressKeepsFpsHeightAndStableWidthThroughCompletion() {
+        var installs = 0
         var notice by mutableStateOf(SoundEffectNotice(-1, "更新下载", SoundEffectNoticeTier.STANDARD,
             kind = IslandNoticeKind.UPDATE_DOWNLOAD, progress = 1))
-        compose.setContent { SoundEffectIslandPill(notice, height = 36.dp) }
+        compose.setContent { SoundEffectIslandPill(notice, height = 36.dp, onUpdateInstall = { installs++ }) }
         val initial = compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot
         for (percent in listOf(9, 10, 99, 100)) {
             compose.runOnIdle { notice = notice.copy(progress = percent) }
@@ -43,7 +44,10 @@ class SoundEffectIslandNoticeTest {
             assertEquals(initial, compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot)
         }
         compose.runOnIdle { notice = notice.copy(name = "下载完成", phase = SoundEffectNoticePhase.READY) }
-        compose.onNodeWithText(if (BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE) "再下载" else "待安装", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithText("点击安装", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithContentDescription("CurrentMusic", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("update_island_notice").performClick()
+        compose.runOnIdle { assertEquals(1, installs) }
         assertEquals(initial, compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot)
         compose.onAllNodesWithTag("sound_effect_island_notice").assertCountEquals(0)
     }
