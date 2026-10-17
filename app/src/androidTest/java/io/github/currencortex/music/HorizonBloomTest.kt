@@ -74,9 +74,27 @@ class HorizonBloomTest {
         compose.setContent { HorizonBloomBackground(ArtworkGlowPalette(0xffed4055.toInt(), 0xff3873ed.toInt()),
             Modifier.fillMaxSize(), active = false, preferShader = false) }
         val bitmap = image()
-        val center = bitmap.getPixel(bitmap.width / 2, (bitmap.height * .62f).toInt())
-        assertTrue((center ushr 16 and 255) > 70)
+        val center = bitmap.getPixel(bitmap.width / 2, (bitmap.height * .66f).toInt())
+        assertTrue((center ushr 16 and 255) > 20)
         capture("horizon-canvas-fallback.png")
+    }
+
+    @Test fun portraitHasShallowDimLimbAndAtmosphereAcrossTheSky() {
+        compose.setContent { HorizonBloomBackground(ArtworkGlowPalette(0xffff9ffc.toInt(), 0xff5227ff.toInt()),
+            Modifier.fillMaxSize(), active = false) }
+        val bitmap = image()
+        fun peak(x: Int): Int = ((bitmap.height * .62).toInt()..(bitmap.height * .73).toInt())
+            .maxBy { bitmap.getPixel(x, it) ushr 16 and 255 }
+        val middle = peak(bitmap.width / 2)
+        val edge = peak((bitmap.width * .05).toInt())
+        assertEquals("Limb should sit at two thirds of the portrait", .66f,
+            middle.toFloat() / bitmap.height, .012f)
+        assertTrue("Planet must have a shallow curve", edge > middle && edge - middle < bitmap.height * .04f)
+        val rim = bitmap.getPixel(bitmap.width / 2, middle) ushr 16 and 255
+        assertTrue("The reference has a soft edge, not a bright neon ring", rim in 20..85)
+        val sky = bitmap.getPixel(bitmap.width / 2, (bitmap.height * .3).toInt())
+        assertTrue("Cool atmosphere must reach the upper sky", (sky and 255) > (sky ushr 16 and 255) + 4)
+        capture("horizon-portrait-reference.png")
     }
 
     private fun image() = compose.onNodeWithTag("update_horizon_background").captureToImage().asAndroidBitmap()
