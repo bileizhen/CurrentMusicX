@@ -209,7 +209,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 Text(user.nickname, Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 UserRoleBadge(user.role)
             }
-            UserTitleBadge(user.title)
+            UserIdentityDetails(user.title, user.ipRegion)
             if (user.bio.isNotBlank()) Text(user.bio, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
             Text("听歌 ${user.days} 天 · ${listeningDuration(user.listenMs)}", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
