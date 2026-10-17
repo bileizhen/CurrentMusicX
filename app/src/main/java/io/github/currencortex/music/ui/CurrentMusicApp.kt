@@ -164,6 +164,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val announcements by announcementVm.items.collectAsStateWithLifecycle()
     val suppressReadAnnouncements by announcementVm.suppressRead.collectAsStateWithLifecycle()
     val updateDialogVisible by container.updates.dialogVisible.collectAsStateWithLifecycle()
+    val updateTransferState by container.updateTransfer.state.collectAsStateWithLifecycle()
     val announcementVisible = launchFinished && announcements.isNotEmpty() && !updateDialogVisible
 
     // Decide from DataStore directly: the StateFlow's initial value can race the first disk read.
@@ -286,7 +287,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         LaunchedEffect(memberFocus) { memberFocus?.let { shownMember = it } }
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         val context = androidx.compose.ui.platform.LocalContext.current
-        val openUpdates: () -> Unit = { scope.launch { container.updates.present() } }
+        val openUpdates: () -> Unit = {
+            if (container.updateTransfer.state.value.download !is io.github.currencortex.music.core.update.UpdateDownloadState.Idle)
+                container.updates.reopenDownload()
+            else scope.launch { container.updates.present() }
+        }
         var pendingPlay by remember { mutableStateOf<(() -> Unit)?>(null) }
         var explained by rememberSaveable { mutableStateOf(false) }
         val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
@@ -424,7 +429,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
                                     onStorage = { navigateTo(STORAGE) },
                                     onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
-                                    onDesktopLyrics = { navigateLibrary("desktop-lyrics") })
+                                    onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, updateTransfer = updateTransferState)
                             }
                         }
                         }
@@ -451,7 +456,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
                             onStorage = { navigateTo(STORAGE) },
                             onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
-                            onDesktopLyrics = { navigateLibrary("desktop-lyrics") }) }
+                            onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, updateTransfer = updateTransferState) }
                     }
                 }
                 entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onEqualizer = { navigateTo(EQUALIZER) }, onNavidrome = { navigateLibrary("navidrome") }, onDesktopLyrics = { navigateLibrary("desktop-lyrics") }) { navigateTo(STORAGE) } }

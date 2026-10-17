@@ -1,6 +1,6 @@
 package io.github.currencortex.music.core.update
 
-data class AppRelease(
+@kotlinx.serialization.Serializable data class AppRelease(
     val version: String,
     val notes: String,
     val pageUrl: String,

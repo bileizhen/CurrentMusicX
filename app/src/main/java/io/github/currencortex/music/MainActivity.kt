@@ -18,6 +18,10 @@ class MainActivity : ComponentActivity() {
     private val desktopRequest = androidx.compose.runtime.mutableIntStateOf(0)
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
+        if (intent.getBooleanExtra(io.github.currencortex.music.core.update.WorkManagerUpdateBackground.OPEN, false)) {
+            (application as CurrentMusicApplication).container.updates.reopenDownload()
+            intent.removeExtra(io.github.currencortex.music.core.update.WorkManagerUpdateBackground.OPEN)
+        }
         if (intent.getBooleanExtra(io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost.OPEN, false)) desktopRequest.intValue++
     }
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,6 +35,10 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         if (android.os.Build.VERSION.SDK_INT >= 29) window.isNavigationBarContrastEnforced = false
         val app = application as CurrentMusicApplication
+        if (intent.getBooleanExtra(io.github.currencortex.music.core.update.WorkManagerUpdateBackground.OPEN, false)) {
+            app.container.updates.reopenDownload()
+            intent.removeExtra(io.github.currencortex.music.core.update.WorkManagerUpdateBackground.OPEN)
+        }
         val animateLaunch = app.consumeLaunchAnimation() && savedInstanceState == null
         setContent { CurrentMusicApp(app.container, animateLaunch = animateLaunch, launchWindowReady = launchWindowReady.value, openDesktopRequest = desktopRequest.intValue) }
     }
