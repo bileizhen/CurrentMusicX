@@ -63,6 +63,10 @@ import kotlin.math.roundToInt
 /** One compact row with a stationary, fading glow; details stay accessible to screen readers. */
 @Composable internal fun SoundEffectIslandPill(notice: SoundEffectNotice, modifier: Modifier = Modifier,
     material: Boolean = true, height: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE) {
+    if (notice.kind == IslandNoticeKind.UPDATE_DOWNLOAD) {
+        UpdateIslandPill(notice, modifier, material, height, font)
+        return
+    }
     val motion = rememberDesktopMotion()
     val ready = notice.phase == SoundEffectNoticePhase.READY
     val glow = remember { Animatable(0f) }
@@ -216,7 +220,7 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
 
 /** No existing island: briefly grow from a compact capsule, then shrink before fading away. */
 @Composable internal fun SoundEffectIslandFallback(container: AppContainer) {
-    val notice by container.soundEffectNotices.state.collectAsStateWithLifecycle()
+    val notice by container.islandNotices.collectAsStateWithLifecycle()
     val desktop by container.desktopLyricsStatus.collectAsStateWithLifecycle()
     val options by container.desktopLyrics.state.collectAsStateWithLifecycle()
     Box(Modifier.fillMaxSize().statusBarsPadding().padding(top = 8.dp, start = 20.dp, end = 20.dp),

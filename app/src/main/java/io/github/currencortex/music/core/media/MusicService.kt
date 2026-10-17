@@ -93,7 +93,7 @@ class MusicService : MediaSessionService() {
                 val controller = container.playerController
                 if (direction > 0) controller.next(controller.state.value.showPause) else controller.previous(controller.state.value.showPause)
             }, togglePlayback = { container.playerController.toggle() }, appearance = container.settings.state,
-            appForeground = container.appForeground, effectNotices = container.soundEffectNotices.state)
+            appForeground = container.appForeground, effectNotices = container.islandNotices)
         val probe = TrackEnergyProbe()
         transitions = PlaybackTransitions(createPlaybackPlayer(probe), probe, scope, ::createPlaybackPlayer,
             ::transitionOffer, resolve = { offer ->
