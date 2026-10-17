@@ -116,6 +116,7 @@ import io.github.currencortex.music.feature.room.*
 private fun isPlaylistRoute(route: String) = route.startsWith("lib/playlist/") || route.startsWith("lib/ncmplaylist/") ||
     route in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent")
 
+private val UnifiedMiniScrollClearance = 36.dp
 private const val ROOT = 0
 private const val APPEARANCE = 1
 private const val ABOUT = 2
@@ -421,8 +422,12 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         .then(if (wideLayout) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) else Modifier)
                         .padding(end = if (wideLayout) SideNavigationSpace else 0.dp,
                         bottom = if (rootFloating) 0.dp else rootTabSpace + if (miniAvailable) miniHeight else 0.dp)) {
-                        CompositionLocalProvider(LocalMusicBottomInset provides if (rootFloating)
-                            (if (wideLayout) 0.dp else 92.dp) + if (miniAvailable) miniHeight else 0.dp else 0.dp) {
+                        val scrollBottom = if (rootFloating)
+                            (if (wideLayout) 0.dp else 92.dp) + if (miniAvailable) miniHeight else 0.dp else 0.dp
+                        val composerBottom = (scrollBottom - if (rootFloating && miniAvailable && settings.floatingBar && !wideLayout)
+                            UnifiedMiniScrollClearance else 0.dp).coerceAtLeast(0.dp)
+                        CompositionLocalProvider(LocalMusicBottomInset provides scrollBottom,
+                            LocalMusicComposerBottomInset provides composerBottom) {
                         Box(Modifier.fillMaxSize().then(if (searchPresented) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
                         RootTabTransition(selected, tabsState, onSelected = ::selectTab) { tab ->
                             when (tab) {
@@ -612,7 +617,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val miniBody: @Composable () -> Unit = {
         MiniPlayer(playerVm, { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
             { playWithPermission { container.playerController.toggle() } },
-            if (unifiedDock) Modifier.onSizeChanged { miniHeight = with(density) { it.height.toDp() } + 36.dp }
+            if (unifiedDock) Modifier.onSizeChanged { miniHeight = with(density) { it.height.toDp() } + UnifiedMiniScrollClearance }
             else Modifier.navigationBarsPadding().graphicsLayer {
                     translationY = -miniLift.value.toPx()
                 }
