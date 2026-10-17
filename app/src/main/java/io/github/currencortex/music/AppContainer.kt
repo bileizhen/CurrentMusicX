@@ -126,6 +126,23 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val neteaseSongActions = io.github.currencortex.music.data.song.NeteaseSongActionsRepository(apiClient) {
         musicSession()
     }
+    val playlistLikeImporter by lazy {
+        io.github.currencortex.music.data.library.PlaylistLikeImporter(playerScope, { musicSession() },
+            { accountRepository.state.value.account?.id ?: 0 },
+            { libraryRepository.playlist(it, fresh = true) },
+            { expected ->
+                val uid = neteaseSongActions.boundUid(expected)
+                val liked = neteaseSongActions.likedIds(fresh = true)
+                if (neteaseSongActions.boundUid(expected) != uid)
+                    throw ApiException(ErrorKind.NeteaseSessionChanged)
+                io.github.currencortex.music.data.library.PlaylistLikeTarget(uid, liked)
+            },
+            { song, expected, uid ->
+                val id = io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song)
+                    ?: throw ApiException(ErrorKind.NotFound)
+                neteaseSongActions.setLiked(id, true, expected, song, expectedUid = uid)
+            })
+    }
     val audioCache = AudioCache(context.applicationContext, java.io.File(context.cacheDir, "audio$storageSuffix"), navidromeMedia)
     val storage = io.github.currencortex.music.core.storage.StorageStore(context.applicationContext, audioCache)
     val audioSources = AudioSourceResolver(audioCache,

@@ -35,6 +35,8 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
         val code = (value as? JsonObject)?.get("code")?.jsonPrimitive?.intOrNull
         if (code != null && code != 200) throw ApiException(when {
             code in listOf(301, 401) -> ErrorKind.NeteaseBindingRequired
+            code == 429 -> ErrorKind.RateLimited
+            code == 403 -> ErrorKind.Forbidden
             path == "playmode/intelligence/list" && code == 400 &&
                 (value as? JsonObject)?.get("message")?.jsonPrimitive?.contentOrNull?.contains("歌单不存在") == true -> ErrorKind.NeteaseLikedPlaylistUnavailable
             else -> ErrorKind.Server
@@ -147,8 +149,11 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
         setLiked(id, desired, expected, song)
         return desired
     }
-    suspend fun setLiked(id: Long, liked: Boolean, expected: RequestSession = session(), song: Song? = null) {
+    suspend fun boundUid(expected: RequestSession = session()): Long = binding(expected).profile!!.uid
+    suspend fun setLiked(id: Long, liked: Boolean, expected: RequestSession = session(), song: Song? = null,
+        expectedUid: Long? = null) {
         val bound = binding(expected)
+        if (expectedUid != null && expectedUid != bound.profile!!.uid) throw ApiException(ErrorKind.NeteaseSessionChanged)
         val response = try {
             api.request("POST", "ncmbind/like/$id", query = mapOf("timestamp" to "${System.currentTimeMillis()}"), body = buildJsonObject {
                 LibraryRepository.metadata(song ?: Song(id, "")).forEach { (key, value) -> put(key, value) }
@@ -160,7 +165,12 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
         }
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         val code = (response as? JsonObject)?.get("code")?.jsonPrimitive?.intOrNull
-        if (code != null && code != 200) throw ApiException(if (code in listOf(301, 401)) ErrorKind.NeteaseBindingRequired else ErrorKind.Server, code)
+        if (code != null && code != 200) throw ApiException(when (code) {
+            301, 401 -> ErrorKind.NeteaseBindingRequired
+            403 -> ErrorKind.Forbidden
+            429 -> ErrorKind.RateLimited
+            else -> ErrorKind.Server
+        }, code)
         val acknowledged = (response as? JsonObject)?.let { it["like"] ?: it["on"] }?.jsonPrimitive?.booleanOrNull
         if (acknowledged != null && acknowledged != liked) throw ApiException(ErrorKind.Server)
         confirmedLikes.entries.removeIf { it.key.session != expected || it.value.until <= now() }
