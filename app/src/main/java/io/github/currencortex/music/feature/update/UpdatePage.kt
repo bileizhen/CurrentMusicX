@@ -20,14 +20,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -42,6 +39,8 @@ import io.github.currencortex.music.core.update.*
 import io.github.currencortex.music.data.update.UpdateSettings
 import io.github.currencortex.music.ui.component.MusicDialog
 import io.github.currencortex.music.ui.component.SettingsSwitch
+import io.github.currencortex.music.ui.component.ArtworkGlowPalette
+import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.*
@@ -59,7 +58,7 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
     transferState: UpdateTransferState, onDownload: (UpdateSource) -> Unit,
     onInstall: () -> Unit, onCancel: () -> Unit, onChangeSource: (UpdateSource) -> Unit,
     downloadExperience: Boolean, settings: UpdateSettings, onAutoCheck: (Boolean) -> Unit,
-    onChannel: (UpdateChannel) -> Unit) {
+    onChannel: (UpdateChannel) -> Unit, cover: String) {
     AnimatedVisibility(visible, enter = fadeIn(tween(280)) + slideInHorizontally(tween(420)) { it / 5 },
         exit = fadeOut(tween(220)) + slideOutHorizontally(tween(320)) { it / 5 }) {
         val context = LocalContext.current
@@ -70,7 +69,8 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
             }
         }
         UpdatePageContent(state, transferState, notes, onDismiss, onRetry, onIgnore, onOpenRelease,
-            onDownload, onInstall, onCancel, onChangeSource, downloadExperience, settings, onAutoCheck, onChannel)
+            onDownload, onInstall, onCancel, onChangeSource, downloadExperience, settings, onAutoCheck, onChannel,
+            cover = cover, backgroundActive = visible)
     }
 }
 
@@ -82,7 +82,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     onDownload: (UpdateSource) -> Unit = {}, onInstall: () -> Unit = {}, onCancel: () -> Unit = {},
     onChangeSource: (UpdateSource) -> Unit = {}, downloadExperience: Boolean = false,
     settings: UpdateSettings = UpdateSettings(), onAutoCheck: (Boolean) -> Unit = {},
-    onChannel: (UpdateChannel) -> Unit = {}) {
+    onChannel: (UpdateChannel) -> Unit = {}, cover: String = "", backgroundActive: Boolean = true) {
     val release = (state as? UpdateState.Available)?.release
     val installedVersion = BuildConfig.VERSION_NAME.substringBefore('-')
     var heroVersion by remember { mutableStateOf(installedVersion) }
@@ -104,6 +104,13 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     val settled by animateFloatAsState(if (checking) 0f else 1f, tween(680, easing = FastOutSlowInEasing), label = "update_check_result")
     val detail by animateFloatAsState(if (expanded) 1f else 0f, tween(600, easing = FastOutSlowInEasing), label = "update_details_morph")
     val notesScroll = rememberScrollState()
+    val artworkPalette by rememberArtworkGlowPalette(cover)
+    val accent = MiuixTheme.colorScheme.primary
+    val palette = if (cover.isBlank()) ArtworkGlowPalette(accent.toArgb(),
+        androidx.compose.ui.graphics.lerp(accent, Color(0xFFFF9FFC), .4f).toArgb()) else artworkPalette
+    var pageWidth by remember { mutableIntStateOf(1) }
+    var bloomX by remember { mutableFloatStateOf(.5f) }
+    var bloomPulse by remember { mutableIntStateOf(0) }
     BackHandler {
         when {
             confirmCancel -> confirmCancel = false
@@ -118,8 +125,13 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
         background = Color(0xFF100D29), surface = Color(0xFF201C35), surfaceContainer = Color(0xFF29253F)) }
     MiuixTheme(colors = colors) {
     CompositionLocalProvider(LocalContentColor provides pageWhite) {
-    Box(Modifier.fillMaxSize().testTag("update_page").background(Color(0xFF100D29))
-        .updateRibbonBackground().pointerInput(Unit) { detectTapGestures { menu = false } }) {
+    Box(Modifier.fillMaxSize().testTag("update_page").background(Color(0xFF0A0A0A))
+        .onSizeChanged { pageWidth = it.width }
+        .pointerInput(Unit) { detectTapGestures {
+            menu = false; bloomX = (it.x / pageWidth).coerceIn(0f, 1f); bloomPulse++
+        } }) {
+        HorizonBloomBackground(palette, Modifier.matchParentSize(), active = backgroundActive,
+            pulse = bloomPulse, touchX = bloomX)
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
             Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically) {
@@ -166,7 +178,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 }
                 Box(Modifier.align(Alignment.TopCenter).padding(horizontal = 20.dp).offset(y = top).widthIn(max = 620.dp).fillMaxWidth()
                     .height((height - top - 20.dp).coerceAtLeast(56.dp)).clip(glassShape)
-                    .background(Color(0xB51C1930)).border(1.dp, Color.White.copy(alpha = .14f), glassShape)
+                    .background(Color(0xB516151D)).border(1.dp, Color.White.copy(alpha = .14f), glassShape)
                     .testTag("update_status_card")) {
                     Column(Modifier.fillMaxSize().padding(18.dp)
                         .then(if (compact && !expanded) Modifier.verticalScroll(rememberScrollState()) else Modifier)) {
@@ -332,26 +344,3 @@ private fun verifiedUpdate(release: AppRelease) = release.apkUrl != null &&
 
 private fun updateSize(bytes: Long): String = if (bytes <= 0) "0 MB" else
     String.format(java.util.Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024))
-
-/** Static cached paths, no bitmap decoding, shader loop or per-frame background animation. */
-private fun Modifier.updateRibbonBackground() = drawWithCache {
-    val w = size.width; val h = size.height
-    val base = Brush.verticalGradient(listOf(Color(0xFF100D29), Color(0xFF18113C), Color(0xFF392879), Color(0xFF100D29)))
-    val glow = Brush.radialGradient(listOf(Color(0xFFA086ED).copy(alpha = .7f), Color.Transparent),
-        Offset(w * .65f, h * .55f), w * .85f)
-    val lower = Path().apply {
-        moveTo(-w * .2f, h * .62f); cubicTo(w * .2f, h * .34f, w * .55f, h * .90f, w * 1.2f, h * .62f)
-        lineTo(w * 1.2f, h * .90f); cubicTo(w * .6f, h * .98f, w * .15f, h * .55f, -w * .2f, h * .82f); close()
-    }
-    val upper = Path().apply {
-        moveTo(w * .3f, h * .59f); cubicTo(w * .18f, h * .35f, w * .95f, h * .28f, w * 1.2f, h * .45f)
-        lineTo(w * 1.2f, h * .71f); cubicTo(w * .85f, h * .49f, w * .7f, h * .81f, w * .3f, h * .59f); close()
-    }
-    val warm = Brush.verticalGradient(0f to Color(0xFFA389DB), .36f to Color(0xFFFBBF89),
-        .5f to Color(0xFFFF8745), .64f to Color(0xFFBC79DD), 1f to Color(0xFF3A2C79), startY = h * .3f, endY = h * .92f)
-    val edge = Color(0xFFE7C0FF).copy(alpha = .22f)
-    onDrawBehind {
-        drawRect(base); drawRect(glow); drawPath(lower, warm); drawPath(lower, edge, style = Stroke(1.dp.toPx()))
-        drawPath(upper, warm); drawPath(upper, edge, style = Stroke(1.dp.toPx()))
-    }
-}

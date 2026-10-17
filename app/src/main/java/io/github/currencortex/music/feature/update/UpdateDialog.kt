@@ -35,7 +35,7 @@ import top.yukonga.miuix.kmp.preference.OverlaySpinnerPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-fun UpdatePage(service: UpdateService, transfer: UpdateTransfer) {
+fun UpdatePage(service: UpdateService, transfer: UpdateTransfer, cover: String = "") {
     val visible by service.dialogVisible.collectAsStateWithLifecycle()
     val state by service.state.collectAsStateWithLifecycle()
     val download by transfer.state.collectAsStateWithLifecycle()
@@ -70,7 +70,7 @@ fun UpdatePage(service: UpdateService, transfer: UpdateTransfer) {
         }, onInstall = transfer::install, onCancel = transfer::cancel,
         onChangeSource = transfer::changeSource, downloadExperience = BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE,
         settings = settings, onAutoCheck = { scope.launch { service.settings.setAutoCheck(it) } },
-        onChannel = { scope.launch { service.settings.setChannel(it); service.check(manual = true) } })
+        onChannel = { scope.launch { service.settings.setChannel(it); service.check(manual = true) } }, cover = cover)
 }
 
 @Composable
