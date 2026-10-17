@@ -52,6 +52,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
     val soundEffectNotices = io.github.currencortex.music.core.media.SoundEffectNoticeCenter(playerScope)
     val desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsPreferences(settingsStore, appScope)
+    private val updateIslandNotice = io.github.currencortex.music.core.update.UpdateIslandNotice(
+        updateTransfer.state.map { it.download }, desktopLyrics.state.map { it.enabled }, playerScope)
+    val islandNotices = io.github.currencortex.music.core.update.prioritizedIslandNotices(
+        updateIslandNotice.state, soundEffectNotices.state, playerScope)
     val desktopLyricsStatus = kotlinx.coroutines.flow.MutableStateFlow(io.github.currencortex.music.feature.lyrics.desktop.DesktopWindowStatus())
     val desktopLyricsSettingsVisible = kotlinx.coroutines.flow.MutableStateFlow(false)
     val appForeground = kotlinx.coroutines.flow.MutableStateFlow(false)

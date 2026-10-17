@@ -32,6 +32,22 @@ import org.junit.Test
 /** Presentation only; never changes the real account, audio or island preferences. */
 class SoundEffectIslandNoticeTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun downloadProgressKeepsFpsHeightAndStableWidthThroughCompletion() {
+        var notice by mutableStateOf(SoundEffectNotice(-1, "更新下载", SoundEffectNoticeTier.STANDARD,
+            kind = IslandNoticeKind.UPDATE_DOWNLOAD, progress = 1))
+        compose.setContent { SoundEffectIslandPill(notice, height = 36.dp) }
+        val initial = compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot
+        for (percent in listOf(9, 10, 99, 100)) {
+            compose.runOnIdle { notice = notice.copy(progress = percent) }
+            compose.onNodeWithText("$percent%", useUnmergedTree = true).assertIsDisplayed()
+            assertEquals(initial, compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot)
+        }
+        compose.runOnIdle { notice = notice.copy(name = "下载完成", phase = SoundEffectNoticePhase.READY) }
+        compose.onNodeWithText("待安装", useUnmergedTree = true).assertIsDisplayed()
+        assertEquals(initial, compose.onNodeWithTag("update_island_notice").fetchSemanticsNode().boundsInRoot)
+        compose.onAllNodesWithTag("sound_effect_island_notice").assertCountEquals(0)
+    }
+
     @Test fun phaseUpdatesKeepOneFullyLitDiscAndWordmarkInsteadOfCrossfadingWholeRows() {
         var notice by mutableStateOf(SoundEffectNotice(1, "AI 调音大师", SoundEffectNoticeTier.SVIP))
         compose.setContent { SoundEffectIslandPill(notice) }
