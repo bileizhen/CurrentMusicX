@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,8 +47,22 @@ import io.github.currencortex.music.core.media.SoundEffectNoticePhase
     val shape = RoundedCornerShape(50)
     val iconSize = 23.dp.coerceAtMost(height)
     val iconInset = (height - iconSize) / 2
-    val statusWidth = with(LocalDensity.current) { maxOf(44.dp, ((font - 1) * 4).sp.toDp() + 2.dp) }
-    val pillWidth = with(LocalDensity.current) { maxOf(216.dp, (font * 9).sp.toDp() + 50.dp).coerceAtMost(340.dp) }
+    val textMeasurer = rememberTextMeasurer()
+    val titleStyle = TextStyle(color = Color.White, fontSize = font.sp, fontWeight = FontWeight.Medium)
+    val statusStyle = TextStyle(color = tint, fontSize = (font - 1).sp,
+        fontFeatureSettings = "tnum", textAlign = TextAlign.End)
+    // Reserve only the measured text widths, keeping progress and completion the same size.
+    val titleWidth = with(LocalDensity.current) {
+        listOf("更新下载", "下载完成", notice.name).maxOf {
+            textMeasurer.measure(it, titleStyle, maxLines = 1, softWrap = false).size.width
+        }.toDp() + 2.dp
+    }
+    val statusWidth = with(LocalDensity.current) {
+        listOf("100%", "点击安装", "连接中").maxOf {
+            textMeasurer.measure(it, statusStyle, maxLines = 1, softWrap = false).size.width
+        }.toDp() + 2.dp
+    }
+    val pillWidth = (iconInset + iconSize + 18.dp + titleWidth + statusWidth + 12.dp).coerceAtMost(340.dp)
     Row(modifier.width(pillWidth).height(height).then(if (material) Modifier.clip(shape)
         .background(Color(0xFF11141B)).border(.8.dp, Color.White.copy(alpha = .2f), shape) else Modifier)
         .semantics(mergeDescendants = true) {
@@ -76,10 +91,9 @@ import io.github.currencortex.music.core.media.SoundEffectNoticePhase
                 drawLine(tint, Offset(size.width * .7f, size.height * .3f), Offset(size.width * .3f, size.height * .7f), stroke, StrokeCap.Round)
             }
         }
-        BasicText(notice.name, Modifier.weight(1f), style = TextStyle(color = Color.White,
-            fontSize = font.sp, fontWeight = FontWeight.Medium), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+        BasicText(notice.name, Modifier.weight(1f), style = titleStyle,
+            maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
         BasicText(if (downloading) notice.progress?.let { "$it%" } ?: "连接中" else if (ready) "点击安装" else "",
-            Modifier.width(statusWidth), style = TextStyle(color = tint, fontSize = (font - 1).sp,
-                fontFeatureSettings = "tnum", textAlign = TextAlign.End), maxLines = 1, softWrap = false)
+            Modifier.width(statusWidth), style = statusStyle, maxLines = 1, softWrap = false)
     }
 }
