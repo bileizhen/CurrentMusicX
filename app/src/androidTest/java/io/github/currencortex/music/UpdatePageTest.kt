@@ -91,7 +91,9 @@ class UpdatePageTest {
         capture("update-page-latest.png")
         compose.onNodeWithTag("update_details").performClick()
         compose.onNodeWithText("离线更新说明", substring = true).assertIsDisplayed()
-        compose.onNodeWithTag("update_back").performClick()
+        compose.onNodeWithText("收起 ⌃").assertDoesNotExist()
+        compose.onNodeWithContentDescription("收起更新说明").assertIsDisplayed().performClick()
+        compose.onNodeWithTag("update_details").assertIsDisplayed()
         compose.runOnIdle { state.value = UpdateState.Failed("网络不可用") }
         compose.onNodeWithTag("update_retry").assertIsDisplayed().performClick()
         compose.runOnIdle { assertEquals(1, retries) }
