@@ -110,21 +110,30 @@ class VersionNumberMorphTest {
             }
         }
         compose.mainClock.autoAdvance = false
+        assertEquals(0f, compose.onNodeWithTag("morph_version").fetchSemanticsNode().config[VersionMorphBlurKey], .01f)
         capture("morph-00.png")
         compose.runOnIdle { version.value = "17" }
         compose.mainClock.advanceTimeByFrame()
         for (index in 1..16) {
             compose.mainClock.advanceTimeBy(64)
+            if (index == 4) assertTrue("The changing outline should soften near the middle",
+                compose.onNodeWithTag("morph_version").fetchSemanticsNode().config[VersionMorphBlurKey] > 2f)
             capture("morph-${index.toString().padStart(2, '0')}.png")
         }
         compose.onNodeWithTag("morph_version").assertTextEquals("17")
+        assertEquals("A settled version must be sharp", 0f,
+            compose.onNodeWithTag("morph_version").fetchSemanticsNode().config[VersionMorphBlurKey], .01f)
         compose.runOnIdle { version.value = "18" }
         compose.mainClock.advanceTimeBy(320)
         compose.runOnIdle { version.value = "19" }
+        compose.mainClock.advanceTimeByFrame()
+        assertTrue("Retargeting must retain the visible blur",
+            compose.onNodeWithTag("morph_version").fetchSemanticsNode().config[VersionMorphBlurKey] > 1f)
         compose.mainClock.advanceTimeBy(128)
         compose.runOnIdle { version.value = "16" }
         compose.mainClock.advanceTimeBy(1200)
         compose.onNodeWithTag("morph_version").assertTextEquals("16")
+        assertEquals(0f, compose.onNodeWithTag("morph_version").fetchSemanticsNode().config[VersionMorphBlurKey], .01f)
     }
 
     private fun raster(from: VersionOutline, to: VersionOutline, progress: Float): Bitmap {
