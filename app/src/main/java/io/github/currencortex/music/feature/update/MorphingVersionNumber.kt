@@ -76,7 +76,7 @@ internal data class VersionOutline(val version: String, val width: Float, val di
 internal class VersionGlyphs {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = EM
-        typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+        typeface = Typeface.create("sans-serif", Typeface.BOLD)
     }
     val top = paint.fontMetrics.top
     val lineHeight = paint.fontMetrics.bottom - top
