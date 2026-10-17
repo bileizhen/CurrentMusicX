@@ -18,6 +18,7 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     val revision = MutableStateFlow(0L)
     private val mutationMutex = Mutex()
     private val reads = SessionReadCache(session, { revision.value })
+    val hasCurrentMusicAccount get() = accountId() > 0 && session().token != null
     fun clearReads() = reads.clear()
     fun invalidate() { reads.clear(); revision.update { it + 1 } }
     fun clearSession() { reads.clear(); statuses.value = emptyMap(); revision.update { it + 1 } }
@@ -26,11 +27,16 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     private suspend fun <T : Any> backgroundRead(key: String, fresh: Boolean = false, load: suspend (RequestSession) -> T): T =
         withContext(Dispatchers.Default) { reads.read(key, fresh, load) }
     suspend fun daily(fresh: Boolean = false): Daily = backgroundRead("daily", fresh) { expected ->
-        val d = api.netease?.let { api.decode<DailyDto>(it.daily(expected.neteaseRevision)) } ?: read<DailyDto>("daily", expected)
+        val d = api.netease?.takeIf { api.hasLocalNeteaseLogin || expected.token == null }
+            ?.let { api.decode<DailyDto>(it.daily(expected.neteaseRevision)) } ?: read<DailyDto>("daily", expected)
         Daily(d.daily.map(SongDto::toDomain), d.forYou.map(SongDto::toDomain), d.artists)
     }
     suspend fun recent(fresh: Boolean = false): List<Song> = backgroundRead("recent", fresh) {
-        (api.netease?.let { native -> api.decode<SongListDto>(native.recent(expectedRevision = it.neteaseRevision)) } ?: read<SongListDto>("plays/recent", it, mapOf("limit" to "50"))).songs.map(SongDto::toDomain)
+        // Project play reports are already uploaded separately from NetEase scrobbles.
+        // A project login must read the same cross-device history that the web client uses.
+        (if (it.token != null) read<SongListDto>("plays/recent", it, mapOf("limit" to "50"))
+        else api.netease?.let { native -> api.decode<SongListDto>(native.recent(expectedRevision = it.neteaseRevision)) }
+            ?: read<SongListDto>("plays/recent", it, mapOf("limit" to "50"))).songs.map(SongDto::toDomain)
     }
     suspend fun likedSongs(fresh: Boolean = false): List<Song> = backgroundRead("likes", fresh) { read<SongListDto>("likes/mine", it).songs.map(SongDto::toDomain) }
     suspend fun playlists(): List<Playlist> = backgroundRead("playlists") { read<PlaylistsDto>("playlists", it).playlists.map(PlaylistDto::domain) }

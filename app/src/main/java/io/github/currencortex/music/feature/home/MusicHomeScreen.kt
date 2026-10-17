@@ -146,7 +146,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
             home.errors["我的歌单"]?.let { item { Text(it, fontSize = 13.sp) } }
             if ("我的歌单" in home.pendingSections && home.playlists.isEmpty()) item { HomeCoverPlaceholders() }
             if (home.playlists.isNotEmpty()) item(key = "playlists") { LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(home.playlists.take(8), key = { it.id }) { playlist ->
+                items(home.playlists.take(8), key = { "${it.source}-${it.id}" }) { playlist ->
                         Column(Modifier.width(136.dp).clickable(role = Role.Button) {
                             navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}")
                         }, verticalArrangement = Arrangement.spacedBy(6.dp)) {

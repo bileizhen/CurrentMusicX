@@ -88,7 +88,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             Text("${home.playlists.size} 个歌单 · 你的音乐收藏", Modifier.padding(top = 6.dp),
                                 fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
                         }
-                        if ((!neteaseMain && account.account != null) || (neteaseMain && vm.container.nativeNetease != null && nativeAccount.loggedIn && !nativeAccount.stale)) PlaylistIconAction(Icons.Default.Add, "新建歌单", onCreate,
+                        if (account.account != null || (nativeAccount.loggedIn && !nativeAccount.stale)) PlaylistIconAction(Icons.Default.Add, "新建歌单", onCreate,
                             Modifier.testTag("create_playlist"), ink = MiuixTheme.colorScheme.primary,
                             background = MiuixTheme.colorScheme.primary.copy(alpha = .1f))
                     }
@@ -110,7 +110,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
                     }
                 }
-            items(home.playlists, key = { it.id }) { playlist ->
+            items(home.playlists, key = { "${it.source}-${it.id}" }) { playlist ->
                 Column(Modifier.testTag("playlist_card_${playlist.id}").clickable(role = Role.Button) {
                     navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}")
                 }) {
