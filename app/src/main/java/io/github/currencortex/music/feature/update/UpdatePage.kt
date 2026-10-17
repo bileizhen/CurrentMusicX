@@ -24,7 +24,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
@@ -108,9 +107,6 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     val accent = MiuixTheme.colorScheme.primary
     val palette = if (cover.isBlank()) ArtworkGlowPalette(accent.toArgb(),
         androidx.compose.ui.graphics.lerp(accent, Color(0xFFFF9FFC), .4f).toArgb()) else artworkPalette
-    var pageWidth by remember { mutableIntStateOf(1) }
-    var bloomX by remember { mutableFloatStateOf(.5f) }
-    var bloomPulse by remember { mutableIntStateOf(0) }
     BackHandler {
         when {
             confirmCancel -> confirmCancel = false
@@ -126,12 +122,10 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     MiuixTheme(colors = colors) {
     CompositionLocalProvider(LocalContentColor provides pageWhite) {
     Box(Modifier.fillMaxSize().testTag("update_page").background(Color(0xFF0A0A0A))
-        .onSizeChanged { pageWidth = it.width }
         .pointerInput(Unit) { detectTapGestures {
-            menu = false; bloomX = (it.x / pageWidth).coerceIn(0f, 1f); bloomPulse++
+            menu = false
         } }) {
-        HorizonBloomBackground(palette, Modifier.matchParentSize(), active = backgroundActive,
-            pulse = bloomPulse, touchX = bloomX)
+        NeonRevealBackground(palette, Modifier.matchParentSize(), active = backgroundActive)
         Column(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing)) {
             Row(Modifier.fillMaxWidth().height(60.dp).padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically) {

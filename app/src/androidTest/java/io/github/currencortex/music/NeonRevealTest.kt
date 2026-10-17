@@ -11,8 +11,8 @@ import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.currencortex.music.core.update.UpdateState
 import io.github.currencortex.music.data.settings.AppearanceSettings
-import io.github.currencortex.music.feature.update.HorizonBloomBackground
-import io.github.currencortex.music.feature.update.HorizonBloomRenderer
+import io.github.currencortex.music.feature.update.NeonRevealBackground
+import io.github.currencortex.music.feature.update.NeonRevealRenderer
 import io.github.currencortex.music.feature.update.UpdatePageContent
 import io.github.currencortex.music.ui.component.ArtworkGlowPalette
 import io.github.currencortex.music.ui.theme.LeiTheme
@@ -22,18 +22,18 @@ import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
 
-class HorizonBloomTest {
+class NeonRevealTest {
     @get:Rule val compose = createComposeRule()
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Test fun nativeShaderCompilesOnSupportedAndroid() {
         assumeTrue(Build.VERSION.SDK_INT >= 33)
-        HorizonBloomRenderer()
+        NeonRevealRenderer()
     }
 
     @Test fun updatePageUsesRealCoverColoursAndRetintsAfterCoverChanges() {
-        val red = cover("horizon-red.png", 0xffed4055.toInt())
-        val blue = cover("horizon-blue.png", 0xff3873ed.toInt())
+        val red = cover("neon-red.png", 0xffed4055.toInt())
+        val blue = cover("neon-blue.png", 0xff3873ed.toInt())
         val selected = mutableStateOf(red.toURI().toString())
         compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
             top.yukonga.miuix.kmp.basic.Scaffold {
@@ -41,10 +41,14 @@ class HorizonBloomTest {
             }
         } }
         compose.waitUntil(15000) { channels().let { it.first > it.second * 1.4 } }
-        capture("horizon-cover-red.png")
+        capture("neon-cover-red.png")
         compose.runOnIdle { selected.value = blue.toURI().toString() }
         compose.waitUntil(15000) { channels().let { it.second > it.first * 1.4 } }
-        capture("horizon-cover-blue.png")
+        capture("neon-cover-blue.png")
+        val beforeTap = image()
+        compose.onNodeWithTag("update_neon_background").performTouchInput { click(center) }
+        compose.mainClock.advanceTimeBy(160)
+        assertTrue("Blank taps must not replay the lighting", beforeTap.sameAs(image()))
         compose.onNodeWithTag("update_details").performClick()
         compose.onNodeWithTag("update_back").performClick()
         compose.onNodeWithTag("update_retry").assertIsDisplayed()
@@ -53,7 +57,7 @@ class HorizonBloomTest {
     @Test fun motionStopsWhenPageIsInactiveAndResumesContinuously() {
         val active = mutableStateOf(true)
         compose.mainClock.autoAdvance = false
-        compose.setContent { HorizonBloomBackground(ArtworkGlowPalette(0xffff9ffc.toInt(), 0xff5227ff.toInt()),
+        compose.setContent { NeonRevealBackground(ArtworkGlowPalette(0xffff9ffc.toInt(), 0xff5227ff.toInt()),
             Modifier.fillMaxSize(), active = active.value) }
         compose.mainClock.advanceTimeBy(2500)
         val first = image()
@@ -70,36 +74,44 @@ class HorizonBloomTest {
         assertFalse(paused.sameAs(image()))
     }
 
-    @Test fun canvasFallbackKeepsTheSameColouredHorizon() {
-        compose.setContent { HorizonBloomBackground(ArtworkGlowPalette(0xffed4055.toInt(), 0xff3873ed.toInt()),
+    @Test fun canvasFallbackDrawsMirroredTubes() {
+        compose.setContent { NeonRevealBackground(ArtworkGlowPalette(0xffffd3a8.toInt(), 0xffff4d6d.toInt()),
             Modifier.fillMaxSize(), active = false, preferShader = false) }
-        val bitmap = image()
-        val center = bitmap.getPixel(bitmap.width / 2, (bitmap.height * .66f).toInt())
-        assertTrue((center ushr 16 and 255) > 20)
-        capture("horizon-canvas-fallback.png")
+        assertMirroredTubes(image())
+        capture("neon-canvas-fallback.png")
     }
 
-    @Test fun portraitHasShallowDimLimbAndAtmosphereAcrossTheSky() {
-        compose.setContent { HorizonBloomBackground(ArtworkGlowPalette(0xffff9ffc.toInt(), 0xff5227ff.toInt()),
-            Modifier.fillMaxSize(), active = false) }
-        val bitmap = image()
-        fun peak(x: Int): Int = ((bitmap.height * .62).toInt()..(bitmap.height * .73).toInt())
-            .maxBy { bitmap.getPixel(x, it) ushr 16 and 255 }
-        val middle = peak(bitmap.width / 2)
-        val edge = peak((bitmap.width * .05).toInt())
-        assertEquals("Limb should sit at two thirds of the portrait", .66f,
-            middle.toFloat() / bitmap.height, .012f)
-        assertTrue("Planet must have a shallow curve", edge > middle && edge - middle < bitmap.height * .04f)
-        val highlight = bitmap.getPixel(bitmap.width / 2, middle) ushr 16 and 255
-        val rim = bitmap.getPixel((bitmap.width * .05).toInt(), edge) ushr 16 and 255
-        assertTrue("The sun must have a visible local highlight", highlight > 130)
-        assertTrue("The rest of the rim must stay dim", rim in 20..85 && highlight > rim * 3)
-        val sky = bitmap.getPixel(bitmap.width / 2, (bitmap.height * .3).toInt())
-        assertTrue("Cool atmosphere must reach the upper sky", (sky and 255) > (sky ushr 16 and 255) + 4)
-        capture("horizon-portrait-reference.png")
+    @Test fun centreOutRevealLeavesBrightMirroredTubes() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { NeonRevealBackground(ArtworkGlowPalette(0xffffd3a8.toInt(), 0xffff4d6d.toInt()),
+            Modifier.fillMaxSize()) }
+        compose.mainClock.advanceTimeBy(200)
+        val dark = image()
+        compose.mainClock.advanceTimeBy(500)
+        val opening = image()
+        assertFalse(dark.sameAs(opening))
+        capture("neon-opening.png")
+        compose.mainClock.advanceTimeBy(2600)
+        val lit = image()
+        assertMirroredTubes(lit)
+        // The horizontal lit span grows from the middle toward both ends.
+        fun brightWidth(b: Bitmap): Int {
+            val y = (0 until b.height / 8).maxBy { b.getPixel(b.width / 2, it) and 255 }
+            return (0 until b.width).count { (b.getPixel(it, y) and 255) > 190 }
+        }
+        assertTrue(brightWidth(lit) > brightWidth(opening) * 1.3)
+        capture("neon-revealed.png")
     }
 
-    private fun image() = compose.onNodeWithTag("update_horizon_background").captureToImage().asAndroidBitmap()
+    private fun assertMirroredTubes(bitmap: Bitmap) {
+        fun peak(range: IntRange) = range.maxOf { bitmap.getPixel(bitmap.width / 2, it) and 255 }
+        assertTrue("Top tube must have a bright core", peak(0..bitmap.height / 8) > 190)
+        assertTrue("Bottom tube must have a bright core", peak(bitmap.height * 7 / 8 until bitmap.height) > 190)
+        val center = bitmap.getPixel(bitmap.width / 2, bitmap.height / 2)
+        assertTrue("Coloured light should reach the centre", (center ushr 16 and 255) > 50)
+    }
+
+    private fun image() = compose.onNodeWithTag("update_neon_background").captureToImage().asAndroidBitmap()
     private fun channels(): Pair<Double, Double> {
         val bitmap = image()
         var red = 0.0; var blue = 0.0
