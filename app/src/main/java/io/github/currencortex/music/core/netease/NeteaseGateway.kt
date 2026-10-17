@@ -140,6 +140,15 @@ class NeteaseGateway(val transport: NeteaseTransport) {
             }
             "ncmbind/likelist" -> return official("/api/song/like/get", data("uid" to "${current.profile?.uid ?: 0}"), expected = expected, authenticated = true)
         }
+        if (path.startsWith("ncmbind/comment/")) {
+            val id = path.substringAfterLast('/').toLongOrNull()?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.NotFound)
+            require(method == "POST" && body.text("content").isNotBlank())
+            val reply = body.long("commentId").takeIf { it > 0 }
+            return official("/api/resource/comments/${if (reply == null) "add" else "reply"}", buildJsonObject {
+                put("threadId", "R_SO_4_$id"); put("content", body.text("content"))
+                reply?.let { put("commentId", it) }
+            }, expected = expected, authenticated = true, clientProfile = NeteaseClientProfile.ANDROID)
+        }
         if (path.startsWith("ncmbind/like/")) {
             val id = path.substringAfterLast('/').toLongOrNull()?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.NotFound)
             val liked = body["like"]?.jsonPrimitive?.booleanOrNull ?: throw ApiException(ErrorKind.Parse)

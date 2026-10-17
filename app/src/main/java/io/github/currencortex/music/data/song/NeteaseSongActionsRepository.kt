@@ -60,6 +60,25 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
             api.decode<NeteaseCommentsPage>(request("comment/music", mapOf("id" to "$id", "offset" to "$offset", "limit" to "$limit"), expected))
         }
     }
+    suspend fun sendComment(id: Long, content: String, replyTo: Long? = null) {
+        require(id > 0 && content.isNotBlank() && content.trim().length <= 1000 && (replyTo == null || replyTo > 0))
+        val expected = session()
+        binding(expected)
+        val result = api.request("POST", "ncmbind/comment/$id", body = buildJsonObject {
+            put("content", content.trim()); replyTo?.let { put("commentId", it) }
+        }, authenticated = true, expectedSession = expected, retryConnection = false) as? JsonObject
+            ?: throw ApiException(ErrorKind.Parse)
+        if (expected != session()) throw ApiException(ErrorKind.NeteaseSessionChanged)
+        val code = result["code"]?.jsonPrimitive?.intOrNull
+        if (code != null && code != 200) throw ApiException(when (code) {
+            301, 401 -> ErrorKind.NeteaseBindingRequired
+            403 -> ErrorKind.Forbidden
+            429 -> ErrorKind.RateLimited
+            else -> ErrorKind.Server
+        }, code)
+        if (result["ok"]?.jsonPrimitive?.booleanOrNull == false) throw ApiException(ErrorKind.Server)
+        reads.clear()
+    }
     suspend fun likedIds(fresh: Boolean = false): Set<Long> = withContext(Dispatchers.Default) {
         val expected = session()
         val bound = binding(expected)

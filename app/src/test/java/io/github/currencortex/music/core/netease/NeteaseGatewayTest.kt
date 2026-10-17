@@ -262,6 +262,24 @@ class NeteaseGatewayTest {
         assertEquals("Bearer current-secret", request.getHeader("Authorization"))
         assertNull(request.getHeader("Cookie")); assertEquals(0, upstream.requestCount)
     }
+    @Test fun commentsAndRepliesUseLocalCredentialsOnceAndNeverLeakTheProjectToken(): Unit = runBlocking {
+        login()
+        val repo = NeteaseSongActionsRepository(api, session = ::owner)
+        for (reply in listOf(null, 90L)) {
+            enqueue("""{"code":200}""")
+            repo.sendComment(11, " 测试内容 ", reply)
+            val request = upstream.takeRequest()
+            assertEquals("/eapi/resource/comments/${if (reply == null) "add" else "reply"}", request.path)
+            assertNull(request.getHeader("Authorization"))
+            val body = payload(request)
+            assertEquals("R_SO_4_11", body["threadId"]!!.jsonPrimitive.content)
+            assertEquals("测试内容", body["content"]!!.jsonPrimitive.content)
+            assertEquals(reply, body["commentId"]?.jsonPrimitive?.longOrNull)
+        }
+        upstream.enqueue(MockResponse().setResponseCode(502))
+        assertTrue(appResult { repo.sendComment(11, "不可自动重发") } is AppResult.Failure)
+        assertEquals(3, upstream.requestCount); assertEquals(0, current.requestCount)
+    }
     @Test fun listeningDeltasProduceOneQualifiedListenAndOneStart() = runBlocking {
         login(); enqueue("""{"code":200}"""); enqueue("""{"code":200}""")
         gateway.recordPlay(11)

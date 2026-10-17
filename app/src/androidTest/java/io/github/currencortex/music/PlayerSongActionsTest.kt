@@ -64,6 +64,7 @@ class PlayerSongActionsTest {
         val container = AppContainer(context, "four-actions-${UUID.randomUUID()}")
         try {
             container.ready.await(); container.sessionRestored.await()
+            container.desktopLyrics.markRecommendationSeen()
             val url = server.url("/cm/").toString()
             container.musicSettings.setServer(url); container.accountRepository.server = url
             container.accountRepository.save("fixture-personal", UserDto(7, nickname = "按钮测试"))
@@ -90,33 +91,28 @@ class PlayerSongActionsTest {
             assertTrue(bounds.first().left >= bar.left && bounds.last().right <= bar.right)
             val badge = compose.onNodeWithTag("like_count", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
             assertTrue("The real quantity belongs at the icon's upper right", badge.top < bounds.first().center.y && badge.center.x > bounds.first().center.x)
+            // A tap toggles the selected library directly; wait for the acknowledged UI state.
+            fun likeReady(selected: Boolean): Boolean {
+                val node = compose.onAllNodesWithTag("player_like").fetchSemanticsNodes().singleOrNull() ?: return false
+                return node.config[SemanticsProperties.Selected] == selected && !node.config.contains(SemanticsProperties.Disabled)
+            }
             compose.onNodeWithTag("player_like").performClick()
-            compose.waitUntil(5000) { compose.onAllNodesWithTag("like_destination_CURRENT_MUSIC").fetchSemanticsNodes().isNotEmpty() &&
-                compose.onAllNodesWithText("未收录，点击加入").fetchSemanticsNodes().isNotEmpty() }
-            assertEquals(0, mutations.get())
-            compose.onNodeWithTag("like_destination_CURRENT_MUSIC").performClick()
-            compose.waitUntil(5000) { cmLiked.get() && container.libraryRepository.statuses.value[11]?.pending == false }
-            assertFalse(liked.get())
-            compose.waitUntil(5000) { compose.onAllNodesWithText("未收录，点击加入 · 红心同步到网易云 APP").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("like_destination_NETEASE").performClick()
-            compose.waitUntil(5000) { liked.get() }
-            compose.waitUntil(5000) { compose.onAllNodesWithText("已收录，点击移出 · 红心同步到网易云 APP").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("like_destination_CURRENT_MUSIC").performClick()
-            compose.waitUntil(5000) { !cmLiked.get() && container.libraryRepository.statuses.value[11]?.pending == false }
-            assertTrue(liked.get())
-            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            compose.waitUntil(10000) { liked.get() && mutations.get() == 1 && likeReady(true) }
+            assertFalse(cmLiked.get())
             compose.onNodeWithTag("song_like_sheet").assertDoesNotExist()
             compose.onNodeWithTag("player_like").performClick()
-            compose.waitUntil(5000) { compose.onAllNodesWithText("已收录，点击移出 · 红心同步到网易云 APP").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("like_destination_NETEASE").assertIsSelected().performClick()
-            compose.waitUntil(5000) { !liked.get() && compose.onAllNodesWithText("未收录，点击加入 · 红心同步到网易云 APP").fetchSemanticsNodes().isNotEmpty() }
-            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            compose.waitUntil(10000) { !liked.get() && mutations.get() == 2 && likeReady(false) }
             compose.onNodeWithTag("player_like").performClick()
-            compose.waitUntil(5000) { compose.onAllNodesWithText("未收录，点击加入 · 红心同步到网易云 APP").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("like_destination_NETEASE").assertIsNotSelected().performClick()
-            compose.waitUntil(5000) { liked.get() && compose.onAllNodesWithText("已收录，点击移出 · 红心同步到网易云 APP").fetchSemanticsNodes().isNotEmpty() }
-            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
-            compose.waitUntil(5000) { compose.onNodeWithTag("player_like").fetchSemanticsNode().config[SemanticsProperties.Selected] }
+            compose.waitUntil(10000) { liked.get() && mutations.get() == 3 && likeReady(true) }
+            container.musicSettings.setNeteaseMainLibrary(false)
+            compose.waitUntil(10000) { !container.primaryLibrary.usesNetease.value && likeReady(false) }
+            compose.onNodeWithTag("player_like").performClick()
+            compose.waitUntil(10000) { cmLiked.get() && container.libraryRepository.statuses.value[11]?.pending == false && likeReady(true) }
+            assertTrue(liked.get())
+            compose.onNodeWithTag("player_like").performClick()
+            compose.waitUntil(10000) { !cmLiked.get() && container.libraryRepository.statuses.value[11]?.pending == false && likeReady(false) }
+            container.musicSettings.setNeteaseMainLibrary(true)
+            compose.waitUntil(10000) { likeReady(true) }
             assertEquals(3, mutations.get())
             compose.onNodeWithTag("player_comments").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithText("网易云热门评论").fetchSemanticsNodes().isNotEmpty() }
