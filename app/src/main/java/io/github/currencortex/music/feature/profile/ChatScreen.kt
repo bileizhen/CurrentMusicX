@@ -47,8 +47,6 @@ import coil3.compose.AsyncImage
 import io.github.currencortex.music.data.profile.ChatMessage
 import io.github.currencortex.music.data.profile.ProfileUser
 import io.github.currencortex.music.ui.component.*
-import io.github.currencortex.music.ui.util.rememberBlurBackdrop
-import top.yukonga.miuix.kmp.blur.layerBackdrop
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -74,7 +72,6 @@ import java.util.Locale
     val density = LocalDensity.current
     var headerHeight by remember { mutableStateOf(60.dp) }
     var composerHeight by remember { mutableStateOf(64.dp) }
-    val backdrop = rememberBlurBackdrop(true)
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         uri?.let { vm.upload(context.contentResolver, it) }
     }
@@ -87,8 +84,8 @@ import java.util.Locale
     LaunchedEffect(state.scrollRequest) { if (state.scrollRequest > 0) list.animateScrollToItem(0) }
     Box(Modifier.fillMaxSize().padding(bottom = bottom).testTag("discover_chat")) {
         Box(Modifier.fillMaxSize()) {
-            // The messages extend behind the two fixed controls; only their backdrops blur.
-            LazyColumn(Modifier.fillMaxSize().then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
+            // The messages scroll under the fades; the fixed controls stay sharp above them.
+            LazyColumn(Modifier.fillMaxSize()
                 .testTag("chat_messages"), state = list, reverseLayout = true,
                 contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = headerHeight + 16.dp, bottom = composerHeight + 16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -111,10 +108,10 @@ import java.util.Locale
                 Modifier.align(Alignment.BottomEnd).padding(end = 8.dp, bottom = composerHeight + 8.dp)
                     .background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(20.dp)))
         }
-        ChatBackdropPanel(backdrop, atTop = true,
-            Modifier.align(Alignment.TopCenter).fillMaxWidth().height(headerHeight + 24.dp).testTag("chat_header_backdrop"))
-        ChatBackdropPanel(backdrop, atTop = false,
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(composerHeight + 24.dp).testTag("chat_composer_backdrop"))
+        ChatEdgeFade(atTop = true,
+            Modifier.align(Alignment.TopCenter).fillMaxWidth().height(headerHeight + 24.dp).testTag("chat_header_fade"))
+        ChatEdgeFade(atTop = false,
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(composerHeight + 24.dp).testTag("chat_composer_fade"))
         Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().pointerInput(Unit) { detectTapGestures {} }.onSizeChanged {
             headerHeight = with(density) { it.height.toDp() }
         }) {
