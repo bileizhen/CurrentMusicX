@@ -697,7 +697,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 if (container.desktopLyrics.state.value.enabled) container.playerController.connect()
             }
         }
-        if (!launchBrand.active && !announcementVisible) UpdatePage(container.updates, container.updateTransfer)
+        if (!launchBrand.active && !announcementVisible) UpdatePage(container.updates, container.updateTransfer, currentSong?.cover.orEmpty())
         LibraryDialogs(libraryVm)
         ProfileDialogs(profileVm, authVm)
         if (profileMessage != null) MusicDialog("账号操作", onDismiss = { profileVm.message.value = null }) {
