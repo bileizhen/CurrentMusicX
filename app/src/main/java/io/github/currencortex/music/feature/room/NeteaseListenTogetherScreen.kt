@@ -62,9 +62,19 @@ internal data class NeteaseListenTogetherActions(
         ListenTogetherHistoryController(container.listenTogetherHistory, scope, container.musicRepository::details)
     }
     val archive by archiveController.state.collectAsStateWithLifecycle()
+    val fateController = remember(container, account.revision) {
+        ListenTogetherFateController(container.listenTogetherFate, scope) { container.errorNotices.show(it) }
+    }
+    val fate by fateController.state.collectAsStateWithLifecycle()
+    var deleteFate by remember(account.revision) { mutableStateOf<io.github.currencortex.music.data.netease.listen.ListenTogetherFateReport?>(null) }
     var invitePeer by remember(account.revision) { mutableStateOf<io.github.currencortex.music.data.netease.listen.ListenTogetherParticipant?>(null) }
     var shareJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var fateShareJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    var fateSharing by remember { mutableStateOf(false) }
     DisposableEffect(archiveController) { onDispose { archiveController.close(); shareJob?.cancel() } }
+    DisposableEffect(fateController) { onDispose { fateController.close(); fateShareJob?.cancel() } }
+    LaunchedEffect(fate.partnerUid) { if (fate.partnerUid == null) { fateShareJob?.cancel(); fateSharing = false; deleteFate = null } }
+    LaunchedEffect(fate.deleted) { if (fate.deleted) { fateController.close(); archiveController.history() } }
     LaunchedEffect(archive.page, archive.reportRoomId) { shareJob?.cancel() }
     LaunchedEffect(state.endedRoom?.roomId, state.endedOwnerUid, account.revision) {
         state.endedRoom?.takeIf { state.endedOwnerUid == account.profile?.uid }?.let { ended ->
@@ -74,6 +84,45 @@ internal data class NeteaseListenTogetherActions(
     }
     LaunchedEffect(controller, account.revision) {
         if (account.loggedIn && !account.stale && (account.profile?.uid ?: 0) > 0) controller.refresh()
+    }
+    if (fate.partnerUid != null) {
+        LaunchedEffect(deleteFate) { onDialogActive(deleteFate != null) }
+        DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
+        BackHandler { if (!fate.deleting) fateController.close() }
+        ListenTogetherFateContent(fate.report, fate.loading, fate.permissionRequired,
+            onBack = { if (!fate.deleting) fateController.close() }, onRetry = fateController::retry,
+            onHistory = { uid -> fateController.close(); archiveController.history(uid) },
+            onShare = { report -> if (fateShareJob?.isActive != true) {
+                fateSharing = true
+                fateShareJob = scope.launch {
+                    try {
+                        val expected = fateController.shareSession(report)
+                        container.listenTogetherFate.checkSession(expected)
+                        val file = ListenTogetherFateSharing.create(context, report)
+                        try {
+                            container.listenTogetherFate.checkSession(expected)
+                            if (fateController.state.value.report === report) {
+                                context.startActivity(Intent.createChooser(ListenTogetherFateSharing.intent(context, report, file), "分享缘分报告"))
+                            } else file.delete()
+                        } catch (failure: Exception) { file.delete(); throw failure }
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                    catch (_: Exception) { context.showMusicError("暂时无法分享缘分报告，请重试") }
+                    finally { fateSharing = false }
+                }
+            } },
+            onDeleteRequest = { deleteFate = fate.report },
+            onOfficial = { report -> try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(report.officialUrl()))) }
+                catch (_: Exception) { context.showMusicError("无法打开网易云缘分报告") } },
+            onInvite = { report -> if (report.canInvite && !report.peer.masked && !state.active) {
+                fateController.close(); invitePeer = report.peer
+            } }, activeRoom = state.active,
+            busy = fate.deleting, sharing = fateSharing, error = fate.error != null)
+        deleteFate?.let { report -> ListenTogetherFateDeleteDialog(report,
+            onDismiss = { deleteFate = null }, onConfirm = { records ->
+                deleteFate = null
+                fateController.deleteConfirmed(report, records)
+            }) }
+        return
     }
     if (archive.page != null) {
         val collectionShown = !archive.collectionSongs.isNullOrEmpty()
@@ -103,7 +152,7 @@ internal data class NeteaseListenTogetherActions(
             onCollect = archiveController::collectSongs,
             onOfficial = { report -> try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(report.officialUrl()))) }
                 catch (_: Exception) { context.showMusicError("无法打开官方报告") } },
-            activeRoom = state.active)
+            activeRoom = state.active, onFate = { peer, scene -> fateController.open(peer.userId, scene) })
         NeteaseSongsCollectionDialog(archive.collectionSongs.orEmpty(), collectionShown,
             archiveController::dismissCollection,
             loadPlaylists = { container.neteaseLibrary.playlists(fresh = true).filter { it.nativeOwned } },

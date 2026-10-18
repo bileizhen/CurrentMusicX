@@ -39,6 +39,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     onCollect: () -> Unit,
     onOfficial: (ListenTogetherRecordReport) -> Unit,
     activeRoom: Boolean = false,
+    onFate: ((ListenTogetherParticipant, Int) -> Unit)? = null,
 ) {
     val colors = MiuixTheme.colorScheme
     val title = when (state.page) {
@@ -92,7 +93,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                     }
                                     ArchiveStats("陪伴彼此", durationLabel(most.totalDurationMs), "一起听过", countLabel(most.totalSongCount))
                                     if (most.totalDurationMs == null || most.totalSongCount == null) ArchiveMuted("部分累计数据仅会员可查看")
-                                    MusicTextAction("查看你们的记录", { onHistory(most.user.userId) }, Modifier.testTag("listen_archive_most_history"))
+                                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        MusicTextAction("查看你们的记录", { onHistory(most.user.userId) }, Modifier.weight(1f).testTag("listen_archive_most_history"))
+                                        if (onFate != null) MusicTextAction("缘分报告", { onFate(most.user, most.ltType) },
+                                            Modifier.weight(1f).testTag("listen_archive_most_fate"))
+                                    }
                                 }
                             }
                         } }
@@ -131,11 +136,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                     ArchiveAvatar(entry.user, entry.online)
                                     Text(entry.user.displayName(), Modifier.weight(1f).padding(start = 12.dp), fontSize = 16.sp,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    MusicTextAction("查看记录", { onHistory(entry.user.userId) }, Modifier.testTag("listen_archive_rank_history_${entry.user.userId}"))
                                 }
                                 ArchiveRule()
                                 ArchiveStats("陪伴彼此", durationLabel(entry.totalDurationMs), "一起听过", countLabel(entry.totalSongCount))
                                 if (entry.totalDurationMs == null || entry.totalSongCount == null) ArchiveMuted("部分累计数据仅会员可查看")
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                    MusicTextAction("查看记录", { onHistory(entry.user.userId) },
+                                        Modifier.weight(1f).testTag("listen_archive_rank_history_${entry.user.userId}"))
+                                    if (onFate != null) MusicTextAction("缘分报告", { onFate(entry.user, entry.ltType) },
+                                        Modifier.weight(1f).testTag("listen_archive_rank_fate_${entry.user.userId}"))
+                                }
                             }
                         }
                     }
@@ -157,6 +167,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                 MusicTextAction(if (activeRoom) "正在一起听中" else "再次邀请", { peer?.let(onInvite) },
                                     Modifier.testTag("listen_archive_report_invite"), enabled = peer != null && report.canInvite && !activeRoom)
                                 if (activeRoom) ArchiveMuted("当前会话结束后可再次邀请好友。")
+                                if (peer != null) onFate?.let { open ->
+                                    MusicTextAction("查看和 TA 的缘分报告", { open(peer, report.ltType) },
+                                        Modifier.testTag("listen_archive_report_fate"))
+                                }
                                 report.failMessage.takeIf(String::isNotBlank)?.let { ArchiveMuted(it) }
                             }
                         } }
@@ -191,7 +205,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         ArchiveMessage("暂无本次报告", "网易云暂未提供这次一起听的数据。", tag = "listen_archive_empty")
                     }
                 }
-                null -> Unit
+                else -> Unit
             }
         }
     }
