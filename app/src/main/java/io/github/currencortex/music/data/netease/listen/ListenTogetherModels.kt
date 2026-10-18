@@ -5,7 +5,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import java.net.URI
 import java.net.URLDecoder
 
-data class ListenTogetherParticipant(val userId: Long, val nickname: String = "", val avatarUrl: String = "")
+data class ListenTogetherParticipant(val userId: Long, val nickname: String = "", val avatarUrl: String = "", val masked: Boolean = false)
 
 data class ListenTogetherRoom(val roomId: String, val creatorId: Long,
     val participants: List<ListenTogetherParticipant> = emptyList(), val roomType: String = "FRIEND",
