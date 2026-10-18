@@ -122,10 +122,12 @@ internal fun stripVersionHeadings(version: String, notes: String): String {
  */
 @Composable
 internal fun MarkdownText(markdown: String, modifier: Modifier = Modifier, onLinkClick: ((String) -> Unit)? = null,
-                          compact: Boolean = false) {
+                          compact: Boolean = false, allowImages: Boolean = true) {
     val context = LocalContext.current
     val linkStyle = SpanStyle(color = MiuixTheme.colorScheme.primary, textDecoration = TextDecoration.Underline)
-    val blocks = remember(markdown) { markdownBlocks(markdown) }
+    val blocks = remember(markdown, allowImages) { markdownBlocks(markdown).map {
+        if (!allowImages && it.kind == MarkdownKind.IMAGE) MarkdownBlock(MarkdownKind.TEXT, it.text) else it
+    } }
     val onLink: (String) -> Unit = onLinkClick ?: { openLink(context, it) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         blocks.forEach { block ->

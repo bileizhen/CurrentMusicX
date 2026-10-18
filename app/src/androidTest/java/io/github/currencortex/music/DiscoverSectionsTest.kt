@@ -192,6 +192,24 @@ class DiscoverSectionsTest {
         compose.waitUntil(10_000) { !chatMessages.containsKey(13) && compose.onAllNodesWithTag("chat_message_13").fetchSemanticsNodes().isEmpty() }
         assertEquals(3, chatWrites.get())
     }
+    @Test fun aiEditsRenderMarkdownAndCardsWithoutReloadingHistory() {
+        open(); compose.onNodeWithText("Chat").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("chat_message_3").fetchSemanticsNodes().isNotEmpty() }
+        val bot = buildJsonObject {
+            put("id", 50); put("userId", 99); put("content", ""); put("streaming", true)
+            put("user", buildJsonObject { put("id", 99); put("nickname", "CurrentMusicAI"); put("isBot", true) })
+        }
+        chatEvent("message", bot)
+        compose.waitUntil(10000) { compose.onAllNodesWithText("正在思考…").fetchSemanticsNodes().isNotEmpty() }
+        chatEvent("edit", buildJsonObject {
+            put("id", 50); put("content", "**最终回复**"); put("streaming", false)
+            put("atts", JsonArray(listOf(buildJsonObject { put("type", "song"); put("id", 8); put("name", "推荐歌") })))
+        })
+        compose.waitUntil(10000) { compose.onAllNodesWithText("最终回复").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("music_attachment_song_8").assertExists()
+        compose.onNodeWithText("AI").assertExists()
+        assertEquals(0, chatWrites.get())
+    }
     @Test fun chatAlignsComposerControlsAndKeepsLongMessagesInsideTheViewport() {
         chatMessages[2] = chatMessage(2, "最近在听电影原声。\n旋律从轻快到安静，配上路上的风景刚刚好。\n也欢迎大家分享自己的歌单，一起发现更多好听的音乐。")
         open(); compose.onNodeWithText("Chat").performClick()

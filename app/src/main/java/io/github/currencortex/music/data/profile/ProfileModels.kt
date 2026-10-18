@@ -27,7 +27,8 @@ fun userRole(isAdmin: Boolean, isSuper: Boolean, isOwner: Boolean = false): User
     @JsonNames("is_admin") @Serializable(with = ApiBooleanSerializer::class) val isAdmin: Boolean = false,
     @JsonNames("is_super") @Serializable(with = ApiBooleanSerializer::class) val isSuper: Boolean = false,
     val title: String = "", @JsonNames("ip_region") val ipRegion: String = "",
-    @JsonNames("is_owner") @Serializable(with = ApiBooleanSerializer::class) val isOwner: Boolean = false) {
+    @JsonNames("is_owner") @Serializable(with = ApiBooleanSerializer::class) val isOwner: Boolean = false,
+    val isBot: Boolean = false) {
     val role get() = userRole(isAdmin, isSuper, isOwner)
     val decoration get() = avatarDecoration.ifBlank { legacyDecoration }
     val visible get() = publicSquare ?: public ?: legacyPublic

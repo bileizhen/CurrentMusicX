@@ -5,6 +5,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.*
@@ -46,6 +47,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import coil3.compose.AsyncImage
 import io.github.currencortex.music.data.profile.ChatMessage
 import io.github.currencortex.music.data.profile.ProfileUser
+import io.github.currencortex.music.data.profile.validMusicAttachments
+import io.github.currencortex.music.feature.update.MarkdownText
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
@@ -65,6 +68,7 @@ import java.util.Locale
     val scope = rememberCoroutineScope()
     val nearBottom by remember { derivedStateOf { list.firstVisibleItemIndex <= 1 } }
     var membersOpen by rememberSaveable { mutableStateOf(false) }
+    var referenceOpen by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<ChatMessage?>(null) }
     var confirming by remember { mutableStateOf<ChatMessage?>(null) }
     var preview by remember { mutableStateOf<String?>(null) }
@@ -92,7 +96,13 @@ import java.util.Locale
                 items(state.messages.asReversed(), key = { it.id }) { message ->
                     ChatMessageRow(message, mine = message.userId == account.account?.id, vm,
                         onProfile = { id -> keyboard?.hide(); navigate("user/profile/$id") },
-                        onImage = { preview = it }, onMenu = { selected = message })
+                        onImage = { preview = it }, onMenu = { selected = message }, onCard = { card ->
+                            if (card.type == "song") {
+                                val song = io.github.currencortex.music.data.song.Song(card.id, card.name, card.sub, cover = card.pic)
+                                val player = vm.container.playerController
+                                if (player.external != null) player.external?.request(song) else player.playList(listOf(song), 0)
+                            } else navigate("lib/${if (card.type == "playlist") "ncmplaylist" else card.type}/${card.id}")
+                        })
                 }
                 if (state.hasOlder) item(key = "older") {
                     Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
@@ -140,6 +150,10 @@ import java.util.Locale
         }) {
             state.actionError?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.error) }
+            state.attachments.forEach { card -> Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text("引用 · ${card.name}", Modifier.weight(1f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                MusicTextAction("移除", { vm.removeAttachment(card) }, enabled = !state.sending)
+            } }
             if (state.image.isNotEmpty()) Row(Modifier.padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
                 AsyncImage(vm.repository.imageUrl(vm.container.audioSession().server, state.image), "待发送图片",
                     Modifier.size(56.dp).clip(RoundedCornerShape(10.dp)), contentScale = ContentScale.Crop)
@@ -153,9 +167,15 @@ import java.util.Locale
                     state.draft.contains('@') && it.length <= 12 && it.none(Char::isWhitespace)
                 }
                 if (fragment != null) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    state.members.filter { it.nickname.contains(fragment, ignoreCase = true) }.take(3).forEach { member ->
+                    (state.suggestions + state.members.filter { it.nickname.contains(fragment, ignoreCase = true) }).distinctBy { it.id }.take(3).forEach { member ->
                         MusicTextAction("@${member.nickname}", { vm.mention(member) }, Modifier.weight(1f))
                     }
+                }
+                Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                    MusicTextAction("引用内容", { referenceOpen = true }, Modifier.testTag("chat_attach_current"), enabled = !state.sending)
+                    if (state.draft.contains("@CurrentMusicAI")) MusicTextAction("猜你想问", {
+                        vm.draft("@CurrentMusicAI " + if (state.image.isNotEmpty()) "这张图里有什么？" else "介绍一下这首歌的创作背景")
+                    })
                 }
                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp).testTag("chat_composer"),
                     verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -175,9 +195,26 @@ import java.util.Locale
                             } })
                     ChatComposerAction(if (state.sending) "发送中" else "发送", MusicIcons.ArrowUp, vm::send,
                         Modifier.testTag("chat_send"), primary = true, busy = state.sending,
-                        enabled = !state.sending && !state.uploading && (state.draft.isNotBlank() || state.image.isNotBlank()))
+                        enabled = !state.sending && !state.uploading && (state.draft.isNotBlank() || state.image.isNotBlank() || state.attachments.isNotEmpty()))
                 }
             }
+        }
+    }
+    if (referenceOpen) {
+        var query by remember { mutableStateOf("") }
+        var type by remember { mutableStateOf("song") }
+        MusicDialog("引用内容", { referenceOpen = false }) {
+            MusicTextAction("引用当前歌曲", { vm.attachCurrent(); referenceOpen = false })
+            Row(Modifier.fillMaxWidth()) { listOf("song" to "歌曲", "album" to "专辑", "artist" to "歌手", "playlist" to "歌单").forEach { (key, label) ->
+                MusicTextAction((if (key == type) "✓ " else "") + label, { type = key; vm.searchReferences(query, type) }, Modifier.weight(1f))
+            } }
+            TextField(query, { query = it; vm.searchReferences(query, type) }, label = "搜索引用内容", modifier = Modifier.fillMaxWidth())
+            LazyColumn(Modifier.fillMaxWidth().heightIn(max = 260.dp)) {
+                if (state.referenceBusy) item { Text("正在搜索…", fontSize = 13.sp) }
+                else if (query.isNotBlank() && state.references.isEmpty()) item { Text("没有找到相关内容", fontSize = 13.sp) }
+                items(state.references) { card -> MusicAttachmentCard(card) { vm.attach(card); referenceOpen = false } }
+            }
+            TextButton("关闭", { referenceOpen = false })
         }
     }
     if (membersOpen) MusicDialog("聊天室成员", { membersOpen = false }) {
@@ -227,7 +264,8 @@ import java.util.Locale
 }
 
 @Composable private fun ChatMessageRow(message: ChatMessage, mine: Boolean, vm: ChatViewModel,
-    onProfile: (Long) -> Unit, onImage: (String) -> Unit, onMenu: () -> Unit) {
+    onProfile: (Long) -> Unit, onImage: (String) -> Unit, onMenu: () -> Unit,
+    onCard: (io.github.currencortex.music.data.profile.PostAttachment) -> Unit) {
     val user = message.user ?: ProfileUser(id = message.userId, nickname = "已注销用户")
     val color = MiuixTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -236,7 +274,7 @@ import java.util.Locale
         Row(Modifier.fillMaxWidth().testTag("chat_message_${message.id}"),
             horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Top) {
             if (!mine) Box(Modifier.padding(end = 10.dp).testTag("chat_avatar_${message.id}")
-                .clickable(enabled = user.id > 0) { onProfile(user.id) }) {
+                .combinedClickable(enabled = user.id > 0, onClick = { onProfile(user.id) }, onLongClick = { vm.mention(user) })) {
                 UserAvatar(user, vm.container, 36.dp, reserveOverlay = false)
             }
             Column(Modifier.widthIn(max = messageWidth), horizontalAlignment = if (mine) Alignment.End else Alignment.Start,
@@ -245,6 +283,7 @@ import java.util.Locale
                     Text(user.nickname.ifBlank { user.username }, Modifier.weight(1f, fill = false).clickable(enabled = user.id > 0) { onProfile(user.id) },
                         fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     UserRoleBadge(user.role)
+                    if (user.isBot) Text("AI", fontSize = 10.sp, color = color.primary)
                     Box(Modifier.size(32.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onMenu)
                         .testTag("chat_menu_${message.id}"), contentAlignment = Alignment.Center) {
                         Icon(MusicIcons.More, "消息操作", Modifier.size(18.dp).rotate(90f), tint = color.onSurface.copy(alpha = .4f))
@@ -256,8 +295,11 @@ import java.util.Locale
                     .background(if (mine) color.primary.copy(alpha = .10f) else color.surfaceContainer).padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (message.content.isNotEmpty()) SelectionContainer {
-                        Text(message.content, Modifier.testTag("chat_body_${message.id}"), fontSize = 14.sp, lineHeight = 21.sp)
+                        MarkdownText(message.content, Modifier.testTag("chat_body_${message.id}"), compact = true, allowImages = false)
                     }
+                    if (message.streaming) Text(if (message.content.isEmpty()) "正在思考…" else "正在回答…",
+                        fontSize = 11.sp, color = color.onSurfaceVariantSummary)
+                    validMusicAttachments(message.atts).forEach { card -> MusicAttachmentCard(card) { onCard(card) } }
                     vm.repository.imageUrl(vm.container.audioSession().server, message.image)?.let { url ->
                         AsyncImage(url, "聊天图片", Modifier.widthIn(max = 230.dp).fillMaxWidth().heightIn(min = 120.dp, max = 240.dp)
                             .clip(RoundedCornerShape(10.dp)).clickable { onImage(url) }, contentScale = ContentScale.Fit)
@@ -269,7 +311,7 @@ import java.util.Locale
                     fontSize = 10.sp, color = color.onSurface.copy(alpha = .4f))
             }
             if (mine) Box(Modifier.padding(start = 10.dp).testTag("chat_avatar_${message.id}")
-                .clickable(enabled = user.id > 0) { onProfile(user.id) }) {
+                .combinedClickable(enabled = user.id > 0, onClick = { onProfile(user.id) }, onLongClick = { vm.mention(user) })) {
                 UserAvatar(user, vm.container, 36.dp, reserveOverlay = false)
             }
         }

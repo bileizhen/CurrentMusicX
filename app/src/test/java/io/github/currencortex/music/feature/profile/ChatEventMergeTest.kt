@@ -7,6 +7,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ChatEventMergeTest {
+    @Test fun editsReplaceAccumulatedTextPreserveIdentityAndDoNotResurrectDeletedMessages() {
+        val original = ChatMessage(7, userId = 99, content = "", streaming = true, user = ProfileUser(99, isBot = true))
+        val delta = ChatLiveEvent(10, "edit", ApiJson.parseToJsonElement("""{"id":7,"content":"**完整回答**","streaming":false,"atts":[{"type":"song","id":42,"name":"音乐"}]}"""))
+        val edited = applyChatEvent(listOf(original), delta).single()
+        assertEquals("**完整回答**", edited.content); assertEquals(99L, edited.userId)
+        assertTrue(edited.user!!.isBot); assertFalse(edited.streaming)
+        assertEquals(42L, edited.atts.single().id)
+        assertTrue(applyChatEvent(emptyList(), delta).isEmpty())
+    }
     @Test fun replayedMessagesReplaceByIdWithoutDuplicatesAndDeletesRemoveOnlyTheirTarget() {
         val initial = listOf(ChatMessage(1, content = "一"), ChatMessage(3, content = "旧"))
         val event = ChatLiveEvent(7, "message", ApiJson.encodeToJsonElement(ChatMessage(3, content = "新")))
