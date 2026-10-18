@@ -103,6 +103,24 @@ class NeteasePrimaryLibraryTest {
         compose.waitUntil(10000) { nativeLikes.toList() == listOf(false, true) }
         assertEquals(0, currentLikeWrites.get())
     }
+    @Test fun heartDestinationIsPersistedIndependentlyFromTheMainLibrary() {
+        player()
+        runBlocking { container.musicSettings.setLikeMode(io.github.currencortex.music.data.settings.LikeMode.CURRENT_MUSIC) }
+        compose.waitUntil(10000) { !container.primaryLibrary.likesUseNetease.value }
+        compose.onNodeWithTag("player_like").performClick()
+        compose.waitUntil(10000) { currentLikeWrites.get() == 1 }
+        assertTrue(nativeLikes.isEmpty())
+        runBlocking {
+            container.musicSettings.setNeteaseMainLibrary(false)
+            container.musicSettings.setLikeMode(io.github.currencortex.music.data.settings.LikeMode.NETEASE)
+        }
+        compose.waitUntil(10000) { container.primaryLibrary.likesUseNetease.value }
+        compose.onNodeWithTag("player_like").performClick()
+        compose.waitUntil(10000) { nativeLikes.size == 1 }
+        assertEquals(1, currentLikeWrites.get())
+        assertFalse(runBlocking { container.musicSettings.snapshot().neteaseMainLibrary })
+        assertEquals(io.github.currencortex.music.data.settings.LikeMode.NETEASE, runBlocking { container.musicSettings.snapshot().likeMode })
+    }
     @Test fun playerLongPressOffersOwnedNeteasePlaylistsAndUsesTheirRealIds() {
         player()
         compose.onNodeWithTag("player_like").performTouchInput { longClick() }

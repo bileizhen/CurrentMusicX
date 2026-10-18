@@ -145,7 +145,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
             try {
                 when (val result = appResult {
                     if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) return@appResult container.navidrome.toggleLike(song)
-                    val native = container.primaryLibrary.resolveNetease()
+                    val native = container.primaryLibrary.resolveLikeNetease()
                     if (expected != container.musicSession()) throw ApiException(ErrorKind.Unauthorized)
                     if (native) {
                         val id = io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound)

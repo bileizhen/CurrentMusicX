@@ -91,6 +91,18 @@ import kotlin.math.roundToInt
             state.message?.let { Text(it, fontSize = 13.sp, color = if (state.busy) hint else colors.error) }
         } } }
 
+        item { MusicSectionHeader("红心与点赞") }
+        item { Card { Column(Modifier.padding(vertical = 8.dp)) {
+            Text("默认红心位置", Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 16.sp)
+            io.github.currencortex.music.data.settings.LikeMode.entries.forEach { mode ->
+                MusicDestinationRow((if (mode == settings.likeMode) "✓ " else "") + mode.label, { vm.likeMode(mode) },
+                    Modifier.testTag("like_mode_${mode.name}"), chevron = false, summary = when (mode) {
+                        io.github.currencortex.music.data.settings.LikeMode.AUTO -> "已绑定网易云时同步到网易云，否则存入 CurrentMusic"
+                        io.github.currencortex.music.data.settings.LikeMode.NETEASE -> "未绑定网易云时回退到 CurrentMusic"
+                        io.github.currencortex.music.data.settings.LikeMode.CURRENT_MUSIC -> "仅存入本站，不影响网易云账号"
+                    })
+            }
+        } } }
         item { MusicSectionHeader("预加载") }
         item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SettingsSwitch("预加载下一首", settings.preloadAudio, vm::preload,

@@ -48,6 +48,7 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
         }
     }
     fun preload(value: Boolean) = viewModelScope.launch { container.musicSettings.setPreload(value) }
+    fun likeMode(value: io.github.currencortex.music.data.settings.LikeMode) = viewModelScope.launch { container.musicSettings.setLikeMode(value) }
     fun preloadMetered(value: Boolean) = viewModelScope.launch { container.musicSettings.setPreloadMetered(value) }
     fun clearCache() = viewModelScope.launch {
         if (cacheState.value.busy) return@launch

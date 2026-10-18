@@ -168,6 +168,10 @@ class PrimaryMusicLibrary(private val current: LibraryRepository, private val ne
     }.stateIn(scope, SharingStarted.Eagerly, Triple(false, 0L, false))
     val usesNetease = identity.map { it.first }.stateIn(scope, SharingStarted.Eagerly, false)
     suspend fun resolveNetease(): Boolean = settings.snapshot().neteaseMainLibrary && binding.cachedStatus().bound
+    val likesUseNetease = combine(binding.state, settings.state.map { it.likeMode }.distinctUntilChanged()) { bound, mode ->
+        mode.useNetease(bound?.bound == true)
+    }.stateIn(scope, SharingStarted.Eagerly, false)
+    suspend fun resolveLikeNetease(): Boolean = settings.snapshot().likeMode.useNetease(binding.cachedStatus().bound)
     suspend fun playlists(fresh: Boolean = false): List<Playlist> = coroutineScope {
         if (fresh) current.clearReads()
         // Both collections can contain the same numeric ID in different namespaces.
