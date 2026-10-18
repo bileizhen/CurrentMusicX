@@ -1,19 +1,27 @@
 package io.github.currencortex.music.feature.room
 
 import android.content.ClipData
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -43,6 +51,14 @@ internal data class NeteaseListenTogetherActions(
     val account by container.neteaseSessions.state.collectAsStateWithLifecycle()
     val playback by container.playerController.state.collectAsStateWithLifecycle()
     val cmRoom by container.roomSession.state.collectAsStateWithLifecycle()
+    val island by container.desktopLyricsStatus.collectAsStateWithLifecycle()
+    val density = LocalDensity.current
+    val statusTop = WindowInsets.statusBars.getTop(density)
+    val islandTop = island.y + island.contentTop
+    val islandClearance = if (island.visible && islandTop < statusTop + with(density) { 96.dp.roundToPx() }) {
+        if (island.contentHeight > 0) with(density) { (islandTop + island.contentHeight - statusTop).coerceAtLeast(0).toDp() } + 12.dp
+        else 48.dp
+    } else 0.dp
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
     LaunchedEffect(controller, account.revision) {
@@ -56,17 +72,19 @@ internal data class NeteaseListenTogetherActions(
                 if (clip.itemCount > 0) clip.getItemAt(0).coerceToText(context)?.toString() else null
             } }),
         onBack = onBack, onSearch = onSearch, onPlayer = onPlayer, onBinding = onBinding,
-        currentMusicRoomActive = cmRoom.detail != null, onDialogActive = onDialogActive)
+        currentMusicRoomActive = cmRoom.detail != null, onDialogActive = onDialogActive, topClearance = islandClearance)
 }
 
 @Composable internal fun NeteaseListenTogetherContent(state: NeteaseListenTogetherState,
     account: NeteaseAccountState, playback: PlayerState, actions: NeteaseListenTogetherActions,
     onBack: () -> Unit, onSearch: () -> Unit, onPlayer: () -> Unit,
     onBinding: (() -> Unit)? = null, currentMusicRoomActive: Boolean = false,
-    onDialogActive: (Boolean) -> Unit = {}) {
+    onDialogActive: (Boolean) -> Unit = {}, topClearance: Dp = 0.dp) {
     val colors = MiuixTheme.colorScheme
     val ready = account.loggedIn && !account.stale && (account.profile?.uid ?: 0) > 0
     val canStart = ready && !state.busy && !currentMusicRoomActive
+    val showAccountCard = !state.active || !ready
+    val accountSummary = when { account.stale -> "本机网易云登录已过期"; ready -> "已登录 · ${account.profile?.nickname?.ifBlank { "网易云用户" }}"; else -> "尚未登录本机网易云账号" }
     var invite by rememberSaveable(account.revision) { mutableStateOf("") }
     var inputError by remember(account.revision) { mutableStateOf<String?>(null) }
     var clipboardMessage by remember { mutableStateOf<String?>(null) }
@@ -78,17 +96,25 @@ internal data class NeteaseListenTogetherActions(
     LaunchedEffect(state.active) { if (state.active) { invite = ""; inputError = null } }
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()
         .padding(horizontal = 20.dp).testTag("netease_listen_screen")) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 60.dp), verticalAlignment = Alignment.CenterVertically) {
-            MusicTextAction("返回", onBack, Modifier.testTag("netease_listen_back"))
-            Text("双人一起听", Modifier.weight(1f), fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Spacer(Modifier.height(topClearance))
+        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(44.dp).clip(CircleShape).background(colors.surfaceContainer)
+                .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).testTag("netease_listen_back"), contentAlignment = Alignment.Center) {
+                Icon(MusicIcons.Back, "返回", Modifier.size(22.dp), tint = colors.onSurface)
+            }
+            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("双人一起听", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                Text(if (showAccountCard) "网易云音乐" else "网易云音乐 · $accountSummary",
+                    if (showAccountCard) Modifier else Modifier.testTag("netease_listen_account"),
+                    fontSize = 12.sp, color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(),
-            contentPadding = musicScrollPadding(PaddingValues(top = 12.dp, bottom = 20.dp)),
-            verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("网易云音乐", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                Text(when { account.stale -> "本机网易云登录已过期"; ready -> "已登录 · ${account.profile?.nickname?.ifBlank { "网易云用户" }}"; else -> "尚未登录本机网易云账号" },
-                    Modifier.testTag("netease_listen_account"), fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+            contentPadding = musicScrollPadding(PaddingValues(top = 8.dp, bottom = 24.dp)),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (showAccountCard) item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("网易云账号", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Text(accountSummary, Modifier.testTag("netease_listen_account"), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
                 if (!ready) {
                     Text("登录后，与网易云音乐好友同步听同一首歌。", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
                     if (onBinding != null) MusicTextAction(if (account.stale) "重新登录网易云" else "登录网易云", onBinding,
@@ -108,37 +134,62 @@ internal data class NeteaseListenTogetherActions(
                 }
             } } }
             if (state.active) {
-                item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                item { Card(Modifier.fillMaxWidth().testTag("netease_listen_session")) { Column(Modifier.padding(20.dp)) {
                     val participants = state.room?.participants.orEmpty()
                     val pair = ListenTogetherPair(participants.map { ListenTogetherParticipant(it.userId, it.nickname, it.avatarUrl) })
-                    ListeningPairArtwork(pair, Modifier.size(96.dp, 60.dp).align(Alignment.CenterHorizontally))
-                    Text(if (participants.size >= 2) "正在一起听" else "等待好友加入", Modifier.align(Alignment.CenterHorizontally),
-                        fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
-                    Text(participants.joinToString(" · ") { it.nickname.ifBlank { "网易云用户" } }.ifBlank { account.profile?.nickname.orEmpty() },
-                        Modifier.fillMaxWidth(), fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
-                    Text(when { state.busy -> "正在同步…"; state.connected -> "已连接 · 播放同步中"; else -> "连接中，正在恢复同步…" },
-                        Modifier.testTag("netease_listen_connection"), fontSize = 13.sp, color = colors.primary)
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        ListeningPairArtwork(pair, Modifier.size(84.dp, 52.dp))
+                        Column(Modifier.weight(1f).padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            Text(if (participants.size >= 2) "正在一起听" else "等待好友加入", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                            Text(participants.joinToString(" · ") { it.nickname.ifBlank { "网易云用户" } }.ifBlank { account.profile?.nickname.orEmpty() },
+                                fontSize = 13.sp, color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Box(Modifier.size(5.dp).background(colors.primary, CircleShape))
+                                Text(when { state.busy -> "正在同步…"; state.connected -> "已连接 · 播放同步中"; else -> "正在恢复同步…" },
+                                    Modifier.testTag("netease_listen_connection"), fontSize = 11.sp, color = colors.primary)
+                            }
+                        }
+                    }
+                    Spacer(Modifier.height(20.dp))
                     val invitation = state.invitationUrl
                     Button(onClick = { if (invitation != null) scope.launch {
                         clipboardMessage = try { actions.copyInvitation(invitation); "邀请链接已复制" }
                         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                         catch (_: Exception) { "暂时无法复制，请重试" }
                     } },
-                        enabled = !invitation.isNullOrBlank(), modifier = Modifier.fillMaxWidth().testTag("netease_listen_copy")) { Text("复制邀请链接") }
-                    Text("将链接发给好友，即可在网易云音乐加入。", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-                    clipboardMessage?.let { Text(it, fontSize = 12.sp, color = colors.primary) }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        MusicTextAction("刷新同步", actions.refresh, Modifier.testTag("netease_listen_refresh"), enabled = ready && !state.busy)
-                        MusicTextAction("退出一起听", { leaveConfirmation = true }, Modifier.testTag("netease_listen_leave"), enabled = !state.busy, destructive = true)
+                        enabled = !invitation.isNullOrBlank(), colors = ButtonDefaults.buttonColorsPrimary(),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("netease_listen_copy")) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(MusicIcons.Copy, null, Modifier.size(18.dp), tint = colors.onPrimary)
+                            Text("复制邀请链接", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.onPrimary)
+                        }
+                    }
+                    Text(clipboardMessage ?: "好友可在网易云音乐打开链接加入。", Modifier.fillMaxWidth().padding(top = 8.dp),
+                        fontSize = 11.sp, color = if (clipboardMessage == null) colors.onSurfaceVariantSummary else colors.primary,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                    Spacer(Modifier.height(16.dp))
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ListenPageAction("刷新同步", MusicIcons.Update, actions.refresh, Modifier.weight(1f).testTag("netease_listen_refresh"), enabled = ready && !state.busy)
+                        ListenPageAction("退出一起听", MusicIcons.Close, { leaveConfirmation = true }, Modifier.weight(1f).testTag("netease_listen_leave"), enabled = !state.busy, destructive = true)
                     }
                 } } }
-                item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("正在播放", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Text(playback.song?.name ?: "等待选择歌曲", maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 20.sp)
-                    playback.song?.artists?.takeIf(String::isNotBlank)?.let { Text(it, fontSize = 13.sp, color = colors.onSurfaceVariantSummary) }
-                    Text("同步队列 ${state.queueCount} 首", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-                    Row { MusicTextAction("选择歌曲", onSearch, Modifier.testTag("netease_listen_search"), enabled = !state.busy)
-                        MusicTextAction("打开播放器", onPlayer, Modifier.testTag("netease_listen_player"), enabled = playback.song != null) }
+                item { Card(Modifier.fillMaxWidth().testTag("netease_listen_now_playing")) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        MusicCover(playback.song?.cover.orEmpty(), Modifier.size(56.dp), cornerRadius = 12.dp)
+                        Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("正在播放", Modifier.weight(1f), fontSize = 11.sp, color = colors.onSurfaceVariantSummary)
+                                Text("${state.queueCount} 首", fontSize = 11.sp, color = colors.onSurfaceVariantSummary)
+                            }
+                            Text(playback.song?.name ?: "等待选择歌曲", maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 17.sp, fontWeight = FontWeight.Medium)
+                            playback.song?.artists?.takeIf(String::isNotBlank)?.let { Text(it, fontSize = 12.sp, color = colors.onSurfaceVariantSummary,
+                                maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                        }
+                    }
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        ListenPageAction("选择歌曲", MusicIcons.Search, onSearch, Modifier.weight(1f).testTag("netease_listen_search"), enabled = !state.busy)
+                        ListenPageAction("打开播放器", MusicIcons.Headphones, onPlayer, Modifier.weight(1f).testTag("netease_listen_player"), enabled = playback.song != null)
+                    }
                 } } }
             } else {
                 if (state.availableRoom != null) item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -187,5 +238,18 @@ internal data class NeteaseListenTogetherActions(
         MusicTextAction("取消", { leaveConfirmation = false }, Modifier.testTag("netease_listen_cancel_leave"))
         MusicTextAction("确认退出", { leaveConfirmation = false; actions.leave() },
             Modifier.testTag("netease_listen_confirm_leave"), destructive = true, enabled = !state.busy)
+    }
+}
+
+@Composable private fun ListenPageAction(label: String, icon: ImageVector, onClick: () -> Unit,
+    modifier: Modifier = Modifier, enabled: Boolean = true, destructive: Boolean = false) {
+    val colors = MiuixTheme.colorScheme
+    val ink = (if (destructive) colors.error else colors.onSurface).copy(alpha = if (enabled) 1f else .4f)
+    Row(modifier.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).background(colors.surfaceContainer)
+        .clickable(enabled = enabled, role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
+        .padding(horizontal = 8.dp, vertical = 10.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, Modifier.size(18.dp), tint = ink)
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
