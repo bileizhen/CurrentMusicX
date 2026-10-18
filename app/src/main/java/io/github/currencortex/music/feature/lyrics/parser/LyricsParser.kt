@@ -41,7 +41,7 @@ object LyricsParser {
         val text = obj.string("txt")
         if (text.isBlank()) return@mapNotNull null
         var offset = 0
-        val words = (obj["words"] as? JsonArray).orEmpty().mapNotNull { value ->
+        var words = (obj["words"] as? JsonArray).orEmpty().mapNotNull { value ->
             val word = value as? JsonObject ?: return@mapNotNull null
             val token = word.string("text")
             val from = word.time("start") ?: return@mapNotNull null
@@ -51,8 +51,27 @@ object LyricsParser {
             offset = index + token.length
             LyricWord(token, from, to, index, offset)
         }.sortedBy { it.startTimeMs }
-        LyricLine(start.coerceAtLeast(0), obj.time("end") ?: 0, text, words,
-            obj.string("trans"), obj.string("romanization").ifBlank { obj.string("roma") })
+        val estimated = (obj["wSynth"] as? JsonPrimitive)?.booleanOrNull == true
+        val next = rows.mapNotNull { (it as? JsonObject)?.time("t") }.filter { it > start }.minOrNull()
+        val end = obj.time("end")?.takeIf { it > start } ?: next ?: (start + 5000)
+        if (words.isEmpty()) {
+            val tokens = (obj["w"] as? JsonArray).orEmpty().mapNotNull { value ->
+                val pair = value as? JsonArray ?: return@mapNotNull null
+                val at = (pair.getOrNull(0) as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
+                val token = (pair.getOrNull(1) as? JsonPrimitive)?.contentOrNull ?: return@mapNotNull null
+                (at to token).takeIf { at >= start && token.isNotEmpty() }
+            }
+            if (tokens.joinToString("") { it.second } == text && tokens.zipWithNext().all { it.first.first < it.second.first }) {
+                var cursor = 0
+                words = tokens.mapIndexedNotNull { i, (at, token) ->
+                    val until = tokens.getOrNull(i + 1)?.first ?: if (estimated) minOf(end, start + 8000) else end
+                    val offset = cursor; cursor += token.length
+                    if (until <= at) null else LyricWord(token, at, until, offset, cursor)
+                }
+            }
+        }
+        LyricLine(start.coerceAtLeast(0), end, text, words,
+            obj.string("trans"), obj.string("romanization").ifBlank { obj.string("roma") }, wordsEstimated = estimated)
     })
 
     fun lrc(source: String): LyricsDocument {

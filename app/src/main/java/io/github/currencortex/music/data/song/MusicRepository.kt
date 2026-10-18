@@ -35,9 +35,16 @@ class MusicRepository(private val api: ApiClient,
             val raw = api.get<JsonObject>("ncm/lyric/new", mapOf("id" to "$id"))
             parseDocument(raw)
         }
-        if (enhanced is AppResult.Success && enhanced.value.lines.isNotEmpty()) enhanced.value
-        else parseDocument(
-            api.get<JsonObject>("ncm/lyric", mapOf("id" to "$id")))
+        if (enhanced is AppResult.Success && enhanced.value.hasWordTiming) enhanced.value
+        else {
+            val normalized = appResult { parseDocument(api.get<JsonObject>("ncm/lyric", mapOf("id" to "$id"))) }
+            when {
+                normalized is AppResult.Success && normalized.value.lines.isNotEmpty() -> normalized.value
+                enhanced is AppResult.Success && enhanced.value.lines.isNotEmpty() -> enhanced.value
+                normalized is AppResult.Failure -> throw ApiException(normalized.kind, normalized.status)
+                else -> (normalized as AppResult.Success).value
+            }
+        }
     }
     suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null): AudioSource {
         val access = audioAccess()
