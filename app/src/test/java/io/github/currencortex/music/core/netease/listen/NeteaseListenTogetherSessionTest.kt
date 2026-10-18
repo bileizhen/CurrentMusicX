@@ -37,6 +37,7 @@ class NeteaseListenTogetherSessionTest {
         var queueFailure: Exception? = null
         var playlistFailure: Exception? = null
         var leaveAction: suspend () -> Unit = {}
+        var restores = 0
         val beats = mutableListOf<Long>()
         val reports = mutableListOf<Pair<String, Int>>()
         val reportedQueues = mutableListOf<ListenTogetherQueue>()
@@ -51,6 +52,7 @@ class NeteaseListenTogetherSessionTest {
         override suspend fun create(expected: NeteaseSession, refer: String, inviteUid: Long?) = createAction()
         override suspend fun accept(expected: NeteaseSession, invitation: ListenTogetherInvitation, refer: String) = acceptAction()
         override suspend fun status(expected: NeteaseSession) = ListenTogetherStatus(inRoom, room.takeIf { inRoom })
+        override suspend fun restoreDevice(expected: NeteaseSession, roomId: String) { restores++ }
         override suspend fun requestSync(expected: NeteaseSession, roomId: String) { syncNotices++; syncFailure?.let { throw it } }
         override suspend fun heartbeat(expected: NeteaseSession, roomId: String, songId: Long,
             playing: Boolean, positionMs: Long, version: List<ListenTogetherVersion>): Boolean { beats += now(); return inRoom }
@@ -323,5 +325,19 @@ class NeteaseListenTogetherSessionTest {
         f.session.request(Song(1001, "已有")); runCurrent()
         assertEquals(reports + 2, f.repo.reports.size)
         assertEquals(1001L, f.repo.reportedQueues.last().let { it.songIds[it.anchorPosition] })
+    }
+
+    @Test fun explicitRefreshRecoversAChangedDeviceWithAResetSequence() = runTest {
+        val f = Fixture(this); f.repo.playback = f.repo.playback!!.copy(serverSeq = 100)
+        f.session.resume(); runCurrent()
+        f.repo.playback = f.repo.playback!!.copy(targetSongId = 20, serverSeq = 1, clientSeq = 1)
+        f.session.refresh(); runCurrent()
+        assertEquals(20L, f.player.state.value.song!!.id)
+        assertEquals(2, f.repo.syncNotices)
+        assertTrue(f.repo.reports.isEmpty()) // Recovery never takes over the peer's transport.
+        val loads = f.player.loaded.size
+        advanceTimeBy(3000); runCurrent()
+        assertEquals(loads, f.player.loaded.size)
+        assertTrue(f.player.corrections.isEmpty())
     }
 }

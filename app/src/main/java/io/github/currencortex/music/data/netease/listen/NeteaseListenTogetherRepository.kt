@@ -13,7 +13,8 @@ import kotlinx.serialization.json.*
  * Heartbeat is liveness only. playlist() is the original recovery snapshot route;
  * polling it is an app fallback and does not claim NetEase IM delivery latency.
  */
-internal class NeteaseListenTogetherRepository(private val transport: NeteaseTransport) : ListenTogetherProtocol {
+internal class NeteaseListenTogetherRepository(private val transport: NeteaseTransport,
+    private val trace: (String) -> Unit = {}) : ListenTogetherProtocol {
     override suspend fun captureSession(): NeteaseSession = transport.sessions.snapshot().also { expected ->
         if (expected.credential.cookies["MUSIC_U"].isNullOrBlank() || expected.credential.stale ||
             (expected.credential.profile?.uid ?: 0) <= 0) throw ApiException(ErrorKind.NeteaseBindingRequired)
@@ -46,6 +47,20 @@ internal class NeteaseListenTogetherRepository(private val transport: NeteaseTra
     override suspend fun requestSync(expected: NeteaseSession, roomId: String) {
         requireRoom(roomId)
         request("sync/notice", buildJsonObject { put("roomId", roomId) }, expected)
+    }
+
+    /** Native restore checks the active device before notifying the room of a device reconnect. */
+    override suspend fun restoreDevice(expected: NeteaseSession, roomId: String) {
+        requireRoom(roomId)
+        val info = request("restore/reconnect/info", buildJsonObject {}, expected).obj("data") ?: parseError()
+        val returnedRoom = info.text("roomId")
+        check(returnedRoom == roomId) { "一起听会话已变更，请重新检查" }
+        trace("restore mainDevice=${info.bool("mainDevice")} canReconnect=${info.bool("canReconnect")}")
+        if (info.bool("mainDevice") == true) return
+        if (info.bool("canReconnect") == false) throw ApiException(ErrorKind.Forbidden)
+        val result = request("device/reconnect/notice", buildJsonObject { put("roomId", roomId) }, expected).obj("data") ?: parseError()
+        if (result.bool("result") != true) throw ApiException(ErrorKind.Server)
+        trace("restore device registered=true")
     }
 
     override suspend fun heartbeat(expected: NeteaseSession, roomId: String, songId: Long,
@@ -126,6 +141,10 @@ internal class NeteaseListenTogetherRepository(private val transport: NeteaseTra
             else -> ErrorKind.Server
         }, code)
         val responseData = result.obj("data")
+        if (path in setOf("play/command/report", "sync/list/command/report")) {
+            trace("report path=$path code=$code result=${responseData?.bool("result")}")
+            if (responseData?.bool("result") != true) throw ApiException(ErrorKind.Server, code)
+        }
         if ((path != "heartbeat" && responseData?.bool("result") == false) || responseData?.bool("success") == false)
             throw ApiException(ErrorKind.Server, code)
         transport.sessions.check(expected)

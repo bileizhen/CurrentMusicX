@@ -23,7 +23,8 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
     private val player: ExternalPlayer, private val scope: CoroutineScope,
     private val detail: suspend (Long) -> Song, private val source: suspend (Song) -> String,
     private val monotonic: () -> Long = { android.os.SystemClock.elapsedRealtime() },
-    private val pollIntervalMs: Long = 1500L) : ExternalPlayback {
+    private val pollIntervalMs: Long = 1500L,
+    private val trace: (String) -> Unit = {}) : ExternalPlayback {
     val state = MutableStateFlow(NeteaseListenTogetherState())
     private class Active(val roomId: String, val expected: NeteaseSession, val epoch: Long) {
         var queue = ListenTogetherQueue()
@@ -36,6 +37,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         var polls = 0
         var members: Set<Long>? = null
         val songs = mutableMapOf<Long, Song>()
+        var lastTrace: String? = null
     }
     private val commands = Mutex()
     private var generation = 0L
@@ -115,6 +117,8 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         val remote = repo.status(expected)
         checkEpoch(epoch)
         val room = remote.room.takeIf { remote.inRoom } ?: error("没有可恢复的网易云一起听会话")
+        repo.restoreDevice(expected, room.roomId)
+        checkEpoch(epoch)
         startRoom(room, expected, epoch) { synchronize(it, members = true) }
     }
 
@@ -161,8 +165,8 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
     private fun publishParticipants(current: Active, room: ListenTogetherRoom) {
         valid(current)
         val self = current.expected.credential.profile!!
-        val users = (room.participants + io.github.currencortex.music.data.netease.listen.ListenTogetherParticipant(
-            self.uid, self.nickname, self.avatar)).distinctBy { it.userId }.take(2)
+        val localUser = io.github.currencortex.music.data.netease.listen.ListenTogetherParticipant(self.uid, self.nickname, self.avatar)
+        val users = (room.participants + localUser).distinctBy { it.userId }.take(2)
         player.state.update { it.copy(canControlPlayback = true,
             listenTogether = ListenTogetherPair(users.map { user ->
                 io.github.currencortex.music.core.media.ListenTogetherParticipant(user.userId, user.nickname, user.avatarUrl)
@@ -178,7 +182,15 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
             checkEpoch(epoch)
             repo.checkSession(expected)
             state.update { it.copy(availableRoom = remote.room.takeIf { remote.inRoom }, connected = false) }
-        } else { synchronize(current, members = true); if (active === current && polling?.isActive != true) startPolling(current) }
+        } else {
+            repo.restoreDevice(current.expected, current.roomId)
+            valid(current)
+            try { repo.requestSync(current.expected, current.roomId) }
+            catch (failure: ApiException) { if (failure.kind != ErrorKind.NotFound) throw failure }
+            valid(current)
+            synchronize(current, members = true, forcePlayback = true)
+            if (active === current && polling?.isActive != true) startPolling(current)
+        }
     }
 
     private fun startPolling(current: Active) {
@@ -216,7 +228,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         }
     }
 
-    private suspend fun synchronize(current: Active, members: Boolean) {
+    private suspend fun synchronize(current: Active, members: Boolean, forcePlayback: Boolean = false) {
         valid(current)
         if (members) {
             val remote = repo.status(current.expected)
@@ -234,15 +246,21 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
             }
             current.members = membersNow
         }
-        val snapshot = repo.playlist(current.expected, current.roomId, current.queue)
+        val snapshot = repo.playlist(current.expected, current.roomId, if (forcePlayback)
+            current.queue.copy(songIds = emptyList(), randomSongIds = emptyList()) else current.queue)
         valid(current)
         current.queue = snapshot.queue
         state.update { it.copy(queueCount = snapshot.queue.songIds.size, connected = true, error = null) }
         val playback = snapshot.playback ?: return
+        val diagnostic = "snapshot seq=${playback.serverSeq} seen=${current.lastServerSeq} client=${playback.clientSeq} " +
+            "sender=${if (playback.userId == current.expected.credential.profile?.uid) "self" else "peer"} " +
+            "command=${playback.commandType} target=${playback.targetSongId} loaded=${current.loadedSongId} " +
+            "playing=${playback.playing} count=${snapshot.queue.songIds.size} forced=$forcePlayback"
+        if (current.lastTrace != diagnostic) { trace(diagnostic); current.lastTrace = diagnostic }
         // Repeated recovery snapshots contain an old progress, not a live clock.
         // Never seek to it again or an actively playing song would jump backwards each poll.
-        if (playback.serverSeq <= current.lastServerSeq && current.lastServerSeq >= 0) return
-        if (playback.userId == current.expected.credential.profile?.uid &&
+        if (!forcePlayback && playback.serverSeq <= current.lastServerSeq && current.lastServerSeq >= 0) return
+        if (!forcePlayback && playback.userId == current.expected.credential.profile?.uid &&
             playback.clientSeq > 0 && playback.clientSeq <= current.clientSeq && current.loadedSongId == playback.targetSongId) {
             current.lastServerSeq = playback.serverSeq; current.lastPlayback = playback; return
         }
@@ -277,7 +295,9 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         val command = ListenTogetherPlayback(type, target, current.loadedSongId, playing,
             position.coerceAtLeast(0), ++current.clientSeq, userId = current.expected.credential.profile!!.uid,
             triggerType = trigger)
+        trace("send command=$type client=${command.clientSeq} target=$target former=${command.formerSongId} playing=$playing")
         repo.reportPlayback(current.expected, current.roomId, command)
+        trace("accepted command=$type client=${command.clientSeq} target=$target")
         valid(current)
         applyPlayback(current, command)
         current.lastPlayback = command
