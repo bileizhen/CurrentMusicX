@@ -129,6 +129,35 @@ class NeteaseListenTogetherRepositoryTest {
         assertEquals(listOf(1L, 2L), queue["version"]!!.jsonArray.map { it.jsonObject["version"]!!.jsonPrimitive.long })
     }
 
+    @Test fun restoringOnAnotherDeviceRegistersItBeforeAcceptingCommands() = runBlocking {
+        val expected = repository.captureSession()
+        response("""{"code":200,"data":{"roomId":"room-100","mainDevice":false,"canReconnect":true}}""")
+        response("""{"code":200,"data":{"result":true}}""")
+        repository.restoreDevice(expected, "room-100")
+        assertEquals("/eapi/listen/together/restore/reconnect/info", server.takeRequest().path)
+        val notice = server.takeRequest()
+        assertEquals("/eapi/listen/together/device/reconnect/notice", notice.path)
+        assertEquals("room-100", payload(notice)["roomId"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun restoringCurrentDeviceDoesNotStealAnotherSessionOrSendAnUnnecessaryNotice() = runBlocking {
+        val expected = repository.captureSession()
+        response("""{"code":200,"data":{"roomId":"room-100","mainDevice":true}}""")
+        repository.restoreDevice(expected, "room-100"); server.takeRequest()
+        assertEquals(1, server.requestCount)
+        response("""{"code":200,"data":{"roomId":"other-room","mainDevice":false,"canReconnect":true}}""")
+        assertTrue(runCatching { repository.restoreDevice(expected, "room-100") }.isFailure)
+        server.takeRequest()
+        assertEquals(2, server.requestCount)
+    }
+
+    @Test fun httpSuccessWithoutACommandAcknowledgementIsNotAccepted() = runBlocking {
+        val expected = repository.captureSession()
+        response("""{"code":200,"data":{}}""")
+        assertTrue(runCatching { repository.reportPlayback(expected, "room-100",
+            ListenTogetherPlayback("NEXT", 20, 10, true, clientSeq = 1)) }.isFailure)
+    }
+
     @Test fun statusAndLeaveDoNotInventAJoinRouteOrOpenExternalMessages() = runBlocking {
         val expected = repository.captureSession()
         response("""{"code":200}""")
