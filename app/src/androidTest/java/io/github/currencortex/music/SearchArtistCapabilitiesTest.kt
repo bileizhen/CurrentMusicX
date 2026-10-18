@@ -88,14 +88,14 @@ class SearchArtistCapabilitiesTest {
     }
     private fun clickFooter(parent: String, tag: String) {
         scroll(parent, tag)
-        compose.onNodeWithTag(parent).performTouchInput { swipeUp(startY = height * .6f, endY = height * .25f, durationMillis = 400) }
+        compose.onNodeWithTag(parent).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollBy) { it(0f, 10_000f) }
         compose.onNodeWithTag(tag).assertIsEnabled()
         val action = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
         val mini = compose.onNodeWithTag("mini_player").fetchSemanticsNode().boundsInRoot
         assertTrue("Footer must scroll above the floating player: $action / $mini", action.bottom <= mini.top)
-        compose.onNodeWithTag(tag).performClick()
+        compose.onNodeWithTag(tag).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
     }
-    private fun artistTab(tab: String) { compose.onNodeWithTag("artist_home").performScrollToIndex(0); compose.onNodeWithTag("artist_tab_$tab").performClick() }
+    private fun artistTab(tab: String) { compose.onNodeWithTag("artist_home").performScrollToIndex(0); compose.onNodeWithTag("artist_tab_$tab").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() } }
     private fun searchCount() = requests.count { it.requestUrl!!.encodedPath == "/cm/ncm/search" }
 
     @Test fun tappingSearchResultsKeepsExistingQueueAndOnlyAddsSelectedSong() {
@@ -103,15 +103,16 @@ class SearchArtistCapabilitiesTest {
         val original = listOf(Song(900, "Paused fixture"), Song(11, "Already queued"), Song(902, "Queue tail"))
         container.playbackQueue.replace(original, 0)
         compose.setContent { CurrentMusicApp(container) }
-        awaitTag("open_home_search"); compose.onNodeWithTag("open_home_search").performClick()
+        awaitTag("open_home_search")
+        compose.onNodeWithTag("open_home_search").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         awaitTag("search_input"); compose.onNodeWithTag("search_input").performTextInput("fixture")
-        compose.onNodeWithTag("submit_search").performClick(); awaitTag("search_song_11")
-        compose.onNodeWithText("Fixture song 11").performClick()
+        compose.onNodeWithTag("submit_search").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_song_11")
+        compose.onNodeWithText("Fixture song 11").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         if (compose.onAllNodesWithText("继续播放").fetchSemanticsNodes().isNotEmpty())
-            compose.onNodeWithText("继续播放").performClick()
+            compose.onNodeWithText("继续播放").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         compose.waitUntil(5000) { container.playbackQueue.state.value.current?.id == 11L }
         assertEquals(original, container.playbackQueue.state.value.songs)
-        compose.onNodeWithText("Fixture song 12").performClick()
+        compose.onNodeWithText("Fixture song 12").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         compose.waitUntil(5000) { container.playbackQueue.state.value.current?.id == 12L }
         assertEquals(listOf(900L, 11L, 12L, 902L), container.playbackQueue.state.value.songs.map { it.id })
         assertEquals(0L, container.playbackQueue.state.value.positionMs)
@@ -119,48 +120,49 @@ class SearchArtistCapabilitiesTest {
 
     @Test fun categorizedSearchAndArtistHomepageKeepSubmittedQueryAndPausedQueue() {
         compose.setContent { CurrentMusicApp(container) }
-        awaitTag("open_home_search"); compose.onNodeWithTag("open_home_search").performClick()
+        awaitTag("open_home_search")
+        compose.onNodeWithTag("open_home_search").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         awaitTag("search_input"); compose.onNodeWithTag("search_input").performTextInput("fixture")
         assertEquals(0, searchCount())
-        compose.onNodeWithTag("submit_search").performClick(); awaitTag("search_song_11")
+        compose.onNodeWithTag("submit_search").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_song_11")
         compose.onNodeWithTag("search_input").performTextReplacement("draft")
-        compose.onNodeWithTag("search_category_artist").performClick(); awaitTag("search_artist_31")
-        compose.onNodeWithTag("search_category_song").performClick(); awaitTag("search_song_11")
+        compose.onNodeWithTag("search_category_artist").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_artist_31")
+        compose.onNodeWithTag("search_category_song").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_song_11")
         assertEquals(2, searchCount())
-        scroll("search_screen", "search_load_more"); compose.onNodeWithTag("search_load_more").performClick()
+        scroll("search_screen", "search_load_more"); compose.onNodeWithTag("search_load_more").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         awaitTag("search_retry"); songPageFail = false
-        scroll("search_screen", "search_retry"); compose.onNodeWithTag("search_retry").performClick(); awaitTag("search_song_13")
+        scroll("search_screen", "search_retry"); compose.onNodeWithTag("search_retry").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_song_13")
         compose.onAllNodesWithTag("search_song_12").assertCountEquals(1)
         val pages = requests.filter { it.requestUrl!!.encodedPath == "/cm/ncm/search" && it.requestUrl!!.queryParameter("offset") == "2" }
         assertEquals(2, pages.size); assertTrue(pages.all { it.requestUrl!!.queryParameter("keywords") == "fixture" })
 
         compose.onNodeWithTag("search_screen").performScrollToIndex(0)
-        compose.onNodeWithTag("search_category_artist").performClick(); awaitTag("search_artist_31")
-        compose.onNodeWithTag("search_artist_31").performClick(); awaitTag("artist_name")
+        compose.onNodeWithTag("search_category_artist").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_artist_31")
+        compose.onNodeWithTag("search_artist_31").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("artist_name")
         compose.onNodeWithText("3 首歌曲 · 2 张专辑").assertExists()
         artistTab("about"); awaitTag("artist_bio_retry")
-        biographyFail = false; scroll("artist_home", "artist_bio_retry"); compose.onNodeWithTag("artist_bio_retry").performClick()
+        biographyFail = false; scroll("artist_home", "artist_bio_retry"); compose.onNodeWithTag("artist_bio_retry").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         compose.waitUntil(10000) { compose.onAllNodesWithText("Fixture biography").fetchSemanticsNodes().isNotEmpty() }
-        artistTab("songs"); scroll("artist_home", "artist_more_songs"); compose.onNodeWithTag("artist_more_songs").performClick()
+        artistTab("songs"); scroll("artist_home", "artist_more_songs"); compose.onNodeWithTag("artist_more_songs").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         compose.waitUntil(10000) { requests.any { it.requestUrl!!.encodedPath == "/cm/ncm/artist" && it.requestUrl!!.queryParameter("offset") == "2" } }
         scroll("artist_home", "artist_song_13"); compose.onAllNodesWithTag("artist_song_12").assertCountEquals(1)
         artistTab("albums"); clickFooter("artist_home", "artist_more_albums")
         compose.waitUntil(10000) { requests.any { it.requestUrl!!.encodedPath == "/cm/ncm/artist/albums" } }
         scroll("artist_home", "catalog_entry_42")
         assertEquals("1", requests.first { it.requestUrl!!.encodedPath == "/cm/ncm/artist/albums" }.requestUrl!!.queryParameter("offset"))
-        scroll("artist_home", "catalog_entry_41"); compose.onNodeWithTag("catalog_entry_41").performClick(); awaitTag("library_detail")
-        compose.onNodeWithText("返回").performClick(); awaitTag("artist_home")
+        scroll("artist_home", "catalog_entry_41"); compose.onNodeWithTag("catalog_entry_41").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("library_detail")
+        compose.onNodeWithText("返回").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("artist_home")
         scroll("artist_home", "catalog_entry_42")
-        compose.onNodeWithTag("artist_home").performScrollToIndex(0); compose.onNodeWithTag("artist_back").performClick(); awaitTag("search_artist_31")
-        compose.onNodeWithTag("search_category_album").performClick(); awaitTag("search_album_41")
-        compose.onNodeWithTag("search_album_41").performClick(); awaitTag("library_detail")
-        compose.onNodeWithText("返回").performClick(); awaitTag("search_album_41")
+        compose.onNodeWithTag("artist_home").performScrollToIndex(0); compose.onNodeWithTag("artist_back").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_artist_31")
+        compose.onNodeWithTag("search_category_album").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_album_41")
+        compose.onNodeWithTag("search_album_41").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("library_detail")
+        compose.onNodeWithText("返回").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_album_41")
         assertEquals("fixture", requests.last { it.requestUrl!!.encodedPath == "/cm/ncm/search" }.requestUrl!!.queryParameter("keywords"))
-        compose.onNodeWithTag("search_category_song").performClick(); awaitTag("search_song_13")
+        compose.onNodeWithTag("search_category_song").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_song_13")
         compose.onNodeWithTag("search_input").assertTextContains("draft")
-        compose.onNodeWithTag("submit_search").performClick(); awaitTag("search_song_99")
+        compose.onNodeWithTag("submit_search").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_song_99")
         compose.onNodeWithTag("search_song_11").assertDoesNotExist()
-        compose.onNodeWithTag("search_category_artist").performClick(); awaitTag("search_artist_32")
+        compose.onNodeWithTag("search_category_artist").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_artist_32")
         val publicPaths = setOf("/cm/ncm/search", "/cm/ncm/artist", "/cm/ncm/artist/desc", "/cm/ncm/artist/albums", "/cm/ncm/album")
         assertTrue(requests.filter { it.requestUrl!!.encodedPath in publicPaths }.all { it.getHeader("Authorization") == null })
         assertEquals(listOf(900L), container.playerController.queue.state.value.songs.map { it.id })
