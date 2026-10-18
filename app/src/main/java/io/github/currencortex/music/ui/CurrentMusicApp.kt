@@ -689,7 +689,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
                     onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") },
                     onDialogActive = { playerDialogOpen = it }, onNetwork = { navigateTo(NETWORK) },
-                    onLike = { currentSong?.let(libraryVm::choosePlaylist) }, onEqualizer = { navigateTo(EQUALIZER) })
+                    onLike = { currentSong?.let(libraryVm::choosePlaylist) }, onEqualizer = { navigateTo(EQUALIZER) },
+                    onAiNavigate = ::navigateLibrary)
             }
         }
         if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm) { miniQueueOpen = false }
