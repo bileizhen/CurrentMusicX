@@ -26,12 +26,12 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 
 @Composable fun LibraryLinks(navigate: (String) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(Triple("我喜欢", "lib/likes", "open_likes"), Triple("歌单", "lib/playlists", "open_playlists"),
                 Triple("最近播放", "lib/recent", "open_recent")).forEach { (title, route, tag) ->
-                Card(Modifier.weight(1f).testTag(tag), onClick = { navigate(route) }, showIndication = true) {
+                Card(Modifier.weight(1f).fillMaxHeight().testTag(tag), onClick = { navigate(route) }, showIndication = true) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                        Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("打开音乐库", fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
                     }
                 }
