@@ -17,6 +17,7 @@ data class LyricLine(
     val roles: List<String> = emptyList(), val key: String? = null,
     val backgroundVocals: List<LyricLine> = emptyList(),
     val translations: List<LyricAuxiliary> = emptyList(), val romanizations: List<LyricAuxiliary> = emptyList(),
+    val wordsEstimated: Boolean = false,
 )
 
 /** Offsets refer to UTF-16 ranges in the complete, laid-out line (including spaces). */
