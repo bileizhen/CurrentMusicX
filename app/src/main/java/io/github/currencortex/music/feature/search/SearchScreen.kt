@@ -44,7 +44,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     actions: (@Composable (Song) -> Unit)? = null, roomName: String? = null, onBack: (() -> Unit)? = null,
     navigate: (String) -> Unit = {}, sheet: SearchSheetState? = null, autoFocus: Boolean = false, onFocused: () -> Unit = {},
     recommendations: List<Song> = emptyList(), recent: List<Song> = emptyList(),
-    onPlay: (List<Song>, Int) -> Unit) {
+    onPlay: (Song) -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
     val landing by vm.landing.collectAsStateWithLifecycle()
@@ -208,9 +208,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 Text("›", fontSize = 22.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .35f))
             }
         }
-        itemsIndexed(page.songs, key = { _, song -> song.id }) { index, song ->
+        itemsIndexed(page.songs, key = { _, song -> song.id }) { _, song ->
             Box(Modifier.testTag("search_song_${song.id}")) {
-                SongRow(SongRowUi(song), { onPlay(page.songs, index) }, { player.add(song, true) }, { player.add(song) }) {
+                SongRow(SongRowUi(song), { onPlay(song) }, { player.add(song, true) }, { player.add(song) }) {
                     actions?.invoke(song)
                 }
             }

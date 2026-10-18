@@ -158,6 +158,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         } finally { if (action == transportGeneration) commandIntent = null }
     }
     fun playList(songs: List<Song>, index: Int) { if (!localOnly()) return; beforeVideo = null; queue.replace(songs, index); load() }
+    fun playSong(song: Song) { if (!localOnly()) return; beforeVideo = null; queue.playSong(song); load() }
     fun toggle() = scope.launch(Dispatchers.Main.immediate) {
         if (!transportAllowed()) return@launch
         external?.let { it.play(!state.value.playing); return@launch }
