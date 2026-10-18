@@ -25,7 +25,7 @@ class PlaybackQueuePageTest {
     private val queue = PlaybackQueue()
     private lateinit var activity: ComponentActivity
     private var dismissed = false
-    private fun show(songs: List<Song>, index: Int = 0) {
+    private fun show(songs: List<Song>, index: Int = 0, shared: Boolean = false) {
         queue.replace(songs, index)
         queue.state.value = queue.state.value.copy(positionMs = 1500)
         compose.setContent {
@@ -36,10 +36,26 @@ class PlaybackQueuePageTest {
             MiuixTheme { Scaffold { Box(Modifier.fillMaxSize()) {
                 if (shown) PlaybackQueueContent(snapshot, true, false, true, null, motion, true, "test_queue",
                     queue::select, { queue.remove(it) }, queue::clear, queue::setMode,
-                    { dismissed = true; shown = false })
+                    { dismissed = true; shown = false }, shared = shared)
             } } }
         }
         compose.waitForIdle()
+    }
+    @Test fun nativeSharedQueueUsesExistingRowsModesAndClearConfirmation() {
+        show(listOf(Song(10, "一起听歌曲", "歌手"), Song(20, "下一首", "歌手")), shared = true)
+        compose.onNodeWithText("一起听歌单").assertIsDisplayed()
+        compose.onNodeWithTag("queue_position").assertTextEquals("1 / 2")
+        compose.onNodeWithTag("queue_song_0").assertIsSelected()
+        compose.onNodeWithTag("queue_song_1").performClick()
+        compose.onNodeWithTag("queue_song_1").assertIsSelected()
+        compose.onNodeWithTag("open_player_mode").performClick()
+        compose.onNodeWithTag("playback_mode_HEART").assertDoesNotExist()
+        compose.onNodeWithTag("playback_mode_SHUFFLE").performClick()
+        compose.onNodeWithTag("queue_clear").performClick()
+        compose.onNodeWithText("会同步清空双方的歌单并暂停播放，一起听会话仍会保留。").assertIsDisplayed()
+        compose.onNodeWithTag("queue_clear_cancel").performClick()
+        compose.onNodeWithTag("queue_position").assertTextEquals("2 / 2")
+        compose.runOnIdle { assertFalse(dismissed) }
     }
     @Test fun rowsModesRemovalAndClearKeepTheQueuePageOpen() {
         show(listOf(Song(1, "Letting Go", "蔡健雅", "说到爱"), Song(2, "小半", "陈粒", "Nagram"),

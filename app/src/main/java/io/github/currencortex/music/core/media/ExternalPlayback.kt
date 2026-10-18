@@ -9,6 +9,7 @@ interface ExternalPlayback {
     fun next()
     fun previous()
     fun request(song: Song)
+    fun enqueue(song: Song, next: Boolean = false) { request(song) }
     fun stop()
     fun ended() {}
     fun failed() {}

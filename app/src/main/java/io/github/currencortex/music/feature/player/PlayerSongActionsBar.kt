@@ -18,6 +18,9 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
     val neteaseMain by vm.usesNeteaseLibrary.collectAsStateWithLifecycle()
     val heartLoading by vm.heartLoading.collectAsStateWithLifecycle()
     val sleep by vm.sleepTimer.state.collectAsStateWithLifecycle()
+    val together by vm.together.state.collectAsStateWithLifecycle()
+    val shared by vm.together.queue.collectAsStateWithLifecycle()
+    val mode = if (together.active) shared.mode else queue.mode
     val id = NeteaseSongActionsRepository.songId(queue.current)
     val navidrome = queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME
     val current = actions.takeIf { it.songId == if (navidrome) queue.current?.id else id }
@@ -32,13 +35,13 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
         // Lit while a timer is running, so an armed timer is visible without opening the sheet.
         PlayerIconButton(PlayerIcon.ALARM, "定时关闭${if (sleep.enabled) "，正在计时" else ""}", onSleep,
             Modifier.testTag("player_sleep_timer"), selected = sleep.enabled)
-        PlayerIconButton(when (queue.mode) {
+        PlayerIconButton(when (mode) {
             PlaybackMode.ONE -> PlayerIcon.REPEAT_ONE
             PlaybackMode.SHUFFLE -> PlayerIcon.SHUFFLE
             PlaybackMode.HEART -> PlayerIcon.HEART_MODE
             PlaybackMode.LIST -> PlayerIcon.REPEAT
-        }, queue.mode.label, vm::cyclePlaybackMode, Modifier.testTag("player_cycle_mode"),
-            selected = queue.mode == PlaybackMode.HEART, enabled = player.mode == PlayerMode.LOCAL && !heartLoading, loading = heartLoading)
-        PlayerIconButton(PlayerIcon.QUEUE, "播放列表，${queue.songs.size} 首", onQueue, Modifier.testTag("open_player_queue"))
+        }, mode.label, vm::cyclePlaybackMode, Modifier.testTag("player_cycle_mode"),
+            selected = mode == PlaybackMode.HEART, enabled = if (together.active) !together.busy else player.mode == PlayerMode.LOCAL && !heartLoading, loading = heartLoading)
+        PlayerIconButton(PlayerIcon.QUEUE, if (together.active) "一起听歌单，${shared.songs.size} 首" else "播放列表，${queue.songs.size} 首", onQueue, Modifier.testTag("open_player_queue"))
     }
 }

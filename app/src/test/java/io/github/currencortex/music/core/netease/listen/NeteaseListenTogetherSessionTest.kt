@@ -42,6 +42,7 @@ class NeteaseListenTogetherSessionTest {
         val beats = mutableListOf<Long>()
         val reports = mutableListOf<Pair<String, Int>>()
         val reportedQueues = mutableListOf<ListenTogetherQueue>()
+        val playbackCommands = mutableListOf<ListenTogetherPlayback>()
         var playlists = 0
         var syncNotices = 0
         var syncFailure: ApiException? = null
@@ -67,6 +68,7 @@ class NeteaseListenTogetherSessionTest {
         }
         override suspend fun reportPlayback(expected: NeteaseSession, roomId: String, playback: ListenTogetherPlayback) {
             reports += "play" to playback.clientSeq
+            playbackCommands += playback
         }
         override suspend fun reportQueue(expected: NeteaseSession, roomId: String, queue: ListenTogetherQueue) {
             queueFailure?.let { throw it }
@@ -331,6 +333,90 @@ class NeteaseListenTogetherSessionTest {
         assertEquals(1001L, f.repo.reportedQueues.last().let { it.songIds[it.anchorPosition] })
     }
 
+    @Test fun recoveryPublishesTheEntireSharedListWithoutReplacingTheSavedLocalQueue() = runTest {
+        val f = Fixture(this); f.original()
+        val original = f.player.queue.state.value
+        f.session.resume(); runCurrent()
+        assertEquals(listOf(10L, 20L), f.session.queue.value.songs.map { it.id })
+        assertEquals(listOf("歌曲10", "歌曲20"), f.session.queue.value.songs.map { it.name })
+        assertEquals(10L, f.session.queue.value.current!!.id)
+        f.repo.queue = f.repo.queue.copy(songIds = listOf(20, 10, 30), playMode = "RANDOM", randomSongIds = listOf(30, 10, 20))
+        advanceTimeBy(1000); runCurrent()
+        assertEquals(listOf(20L, 10L, 30L), f.session.queue.value.songs.map { it.id })
+        assertEquals(1, f.session.queue.value.index)
+        assertEquals(PlaybackMode.SHUFFLE, f.session.queue.value.mode)
+        assertEquals(listOf(10L), f.player.loaded)
+        f.session.disconnect(); runCurrent()
+        assertEquals(original, f.player.queue.state.value)
+        assertTrue(f.session.queue.value.songs.isEmpty())
+    }
+
+    @Test fun enqueueAndModeChangesReportSharedListsWithoutRestartingTheCurrentSong() = runTest {
+        val f = Fixture(this); f.session.resume(); runCurrent()
+        f.session.enqueue(Song(30, "新歌")); runCurrent()
+        assertEquals(listOf(10L, 20L, 30L), f.repo.reportedQueues.last().songIds)
+        assertTrue(f.repo.playbackCommands.isEmpty())
+        f.session.setQueueMode(PlaybackMode.SHUFFLE); runCurrent()
+        val random = f.repo.reportedQueues.last()
+        assertEquals(random.songIds.toSet(), random.randomSongIds.toSet())
+        assertEquals(PlaybackMode.SHUFFLE, f.session.queue.value.mode)
+        assertEquals(listOf(10L), f.player.loaded)
+        f.session.selectSong(20); runCurrent()
+        assertEquals(20L, f.repo.playbackCommands.last().targetSongId)
+        assertEquals("GOTO", f.repo.playbackCommands.last().commandType)
+        assertEquals(20L, f.session.queue.value.current!!.id)
+    }
+
+    @Test fun existingAddNextActionInsertsIntoSharedQueueWithoutChangingPlayback() = runTest {
+        val f = Fixture(this); f.session.resume(); runCurrent()
+        f.session.enqueue(Song(30, "下一首添加"), next = true); runCurrent()
+        assertEquals(listOf(10L, 30L, 20L), f.repo.reportedQueues.last().songIds)
+        assertTrue(f.repo.playbackCommands.isEmpty())
+        assertEquals(10L, f.player.state.value.song!!.id)
+    }
+
+    @Test fun removalRefreshesPeerChangesAndOnlyChangesPlaybackWhenRemovingCurrentSong() = runTest {
+        val f = Fixture(this); f.session.resume(); runCurrent()
+        f.repo.queue = f.repo.queue.copy(songIds = listOf(10, 20, 30), version = listOf(ListenTogetherVersion(100, 1), ListenTogetherVersion(200, 9)))
+        f.session.removeSong(20); runCurrent()
+        assertEquals(listOf(10L, 30L), f.repo.reportedQueues.last().songIds)
+        assertEquals(9L, f.repo.reportedQueues.last().version.first { it.userId == 200L }.version)
+        assertTrue(f.repo.playbackCommands.isEmpty())
+        f.session.removeSong(10); runCurrent()
+        assertEquals(listOf(30L), f.session.queue.value.songs.map { it.id })
+        assertEquals(30L, f.repo.playbackCommands.last().targetSongId)
+        assertEquals(0, f.repo.leaves)
+    }
+
+    @Test fun rejectedQueueChangeKeepsDisplayedSongsAndClearingKeepsTheRoomOpen() = runTest {
+        val f = Fixture(this); f.session.resume(); runCurrent()
+        f.repo.queueFailure = ApiException(ErrorKind.Server)
+        f.session.removeSong(20); runCurrent()
+        assertEquals(listOf(10L, 20L), f.session.queue.value.songs.map { it.id })
+        assertNotNull(f.session.state.value.error)
+        f.repo.queueFailure = null
+        f.session.clearQueue(); runCurrent()
+        assertTrue(f.repo.reportedQueues.last().songIds.isEmpty())
+        assertEquals("PAUSE", f.repo.playbackCommands.last().commandType)
+        assertTrue(f.session.queue.value.songs.isEmpty())
+        assertNull(f.player.state.value.song)
+        assertTrue(f.session.state.value.active)
+        assertEquals(0, f.repo.leaves)
+        advanceTimeBy(2000); runCurrent()
+        assertNull(f.player.state.value.song) // An old recovery playCommand must not resurrect the removed song.
+        f.session.enqueue(Song(99, "继续")); runCurrent()
+        f.session.selectSong(99); runCurrent()
+        assertEquals(99L, f.player.state.value.song!!.id)
+    }
+
+    @Test fun staleSongSelectionDoesNotAddOrPlayARemovedSong() = runTest {
+        val f = Fixture(this); f.session.resume(); runCurrent()
+        f.repo.queue = f.repo.queue.copy(songIds = listOf(10))
+        f.session.selectSong(20); runCurrent()
+        assertTrue(f.repo.reports.isEmpty())
+        assertNotNull(f.session.state.value.error)
+    }
+
     @Test fun explicitRefreshRecoversAChangedDeviceWithAResetSequence() = runTest {
         val f = Fixture(this); f.repo.playback = f.repo.playback!!.copy(serverSeq = 100)
         f.session.resume(); runCurrent()
@@ -372,5 +458,16 @@ class NeteaseListenTogetherSessionTest {
         assertEquals(0, f.repo.restores)
         assertEquals(0, f.player.begins)
         assertEquals(1L, f.player.queue.state.value.current!!.id)
+    }
+
+    @Test fun manualCutsPublishTheSharedListBeforeTheDesktopPlaybackCommand() = runTest {
+        val f = Fixture(this); f.session.resume(); runCurrent()
+        f.session.next(); runCurrent()
+        assertEquals(listOf("queue" to 1, "play" to 2), f.repo.reports)
+        assertEquals(listOf(10L, 20L), f.repo.reportedQueues.last().songIds)
+        assertEquals(20L, f.repo.playbackCommands.last().targetSongId)
+        f.session.selectSong(10); runCurrent()
+        assertEquals(listOf("queue" to 3, "play" to 4), f.repo.reports.takeLast(2))
+        assertEquals(10L, f.repo.playbackCommands.last().targetSongId)
     }
 }

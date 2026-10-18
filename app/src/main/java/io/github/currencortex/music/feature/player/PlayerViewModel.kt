@@ -28,6 +28,7 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val sleepTimer = container.sleepTimer
     val state = player.state
     val queue = player.queue.state
+    val together = container.listenTogether
     // The navigation host needs only low-frequency state, never the playback position.
     val navigation = state.map { NavigationPlayback(it.mode, it.error) }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NavigationPlayback(state.value.mode, state.value.error))
@@ -188,6 +189,12 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
     fun cyclePlaybackMode() {
+        if (together.state.value.active) {
+            together.setQueueMode(when (together.queue.value.mode) {
+                PlaybackMode.LIST -> PlaybackMode.ONE; PlaybackMode.ONE -> PlaybackMode.SHUFFLE; else -> PlaybackMode.LIST
+            })
+            return
+        }
         setPlaybackMode(when (queue.value.mode) {
             PlaybackMode.LIST -> PlaybackMode.ONE
             PlaybackMode.ONE -> PlaybackMode.SHUFFLE
@@ -197,6 +204,7 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     }
     // Every entry point selects the same exclusive queue mode. HEART needs recommendations first.
     fun setPlaybackMode(mode: PlaybackMode) {
+        if (together.state.value.active) { together.setQueueMode(mode); return }
         if (state.value.mode != PlayerMode.LOCAL) { _actions.update { it.copy(error = "请先退出一起听或结束投屏") }; return }
         if (mode != PlaybackMode.HEART) {
             heartStartJob?.cancel()

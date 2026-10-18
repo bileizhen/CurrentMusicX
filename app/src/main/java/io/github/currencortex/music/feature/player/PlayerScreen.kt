@@ -63,6 +63,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val commentComposer by vm.commentComposer.collectAsStateWithLifecycle()
     val heartLoading by vm.heartLoading.collectAsStateWithLifecycle()
     val sleepState by vm.sleepTimer.state.collectAsStateWithLifecycle()
+    val together by vm.together.state.collectAsStateWithLifecycle()
+    val sharedQueue by vm.together.queue.collectAsStateWithLifecycle()
+    val playbackMode = if (together.active) sharedQueue.mode else queue.mode
     val context = LocalContext.current
     // The timer can expire while the sheet is closed; report it once, on the next composition.
     LaunchedEffect(sleepState.notice) {
@@ -246,11 +249,11 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 commentComposer, vm::editComment, vm::replyTo, vm::sendComment)
             PlayerOverlay.QUEUE -> Unit
             PlayerOverlay.MODE -> MusicDialog("播放模式", dismiss) {
-                PlaybackMode.entries.forEach { mode -> TextButton((if (mode == queue.mode) "✓ " else "") + mode.label,
+                PlaybackMode.entries.filter { !together.active || it != PlaybackMode.HEART }.forEach { mode -> TextButton((if (mode == playbackMode) "✓ " else "") + mode.label,
                     onClick = { vm.setPlaybackMode(mode); overlay = PlayerOverlay.QUEUE },
-                    enabled = state.mode == PlayerMode.LOCAL && (mode != PlaybackMode.HEART ||
+                    enabled = (if (together.active) !together.busy else state.mode == PlayerMode.LOCAL) && (mode != PlaybackMode.HEART ||
                         (!heartLoading && io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(queue.current) != null)),
-                    modifier = Modifier.testTag("playback_mode_${mode.name}").semantics { selected = mode == queue.mode }) }
+                    modifier = Modifier.testTag("playback_mode_${mode.name}").semantics { selected = mode == playbackMode }) }
             }
             PlayerOverlay.QUALITY -> AudioQualitySheet(settings.quality, vm::quality, dismiss, state.mode == PlayerMode.LOCAL,
                 onNetwork = onNetwork?.let { { dismiss(); it() } })
@@ -280,7 +283,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 MusicDestinationRow("播放音质", summary = if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null)
                 if (onEqualizer != null) MusicDestinationRow("音效", onClick = { dismiss(); onEqualizer() },
                     modifier = Modifier.testTag("open_player_equalizer"))
-                MusicDestinationRow("播放模式", summary = queue.mode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL)
+                MusicDestinationRow("播放模式", summary = playbackMode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL || (together.active && !together.busy))
                 MusicDestinationRow("定时关闭", summary = sleepSummary(sleepState), modifier = Modifier.testTag("open_sleep_timer"),
                     onClick = { overlay = PlayerOverlay.SLEEP })
                 MusicDestinationRow("歌词显示", summary = "霞鹜文楷 · 字号 ${settings.lyricsFontSize.toInt()}",

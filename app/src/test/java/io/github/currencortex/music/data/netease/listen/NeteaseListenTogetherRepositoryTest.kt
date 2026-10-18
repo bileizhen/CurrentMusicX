@@ -129,6 +129,20 @@ class NeteaseListenTogetherRepositoryTest {
         assertEquals(listOf(1L, 2L), queue["version"]!!.jsonArray.map { it.jsonObject["version"]!!.jsonPrimitive.long })
     }
 
+    @Test fun emptySharedQueueUsesReplaceWithoutEndingTheRoom() = runBlocking {
+        val expected = repository.captureSession()
+        response("""{"code":200,"data":{"result":true}}""")
+        repository.reportQueue(expected, "room-100", ListenTogetherQueue(clientSeq = 5,
+            version = listOf(ListenTogetherVersion(100, 2))))
+        val request = server.takeRequest()
+        assertEquals("/eapi/listen/together/sync/list/command/report", request.path)
+        val queue = ApiJson.parseToJsonElement(payload(request)["playlistParam"]!!.jsonPrimitive.content).jsonObject
+        assertEquals("REPLACE", queue["commandType"]!!.jsonPrimitive.content)
+        assertTrue(queue["displayList"]!!.jsonArray.isEmpty())
+        assertEquals("0", queue["anchorSongId"]!!.jsonPrimitive.content)
+        assertEquals(1, server.requestCount)
+    }
+
     @Test fun restoringOnAnotherDeviceRegistersItBeforeAcceptingCommands() = runBlocking {
         val expected = repository.captureSession()
         response("""{"code":200,"data":{"roomId":"room-100","mainDevice":false,"canReconnect":true}}""")

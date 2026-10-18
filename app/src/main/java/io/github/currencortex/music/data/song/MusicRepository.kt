@@ -25,6 +25,9 @@ class MusicRepository(private val api: ApiClient,
         SearchPage(result.songs.map(SongDto::toDomain), result.totals.song, result.hasMore.song)
     }
     suspend fun detail(id: Long): Song = api.get<SongDetailDto>("ncm/song/detail", mapOf("ids" to "$id")).songs.first().toDomain()
+    suspend fun details(ids: List<Long>): List<Song> = ids.distinct().chunked(200).flatMap { batch ->
+        api.get<SongDetailDto>("ncm/song/detail", mapOf("ids" to batch.joinToString(","))).songs.map(SongDto::toDomain)
+    }
     suspend fun lyrics(id: Long): AppResult<List<LyricLine>> = appResult {
         parseDocument(api.get<JsonObject>("ncm/lyric", mapOf("id" to "$id"))).lines.map {
             LyricLine(it.startTimeMs, it.text, it.translation)
