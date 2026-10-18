@@ -7,6 +7,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.lyrics.ui.LyricsFontFamily
+import io.github.currencortex.music.ui.component.listeningPairArtworkAspectRatio
 
 internal data class DesktopIslandSize(val width: Float, val metadata: Dp, val headingWidth: Float)
 
@@ -15,12 +16,13 @@ internal val desktopIslandArtistStyle = TextStyle(fontSize = 9.sp)
 
 /** Measure once per cue/style, never from word-progress frames or the current window width. */
 @Composable internal fun rememberIslandSize(song: Song?, text: String, font: Float, compact: Boolean,
-    editing: Boolean, translation: String? = null): DesktopIslandSize {
+    editing: Boolean, translation: String? = null, listeningPair: Boolean = false): DesktopIslandSize {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val resolver = androidx.compose.ui.platform.LocalFontFamilyResolver.current
     val face by resolver.resolve(LyricsFontFamily, fontWeight = FontWeight.Medium)
-    return remember(song?.name, song?.artists, text, translation, font, compact, editing, density, face) {
+    return remember(song?.name, song?.artists, text, translation, font, compact, editing, density, face, listeningPair) {
+        val artworkRatio = if (listeningPair) listeningPairArtworkAspectRatio else 1f
         fun width(value: String, style: TextStyle) = with(density) {
             measurer.measure(AnnotatedString(islandSingleLine(value)), style, softWrap = false, maxLines = 1).size.width.toDp().value
         }
@@ -37,7 +39,7 @@ internal val desktopIslandArtistStyle = TextStyle(fontSize = 9.sp)
         val metadata = (28f + metadataText).coerceIn(28f, 626f)
         val headingHeight = with(density) { (titleLayout.size.height + artistLayout.size.height).toDp().value } + 1f
         val headingCover = (maxOf(30f, headingHeight) - 8f).coerceAtLeast(22f)
-        val headingWidth = (headingCover + desktopIslandCoverGap.value + metadataText + 14f)
+        val headingWidth = (headingCover * artworkRatio + desktopIslandCoverGap.value + metadataText + 14f)
             .coerceIn(if (editing) 240f else 48f, 640f)
         val lyricWidth = width(text, TextStyle(fontFamily = if (compact) androidx.compose.ui.text.font.FontFamily.Monospace else LyricsFontFamily,
             fontSize = font.sp, fontWeight = if (compact) FontWeight.Normal else FontWeight.Medium))
@@ -55,7 +57,7 @@ internal val desktopIslandArtistStyle = TextStyle(fontSize = 9.sp)
         // Match the frame's 2 dp outer + 5 dp inner horizontal insets exactly.
         // Extra spare width would get centered around the paragraph and widen its 6 dp gap.
         val textPadding = if (compact) 12f else desktopEffectPadding().value * 2
-        val preferred = cover + desktopIslandCoverGap.value + desktopIslandProgressWidth.value +
+        val preferred = cover * artworkRatio + desktopIslandCoverGap.value + desktopIslandProgressWidth.value +
             maxOf(lyricWidth, subtitleWidth) + textPadding + 14f - desktopIslandLyricInset.value * 2
         DesktopIslandSize(preferred.coerceIn(if (editing) 240f else 48f, 640f), metadata.dp, headingWidth)
     }

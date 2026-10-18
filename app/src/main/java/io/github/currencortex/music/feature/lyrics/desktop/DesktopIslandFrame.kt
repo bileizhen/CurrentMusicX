@@ -32,6 +32,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.SemanticsProperties
 import io.github.currencortex.music.data.song.Song
+import io.github.currencortex.music.core.media.ListenTogetherPair
+import io.github.currencortex.music.ui.component.listeningPairArtworkAspectRatio
 
 /** Layout and material only. Both hosts supply the existing timed lyric renderer. */
 internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandReveal")
@@ -42,6 +44,7 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
     transition: DesktopIslandCoverTransition? = null,
     onCoverTap: (() -> Unit)? = null, coverPlaying: Boolean = false,
     onCoverBounds: (Rect) -> Unit = {}, material: Boolean = true,
+    listenTogether: ListenTogetherPair? = null,
     content: @Composable () -> Unit) {
     val shape = RoundedCornerShape(50)
     val reveal = presentation.coerceIn(0f, 1f)
@@ -66,7 +69,7 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
                         if (onCoverTap != null) Modifier.clickable(
                             interactionSource = remember { MutableInteractionSource() }, indication = null,
                             role = Role.Button, onClickLabel = if (coverPlaying) "暂停歌曲" else "播放歌曲",
-                            onClick = onCoverTap) else Modifier))
+                            onClick = onCoverTap) else Modifier), listenTogether = listenTogether)
                 Column(Modifier.testTag("desktop_island_metadata").then(if (reveal >= .55f) Modifier.clearAndSetSemantics {} else Modifier).clipToBounds().graphicsLayer { alpha = (1f - reveal / .55f).coerceIn(0f, 1f) },
                     verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     val name = song?.name?.takeIf(String::isNotBlank) ?: "CurrentMusic"
@@ -95,10 +98,12 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
             val gap = desktopIslandCoverGap.roundToPx()
             val lyricInset = (desktopIslandLyricInset * reveal).roundToPx()
             val dividerWidth = (desktopIslandProgressWidth * reveal).roundToPx()
+            val artworkRatio = if (listenTogether == null) 1f else listeningPairArtworkAspectRatio
             val minCover = 22.dp.roundToPx()
+            fun artworkWidth(diameter: Int) = (diameter * artworkRatio).roundToInt()
             var infoPixels = infoWidth.roundToPx().coerceAtMost((width - minCover - gap).coerceAtLeast(0))
             var info = children[1].measure(Constraints.fixedWidth(infoPixels))
-            fun lyricConstraints(cover: Int) = Constraints.fixedWidth((width - cover - gap - infoPixels - dividerWidth + lyricInset * 2).coerceAtLeast(1))
+            fun lyricConstraints(cover: Int) = Constraints.fixedWidth((width - artworkWidth(cover) - gap - infoPixels - dividerWidth + lyricInset * 2).coerceAtLeast(1))
             var lyric = children[3].measure(lyricConstraints(minCover))
             // Hidden lyrics are warmed, but do not reserve a bilingual shell.
             val growth = (reveal / .25f).coerceIn(0f, 1f)
@@ -107,17 +112,18 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
             // A new heading must not shrink a bilingual cover on the first frame.
             // Capture the previously rendered geometry synchronously with the song
             // identity, then resize, move and flip using the same finite progress.
-            val p = coverTransition.progress.value
-            val start = coverTransition.start
+            val p = if (listenTogether == null) coverTransition.progress.value else 1f
+            val start = coverTransition.start.takeIf { listenTogether == null }
             val height = (start?.let { it.height * (1f - p) + naturalHeight * p } ?: naturalHeight.toFloat()).roundToInt()
             val coverSize = (height - 8.dp.roundToPx()).coerceAtLeast(minCover)
-            val availableInfo = (width - coverSize - gap - dividerWidth).coerceAtLeast(0)
+            val coverWidth = artworkWidth(coverSize)
+            val availableInfo = (width - coverWidth - gap - dividerWidth).coerceAtLeast(0)
             if (infoPixels > availableInfo) {
                 infoPixels = availableInfo
                 info = children[1].measure(Constraints.fixedWidth(infoPixels))
             }
             if (coverSize != minCover) lyric = children[3].measure(lyricConstraints(coverSize))
-            val cover = children[0].measure(Constraints.fixed(coverSize, coverSize))
+            val cover = children[0].measure(Constraints.fixed(coverWidth, coverSize))
             val direction = if (layoutDirection == LayoutDirection.Rtl) -1f else 1f
             val slot = Offset(direction * (coverSize - width) / 2f, height / 2f)
             val destination = Offset(direction * ((naturalHeight - 8.dp.roundToPx()).coerceAtLeast(minCover) - width) / 2f, naturalHeight / 2f)
@@ -132,9 +138,9 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
             val divider = children[2].measure(Constraints.fixed(dividerWidth, 22.dp.roundToPx()))
             layout(width, height) {
                 cover.placeRelative(0, (height - cover.height) / 2)
-                info.placeRelative(coverSize + gap, (height - info.height) / 2)
-                divider.placeRelative(coverSize + gap + infoPixels, (height - divider.height) / 2)
-                lyric.placeRelative(coverSize + gap + infoPixels + dividerWidth - lyricInset, (height - lyric.height) / 2)
+                info.placeRelative(coverWidth + gap, (height - info.height) / 2)
+                divider.placeRelative(coverWidth + gap + infoPixels, (height - divider.height) / 2)
+                lyric.placeRelative(coverWidth + gap + infoPixels + dividerWidth - lyricInset, (height - lyric.height) / 2)
             }
         }
     }

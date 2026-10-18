@@ -66,7 +66,7 @@ import kotlinx.coroutines.flow.StateFlow
     val index by remember(timeline, effective) { derivedStateOf { desktopIslandLineIndex(content.document, timeline, effective.value) } }
     val line = content.document.lines.getOrNull(index).takeIf { content.songId == player.song?.id }
     val motion = rememberDesktopMotion()
-    val coverTransition = rememberIslandCoverTransition(player.song, motion)
+    val coverTransition = rememberIslandCoverTransition(player.song, motion && player.listenTogether == null)
     val coverFlying by remember(coverTransition) { derivedStateOf { coverTransition.progress.value < 1f } }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var controlsWanted by remember { mutableStateOf(true) }
@@ -84,7 +84,7 @@ import kotlinx.coroutines.flow.StateFlow
     SideEffect { onEditingChanged(showChrome) }
     val font = options.displayFontSize
     val size = rememberIslandSize(player.song, if (fpsMode) "000.0 FPS" else line?.text.orEmpty(), font, fpsMode, showChrome,
-        line?.translation?.takeIf { options.translation && !fpsMode })
+        line?.translation?.takeIf { options.translation && !fpsMode }, listeningPair = player.listenTogether != null)
     val reveal = rememberIslandPresentation(player.song?.id, fpsMode || (!content.loading && content.songId == player.song?.id), motion).value
     val introWidth = size.headingWidth.coerceAtMost(maxIslandWidth())
     // Keep the measured heading space until its labels have completely faded.
@@ -138,6 +138,7 @@ import kotlinx.coroutines.flow.StateFlow
             }, metadata = size.metadata, presentation = reveal, coverPosition = position, motion = motion,
             durationMs = player.durationMs.takeIf { it > 0 } ?: player.song?.durationMs ?: 0L, transition = coverTransition,
             coverPlaying = player.showPause, onCoverBounds = onCoverBounds, material = false,
+            listenTogether = player.listenTogether,
             onCoverTap = { if (player.song != null && player.canControlPlayback) togglePlayback() }) {
             DesktopIslandDisplay(fpsMode, motion, lyrics = {
                 if (line != null) {

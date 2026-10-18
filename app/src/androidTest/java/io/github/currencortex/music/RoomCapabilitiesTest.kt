@@ -115,6 +115,19 @@ class RoomCapabilitiesTest {
         compose.waitUntil(5000) { !vm.browser.value.loading }
         compose.onNodeWithText("Fixture room").assertIsDisplayed()
     }
+    @Test fun nativeTogetherEntryKeepsCurrentMusicSixDigitRoomsOnTheirOwnPage() {
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
+            top.yukonga.miuix.kmp.basic.Scaffold { RoomScreen(vm, {}, {}, {}) }
+        } }
+        compose.onNodeWithTag("room_query").assertExists()
+        compose.onNodeWithTag("open_netease_listen_together").performClick()
+        compose.onNodeWithTag("netease_listen_screen").assertExists()
+        compose.onNodeWithTag("room_query").assertDoesNotExist()
+        compose.onNodeWithTag("netease_listen_back").performClick()
+        compose.onNodeWithTag("room_query").assertExists()
+        compose.onNodeWithTag("netease_listen_screen").assertDoesNotExist()
+    }
     @Test fun failedRoomCreationKeepsDialogAndNameForRetry() {
         createFails = true
         val vm = RoomViewModel(container)

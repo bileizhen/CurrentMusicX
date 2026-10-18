@@ -26,6 +26,8 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.coverRequestUrl
+import io.github.currencortex.music.ui.component.ListeningPairArtwork
+import io.github.currencortex.music.core.media.ListenTogetherPair
 
 internal data class DesktopIslandCoverPlacement(val height: Float, val diameter: Float, val center: Offset)
 
@@ -67,7 +69,12 @@ private class CoverTransitionHistory { var current: DesktopIslandCoverTransition
 
 /** The outer layer flies and flips around Y; only the circular inner image spins around Z. */
 @Composable internal fun DesktopIslandCover(song: Song?, coverPosition: State<Long>?, motion: Boolean,
-    transition: DesktopIslandCoverTransition? = null, modifier: Modifier = Modifier) {
+    transition: DesktopIslandCoverTransition? = null, modifier: Modifier = Modifier,
+    listenTogether: ListenTogetherPair? = null) {
+    if (listenTogether != null) {
+        ListeningPairArtwork(listenTogether, modifier.testTag("desktop_island_pair_artwork"))
+        return
+    }
     val travel = transition ?: rememberIslandCoverTransition(song, motion)
     val outgoing by remember(travel) { derivedStateOf { travel.progress.value < .5f } }
     Box(modifier.testTag("desktop_island_cover"), contentAlignment = Alignment.Center) {

@@ -76,6 +76,26 @@ class MiniPlayerInteractionTest {
         assertEquals(1, opens); assertEquals(1, toggles); assertEquals(1, queues)
         assertFalse(container.playerController.state.value.playing)
     }
+    @Test fun togetherSessionReplacesCoverWithStationaryPortraitsAndRestoresCoverAfterLeaving() {
+        compose.mainClock.autoAdvance = false
+        component()
+        compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(
+            playing = true, listenTogether = ListenTogetherPair(listOf(
+                ListenTogetherParticipant(1, "我", ""), ListenTogetherParticipant(2, "好友", "")))) }
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithTag("mini_cover").assertDoesNotExist()
+        compose.onNodeWithTag("mini_pair_artwork").assertExists()
+        compose.onNodeWithContentDescription("一起听：我、好友").assertExists()
+        val before = compose.onNodeWithTag("listening_pair_avatar_1", true).getUnclippedBoundsInRoot()
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals(before, compose.onNodeWithTag("listening_pair_avatar_1", true).getUnclippedBoundsInRoot())
+        compose.onNodeWithTag("mini_pair_artwork").performClick()
+        assertEquals(1, opens)
+        compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(listenTogether = null) }
+        compose.mainClock.advanceTimeByFrame()
+        compose.onNodeWithTag("mini_pair_artwork").assertDoesNotExist()
+        compose.onNodeWithTag("mini_cover").assertExists()
+    }
     @Test fun memberSwipesAreIgnoredAndPromotionRestoresGestureControls() {
         component(member = true)
         compose.onNodeWithTag("mini_toggle").assertIsNotEnabled()
