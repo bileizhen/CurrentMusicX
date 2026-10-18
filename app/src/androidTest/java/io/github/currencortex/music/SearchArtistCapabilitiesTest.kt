@@ -98,6 +98,25 @@ class SearchArtistCapabilitiesTest {
     private fun artistTab(tab: String) { compose.onNodeWithTag("artist_home").performScrollToIndex(0); compose.onNodeWithTag("artist_tab_$tab").performClick() }
     private fun searchCount() = requests.count { it.requestUrl!!.encodedPath == "/cm/ncm/search" }
 
+    @Test fun tappingSearchResultsKeepsExistingQueueAndOnlyAddsSelectedSong() {
+        check(ApplicationProvider.getApplicationContext<CurrentMusicApplication>().packageName.endsWith(".verification"))
+        val original = listOf(Song(900, "Paused fixture"), Song(11, "Already queued"), Song(902, "Queue tail"))
+        container.playbackQueue.replace(original, 0)
+        compose.setContent { CurrentMusicApp(container) }
+        awaitTag("open_home_search"); compose.onNodeWithTag("open_home_search").performClick()
+        awaitTag("search_input"); compose.onNodeWithTag("search_input").performTextInput("fixture")
+        compose.onNodeWithTag("submit_search").performClick(); awaitTag("search_song_11")
+        compose.onNodeWithText("Fixture song 11").performClick()
+        if (compose.onAllNodesWithText("继续播放").fetchSemanticsNodes().isNotEmpty())
+            compose.onNodeWithText("继续播放").performClick()
+        compose.waitUntil(5000) { container.playbackQueue.state.value.current?.id == 11L }
+        assertEquals(original, container.playbackQueue.state.value.songs)
+        compose.onNodeWithText("Fixture song 12").performClick()
+        compose.waitUntil(5000) { container.playbackQueue.state.value.current?.id == 12L }
+        assertEquals(listOf(900L, 11L, 12L, 902L), container.playbackQueue.state.value.songs.map { it.id })
+        assertEquals(0L, container.playbackQueue.state.value.positionMs)
+    }
+
     @Test fun categorizedSearchAndArtistHomepageKeepSubmittedQueryAndPausedQueue() {
         compose.setContent { CurrentMusicApp(container) }
         awaitTag("open_home_search"); compose.onNodeWithTag("open_home_search").performClick()

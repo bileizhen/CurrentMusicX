@@ -6,6 +6,50 @@ import kotlinx.serialization.decodeFromString
 import org.junit.Assert.*
 import org.junit.Test
 class PlaybackQueueTest {
+    @Test fun playingOneSearchResultPreservesQueueOrderAndMode() {
+        val queue = PlaybackQueue()
+        val songs = (1L..3L).map { Song(it, "$it") }
+        queue.replace(songs, 1)
+        queue.setMode(PlaybackMode.SHUFFLE)
+        queue.state.value = queue.state.value.copy(positionMs = 12_000, quality = AudioQuality.LOSSLESS)
+        queue.previewNext()
+        queue.playSong(Song(4, "selected result"))
+        assertEquals(listOf(1L, 2L, 4L, 3L), queue.state.value.songs.map { it.id })
+        assertEquals(4L, queue.state.value.current!!.id)
+        assertEquals(0L, queue.state.value.positionMs)
+        assertEquals(PlaybackMode.SHUFFLE, queue.state.value.mode)
+        assertEquals(AudioQuality.LOSSLESS, queue.state.value.quality)
+        assertTrue(queue.state.value.shuffleHistory.isEmpty())
+    }
+
+    @Test fun selectingAnExistingSearchResultDoesNotDuplicateOrReorderTracks() {
+        val queue = PlaybackQueue()
+        val songs = (1L..3L).map { Song(it, "$it") }
+        queue.replace(songs, 0)
+        queue.playSong(songs[2].copy(artists = "new search metadata"))
+        assertEquals(songs, queue.state.value.songs)
+        assertEquals(2, queue.state.value.index)
+        queue.state.value = queue.state.value.copy(positionMs = 42_000)
+        queue.playSong(songs[2])
+        assertEquals(songs, queue.state.value.songs)
+        assertEquals(0L, queue.state.value.positionMs)
+    }
+
+    @Test fun singleSearchSelectionWorksWithEmptyQueueAndDistinctSources() {
+        val queue = PlaybackQueue()
+        val song = Song(1, "first")
+        queue.playSong(song)
+        assertEquals(listOf(song), queue.state.value.songs)
+        assertEquals(0, queue.state.value.index)
+        val other = song.copy(musicSource = io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
+        queue.playSong(other)
+        assertEquals(listOf(song, other), queue.state.value.songs)
+        assertEquals(other, queue.state.value.current)
+        val video = song.copy(video = true)
+        queue.playSong(video)
+        assertEquals(listOf(song, other, video), queue.state.value.songs)
+        assertEquals(video, queue.state.value.current)
+    }
     @Test fun shufflePreviousRetracesHistoryAndNextReusesForwardHistoryAndPreload() {
         val queue = PlaybackQueue()
         queue.replace((1L..10L).map { Song(it, "$it") }, 0)

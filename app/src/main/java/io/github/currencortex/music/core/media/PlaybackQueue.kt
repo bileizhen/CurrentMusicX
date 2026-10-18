@@ -77,6 +77,15 @@ class PlaybackQueue {
         } else resetHistory(s.copy(index = (s.index - 1 + s.songs.size) % s.songs.size, positionMs = 0))
     }
     fun select(index: Int) { if (index in state.value.songs.indices) state.value = resetHistory(state.value.copy(index = index, positionMs = 0)) }
+    /** A search selection keeps the current queue and reuses a track already in it. */
+    fun playSong(song: Song) {
+        val current = state.value
+        val existing = current.songs.indexOfFirst { it.id == song.id && it.musicSource == song.musicSource && it.video == song.video &&
+            it.navidrome?.identity == song.navidrome?.identity }
+        val index = if (existing >= 0) existing else (current.index + 1).coerceIn(0, current.songs.size)
+        val songs = if (existing >= 0) current.songs else current.songs.toMutableList().apply { add(index, song) }
+        state.value = resetHistory(current.copy(songs = songs, index = index, positionMs = 0))
+    }
     fun setMode(mode: PlaybackMode) {
         if (state.value.mode != mode) state.value = resetHistory(state.value.copy(mode = mode, heartPlaylistId = 0))
     }

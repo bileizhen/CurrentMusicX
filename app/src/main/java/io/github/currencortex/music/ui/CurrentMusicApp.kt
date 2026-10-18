@@ -466,8 +466,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             SearchScreen(searchVm, container.playerController,
                                 actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) }, navigate = ::navigateLibrary,
                                 onBack = ::navigateBack, sheet = searchSheet, autoFocus = searchFocus, onFocused = { searchFocus = false },
-                                recommendations = libraryHome.daily + libraryHome.forYou, recent = libraryHome.recent) { songs, index ->
-                                playWithPermission { container.playerController.playList(songs, index) }
+                                recommendations = libraryHome.daily + libraryHome.forYou, recent = libraryHome.recent) { song ->
+                                playWithPermission { container.playerController.playSong(song) }
                             }
                         }
                     }
@@ -514,7 +514,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         SearchScreen(searchVm, container.playerController, actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) },
                             navigate = ::navigateLibrary,
                             roomName = if (nativeTogether.active) "网易云双人一起听" else roomLive.detail?.room?.name.orEmpty(),
-                            onBack = ::navigateBack) { songs, index -> requestSong(songs[index]) }
+                            onBack = ::navigateBack, onPlay = ::requestSong)
                     }
                 }
                 entry("room/list") {
