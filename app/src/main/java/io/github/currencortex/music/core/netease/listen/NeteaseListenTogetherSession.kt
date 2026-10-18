@@ -441,6 +441,17 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         })
     }
 
+    fun setRecommendation(enabled: Boolean) = command { current ->
+        val result = repo.setRecommendation(current.expected, current.roomId, enabled)
+        valid(current)
+        check(result.success) { result.message.ifBlank { "无法更改心动推荐，请检查网易云会员权限" } }
+        state.update { it.copy(room = it.room?.copy(openHeartRcmd = enabled)) }
+        metadataIds = emptyList()
+        synchronize(current, members = false)
+        // A server-generated recommendation list may arrive independently of the play command.
+        if (result.refreshPlaylist) synchronize(current, members = true)
+    }
+
     private fun command(block: suspend (Active) -> Unit) = operation { active?.let { valid(it); block(it) } }
     override fun play(playing: Boolean) = command { current ->
         val target = current.loadedSongId.takeIf { it > 0 } ?: current.queue.songIds.firstOrNull()

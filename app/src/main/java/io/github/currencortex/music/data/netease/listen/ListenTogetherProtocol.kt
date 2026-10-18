@@ -17,5 +17,7 @@ internal interface ListenTogetherProtocol {
     suspend fun playlist(expected: NeteaseSession, roomId: String, local: ListenTogetherQueue = ListenTogetherQueue()): ListenTogetherSnapshot
     suspend fun reportPlayback(expected: NeteaseSession, roomId: String, playback: ListenTogetherPlayback)
     suspend fun reportQueue(expected: NeteaseSession, roomId: String, queue: ListenTogetherQueue)
+    suspend fun setRecommendation(expected: NeteaseSession, roomId: String, enabled: Boolean): ListenTogetherRecommendation =
+        error("当前服务暂不支持一起听心动推荐")
     suspend fun leave(expected: NeteaseSession, roomId: String)
 }

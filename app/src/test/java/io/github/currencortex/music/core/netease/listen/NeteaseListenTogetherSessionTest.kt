@@ -25,7 +25,7 @@ class NeteaseListenTogetherSessionTest {
     private class FakeProtocol(private val now: () -> Long) : ListenTogetherProtocol {
         var revision = 0L
         val credential = NeteaseCredential(mapOf("MUSIC_U" to "local-fixture"), BoundProfile(100, "自己", "https://self.invalid/avatar"))
-        val room = ListenTogetherRoom("room-100", 100, listOf(
+        var room = ListenTogetherRoom("room-100", 100, listOf(
             ListenTogetherParticipant(100, "自己", "https://self.invalid/avatar"),
             ListenTogetherParticipant(200, "朋友", "https://friend.invalid/avatar")))
         var inRoom = true
@@ -47,6 +47,11 @@ class NeteaseListenTogetherSessionTest {
         var syncNotices = 0
         var syncFailure: ApiException? = null
         var leaves = 0
+        var recommendationResult = ListenTogetherRecommendation(true, false)
+        override suspend fun setRecommendation(expected: NeteaseSession, roomId: String, enabled: Boolean): ListenTogetherRecommendation {
+            if (recommendationResult.success) room = room.copy(openHeartRcmd = enabled)
+            return recommendationResult
+        }
         override suspend fun captureSession() = NeteaseSession(credential, revision)
         override fun checkSession(expected: NeteaseSession) {
             if (expected.revision != revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
@@ -469,5 +474,17 @@ class NeteaseListenTogetherSessionTest {
         f.session.selectSong(10); runCurrent()
         assertEquals(listOf("queue" to 3, "play" to 4), f.repo.reports.takeLast(2))
         assertEquals(10L, f.repo.playbackCommands.last().targetSongId)
+    }
+
+    @Test fun nativeRecommendationStateChangesOnlyAfterAcknowledgementAndNeverReplacesTheQueueLocally() = runTest {
+        val f = Fixture(this); f.session.resume(); runCurrent()
+        f.session.setRecommendation(true); runCurrent()
+        assertTrue(f.session.state.value.room!!.openHeartRcmd)
+        assertTrue(f.repo.reportedQueues.isEmpty())
+        assertTrue(f.repo.playbackCommands.isEmpty())
+        f.repo.recommendationResult = ListenTogetherRecommendation(false, false, "需要会员权限")
+        f.session.setRecommendation(false); runCurrent()
+        assertTrue(f.session.state.value.room!!.openHeartRcmd)
+        assertEquals("需要会员权限", f.session.state.value.error)
     }
 }

@@ -9,7 +9,10 @@ data class ListenTogetherParticipant(val userId: Long, val nickname: String = ""
 
 data class ListenTogetherRoom(val roomId: String, val creatorId: Long,
     val participants: List<ListenTogetherParticipant> = emptyList(), val roomType: String = "FRIEND",
-    val effectiveDurationMs: Long = 0, val roomCreateTime: Long = 0)
+    val effectiveDurationMs: Long = 0, val roomCreateTime: Long = 0,
+    val openHeartRcmd: Boolean = false, val playlistCopywriting: String = "")
+
+data class ListenTogetherRecommendation(val success: Boolean, val refreshPlaylist: Boolean, val message: String = "")
 
 data class ListenTogetherStatus(val inRoom: Boolean, val room: ListenTogetherRoom? = null, val status: String = "")
 
