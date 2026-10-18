@@ -737,7 +737,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         LibraryDialogs(libraryVm)
         ProfileDialogs(profileVm, authVm)
         if (profileMessage != null) MusicDialog("账号操作", onDismiss = { profileVm.message.value = null }) {
-            Text(profileMessage.orEmpty()); TextButton("关闭", onClick = { profileVm.message.value = null })
+            Text(profileMessage.orEmpty()); MusicDialogButton("关闭", onClick = { profileVm.message.value = null })
         }
         LaunchedEffect(playerState.error) {
             playerState.error?.let { message ->
@@ -757,11 +757,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             pendingPlay = null
         }) {
             Text("允许通知后，可从通知栏控制播放；锁屏和蓝牙媒体控制也由播放服务提供。")
-            TextButton("允许通知并播放", onClick = {
+            MusicDialogButton("允许通知并播放", onClick = {
                 explained = true
                 if (Build.VERSION.SDK_INT >= 33) permissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
             })
-            TextButton("继续播放", onClick = { explained = true; val action = pendingPlay; pendingPlay = null; action?.invoke() })
+            MusicDialogButton("继续播放", onClick = { explained = true; val action = pendingPlay; pendingPlay = null; action?.invoke() })
         }
         io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsRecommendation(container,
             eligible = launchFinished && announcements.isEmpty() && !updateDialogVisible && pendingPlay == null)

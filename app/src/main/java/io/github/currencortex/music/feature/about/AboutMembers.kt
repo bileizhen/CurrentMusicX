@@ -1,6 +1,7 @@
 // Ported from LeiFetch AboutScreen, GPL-3.0; same avatar rows, member dialogs and AnimatedList motion.
 package io.github.currencortex.music.feature.about
 
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.util.LruCache
@@ -193,10 +194,10 @@ internal fun MemberDetailDialog(show: Boolean, focus: MemberFocus?, onDismiss: (
                             .padding(top = 12.dp))
                 }
                 current.member.githubUrl?.let { url ->
-                    TextButton("GitHub", onClick = { openExternalLink(context, url) },
+                    MusicDialogButton("GitHub", onClick = { openExternalLink(context, url) },
                         modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("member_github"))
                 }
-                TextButton("关闭", onClick = onDismiss,
+                MusicDialogButton("关闭", onClick = onDismiss,
                     modifier = Modifier.fillMaxWidth().padding(top = 18.dp))
             }
         }

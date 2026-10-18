@@ -39,7 +39,8 @@ val LocalMusicPageActive = staticCompositionLocalOf { true }
 
 @Composable fun MusicTextAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
     destructive: Boolean = false) {
-    Text(label, modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick).heightIn(min = 48.dp).padding(horizontal = 8.dp, vertical = 12.dp),
+    Text(label, modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick).heightIn(min = 48.dp)
+        .padding(horizontal = if (LocalMusicDialogContent.current) 0.dp else 8.dp, vertical = 12.dp),
         fontSize = 13.sp, fontWeight = FontWeight.Medium,
         color = (if (destructive) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary).copy(alpha = if (enabled) 1f else .4f))
 }
@@ -54,7 +55,7 @@ val LocalMusicPageActive = staticCompositionLocalOf { true }
 @Composable fun MusicDestinationRow(title: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     summary: String? = null, enabled: Boolean = true, chevron: Boolean = true) {
     Row(modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-        .heightIn(min = 52.dp).padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        .heightIn(min = 52.dp).padding(horizontal = if (LocalMusicDialogContent.current) 0.dp else 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(title, fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else .4f))
             summary?.let { Text(it, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f),

@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.download
 
+import io.github.currencortex.music.ui.component.MusicDialogActions
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -128,13 +130,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         }
         // Three buttons must still fit the longest label ("打开歌曲") on one line, so the primary
         // action keeps the extra width instead of splitting the row into equal thirds.
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton("关闭", onClick = onDismiss, modifier = Modifier.weight(0.9f))
-            if (saved) TextButton(if (deleting) "删除中" else "删除", onClick = { deleteSaved() }, enabled = !deleting,
+        MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MusicDialogButton("关闭", onClick = onDismiss, modifier = Modifier.weight(0.9f))
+            if (saved) MusicDialogButton(if (deleting) "删除中" else "删除", onClick = { deleteSaved() }, enabled = !deleting,
                 colors = ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.error,
                     textColor = MiuixTheme.colorScheme.onError),
                 modifier = Modifier.weight(0.9f).testTag("song_download_delete"))
-            TextButton(when { active -> "取消下载"; info?.state == WorkInfo.State.FAILED -> "重试下载"
+            MusicDialogButton(when { active -> "取消下载"; info?.state == WorkInfo.State.FAILED -> "重试下载"
                 saved -> "打开歌曲"; else -> "开始下载" }, onClick = {
                 when {
                     active -> manager.cancel(song)

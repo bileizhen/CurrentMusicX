@@ -262,7 +262,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 commentComposer, vm::editComment, vm::replyTo, vm::sendComment)
             PlayerOverlay.QUEUE -> Unit
             PlayerOverlay.MODE -> MusicDialog("播放模式", dismiss) {
-                PlaybackMode.entries.filter { !together.active || it != PlaybackMode.HEART }.forEach { mode -> TextButton((if (mode == playbackMode) "✓ " else "") + mode.label,
+                PlaybackMode.entries.filter { !together.active || it != PlaybackMode.HEART }.forEach { mode -> MusicDialogButton((if (mode == playbackMode) "✓ " else "") + mode.label,
                     onClick = { vm.setPlaybackMode(mode); overlay = PlayerOverlay.QUEUE },
                     enabled = (if (together.active) !together.busy else state.mode == PlayerMode.LOCAL) && (mode != PlaybackMode.HEART ||
                         (!heartLoading && io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(queue.current) != null)),

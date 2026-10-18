@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.lyrics.desktop
 
+import io.github.currencortex.music.ui.component.MusicDialogActions
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import android.content.Intent
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -50,9 +52,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             Text("应用内默认显示 FPS，点击灵动岛可切换歌词与帧率。", fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             (error ?: action.error)?.let { Text(it, fontSize = 13.sp, color = MiuixTheme.colorScheme.error) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton("暂不开启", onClick = ::dismiss, modifier = Modifier.weight(1f).testTag("desktop_recommendation_skip"))
-            TextButton(if (action.connecting) "正在开启…" else "快捷开启", onClick = {
+            MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MusicDialogButton("暂不开启", onClick = ::dismiss, modifier = Modifier.weight(1f).testTag("desktop_recommendation_skip"))
+            MusicDialogButton(if (action.connecting) "正在开启…" else "快捷开启", onClick = {
                 error = null; markSeen()
                 if (Settings.canDrawOverlays(context)) activation.request(true)
                 else {

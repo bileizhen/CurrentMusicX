@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.room
 
+import io.github.currencortex.music.ui.component.MusicDialogButton
+
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -156,18 +158,18 @@ import top.yukonga.miuix.kmp.basic.*
     passwordRoom?.let { room ->
         var password by remember(room.id) { mutableStateOf("") }
         MusicDialog("加入 ${room.name}", onDismiss = { vm.passwordRoom.value = null }) {
-            TextField(password, { password = it }, label = "房间密码", visualTransformation = PasswordVisualTransformation())
+            TextField(password, { password = it }, label = "房间密码", visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
             browser.error?.let { Text(it, fontSize = 13.sp) }
-            MusicTextAction(if (busy) "正在加入…" else "加入", onClick = { vm.join(room, password) }, enabled = !busy)
+            MusicDialogButton(if (busy) "正在加入…" else "加入", onClick = { vm.join(room, password) }, enabled = !busy)
         }
     }
     if (exit) MusicDialog("退出一起听", onDismiss = { exit = false }) {
         Text("退出后恢复本地队列，保持暂停。")
-        MusicTextAction("退出房间", onClick = { exit = false; vm.leave() }, modifier = Modifier.testTag("confirm_leave_room"))
+        MusicDialogButton("退出房间", onClick = { exit = false; vm.leave() }, modifier = Modifier.testTag("confirm_leave_room"))
     }
     if (close) MusicDialog("关闭房间", onDismiss = { close = false }) {
         Text("所有成员都会离开此房间。")
-        MusicTextAction("关闭房间", onClick = { close = false; vm.session.action("close", permission = { it == RoomRole.OWNER }) })
+        MusicDialogButton("关闭房间", onClick = { close = false; vm.session.action("close", permission = { it == RoomRole.OWNER }) })
     }
 }
 @Composable private fun RoomTransport(label: String, icon: Int, onClick: () -> Unit, enabled: Boolean, primary: Boolean = false) {
@@ -247,13 +249,13 @@ import top.yukonga.miuix.kmp.basic.*
     MusicDialog(title, onDismiss = onDismiss) {
         Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()).testTag("room_form"),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextField(name, { name = it }, label = "房间名称")
+            TextField(name, { name = it }, label = "房间名称", modifier = Modifier.fillMaxWidth())
             if (initial != null) Row { Text("修改密码（留空解除密码）", Modifier.weight(1f)); Switch(changePassword, { changePassword = it }) }
-            if (changePassword) TextField(password, { password = it }, label = "房间密码", visualTransformation = PasswordVisualTransformation())
+            if (changePassword) TextField(password, { password = it }, label = "房间密码", visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
             Row { Text("公开房间", Modifier.weight(1f)); Switch(public, { public = it }) }
             Row { Text("自由点歌", Modifier.weight(1f)); Switch(free, { free = it }) }
             error?.let { Text(it, fontSize = 13.sp) }
-            MusicTextAction(if (saving) "正在创建…" else "保存", enabled = name.isNotBlank() && !saving, onClick = { onSave(name, if (changePassword) password else null, public, free) })
+            MusicDialogButton(if (saving) "正在创建…" else "保存", enabled = name.isNotBlank() && !saving, onClick = { onSave(name, if (changePassword) password else null, public, free) })
         }
     }
 }

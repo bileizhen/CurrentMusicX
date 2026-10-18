@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.binding
 
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import android.graphics.Bitmap
 import android.os.SystemClock
@@ -216,7 +217,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
     if (unbind) MusicDialog("解绑网易云音乐？", { if (!busy) unbind = false }) {
         Text(if (vm.container.apiClient.hasLocalNeteaseLogin) "将退出本机网易云账号，云端绑定和歌单会保留。"
             else "将解除当前 CurrentMusic 账号的云端网易云绑定，已导入歌单会保留为快照。")
-        TextButton("确认解绑", onClick = { unbind = false; vm.unbind() }, enabled = !busy, modifier = Modifier.testTag("confirm_unbind"))
+        MusicDialogButton("确认解绑", onClick = { unbind = false; vm.unbind() }, enabled = !busy, modifier = Modifier.testTag("confirm_unbind"))
         BindingAction("取消", { unbind = false }, enabled = !busy)
     }
 }

@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.library
 
+import io.github.currencortex.music.ui.component.MusicDialogActions
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -40,15 +42,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         }
         if (state.running) {
             Text("关闭面板后仍会继续导入；请保持应用运行。", fontSize = 13.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton("后台导入", onClick = onClose, modifier = Modifier.testTag("playlist_import_background"))
-                TextButton("停止导入", onClick = onStop, modifier = Modifier.testTag("playlist_import_stop"))
+            MusicDialogActions(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MusicDialogButton("后台导入", onClick = onClose, modifier = Modifier.weight(1f).testTag("playlist_import_background"))
+                MusicDialogButton("停止导入", onClick = onStop, modifier = Modifier.weight(1f).testTag("playlist_import_stop"))
             }
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton("关闭", onClick = onClose)
+            MusicDialogActions(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MusicDialogButton("关闭", onClick = onClose, modifier = Modifier.weight(1f))
                 if (state.error != null || state.failed > 0)
-                    TextButton("重试补齐", onClick = onRetry, modifier = Modifier.testTag("playlist_import_retry"))
+                    MusicDialogButton("重试补齐", onClick = onRetry, modifier = Modifier.weight(1f).testTag("playlist_import_retry"))
             }
         }
     }

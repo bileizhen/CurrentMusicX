@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.player
 
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -130,12 +131,12 @@ import java.util.Locale
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Bottom) {
-                TextField(composer.draft, edit, Modifier.weight(1f).focusRequester(focus).testTag("player_comment_draft"),
+                TextField(composer.draft, edit, Modifier.fillMaxWidth().then(Modifier.weight(1f).focusRequester(focus).testTag("player_comment_draft")),
                     label = if (composer.replyTo == null) "写下你的评论" else "写下你的回复", useLabelAsPlaceholder = true,
                     insideMargin = DpSize(14.dp, 12.dp), cornerRadius = 16.dp, maxLines = 3,
                     textStyle = MiuixTheme.textStyles.main.copy(fontSize = 15.sp), readOnly = composer.sending)
-                TextButton(if (composer.sending) "发送中…" else "发送", send, Modifier.testTag("player_comment_send"),
-                    enabled = !composer.sending && composer.draft.isNotBlank())
+                MusicDialogButton(if (composer.sending) "发送中…" else "发送", send, Modifier.testTag("player_comment_send"),
+                    enabled = !composer.sending && composer.draft.isNotBlank(), fillWidth = false)
             }
             val feedback = composer.error ?: composer.message
             if (feedback != null || composer.draft.isNotEmpty()) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {

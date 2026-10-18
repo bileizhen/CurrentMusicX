@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.update
 
+import io.github.currencortex.music.ui.component.MusicDialogActions
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.BasicTextField
@@ -67,10 +69,10 @@ fun UpdatePreviewDialog(initialVersion: String, onDismiss: () -> Unit, onConfirm
                     }
                 })
             Text(if (input.text.length > 32) "版本文字最多 32 个字符" else "仅预览数字形变，实际安装版本和下载包保持不变。", fontSize = 12.sp)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton("取消", modifier = Modifier.weight(1f).testTag("update_preview_cancel"),
+            MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MusicDialogButton("取消", modifier = Modifier.weight(1f).testTag("update_preview_cancel"),
                     onClick = { keyboard?.hide(); onDismiss() })
-                TextButton("开始预览", enabled = valid, modifier = Modifier.weight(1f).testTag("update_preview_confirm"),
+                MusicDialogButton("开始预览", enabled = valid, modifier = Modifier.weight(1f).testTag("update_preview_confirm"),
                     onClick = { submit() })
             }
             LaunchedEffect(Unit) { withFrameNanos { }; focus.requestFocus(); keyboard?.show() }

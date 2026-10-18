@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.share
 
+import io.github.currencortex.music.ui.component.MusicDialogActions
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -74,8 +76,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
             if (poster != null && !poster.coverLoaded) Text("封面暂未加载，可重新生成海报", fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TextButton("保存图片", onClick = {
+            MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MusicDialogButton("保存图片", onClick = {
                     if (poster != null) {
                         pendingSave = poster
                         try { save.launch(poster.content.filename) }
@@ -83,7 +85,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         catch (_: Exception) { pendingSave = null; message("无法打开保存位置", error = true) }
                     }
                 }, enabled = poster != null && !saving, modifier = Modifier.weight(1f).testTag("song_share_save"))
-                TextButton("分享图片", onClick = {
+                MusicDialogButton("分享图片", onClick = {
                     if (poster != null) try { context.startActivity(Intent.createChooser(SongShareFiles.shareIntent(context, poster), "分享歌曲海报")) }
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { message("无法打开分享面板，请保存图片后分享", error = true) }
@@ -91,14 +93,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     color = MiuixTheme.colorScheme.primary, textColor = MiuixTheme.colorScheme.onPrimary),
                     modifier = Modifier.weight(1f).testTag("song_share_send"))
             }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                TextButton(if (SongShareContent.from(song).publicUrl == null) "复制歌曲信息" else "复制链接", onClick = {
+            MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MusicDialogButton(if (SongShareContent.from(song).publicUrl == null) "复制歌曲信息" else "复制链接", onClick = {
                     val content = SongShareContent.from(song)
                     context.getSystemService(ClipboardManager::class.java).setPrimaryClip(
                         ClipData.newPlainText("歌曲分享", content.publicUrl ?: content.text))
                     message(if (content.publicUrl == null) "已复制歌曲信息" else "已复制链接")
                 }, modifier = Modifier.weight(1f).testTag("song_share_copy"))
-                if (result?.isFailure == true || poster?.coverLoaded == false) TextButton("重新生成", onClick = { attempt++ },
+                if (result?.isFailure == true || poster?.coverLoaded == false) MusicDialogButton("重新生成", onClick = { attempt++ },
                     modifier = Modifier.weight(1f).testTag("song_share_retry"))
             }
         }

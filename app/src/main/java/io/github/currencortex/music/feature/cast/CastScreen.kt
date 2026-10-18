@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.cast
 
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -71,6 +72,6 @@ class CastViewModel(val container: AppContainer) : ViewModel() {
     }
     confirm?.let { device -> MusicDialog("投屏到 ${device.name}", onDismiss = { confirm = null }) {
         Text("默认尝试无损音质；设备不兼容时回退到极高音质。")
-        TextButton("开始投屏", onClick = { confirm = null; vm.container.dlnaController.start(device) })
+        MusicDialogButton("开始投屏", onClick = { confirm = null; vm.container.dlnaController.start(device) })
     } }
 }

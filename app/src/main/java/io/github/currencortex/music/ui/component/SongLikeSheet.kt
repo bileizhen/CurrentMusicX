@@ -1,5 +1,6 @@
 package io.github.currencortex.music.ui.component
 
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -22,7 +23,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable fun SongLikeSheet(selection: SongLikeSelection, toggle: (LikeDestination) -> Unit, dismiss: () -> Unit) {
-    MusicDialog("收录到哪个「我喜欢」？", dismiss, footer = { TextButton("关闭", onClick = dismiss) }) {
+    MusicDialog("收录到哪个「我喜欢」？", dismiss, footer = { MusicDialogButton("关闭", onClick = dismiss) }) {
         Column(Modifier.testTag("song_like_sheet")) {
             LikeRow("CurrentMusic · 我喜欢的音乐", selection.currentMusic, LikeDestination.CURRENT_MUSIC, toggle)
             LikeRow("网易云音乐 APP · 我喜欢的音乐", selection.netease, LikeDestination.NETEASE, toggle)

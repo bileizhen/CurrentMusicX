@@ -62,7 +62,7 @@ fun AnnouncementDialog(items: List<Announcement>, suppressByDefault: Boolean = f
             context.showMusicError("未找到可以打开链接的应用")
         }
     }
-    MusicDialog(if (items.size == 1) "公告" else "公告（${items.size}）", dismiss,
+    MusicDialog(if (items.size == 1) "公告" else "公告（${items.size}）", dismiss, alignContent = false,
         footer = {
             if (items.size > 1) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically) {

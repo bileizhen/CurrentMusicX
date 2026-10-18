@@ -123,9 +123,9 @@ private fun postTime(seconds: Long) = if (seconds <= 0) "" else
             Text("支持 Markdown 格式", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
             current?.let { SettingsSwitch("附带当前歌曲", attachCurrent, { attachCurrent = it }, summary = it.name) }
             state.message?.let { Text(it, fontSize = 12.sp) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            TextButton("取消", { vm.editor(false) }, enabled = !state.busy, modifier = Modifier.weight(1f))
-            TextButton(if (state.busy) "发布中…" else "发布", {
+            MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            MusicDialogButton("取消", { vm.editor(false) }, enabled = !state.busy, modifier = Modifier.weight(1f))
+            MusicDialogButton(if (state.busy) "发布中…" else "发布", {
                 vm.publish(if (attachCurrent && current != null) listOf(PostAttachment("song", current.id, current.name, current.artists, current.cover)) else emptyList())
             }, enabled = !state.busy && state.draft.isNotBlank(), modifier = Modifier.weight(1f).testTag("post_publish"))
             }
@@ -157,9 +157,9 @@ private fun postTime(seconds: Long) = if (seconds <= 0) "" else
             state.message?.let { Text(it, fontSize = 12.sp) }
             if (account.account != null) {
                 TextField(reply, { reply = it }, Modifier.fillMaxWidth().testTag("post_reply"))
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TextButton("关闭", { vm.comments(null) }, modifier = Modifier.weight(1f))
-                    TextButton("发送", { vm.sendComment(reply) }, enabled = !state.busy && reply.isNotBlank(),
+                MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    MusicDialogButton("关闭", { vm.comments(null) }, modifier = Modifier.weight(1f))
+                    MusicDialogButton("发送", { vm.sendComment(reply) }, enabled = !state.busy && reply.isNotBlank(),
                         modifier = Modifier.weight(1f).testTag("post_reply_send"))
                 }
             } else MusicTextAction("登录后评论", { vm.comments(null); navigate("user/login") })
@@ -167,10 +167,10 @@ private fun postTime(seconds: Long) = if (seconds <= 0) "" else
     }
     deleting?.let { post -> MusicDialog("删除帖子？", { deleting = null }) {
         Text("删除后无法恢复。")
-        TextButton("确认删除", { deleting = null; vm.delete(post) }, modifier = Modifier.testTag("post_confirm_delete"))
+        MusicDialogButton("确认删除", { deleting = null; vm.delete(post) }, modifier = Modifier.testTag("post_confirm_delete"))
     } }
     deletingComment?.let { comment -> MusicDialog("删除评论？", { deletingComment = null }) {
         Text("删除后无法恢复。")
-        TextButton("确认删除", { deletingComment = null; vm.delete(comment) }, modifier = Modifier.testTag("post_comment_confirm_delete"))
+        MusicDialogButton("确认删除", { deletingComment = null; vm.delete(comment) }, modifier = Modifier.testTag("post_comment_confirm_delete"))
     } }
 }

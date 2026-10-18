@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.mv
 
+import io.github.currencortex.music.ui.component.MusicDialogActions
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -105,9 +107,9 @@ internal fun WorkInfo?.mvLabel(): String = when {
                 else -> Unit
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton("关闭", onDismiss, Modifier.weight(1f))
-            TextButton(when { active -> "取消下载"; saved -> "打开视频"; info?.state == WorkInfo.State.FAILED -> "重试下载"; else -> "开始下载" }, {
+        MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MusicDialogButton("关闭", onDismiss, Modifier.weight(1f))
+            MusicDialogButton(when { active -> "取消下载"; saved -> "打开视频"; info?.state == WorkInfo.State.FAILED -> "重试下载"; else -> "开始下载" }, {
                 when {
                     active -> manager.cancel(song)
                     saved -> try {

@@ -34,9 +34,9 @@ import top.yukonga.miuix.kmp.basic.TextButton
                 ?: if (Build.VERSION.SDK_INT >= 29) "Download/CurrentMusic" else "请选择文件夹")
             Text("按当前下载设置加入任务，已在下载的歌曲会保留原任务。")
             error?.let { Text(it) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton("取消", onDismiss, modifier = Modifier.weight(1f))
-                TextButton("开始下载", {
+            MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MusicDialogButton("取消", onDismiss, modifier = Modifier.weight(1f))
+                MusicDialogButton("开始下载", {
                     try {
                         val account = container.accountRepository.state.value.account?.id ?: 0L
                         val server = container.accountRepository.server
