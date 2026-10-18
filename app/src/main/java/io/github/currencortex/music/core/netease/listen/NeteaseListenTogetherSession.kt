@@ -122,6 +122,22 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         startRoom(room, expected, epoch) { synchronize(it, members = true) }
     }
 
+    /** One startup attempt; a user transport action during lookup always wins. */
+    fun restoreAutomatically(eligible: () -> Boolean) = operation { epoch ->
+        if (active != null || player.state.value.mode != PlayerMode.LOCAL || !eligible()) return@operation
+        val expected = repo.captureSession()
+        checkEpoch(epoch)
+        val remote = repo.status(expected)
+        checkEpoch(epoch)
+        repo.checkSession(expected)
+        val room = remote.room.takeIf { remote.inRoom } ?: return@operation
+        if (!eligible() || player.state.value.mode != PlayerMode.LOCAL) return@operation
+        repo.restoreDevice(expected, room.roomId)
+        checkEpoch(epoch)
+        if (!eligible() || player.state.value.mode != PlayerMode.LOCAL) return@operation
+        startRoom(room, expected, epoch) { synchronize(it, members = true) }
+    }
+
     private suspend fun startRoom(room: ListenTogetherRoom, expected: NeteaseSession, epoch: Long,
         initialize: suspend (Active) -> Unit) {
         val current = attach(room, expected, epoch)

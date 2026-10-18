@@ -297,6 +297,20 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val ready = CompletableDeferred<Unit>()
     val sessionRestored = CompletableDeferred<Unit>()
     init {
+        if (storageNamespace.isEmpty() && externalPlayer == null) playerScope.launch {
+            ready.await()
+            sessionRestored.await()
+            neteaseSessions.ready.await()
+            val account = neteaseSessions.state.value
+            if (account.loggedIn && !account.stale) {
+                val commands = playerController.commandRevision
+                val localQueue = playbackQueue.state.value
+                listenTogether.restoreAutomatically {
+                    playerController.commandRevision == commands && playbackQueue.state.value == localQueue &&
+                        !playerController.state.value.showPause && roomSession.state.value.detail == null
+                }
+            }
+        }
         playerScope.launch {
             neteaseSessions.ready.await()
             var previous = neteaseSessions.state.value.revision

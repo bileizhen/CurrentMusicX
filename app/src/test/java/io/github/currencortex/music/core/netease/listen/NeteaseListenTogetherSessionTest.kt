@@ -37,6 +37,7 @@ class NeteaseListenTogetherSessionTest {
         var queueFailure: Exception? = null
         var playlistFailure: Exception? = null
         var leaveAction: suspend () -> Unit = {}
+        var statusAction: suspend () -> Unit = {}
         var restores = 0
         val beats = mutableListOf<Long>()
         val reports = mutableListOf<Pair<String, Int>>()
@@ -51,7 +52,10 @@ class NeteaseListenTogetherSessionTest {
         }
         override suspend fun create(expected: NeteaseSession, refer: String, inviteUid: Long?) = createAction()
         override suspend fun accept(expected: NeteaseSession, invitation: ListenTogetherInvitation, refer: String) = acceptAction()
-        override suspend fun status(expected: NeteaseSession) = ListenTogetherStatus(inRoom, room.takeIf { inRoom })
+        override suspend fun status(expected: NeteaseSession): ListenTogetherStatus {
+            statusAction()
+            return ListenTogetherStatus(inRoom, room.takeIf { inRoom })
+        }
         override suspend fun restoreDevice(expected: NeteaseSession, roomId: String) { restores++ }
         override suspend fun requestSync(expected: NeteaseSession, roomId: String) { syncNotices++; syncFailure?.let { throw it } }
         override suspend fun heartbeat(expected: NeteaseSession, roomId: String, songId: Long,
@@ -339,5 +343,34 @@ class NeteaseListenTogetherSessionTest {
         advanceTimeBy(3000); runCurrent()
         assertEquals(loads, f.player.loaded.size)
         assertTrue(f.player.corrections.isEmpty())
+    }
+
+    @Test fun startupRestoresInterruptedRoomAndLeavesAEndedRoomAlone() = runTest {
+        val f = Fixture(this); f.original()
+        f.session.restoreAutomatically { true }; runCurrent()
+        assertTrue(f.session.state.value.active)
+        assertEquals(1, f.repo.restores)
+        assertEquals(10L, f.player.state.value.song!!.id)
+        f.session.disconnect()
+        f.repo.inRoom = false
+        f.session.restoreAutomatically { true }; runCurrent()
+        f.assertLocal()
+        assertNull(f.session.state.value.error)
+        assertEquals(1L, f.player.queue.state.value.current!!.id)
+        assertEquals(0, f.repo.leaves)
+    }
+
+    @Test fun userPlaybackWhileStartupLookupIsPendingCancelsAutomaticRecovery() = runTest {
+        val f = Fixture(this); f.original()
+        val release = CompletableDeferred<Unit>()
+        var eligible = true
+        f.repo.statusAction = { release.await() }
+        f.session.restoreAutomatically { eligible }; runCurrent()
+        eligible = false
+        release.complete(Unit); runCurrent()
+        f.assertLocal()
+        assertEquals(0, f.repo.restores)
+        assertEquals(0, f.player.begins)
+        assertEquals(1L, f.player.queue.state.value.current!!.id)
     }
 }
