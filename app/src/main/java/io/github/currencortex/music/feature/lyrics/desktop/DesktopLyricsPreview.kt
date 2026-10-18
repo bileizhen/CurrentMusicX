@@ -50,8 +50,8 @@ import androidx.compose.ui.graphics.Color
     val size = rememberIslandSize(playback.song, if (fpsMode) "000.0 FPS" else line?.text.orEmpty(), font, fpsMode, false,
         line?.translation?.takeIf { options.translation && !fpsMode })
     val reveal = rememberIslandPresentation(playback.song?.id, fpsMode || line != null || !content.loading, motion).value
-    val introWidth = (size.metadata.value + 14f).coerceIn(48f, 640f)
-    val width = rememberIslandWidth(if (reveal < .15f) introWidth else size.width, motion)
+    val width = rememberIslandWidth(size.width + (size.headingWidth - size.width) *
+        (1f - reveal / .55f).coerceIn(0f, 1f), motion)
     val colors = MiuixTheme.colorScheme
     Card(Modifier.fillMaxWidth().testTag("desktop_preview")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {

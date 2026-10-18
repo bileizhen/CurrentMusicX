@@ -86,8 +86,10 @@ import kotlinx.coroutines.flow.StateFlow
     val size = rememberIslandSize(player.song, if (fpsMode) "000.0 FPS" else line?.text.orEmpty(), font, fpsMode, showChrome,
         line?.translation?.takeIf { options.translation && !fpsMode })
     val reveal = rememberIslandPresentation(player.song?.id, fpsMode || (!content.loading && content.songId == player.song?.id), motion).value
-    val introWidth = (size.metadata.value + 14f).coerceIn(if (showChrome) 240f else 48f, 640f).coerceAtMost(maxIslandWidth())
-    val desiredWidth = if (reveal < .15f) introWidth else size.width.coerceAtMost(maxIslandWidth())
+    val introWidth = size.headingWidth.coerceAtMost(maxIslandWidth())
+    // Keep the measured heading space until its labels have completely faded.
+    val desiredWidth = (size.width + (introWidth - size.width) * (1f - reveal / .55f).coerceIn(0f, 1f))
+        .coerceAtMost(maxIslandWidth())
     var widthTarget by remember { mutableFloatStateOf(desiredWidth) }
     val width = rememberIslandWidth(widthTarget, motion)
     val entrance = rememberIslandEntrance(motion)
