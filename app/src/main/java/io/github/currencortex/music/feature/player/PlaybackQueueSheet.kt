@@ -249,12 +249,14 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                     Modifier.padding(top = 12.dp).testTag("open_player_mode"), pill = true)
             }
         }
-        if (modeOpen) MusicDialog("播放模式", { modeOpen = false }) {
+        MusicOverlayDialog(show = modeOpen, title = "播放模式", onDismissRequest = { modeOpen = false }) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PlaybackMode.entries.filter { !shared || it != PlaybackMode.HEART }.forEach { mode ->
                 TextButton((if (mode == queue.mode) "✓ " else "") + mode.label,
                     { onMode(mode); modeOpen = false }, enabled = editable &&
                         (mode != PlaybackMode.HEART || (!loading && heartAvailable)),
                     modifier = Modifier.testTag("playback_mode_${mode.name}").semantics { selected = mode == queue.mode })
+            }
             }
         }
         MusicOverlayDialog(show = confirmClear, title = "清除播放队列？", onDismissRequest = { confirmClear = false }) {
