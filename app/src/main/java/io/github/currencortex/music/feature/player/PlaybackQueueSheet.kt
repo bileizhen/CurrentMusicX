@@ -182,8 +182,6 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
             .statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)
             .align(Alignment.TopCenter)) {
             Column(Modifier.fillMaxWidth().then(dragHeader).testTag("queue_drag_handle")) {
-                // Leave the island's lane clear; the close hint belongs to the footer.
-                Spacer(Modifier.height(48.dp))
                 queue.current?.let { song ->
                     Row(Modifier.fillMaxWidth().testTag("queue_current_song")
                         .clickable(interactionSource = interactions, indication = null) { settle(true) }

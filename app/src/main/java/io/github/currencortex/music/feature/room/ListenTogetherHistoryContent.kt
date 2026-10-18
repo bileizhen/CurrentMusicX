@@ -14,7 +14,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.core.media.ListenTogetherPair
@@ -39,7 +38,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     onShare: (ListenTogetherRecordReport) -> Unit,
     onCollect: () -> Unit,
     onOfficial: (ListenTogetherRecordReport) -> Unit,
-    topClearance: Dp = 0.dp,
     activeRoom: Boolean = false,
 ) {
     val colors = MiuixTheme.colorScheme
@@ -50,7 +48,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp)
         .testTag("listen_archive_screen")) {
-        Spacer(Modifier.height(topClearance))
         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).background(colors.surfaceContainer)
                 .clickable(role = Role.Button, onClick = onBack).testTag("listen_archive_back"), contentAlignment = Alignment.Center) {

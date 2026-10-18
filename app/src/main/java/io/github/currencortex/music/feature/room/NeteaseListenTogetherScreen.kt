@@ -21,11 +21,9 @@ import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -57,14 +55,6 @@ internal data class NeteaseListenTogetherActions(
     val account by container.neteaseSessions.state.collectAsStateWithLifecycle()
     val playback by container.playerController.state.collectAsStateWithLifecycle()
     val cmRoom by container.roomSession.state.collectAsStateWithLifecycle()
-    val island by container.desktopLyricsStatus.collectAsStateWithLifecycle()
-    val density = LocalDensity.current
-    val statusTop = WindowInsets.statusBars.getTop(density)
-    val islandTop = island.y + island.contentTop
-    val islandClearance = if (island.visible && islandTop < statusTop + with(density) { 96.dp.roundToPx() }) {
-        if (island.contentHeight > 0) with(density) { (islandTop + island.contentHeight - statusTop).coerceAtLeast(0).toDp() } + 12.dp
-        else 48.dp
-    } else 0.dp
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -113,7 +103,7 @@ internal data class NeteaseListenTogetherActions(
             onCollect = archiveController::collectSongs,
             onOfficial = { report -> try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(report.officialUrl()))) }
                 catch (_: Exception) { context.showMusicError("无法打开官方报告") } },
-            topClearance = islandClearance, activeRoom = state.active)
+            activeRoom = state.active)
         NeteaseSongsCollectionDialog(archive.collectionSongs.orEmpty(), collectionShown,
             archiveController::dismissCollection,
             loadPlaylists = { container.neteaseLibrary.playlists(fresh = true).filter { it.nativeOwned } },
@@ -133,7 +123,7 @@ internal data class NeteaseListenTogetherActions(
                 if (clip.itemCount > 0) clip.getItemAt(0).coerceToText(context)?.toString() else null
             } }),
         onBack = onBack, onSearch = onSearch, onPlayer = onPlayer, onBinding = onBinding,
-        currentMusicRoomActive = cmRoom.detail != null, onDialogActive = onDialogActive, topClearance = islandClearance,
+        currentMusicRoomActive = cmRoom.detail != null, onDialogActive = onDialogActive,
         onHistory = { archiveController.history() })
 }
 
@@ -141,7 +131,7 @@ internal data class NeteaseListenTogetherActions(
     account: NeteaseAccountState, playback: PlayerState, actions: NeteaseListenTogetherActions,
     onBack: () -> Unit, onSearch: () -> Unit, onPlayer: () -> Unit,
     onBinding: (() -> Unit)? = null, currentMusicRoomActive: Boolean = false,
-    onDialogActive: (Boolean) -> Unit = {}, topClearance: Dp = 0.dp, onHistory: (() -> Unit)? = null) {
+    onDialogActive: (Boolean) -> Unit = {}, onHistory: (() -> Unit)? = null) {
     val colors = MiuixTheme.colorScheme
     val ready = account.loggedIn && !account.stale && (account.profile?.uid ?: 0) > 0
     val canStart = ready && !state.busy && !currentMusicRoomActive
@@ -158,7 +148,6 @@ internal data class NeteaseListenTogetherActions(
     LaunchedEffect(state.active) { if (state.active) { invite = ""; inputError = null } }
     Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()
         .padding(horizontal = 20.dp).testTag("netease_listen_screen")) {
-        Spacer(Modifier.height(topClearance))
         Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).background(colors.surfaceContainer)
                 .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).testTag("netease_listen_back"), contentAlignment = Alignment.Center) {
