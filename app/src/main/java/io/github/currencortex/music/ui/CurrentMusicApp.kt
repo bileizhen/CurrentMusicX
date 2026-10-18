@@ -633,7 +633,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 .onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp),
             onNext = { container.playerController.next(container.playerController.state.value.showPause) },
             onPrevious = { container.playerController.previous(container.playerController.state.value.showPause) },
-            onQueue = { if (playerState.mode == PlayerMode.ROOM) navigateLibrary("room/list") else miniQueueOpen = true },
+            onQueue = { if (playerState.mode == PlayerMode.ROOM && !container.listenTogether.state.value.active) navigateLibrary("room/list") else miniQueueOpen = true },
             onSurfaceBounds = { miniBounds = it }, active = showMini, onSurfaceCoordinates = { miniCoordinates = it },
             onArtworkOrigin = { miniArtworkOrigin = it }, artworkVisible = { !artworkTransition.moving })
         }

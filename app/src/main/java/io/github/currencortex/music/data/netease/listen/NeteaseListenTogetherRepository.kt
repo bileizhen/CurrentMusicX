@@ -110,7 +110,7 @@ internal class NeteaseListenTogetherRepository(private val transport: NeteaseTra
 
     override suspend fun reportQueue(expected: NeteaseSession, roomId: String, queue: ListenTogetherQueue) {
         requireRoom(roomId)
-        require(queue.songIds.isNotEmpty() && queue.songIds.all { it > 0 } && queue.songIds.size <= 10000 &&
+        require(queue.songIds.all { it > 0 } && queue.songIds.size <= 10000 &&
             queue.randomSongIds.all { it > 0 } && queue.clientSeq >= 0 && queue.anchorPosition >= 0)
         request("sync/list/command/report", buildJsonObject {
             put("roomId", roomId); put("playlistParam", queueJson(queue, report = true).toString())

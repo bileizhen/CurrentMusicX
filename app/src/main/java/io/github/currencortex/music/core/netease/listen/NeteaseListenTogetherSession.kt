@@ -9,6 +9,7 @@ import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.data.song.Song
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -16,7 +17,8 @@ import kotlinx.coroutines.sync.withLock
 data class NeteaseListenTogetherState(val room: ListenTogetherRoom? = null,
     val availableRoom: ListenTogetherRoom? = null, val active: Boolean = false,
     val busy: Boolean = false, val connected: Boolean = false, val error: String? = null,
-    val queueCount: Int = 0, val invitationUrl: String? = null)
+    val queueCount: Int = 0, val invitationUrl: String? = null,
+    val queueLoading: Boolean = false, val queueError: String? = null)
 
 /** Original recovery snapshots are polled; a heartbeat is never interpreted as a playback command. */
 class NeteaseListenTogetherSession internal constructor(private val repo: ListenTogetherProtocol,
@@ -24,8 +26,13 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
     private val detail: suspend (Long) -> Song, private val source: suspend (Song) -> String,
     private val monotonic: () -> Long = { android.os.SystemClock.elapsedRealtime() },
     private val pollIntervalMs: Long = 1500L,
+    private val details: suspend (List<Long>) -> List<Song> = { ids -> ids.map { detail(it) } },
     private val trace: (String) -> Unit = {}) : ExternalPlayback {
     val state = MutableStateFlow(NeteaseListenTogetherState())
+    private val _queue = MutableStateFlow(QueueSnapshot())
+    val queue = _queue.asStateFlow()
+    private var metadata: Job? = null
+    private var metadataIds = emptyList<Long>()
     private class Active(val roomId: String, val expected: NeteaseSession, val epoch: Long) {
         var queue = ListenTogetherQueue()
         var clientSeq = 0
@@ -204,6 +211,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
             try { repo.requestSync(current.expected, current.roomId) }
             catch (failure: ApiException) { if (failure.kind != ErrorKind.NotFound) throw failure }
             valid(current)
+            metadataIds = emptyList()
             synchronize(current, members = true, forcePlayback = true)
             if (active === current && polling?.isActive != true) startPolling(current)
         }
@@ -267,12 +275,20 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         valid(current)
         current.queue = snapshot.queue
         state.update { it.copy(queueCount = snapshot.queue.songIds.size, connected = true, error = null) }
+        publishQueue(current)
+        if (snapshot.queue.songIds.isEmpty() && current.loadedSongId != 0L) {
+            player.roomTrack(null, null, 0, false)
+            valid(current)
+            current.loadedSongId = 0
+        }
         val playback = snapshot.playback ?: return
         val diagnostic = "snapshot seq=${playback.serverSeq} seen=${current.lastServerSeq} client=${playback.clientSeq} " +
             "sender=${if (playback.userId == current.expected.credential.profile?.uid) "self" else "peer"} " +
             "command=${playback.commandType} target=${playback.targetSongId} loaded=${current.loadedSongId} " +
             "playing=${playback.playing} count=${snapshot.queue.songIds.size} forced=$forcePlayback"
         if (current.lastTrace != diagnostic) { trace(diagnostic); current.lastTrace = diagnostic }
+        // Recovery may retain the last command after the shared list has removed its target.
+        if (current.queue.songIds.isEmpty()) return
         // Repeated recovery snapshots contain an old progress, not a live clock.
         // Never seek to it again or an actively playing song would jump backwards each poll.
         if (!forcePlayback && playback.serverSeq <= current.lastServerSeq && current.lastServerSeq >= 0) return
@@ -284,6 +300,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         valid(current)
         current.lastServerSeq = playback.serverSeq
         current.lastPlayback = playback
+        publishQueue(current)
     }
 
     private suspend fun applyPlayback(current: Active, playback: ListenTogetherPlayback) {
@@ -317,6 +334,110 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         valid(current)
         applyPlayback(current, command)
         current.lastPlayback = command
+        publishQueue(current)
+    }
+
+    /** Display the shared list separately: roomTrack owns a one-track audio transport queue. */
+    private fun publishQueue(current: Active) {
+        valid(current)
+        val ids = current.queue.songIds
+        val mode = when (current.queue.playMode) {
+            "RANDOM" -> PlaybackMode.SHUFFLE; "SINGLE_LOOP" -> PlaybackMode.ONE; else -> PlaybackMode.LIST
+        }
+        _queue.value = QueueSnapshot(ids.map { current.songs[it] ?: Song(it, "歌曲信息加载中…") },
+            ids.indexOf(current.loadedSongId), mode = mode)
+        val missing = ids.filterNot { it in current.songs }
+        if (missing.isEmpty()) {
+            metadata?.cancel(); metadata = null; metadataIds = emptyList()
+            state.update { it.copy(queueLoading = false, queueError = null) }
+        } else if (metadataIds != ids) {
+            metadata?.cancel(); metadataIds = ids
+            state.update { it.copy(queueLoading = true, queueError = null) }
+            metadata = scope.launch {
+                try {
+                    val loaded = details(missing)
+                    valid(current)
+                    loaded.forEach { song -> songId(song)?.takeIf { it in ids }?.let { current.songs[it] = song } }
+                    val latest = current.queue.songIds
+                    _queue.update { it.copy(songs = latest.map { id -> current.songs[id] ?: Song(id, "歌曲 $id") }) }
+                    state.update { it.copy(queueLoading = false,
+                        queueError = if (latest.any { id -> id !in current.songs }) "部分歌曲信息暂不可用，可刷新重试" else null) }
+                } catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { if (active === current) state.update {
+                    it.copy(queueLoading = false, queueError = "歌曲信息加载失败，可刷新重试")
+                } }
+            }
+        }
+    }
+
+    fun selectSong(id: Long) = command { current ->
+        synchronize(current, members = false); valid(current)
+        check(id in current.queue.songIds) { "这首歌已被移出一起听歌单" }
+        if (id != current.loadedSongId) {
+            // Desktop drops PLAY_COMMAND targets absent from its local shared list.
+            // Publish the room list first so its PLAYLIST event precedes this cut.
+            replaceQueue(current, current.queue.songIds)
+            sendPlayback(current, "GOTO", id, true, 0)
+        }
+    }
+
+    private suspend fun replaceQueue(current: Active, ids: List<Long>, mode: String = current.queue.playMode) {
+        val anchor = current.loadedSongId.takeIf { it in ids } ?: ids.firstOrNull() ?: 0L
+        val random = if (mode == "RANDOM") {
+            if (current.queue.playMode == mode) current.queue.randomSongIds.filter { it in ids }.let { kept -> kept + ids.filterNot { it in kept } }
+            else ids.shuffled()
+        } else emptyList()
+        val replacement = current.queue.copy(songIds = ids, randomSongIds = random, playMode = mode,
+            anchorSongId = anchor, anchorPosition = ids.indexOf(anchor).coerceAtLeast(0),
+            version = reserveQueueVersion(current), clientSeq = ++current.clientSeq)
+        repo.reportQueue(current.expected, current.roomId, replacement)
+        valid(current)
+        current.queue = replacement
+        state.update { it.copy(queueCount = ids.size) }
+        publishQueue(current)
+    }
+
+    override fun enqueue(song: Song, next: Boolean) = command { current ->
+        val id = songId(song) ?: error("双人一起听仅支持网易云歌曲")
+        synchronize(current, members = false); valid(current)
+        if (id in current.queue.songIds) return@command
+        check(current.queue.songIds.size < MAX_QUEUE) { "一起听队列已满，请先移除歌曲" }
+        current.songs[id] = song
+        val ids = current.queue.songIds.toMutableList()
+        val position = if (next) (ids.indexOf(current.loadedSongId) + 1).coerceIn(0, ids.size) else ids.size
+        ids.add(position, id)
+        replaceQueue(current, ids)
+    }
+
+    fun removeSong(id: Long) = command { current ->
+        synchronize(current, members = false); valid(current)
+        val index = current.queue.songIds.indexOf(id)
+        if (index < 0) return@command
+        val ids = current.queue.songIds.filterNot { it == id }
+        if (ids.isEmpty()) clearQueue(current)
+        else {
+            val wasPlaying = player.state.value.showPause
+            replaceQueue(current, ids)
+            if (current.loadedSongId == id) sendPlayback(current, "GOTO", ids[index.coerceAtMost(ids.lastIndex)], wasPlaying, 0)
+        }
+    }
+
+    fun clearQueue() = command { current -> synchronize(current, members = false); valid(current); clearQueue(current) }
+    private suspend fun clearQueue(current: Active) {
+        if (current.loadedSongId > 0) sendPlayback(current, "PAUSE", current.loadedSongId, false, player.state.value.positionMs)
+        replaceQueue(current, emptyList())
+        player.roomTrack(null, null, 0, false)
+        valid(current)
+        current.loadedSongId = 0
+        publishQueue(current)
+    }
+
+    fun setQueueMode(mode: PlaybackMode) = command { current ->
+        check(mode != PlaybackMode.HEART) { "一起听暂不支持本机心动模式" }
+        synchronize(current, members = false); valid(current)
+        replaceQueue(current, current.queue.songIds, when (mode) {
+            PlaybackMode.SHUFFLE -> "RANDOM"; PlaybackMode.ONE -> "SINGLE_LOOP"; else -> "ORDER_LOOP"
+        })
     }
 
     private fun command(block: suspend (Active) -> Unit) = operation { active?.let { valid(it); block(it) } }
@@ -330,11 +451,13 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         sendPlayback(current, "PROGRESS", current.loadedSongId, player.state.value.showPause, position)
     }
     private fun advance(direction: Int, automatic: Boolean = false) = command { current ->
+        if (!automatic) { synchronize(current, members = false); valid(current) }
         val ids = current.queue.randomSongIds.takeIf { current.queue.playMode == "RANDOM" && it.isNotEmpty() } ?: current.queue.songIds
         if (ids.isEmpty()) return@command
         val index = ids.indexOf(current.loadedSongId).coerceAtLeast(0)
         val next = if (automatic && current.queue.playMode == "SINGLE_LOOP") index
             else (index + direction + ids.size) % ids.size
+        if (!automatic) replaceQueue(current, current.queue.songIds)
         sendPlayback(current, if (direction < 0) "PREVIOUS" else "NEXT", ids[next], true, 0, if (automatic) "AUTO" else "MANUAL")
     }
     override fun next() = advance(1)
@@ -362,6 +485,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         valid(current)
         current.queue = queue
         state.update { it.copy(queueCount = queue.songIds.size) }
+        publishQueue(current)
         sendPlayback(current, "GOTO", id, true, 0)
     }
     override fun stop() = leave()
@@ -377,6 +501,8 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
     fun disconnect(error: String? = null) {
         ++generation
         polling?.cancel(); polling = null
+        metadata?.cancel(); metadata = null; metadataIds = emptyList()
+        _queue.value = QueueSnapshot()
         active = null
         player.endExternal(this)
         state.value = NeteaseListenTogetherState(error = error)

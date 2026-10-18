@@ -286,6 +286,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             trace = { if (BuildConfig.DEBUG) android.util.Log.d("ListenTogetherSync", it) }),
         externalPlayer ?: playerController, playerScope, musicRepository::detail,
         { song -> musicRepository.source(song, AudioQuality.from(musicSettings.state.value.quality.value), audioSession()).url },
+        details = musicRepository::details,
         trace = { if (BuildConfig.DEBUG) android.util.Log.d("ListenTogetherSync", it) })
     private val dlnaSoap = io.github.currencortex.music.core.dlna.SoapClient(networkSocketFactory = {
         val manager = context.getSystemService(android.net.ConnectivityManager::class.java)

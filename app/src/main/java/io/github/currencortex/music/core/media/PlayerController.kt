@@ -204,7 +204,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         state.value = state.value.copy(positionMs = target, anchorRealtimeMs = SystemClock.elapsedRealtime(), timelineRevision = state.value.timelineRevision + 1)
         controller?.seekTo(target)
     }
-    fun add(song: Song, next: Boolean = false) { if (state.value.mode == PlayerMode.ROOM) { external?.request(song); return }; queue.add(song, next) }
+    fun add(song: Song, next: Boolean = false) { if (state.value.mode == PlayerMode.ROOM) { external?.enqueue(song, next); return }; queue.add(song, next) }
     fun remove(index: Int) { if (!localOnly()) return; if (queue.remove(index)) { if (queue.state.value.current == null) clear() else load(state.value.playing) } }
     fun clear() { if (!localOnly()) return; ++transportGeneration; commandIntent = null; beforeVideo = null; queue.clear(); controller?.stop(); controller?.clearMediaItems(); state.value = PlayerState() }
     fun select(index: Int) { if (!localOnly()) return; queue.select(index); load() }

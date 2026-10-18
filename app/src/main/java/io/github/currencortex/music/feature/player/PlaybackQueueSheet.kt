@@ -54,16 +54,26 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
     val player by vm.state.collectAsStateWithLifecycle()
     val loading by vm.heartLoading.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
-    PlaybackQueueContent(queue, player.mode == PlayerMode.LOCAL, loading,
-        NeteaseSongActionsRepository.songId(queue.current) != null, actions.error,
-        motion, backdrop, tag, vm.player::select, vm.player::remove, vm.player::clear, vm::setPlaybackMode, onDismiss)
+    val together by vm.together.state.collectAsStateWithLifecycle()
+    val sharedQueue by vm.together.queue.collectAsStateWithLifecycle()
+    val shared = together.active
+    val displayed = if (shared) sharedQueue else queue
+    PlaybackQueueContent(displayed, if (shared) !together.busy else player.mode == PlayerMode.LOCAL,
+        if (shared) together.queueLoading else loading,
+        !shared && NeteaseSongActionsRepository.songId(queue.current) != null,
+        if (shared) together.error ?: together.queueError else actions.error,
+        motion, backdrop, tag,
+        onSelect = { index -> if (shared) displayed.songs.getOrNull(index)?.let { vm.together.selectSong(it.id) } else vm.player.select(index) },
+        onRemove = { index -> if (shared) displayed.songs.getOrNull(index)?.let { vm.together.removeSong(it.id) } else vm.player.remove(index) },
+        onClear = { if (shared) vm.together.clearQueue() else vm.player.clear() },
+        onMode = vm::setPlaybackMode, onDismiss = onDismiss, shared = shared)
 }
 
 /** One viewport and queue for both entry points; no separate dialog queue or audio restart on opening. */
 @Composable internal fun PlaybackQueueContent(queue: QueueSnapshot, editable: Boolean, loading: Boolean,
     heartAvailable: Boolean, error: String?, motion: QueuePageMotion, backdrop: Boolean, tag: String,
     onSelect: (Int) -> Unit, onRemove: (Int) -> Unit, onClear: () -> Unit,
-    onMode: (PlaybackMode) -> Unit, onDismiss: () -> Unit) {
+    onMode: (PlaybackMode) -> Unit, onDismiss: () -> Unit, shared: Boolean = false) {
     val scope = rememberCoroutineScope()
     val dismiss by rememberUpdatedState(onDismiss)
     val list = rememberLazyListState((queue.index - 2).coerceAtLeast(0))
@@ -166,7 +176,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                 Box(Modifier.fillMaxWidth().height(64.dp)) {
                     Text("${if (queue.index >= 0) queue.index + 1 else 0} / ${queue.songs.size}",
                         Modifier.align(Alignment.CenterStart).testTag("queue_position"), fontSize = 13.sp, color = Color.White.copy(alpha = .4f))
-                    Text("播放队列", Modifier.align(Alignment.Center), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = Color.White)
+                    Text(if (shared) "一起听歌单" else "播放队列", Modifier.align(Alignment.Center), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = Color.White)
                     QueueTextAction("清除", { confirmClear = true }, editable && queue.songs.isNotEmpty(),
                         Modifier.align(Alignment.CenterEnd).testTag("queue_clear"))
                 }
@@ -196,24 +206,28 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
             }
             Column(Modifier.fillMaxWidth().then(dragHeader).padding(bottom = 12.dp)) {
                 error?.let { Text(it, color = Color.White.copy(alpha = .55f), fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp)) }
-                if (!editable) Text("请先退出一起听或结束投屏，再编辑队列", color = Color.White.copy(alpha = .55f), fontSize = 12.sp)
+                if (shared) Text(if (editable) "双方共享歌单 · 修改会同步给对方" else "正在同步操作…",
+                    color = Color.White.copy(alpha = .55f), fontSize = 12.sp)
+                else if (!editable) Text("请先退出一起听或结束投屏，再编辑队列", color = Color.White.copy(alpha = .55f), fontSize = 12.sp)
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .07f)))
                 QueueTextAction(queue.mode.label + if (loading) " · 加载中" else "", { modeOpen = true }, editable,
                     Modifier.padding(top = 12.dp).testTag("open_player_mode"), pill = true)
             }
         }
         if (modeOpen) MusicDialog("播放模式", { modeOpen = false }) {
-            PlaybackMode.entries.forEach { mode ->
+            PlaybackMode.entries.filter { !shared || it != PlaybackMode.HEART }.forEach { mode ->
                 TextButton((if (mode == queue.mode) "✓ " else "") + mode.label,
                     { onMode(mode); modeOpen = false }, enabled = editable &&
                         (mode != PlaybackMode.HEART || (!loading && heartAvailable)),
                     modifier = Modifier.testTag("playback_mode_${mode.name}").semantics { selected = mode == queue.mode })
             }
         }
-        if (confirmClear) MusicDialog("清除播放队列？", { confirmClear = false }) {
-            Text("清除后将停止当前播放。")
+        MusicOverlayDialog(show = confirmClear, title = "清除播放队列？", onDismissRequest = { confirmClear = false }) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(if (shared) "会同步清空双方的歌单并暂停播放，一起听会话仍会保留。" else "清除后将停止当前播放。")
             TextButton("取消", { confirmClear = false }, modifier = Modifier.testTag("queue_clear_cancel"))
             TextButton("清除", { onClear(); confirmClear = false }, enabled = editable, modifier = Modifier.testTag("queue_clear_confirm"))
+            }
         }
     }
 }
