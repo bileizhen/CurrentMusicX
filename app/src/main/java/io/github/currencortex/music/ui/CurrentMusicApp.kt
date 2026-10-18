@@ -447,7 +447,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                         if (searchState.query.isNotBlank()) { searchVm.search(); searchFocus = false }
                                     })
                                 DISCOVER_TAB -> DiscoverScreen(discoverVm, ::navigateLibrary)
-                                ME_TAB -> MeScreen(profileVm, authVm, ::navigateLibrary, { selectTab(SETTINGS_TAB) },
+                                ME_TAB -> MeScreen(profileVm, ::navigateLibrary,
                                     play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
                                 SETTINGS_TAB -> SettingsScreen(
                                     onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },

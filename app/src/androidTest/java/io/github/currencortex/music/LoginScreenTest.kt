@@ -10,7 +10,7 @@ import org.junit.Rule
 import org.junit.Test
 import java.util.UUID
 
-/** The login form lives in the "我的" tab; drive it the way a user does. */
+/** Reach the login form from the personal landing page, then exercise its fields. */
 class LoginScreenTest {
     @get:Rule val compose = createComposeRule()
 
@@ -62,7 +62,12 @@ class LoginScreenTest {
             container.ready.await(); container.sessionRestored.await()
             container.updateSettings.setAutoCheck(false)
             compose.setContent { CurrentMusicApp(container) }
-            compose.onNodeWithTag("tab_2").performClick()
+            compose.onNodeWithTag("tab_2")
+                .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+            // Root transition placement can move during a pointer tap; invoke each accessible action.
+            compose.onNodeWithTag("open_currentmusic_login").performScrollTo()
+                .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("login_card").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("login_card").assertExists()
             compose.onNodeWithTag("login_message").assertDoesNotExist()
             // Submit stays disabled until both fields are filled.
