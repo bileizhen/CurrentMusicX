@@ -20,6 +20,41 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 class ApiClientTest {
+    @Test fun registrationFailuresPreserveOnlyTheUpstreamErrorField() = runBlocking {
+        MockWebServer().use { server ->
+            val api = ApiClient({ server.url("/cm/").toString() }, { "stored-session" }, {})
+            val cases = listOf(
+                Triple("auth/register", 400, "用户名需 2~24 位字母/数字/下划线/中文"),
+                Triple("auth/register", 409, "用户名已被占用"),
+                Triple("auth/email/code", 429, "请稍后再获取验证码"),
+                Triple("auth/phone/code", 400, "手机号格式不正确"))
+            for ((path, status, message) in cases) {
+                server.enqueue(MockResponse().setResponseCode(status)
+                    .setBody("""{"error":"$message","token":"private-token","code":"private-code"}"""))
+                val failure = appResult { api.request("POST", path) } as AppResult.Failure
+                assertEquals(message, failure.message)
+                assertEquals(status, failure.status)
+                assertFalse(failure.toString().contains("private-"))
+                assertNull(server.takeRequest().getHeader("Authorization"))
+            }
+        }
+    }
+
+    @Test fun malformedRegistrationErrorsAndUnrelatedRoutesKeepGenericMessages() = runBlocking {
+        MockWebServer().use { server ->
+            val api = ApiClient({ server.url("/cm/").toString() }, { null }, {})
+            for (body in listOf("<html>proxy error</html>", """{"error":{"debug":"details"}}""", """{"error":" "}""", """{"error":123}""")) {
+                server.enqueue(MockResponse().setResponseCode(400).setBody(body))
+                val failure = appResult { api.request("POST", "auth/register") } as AppResult.Failure
+                assertEquals(ErrorKind.Unknown.message, failure.message)
+            }
+            server.enqueue(MockResponse().setResponseCode(500).setBody("""{"error":"internal traceback"}"""))
+            assertEquals(ErrorKind.Server.message, (appResult { api.request("POST", "auth/register") } as AppResult.Failure).message)
+            server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"internal details"}"""))
+            assertEquals(ErrorKind.Unknown.message, (appResult { api.request("POST", "other") } as AppResult.Failure).message)
+        }
+    }
+
     @Serializable(with = SlowValueSerializer::class) data class SlowValue(val uiResponded: Boolean)
     object SlowValueSerializer : KSerializer<SlowValue> {
         val decoding = AtomicBoolean(false)

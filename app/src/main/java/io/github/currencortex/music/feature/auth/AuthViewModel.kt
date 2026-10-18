@@ -9,14 +9,15 @@ import kotlinx.coroutines.flow.*
 import io.github.currencortex.music.data.auth.RegistrationInput
 import android.os.SystemClock
 
-data class AuthUiState(val loading: Boolean = false, val message: String? = null)
+data class AuthUiState(val loading: Boolean = false, val message: String? = null, val failed: Boolean = false)
 class AuthViewModel(private val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(AuthUiState())
     val account = container.accountRepository.state
+    val errorNotices = container.errorNotices
     val codeUntil = MutableStateFlow(0L)
     fun begin() { state.value = AuthUiState() }
     /** Drops a stale outcome without touching an in-flight request. */
-    fun clearMessage() { state.update { it.copy(message = null) } }
+    fun clearMessage() { state.update { it.copy(message = null, failed = false) } }
     private fun action(success: String, block: suspend () -> AppResult<*>) {
         if (state.value.loading) return
         state.value = AuthUiState(loading = true)
@@ -25,7 +26,7 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
                 container.sessionRestored.await()
                 when (val result = block()) {
                     is AppResult.Success -> state.value = AuthUiState(message = success)
-                    is AppResult.Failure -> state.value = AuthUiState(message = result.kind.message)
+                    is AppResult.Failure -> state.value = AuthUiState(message = result.message, failed = true)
                 }
             } finally { state.update { it.copy(loading = false) } }
         }
