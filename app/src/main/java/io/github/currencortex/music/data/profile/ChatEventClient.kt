@@ -24,10 +24,10 @@ class ChatEventClient(client: OkHttpClient = OkHttpClient.Builder().connectTimeo
         val source = factory.newEventSource(request.build(), object : EventSourceListener() {
             override fun onOpen(eventSource: EventSource, response: Response) { onOpen() }
             override fun onEvent(eventSource: EventSource, id: String?, type: String?, data: String) {
-                if (type != null && type !in setOf("message", "delete")) return
+                if (type != null && type !in setOf("message", "delete", "edit")) return
                 val event = try {
                     ApiJson.decodeFromString<ChatLiveEvent>(data).also {
-                        require(it.seq > 0 && it.type in setOf("message", "delete"))
+                        require(it.seq > 0 && it.type in setOf("message", "delete", "edit"))
                         require(type == null || it.type == type)
                         require(it.payload is JsonObject)
                         if (it.type == "message") {

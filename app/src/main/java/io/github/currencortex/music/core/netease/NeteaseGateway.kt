@@ -166,16 +166,23 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         val id = arg("id")
         when (path.removePrefix("ncm/")) {
             "search" -> {
-                val type = when (arg("type", "song")) { "song", "1" -> 1; "album", "10" -> 10; "artist", "100" -> 100; else -> throw ApiException(ErrorKind.NotFound) }
+                val type = when (arg("type", "song")) { "song", "1" -> 1; "album", "10" -> 10; "artist", "100" -> 100; "playlist", "1000" -> 1000; else -> throw ApiException(ErrorKind.NotFound) }
                 val offset = page("offset", 0, max = Int.MAX_VALUE)
                 val raw = official("/api/cloudsearch/pc", params("s" to JsonPrimitive(arg("keywords")), "type" to JsonPrimitive(type),
                     "limit" to JsonPrimitive(page("limit", 30, min = 1)), "offset" to JsonPrimitive(offset)), expected = expected).obj("result")
-                val field = if (type == 1) "songs" else if (type == 10) "albums" else "artists"
+                val key = when (type) { 1 -> "song"; 10 -> "album"; 100 -> "artist"; else -> "playlist" }
+                val field = key + "s"
                 val records = raw.array(field)
-                val count = raw.long(if (type == 1) "songCount" else if (type == 10) "albumCount" else "artistCount").toInt()
-                val key = if (type == 1) "song" else if (type == 10) "album" else "artist"
+                val count = raw.long(key + "Count").toInt()
                 return buildJsonObject {
-                    put(field, if (type == 1) songs(records) else JsonArray(records.mapNotNull { it as? JsonObject }.map { if (type == 10) album(it) else artist(it) }))
+                    put(field, if (type == 1) songs(records) else JsonArray(records.mapNotNull { it as? JsonObject }.map { record -> when (type) {
+                        10 -> album(record)
+                        100 -> artist(record)
+                        else -> buildJsonObject {
+                            put("id", record.long("id")); put("name", record.text("name")); put("pic", record.text("coverImgUrl"))
+                            put("creator", record.obj("creator").text("nickname"))
+                        }
+                    } }))
                     put("totals", buildJsonObject { put(key, count) }); put("hasMore", buildJsonObject { put(key, records.isNotEmpty() && offset + records.size < count) })
                 }
             }

@@ -6,7 +6,8 @@ import kotlinx.serialization.json.*
 import java.util.Base64
 
 @Serializable data class ChatMessage(val id: Long, val userId: Long = 0, val content: String = "",
-    val image: String = "", val createdAt: Long = 0, val user: ProfileUser? = null)
+    val image: String = "", val createdAt: Long = 0, val user: ProfileUser? = null,
+    val atts: List<PostAttachment> = emptyList(), val streaming: Boolean = false)
 @Serializable data class ChatMessages(val messages: List<ChatMessage> = emptyList())
 @Serializable data class ChatMembers(val members: List<ProfileUser> = emptyList())
 @Serializable data class ChatLiveEvent(val seq: Long, val type: String, val payload: JsonElement)
@@ -30,22 +31,37 @@ class ChatRepository(private val api: ApiClient, private val session: () -> Requ
             buildMap { put("limit", "30"); if (before > 0) put("before", before.toString()) })).messages
     }
 
-    suspend fun members(expected: RequestSession = session()): List<ProfileUser> =
-        api.decode<ChatMembers>(request("GET", "chat/members", expected)).members
+    suspend fun members(expected: RequestSession = session(), query: String = ""): List<ProfileUser> =
+        api.decode<ChatMembers>(request("GET", "chat/members", expected,
+            if (query.isEmpty()) emptyMap() else mapOf("q" to query.take(40), "limit" to "8"))).members
 
     suspend fun live(since: Long, expected: RequestSession = session()): ChatLivePage {
         require(since >= 0)
         return api.decode(request("GET", "chat/live", expected, mapOf("since" to since.toString())))
     }
 
+    suspend fun references(query: String, type: String, expected: RequestSession = session()): List<PostAttachment> {
+        require(type in setOf("song", "album", "artist", "playlist"))
+        val result = request("GET", "ncm/search", expected, mapOf("keywords" to query.trim().take(100), "type" to type, "limit" to "8")) as? JsonObject
+        return validMusicAttachments((result?.get(type + "s") as? JsonArray).orEmpty().mapNotNull { value ->
+            val item = value as? JsonObject ?: return@mapNotNull null
+            fun text(key: String) = (item[key] as? JsonPrimitive)?.contentOrNull.orEmpty()
+            val id = ((item["ncm_id"] ?: item["id"]) as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
+            PostAttachment(type, id, text("name"), text("artists").ifBlank { text("artist").ifBlank { text("creator") } },
+                text("pic").ifBlank { text("cover").ifBlank { text("picUrl") } })
+        })
+    }
+
     suspend fun send(content: String, image: String = "", mentions: List<Long> = emptyList(),
-        expected: RequestSession = session()): ChatMessage {
-        require(content.isNotBlank() || image.isNotBlank())
+        expected: RequestSession = session(), attachments: List<PostAttachment> = emptyList()): ChatMessage {
+        require(content.length <= 500 && (content.isNotBlank() || image.isNotBlank() || attachments.isNotEmpty()))
+        require(attachments.size <= 5 && validMusicAttachments(attachments).size == attachments.size)
         require(image.isEmpty() || validChatImageName(image))
         require(mentions.all { it > 0 } && mentions.distinct().size <= 10)
         return api.decode(request("POST", "chat/messages", expected, body = buildJsonObject {
             put("content", content.trim()); put("image", image)
             put("mentions", JsonArray(mentions.distinct().map(::JsonPrimitive)))
+            put("atts", ApiJson.encodeToJsonElement(validMusicAttachments(attachments)))
         }))
     }
 

@@ -9,6 +9,14 @@ import org.junit.Test
 import java.io.IOException
 
 class ChatEventClientTest {
+    @Test fun editEventsReachTheClientWithStreamingPayloads(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setHeader("Content-Type", "text/event-stream").setBody(
+                "event: edit\ndata: {\"seq\":8,\"type\":\"edit\",\"payload\":{\"id\":5,\"content\":\"回答\",\"streaming\":true}}\n\n"))
+            val event = withTimeout(3000) { ChatEventClient().events(RequestSession(server.url("/cm/").toString(), null), 7).first() }
+            assertEquals("edit", event.type); assertEquals(8L, event.seq)
+        }
+    }
     @Test fun anonymousPublicStreamUsesSequenceWithoutLeakingTokenInUrl(): Unit = runBlocking {
         MockWebServer().use { server ->
             server.enqueue(MockResponse().setHeader("Content-Type", "text/event-stream").setBody(

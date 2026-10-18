@@ -16,7 +16,8 @@ data class ChatState(val messages: List<ChatMessage> = emptyList(), val members:
     val hasOlder: Boolean = false, val connected: Boolean = false, val seq: Long = 0,
     val draft: String = "", val image: String = "", val sending: Boolean = false, val uploading: Boolean = false,
     val error: String? = null, val actionError: String? = null, val deleting: Long? = null,
-    val scrollRequest: Long = 0)
+    val scrollRequest: Long = 0, val attachments: List<PostAttachment> = emptyList(),
+    val suggestions: List<ProfileUser> = emptyList(), val references: List<PostAttachment> = emptyList(), val referenceBusy: Boolean = false)
 
 class ChatViewModel(val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(ChatState())
@@ -27,6 +28,8 @@ class ChatViewModel(val container: AppContainer) : ViewModel() {
     private var action: Job? = null
     private var upload: Job? = null
     private var older: Job? = null
+    private var memberSearch: Job? = null
+    private var referenceSearch: Job? = null
     private val refresh = MutableStateFlow(0)
     init { viewModelScope.launch {
         container.sessionRestored.await()
@@ -35,7 +38,7 @@ class ChatViewModel(val container: AppContainer) : ViewModel() {
     } }
     private fun resetFor(expected: RequestSession) {
         if (identity == expected) return
-        identity = expected; action?.cancel(); upload?.cancel(); older?.cancel()
+        identity = expected; action?.cancel(); upload?.cancel(); older?.cancel(); memberSearch?.cancel(); referenceSearch?.cancel()
         state.value = ChatState()
     }
     private fun current(expected: RequestSession) = expected == session() && identity == expected
@@ -109,12 +112,43 @@ class ChatViewModel(val container: AppContainer) : ViewModel() {
             }
         }
     }
-    fun draft(value: String) { state.update { it.copy(draft = value, actionError = null) } }
+    fun draft(value: String) {
+        state.update { it.copy(draft = value.take(500), actionError = null) }
+        memberSearch?.cancel()
+        val fragment = value.substringAfterLast('@', "").takeIf { '@' in value && it.length <= 40 && it.none(Char::isWhitespace) }
+        if (fragment == null) { state.update { it.copy(suggestions = emptyList()) }; return }
+        val expected = session()
+        memberSearch = viewModelScope.launch {
+            delay(250)
+            val result = appResult { repository.members(expected, fragment) }
+            if (current(expected) && result is AppResult.Success) state.update { it.copy(suggestions = result.value) }
+        }
+    }
+    fun attachCurrent() {
+        val song = container.playbackQueue.state.value.current ?: return
+        val id = io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) ?: return
+        attach(PostAttachment("song", id, song.name, song.artists, song.cover))
+    }
+    fun searchReferences(query: String, type: String) {
+        referenceSearch?.cancel()
+        state.update { it.copy(references = emptyList(), referenceBusy = query.isNotBlank()) }
+        if (query.isBlank()) return
+        val expected = session()
+        referenceSearch = viewModelScope.launch {
+            delay(250)
+            val result = appResult { repository.references(query, type, expected) }
+            if (current(expected)) state.update { it.copy(referenceBusy = false, references = (result as? AppResult.Success)?.value.orEmpty(),
+                actionError = (result as? AppResult.Failure)?.kind?.message) }
+        }
+    }
+    fun attach(card: PostAttachment) { state.update { it.copy(attachments = validMusicAttachments(it.attachments + card)) } }
+    fun removeAttachment(card: PostAttachment) { if (!state.value.sending) state.update { it.copy(attachments = it.attachments - card) } }
     fun mention(user: ProfileUser) {
         if (user.nickname.isBlank()) return
         state.update {
             val prefix = it.draft.replace(Regex("@[^\\s@]*$"), "")
-            it.copy(draft = prefix + (if (prefix.isNotEmpty() && !prefix.last().isWhitespace()) " " else "") + "@${user.nickname} ")
+            it.copy(draft = (prefix + (if (prefix.isNotEmpty() && !prefix.last().isWhitespace()) " " else "") + "@${user.nickname} ").take(500),
+                suggestions = emptyList(), members = (it.members + user).distinctBy(ProfileUser::id))
         }
     }
     fun removeImage() { if (!state.value.sending) state.update { it.copy(image = "") } }
@@ -132,16 +166,17 @@ class ChatViewModel(val container: AppContainer) : ViewModel() {
     }
     fun send() {
         val value = state.value
-        if (value.sending || value.uploading || (value.draft.isBlank() && value.image.isBlank())) return
+        if (value.sending || value.uploading || (value.draft.isBlank() && value.image.isBlank() && value.attachments.isEmpty())) return
         val expected = session()
         if (expected.token == null) { state.update { it.copy(actionError = "登录 CurrentMusic 后即可聊天") }; return }
         val mentions = chatMentions(value.draft, value.members)
         state.update { it.copy(sending = true, actionError = null) }
         action = viewModelScope.launch {
-            when (val result = appResult { repository.send(value.draft, value.image, mentions, expected) }) {
+            when (val result = appResult { repository.send(value.draft, value.image, mentions, expected, value.attachments) }) {
                 is AppResult.Success -> if (current(expected)) state.update { it.copy(sending = false,
                     messages = (it.messages + result.value).distinctBy(ChatMessage::id).sortedBy(ChatMessage::id),
                     draft = if (it.draft == value.draft) "" else it.draft, image = if (it.image == value.image) "" else it.image,
+                    attachments = if (it.attachments == value.attachments) emptyList() else it.attachments,
                     scrollRequest = it.scrollRequest + 1) }
                 is AppResult.Failure -> if (current(expected)) state.update { it.copy(sending = false,
                     actionError = "${result.kind.message}，草稿已保留，请确认后重试") }
@@ -166,6 +201,14 @@ internal fun applyChatEvent(messages: List<ChatMessage>, event: ChatLiveEvent): 
         (messages.filterNot { it.id == message.id } + message).sortedBy(ChatMessage::id)
     }
     "delete" -> event.payload.jsonObject["id"]?.jsonPrimitive?.longOrNull?.let { id -> messages.filterNot { it.id == id } } ?: messages
+    "edit" -> {
+        val patch = event.payload as? JsonObject
+        val id = patch?.get("id")?.jsonPrimitive?.longOrNull
+        messages.map { message -> if (message.id != id) message else message.copy(
+            content = (patch["content"] as? JsonPrimitive)?.contentOrNull ?: message.content,
+            atts = patch["atts"]?.let { validMusicAttachments(ApiJson.decodeFromJsonElement<List<PostAttachment>>(it)) } ?: message.atts,
+            streaming = (patch["streaming"] as? JsonPrimitive)?.booleanOrNull ?: message.streaming) }
+    }
     else -> messages
 }
 internal fun chatMentions(content: String, members: List<ProfileUser>) = members.filter {
