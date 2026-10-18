@@ -230,6 +230,7 @@ class NeteaseListenTogetherSessionTest {
         release.complete(Unit); runCurrent()
         f.assertLocal()
         assertNotNull(f.session.state.value.error)
+        assertNull("Unconfirmed remote exit must not claim a finished report", f.session.state.value.endedRoom)
         assertEquals(0, f.player.begins)
     }
 
@@ -302,6 +303,28 @@ class NeteaseListenTogetherSessionTest {
         f.scope.cancel(); runCurrent()
         f.assertLocal()
         assertEquals(1L, f.player.queue.state.value.current!!.id)
+    }
+
+    @Test fun confirmedLeaveRetainsOnlyTheRoomReferenceForTheSameAccountsServerReport() = runTest {
+        val f = Fixture(this); f.original(); f.session.resume(); runCurrent()
+        f.session.leave(); runCurrent()
+        f.assertLocal()
+        assertEquals(f.repo.room, f.session.state.value.endedRoom)
+        assertEquals(100L, f.session.state.value.endedOwnerUid)
+        f.session.dismissEndedRoom()
+        assertNull(f.session.state.value.endedRoom)
+        assertEquals(0L, f.session.state.value.endedOwnerUid)
+    }
+
+    @Test fun remoteEndRetainsReportReferenceButAccountDisconnectClearsIt() = runTest {
+        val f = Fixture(this); f.original(); f.session.resume(); runCurrent()
+        f.repo.inRoom = false
+        advanceTimeBy(4000); runCurrent()
+        f.assertLocal()
+        assertEquals(f.repo.room.roomId, f.session.state.value.endedRoom?.roomId)
+        assertEquals(100L, f.session.state.value.endedOwnerUid)
+        f.session.disconnect("账号已变更")
+        assertNull(f.session.state.value.endedRoom)
     }
 
     @Test fun shuffledCreationPublishesTheSamePermutationAndAddsRequestedSongsToBothLists() = runTest {

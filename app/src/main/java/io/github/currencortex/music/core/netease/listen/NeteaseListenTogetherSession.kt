@@ -18,7 +18,8 @@ data class NeteaseListenTogetherState(val room: ListenTogetherRoom? = null,
     val availableRoom: ListenTogetherRoom? = null, val active: Boolean = false,
     val busy: Boolean = false, val connected: Boolean = false, val error: String? = null,
     val queueCount: Int = 0, val invitationUrl: String? = null,
-    val queueLoading: Boolean = false, val queueError: String? = null)
+    val queueLoading: Boolean = false, val queueError: String? = null,
+    val endedRoom: ListenTogetherRoom? = null, val endedOwnerUid: Long = 0)
 
 /** Original recovery snapshots are polled; a heartbeat is never interpreted as a playback command. */
 class NeteaseListenTogetherSession internal constructor(private val repo: ListenTogetherProtocol,
@@ -232,7 +233,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
                             val alive = repo.heartbeat(current.expected, current.roomId, songId(playback.song) ?: 0,
                                 playback.showPause, playback.positionMs.coerceAtLeast(0), current.queue.version)
                             valid(current)
-                            if (!alive) { disconnect("网易云一起听已结束"); return@withLock }
+                            if (!alive) { finishRoom(current); return@withLock }
                             current.heartbeatAt = now
                         }
                         synchronize(current, members = current.polls++ % 3 == 0)
@@ -259,7 +260,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
             val remote = repo.status(current.expected)
             valid(current)
             if (!remote.inRoom || remote.room?.roomId != current.roomId) {
-                disconnect("网易云一起听已结束"); return
+                finishRoom(current); return
             }
             state.update { it.copy(room = remote.room) }
             publishParticipants(current, remote.room)
@@ -505,11 +506,21 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         val current = active ?: return@operation
         polling?.cancel()
         var failure: String? = null
-        try { repo.leave(current.expected, current.roomId) }
+        var confirmed = false
+        try { repo.leave(current.expected, current.roomId); valid(current); confirmed = true }
         catch (cancelled: CancellationException) { throw cancelled }
         catch (_: Exception) { failure = "已退出本机，远端会话结束尚未确认" }
-        finally { if (active === current) disconnect(failure) }
+        finally { if (active === current) { if (confirmed) finishRoom(current) else disconnect(failure) } }
     }
+    private fun finishRoom(current: Active) {
+        valid(current)
+        val ended = state.value.room
+        val owner = current.expected.credential.profile?.uid ?: 0
+        disconnect()
+        // Keep only a server lookup reference. History owns the authoritative statistics.
+        state.update { it.copy(endedRoom = ended, endedOwnerUid = owner) }
+    }
+    fun dismissEndedRoom() { state.update { it.copy(endedRoom = null, endedOwnerUid = 0) } }
     fun disconnect(error: String? = null) {
         ++generation
         polling?.cancel(); polling = null
