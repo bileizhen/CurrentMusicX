@@ -14,10 +14,13 @@ class NeteaseGateway(val transport: NeteaseTransport) {
     private var listeningMs = 0L
     private var listeningReported = false
     val sessions get() = transport.sessions
-    // Protected source families stay on CurrentMusic, including with a local NetEase login.
-    fun handles(path: String) = (path.startsWith("ncm/") && !path.startsWith("ncm/song/url") &&
-        path !in setOf("ncm/mv/url", "ncm/video/url", "ncm/song/cloud/download", "ncm/voice/detail", "ncm/lyric", "ncm/lyric/new")) ||
-        path == "ncmbind" || path.startsWith("ncmbind/")
+    // Preserve the existing server source unless the user explicitly selects native media.
+    fun handles(path: String, nativeMedia: Boolean = false): Boolean {
+        if (path == "ncmbind" || path.startsWith("ncmbind/")) return true
+        if (!path.startsWith("ncm/")) return false
+        return nativeMedia || (!path.startsWith("ncm/song/url") && path !in setOf(
+            "ncm/mv/url", "ncm/video/url", "ncm/song/cloud/download", "ncm/voice/detail", "ncm/lyric", "ncm/lyric/new"))
+    }
     private fun JsonObject.text(key: String) = (get(key) as? JsonPrimitive)?.contentOrNull.orEmpty()
     private fun JsonObject.long(key: String) = (get(key) as? JsonPrimitive)?.longOrNull ?: 0L
     private fun JsonObject.obj(key: String) = get(key) as? JsonObject ?: buildJsonObject {}
@@ -165,6 +168,22 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         fun page(name: String, fallback: Int, min: Int = 0, max: Int = 1000) = arg(name).toIntOrNull()?.coerceIn(min, max) ?: fallback
         val id = arg("id")
         when (path.removePrefix("ncm/")) {
+            "song/url", "song/url/v1" -> {
+                val level = arg("level", "auto").let { if (it == "auto") "jymaster" else it }
+                val raw = official("/api/song/enhance/player/url/v1", buildJsonObject {
+                    put("ids", "[$id]"); put("level", level); put("encodeType", "flac")
+                    if (level == "sky") put("immerseType", "c51")
+                }, expected = expected)
+                val track = raw.array("data").mapNotNull { it as? JsonObject }
+                    .firstOrNull { it.long("id").toString() == id } ?: throw ApiException(ErrorKind.Parse)
+                if (track.text("url").isBlank()) throw ApiException(ErrorKind.NeteaseAudioUnavailable)
+                return track
+            }
+            "lyric", "lyric/new" -> return official(if (path.endsWith("/new")) "/api/song/lyric/v1" else "/api/song/lyric",
+                buildJsonObject {
+                    put("id", id); put("cp", false)
+                    listOf("tv", "lv", "rv", "kv", "yv", "ytv", "yrv").forEach { put(it, 0) }
+                }, expected = expected)
             "search" -> {
                 val type = when (arg("type", "song")) { "song", "1" -> 1; "album", "10" -> 10; "artist", "100" -> 100; "playlist", "1000" -> 1000; else -> throw ApiException(ErrorKind.NotFound) }
                 val offset = page("offset", 0, max = Int.MAX_VALUE)

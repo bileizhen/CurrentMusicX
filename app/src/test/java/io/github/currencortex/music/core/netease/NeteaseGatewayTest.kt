@@ -43,6 +43,73 @@ class NeteaseGatewayTest {
     @After fun cleanup() { scope.cancel(); upstream.shutdown(); current.shutdown() }
     private suspend fun login(uid: Long = 42) = sessions.login(mapOf("MUSIC_U" to "native-cookie-$uid"), BoundProfile(uid, "Native $uid"), sessions.snapshot())
     private suspend fun call(path: String, query: Map<String, String> = emptyMap()) = api.request("GET", path, query, authenticated = true, expectedSession = owner())
+    private fun nativeApi(): ApiClient {
+        // Any accidental project fallback must fail immediately rather than stall the test.
+        current.enqueue(MockResponse().setResponseCode(503).setBody("{}"))
+        return ApiClient({ current.url("/cm/").toString() }, { "current-secret" }, { expired++ },
+            netease = gateway, nativeMedia = { true })
+    }
+
+    @Test fun nativeRecommendationsDoNotUseProjectLoginAsAnImplicitServerFallback(): Unit = runBlocking {
+        enqueue("""{"code":200,"result":[{"song":${rawSong(11)}}]}""")
+        val library = LibraryRepository(nativeApi(), { 7L }, ::owner)
+        assertEquals(11L, library.daily().songs.single().id)
+        assertEquals("/weapi/personalized/newsong", upstream.takeRequest().path)
+        assertTrue(library.recent().isEmpty())
+        assertEquals(0, current.requestCount)
+    }
+
+    @Test fun nativeSourceUsesOnlyNeteaseAndReturnsItsActualQualityAndLifetime(): Unit = runBlocking {
+        login()
+        enqueue("""{"code":200,"data":[{"id":11,"url":"https://m10.music.126.net/song.flac","level":"lossless","sampleRate":48000,"channelCount":2,"type":"flac","expi":1200}]}""")
+        val repository = MusicRepository(nativeApi(), { io.github.currencortex.music.data.settings.AudioSourceAccess(io.github.currencortex.music.data.settings.AudioProvider.NETEASE) })
+        val source = repository.source(11, io.github.currencortex.music.core.media.AudioQuality.AUTO,
+            RequestSession("https://music.163.com/", null, sessions.state.value.revision))
+        assertEquals("lossless", source.level); assertEquals(48000, source.sampleRate)
+        assertEquals(2, source.channelCount); assertEquals(1200L, source.validForSeconds)
+        val request = upstream.takeRequest()
+        assertEquals("/eapi/song/enhance/player/url/v1", request.path)
+        val data = payload(request)
+        assertEquals("[11]", data["ids"]!!.jsonPrimitive.content)
+        assertEquals("jymaster", data["level"]!!.jsonPrimitive.content)
+        assertTrue(request.getHeader("Cookie")!!.contains("MUSIC_U=native-cookie-42"))
+        assertNull(request.getHeader("Authorization")); assertEquals(0, current.requestCount)
+    }
+
+    @Test fun nativeModeReadsLyricsAndMvAnonymouslyWithoutProjectFallback(): Unit = runBlocking {
+        val native = nativeApi()
+        enqueue("""{"code":200,"yrc":{"lyric":"[1000,1000](1000,500,0)Hel(1500,500,0)lo"}}""")
+        val document = (MusicRepository(native).lyricsDocument(11) as AppResult.Success).value
+        assertTrue(document.hasWordTiming)
+        assertEquals("/eapi/song/lyric/v1", upstream.takeRequest().path)
+        enqueue("""{"code":200,"data":{"url":"https://vod.126.net/video.mp4"}}""")
+        assertEquals("https://vod.126.net/video.mp4", LibraryRepository(native, { 0L }, ::owner).mvSource(55, 720))
+        assertEquals("/weapi/song/enhance/play/mv/url", upstream.takeRequest().path)
+        enqueue("""{"code":404}""")
+        assertEquals(ErrorKind.NotFound, (appResult { native.request("GET", "ncm/mv/url", mapOf("id" to "55")) } as AppResult.Failure).kind)
+        assertEquals(0, current.requestCount); assertEquals(0, expired)
+    }
+
+    @Test fun deniedNativeSourcesNeverFallBackAndAccountSwitchRejectsAnInflightUrl(): Unit = runBlocking {
+        login()
+        var access = io.github.currencortex.music.data.settings.AudioSourceAccess(io.github.currencortex.music.data.settings.AudioProvider.NETEASE)
+        val repository = MusicRepository(nativeApi(), { access })
+        enqueue("""{"code":200,"data":[{"id":11,"url":null}]}""")
+        assertEquals(ErrorKind.NeteaseAudioUnavailable, (appResult { repository.source(11, io.github.currencortex.music.core.media.AudioQuality.STANDARD) } as AppResult.Failure).kind)
+        upstream.takeRequest()
+        upstream.enqueue(response("""{"code":200,"data":[{"id":11,"url":"https://m10.music.126.net/song.mp3"}]}""").setBodyDelay(200, TimeUnit.MILLISECONDS))
+        val old = RequestSession("https://music.163.com/", null, sessions.state.value.revision)
+        val pending = async { appResult { repository.source(11, io.github.currencortex.music.core.media.AudioQuality.STANDARD, old) } }
+        withContext(Dispatchers.IO) { assertNotNull(upstream.takeRequest(2, TimeUnit.SECONDS)) }
+        login(99)
+        assertEquals(ErrorKind.NeteaseSessionChanged, (pending.await() as AppResult.Failure).kind)
+        upstream.enqueue(response("""{"code":200,"data":[{"id":11,"url":"https://m10.music.126.net/song.mp3"}]}""").setBodyDelay(200, TimeUnit.MILLISECONDS))
+        val changingSource = async { appResult { repository.source(11, io.github.currencortex.music.core.media.AudioQuality.STANDARD) } }
+        withContext(Dispatchers.IO) { assertNotNull(upstream.takeRequest(2, TimeUnit.SECONDS)) }
+        access = io.github.currencortex.music.data.settings.AudioSourceAccess(io.github.currencortex.music.data.settings.AudioProvider.CURRENT_MUSIC)
+        assertEquals(ErrorKind.AudioSourceChanged, (changingSource.await() as AppResult.Failure).kind)
+        assertEquals(0, current.requestCount)
+    }
     private fun payload(request: RecordedRequest): JsonObject {
         val params = request.body.readUtf8().split('&').associate { part -> part.split('=', limit = 2).let { it[0] to URLDecoder.decode(it[1], "UTF-8") } }.getValue("params")
         val bytes = params.chunked(2).map { it.toInt(16).toByte() }.toByteArray()

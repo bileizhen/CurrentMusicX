@@ -27,6 +27,32 @@ class AudioSourceSettingsTest {
         assertTrue(container.playbackQueue.state.value.songs.isEmpty())
     }
     @After fun finish() { container.close() }
+    @Test fun nativeSourceIsSelectablePersistsAndScopesCacheToTheNeteaseAccount(): Unit = runBlocking {
+        val vm = MusicSettingsViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings()) { MusicSettingsScreen(vm) {} } }
+        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("audio_provider_netease"))
+        compose.onNodeWithTag("audio_provider_netease").performClick()
+        compose.waitUntil(5000) { vm.audioProvider.value.provider == AudioProvider.NETEASE && !vm.audioState.value.busy }
+        assertEquals("netease", container.audioSettings.access().identity)
+        compose.onNodeWithTag("audio_key_input").assertDoesNotExist()
+        val song = io.github.currencortex.music.data.song.Song(11, "Native fixture")
+        container.neteaseSessions.login(mapOf("MUSIC_U" to "fixture-cookie"),
+            io.github.currencortex.music.data.binding.BoundProfile(42, "Fixture"), container.neteaseSessions.snapshot())
+        val first = container.audioRequest(song, io.github.currencortex.music.core.media.AudioQuality.STANDARD)
+        assertEquals(42L, first.accountId)
+        assertEquals("https://music.163.com/", first.session.server)
+        assertNull(first.session.token)
+        container.accountRepository.server = "https://unreachable.invalid/cm/"
+        assertEquals("Changing a project server cannot change a native audio cache key", first.key,
+            container.audioRequest(song, first.quality).key)
+        container.neteaseSessions.login(mapOf("MUSIC_U" to "another-fixture-cookie"),
+            io.github.currencortex.music.data.binding.BoundProfile(99, "Other fixture"), container.neteaseSessions.snapshot())
+        val other = container.audioRequest(song, first.quality)
+        assertNotEquals(first.key, other.key); assertNotEquals(first.session, other.session)
+        val preferences = context.preferencesDataStoreFile("app.$namespace.preferences_pb").readBytes()
+        assertTrue(preferences.toString(Charsets.ISO_8859_1).contains("NETEASE"))
+        assertTrue(container.playbackQueue.state.value.songs.isEmpty())
+    }
     @Test fun sourceControlsStoreOnlyEncryptedKeyAndKeepProjectAccountAndQueue() = runBlocking<Unit> {
         val vm = MusicSettingsViewModel(container)
         val account = container.accountRepository.state.value
