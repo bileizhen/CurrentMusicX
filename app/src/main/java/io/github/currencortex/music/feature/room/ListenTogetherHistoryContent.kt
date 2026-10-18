@@ -11,7 +11,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -156,26 +159,33 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         val report = resolveReportPeople(raw, state)
                         val peer = report.peer
                         item { Card(Modifier.fillMaxWidth().testTag("listen_archive_partner")) {
-                            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     if (peer != null) ArchiveAvatar(peer, report.online)
                                     Column(Modifier.weight(1f).padding(start = if (peer != null) 12.dp else 0.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                                        Text(peer?.displayName() ?: "本次一起听", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                                        Text(peer?.displayName() ?: "本次一起听", fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
+                                            maxLines = 2, overflow = TextOverflow.Ellipsis)
                                         ArchiveMuted(if (report.online) "好友在线" else "一起听已结束")
                                     }
+                                    MusicTextAction(if (activeRoom) "正在一起听中" else "再次邀请", { peer?.let(onInvite) },
+                                        Modifier.testTag("listen_archive_report_invite"), enabled = peer != null && report.canInvite && !activeRoom)
                                 }
-                                MusicTextAction(if (activeRoom) "正在一起听中" else "再次邀请", { peer?.let(onInvite) },
-                                    Modifier.testTag("listen_archive_report_invite"), enabled = peer != null && report.canInvite && !activeRoom)
                                 if (activeRoom) ArchiveMuted("当前会话结束后可再次邀请好友。")
                                 if (peer != null) onFate?.let { open ->
-                                    MusicTextAction("查看和 TA 的缘分报告", { open(peer, report.ltType) },
-                                        Modifier.testTag("listen_archive_report_fate"))
+                                    ArchiveRule()
+                                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { open(peer, report.ltType) }
+                                        .heightIn(min = 48.dp).padding(vertical = 10.dp).testTag("listen_archive_report_fate"),
+                                        verticalAlignment = Alignment.CenterVertically) {
+                                        Text("查看和 TA 的缘分报告", Modifier.weight(1f), fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium, color = colors.primary)
+                                        Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = colors.onSurfaceVariantSummary)
+                                    }
                                 }
                                 report.failMessage.takeIf(String::isNotBlank)?.let { ArchiveMuted(it) }
                             }
                         } }
                         item { Card(Modifier.fillMaxWidth().testTag("listen_archive_report")) {
-                            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                            Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     Text("这一次的陪伴", Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                                     report.endTimeMs?.takeIf { it > 0 }?.let { ArchiveMuted(dateLabel(it, "yyyy.MM.dd")) }
@@ -241,14 +251,28 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable private fun ArchiveStats(firstLabel: String, first: String, secondLabel: String, second: String, emphasized: Boolean = false) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        listOf(firstLabel to first, secondLabel to second).forEach { (label, value) ->
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                ArchiveMuted(label)
-                Text(value, fontSize = if (emphasized) 22.sp else 17.sp, fontWeight = FontWeight.SemiBold,
-                    color = if (emphasized) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface)
+    val density = LocalDensity.current
+    val measurer = rememberTextMeasurer()
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val baseSize = if (emphasized) 20.sp else 16.sp
+        val style = TextStyle(fontSize = baseSize, fontWeight = FontWeight.SemiBold)
+        val widest = maxOf(measurer.measure(first, style).size.width, measurer.measure(second, style).size.width).coerceAtLeast(1)
+        val columnWidth = with(density) { ((maxWidth - 16.dp) / 2).toPx() }
+        val fittedSize = baseSize * (columnWidth / widest).coerceIn(0f, 1f)
+        // Keep both values at the same size; use full-width rows before text becomes too small.
+        val stacked = fittedSize.value < if (emphasized) 16f else 14f
+        val valueSize = if (stacked) baseSize else fittedSize
+        val cells: @Composable (Modifier) -> Unit = { modifier ->
+            listOf(firstLabel to first, secondLabel to second).forEach { (label, value) ->
+                Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    ArchiveMuted(label)
+                    Text(value, fontSize = valueSize, fontWeight = FontWeight.SemiBold,
+                        color = if (emphasized) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface)
+                }
             }
         }
+        if (stacked) Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { cells(Modifier.fillMaxWidth()) }
+        else Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) { cells(Modifier.weight(1f)) }
     }
 }
 
