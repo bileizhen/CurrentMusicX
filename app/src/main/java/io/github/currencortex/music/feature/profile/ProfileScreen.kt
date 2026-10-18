@@ -37,7 +37,6 @@ import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.data.profile.*
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.auth.AuthViewModel
-import io.github.currencortex.music.feature.auth.LoginScreen
 import io.github.currencortex.music.feature.library.LibraryLinks
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.*
@@ -79,61 +78,9 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
         })
 }
 
-@Composable fun MeScreen(vm: ProfileViewModel, auth: AuthViewModel, navigate: (String) -> Unit, onSettings: () -> Unit,
+@Composable fun MeScreen(vm: ProfileViewModel, navigate: (String) -> Unit,
     play: (List<Song>, Int) -> Unit) {
-    val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
-    // The bottom navigation already owns "设置"; a second entry above the login form was redundant.
-    if (account.account == null && vm.container.nativeNetease != null) NativeMeScreen(vm.container, navigate, onSettings)
-    else if (account.account == null) LoginScreen(auth) else ProfileScreen(vm, navigate, play, onSettings = onSettings)
-}
-
-@Composable private fun NativeMeScreen(container: AppContainer, navigate: (String) -> Unit, onSettings: () -> Unit) {
-    val account by container.neteaseSessions.state.collectAsStateWithLifecycle()
-    val bottomInset = LocalMusicBottomInset.current
-    val avatarFlight = LocalAvatarFlight.current
-    val placement = LocalRootTabPlacement.current
-    val density = LocalDensity.current
-    val listState = rememberLazyListState()
-    LaunchedEffect(avatarFlight?.request) { if (avatarFlight?.active == true && !avatarFlight.returning) listState.scrollToItem(0) }
-    LaunchedEffect(listState, avatarFlight) {
-        snapshotFlow { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
-            .collect { if (!it) avatarFlight?.profileLanding = null }
-    }
-    LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState,
-        contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
-        verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        item { Row(Modifier.fillMaxWidth().then(LocalRootTabSwipe.current), verticalAlignment = Alignment.CenterVertically) {
-            Text("我的", Modifier.weight(1f), fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
-            MusicTextAction("设置", onSettings)
-        } }
-        account.profile?.let { native -> item {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Box(Modifier.testTag("my_profile_avatar").onGloballyPositioned {
-                    val center = (placement?.landingBounds(it) ?: it.boundsInRoot()).center
-                    val radius = with(density) { 32.dp.toPx() }
-                    val landing = Rect(center - Offset(radius, radius), center + Offset(radius, radius))
-                    if (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0) avatarFlight?.profileLanding = landing
-                    if (avatarFlight?.returning != true) avatarFlight?.destination = landing
-                }.graphicsLayer { alpha = if (avatarFlight?.active == true) 0f else 1f }) {
-                    UserAvatar(ProfileUser(id = native.uid, nickname = native.nickname, avatar = native.avatar), container,
-                        reserveOverlay = false, flightState = avatarFlight)
-                }
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(native.nickname, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
-                    Text(if (account.stale) "网易云登录已过期" else "网易云音乐", fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
-                }
-            }
-        } }
-        item { MusicSectionHeader("我的音乐"); LibraryLinks(navigate) }
-        item { Card(Modifier.fillMaxWidth()) {
-            MusicDestinationRow(if (account.loggedIn) "网易云账号" else "登录网易云", { navigate("user/binding") },
-                Modifier.testTag("open_binding"), "我喜欢、歌单与最近播放")
-            MusicDestinationRow("Navidrome 曲库", { navigate("navidrome") }, Modifier.testTag("profile_navidrome"), "自己的音乐服务器")
-            MusicDestinationRow("CurrentMusic 账户", { navigate("user/login") }, Modifier.testTag("open_currentmusic_login"),
-                "头像装饰与一起听房间")
-        } }
-    }
+    MyMusicScreen(vm, navigate, play)
 }
 
 @Composable fun ProfileScreen(vm: ProfileViewModel, navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit,
