@@ -25,11 +25,8 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.LayoutDirection
 import kotlin.math.roundToInt
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -73,14 +70,14 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
                 Column(Modifier.testTag("desktop_island_metadata").then(if (reveal >= .55f) Modifier.clearAndSetSemantics {} else Modifier).clipToBounds().graphicsLayer { alpha = (1f - reveal / .55f).coerceIn(0f, 1f) },
                     verticalArrangement = Arrangement.spacedBy(1.dp)) {
                     val name = song?.name?.takeIf(String::isNotBlank) ?: "CurrentMusic"
-                    BasicText(name,
+                    BasicText(islandSingleLine(name),
                         Modifier.testTag("desktop_island_title"),
-                        style = TextStyle(color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    BasicText(song?.artists?.takeIf(String::isNotBlank) ?: if (song == null) "等待播放" else "未知歌手",
+                        style = desktopIslandTitleStyle.copy(color = Color.White),
+                        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    BasicText(islandSingleLine(song?.artists?.takeIf(String::isNotBlank) ?: if (song == null) "等待播放" else "未知歌手"),
                         Modifier.testTag("desktop_island_artist"),
-                        style = TextStyle(color = Color.White.copy(.65f), fontSize = 9.sp),
-                        maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        style = desktopIslandArtistStyle.copy(color = Color.White.copy(.65f)),
+                        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                 }
             DesktopIslandProgress(coverPosition.takeIf { song != null }, durationMs.takeIf { song != null } ?: 0L,
                 Modifier.clipToBounds().graphicsLayer {
@@ -98,9 +95,9 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
             val gap = desktopIslandCoverGap.roundToPx()
             val lyricInset = (desktopIslandLyricInset * reveal).roundToPx()
             val dividerWidth = (desktopIslandProgressWidth * reveal).roundToPx()
-            val infoPixels = infoWidth.roundToPx().coerceAtMost((width - 28.dp.roundToPx()).coerceAtLeast(0))
-            val info = children[1].measure(Constraints.fixedWidth(infoPixels))
             val minCover = 22.dp.roundToPx()
+            var infoPixels = infoWidth.roundToPx().coerceAtMost((width - minCover - gap).coerceAtLeast(0))
+            var info = children[1].measure(Constraints.fixedWidth(infoPixels))
             fun lyricConstraints(cover: Int) = Constraints.fixedWidth((width - cover - gap - infoPixels - dividerWidth + lyricInset * 2).coerceAtLeast(1))
             var lyric = children[3].measure(lyricConstraints(minCover))
             // Hidden lyrics are warmed, but do not reserve a bilingual shell.
@@ -114,6 +111,11 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
             val start = coverTransition.start
             val height = (start?.let { it.height * (1f - p) + naturalHeight * p } ?: naturalHeight.toFloat()).roundToInt()
             val coverSize = (height - 8.dp.roundToPx()).coerceAtLeast(minCover)
+            val availableInfo = (width - coverSize - gap - dividerWidth).coerceAtLeast(0)
+            if (infoPixels > availableInfo) {
+                infoPixels = availableInfo
+                info = children[1].measure(Constraints.fixedWidth(infoPixels))
+            }
             if (coverSize != minCover) lyric = children[3].measure(lyricConstraints(coverSize))
             val cover = children[0].measure(Constraints.fixed(coverSize, coverSize))
             val direction = if (layoutDirection == LayoutDirection.Rtl) -1f else 1f
