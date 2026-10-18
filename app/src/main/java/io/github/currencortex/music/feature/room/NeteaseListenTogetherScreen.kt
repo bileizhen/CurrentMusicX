@@ -171,7 +171,7 @@ internal data class NeteaseListenTogetherActions(
                             }
                         }, Modifier.testTag("netease_listen_paste"), enabled = !state.busy)
                         MusicTextAction("加入一起听", {
-                            if (ListenTogetherInvitation.parse(invite) == null) inputError = "请粘贴有效的网易云一起听邀请链接"
+                            if (!ListenTogetherInvitation.isSupported(invite)) inputError = "请粘贴有效的网易云一起听邀请链接"
                             else { focus.clearFocus(); actions.join(invite.trim()) }
                         }, Modifier.testTag("netease_listen_join"), enabled = canStart && invite.isNotBlank())
                     }

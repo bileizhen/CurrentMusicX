@@ -108,9 +108,10 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
 
     fun join(inviteText: String) = operation { epoch ->
         check(active == null && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听或结束投屏" }
-        val invitation = ListenTogetherInvitation.parse(inviteText) ?: error("请粘贴有效的网易云一起听邀请链接")
         val expected = repo.captureSession()
+        val invitation = repo.resolveInvitation(inviteText)
         checkEpoch(epoch)
+        repo.checkSession(expected)
         val room = repo.accept(expected, invitation)
         checkEpoch(epoch)
         repo.checkSession(expected)

@@ -37,11 +37,16 @@ data class ListenTogetherInvitation(val roomId: String, val inviterId: Long) {
 
     companion object {
         private const val SHARE_BASE = "https://st.music.163.com/listen-together/share/index.html"
+        internal fun candidate(text: String): String = (Regex("(?:https?://|orpheus://)[^\\s<>\"，。]+")
+            .find(text.trim())?.value ?: text.trim()).trimEnd(')', '）', ']', '。', '，')
+
+        fun isSupported(text: String): Boolean = parse(text) != null || candidate(text).toHttpUrlOrNull()?.let {
+            it.scheme == "https" && it.host == "163cn.tv" && it.port == 443 && it.username.isEmpty() && it.password.isEmpty()
+        } == true
 
         /** Parse locally; pasted links are never fetched and never receive account cookies. */
         fun parse(text: String): ListenTogetherInvitation? = runCatching {
-            val candidate = Regex("(?:https?://|orpheus://)[^\\s<>\"，。]+")
-                .find(text.trim())?.value ?: text.trim()
+            val candidate = candidate(text)
             val http = candidate.toHttpUrlOrNull()
             val query = when {
                 http != null -> {
