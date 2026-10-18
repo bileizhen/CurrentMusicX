@@ -122,7 +122,7 @@ internal class NeteaseListenTogetherRepository(private val transport: NeteaseTra
     override suspend fun leave(expected: NeteaseSession, roomId: String) {
         requireRoom(roomId)
         request("end/v2", buildJsonObject {
-            put("roomId", roomId); put("shareInfo", "null"); put("needRecord", false)
+            put("roomId", roomId); put("shareInfo", "null"); put("needRecord", true)
             put("scene", ""); put("exitType", "NORMAL_END")
         }, expected)
     }

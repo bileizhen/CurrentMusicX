@@ -200,7 +200,7 @@ class NeteaseListenTogetherRepositoryTest {
         val leave = server.takeRequest()
         assertEquals("/eapi/listen/together/end/v2", leave.path)
         val leaveData = payload(leave)
-        assertFalse(leaveData["needRecord"]!!.jsonPrimitive.boolean)
+        assertTrue(leaveData["needRecord"]!!.jsonPrimitive.boolean)
         assertEquals("NORMAL_END", leaveData["exitType"]!!.jsonPrimitive.content)
         response("""{"code":200,"data":{"inRoom":false}}""")
         assertFalse(repository.status(expected).inRoom)
