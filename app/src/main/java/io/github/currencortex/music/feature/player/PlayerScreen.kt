@@ -47,13 +47,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 
 private enum class PlayerContent { COVER, LYRICS }
-private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP }
+private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI }
 internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePosition")
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
     actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null,
     onCast: (() -> Unit)? = null, onRoom: (() -> Unit)? = null, onDialogActive: (Boolean) -> Unit = {},
-    onNetwork: (() -> Unit)? = null, onLike: (() -> Unit)? = null, onEqualizer: (() -> Unit)? = null) {
+    onNetwork: (() -> Unit)? = null, onLike: (() -> Unit)? = null, onEqualizer: (() -> Unit)? = null,
+    onAiNavigate: (String) -> Unit = {}) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -89,6 +90,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         overlay = PlayerOverlay.NONE
     }
     LaunchedEffect(overlay, queueGesture) { onDialogActive(overlay != PlayerOverlay.NONE || queueGesture) }
+    LaunchedEffect(overlay) { if (overlay != PlayerOverlay.AI) vm.ai.close() }
     LaunchedEffect(overlay, songActions.songId) { if (overlay == PlayerOverlay.COMMENTS) vm.loadComments() }
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     val indication = LocalIndication.current
@@ -255,6 +257,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlayerOverlay.ACTIONS -> if (queue.current != null) MusicDialog("歌曲操作", dismiss) { actions?.invoke(queue.current!!) }
             PlayerOverlay.OPTIONS -> MusicDialog("播放与歌词", dismiss) {
                 Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
+                if (io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(queue.current) != null)
+                    MusicDestinationRow("问AI", summary = "了解这首歌 · 私有对话", modifier = Modifier.testTag("open_player_ai"),
+                        onClick = { vm.openAi(); overlay = PlayerOverlay.AI })
                 MusicDestinationRow(if (content == PlayerContent.LYRICS) {
                     if (widePlayer) "显示控制栏" else "显示封面"
                 } else "显示歌词",
@@ -282,6 +287,11 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     modifier = Modifier.testTag("open_lyrics_display"), onClick = { overlay = PlayerOverlay.LYRICS })
                 if (onRoom != null && state.song?.navidrome == null) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
                 }
+            }
+            PlayerOverlay.AI -> PlayerAiDialog(vm.ai, dismiss) { card ->
+                vm.ai.close(); dismiss()
+                if (card.type == "song") vm.playAiCard(card)
+                else onAiNavigate("lib/${if (card.type == "playlist") "ncmplaylist" else card.type}/${card.id}")
             }
             PlayerOverlay.WEIGHT -> MusicDialog("歌词字重", { overlay = PlayerOverlay.LYRICS }) {
                 LyricsWeight.entries.forEach { weight ->

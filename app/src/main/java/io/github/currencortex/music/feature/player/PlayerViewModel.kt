@@ -34,6 +34,12 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val currentSong = queue.map { it.current }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), queue.value.current)
     val settings = container.musicSettings.state
+    val ai = PlayerAiController(io.github.currencortex.music.data.profile.PlayerAiRepository(session = { container.audioSession() }), viewModelScope) { container.audioSession() }
+    fun openAi() { queue.value.current?.let(ai::open) }
+    fun playAiCard(card: io.github.currencortex.music.data.profile.PostAttachment) {
+        val song = Song(card.id, card.name, card.sub, cover = card.pic)
+        if (player.external != null) player.external?.request(song) else player.playList(listOf(song), 0)
+    }
     val libraryStatuses = container.libraryRepository.statuses
     val usesNeteaseLibrary = container.primaryLibrary.likesUseNetease
     val lyrics = container.playbackLyrics.state
@@ -53,6 +59,8 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     private val heartMutex = Mutex()
     private val netease = container.neteaseSongActions
     init {
+        viewModelScope.launch { container.accountRepository.sessionRevision.drop(1).collect { ai.close() } }
+        viewModelScope.launch { settings.map { it.server }.distinctUntilChanged().drop(1).collect { ai.close() } }
         viewModelScope.launch {
             combine(queue.map { if (it.current?.musicSource == MusicSource.NAVIDROME) it.current?.id else NeteaseSongActionsRepository.songId(it.current) }.distinctUntilChanged(),
                 container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server to it.likeMode }.distinctUntilChanged(),
