@@ -3,6 +3,7 @@ package io.github.currencortex.music.feature.player
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.foundation.pager.HorizontalPager
@@ -142,7 +143,11 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         val wideVerticalInset = with(density) { maxOf(WindowInsets.safeDrawing.getTop(density),
             WindowInsets.safeDrawing.getBottom(density)).toDp() }
         LaunchedEffect(widePlayer) { if (widePlayer) pager.scrollToPage(PlayerContent.LYRICS.ordinal) }
-        val immersive = settings.lyricsDisplay.hideControls && !controlsRevealed && content == PlayerContent.LYRICS
+        val hideControls by animateFloatAsState(
+            if (settings.lyricsDisplay.hideControls && !controlsRevealed) 1f else 0f,
+            tween(260, easing = LinearOutSlowInEasing), label = "lyricsControls")
+        val lyricsProgress = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
+        val controlsVisibility = 1f - hideControls * lyricsProgress
         val functions: @Composable () -> Unit = {
             PlayerSongActionsBar(vm, { overlay = PlayerOverlay.COMMENTS }, {
                 scope.launch { queueMotion.animation.snapTo(0f); overlay = PlayerOverlay.QUEUE }
@@ -231,14 +236,21 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     PlayerPagerArtwork(pagerArtwork, queue.current?.cover.orEmpty())
                     }
                     }
-                    if (!immersive) PlayerTransport(vm, onToggle)
+                    PlayerControlsRegion(controlsVisibility, Modifier.testTag("player_transport_transition")) {
+                        PlayerTransport(vm, onToggle)
+                    }
                 }
             }
-            if (!widePlayer && immersive) Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
-                Text("显示控制面板", color = Color.White.copy(alpha = .65f), fontSize = 12.sp,
-                    modifier = Modifier.testTag("lyrics_reveal_controls").clickable(role = Role.Button) { controlsRevealed = true }
-                        .padding(horizontal = 24.dp, vertical = 14.dp))
-            } else if (!widePlayer) functions()
+            if (!widePlayer) {
+                PlayerControlsRegion(1f - controlsVisibility) {
+                    Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
+                        Text("显示控制面板", color = Color.White.copy(alpha = .65f), fontSize = 12.sp,
+                            modifier = Modifier.testTag("lyrics_reveal_controls").clickable(role = Role.Button) { controlsRevealed = true }
+                                .padding(horizontal = 24.dp, vertical = 14.dp))
+                    }
+                }
+                PlayerControlsRegion(controlsVisibility) { functions() }
+            }
         }
         }
         }

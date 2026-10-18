@@ -399,7 +399,9 @@ class PlayerSheetCapabilitiesTest {
         compose.setContent { io.github.currencortex.music.ui.theme.LeiTheme(io.github.currencortex.music.data.settings.AppearanceSettings(blur = false)) {
             val vm: io.github.currencortex.music.feature.player.PlayerViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
                 factory = io.github.currencortex.music.ui.util.viewModelFactory { io.github.currencortex.music.feature.player.PlayerViewModel(container) })
-            io.github.currencortex.music.feature.player.PlayerScreen(vm, {}, {})
+            top.yukonga.miuix.kmp.basic.Scaffold {
+                io.github.currencortex.music.feature.player.PlayerScreen(vm, {}, {})
+            }
         } }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("player_pager_artwork").fetchSemanticsNodes().isNotEmpty() }
         compose.waitForIdle()
@@ -432,6 +434,28 @@ class PlayerSheetCapabilitiesTest {
             }
         }
         assertAligned("player_cover")
+        val fullControlsHeight = compose.onNodeWithTag("player_transport_transition").fetchSemanticsNode().boundsInRoot.height
+        // A held/reversed swipe must resize and fade controls before the page settles.
+        compose.mainClock.autoAdvance = false
+        pager.performTouchInput {
+            down(androidx.compose.ui.geometry.Offset(width * .9f, centerY))
+            moveBy(androidx.compose.ui.geometry.Offset(-width * .4f, 0f))
+        }
+        compose.mainClock.advanceTimeBy(64)
+        val position = pager.fetchSemanticsNode().config[io.github.currencortex.music.feature.player.PlayerPagePosition]
+        val visibility = compose.onNodeWithTag("player_transport_transition").fetchSemanticsNode()
+            .config[io.github.currencortex.music.feature.player.PlayerControlsVisibility]
+        assertTrue("The finger holds the pager between pages", position in .1f.. .8f)
+        assertEquals("Control opacity and height follow the finger, not the settled page", 1f - position, visibility, .01f)
+        val partialControlsHeight = compose.onNodeWithTag("player_transport_transition").fetchSemanticsNode().boundsInRoot.height
+        assertEquals("Controls relinquish their space gradually", fullControlsHeight * visibility, partialControlsHeight, 2f)
+        pager.performTouchInput {
+            moveBy(androidx.compose.ui.geometry.Offset(width * .4f, 0f), delayMillis = 300)
+            up()
+        }
+        compose.mainClock.advanceTimeBy(600)
+        compose.mainClock.autoAdvance = true
+        assertAligned("player_cover")
         repeat(3) {
             pager.performTouchInput { swipeLeft(durationMillis = 180) }
             compose.onNodeWithTag("lyrics_reveal_controls").assertIsDisplayed()
@@ -442,9 +466,23 @@ class PlayerSheetCapabilitiesTest {
             assertAligned("player_cover")
         }
         pager.performTouchInput { swipeLeft(durationMillis = 180) }
+        compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("lyrics_reveal_controls").performClick()
+        compose.mainClock.advanceTimeBy(80)
+        fun controlsFraction() = compose.onNodeWithTag("player_transport_transition").fetchSemanticsNode()
+            .config[io.github.currencortex.music.feature.player.PlayerControlsVisibility]
+        assertTrue("Manually showing controls has an intermediate frame", controlsFraction() in .01f.. .99f)
+        compose.mainClock.advanceTimeBy(400)
         compose.onNodeWithTag("player_transport").assertIsDisplayed()
         assertAligned("player_lyrics_cover")
+        compose.onNodeWithTag("lyrics_options").performClick()
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithTag("lyrics_conceal_controls").performClick()
+        compose.mainClock.advanceTimeBy(80)
+        assertTrue("Manually hiding controls has an intermediate frame", controlsFraction() in .01f.. .99f)
+        compose.mainClock.advanceTimeBy(400)
+        compose.onNodeWithTag("player_transport").assertDoesNotExist()
+        compose.mainClock.autoAdvance = true
         pager.performTouchInput { swipeRight(durationMillis = 180) }
         assertAligned("player_cover")
         assertTrue(container.musicSettings.snapshot().lyricsDisplay.hideControls)
