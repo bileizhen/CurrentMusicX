@@ -27,21 +27,32 @@ fun MusicOverlayDialog(
 ) {
     val visible = remember { mutableStateOf(show) }
     SideEffect { visible.value = show }
-    val dismiss by rememberUpdatedState(onDismissRequest)
-    val colors = MiuixTheme.colorScheme
-    val styles = MiuixTheme.textStyles
+    val dismiss = rememberUpdatedState(onDismissRequest)
+    val colors = rememberUpdatedState(MiuixTheme.colorScheme)
+    val styles = rememberUpdatedState(MiuixTheme.textStyles)
+    val currentModifier = rememberUpdatedState(modifier)
+    val currentTitle = rememberUpdatedState(title)
+    val currentSummary = rememberUpdatedState(summary)
+    val currentInsideMargin = rememberUpdatedState(insideMargin)
+    val currentOutsideMargin = rememberUpdatedState(outsideMargin)
+    val body = rememberUpdatedState(content)
     // DialogLayout retains its root entry through exit even when this caller is disposed.
     // Native OverlayDialog keeps entrance/layout/predictive back; the root owns exit + dim.
-    DialogLayout(visible = visible, enterTransition = EnterTransition.None,
-        onDismissFinished = onDismissFinished) {
-        MiuixTheme(colors = colors, textStyles = styles) {
-            // A local host keeps native presentation inside the root's animated layer.
-            Scaffold(containerColor = Color.Transparent, contentWindowInsets = WindowInsets(0, 0, 0, 0)) {
-                OverlayDialog(show = true, modifier = modifier, title = title, summary = summary,
-                    insideMargin = insideMargin, outsideMargin = outsideMargin,
-                    enableWindowDim = false, renderInRootScaffold = false,
-                    onDismissRequest = { if (visible.value) dismiss?.invoke() }) { content() }
+    // The root host stores this lambda in snapshot state. Keep its identity stable so
+    // updating caller content cannot feed back into registering the same root overlay.
+    val retainedContent: @Composable () -> Unit = remember {
+        {
+            MiuixTheme(colors = colors.value, textStyles = styles.value) {
+                // A local host keeps native presentation inside the root's animated layer.
+                Scaffold(containerColor = Color.Transparent, contentWindowInsets = WindowInsets(0, 0, 0, 0)) {
+                    OverlayDialog(show = true, modifier = currentModifier.value, title = currentTitle.value, summary = currentSummary.value,
+                        insideMargin = currentInsideMargin.value, outsideMargin = currentOutsideMargin.value,
+                        enableWindowDim = false, renderInRootScaffold = false,
+                        onDismissRequest = { if (visible.value) dismiss.value?.invoke() }) { body.value() }
+                }
             }
         }
     }
+    DialogLayout(visible = visible, enterTransition = EnterTransition.None,
+        onDismissFinished = onDismissFinished, content = retainedContent)
 }
