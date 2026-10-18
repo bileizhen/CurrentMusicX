@@ -18,6 +18,11 @@ import top.yukonga.miuix.kmp.basic.TextButton
 
 /** Same destination picker as a single song; no new queue or search screen. */
 @Composable internal fun NativeQueueCollectionDialog(vm: PlayerViewModel, songs: List<Song>, show: Boolean, onDismiss: () -> Unit) {
+    NeteaseSongsCollectionDialog(songs, show, onDismiss, vm::queuePlaylists, vm::collectQueue)
+}
+
+@Composable internal fun NeteaseSongsCollectionDialog(songs: List<Song>, show: Boolean, onDismiss: () -> Unit,
+    loadPlaylists: suspend () -> List<Playlist>, collect: suspend (Long, List<Song>) -> Unit) {
     var lists by remember { mutableStateOf<List<Playlist>>(emptyList()) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -27,7 +32,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
     LaunchedEffect(show, retry) {
         if (!show) return@LaunchedEffect
         busy = true; error = null; lists = emptyList()
-        when (val result = appResult { vm.queuePlaylists() }) {
+        when (val result = appResult { loadPlaylists() }) {
             is AppResult.Success -> lists = result.value
             is AppResult.Failure -> error = result.kind.message
         }
@@ -42,7 +47,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
                 items(lists, key = { it.id }) { playlist ->
                     MusicDestinationRow(playlist.name, {
                         if (!busy) { busy = true; error = null; scope.launch {
-                            when (val result = appResult { vm.collectQueue(playlist.id, songs) }) {
+                            when (val result = appResult { collect(playlist.id, songs) }) {
                                 is AppResult.Success -> { Toast.makeText(context, "已收藏到${playlist.name}", Toast.LENGTH_SHORT).show(); onDismiss() }
                                 is AppResult.Failure -> error = result.kind.message
                             }

@@ -1,6 +1,10 @@
 package io.github.currencortex.music.feature.room
 
 import android.content.ClipData
+import android.content.Intent
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -32,6 +36,7 @@ import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.core.netease.NeteaseAccountState
 import io.github.currencortex.music.core.netease.listen.NeteaseListenTogetherState
 import io.github.currencortex.music.data.netease.listen.ListenTogetherInvitation
+import io.github.currencortex.music.feature.player.NeteaseSongsCollectionDialog
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
@@ -61,8 +66,63 @@ internal data class NeteaseListenTogetherActions(
     } else 0.dp
     val clipboard = LocalClipboard.current
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val archiveController = remember(container, account.revision) {
+        ListenTogetherHistoryController(container.listenTogetherHistory, scope, container.musicRepository::details)
+    }
+    val archive by archiveController.state.collectAsStateWithLifecycle()
+    var invitePeer by remember(account.revision) { mutableStateOf<io.github.currencortex.music.data.netease.listen.ListenTogetherParticipant?>(null) }
+    var shareJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
+    DisposableEffect(archiveController) { onDispose { archiveController.close(); shareJob?.cancel() } }
+    LaunchedEffect(archive.page, archive.reportRoomId) { shareJob?.cancel() }
+    LaunchedEffect(state.endedRoom?.roomId, state.endedOwnerUid, account.revision) {
+        state.endedRoom?.takeIf { state.endedOwnerUid == account.profile?.uid }?.let { ended ->
+            archiveController.report(ended.roomId, ended)
+            controller.dismissEndedRoom()
+        }
+    }
     LaunchedEffect(controller, account.revision) {
         if (account.loggedIn && !account.stale && (account.profile?.uid ?: 0) > 0) controller.refresh()
+    }
+    if (archive.page != null) {
+        val collectionShown = !archive.collectionSongs.isNullOrEmpty()
+        LaunchedEffect(invitePeer, collectionShown) { onDialogActive(invitePeer != null || collectionShown) }
+        DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
+        val back = { if (archive.page == ListenArchivePage.HISTORY) archiveController.close() else archiveController.history() }
+        BackHandler(onBack = back)
+        ListenTogetherHistoryContent(archive, onBack = back, onHistory = archiveController::history,
+            onRanking = archiveController::ranking, onReport = { roomId ->
+                val knownPeer = archive.history?.records?.firstOrNull { it.roomId == roomId }?.user
+                val knownRoom = io.github.currencortex.music.data.netease.listen.ListenTogetherRoom(roomId,
+                    archive.self?.userId ?: 0, listOfNotNull(archive.self, knownPeer))
+                archiveController.report(roomId, knownRoom)
+            },
+            onMore = archiveController::more, onRetry = archiveController::retry,
+            onInvite = { if (!state.active) invitePeer = it },
+            onShare = { report -> if (shareJob?.isActive != true) {
+                Toast.makeText(context, "正在生成报告…", Toast.LENGTH_SHORT).show()
+                shareJob = scope.launch {
+                    try {
+                        val file = ListenTogetherReportSharing.create(context, report)
+                        context.startActivity(Intent.createChooser(ListenTogetherReportSharing.intent(context, report, file), "分享一起听报告"))
+                    } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+                    catch (_: Exception) { Toast.makeText(context, "暂时无法分享报告，请重试", Toast.LENGTH_SHORT).show() }
+                }
+            } },
+            onCollect = archiveController::collectSongs,
+            onOfficial = { report -> try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(report.officialUrl()))) }
+                catch (_: Exception) { Toast.makeText(context, "无法打开官方报告", Toast.LENGTH_SHORT).show() } },
+            topClearance = islandClearance, activeRoom = state.active)
+        NeteaseSongsCollectionDialog(archive.collectionSongs.orEmpty(), collectionShown,
+            archiveController::dismissCollection,
+            loadPlaylists = { container.neteaseLibrary.playlists(fresh = true).filter { it.nativeOwned } },
+            collect = { id, songs -> container.neteaseLibrary.addAll(id, songs); Unit })
+        invitePeer?.let { peer -> MusicDialog("再次一起听", onDismiss = { invitePeer = null }) {
+            Text("创建新的双人会话后，可复制邀请链接发给${peer.nickname.ifBlank { "好友" }}。")
+            MusicTextAction("取消", { invitePeer = null })
+            MusicTextAction("创建一起听", { invitePeer = null; archiveController.close(); controller.create() }, enabled = !state.active && !state.busy)
+        } }
+        return
     }
     NeteaseListenTogetherContent(state, account, playback,
         actions = NeteaseListenTogetherActions(controller::create, controller::join, controller::resume,
@@ -72,14 +132,15 @@ internal data class NeteaseListenTogetherActions(
                 if (clip.itemCount > 0) clip.getItemAt(0).coerceToText(context)?.toString() else null
             } }),
         onBack = onBack, onSearch = onSearch, onPlayer = onPlayer, onBinding = onBinding,
-        currentMusicRoomActive = cmRoom.detail != null, onDialogActive = onDialogActive, topClearance = islandClearance)
+        currentMusicRoomActive = cmRoom.detail != null, onDialogActive = onDialogActive, topClearance = islandClearance,
+        onHistory = { archiveController.history() })
 }
 
 @Composable internal fun NeteaseListenTogetherContent(state: NeteaseListenTogetherState,
     account: NeteaseAccountState, playback: PlayerState, actions: NeteaseListenTogetherActions,
     onBack: () -> Unit, onSearch: () -> Unit, onPlayer: () -> Unit,
     onBinding: (() -> Unit)? = null, currentMusicRoomActive: Boolean = false,
-    onDialogActive: (Boolean) -> Unit = {}, topClearance: Dp = 0.dp) {
+    onDialogActive: (Boolean) -> Unit = {}, topClearance: Dp = 0.dp, onHistory: (() -> Unit)? = null) {
     val colors = MiuixTheme.colorScheme
     val ready = account.loggedIn && !account.stale && (account.profile?.uid ?: 0) > 0
     val canStart = ready && !state.busy && !currentMusicRoomActive
@@ -108,6 +169,7 @@ internal data class NeteaseListenTogetherActions(
                     if (showAccountCard) Modifier else Modifier.testTag("netease_listen_account"),
                     fontSize = 12.sp, color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            if (ready && onHistory != null) MusicTextAction("记录", onHistory, Modifier.testTag("netease_listen_history"))
         }
         LazyColumn(Modifier.weight(1f).fillMaxWidth(),
             contentPadding = musicScrollPadding(PaddingValues(top = 8.dp, bottom = 24.dp)),
