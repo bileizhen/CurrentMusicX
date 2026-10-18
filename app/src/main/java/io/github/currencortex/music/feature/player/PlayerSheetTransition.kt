@@ -84,6 +84,7 @@ internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtwo
             PlayerPagerArtworkRole.LYRICS -> pager?.lyrics = it
             null -> if (transitionTarget) transfer?.target = it
         }
+        if (pagerRole != null) pager?.updateBounds()
     }
         .semantics {
             this[CoverRotation] = rotation?.value ?: 0f
