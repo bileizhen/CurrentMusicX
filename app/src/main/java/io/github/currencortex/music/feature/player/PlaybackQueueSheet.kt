@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -37,6 +38,9 @@ import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 
+internal data class NativeQueueActions(val recommended: Boolean, val description: String,
+    val onRecommendation: (Boolean) -> Unit)
+
 internal class QueuePageMotion {
     val animation = Animatable(0f)
     var dragged by mutableStateOf<Float?>(null)
@@ -58,6 +62,8 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
     val sharedQueue by vm.together.queue.collectAsStateWithLifecycle()
     val shared = together.active
     val displayed = if (shared) sharedQueue else queue
+    val nativeActions = if (shared) NativeQueueActions(together.room?.openHeartRcmd == true,
+        together.room?.playlistCopywriting.orEmpty().ifBlank { "根据双方口味，心动推荐" }, vm.together::setRecommendation) else null
     PlaybackQueueContent(displayed, if (shared) !together.busy else player.mode == PlayerMode.LOCAL,
         if (shared) together.queueLoading else loading,
         !shared && NeteaseSongActionsRepository.songId(queue.current) != null,
@@ -66,14 +72,15 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         onSelect = { index -> if (shared) displayed.songs.getOrNull(index)?.let { vm.together.selectSong(it.id) } else vm.player.select(index) },
         onRemove = { index -> if (shared) displayed.songs.getOrNull(index)?.let { vm.together.removeSong(it.id) } else vm.player.remove(index) },
         onClear = { if (shared) vm.together.clearQueue() else vm.player.clear() },
-        onMode = vm::setPlaybackMode, onDismiss = onDismiss, shared = shared)
+        onMode = vm::setPlaybackMode, onDismiss = onDismiss, shared = shared, nativeActions = nativeActions)
 }
 
 /** One viewport and queue for both entry points; no separate dialog queue or audio restart on opening. */
 @Composable internal fun PlaybackQueueContent(queue: QueueSnapshot, editable: Boolean, loading: Boolean,
     heartAvailable: Boolean, error: String?, motion: QueuePageMotion, backdrop: Boolean, tag: String,
     onSelect: (Int) -> Unit, onRemove: (Int) -> Unit, onClear: () -> Unit,
-    onMode: (PlaybackMode) -> Unit, onDismiss: () -> Unit, shared: Boolean = false) {
+    onMode: (PlaybackMode) -> Unit, onDismiss: () -> Unit, shared: Boolean = false,
+    nativeActions: NativeQueueActions? = null) {
     val scope = rememberCoroutineScope()
     val dismiss by rememberUpdatedState(onDismiss)
     val list = rememberLazyListState((queue.index - 2).coerceAtLeast(0))
@@ -181,6 +188,17 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                         Modifier.align(Alignment.CenterEnd).testTag("queue_clear"))
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .07f)))
+                if (nativeActions != null) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Row(Modifier.weight(1f).heightIn(min = 48.dp).testTag("queue_recommendation")
+                            .toggleable(nativeActions.recommended, enabled = editable, role = Role.Checkbox,
+                                onValueChange = nativeActions.onRecommendation), verticalAlignment = Alignment.CenterVertically) {
+                            Text(if (nativeActions.recommended) "✓" else "○", color = Color.White.copy(alpha = .8f), fontSize = 19.sp)
+                            Text(nativeActions.description, Modifier.padding(start = 8.dp), fontSize = 12.sp,
+                                maxLines = 2, overflow = TextOverflow.Ellipsis, color = Color.White.copy(alpha = .6f))
+                        }
+                    }
+                }
             }
             if (queue.songs.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth().then(dragHeader), contentAlignment = Alignment.Center) {
                 Text("播放队列为空", color = Color.White.copy(alpha = .5f), fontSize = 16.sp)

@@ -172,6 +172,19 @@ class NeteaseListenTogetherRepositoryTest {
             ListenTogetherPlayback("NEXT", 20, 10, true, clientSeq = 1)) }.isFailure)
     }
 
+    @Test fun recommendationUsesNativeIntegerStatusAndPreservesServerPermissionMessage() = runBlocking {
+        val expected = repository.captureSession()
+        response("""{"code":200,"data":{"success":true,"refreshPlaylist":true}}""")
+        val enabled = repository.setRecommendation(expected, "room-100", true)
+        assertTrue(enabled.success); assertTrue(enabled.refreshPlaylist)
+        val request = server.takeRequest()
+        assertEquals("/eapi/listen/together/heart/rcmd/change", request.path)
+        assertEquals(1, payload(request)["status"]!!.jsonPrimitive.int)
+        response("""{"code":200,"data":{"success":false,"toast":"需要会员权限"}}""")
+        val rejected = repository.setRecommendation(expected, "room-100", false)
+        assertFalse(rejected.success); assertEquals("需要会员权限", rejected.message)
+    }
+
     @Test fun statusAndLeaveDoNotInventAJoinRouteOrOpenExternalMessages() = runBlocking {
         val expected = repository.captureSession()
         response("""{"code":200}""")

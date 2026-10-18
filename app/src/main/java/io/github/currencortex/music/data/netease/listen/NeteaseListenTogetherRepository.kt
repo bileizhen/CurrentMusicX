@@ -127,6 +127,15 @@ internal class NeteaseListenTogetherRepository(private val transport: NeteaseTra
         }, expected)
     }
 
+    /** Android 9.5.30 rg0.h0$j: integer status, roomId; server decides membership eligibility. */
+    override suspend fun setRecommendation(expected: NeteaseSession, roomId: String, enabled: Boolean): ListenTogetherRecommendation {
+        requireRoom(roomId)
+        val data = request("heart/rcmd/change", buildJsonObject {
+            put("roomId", roomId); put("status", if (enabled) 1 else 0)
+        }, expected).obj("data") ?: parseError()
+        return ListenTogetherRecommendation(data.bool("success") ?: parseError(), data.bool("refreshPlaylist") == true, data.text("toast"))
+    }
+
     private suspend fun request(path: String, data: JsonObject, expected: NeteaseSession): JsonObject {
         transport.sessions.check(expected)
         if (expected.credential.cookies["MUSIC_U"].isNullOrBlank() || expected.credential.stale)
@@ -146,7 +155,8 @@ internal class NeteaseListenTogetherRepository(private val transport: NeteaseTra
             trace("report path=$path code=$code result=${responseData?.bool("result")}")
             if (responseData?.bool("result") != true) throw ApiException(ErrorKind.Server, code)
         }
-        if ((path != "heartbeat" && responseData?.bool("result") == false) || responseData?.bool("success") == false)
+        if ((path != "heartbeat" && responseData?.bool("result") == false) ||
+            (path != "heart/rcmd/change" && responseData?.bool("success") == false))
             throw ApiException(ErrorKind.Server, code)
         transport.sessions.check(expected)
         return result
@@ -168,7 +178,8 @@ internal class NeteaseListenTogetherRepository(private val transport: NeteaseTra
             }
         }?.distinctBy { it.userId }.orEmpty()
         return ListenTogetherRoom(id, data.long("creatorId") ?: 0, users, data.text("roomType").ifBlank { "FRIEND" },
-            data.long("effectiveDurationMs") ?: 0, data.long("roomCreateTime") ?: 0)
+            data.long("effectiveDurationMs") ?: 0, data.long("roomCreateTime") ?: 0,
+            data.bool("openHeartRcmd") == true, data.text("playlistCopywriting"))
     }
 
     private fun parsePlayback(data: JsonObject): ListenTogetherPlayback? {
