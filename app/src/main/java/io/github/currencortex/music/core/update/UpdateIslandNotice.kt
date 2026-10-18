@@ -51,5 +51,6 @@ class UpdateIslandNotice(downloads: Flow<UpdateDownloadState>, enabled: Flow<Boo
  * The latest download remains intact and becomes visible again when the effect notice expires.
  */
 internal fun prioritizedIslandNotices(download: StateFlow<SoundEffectNotice?>, effects: StateFlow<SoundEffectNotice?>,
-    scope: CoroutineScope): StateFlow<SoundEffectNotice?> =
-    combine(download, effects) { update, effect -> effect ?: update }.stateIn(scope, SharingStarted.Eagerly, null)
+    scope: CoroutineScope, errors: StateFlow<SoundEffectNotice?> = MutableStateFlow(null)): StateFlow<SoundEffectNotice?> =
+    combine(download, effects, errors) { update, effect, error -> error ?: effect ?: update }
+        .stateIn(scope, SharingStarted.Eagerly, null)

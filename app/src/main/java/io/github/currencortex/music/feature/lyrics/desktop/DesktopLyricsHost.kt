@@ -97,9 +97,13 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         scope.launch { preferences.ready.await(); combine(preferences.state, settingsVisible) { settings, _ -> settings }
             .collect { current = it; reconcile() } }
         scope.launch { appearance.map { it.refreshRate }.distinctUntilChanged().collect { refreshRate = it; updateWindow() } }
-        scope.launch { combine(appForeground, pageHidden) { foreground, hidden -> foreground && hidden }
+        scope.launch { combine(appForeground, pageHidden) { foreground, hidden -> foreground to hidden }
             .distinctUntilChanged().collect { visibility() } }
-        scope.launch { effectNotices.map { it != null && !it.isUpdateInstallNotice() }.distinctUntilChanged().collectLatest { showing ->
+        scope.launch { effectNotices.collectLatest { notice ->
+            // A notice may become install-ready without changing its presence. Recheck first,
+            // before the input-window delay, so every temporary phase can appear on any page.
+            visibility()
+            val showing = notice != null && !notice.isUpdateInstallNotice()
             effectTransitioning = true
             removeIslandTouchWindow()
             // No input-window resize transactions while the visual capsule morphs.
@@ -141,7 +145,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                 val config by appearance.collectAsState()
                 Box(Modifier.musicRefreshRate(config.refreshRate), propagateMinConstraints = true) {
                 val inApp by appForeground.collectAsState()
-                DesktopLyricsSurface(lyrics, playback, preferences.state, effectNotices = effectNotices, installUpdate = installUpdate,
+                DesktopLyricsSurface(lyrics, playback, preferences.state, effectNotices = effectNotices, installUpdate = installUpdate, noticeOnly = inApp,
                 lock = { scope.launch { preferences.edit { it.copy(locked = true) } } },
                 close = { scope.launch { preferences.edit { it.copy(enabled = false) } } }, settings = {
                     context.startActivity(settingsIntent(context))
@@ -325,7 +329,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private fun visibility() {
         val root = view ?: return
         val hardHidden = !power.isInteractive || keyguard.isKeyguardLocked || settingsVisible.value
-        val pageConcealed = appForeground.value && pageHidden.value
+        val pageConcealed = !desktopIslandContentAllowed(appForeground.value, effectNotices.value)
         val visible = systemVisible && !hardHidden && !pageConcealed
         if (!visible) removeIslandTouchWindow()
         status.value = status.value.copy(visible = visible)
@@ -368,7 +372,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
             }.start()
     }
     private fun screenHidden() = !power.isInteractive || keyguard.isKeyguardLocked || settingsVisible.value ||
-        (appForeground.value && pageHidden.value)
+        !desktopIslandContentAllowed(appForeground.value, effectNotices.value)
     private fun notification() {
         val key = current.locked to editing
         if (view == null || noticeKey == key) return

@@ -3,7 +3,6 @@ package io.github.currencortex.music.feature.announcement
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
-import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -32,6 +31,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.currencortex.music.ui.util.showMusicError
 import io.github.currencortex.music.data.announcement.Announcement
 import io.github.currencortex.music.feature.update.MarkdownText
 import io.github.currencortex.music.ui.component.MusicDialog
@@ -59,7 +59,7 @@ fun AnnouncementDialog(items: List<Announcement>, suppressByDefault: Boolean = f
     val openDetails: (String) -> Unit = onOpenLink ?: { url ->
         try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
         catch (_: ActivityNotFoundException) {
-            Toast.makeText(context, "未找到可以打开链接的应用", Toast.LENGTH_SHORT).show()
+            context.showMusicError("未找到可以打开链接的应用")
         }
     }
     MusicDialog(if (items.size == 1) "公告" else "公告（${items.size}）", dismiss,

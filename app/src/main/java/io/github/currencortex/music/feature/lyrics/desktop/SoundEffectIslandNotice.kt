@@ -64,6 +64,10 @@ import kotlin.math.roundToInt
 @Composable internal fun SoundEffectIslandPill(notice: SoundEffectNotice, modifier: Modifier = Modifier,
     material: Boolean = true, height: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE,
     onUpdateInstall: () -> Unit = {}) {
+    if (notice.kind == IslandNoticeKind.ERROR) {
+        AppErrorIslandPill(notice, modifier, material, height, font)
+        return
+    }
     if (notice.kind == IslandNoticeKind.UPDATE_DOWNLOAD) {
         UpdateIslandPill(notice, modifier, material, height, font, onUpdateInstall)
         return
@@ -222,18 +226,16 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
 
 /** No existing island: briefly grow from a compact capsule, then shrink before fading away. */
 @Composable internal fun SoundEffectIslandFallback(container: AppContainer) {
-    val pageHidden by container.desktopIslandPageHidden.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val notice by container.islandNotices.collectAsStateWithLifecycle()
     val desktop by container.desktopLyricsStatus.collectAsStateWithLifecycle()
     val options by container.desktopLyrics.state.collectAsStateWithLifecycle()
     Box(Modifier.fillMaxSize().statusBarsPadding().padding(top = 8.dp, start = 20.dp, end = 20.dp),
         contentAlignment = Alignment.TopCenter) {
-        AnimatedVisibility(notice != null && !desktop.visible && !pageHidden,
+        AnimatedVisibility(fallbackIslandNoticeVisible(notice, desktop.attached),
             enter = fadeIn(tween(160)) + scaleIn(tween(260), initialScale = .88f),
-            exit = if (pageHidden) fadeOut(tween(180)) + scaleOut(tween(180), targetScale = .94f)
-                else fadeOut(tween(140, 380)) + scaleOut(tween(180, 300), targetScale = .88f)) {
-            DesktopIslandEffectTransition(notice.takeUnless { desktop.visible },
+            exit = fadeOut(tween(140, 380)) + scaleOut(tween(180, 300), targetScale = .88f)) {
+            DesktopIslandEffectTransition(notice.takeUnless { desktop.attached },
                 effectHeight = rememberIslandFpsHeight(options.displayFontSize), font = options.displayFontSize,
                 onUpdateInstall = { io.github.currencortex.music.core.update.UpdateInstallAction.open(context) }) {
                 Spacer(Modifier.width(112.dp).height(rememberIslandFpsHeight(options.displayFontSize)))

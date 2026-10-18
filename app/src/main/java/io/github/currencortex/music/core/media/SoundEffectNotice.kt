@@ -11,7 +11,7 @@ enum class SoundEffectNoticeTier { STANDARD, VIP, SVIP;
     companion object { fun fromMembership(value: Int) = when (value) { 4 -> SVIP; 3 -> VIP; else -> STANDARD } }
 }
 enum class SoundEffectNoticePhase { APPLYING, READY, WAITING, FAILED }
-enum class IslandNoticeKind { SOUND_EFFECT, UPDATE_DOWNLOAD }
+enum class IslandNoticeKind { SOUND_EFFECT, UPDATE_DOWNLOAD, ERROR }
 data class SoundEffectNotice(val id: Long, val name: String, val tier: SoundEffectNoticeTier,
     val phase: SoundEffectNoticePhase = SoundEffectNoticePhase.APPLYING, val message: String = "正在启用音效…",
     val kind: IslandNoticeKind = IslandNoticeKind.SOUND_EFFECT, val progress: Int? = null)

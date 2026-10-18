@@ -3,7 +3,6 @@ package io.github.currencortex.music.feature.mv
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -18,10 +17,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.work.WorkInfo
+import io.github.currencortex.music.ui.util.showMusicError
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.MusicDialog
+import kotlinx.coroutines.CancellationException
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -63,11 +64,13 @@ internal fun WorkInfo?.mvLabel(): String = when {
             manager.start(song, quality, container.accountRepository.state.value.account?.id ?: 0L,
                 container.musicSession().server,
                 if (container.nativeNetease != null) container.neteaseSessions.state.value.profile?.uid ?: 0L else -1)
-        } catch (_: Exception) { Toast.makeText(context, "无法开始 MV 下载，请重试", Toast.LENGTH_LONG).show() }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { context.showMusicError("无法开始 MV 下载，请重试") }
     }
     val folder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) try { manager.setDirectory(uri); if (afterFolder) start() }
-        catch (_: Exception) { Toast.makeText(context, "此文件夹不可写，请重新选择", Toast.LENGTH_LONG).show() }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { context.showMusicError("此文件夹不可写，请重新选择") }
         afterFolder = false
     }
     if (choosing) MvQualityDialog(quality, { quality = it }, { choosing = false })
@@ -110,7 +113,8 @@ internal fun WorkInfo?.mvLabel(): String = when {
                     saved -> try {
                         context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(requireNotNull(info?.outputData?.getString("uri"))), "video/mp4")
                             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-                    } catch (_: Exception) { Toast.makeText(context, "文件不可用或没有视频播放器，可到保存位置查看或重新下载", Toast.LENGTH_LONG).show() }
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { context.showMusicError("文件不可用或没有视频播放器，可到保存位置查看或重新下载") }
                     Build.VERSION.SDK_INT < 29 && directory == null -> { afterFolder = true; folder.launch(null) }
                     else -> start()
                 }

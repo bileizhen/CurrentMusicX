@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import io.github.currencortex.music.ui.util.showMusicError
 import io.github.currencortex.music.core.logging.AppLogger
 import io.github.currencortex.music.core.logging.DiagnosticExporter
 import io.github.currencortex.music.ui.component.MusicIcons
@@ -32,7 +33,7 @@ fun LogExportDialog(show: Boolean, logger: AppLogger, onDismiss: () -> Unit) {
         catch (cancelled: CancellationException) { throw cancelled }
         catch (error: Exception) {
             logger.warn("Diagnostics", "Unable to export logs", error)
-            Toast.makeText(context, "导出失败，请重试", Toast.LENGTH_LONG).show()
+            context.showMusicError("导出失败，请重试")
         } finally { busy = false }
     }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
@@ -49,7 +50,8 @@ fun LogExportDialog(show: Boolean, logger: AppLogger, onDismiss: () -> Unit) {
             modifier = Modifier.testTag("export_logs_save"), onClick = {
                 onDismiss()
                 try { save.launch("${io.github.currencortex.music.core.config.AppMetadata.GITHUB_REPO}_logs_${System.currentTimeMillis()}.zip") }
-                catch (_: Exception) { Toast.makeText(context, "无法打开文件选择器", Toast.LENGTH_LONG).show() }
+                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: Exception) { context.showMusicError("无法打开文件选择器") }
             })
         ArrowPreference(title = "分享日志", summary = "使用系统分享",
             startAction = { Icon(MusicIcons.Share, null, Modifier.padding(end = 12.dp)) },

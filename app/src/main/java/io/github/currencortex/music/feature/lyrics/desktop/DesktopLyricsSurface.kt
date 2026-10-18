@@ -44,7 +44,7 @@ import kotlinx.coroutines.flow.StateFlow
     onIslandSize: (IntSize) -> Unit = {}, islandTapRequest: Int = 0, onIslandModeChanged: (Boolean) -> Unit = {},
     changeSong: (Int) -> Unit = {}, onIslandTop: (Int) -> Unit = {},
     togglePlayback: () -> Unit = {}, onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
-    defaultFpsMode: Boolean = false,
+    defaultFpsMode: Boolean = false, noticeOnly: Boolean = false,
     effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = remember { kotlinx.coroutines.flow.MutableStateFlow(null) },
     installUpdate: () -> Unit = {}) {
     val effectNotice by effectNotices.collectAsStateWithLifecycle()
@@ -80,7 +80,7 @@ import kotlinx.coroutines.flow.StateFlow
     }
     val chromeAlpha by animateFloatAsState(if (controlsWanted && !options.locked) 1f else 0f,
         tween(if (motion) 180 else 0), label = "desktop chrome")
-    val showChrome = !options.locked && (controlsWanted || chromeAlpha > 0f)
+    val showChrome = !noticeOnly && !options.locked && (controlsWanted || chromeAlpha > 0f)
     SideEffect { onEditingChanged(showChrome) }
     val font = options.displayFontSize
     val size = rememberIslandSize(player.song, if (fpsMode) "000.0 FPS" else line?.text.orEmpty(), font, fpsMode, showChrome,
@@ -127,6 +127,8 @@ import kotlinx.coroutines.flow.StateFlow
                 alpha = entrance.value; scaleX = .94f + .06f * entrance.value; scaleY = scaleX
                 transformOrigin = TransformOrigin(.5f, 0f)
             }, effectHeight = rememberIslandFpsHeight(font), font = font, onUpdateInstall = installUpdate) {
+        if (noticeOnly) Spacer(Modifier.width(112.dp).height(rememberIslandFpsHeight(font)))
+        else
         DesktopIslandFrame(player.song, Modifier.islandAnimatedWidth(width).fillMaxWidth()
             .pointerInput(options.locked) { detectTapGestures(onTap = { toggle() }, onLongPress = { if (!options.locked) revealControls() }) }
             .pointerInput(Unit) {
