@@ -48,7 +48,7 @@ import androidx.compose.ui.graphics.Color
     val maximum = remember(context) { if (Build.VERSION.SDK_INT >= 31) context.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch else .8f }
     val alpha = desktopWindowAlpha(options.displayOpacity, options.locked, maximum)
     val size = rememberIslandSize(playback.song, if (fpsMode) "000.0 FPS" else line?.text.orEmpty(), font, fpsMode, false,
-        line?.translation?.takeIf { options.translation && !fpsMode })
+        line?.translation?.takeIf { options.translation && !fpsMode }, listeningPair = playback.listenTogether != null)
     val reveal = rememberIslandPresentation(playback.song?.id, fpsMode || line != null || !content.loading, motion).value
     val width = rememberIslandWidth(size.width + (size.headingWidth - size.width) *
         (1f - reveal / .55f).coerceIn(0f, 1f), motion)
@@ -66,6 +66,7 @@ import androidx.compose.ui.graphics.Color
                     metadata = size.metadata, presentation = reveal, coverPosition = clock, motion = motion,
                     durationMs = playback.durationMs.takeIf { it > 0 } ?: playback.song?.durationMs ?: 0L,
                     coverPlaying = playback.showPause,
+                    listenTogether = playback.listenTogether,
                     onCoverTap = { if (playback.song != null && playback.canControlPlayback) container.playerController.toggle() }) {
                     DesktopIslandDisplay(fpsMode, motion, lyrics = {
                         if (line != null) {

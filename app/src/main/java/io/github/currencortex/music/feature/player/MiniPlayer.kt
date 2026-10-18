@@ -88,7 +88,8 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
     val duration = (if (currentMatches) state.durationMs.takeIf { it > 0 } else null) ?: song?.durationMs ?: 0L
     val position = if (currentMatches) state.positionMs else queue.positionMs
     val progress = if (duration > 0) (position.toDouble() / duration).toFloat().coerceIn(0f, 1f) else 0f
-    val rotation = LocalPlayerArtworkRotation.current ?: rememberCoverRotation(song?.id, active && state.playing && song?.video != true)
+    val pair = state.listenTogether
+    val rotation = LocalPlayerArtworkRotation.current ?: rememberCoverRotation(song?.id, active && pair == null && state.playing && song?.video != true)
     val coverAngle by rememberUpdatedState(rotation)
     val coverBorder = MiuixTheme.colorScheme.onSurface.copy(alpha = .85f)
     val borderColor by rememberUpdatedState(coverBorder)
@@ -99,7 +100,7 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
     } else remember { mutableFloatStateOf(0f) }
     var dragged by remember { mutableFloatStateOf(0f) }
     val subtitle = when (state.mode) {
-        PlayerMode.ROOM -> if (state.canControlPlayback) "房间控制" else "跟随房间"
+        PlayerMode.ROOM -> if (pair != null) "双人一起听" else if (state.canControlPlayback) "房间控制" else "跟随房间"
         PlayerMode.CAST -> "正在投屏"
         else -> song?.artists.orEmpty()
     }
@@ -120,14 +121,16 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
     surface(modifier.fillMaxWidth().testTag("mini_player")) {
         Row(Modifier.heightIn(min = 52.dp).onGloballyPositioned { onSurfaceBounds(it.boundsInRoot()); onSurfaceCoordinates(it) }
             .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(42.dp).onGloballyPositioned { coordinates ->
+            Box(Modifier.width(if (pair == null) 42.dp else 42.dp * listeningPairArtworkAspectRatio).height(42.dp).onGloballyPositioned { coordinates ->
                 onArtworkOrigin {
-                    if (!coordinates.isAttached) null else PlayerArtworkOrigin(
+                    if (pair != null || !coordinates.isAttached) null else PlayerArtworkOrigin(
                         Rect(coordinates.localToRoot(androidx.compose.ui.geometry.Offset.Zero),
                             Size(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())), coverAngle.value, borderColor)
                 }
             }) {
-            MusicCover(song?.cover.orEmpty(), Modifier.size(42.dp).testTag("mini_cover")
+            if (pair != null) ListeningPairArtwork(pair, Modifier.fillMaxSize().testTag("mini_pair_artwork")
+                .clickable(onClick = onOpen))
+            else MusicCover(song?.cover.orEmpty(), Modifier.size(42.dp).testTag("mini_cover")
                 .semantics { this[CoverRotation] = rotation.value }
                 .graphicsLayer { rotationZ = rotation.value; alpha = if (artworkVisible()) 1f else 0f }.clip(CircleShape)
                 .border(2.dp, coverBorder, CircleShape).clickable(onClick = onOpen))

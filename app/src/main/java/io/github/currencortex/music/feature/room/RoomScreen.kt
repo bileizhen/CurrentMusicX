@@ -32,13 +32,22 @@ import io.github.currencortex.music.ui.component.MusicDialog
 import io.github.currencortex.music.ui.component.MusicCover
 import io.github.currencortex.music.ui.component.MusicTextAction
 import io.github.currencortex.music.ui.component.MusicCategoryTabs
+import io.github.currencortex.music.ui.component.MusicDestinationRow
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 import top.yukonga.miuix.kmp.basic.*
 
 @Composable fun RoomScreen(vm: RoomViewModel, onBack: () -> Unit, onSearch: () -> Unit, onPlayer: () -> Unit,
-    onDialogActive: (Boolean) -> Unit = {}) {
+    onDialogActive: (Boolean) -> Unit = {}, onBinding: (() -> Unit)? = null) {
+    val native by vm.container.listenTogether.state.collectAsStateWithLifecycle()
+    var nativePage by rememberSaveable { mutableStateOf(native.active) }
+    LaunchedEffect(native.active) { if (native.active) nativePage = true }
+    if (nativePage) {
+        NeteaseListenTogetherScreen(vm.container, onBack = { nativePage = false }, onSearch = onSearch,
+            onPlayer = onPlayer, onBinding = onBinding, onDialogActive = onDialogActive)
+        return
+    }
     val browser by vm.browser.collectAsPageState()
     val live by vm.session.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
@@ -58,6 +67,10 @@ import top.yukonga.miuix.kmp.basic.*
         Row(verticalAlignment = Alignment.CenterVertically) {
             MusicTextAction("返回", onClick = onBack)
             Text("一起听", Modifier.weight(1f), fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+        }
+        Card(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+            MusicDestinationRow("网易云双人一起听", { nativePage = true }, Modifier.testTag("open_netease_listen_together"),
+                summary = if (native.active) "正在一起听 · 查看会话" else "和网易云好友同步听歌")
         }
         val detail = live.detail
         if (detail == null) {

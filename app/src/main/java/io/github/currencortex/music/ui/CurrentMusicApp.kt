@@ -205,6 +205,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val searchKeyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val searchFocusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val roomLive by container.roomSession.state.collectAsStateWithLifecycle()
+    val nativeTogether by container.listenTogether.state.collectAsStateWithLifecycle()
     val tabsState = rememberSaveableStateHolder()
     var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
     var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
@@ -321,6 +322,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             else action()
         }
         fun requestSong(song: Song) {
+            if (nativeTogether.active) { container.listenTogether.request(song); return }
             if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) { libraryVm.message.value = "私有曲库歌曲不能提交到一起听房间"; return }
             if (!container.roomSession.active || song.id in roomPending) return
             val revision = container.accountRepository.sessionRevision.value
@@ -338,11 +340,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 } finally { if (revision == container.accountRepository.sessionRevision.value) roomPending = roomPending - song.id }
             }
         }
-        LaunchedEffect(roomLive.detail?.room?.id, playerState.mode) {
-            if (backStack.last() == "room/search" && !container.roomSession.active) navigateBack()
+        LaunchedEffect(roomLive.detail?.room?.id, playerState.mode, nativeTogether.active) {
+            if (backStack.last() == "room/search" && !container.roomSession.active && !nativeTogether.active) navigateBack()
         }
-        val roomRequest = if (container.roomSession.active && roomLive.detail != null)
-            RoomSongRequest(::requestSong) { it in roomPending } else null
+        val roomRequest = when {
+            nativeTogether.active -> RoomSongRequest(::requestSong) { nativeTogether.busy }
+            container.roomSession.active && roomLive.detail != null -> RoomSongRequest(::requestSong) { it in roomPending }
+            else -> null
+        }
         val playerDrag = remember(playerExpansion, scope) { PlayerSheetDragController(playerExpansion, scope) }
         SideEffect {
             playerDrag.onOpen = { navigateTo(PLAYER) }
@@ -508,12 +513,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                         SearchScreen(searchVm, container.playerController, actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) },
                             navigate = ::navigateLibrary,
-                            roomName = roomLive.detail?.room?.name.orEmpty(), onBack = ::navigateBack) { songs, index -> requestSong(songs[index]) }
+                            roomName = if (nativeTogether.active) "网易云双人一起听" else roomLive.detail?.room?.name.orEmpty(),
+                            onBack = ::navigateBack) { songs, index -> requestSong(songs[index]) }
                     }
                 }
                 entry("room/list") {
                     val vm: RoomViewModel = viewModel(factory = viewModelFactory { RoomViewModel(container) })
-                    RoomScreen(vm, ::navigateBack, { navigateLibrary("room/search") }, { navigateTo(PLAYER) }, { roomDialogOpen = it })
+                    RoomScreen(vm, ::navigateBack, { navigateLibrary("room/search") }, { navigateTo(PLAYER) }, { roomDialogOpen = it },
+                        onBinding = { navigateLibrary("user/binding") })
                 }
                 entry(APPEARANCE.toString()) {
                     Box(Modifier.fillMaxSize().navigationBarsPadding()) {
