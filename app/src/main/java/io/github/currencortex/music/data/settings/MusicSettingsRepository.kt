@@ -19,7 +19,13 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val neteaseMainLibrary: Boolean = true,
                          val allowConcurrentPlayback: Boolean = false,
                          val transitionMode: MusicTransitionMode = MusicTransitionMode.OFF,
-                         val crossfadeSeconds: Int = 5)
+                         val crossfadeSeconds: Int = 5, val likeMode: LikeMode = LikeMode.AUTO)
+
+enum class LikeMode(val label: String) {
+    AUTO("自动"), NETEASE("网易云 · 我喜欢"), CURRENT_MUSIC("CurrentMusic · 我喜欢");
+    fun useNetease(bound: Boolean) = bound && this != CURRENT_MUSIC
+    companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: AUTO }
+}
 
 enum class MusicTransitionMode { OFF, SMART, CROSSFADE;
     companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: OFF }
@@ -88,6 +94,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val smoke = booleanPreferencesKey("lyrics.smoke")
     private val particles = booleanPreferencesKey("lyrics.particles")
     private val neteaseMain = booleanPreferencesKey("library.neteaseMain")
+    private val likeMode = stringPreferencesKey("music.likeMode")
     private val concurrentPlayback = booleanPreferencesKey("music.allowConcurrentPlayback")
     private val transition = stringPreferencesKey("music.transitionMode")
     private val crossfadeSeconds = intPreferencesKey("music.crossfadeSeconds")
@@ -99,7 +106,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[blur] ?: true, p[stagger] ?: true, KaraokeScope.from(p[karaokeScope]), p[hideControls] ?: false,
             p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true,
             p[perspective] ?: true, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false, p[particles] ?: false).normalized(), p[neteaseMain] ?: true,
-        p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12))
+        p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), LikeMode.from(p[likeMode]))
     // Read the persisted value directly, without the StateFlow's initial defaults.
     val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: false }.distinctUntilChanged()
     val state = store.data.map(::decode)
@@ -134,4 +141,5 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     }
     suspend fun setAccount(id: Long, name: String) { store.edit { it[account] = id; it[nickname] = name } }
     suspend fun setNeteaseMainLibrary(value: Boolean) { store.edit { it[neteaseMain] = value } }
+    suspend fun setLikeMode(value: LikeMode) { store.edit { it[likeMode] = value.name } }
 }
