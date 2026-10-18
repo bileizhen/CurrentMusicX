@@ -739,13 +739,18 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         if (profileMessage != null) MusicDialog("账号操作", onDismiss = { profileVm.message.value = null }) {
             Text(profileMessage.orEmpty()); TextButton("关闭", onClick = { profileVm.message.value = null })
         }
-        val playbackMessage = libraryMessage ?: playerState.error.takeUnless { sceneStack.last() == "lib/video" }
+        LaunchedEffect(playerState.error) {
+            playerState.error?.let { message ->
+                container.errorNotices.show(message)
+            }
+        }
+        val playbackMessage = libraryMessage
         if (playbackMessage != null) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.BottomCenter) {
             androidx.compose.foundation.layout.Row(Modifier.imePadding().navigationBarsPadding().padding(12.dp)
                 .padding(bottom = (if (rootPage && !keyboardOpen) 92.dp else 0.dp) + if (showMini) miniHeight else 0.dp)
                 .background(MiuixTheme.colorScheme.surface, androidx.compose.foundation.shape.RoundedCornerShape(18.dp)).padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text(playbackMessage.orEmpty(), Modifier.weight(1f), fontSize = 13.sp); MusicTextAction("关闭", { libraryVm.message.value = null; container.playerController.dismissError() })
+                Text(playbackMessage.orEmpty(), Modifier.weight(1f), fontSize = 13.sp); MusicTextAction("关闭", { libraryVm.message.value = null })
             }
         }
         if (pendingPlay != null) MusicDialog("后台播放通知", onDismiss = {

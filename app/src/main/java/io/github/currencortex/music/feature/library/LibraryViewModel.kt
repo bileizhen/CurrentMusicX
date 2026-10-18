@@ -85,7 +85,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
     }
     fun toggle(song: Song) = viewModelScope.launch {
         when (val result = container.libraryRepository.toggleLike(song)) {
-            is AppResult.Failure -> message.value = result.kind.message
+            is AppResult.Failure -> container.errorNotices.show(result.kind.message)
             is AppResult.Success -> message.value = "点赞已更新"
         }
     }
@@ -159,7 +159,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                         if (song.navidrome == null) container.libraryRepository.invalidate()
                         message.value = if (result.value) "已加入我喜欢" else "已取消喜欢"
                     }
-                    is AppResult.Failure -> if (expected == container.musicSession()) message.value = result.kind.message
+                    is AppResult.Failure -> if (expected == container.musicSession()) container.errorNotices.show(result.kind.message)
                 }
             } finally { primaryLikeBusy.value = false }
         }
@@ -180,7 +180,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                     block()
                 }) {
                     is AppResult.Success -> if (expected == container.musicSession()) message.value = success
-                    is AppResult.Failure -> if (expected == container.musicSession()) message.value = r.kind.message
+                    is AppResult.Failure -> if (expected == container.musicSession()) container.errorNotices.show(r.kind.message)
                 }
             } finally { busy.value = false }
         }

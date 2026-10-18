@@ -22,10 +22,10 @@ import kotlin.math.roundToInt
     var retainedDownload by remember { mutableStateOf<SoundEffectNotice?>(null) }
     var retainedEffect by remember { mutableStateOf<SoundEffectNotice?>(null) }
     val download = notice?.takeIf { it.kind == IslandNoticeKind.UPDATE_DOWNLOAD } ?: retainedDownload
-    val effect = notice?.takeIf { it.kind == IslandNoticeKind.SOUND_EFFECT } ?: retainedEffect
+    val effect = notice?.takeIf { it.kind != IslandNoticeKind.UPDATE_DOWNLOAD } ?: retainedEffect
     SideEffect {
         if (notice?.kind == IslandNoticeKind.UPDATE_DOWNLOAD) retainedDownload = notice
-        if (notice?.kind == IslandNoticeKind.SOUND_EFFECT) retainedEffect = notice
+        if (notice != null && notice.kind != IslandNoticeKind.UPDATE_DOWNLOAD) retainedEffect = notice
     }
     val motion = rememberDesktopMotion()
     val progress = animateFloatAsState(if (notice?.kind == IslandNoticeKind.UPDATE_DOWNLOAD) 0f else 1f,

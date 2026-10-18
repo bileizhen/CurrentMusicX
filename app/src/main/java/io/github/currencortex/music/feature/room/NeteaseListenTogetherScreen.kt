@@ -37,6 +37,7 @@ import io.github.currencortex.music.core.netease.NeteaseAccountState
 import io.github.currencortex.music.core.netease.listen.NeteaseListenTogetherState
 import io.github.currencortex.music.data.netease.listen.ListenTogetherInvitation
 import io.github.currencortex.music.feature.player.NeteaseSongsCollectionDialog
+import io.github.currencortex.music.ui.util.showMusicError
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
@@ -106,12 +107,12 @@ internal data class NeteaseListenTogetherActions(
                         val file = ListenTogetherReportSharing.create(context, report)
                         context.startActivity(Intent.createChooser(ListenTogetherReportSharing.intent(context, report, file), "分享一起听报告"))
                     } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
-                    catch (_: Exception) { Toast.makeText(context, "暂时无法分享报告，请重试", Toast.LENGTH_SHORT).show() }
+                    catch (_: Exception) { context.showMusicError("暂时无法分享报告，请重试") }
                 }
             } },
             onCollect = archiveController::collectSongs,
             onOfficial = { report -> try { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(report.officialUrl()))) }
-                catch (_: Exception) { Toast.makeText(context, "无法打开官方报告", Toast.LENGTH_SHORT).show() } },
+                catch (_: Exception) { context.showMusicError("无法打开官方报告") } },
             topClearance = islandClearance, activeRoom = state.active)
         NeteaseSongsCollectionDialog(archive.collectionSongs.orEmpty(), collectionShown,
             archiveController::dismissCollection,

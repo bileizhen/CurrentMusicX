@@ -51,14 +51,15 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val logger = AppLogger(context)
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
     val soundEffectNotices = io.github.currencortex.music.core.media.SoundEffectNoticeCenter(playerScope)
+    val errorNotices = io.github.currencortex.music.core.media.IslandErrorNoticeCenter(playerScope)
     val desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsPreferences(settingsStore, appScope)
+    val appForeground = kotlinx.coroutines.flow.MutableStateFlow(false)
     private val updateIslandNotice = io.github.currencortex.music.core.update.UpdateIslandNotice(
-        updateTransfer.state.map { it.download }, desktopLyrics.state.map { it.enabled }, playerScope)
+        updateTransfer.state.map { it.download }, kotlinx.coroutines.flow.combine(desktopLyrics.state, appForeground) { options, foreground -> options.enabled || foreground }, playerScope)
     val islandNotices = io.github.currencortex.music.core.update.prioritizedIslandNotices(
-        updateIslandNotice.state, soundEffectNotices.state, playerScope)
+        updateIslandNotice.state, soundEffectNotices.state, playerScope, errors = errorNotices.state)
     val desktopLyricsStatus = kotlinx.coroutines.flow.MutableStateFlow(io.github.currencortex.music.feature.lyrics.desktop.DesktopWindowStatus())
     val desktopLyricsSettingsVisible = kotlinx.coroutines.flow.MutableStateFlow(false)
-    val appForeground = kotlinx.coroutines.flow.MutableStateFlow(false)
     val desktopIslandPageHidden = kotlinx.coroutines.flow.MutableStateFlow(false)
     val equalizerSettings = io.github.currencortex.music.data.settings.EqualizerSettingsRepository(settingsStore, appScope)
     val equalizer = PlaybackEqualizer { logger.warn("Equalizer", it) }

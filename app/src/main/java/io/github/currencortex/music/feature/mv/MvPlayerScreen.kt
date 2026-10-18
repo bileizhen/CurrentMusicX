@@ -183,7 +183,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             if (state.loading && state.error == null) Text("正在缓冲…", Modifier.align(Alignment.TopCenter).padding(top = if (immersive) 60.dp else 12.dp),
                 color = Color.White.copy(alpha = .8f), fontSize = 12.sp)
             if (state.error != null) Column(Modifier.align(Alignment.Center).padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(state.error, color = Color.White, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 TextButton("重新加载", { interact(onRetry) }, Modifier.testTag("mv_retry"))
             }
         }

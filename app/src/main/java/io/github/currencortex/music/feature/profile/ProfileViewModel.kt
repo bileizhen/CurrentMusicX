@@ -89,7 +89,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         viewModelScope.launch {
             try { when (val r = appResult { block() }) {
                 is AppResult.Success -> message.value = success
-                is AppResult.Failure -> message.value = r.kind.message
+                is AppResult.Failure -> container.errorNotices.show(r.kind.message)
             } } finally { busy.value = false }
         }
     }
@@ -279,7 +279,7 @@ class DecorationViewModel(val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             try { when (val r = appResult { container.profileRepository.decorate(id) }) {
                 is AppResult.Success -> { message.value = if (id.isEmpty()) "已取消佩戴" else "挂件已设置"; state.update { it.copy(preview = null) }; reload() }
-                is AppResult.Failure -> message.value = r.kind.message
+                is AppResult.Failure -> container.errorNotices.show(r.kind.message)
             } } finally { busy.value = false }
         }
     }

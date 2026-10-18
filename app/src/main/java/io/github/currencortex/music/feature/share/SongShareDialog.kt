@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import io.github.currencortex.music.ui.util.showMusicError
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.MusicDialog
 import kotlinx.coroutines.CancellationException
@@ -43,7 +44,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             catch (error: Exception) { Result.failure(error) }
     }
     val poster = result?.getOrNull()
-    fun message(text: String) { Toast.makeText(context, text, Toast.LENGTH_SHORT).show() }
+    fun message(text: String, error: Boolean = false) {
+        if (error) context.showMusicError(text) else Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+    }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
         val selected = pendingSave
         pendingSave = null
@@ -51,7 +54,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             saving = true
             try { SongShareFiles.save(context, selected, uri); message("海报已保存") }
             catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { message("保存失败，请重新选择位置") }
+            catch (_: Exception) { message("保存失败，请重新选择位置", error = true) }
             finally { saving = false }
         }
     }
@@ -76,12 +79,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     if (poster != null) {
                         pendingSave = poster
                         try { save.launch(poster.content.filename) }
-                        catch (_: Exception) { pendingSave = null; message("无法打开保存位置") }
+                        catch (cancelled: CancellationException) { throw cancelled }
+                        catch (_: Exception) { pendingSave = null; message("无法打开保存位置", error = true) }
                     }
                 }, enabled = poster != null && !saving, modifier = Modifier.weight(1f).testTag("song_share_save"))
                 TextButton("分享图片", onClick = {
                     if (poster != null) try { context.startActivity(Intent.createChooser(SongShareFiles.shareIntent(context, poster), "分享歌曲海报")) }
-                    catch (_: Exception) { message("无法打开分享面板，请保存图片后分享") }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { message("无法打开分享面板，请保存图片后分享", error = true) }
                 }, enabled = poster != null, colors = ButtonDefaults.textButtonColors(
                     color = MiuixTheme.colorScheme.primary, textColor = MiuixTheme.colorScheme.onPrimary),
                     modifier = Modifier.weight(1f).testTag("song_share_send"))

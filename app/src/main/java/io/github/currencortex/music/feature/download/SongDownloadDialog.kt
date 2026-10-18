@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import android.provider.DocumentsContract
 import androidx.work.WorkInfo
+import io.github.currencortex.music.ui.util.showMusicError
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.data.song.Song
@@ -56,7 +57,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             } else manager.start(song, AudioQuality.from(quality), container.accountRepository.state.value.account?.id ?: 0L,
                 container.accountRepository.server, container.audioSettings.access().identity,
                 if (container.nativeNetease != null) container.neteaseSessions.state.value.profile?.uid ?: 0L else -1)
-        } catch (_: Exception) { Toast.makeText(context, "无法开始下载，请重试", Toast.LENGTH_LONG).show() }
+        } catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { context.showMusicError("无法开始下载，请重试") }
     }
     // Deletes only the URIs this task published; a stale/missing file must not abort the rest.
     fun deleteSaved() {
@@ -73,16 +75,17 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     else { context.contentResolver.delete(uri, null, null); true }
                 }.getOrDefault(false).not() } }
                 if (failed.isEmpty()) withContext(Dispatchers.IO) { manager.hideCompleted(completed.id) }
-                Toast.makeText(context, if (failed.isEmpty()) "已删除下载文件" else "部分文件删除失败，请重新尝试或到保存位置检查",
-                    Toast.LENGTH_LONG).show()
+                if (failed.isEmpty()) Toast.makeText(context, "已删除下载文件", Toast.LENGTH_LONG).show()
+                else context.showMusicError("部分文件删除失败，请重新尝试或到保存位置检查")
             } catch (cancelled: CancellationException) { throw cancelled }
-              catch (_: Exception) { Toast.makeText(context, "下载记录更新失败，请重试", Toast.LENGTH_LONG).show() }
+              catch (_: Exception) { context.showMusicError("下载记录更新失败，请重试") }
               finally { deleting = false }
         }
     }
     val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) try { manager.setDirectory(uri); if (afterFolder) start() }
-        catch (_: Exception) { Toast.makeText(context, "此文件夹不可写，请重新选择", Toast.LENGTH_LONG).show() }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: Exception) { context.showMusicError("此文件夹不可写，请重新选择") }
         afterFolder = false
     }
     // Reuse the playback picker so both quality sheets stay visually identical.
@@ -138,7 +141,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     saved -> try {
                         context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(Uri.parse(info?.outputData?.getString("uri")), "audio/*")
                             .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION))
-                    } catch (_: Exception) { Toast.makeText(context, "无法打开文件，请到保存位置查看", Toast.LENGTH_LONG).show() }
+                    } catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { context.showMusicError("无法打开文件，请到保存位置查看") }
                     Build.VERSION.SDK_INT < 29 && directory == null -> { afterFolder = true; folderLauncher.launch(null) }
                     else -> start()
                 }
