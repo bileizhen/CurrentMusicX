@@ -50,6 +50,9 @@ import io.github.currencortex.music.data.auth.RegistrationInput
     LaunchedEffect(state.message) { if (addingAccount && state.message in listOf("登录成功", "注册成功")) onDone() }
     // Entering the page starts a clean attempt: a stale error must not greet the user.
     LaunchedEffect(Unit) { vm.clearMessage() }
+    LaunchedEffect(state.message, state.failed, account.error) {
+        (if (state.failed) state.message else account.error)?.let(vm.errorNotices::show)
+    }
     // Editing any field clears the previous outcome, so the message never describes stale input.
     fun edit(block: () -> Unit) { block(); if (state.message != null) vm.clearMessage() }
     val colors = MiuixTheme.colorScheme
@@ -141,9 +144,8 @@ import io.github.currencortex.music.data.auth.RegistrationInput
             }
         }
         if (account.loading) Text("正在验证会话…", fontSize = 13.sp, color = secondary)
-        (state.message ?: account.error)?.let {
-            val failed = account.error != null || (state.message != null && !state.message!!.contains("成功"))
-            Text(it, fontSize = 13.sp, color = if (failed) colors.error else secondary, modifier = Modifier.testTag("login_message"))
+        state.message?.takeIf { !state.failed }?.let {
+            Text(it, fontSize = 13.sp, color = secondary, modifier = Modifier.testTag("login_message"))
         }
         if (account.offline) {
             Text("当前离线，会话凭据已保留", fontSize = 13.sp, color = secondary)

@@ -18,20 +18,22 @@ enum class ErrorKind(val message: String) {
     NeteaseLikedPlaylistUnavailable("无法读取网易云“我喜欢的音乐”歌单，请检查网易云绑定"),
     NeteaseHeartNoRecommendations("暂时没有心动推荐，请换一首歌再试")
 }
-class ApiException(val kind: ErrorKind, val status: Int = 0) : IOException(kind.message)
+class ApiException(val kind: ErrorKind, val status: Int = 0, val userMessage: String? = null) : IOException(userMessage ?: kind.message)
 sealed interface AppResult<out T> {
     data class Success<T>(val value: T) : AppResult<T>
-    data class Failure(val kind: ErrorKind, val status: Int = 0) : AppResult<Nothing>
+    data class Failure(val kind: ErrorKind, val status: Int = 0, val message: String = kind.message) : AppResult<Nothing>
 }
 suspend fun <T> appResult(block: suspend () -> T): AppResult<T> = try {
     AppResult.Success(block())
 } catch (e: CancellationException) { throw e
 } catch (e: Exception) {
-    AppResult.Failure(when (e) {
+    val kind = when (e) {
         is ApiException -> e.kind
         is SocketTimeoutException -> ErrorKind.Timeout
         is SerializationException -> ErrorKind.Parse
         is IOException -> ErrorKind.Network
         else -> ErrorKind.Unknown
-    }, status = (e as? ApiException)?.status ?: 0)
+    }
+    AppResult.Failure(kind, status = (e as? ApiException)?.status ?: 0,
+        message = (e as? ApiException)?.userMessage ?: kind.message)
 }

@@ -82,11 +82,18 @@ class ApiClient(
                 // rejection should invalidate the account.
                 val errorText = it.body?.string().orEmpty()
                 if (it.code == 401 && authenticated && !errorText.contains("绑定")) onUnauthorized(session)
+                // Registration validation is user-facing upstream text, not a generic HTTP failure.
+                // Other routes and server failures retain their existing bounded error mapping.
+                val registrationError = if (it.code in 400..499 && path in setOf("auth/register", "auth/email/code", "auth/phone/code"))
+                    runCatching {
+                        (ApiJson.parseToJsonElement(errorText).jsonObject["error"] as? JsonPrimitive)
+                            ?.takeIf { value -> value.isString }?.content?.trim()?.takeIf { value -> value.isNotEmpty() }?.take(240)
+                    }.getOrNull() else null
                 throw ApiException(when (it.code) {
                     401 -> if (errorText.contains("绑定")) ErrorKind.Forbidden else ErrorKind.Unauthorized
                     403 -> ErrorKind.Forbidden; 404 -> ErrorKind.NotFound; 429 -> ErrorKind.RateLimited
                     in 500..599 -> ErrorKind.Server; else -> ErrorKind.Unknown
-                }, it.code)
+                }, it.code, registrationError)
             }
             val raw = it.body?.string().orEmpty()
             if (raw.isBlank()) JsonNull else ApiJson.parseToJsonElement(raw)
