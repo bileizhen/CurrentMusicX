@@ -41,8 +41,8 @@ import top.yukonga.miuix.kmp.basic.*
 @Composable fun RoomScreen(vm: RoomViewModel, onBack: () -> Unit, onSearch: () -> Unit, onPlayer: () -> Unit,
     onDialogActive: (Boolean) -> Unit = {}, onBinding: (() -> Unit)? = null) {
     val native by vm.container.listenTogether.state.collectAsStateWithLifecycle()
-    var nativePage by rememberSaveable { mutableStateOf(native.active) }
-    LaunchedEffect(native.active) { if (native.active) nativePage = true }
+    var nativePage by rememberSaveable { mutableStateOf(native.active || native.endedRoom != null) }
+    LaunchedEffect(native.active, native.endedRoom?.roomId) { if (native.active || native.endedRoom != null) nativePage = true }
     if (nativePage) {
         NeteaseListenTogetherScreen(vm.container, onBack = { nativePage = false }, onSearch = onSearch,
             onPlayer = onPlayer, onBinding = onBinding, onDialogActive = onDialogActive)
