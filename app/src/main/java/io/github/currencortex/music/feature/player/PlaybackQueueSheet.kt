@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.gestures.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -40,7 +41,8 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.Icon
 
 internal data class NativeQueueActions(val recommended: Boolean, val description: String,
-    val onRecommendation: (Boolean) -> Unit, val onCollect: () -> Unit)
+    val onRecommendation: (Boolean) -> Unit, val onDownload: () -> Unit, val onCollect: () -> Unit,
+    val onSongMenu: (Song) -> Unit)
 
 internal class QueuePageMotion {
     val animation = Animatable(0f)
@@ -49,12 +51,13 @@ internal class QueuePageMotion {
 }
 internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress")
 
-@Composable fun PlaybackQueueSheet(vm: PlayerViewModel, onDismiss: () -> Unit) {
-    PlaybackQueuePage(vm, remember { QueuePageMotion() }, true, "mini_queue_sheet", onDismiss)
+@Composable fun PlaybackQueueSheet(vm: PlayerViewModel, onDismiss: () -> Unit,
+    actions: (@Composable (Song) -> Unit)? = null) {
+    PlaybackQueuePage(vm, remember { QueuePageMotion() }, true, "mini_queue_sheet", onDismiss, actions)
 }
 
 @Composable internal fun PlaybackQueuePage(vm: PlayerViewModel, motion: QueuePageMotion,
-    backdrop: Boolean, tag: String, onDismiss: () -> Unit) {
+    backdrop: Boolean, tag: String, onDismiss: () -> Unit, songActions: (@Composable (Song) -> Unit)? = null) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     val player by vm.state.collectAsStateWithLifecycle()
     val loading by vm.heartLoading.collectAsStateWithLifecycle()
@@ -63,11 +66,16 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
     val sharedQueue by vm.together.queue.collectAsStateWithLifecycle()
     val shared = together.active
     val displayed = if (shared) sharedQueue else queue
+    val openMenu = LocalSongMenu.current
+    var downloading by remember { mutableStateOf(false) }
     var collecting by remember { mutableStateOf(false) }
     var batch by remember { mutableStateOf<List<Song>>(emptyList()) }
     val nativeActions = if (shared) NativeQueueActions(together.room?.openHeartRcmd == true,
         together.room?.playlistCopywriting.orEmpty().ifBlank { "根据双方口味，心动推荐" }, vm.together::setRecommendation,
-        { batch = displayed.songs.toList(); collecting = true }) else null
+        { batch = displayed.songs.toList(); downloading = true },
+        { batch = displayed.songs.toList(); collecting = true },
+        { song -> openMenu?.invoke(SongMenu(song, { vm.together.selectSong(song.id) },
+            { vm.player.add(song, true) }, { vm.player.add(song) }, extra = { songActions?.invoke(song) })) }) else null
     PlaybackQueueContent(displayed, if (shared) !together.busy else player.mode == PlayerMode.LOCAL,
         if (shared) together.queueLoading else loading,
         !shared && NeteaseSongActionsRepository.songId(queue.current) != null,
@@ -78,6 +86,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         onClear = { if (shared) vm.together.clearQueue() else vm.player.clear() },
         onMode = vm::setPlaybackMode, onDismiss = onDismiss, shared = shared, nativeActions = nativeActions)
     NativeQueueCollectionDialog(vm, batch, collecting) { collecting = false }
+    io.github.currencortex.music.feature.download.QueueDownloadDialog(vm.container, batch, downloading) { downloading = false }
 }
 
 /** One viewport and queue for both entry points; no separate dialog queue or audio restart on opening. */
@@ -202,6 +211,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                             Text(nativeActions.description, Modifier.padding(start = 8.dp), fontSize = 12.sp,
                                 maxLines = 2, overflow = TextOverflow.Ellipsis, color = Color.White.copy(alpha = .6f))
                         }
+                        QueueIconAction(MusicIcons.Download, "下载全部", editable && queue.songs.isNotEmpty(), nativeActions.onDownload, "queue_download_all")
                         QueueIconAction(MusicIcons.Folder, "收藏全部到歌单", editable && queue.songs.isNotEmpty(), nativeActions.onCollect, "queue_collect_all")
                     }
                 }
@@ -213,8 +223,9 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                 itemsIndexed(queue.songs, key = { index, _ -> rowKeys[index] }) { index, song ->
                     Row(Modifier.fillMaxWidth().background(if (index == queue.index) Color.White.copy(alpha = .11f) else Color.Transparent,
                         RoundedCornerShape(14.dp)).testTag("queue_row_$index").animateItem(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).clickable(enabled = editable, interactionSource = remember { MutableInteractionSource() },
-                            indication = null) { if (index != queue.index) onSelect(index) }
+                        Column(Modifier.weight(1f).combinedClickable(enabled = editable, interactionSource = remember { MutableInteractionSource() },
+                            indication = null, onLongClick = nativeActions?.let { { it.onSongMenu(song) } },
+                            onClick = { if (index != queue.index) onSelect(index) })
                             .semantics { selected = index == queue.index }.testTag("queue_song_$index")
                             .padding(horizontal = 8.dp, vertical = 10.dp)) {
                             Text(song.name, color = Color.White.copy(alpha = .9f), fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -242,7 +242,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         }
         }
         if (queueGesture || overlay == PlayerOverlay.QUEUE)
-            PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss)
+            PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss, actions)
         when (overlay) {
             PlayerOverlay.NONE -> Unit
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) },

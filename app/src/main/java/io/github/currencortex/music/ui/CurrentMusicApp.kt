@@ -693,7 +693,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     onAiNavigate = ::navigateLibrary)
             }
         }
-        if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm) { miniQueueOpen = false }
+        if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm,
+            onDismiss = { miniQueueOpen = false }, actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) })
         }
         }
         songMenu?.let { SongActionsSheet(it, onDismiss = { songMenu = null }, onDownload = { song ->

@@ -25,6 +25,10 @@ class PlaybackQueuePageTest {
     private val queue = PlaybackQueue()
     private lateinit var activity: ComponentActivity
     private var dismissed = false
+    private var downloaded = 0
+    private var collected = 0
+    private var menuSong: Song? = null
+    private val recommendations = mutableListOf<Boolean>()
     private fun show(songs: List<Song>, index: Int = 0, shared: Boolean = false) {
         queue.replace(songs, index)
         queue.state.value = queue.state.value.copy(positionMs = 1500)
@@ -36,7 +40,9 @@ class PlaybackQueuePageTest {
             MiuixTheme { Scaffold { Box(Modifier.fillMaxSize()) {
                 if (shown) PlaybackQueueContent(snapshot, true, false, true, null, motion, true, "test_queue",
                     queue::select, { queue.remove(it) }, queue::clear, queue::setMode,
-                    { dismissed = true; shown = false }, shared = shared)
+                    { dismissed = true; shown = false }, shared = shared,
+                    nativeActions = if (shared) NativeQueueActions(true, "根据双方口味，心动推荐",
+                        { recommendations += it }, { downloaded++ }, { collected++ }, { menuSong = it }) else null)
             } } }
         }
         compose.waitForIdle()
@@ -46,6 +52,12 @@ class PlaybackQueuePageTest {
         compose.onNodeWithText("一起听歌单").assertIsDisplayed()
         compose.onNodeWithTag("queue_position").assertTextEquals("1 / 2")
         compose.onNodeWithTag("queue_song_0").assertIsSelected()
+        compose.onNodeWithTag("queue_recommendation").assertIsOn().performClick()
+        compose.runOnIdle { assertEquals(listOf(false), recommendations); assertEquals(0, downloaded); assertEquals(0, collected) }
+        compose.onNodeWithTag("queue_download_all").performClick()
+        compose.onNodeWithTag("queue_collect_all").performClick()
+        compose.onNodeWithTag("queue_song_1").performTouchInput { longClick() }
+        compose.runOnIdle { assertEquals(1, downloaded); assertEquals(1, collected); assertEquals(20L, menuSong?.id) }
         compose.onNodeWithTag("queue_song_1").performClick()
         compose.onNodeWithTag("queue_song_1").assertIsSelected()
         compose.onNodeWithTag("open_player_mode").performClick()

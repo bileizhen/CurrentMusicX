@@ -23,7 +23,7 @@ data class PlayerComments(val songId: Long? = null, val total: Long? = null, val
     val loading: Boolean = false, val error: String? = null)
 data class PlayerCommentComposer(val draft: String = "", val replyTo: NeteaseComment? = null,
     val sending: Boolean = false, val error: String? = null, val message: String? = null)
-class PlayerViewModel(private val container: AppContainer) : ViewModel() {
+class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
     val player = container.playerController
     val sleepTimer = container.sleepTimer
     val state = player.state
