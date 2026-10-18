@@ -57,13 +57,16 @@ class MusicRepository(private val api: ApiClient,
             return source
         }
         val query = mapOf("id" to "$id", "level" to quality.value)
-        val dto = if (session == null) api.get<SongUrlDto>("ncm/song/url", query, authenticated = true)
+        val dto = if (access.provider == AudioProvider.NETEASE) {
+            val gateway = api.netease ?: throw ApiException(ErrorKind.NotFound)
+            ApiJson.decodeFromJsonElement<SongUrlDto>(gateway.request("GET", "ncm/song/url", query, null,
+                expectedRevision = session?.neteaseRevision))
+        } else if (session == null) api.get<SongUrlDto>("ncm/song/url", query, authenticated = true)
             else ApiJson.decodeFromJsonElement<SongUrlDto>(api.request("GET", "ncm/song/url", query,
                 authenticated = true, expectedSession = session))
         val url = dto.url?.toHttpUrlOrNull() ?: throw ApiException(ErrorKind.NotFound)
         if (audioAccess().identity != access.identity) throw ApiException(ErrorKind.AudioSourceChanged)
-        // CurrentMusic documents a 20-minute CDN URL lifetime. Older servers omit expi;
-        // use only five minutes in that case, rather than discarding a prefetch after 30s.
+        // Both sources report expi. Bound reuse to five minutes when a server omits it.
         return AudioSource(url.toString(), dto.level, maxOf(dto.sr, dto.sampleRate), maxOf(dto.ch, dto.channelCount), dto.type, dto.md5,
             validForSeconds = dto.expi.takeIf { it > 0 } ?: 300)
     }

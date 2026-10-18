@@ -9,14 +9,17 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.security.MessageDigest
 
-enum class AudioProvider(val label: String) { CURRENT_MUSIC("CurrentMusic"), LEIZ("LeiZ API") }
+enum class AudioProvider(val label: String) { CURRENT_MUSIC("CurrentMusic"), NETEASE("网易云原生"), LEIZ("LeiZ API") }
 data class AudioProviderState(val provider: AudioProvider = AudioProvider.CURRENT_MUSIC,
     val keyConfigured: Boolean = false, val identity: String = "currentmusic")
 
 /** Immutable request credentials. Never include credentials in generated toString/equals/logs. */
 class AudioSourceAccess(val provider: AudioProvider, internal val key: String = "") {
-    val identity = if (provider == AudioProvider.CURRENT_MUSIC) "currentmusic" else "leiz:" +
-        MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
+    val identity = when (provider) {
+        AudioProvider.CURRENT_MUSIC -> "currentmusic"
+        AudioProvider.NETEASE -> "netease"
+        AudioProvider.LEIZ -> "leiz:" + MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
+    }
     override fun toString() = "AudioSourceAccess($provider, key=[redacted])"
 }
 

@@ -21,6 +21,7 @@ import io.github.currencortex.music.data.auth.*
 import io.github.currencortex.music.data.song.MusicRepository
 import io.github.currencortex.music.data.local.MusicDatabase
 import io.github.currencortex.music.data.settings.MusicSettingsRepository
+import io.github.currencortex.music.data.settings.AudioProvider
 import androidx.room.Room
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -102,22 +103,33 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     fun musicSession(authenticated: Boolean = true) = RequestSession(
         accountRepository.server.ifBlank { musicSettings.state.value.server },
         accountRepository.token.takeIf { authenticated }, nativeNetease?.sessions?.state?.value?.revision)
-    fun audioSession() = RequestSession(accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)
+    fun audioSession() = if (audioSettings.access().provider == AudioProvider.NETEASE)
+        RequestSession("https://music.163.com/", null, neteaseSessions.state.value.revision)
+        else RequestSession(accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)
     val apiClient = ApiClient(
         server = { accountRepository.server.ifBlank { musicSettings.state.value.server } },
         token = { accountRepository.token }, onUnauthorized = accountRepository::expired,
         log = { logger.info("Network", it) },
         netease = nativeNetease,
+        nativeMedia = { audioSettings.access().provider == AudioProvider.NETEASE },
     )
     val authRepository = AuthRepository(apiClient, accountRepository, "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
         persistServer = musicSettings::setServer, persistAccount = musicSettings::setAccount)
     val navidrome = io.github.currencortex.music.data.navidrome.NavidromeRepository(SecureTokenStore(context, ".navidrome$storageSuffix"), appScope)
     val navidromeMedia = okhttp3.OkHttpClient.Builder().addInterceptor(navidrome.client.mediaInterceptor()).build()
     val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome)
-    fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality): AudioRequest =
+    fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality): AudioRequest {
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
-            AudioRequest(song.id, quality, 0L, navidrome.session(), "navidrome:" + navidrome.state.value.identity, song)
-        else AudioRequest(song.id, quality, accountRepository.state.value.account?.id ?: 0L, audioSession(), audioSettings.access().identity, song)
+            return AudioRequest(song.id, quality, 0L, navidrome.session(), "navidrome:" + navidrome.state.value.identity, song)
+        val access = audioSettings.access()
+        if (access.provider == AudioProvider.NETEASE) {
+            // Snapshot UID and revision together so a concurrent account switch cannot mix cache owners.
+            val owner = neteaseSessions.state.value
+            return AudioRequest(song.id, quality, owner.profile?.uid ?: 0L,
+                RequestSession("https://music.163.com/", null, owner.revision), access.identity, song)
+        }
+        return AudioRequest(song.id, quality, accountRepository.state.value.account?.id ?: 0L, audioSession(), access.identity, song)
+    }
     val announcements = io.github.currencortex.music.data.announcement.AnnouncementRepository(apiClient)
     val announcementPreferences = io.github.currencortex.music.data.announcement.AnnouncementPreferences(settingsStore)
     val songDownloads = io.github.currencortex.music.core.download.SongDownloadManager(context.applicationContext, storageSuffix)
@@ -352,6 +364,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             }
         }
         appScope.launch { audioSettings.state.collect { audioSources.invalidate() } }
+        appScope.launch { audioSettings.state.map { it.provider }.distinctUntilChanged().collect {
+            bindingRepository.clearSession(); neteaseLibrary.invalidate(); neteaseSongActions.clearSession()
+            libraryRepository.clearReads()
+        } }
         appScope.launch {
             bindingRepository.state.map { it?.profile?.uid to it?.bound }.distinctUntilChanged().collect {
                 neteaseSongActions.clearSession(); neteaseLibrary.invalidate()

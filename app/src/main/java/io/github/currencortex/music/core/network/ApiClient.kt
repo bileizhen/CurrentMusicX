@@ -22,14 +22,18 @@ class ApiClient(
         .readTimeout(75, TimeUnit.SECONDS).writeTimeout(30, TimeUnit.SECONDS)
         .callTimeout(90, TimeUnit.SECONDS).followRedirects(false).build(),
     val netease: NeteaseGateway? = null,
+    private val nativeMedia: () -> Boolean = { false },
 ) {
     private val http = client.newBuilder().addInterceptor(AuthInterceptor()).build()
     private val singleAttemptHttp = http.newBuilder().retryOnConnectionFailure(false).build()
     val hasLocalNeteaseLogin get() = netease?.sessions?.state?.value?.loggedIn == true
+    val nativeMediaEnabled get() = nativeMedia() && netease != null
     private fun useNative(path: String, authenticated: Boolean, projectToken: String?): Boolean {
-        if (netease?.handles(path) != true) return false
+        if (netease?.handles(path, nativeMedia()) != true) return false
         // Imported snapshots belong to the project account, even with a local NetEase login.
         if (path == "ncmbind/sync") return false
+        // Explicit native mode never falls back to the project server for NetEase routes.
+        if (nativeMedia()) return true
         // New logins remain device-local; membership/medal adapters are local-only routes.
         if (path.startsWith("ncmbind/phone/") || path.startsWith("ncmbind/qr/") ||
             path in setOf("ncmbind/membership", "ncmbind/medals", "ncm/captcha/sent/v1")) return true

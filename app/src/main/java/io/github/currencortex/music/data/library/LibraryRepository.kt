@@ -27,14 +27,14 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     private suspend fun <T : Any> backgroundRead(key: String, fresh: Boolean = false, load: suspend (RequestSession) -> T): T =
         withContext(Dispatchers.Default) { reads.read(key, fresh, load) }
     suspend fun daily(fresh: Boolean = false): Daily = backgroundRead("daily", fresh) { expected ->
-        val d = api.netease?.takeIf { api.hasLocalNeteaseLogin || expected.token == null }
+        val d = api.netease?.takeIf { api.nativeMediaEnabled || api.hasLocalNeteaseLogin || expected.token == null }
             ?.let { api.decode<DailyDto>(it.daily(expected.neteaseRevision)) } ?: read<DailyDto>("daily", expected)
         Daily(d.daily.map(SongDto::toDomain), d.forYou.map(SongDto::toDomain), d.artists)
     }
     suspend fun recent(fresh: Boolean = false): List<Song> = backgroundRead("recent", fresh) {
         // Project play reports are already uploaded separately from NetEase scrobbles.
         // A project login must read the same cross-device history that the web client uses.
-        (if (it.token != null) read<SongListDto>("plays/recent", it, mapOf("limit" to "50"))
+        (if (it.token != null && !api.nativeMediaEnabled) read<SongListDto>("plays/recent", it, mapOf("limit" to "50"))
         else api.netease?.let { native -> api.decode<SongListDto>(native.recent(expectedRevision = it.neteaseRevision)) }
             ?: read<SongListDto>("plays/recent", it, mapOf("limit" to "50"))).songs.map(SongDto::toDomain)
     }
