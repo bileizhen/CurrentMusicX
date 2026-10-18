@@ -74,7 +74,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     if (song != null) MusicDialog("收藏到歌单", onDismiss = { vm.selectedSong.value = null }) {
         if (busy && lists.isEmpty()) Text("正在读取歌单…")
         if (!busy && lists.isEmpty() && playlistError == null) Text("没有可编辑的歌单，请先创建歌单")
-        playlistError?.let { error -> Text(error); TextButton("重试", onClick = { vm.choosePlaylist(song!!) }, enabled = !busy) }
+        playlistError?.let { error -> Text(error); MusicDialogButton("重试", onClick = { vm.choosePlaylist(song!!) }, enabled = !busy) }
         LazyColumn(Modifier.heightIn(max = 360.dp)) {
             items(lists, key = { "${it.source}-${it.id}" }) { playlist ->
                 MusicDestinationRow(playlist.name, { vm.addToPlaylist(playlist) },
@@ -93,9 +93,9 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     var description by rememberSaveable { mutableStateOf("") }
     PlaylistIndexBody(vm, navigate, onCreate = { create = true })
     if (create) MusicDialog("新建歌单", onDismiss = { if (!busy) create = false }) {
-        TextField(name, { name = it }, label = "歌单名称", modifier = Modifier.testTag("playlist_name"))
-        if (!neteaseMain || vm.container.nativeNetease == null) TextField(description, { description = it }, label = "介绍")
-        TextButton("创建", onClick = { vm.create(name, description) { create = false; name = ""; description = "" } },
+        TextField(name, { name = it }, label = "歌单名称", modifier = Modifier.fillMaxWidth().then(Modifier.testTag("playlist_name")))
+        if (!neteaseMain || vm.container.nativeNetease == null) TextField(description, { description = it }, label = "介绍", modifier = Modifier.fillMaxWidth())
+        MusicDialogButton("创建", onClick = { vm.create(name, description) { create = false; name = ""; description = "" } },
             enabled = name.isNotBlank() && !busy, modifier = Modifier.testTag("confirm_create_playlist"))
     }
 }
@@ -179,12 +179,12 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     }
     }
     if (rename) MusicDialog("重命名歌单", onDismiss = { if (!busy) rename = false }) {
-        TextField(name, { name = it }, label = "歌单名称", modifier = Modifier.testTag("rename_input"))
-        TextButton("保存", onClick = { library.action("名称已更新") { vm.rename(name); rename = false } }, enabled = name.isNotBlank() && !busy)
+        TextField(name, { name = it }, label = "歌单名称", modifier = Modifier.fillMaxWidth().then(Modifier.testTag("rename_input")))
+        MusicDialogButton("保存", onClick = { library.action("名称已更新") { vm.rename(name); rename = false } }, enabled = name.isNotBlank() && !busy)
     }
     if (delete) MusicDialog("删除歌单？", onDismiss = { if (!busy) delete = false }) {
         Text("删除后无法恢复。")
-        TextButton("确认删除", onClick = { library.action("歌单已删除") { vm.delete(); delete = false; deleted() } }, enabled = !busy)
+        MusicDialogButton("确认删除", onClick = { library.action("歌单已删除") { vm.delete(); delete = false; deleted() } }, enabled = !busy)
     }
 }
 

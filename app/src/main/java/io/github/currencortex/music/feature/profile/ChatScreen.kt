@@ -214,7 +214,7 @@ import java.util.Locale
                 else if (query.isNotBlank() && state.references.isEmpty()) item { Text("没有找到相关内容", fontSize = 13.sp) }
                 items(state.references) { card -> MusicAttachmentCard(card) { vm.attach(card); referenceOpen = false } }
             }
-            TextButton("关闭", { referenceOpen = false })
+            MusicDialogButton("关闭", { referenceOpen = false })
         }
     }
     if (membersOpen) MusicDialog("聊天室成员", { membersOpen = false }) {
@@ -230,21 +230,21 @@ import java.util.Locale
                 }
             }
         }
-        TextButton("关闭", { membersOpen = false })
+        MusicDialogButton("关闭", { membersOpen = false })
     }
     selected?.let { message -> MusicDialog("消息操作", { selected = null }) {
-        if (message.content.isNotEmpty()) TextButton("复制文字", { clipboard.setText(AnnotatedString(message.content)); selected = null })
-        if (message.userId == account.account?.id) TextButton("删除消息", { selected = null; confirming = message }, Modifier.testTag("chat_delete"))
-        TextButton("关闭", { selected = null })
+        if (message.content.isNotEmpty()) MusicDialogButton("复制文字", { clipboard.setText(AnnotatedString(message.content)); selected = null })
+        if (message.userId == account.account?.id) MusicDialogButton("删除消息", { selected = null; confirming = message }, Modifier.testTag("chat_delete"))
+        MusicDialogButton("关闭", { selected = null })
     } }
     confirming?.let { message -> MusicDialog("删除这条消息？", { confirming = null }) {
         Text("删除后其他成员也将无法查看。", fontSize = 13.sp)
-        TextButton("确认删除", { vm.delete(message); confirming = null }, Modifier.testTag("chat_confirm_delete"))
-        TextButton("取消", { confirming = null })
+        MusicDialogButton("确认删除", { vm.delete(message); confirming = null }, Modifier.testTag("chat_confirm_delete"))
+        MusicDialogButton("取消", { confirming = null })
     } }
     preview?.let { image -> MusicDialog("聊天图片", { preview = null }) {
         AsyncImage(image, "聊天图片", Modifier.fillMaxWidth().heightIn(min = 180.dp, max = 420.dp), contentScale = ContentScale.Fit)
-        TextButton("关闭", { preview = null })
+        MusicDialogButton("关闭", { preview = null })
     } }
 }
 

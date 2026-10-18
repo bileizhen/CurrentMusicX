@@ -263,7 +263,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         MusicOverlayDialog(show = modeOpen, title = "播放模式", onDismissRequest = { modeOpen = false }) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PlaybackMode.entries.filter { !shared || it != PlaybackMode.HEART }.forEach { mode ->
-                TextButton((if (mode == queue.mode) "✓ " else "") + mode.label,
+                MusicDialogButton((if (mode == queue.mode) "✓ " else "") + mode.label,
                     { onMode(mode); modeOpen = false }, enabled = editable &&
                         (mode != PlaybackMode.HEART || (!loading && heartAvailable)),
                     modifier = Modifier.testTag("playback_mode_${mode.name}").semantics { selected = mode == queue.mode })
@@ -273,8 +273,8 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         MusicOverlayDialog(show = confirmClear, title = "清除播放队列？", onDismissRequest = { confirmClear = false }) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(if (shared) "会同步清空双方的歌单并暂停播放，一起听会话仍会保留。" else "清除后将停止当前播放。")
-            TextButton("取消", { confirmClear = false }, modifier = Modifier.testTag("queue_clear_cancel"))
-            TextButton("清除", { onClear(); confirmClear = false }, enabled = editable, modifier = Modifier.testTag("queue_clear_confirm"))
+            MusicDialogButton("取消", { confirmClear = false }, modifier = Modifier.testTag("queue_clear_cancel"))
+            MusicDialogButton("清除", { onClear(); confirmClear = false }, enabled = editable, modifier = Modifier.testTag("queue_clear_confirm"))
             }
         }
     }

@@ -266,7 +266,7 @@ import kotlin.math.sin
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().clickable(onClick = onDismiss))
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxHeight * .61f)
+            Column(Modifier.align(Alignment.BottomCenter).widthIn(max = 420.dp).fillMaxWidth().heightIn(max = maxHeight * .61f)
                 .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(Color.White)
                 // Register this panel in the hit path so text/empty space cannot hit the backdrop.
                 // No child gestures are consumed: text scrolling and the two close buttons stay usable.
@@ -274,9 +274,9 @@ import kotlin.math.sin
                     awaitFirstDown(requireUnconsumed = false); waitForUpOrCancellation()
                 } }.testTag("mood_info_panel")
                 .navigationBarsPadding().padding(horizontal = 20.dp)) {
-                Box(Modifier.fillMaxWidth().height(58.dp), contentAlignment = Alignment.Center) {
-                    Text("AI情绪调音师说明", color = Color.Black, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                    Box(Modifier.align(Alignment.CenterEnd)) { MoodDetailIcon("关闭说明", onDismiss) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 58.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text("AI情绪调音师说明", Modifier.weight(1f), color = Color.Black, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+                    Box { MoodDetailIcon("关闭说明", onDismiss) {
                         Icon(Icons.Default.Close, null, tint = Color(0xFF777777), modifier = Modifier.size(20.dp))
                     } }
                 }
@@ -287,7 +287,7 @@ import kotlin.math.sin
                         Spacer(Modifier.height(18.dp))
                     }
                 }
-                Box(Modifier.fillMaxWidth().padding(vertical = 12.dp).height(43.dp).clip(CircleShape)
+                Box(Modifier.fillMaxWidth().padding(vertical = 12.dp).height(48.dp).clip(CircleShape)
                     .background(Color(0xFFFF393C)).clickable(role = Role.Button, onClick = onDismiss)
                     .testTag("mood_info_done"),
                     contentAlignment = Alignment.Center) { Text("知道了", color = Color.White, fontSize = 15.sp) }

@@ -314,7 +314,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     }
     removing?.let { saved -> MusicDialog("移除已保存账号？", { removing = null }) {
         Text(saved.nickname.ifBlank { saved.username }); Text("仅移除本机凭据，账号本身不受影响。")
-        TextButton("确认移除", onClick = { removing = null; auth.removeSaved(saved.key) },
+        MusicDialogButton("确认移除", onClick = { removing = null; auth.removeSaved(saved.key) },
             modifier = Modifier.testTag("confirm_remove_account"))
     } }
 }
@@ -332,32 +332,32 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
             var bio by rememberSaveable(user.id) { mutableStateOf(user.bio) }
             var visible by rememberSaveable(user.id) { mutableStateOf(user.visible) }
             MusicDialog("编辑资料", ::close) {
-                Text("昵称"); TextField(nickname, { nickname = it }, singleLine = true, modifier = Modifier.testTag("profile_nickname"))
-                Text("简介"); TextField(bio, { bio = it }, modifier = Modifier.testTag("profile_bio"))
+                Text("昵称"); TextField(nickname, { nickname = it }, singleLine = true, modifier = Modifier.fillMaxWidth().then(Modifier.testTag("profile_nickname")))
+                Text("简介"); TextField(bio, { bio = it }, modifier = Modifier.fillMaxWidth().then(Modifier.testTag("profile_bio")))
                 visible?.let { current -> SettingsSwitch("在用户广场公开资料", current, { visible = it }) }
-                TextButton("保存", onClick = { vm.update(nickname, bio, visible) }, enabled = nickname.isNotBlank() && !busy,
+                MusicDialogButton("保存", onClick = { vm.update(nickname, bio, visible) }, enabled = nickname.isNotBlank() && !busy,
                     modifier = Modifier.testTag("save_profile"))
             }
         }
         "avatar" -> MusicDialog("更换头像", ::close) {
             AsyncImage(avatar, contentDescription = "新头像预览", modifier = Modifier.size(120.dp))
             Text("上传后将替换当前头像。")
-            TextButton("确认上传", onClick = { vm.upload(context.contentResolver) }, enabled = !busy, modifier = Modifier.testTag("confirm_avatar_upload"))
+            MusicDialogButton("确认上传", onClick = { vm.upload(context.contentResolver) }, enabled = !busy, modifier = Modifier.testTag("confirm_avatar_upload"))
         }
         "password" -> {
             var old by remember { mutableStateOf("") }; var new by remember { mutableStateOf("") }; var confirm by remember { mutableStateOf("") }
             MusicDialog("修改密码", ::close) {
-                Text("当前密码"); TextField(old, { old = it }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
-                Text("新密码（至少 6 位）"); TextField(new, { new = it }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
-                Text("再次输入新密码"); TextField(confirm, { confirm = it }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation())
-                TextButton("更新密码", enabled = old.isNotEmpty() && new.length >= 6 && new == confirm && !busy, onClick = {
+                Text("当前密码"); TextField(old, { old = it }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                Text("新密码（至少 6 位）"); TextField(new, { new = it }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                Text("再次输入新密码"); TextField(confirm, { confirm = it }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+                MusicDialogButton("更新密码", enabled = old.isNotEmpty() && new.length >= 6 && new == confirm && !busy, onClick = {
                     vm.password(old, new); old = ""; new = ""; confirm = ""
                 })
             }
         }
         "logout" -> MusicDialog("退出当前账号？", ::close) {
             Text("会移除本机保存的当前账号凭据，其他已保存账号保留。")
-            TextButton("确认退出", onClick = { vm.container.playerController.pause(); vm.dialog.value = null; auth.logout() })
+            MusicDialogButton("确认退出", onClick = { vm.container.playerController.pause(); vm.dialog.value = null; auth.logout() })
         }
     }
 }
@@ -387,7 +387,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
             }
             state.preview?.let { item -> MusicDialog("挂件预览：${item.name}", { if (!busy) vm.preview(null) }) {
                 UserAvatar(user, vm.container, 64.dp, item.id)
-                TextButton("佩戴", onClick = { vm.set(item.id) }, enabled = catalog.unlocked && !busy, modifier = Modifier.testTag("wear_decoration"))
+                MusicDialogButton("佩戴", onClick = { vm.set(item.id) }, enabled = catalog.unlocked && !busy, modifier = Modifier.testTag("wear_decoration"))
                 if (!catalog.unlocked) Text("尚未达到服务器解锁条件")
             } }
         }

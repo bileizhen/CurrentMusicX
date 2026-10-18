@@ -237,7 +237,7 @@ private val masterDiyOptions = listOf(
                 }
             }
         }
-        Box(Modifier.align(Alignment.CenterHorizontally).padding(top = 13.dp, bottom = 12.dp).width(240.dp).height(45.dp)
+        Box(Modifier.fillMaxWidth().padding(top = 13.dp, bottom = 12.dp).height(48.dp)
             .clip(CircleShape).background(MasterGold).clickable(enabled = !saving, role = Role.Button) { onSave(draft) }
             .testTag("sound_ai_master_diy_save"), contentAlignment = Alignment.Center) {
             Text(if (saving) "保存中" else "保存设置", color = Color(0xFF241C0E), fontSize = 15.sp)
@@ -249,11 +249,11 @@ private val masterDiyOptions = listOf(
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxSize().clickable(onClick = onDismiss))
-            Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().heightIn(max = maxHeight * .86f)
+            Column(Modifier.align(Alignment.BottomCenter).widthIn(max = 420.dp).fillMaxWidth().heightIn(max = maxHeight * .86f)
                 .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp))
                 .background(if (dark) Brush.verticalGradient(listOf(Color(0xFF2E251C), Color.Black))
                     else Brush.verticalGradient(listOf(Color.White, Color.White)))
-                .navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 18.dp, vertical = 10.dp),
+                .navigationBarsPadding().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 16.dp),
                 content = content)
         }
     }
@@ -277,7 +277,7 @@ private val masterDiyOptions = listOf(
             Text(title, color = Color(0xFF333333), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
             Text(description, Modifier.padding(top = 7.dp, bottom = 18.dp), color = Color(0xFF888888), fontSize = 12.sp, lineHeight = 19.sp)
         }
-        Box(Modifier.fillMaxWidth().padding(vertical = 10.dp).height(45.dp).clip(CircleShape)
+        Box(Modifier.fillMaxWidth().padding(vertical = 10.dp).height(48.dp).clip(CircleShape)
             .background(Color(0xFFFF393C)).clickable(role = Role.Button, onClick = onDismiss), contentAlignment = Alignment.Center) {
             Text("知道了", color = Color.White, fontSize = 15.sp)
         }

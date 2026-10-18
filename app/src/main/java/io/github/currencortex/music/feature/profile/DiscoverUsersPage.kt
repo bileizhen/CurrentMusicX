@@ -156,7 +156,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 }
             }
         }
-        TextButton("取消", { sorting = false })
+        MusicDialogButton("取消", { sorting = false })
     }
 }
 

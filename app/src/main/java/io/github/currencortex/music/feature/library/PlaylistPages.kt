@@ -350,7 +350,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         Text(origin, fontSize = 13.sp)
         Text(playlistDurationLabel(state.songs), fontSize = 13.sp)
         Text(state.description.ifBlank { "暂无歌单介绍" }, Modifier.heightIn(max = 240.dp).verticalScroll(androidx.compose.foundation.rememberScrollState()), fontSize = 14.sp)
-        TextButton("关闭", onClick = { infoOpen = false })
+        MusicDialogButton("关闭", onClick = { infoOpen = false })
     }
     if (importOpen) PlaylistLikeImportDialog(importState, onClose = { importOpen = false },
         onStop = vm.container.playlistLikeImporter::stop,

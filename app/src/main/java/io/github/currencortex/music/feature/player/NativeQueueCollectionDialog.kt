@@ -41,7 +41,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
     MusicOverlayDialog(show = show, title = "收藏 ${songs.size} 首到歌单", onDismissRequest = { if (!busy) onDismiss() }) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (busy) Text("正在处理…")
-            error?.let { Text(it); TextButton("重试", { retry++ }, enabled = !busy) }
+            error?.let { Text(it); MusicDialogButton("重试", { retry++ }, enabled = !busy) }
             if (!busy && lists.isEmpty() && error == null) Text("没有可编辑的网易云歌单，请先创建歌单")
             LazyColumn(Modifier.heightIn(max = 360.dp)) {
                 items(lists, key = { it.id }) { playlist ->
@@ -56,7 +56,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
                     }, Modifier.testTag("queue_collect_playlist_${playlist.id}"), summary = "网易云音乐", enabled = !busy, chevron = false)
                 }
             }
-            TextButton("取消", onDismiss, enabled = !busy)
+            MusicDialogButton("取消", onDismiss, enabled = !busy)
         }
     }
 }

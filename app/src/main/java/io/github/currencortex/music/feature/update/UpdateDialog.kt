@@ -1,6 +1,7 @@
 // Bottom dialog layout adapted from 123PanX / XBlocker / MIUIX, GPL-3.0-only.
 package io.github.currencortex.music.feature.update
 
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import android.widget.Toast
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
@@ -97,7 +98,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
         is UpdateDownloadState.Ready -> 1f
         else -> previewProgress.coerceIn(0f, 1f)
     }, animationSpec = tween(180), label = "update_progress")
-    OverlayDialog(show = true, insideMargin = DpSize(22.dp, 18.dp),
+    OverlayDialog(show = true, insideMargin = DpSize(20.dp, 18.dp),
         onDismissRequest = if (transferState.installing) null else onDismiss) {
         Column(Modifier.fillMaxWidth().heightIn(max =
             (LocalConfiguration.current.screenHeightDp * .82f).dp.coerceAtMost(680.dp))) {
@@ -167,7 +168,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
             transferState.message?.let { Text(it, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis) }
         }
         Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton(if (downloading) "后台下载" else "关闭", onClick = onDismiss,
+            MusicDialogButton(if (downloading) "后台下载" else "关闭", onClick = onDismiss,
                 enabled = !transferState.installing, minHeight = 48.dp, cornerRadius = 16.dp,
                 insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                 textStyle = MiuixTheme.textStyles.body1.copy(fontSize = 15.sp),

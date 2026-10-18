@@ -199,12 +199,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             MusicDestinationRow("删除歌单", { action("delete") }, enabled = !busy, chevron = false)
         }
     } else if (dialog.isNotEmpty()) MusicDialog(when (dialog) { "disconnect" -> "断开连接"; "delete" -> "删除歌单"; "remove" -> "移出歌单"; "rename" -> "重命名歌单"; else -> "新建歌单" }, ::closeDialog) {
-        if (dialog in setOf("create", "rename")) TextField(name, { name = it }, label = "歌单名称", singleLine = true, enabled = !busy, modifier = Modifier.testTag("navidrome_playlist_name"))
+        if (dialog in setOf("create", "rename")) TextField(name, { name = it }, label = "歌单名称", singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth().then(Modifier.testTag("navidrome_playlist_name")))
         else Text(when (dialog) { "disconnect" -> "断开此服务器账号，保留其他音乐服务与播放队列。"; "remove" -> "将「${removal?.song?.name.orEmpty()}」移出「${removal?.playlist?.title.orEmpty()}」？"; else -> "删除「${target.title}」？服务器中的音乐文件会保留。" })
         error?.let { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 13.sp) }
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextButton("取消", ::closeDialog, enabled = !busy, modifier = Modifier.weight(1f))
-            TextButton(if (busy) "正在处理…" else "确定", {
+        MusicDialogActions(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MusicDialogButton("取消", ::closeDialog, enabled = !busy, modifier = Modifier.weight(1f))
+            MusicDialogButton(if (busy) "正在处理…" else "确定", {
                 val done: (Boolean) -> Unit = { if (it) dialog = "" }
                 when (dialog) { "disconnect" -> vm.disconnect { if (it) { configuration = false; dialog = "" } }; "create" -> vm.create(name, done); "rename" -> vm.rename(target, name, done); "delete" -> vm.delete(target, done); "remove" -> removal?.let { vm.remove(it, done) } }
             }, enabled = !busy && (dialog !in setOf("create", "rename") || name.isNotBlank()), modifier = Modifier.weight(1f).testTag("navidrome_confirm"))

@@ -36,9 +36,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         state.error?.let { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 12.sp) }
         TextField(state.draft, controller::draft, label = "关于这首歌，想问什么？",
             modifier = Modifier.fillMaxWidth().testTag("player_ai_input"), maxLines = 3)
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton("关闭", onDismiss, Modifier.weight(1f))
-            TextButton(if (state.busy) "回答中…" else "发送", controller::ask, Modifier.weight(1f).testTag("player_ai_send"),
+        MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            MusicDialogButton("关闭", onDismiss, Modifier.weight(1f))
+            MusicDialogButton(if (state.busy) "回答中…" else "发送", controller::ask, Modifier.weight(1f).testTag("player_ai_send"),
                 enabled = !state.busy && state.draft.isNotBlank())
         }
     }

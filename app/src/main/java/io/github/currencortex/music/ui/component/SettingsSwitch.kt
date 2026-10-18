@@ -1,12 +1,15 @@
 package io.github.currencortex.music.ui.component
 
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
 import androidx.compose.ui.state.ToggleableState
 import top.yukonga.miuix.kmp.basic.BasicComponent
+import top.yukonga.miuix.kmp.basic.BasicComponentDefaults
 import top.yukonga.miuix.kmp.basic.Switch
 
 @Composable
@@ -22,6 +25,7 @@ fun SettingsSwitch(
     BasicComponent(
         modifier = modifier.semantics { toggleableState = if (checked) ToggleableState.On else ToggleableState.Off },
         title = title,
+        insideMargin = if (LocalMusicDialogContent.current) PaddingValues(vertical = 8.dp) else BasicComponentDefaults.InsideMargin,
         startAction = startAction,
         summary = summary,
         enabled = enabled,

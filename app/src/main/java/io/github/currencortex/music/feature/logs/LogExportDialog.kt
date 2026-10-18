@@ -1,6 +1,7 @@
 // Layout adapted from 123PanX / XBlocker / SukiSU-Ultra SendLogDialog, GPL-3.0-only.
 package io.github.currencortex.music.feature.logs
 
+import io.github.currencortex.music.ui.component.MusicDialogButton
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -61,7 +62,7 @@ fun LogExportDialog(show: Boolean, logger: AppLogger, onDismiss: () -> Unit) {
                     context.startActivity(Intent.createChooser(DiagnosticExporter.shareIntent(context, file), "分享日志"))
                 } }
             })
-        TextButton("取消", onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
+        MusicDialogButton("取消", onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
     }
     OverlayDialog(show = busy, title = "正在生成日志", onDismissRequest = {}) {
         Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }

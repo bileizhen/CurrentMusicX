@@ -159,8 +159,11 @@ internal data class NeteaseListenTogetherActions(
             collect = { id, songs -> container.neteaseLibrary.addAll(id, songs); Unit })
         invitePeer?.let { peer -> MusicDialog("再次一起听", onDismiss = { invitePeer = null }) {
             Text("创建新的双人会话后，可复制邀请链接发给${peer.nickname.ifBlank { "好友" }}。")
-            MusicTextAction("取消", { invitePeer = null })
-            MusicTextAction("创建一起听", { invitePeer = null; archiveController.close(); controller.create() }, enabled = !state.active && !state.busy)
+            MusicDialogActions {
+                MusicDialogButton("取消", { invitePeer = null }, Modifier.weight(1f))
+                MusicDialogButton("创建一起听", { invitePeer = null; archiveController.close(); controller.create() },
+                    Modifier.weight(1f), enabled = !state.active && !state.busy)
+            }
         } }
         return
     }
@@ -336,9 +339,11 @@ internal data class NeteaseListenTogetherActions(
     }
     if (leaveConfirmation) MusicDialog("退出双人一起听", onDismiss = { leaveConfirmation = false }) {
         Text("退出将结束当前双人会话，并恢复本机播放队列。")
-        MusicTextAction("取消", { leaveConfirmation = false }, Modifier.testTag("netease_listen_cancel_leave"))
-        MusicTextAction("确认退出", { leaveConfirmation = false; actions.leave() },
-            Modifier.testTag("netease_listen_confirm_leave"), destructive = true, enabled = !state.busy)
+        MusicDialogActions {
+            MusicDialogButton("取消", { leaveConfirmation = false }, Modifier.weight(1f).testTag("netease_listen_cancel_leave"))
+            MusicDialogButton("确认退出", { leaveConfirmation = false; actions.leave() },
+                Modifier.weight(1f).testTag("netease_listen_confirm_leave"), destructive = true, enabled = !state.busy)
+        }
     }
 }
 
