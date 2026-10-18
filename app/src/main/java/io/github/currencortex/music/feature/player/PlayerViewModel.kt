@@ -29,6 +29,8 @@ class PlayerViewModel(private val container: AppContainer) : ViewModel() {
     val state = player.state
     val queue = player.queue.state
     val together = container.listenTogether
+    suspend fun queuePlaylists() = container.neteaseLibrary.playlists(fresh = true).filter { it.nativeOwned }
+    suspend fun collectQueue(playlistId: Long, songs: List<Song>) = container.neteaseLibrary.addAll(playlistId, songs)
     // The navigation host needs only low-frequency state, never the playback position.
     val navigation = state.map { NavigationPlayback(it.mode, it.error) }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), NavigationPlayback(state.value.mode, state.value.error))

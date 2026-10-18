@@ -112,16 +112,19 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
             info.copy(name = "我喜欢的音乐", songs = tracks, count = tracks.size)
         }
     }
-    suspend fun add(id: Long, song: Song) = writeMutex.withLock {
-        val songId = NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound)
+    suspend fun add(id: Long, song: Song) = addAll(id, listOf(song))
+    suspend fun addAll(id: Long, songs: List<Song>) = writeMutex.withLock {
+        require(songs.isNotEmpty() && songs.size <= 1000)
+        val tracks = songs.associateBy { NeteaseSongActionsRepository.songId(it) ?: throw ApiException(ErrorKind.NotFound) }
         val expected = session()
         val uid = owner(fresh = true)
         val target = playlists(fresh = true).firstOrNull { it.id == id && it.ownerId == uid && it.nativeOwned }
             ?: throw ApiException(ErrorKind.Forbidden)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
-        if (target.nativeLiked) actions.setLiked(songId, true, expected, song)
-        else request("playlist/tracks", mapOf("pid" to "$id", "tracks" to "$songId", "op" to "add", "confirm" to "1"), expected)
-        invalidate()
+        try {
+            if (target.nativeLiked) tracks.forEach { (songId, song) -> actions.setLiked(songId, true, expected, song) }
+            else request("playlist/tracks", mapOf("pid" to "$id", "tracks" to tracks.keys.joinToString(","), "op" to "add", "confirm" to "1"), expected)
+        } finally { invalidate() }
     }
     suspend fun create(name: String) = writeMutex.withLock {
         require(name.trim().isNotBlank())

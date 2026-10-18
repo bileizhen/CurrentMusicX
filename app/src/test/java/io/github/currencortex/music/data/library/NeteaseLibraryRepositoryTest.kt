@@ -11,6 +11,21 @@ import org.junit.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
 class NeteaseLibraryRepositoryTest {
+    @Test fun batchCollectionUsesOneOwnedNativePlaylistWriteWithDistinctIds() = runBlocking {
+        MockWebServer().use { server ->
+            val writes = CopyOnWriteArrayList<String>()
+            dispatch(server) { request -> if (request.requestUrl!!.encodedPath == "/cm/ncm/playlist/tracks") {
+                writes += request.requestUrl!!.queryParameter("tracks").orEmpty()
+                assertEquals("88", request.requestUrl!!.queryParameter("pid"))
+                json("""{"code":200}""")
+            } else null }
+            val (_, _, native) = fixture(server)
+            native.addAll(88, listOf(Song(11, "One"), Song(22, "Two"), Song(11, "One")))
+            assertEquals(listOf("11,22"), writes)
+            assertEquals(ErrorKind.Forbidden, (appResult { native.addAll(89, listOf(Song(11, "One"))) } as AppResult.Failure).kind)
+            assertEquals(1, writes.size)
+        }
+    }
     private fun json(body: String) = MockResponse().setBody(body)
     private fun lists(uid: Long = 7) = """{"code":200,"playlist":[
         {"id":9918106457,"name":"Native likes","specialType":5,"trackCount":1,"creator":{"userId":$uid}},
