@@ -3,6 +3,7 @@ package io.github.currencortex.music.feature.player
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.selection.toggleable
@@ -12,10 +13,12 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -179,9 +182,8 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
             .statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)
             .align(Alignment.TopCenter)) {
             Column(Modifier.fillMaxWidth().then(dragHeader).testTag("queue_drag_handle")) {
-                Text(if (backdrop) "向下轻扫关闭播放队列" else "向下轻扫返回播放界面", Modifier.align(Alignment.CenterHorizontally)
-                    .clickable(interactionSource = interactions, indication = null) { settle(true) }
-                    .padding(top = 18.dp, bottom = 18.dp), color = Color.White.copy(alpha = .45f), fontSize = 12.sp)
+                // Leave the island's lane clear; the close hint belongs to the footer.
+                Spacer(Modifier.height(48.dp))
                 queue.current?.let { song ->
                     Row(Modifier.fillMaxWidth().testTag("queue_current_song")
                         .clickable(interactionSource = interactions, indication = null) { settle(true) }
@@ -196,19 +198,23 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                 }
                 Box(Modifier.fillMaxWidth().height(64.dp)) {
                     Text("${if (queue.index >= 0) queue.index + 1 else 0} / ${queue.songs.size}",
-                        Modifier.align(Alignment.CenterStart).testTag("queue_position"), fontSize = 13.sp, color = Color.White.copy(alpha = .4f))
+                        Modifier.align(Alignment.CenterStart).padding(start = 8.dp).testTag("queue_position"),
+                        fontSize = 13.sp, color = Color.White.copy(alpha = .4f))
                     Text(if (shared) "一起听歌单" else "播放队列", Modifier.align(Alignment.Center), fontSize = 17.sp, fontWeight = FontWeight.Medium, color = Color.White)
                     QueueTextAction("清除", { confirmClear = true }, editable && queue.songs.isNotEmpty(),
-                        Modifier.align(Alignment.CenterEnd).testTag("queue_clear"))
+                        Modifier.align(Alignment.CenterEnd).width(48.dp).testTag("queue_clear"))
                 }
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .07f)))
                 if (nativeActions != null) {
-                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.fillMaxWidth().padding(start = 8.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         Row(Modifier.weight(1f).heightIn(min = 48.dp).testTag("queue_recommendation")
                             .toggleable(nativeActions.recommended, enabled = editable, role = Role.Checkbox,
                                 onValueChange = nativeActions.onRecommendation), verticalAlignment = Alignment.CenterVertically) {
-                            Text(if (nativeActions.recommended) "✓" else "○", color = Color.White.copy(alpha = .8f), fontSize = 19.sp)
-                            Text(nativeActions.description, Modifier.padding(start = 8.dp), fontSize = 12.sp,
+                            Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
+                                if (nativeActions.recommended) Icon(MusicIcons.Check, null, Modifier.size(18.dp), tint = Color.White.copy(alpha = .8f))
+                                else Box(Modifier.size(14.dp).border(1.dp, Color.White.copy(alpha = .5f), CircleShape))
+                            }
+                            Text(nativeActions.description, Modifier.padding(start = 8.dp, end = 8.dp), fontSize = 12.sp, lineHeight = 18.sp,
                                 maxLines = 2, overflow = TextOverflow.Ellipsis, color = Color.White.copy(alpha = .6f))
                         }
                         QueueIconAction(MusicIcons.Download, "下载全部", editable && queue.songs.isNotEmpty(), nativeActions.onDownload, "queue_download_all")
@@ -218,8 +224,8 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
             }
             if (queue.songs.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth().then(dragHeader), contentAlignment = Alignment.Center) {
                 Text("播放队列为空", color = Color.White.copy(alpha = .5f), fontSize = 16.sp)
-            } else LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("queue_songs").nestedScroll(nested),
-                state = list, contentPadding = PaddingValues(top = 12.dp, bottom = 16.dp)) {
+            } else LazyColumn(Modifier.weight(1f).fillMaxWidth().clipToBounds().testTag("queue_songs").nestedScroll(nested),
+                state = list, contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp)) {
                 itemsIndexed(queue.songs, key = { index, _ -> rowKeys[index] }) { index, song ->
                     Row(Modifier.fillMaxWidth().background(if (index == queue.index) Color.White.copy(alpha = .11f) else Color.Transparent,
                         RoundedCornerShape(14.dp)).testTag("queue_row_$index").animateItem(), verticalAlignment = Alignment.CenterVertically) {
@@ -240,13 +246,20 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                 }
             }
             Column(Modifier.fillMaxWidth().then(dragHeader).padding(bottom = 12.dp)) {
-                error?.let { Text(it, color = Color.White.copy(alpha = .55f), fontSize = 12.sp, modifier = Modifier.padding(bottom = 8.dp)) }
-                if (shared) Text(if (editable) "双方共享歌单 · 修改会同步给对方" else "正在同步操作…",
-                    color = Color.White.copy(alpha = .55f), fontSize = 12.sp)
-                else if (!editable) Text("请先退出一起听或结束投屏，再编辑队列", color = Color.White.copy(alpha = .55f), fontSize = 12.sp)
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .07f)))
-                QueueTextAction(queue.mode.label + if (loading) " · 加载中" else "", { modeOpen = true }, editable,
-                    Modifier.padding(top = 12.dp).testTag("open_player_mode"), pill = true)
+                error?.let { Text(it, color = Color.White.copy(alpha = .55f), fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 10.dp)) }
+                if (!shared && !editable) Text("请先退出一起听或结束投屏，再编辑队列", color = Color.White.copy(alpha = .55f), fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 10.dp))
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    QueueTextAction(queue.mode.label + if (loading) " · 加载中" else "", { modeOpen = true }, editable,
+                        Modifier.testTag("open_player_mode"), pill = true)
+                    Spacer(Modifier.width(12.dp))
+                    Text(if (shared) { if (editable) "双方共享歌单" else "正在同步操作…" }
+                        else if (backdrop) "向下轻扫关闭队列" else "向下轻扫返回播放界面",
+                        Modifier.weight(1f).padding(end = 8.dp), color = Color.White.copy(alpha = .4f), fontSize = 11.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.End)
+                }
             }
         }
         MusicOverlayDialog(show = modeOpen, title = "播放模式", onDismissRequest = { modeOpen = false }) {
@@ -284,7 +297,7 @@ private fun Song.queueSummary() = listOf(artists, album).filter { it.isNotBlank(
     val scale = animateFloatAsState(if (pressed) .94f else 1f, tween(120), label = "queue button press")
     Box(modifier.heightIn(min = 48.dp).graphicsLayer { scaleX = scale.value; scaleY = scaleX }
         .clickable(enabled = enabled, role = Role.Button, interactionSource = interactions, indication = null, onClick = onClick)
-        .padding(horizontal = 14.dp), contentAlignment = Alignment.Center) {
+        .padding(horizontal = 8.dp), contentAlignment = Alignment.Center) {
         Text(label, modifier = if (pill) Modifier.background(Color.White.copy(alpha = .1f), RoundedCornerShape(18.dp))
             .padding(horizontal = 12.dp, vertical = 6.dp) else Modifier,
             color = Color.White.copy(alpha = if (enabled) .65f else .25f), fontSize = 13.sp)
