@@ -56,7 +56,7 @@ import io.github.currencortex.music.data.auth.RegistrationInput
     val secondary = colors.onSurfaceVariantSummary
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(musicScrollPadding()).testTag("login_screen"),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("我的", fontSize = 32.sp)
+        Text("我的", Modifier.fillMaxWidth().then(io.github.currencortex.music.ui.component.LocalRootTabSwipe.current), fontSize = 32.sp)
         account.account?.takeIf { !addingAccount }?.let {
             Text(it.nickname, fontSize = 24.sp)
             TextButton("退出登录", onClick = { vm.logout() }, enabled = !state.loading)

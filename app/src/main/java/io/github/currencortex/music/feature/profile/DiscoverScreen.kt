@@ -36,7 +36,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val chat: ChatViewModel = viewModel(factory = viewModelFactory { ChatViewModel(vm.container) })
     LaunchedEffect(pager.settledPage) { if (pager.settledPage == 2) posts.ensureLoaded() }
     Column(Modifier.fillMaxSize().testTag("discover_screen")) {
-        Text("发现", Modifier.padding(start = 20.dp, top = 20.dp, bottom = 14.dp), fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
+        Text("发现", Modifier.fillMaxWidth().then(LocalRootTabSwipe.current).padding(start = 20.dp, top = 20.dp, bottom = 14.dp), fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
         DiscoverTabs(pager.targetPage,
             onTabSelected = { index -> scope.launch { pager.animateScrollToPage(index) } },
             modifier = Modifier.padding(horizontal = 20.dp).testTag("discover_tabs"))

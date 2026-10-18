@@ -79,7 +79,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     MusicPullToRefresh(home.loading, vm::refresh, Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize().testTag("music_home"), state = listState, contentPadding = PaddingValues(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 24.dp + bottomInset), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item(key = "identity") {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().then(LocalRootTabSwipe.current), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         HomeBrandTitle()
                         SplitText(account.account?.let { "欢迎，${it.nickname}" } ?: nativeAccount.profile?.let { "欢迎，${it.nickname}" } ?: "音乐，从这里开始",

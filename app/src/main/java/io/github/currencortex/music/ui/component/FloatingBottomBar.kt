@@ -31,8 +31,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
@@ -59,7 +59,6 @@ import androidx.compose.ui.util.fastRoundToInt
 import androidx.compose.ui.util.lerp
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import io.github.currencortex.music.ui.component.liquid.InnerShadow
@@ -224,7 +223,8 @@ fun FloatingBottomBar(
         }
     }
 
-    var currentIndex by remember { mutableIntStateOf(selectedIndex()) }
+    val selected by rememberUpdatedState(selectedIndex)
+    val select by rememberUpdatedState(onSelected)
 
     class DampedDragAnimationHolder {
         var instance: DampedDragAnimation? = null
@@ -257,7 +257,7 @@ fun FloatingBottomBar(
             onDragStarted = {},
             onDragStopped = {
                 val targetIndex = targetValue.fastRoundToInt().fastCoerceIn(0, tabsCount - 1)
-                currentIndex = targetIndex
+                if (targetIndex != selected()) select(targetIndex)
                 animateToValue(targetIndex.toFloat())
                 animationScope.launch {
                     offsetAnimation.animateTo(0f, spring(1f, 300f, 0.5f))
@@ -277,13 +277,10 @@ fun FloatingBottomBar(
         ).also { holder.instance = it }
     }
 
-    LaunchedEffect(selectedIndex) {
-        snapshotFlow { selectedIndex() }.collectLatest { currentIndex = it }
-    }
     LaunchedEffect(dampedDragAnimation) {
-        snapshotFlow { currentIndex }.drop(1).collectLatest { index ->
-            dampedDragAnimation.animateToValue(index.toFloat())
-            onSelected(index)
+        snapshotFlow { selected() }.collectLatest { index ->
+            if (abs(dampedDragAnimation.targetValue - index) > .0001f)
+                dampedDragAnimation.animateToValue(index.toFloat())
         }
     }
 
@@ -313,7 +310,7 @@ fun FloatingBottomBar(
     val combinedBackdrop = rememberCombinedBackdrop(indicatorBackdrop, tabsBackdrop)
 
     Box(
-        modifier = modifier.width(IntrinsicSize.Min),
+        modifier = modifier.width(IntrinsicSize.Min).then(rootNavigationSwipe(selected(), select)),
         contentAlignment = Alignment.CenterStart
     ) {
         Row(

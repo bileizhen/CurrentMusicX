@@ -35,7 +35,7 @@ fun PlainFloatingBar(selected: Int, labels: List<String>, icons: List<ImageVecto
     modifier: Modifier = Modifier, embedded: Boolean = false) {
     val background = if (isInDarkTheme()) MiuixTheme.colorScheme.surfaceContainer else Color.White
     Row(
-        modifier.fillMaxWidth().height(64.dp).testTag("plain_floating_bar")
+        modifier.fillMaxWidth().height(64.dp).testTag("plain_floating_bar").then(rootNavigationSwipe(selected, onSelect))
             .then(if (embedded) Modifier else Modifier.shadow(8.dp, CircleShape).clip(CircleShape).background(background))
             .padding(4.dp).selectableGroup(),
     ) {
@@ -57,7 +57,7 @@ fun PlainFloatingBar(selected: Int, labels: List<String>, icons: List<ImageVecto
 
 @Composable
 fun StandardNavigationBar(selected: Int, labels: List<String>, icons: List<ImageVector>, onSelect: (Int) -> Unit) {
-    NavigationBar(modifier = Modifier.testTag("standard_navigation_bar")) {
+    NavigationBar(modifier = Modifier.testTag("standard_navigation_bar").then(rootNavigationSwipe(selected, onSelect))) {
         labels.forEachIndexed { index, label ->
             NavigationBarItem(
                 modifier = Modifier.weight(1f).testTag("tab_$index"),
