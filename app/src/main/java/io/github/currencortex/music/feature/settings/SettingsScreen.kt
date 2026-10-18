@@ -24,7 +24,8 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
     LazyColumn(Modifier.fillMaxSize().testTag("settings_screen"),
         contentPadding = musicScrollPadding(PaddingValues(12.dp, 30.dp, 12.dp, 32.dp)),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        item { Text("设置", fontSize = 32.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
+        item { Text("设置", fontSize = 32.sp, modifier = Modifier.fillMaxWidth()
+            .then(io.github.currencortex.music.ui.component.LocalRootTabSwipe.current).padding(horizontal = 12.dp, vertical = 8.dp)) }
         item {
             var origin by remember { mutableStateOf<LayoutCoordinates?>(null) }
             val color = MiuixTheme.colorScheme.surface

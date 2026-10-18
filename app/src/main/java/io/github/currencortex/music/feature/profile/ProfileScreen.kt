@@ -102,7 +102,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState,
         contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        item { Row(verticalAlignment = Alignment.CenterVertically) {
+        item { Row(Modifier.fillMaxWidth().then(LocalRootTabSwipe.current), verticalAlignment = Alignment.CenterVertically) {
             Text("我的", Modifier.weight(1f), fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
             MusicTextAction("设置", onSettings)
         } }
@@ -166,7 +166,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState, contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        item { Row(verticalAlignment = Alignment.CenterVertically) {
+        item { Row(Modifier.fillMaxWidth().then(LocalRootTabSwipe.current), verticalAlignment = Alignment.CenterVertically) {
             // No back button here either: system/predictive back is handled by the navigation layer.
             Text(if (onBack == null) "我的" else "用户主页", Modifier.weight(1f), fontSize = 28.sp,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)

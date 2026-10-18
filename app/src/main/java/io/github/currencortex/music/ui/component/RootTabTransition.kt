@@ -4,6 +4,9 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.interaction.DragInteraction
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.pager.HorizontalPager
@@ -18,6 +21,8 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import kotlinx.coroutines.flow.first
 import kotlin.coroutines.coroutineContext
@@ -37,6 +42,8 @@ class RootTabPlacement(private val viewport: () -> LayoutCoordinates?, private v
     }
 }
 val LocalRootTabPlacement = staticCompositionLocalOf<RootTabPlacement?> { null }
+/** Only root-page title containers opt into moving the root pager. */
+val LocalRootTabSwipe = staticCompositionLocalOf<Modifier> { Modifier }
 
 /** Continuous full-width pages, including intermediate tabs; no fade, overshoot or pre-jump. */
 @Composable fun RootTabTransition(selected: Int, states: SaveableStateHolder,
@@ -47,19 +54,27 @@ val LocalRootTabPlacement = staticCompositionLocalOf<RootTabPlacement?> { null }
     var gesturePending by remember { mutableStateOf(false) }
     val latestSelected by rememberUpdatedState(selected)
     val select by rememberUpdatedState(onSelected)
+    val interactions = remember { MutableInteractionSource() }
+    val fling = PagerDefaults.flingBehavior(pager, snapAnimationSpec = tween(320, easing = easing))
+    val swipe = Modifier.scrollable(pager, Orientation.Horizontal,
+        reverseDirection = LocalLayoutDirection.current == LayoutDirection.Ltr,
+        flingBehavior = fling, interactionSource = interactions).testTag("root_swipe_header")
     LaunchedEffect(pager) {
-        pager.interactionSource.interactions.collect { if (it is DragInteraction.Start) gesturePending = true }
+        interactions.interactions.collect { if (it is DragInteraction.Start) gesturePending = true }
     }
     LaunchedEffect(pager) {
-        snapshotFlow { pager.isScrollInProgress to pager.settledPage }.collect { (moving, page) ->
-            if (!moving && gesturePending) {
-                gesturePending = false
+        snapshotFlow { pager.isScrollInProgress to pager.currentPage }.collect { (moving, page) ->
+            if (gesturePending) {
                 if (page != latestSelected) select(page)
+                if (!moving) gesturePending = false
             }
         }
     }
     LaunchedEffect(selected) {
         snapshotFlow { pager.layoutInfo.pageSize }.first { it > 0 }
+        // Selection follows a finger drag immediately; it must not start a second animation.
+        if (gesturePending && pager.isScrollInProgress && selected == pager.currentPage) return@LaunchedEffect
+        gesturePending = false
         if (abs(pager.getOffsetDistanceInPages(selected)) < .0001f) return@LaunchedEffect
         if ((coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) == 0f) pager.scrollToPage(selected)
         else pager.scroll {
@@ -77,11 +92,11 @@ val LocalRootTabPlacement = staticCompositionLocalOf<RootTabPlacement?> { null }
         .onGloballyPositioned { viewport = it },
         // Measure the requested page immediately for hero anchors, then retain only neighbours.
         beyondViewportPageCount = maxOf(1, abs(selected - pager.currentPage)), key = { it },
-        flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = tween(320, easing = easing))) { tab ->
+        userScrollEnabled = false, flingBehavior = fling) { tab ->
         states.SaveableStateProvider(tab) {
             var page by remember { mutableStateOf<LayoutCoordinates?>(null) }
             val placement = remember { RootTabPlacement({ viewport }, { page }) }
-            CompositionLocalProvider(LocalRootTabPlacement provides placement) {
+            CompositionLocalProvider(LocalRootTabPlacement provides placement, LocalRootTabSwipe provides swipe) {
                 Box(Modifier.fillMaxSize().onGloballyPositioned { page = it }
                     .then(if (tab != selected) Modifier.clearAndSetSemantics {} else Modifier)) { content(tab) }
             }

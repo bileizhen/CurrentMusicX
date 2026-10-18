@@ -18,6 +18,7 @@ import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.ui.component.RootTabTransition
+import io.github.currencortex.music.ui.component.LocalRootTabSwipe
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -37,8 +38,10 @@ class RootTabTransitionTest {
                 RootTabTransition(selected, rememberSaveableStateHolder(), onSelected = { selected = it }) { tab ->
                     var count by rememberSaveable { mutableIntStateOf(0) }
                     val color = listOf(ComposeColor.Blue,ComposeColor.Red,ComposeColor.Green,ComposeColor.Magenta)[tab]
-                    Box(Modifier.fillMaxSize().background(color).clickable { count++ }) {
-                        BasicText("page$tab:$count", Modifier.padding(20.dp))
+                    Box(Modifier.fillMaxSize().background(color)) {
+                        Box(Modifier.fillMaxWidth().height(80.dp).then(LocalRootTabSwipe.current)) {
+                            BasicText("page$tab:$count", Modifier.padding(20.dp).clickable { count++ })
+                        }
                     }
                 }
             }
@@ -119,13 +122,40 @@ class RootTabTransitionTest {
         compose.mainClock.autoAdvance = false
         compose.setContent { Fixture() }
         compose.onNodeWithText("page0:0").performClick()
-        compose.onNodeWithTag("root_tab_transition").performTouchInput { swipeLeft(durationMillis = 320) }
+        compose.onNodeWithTag("root_swipe_header").performTouchInput { swipeLeft(durationMillis = 320) }
         compose.mainClock.advanceTimeBy(800)
         compose.onNodeWithText("page1:0").assertExists()
         assertEquals(Color.RED,pixel())
-        compose.onNodeWithTag("root_tab_transition").performTouchInput { swipeRight(durationMillis = 320) }
+        compose.onNodeWithTag("root_swipe_header").performTouchInput { swipeRight(durationMillis = 320) }
         compose.mainClock.advanceTimeBy(800)
         compose.onNodeWithText("page0:1").assertExists()
         assertEquals(Color.BLUE,pixel())
+    }
+
+    @Test fun contentAreaCannotSwitchRootTabsAndHeaderTapsStillReachTheirAction() {
+        compose.setContent { Fixture() }
+        compose.onNodeWithTag("root_tab_transition").performTouchInput { swipeLeft(durationMillis = 240) }
+        compose.onNodeWithText("page0:0").assertExists()
+        assertEquals(Color.BLUE, pixel())
+        compose.onNodeWithText("page0:0").performClick()
+        compose.onNodeWithText("page0:1").assertExists()
+        compose.onNodeWithTag("root_swipe_header").performTouchInput { swipeLeft(durationMillis = 240) }
+        compose.onNodeWithText("page1:0").assertExists()
+        assertEquals(Color.RED, pixel())
+    }
+
+    @Test fun selectionTracksTheCrossedPageBeforeFingerRelease() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { Fixture() }
+        compose.onNodeWithTag("root_swipe_header").performTouchInput {
+            down(androidx.compose.ui.geometry.Offset(width * .9f, centerY))
+            moveBy(androidx.compose.ui.geometry.Offset(-width * .7f, 0f))
+        }
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithText("page1:0").assertExists()
+        compose.onNodeWithText("page0:0").assertDoesNotExist()
+        compose.onNodeWithTag("root_swipe_header").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(800)
+        assertEquals(Color.RED, pixel())
     }
 }
