@@ -11,6 +11,8 @@ internal interface ListenTogetherProtocol {
     suspend fun status(expected: NeteaseSession): ListenTogetherStatus
     suspend fun requestSync(expected: NeteaseSession, roomId: String)
     suspend fun restoreDevice(expected: NeteaseSession, roomId: String) {}
+    suspend fun resolveInvitation(text: String): ListenTogetherInvitation =
+        ListenTogetherInvitation.parse(text) ?: error("请粘贴有效的网易云一起听邀请链接")
     suspend fun heartbeat(expected: NeteaseSession, roomId: String, songId: Long, playing: Boolean, positionMs: Long, version: List<ListenTogetherVersion>): Boolean
     suspend fun playlist(expected: NeteaseSession, roomId: String, local: ListenTogetherQueue = ListenTogetherQueue()): ListenTogetherSnapshot
     suspend fun reportPlayback(expected: NeteaseSession, roomId: String, playback: ListenTogetherPlayback)

@@ -2,7 +2,7 @@ package io.github.currencortex.music
 
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.core.netease.NeteaseAccountState
 import io.github.currencortex.music.core.netease.listen.NeteaseListenTogetherState
@@ -95,6 +95,16 @@ class NeteaseListenTogetherScreenTest {
         compose.onNodeWithTag("netease_listen_confirm_leave").performClick()
         assertEquals(1, leaves)
         assertEquals(0, creates); assertTrue(joins.isEmpty())
+    }
+
+    @Test fun officialShortLinkInsideShareTextCanBeSubmittedWithoutAutoJoining() {
+        show()
+        val shared = "我的耳机分你一半，和我一起听歌吧～快点开看看 https://163cn.tv/fixtureInvite (@网易云音乐)"
+        compose.onNodeWithTag("netease_listen_invite").performScrollTo().performTextInput(shared)
+        assertTrue(joins.isEmpty())
+        compose.onNodeWithTag("netease_listen_join").performScrollTo().performClick()
+        assertEquals(listOf(shared), joins)
+        compose.onNodeWithTag("netease_listen_invite_error").assertDoesNotExist()
     }
     @Test fun detectsExistingRoomWithoutAutoResumeAndKeepsCurrentMusicRoomsSeparate() {
         state.value = NeteaseListenTogetherState(availableRoom = room)

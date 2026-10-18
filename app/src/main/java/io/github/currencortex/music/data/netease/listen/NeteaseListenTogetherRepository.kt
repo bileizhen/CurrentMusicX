@@ -21,6 +21,7 @@ internal class NeteaseListenTogetherRepository(private val transport: NeteaseTra
     }
 
     override fun checkSession(expected: NeteaseSession) = transport.sessions.check(expected)
+    override suspend fun resolveInvitation(text: String) = ListenTogetherInvitationResolver().resolve(text)
 
     override suspend fun create(expected: NeteaseSession, refer: String, inviteUid: Long?): ListenTogetherRoom {
         require(inviteUid == null || inviteUid > 0)
