@@ -283,6 +283,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         io.github.currencortex.music.core.room.RoomSseClient(), externalPlayer ?: playerController, playerScope,
         { accountRepository.state.value.account?.id ?: 0 }, accountRepository::expired)
     internal val listenTogetherHistory = io.github.currencortex.music.data.netease.listen.NeteaseListenTogetherHistoryRepository(neteaseTransport)
+    internal val listenTogetherFate = io.github.currencortex.music.data.netease.listen.NeteaseListenTogetherFateRepository(neteaseTransport)
     val listenTogether = io.github.currencortex.music.core.netease.listen.NeteaseListenTogetherSession(
         io.github.currencortex.music.data.netease.listen.NeteaseListenTogetherRepository(neteaseTransport,
             trace = { if (BuildConfig.DEBUG) android.util.Log.d("ListenTogetherSync", it) }),
