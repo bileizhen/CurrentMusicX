@@ -39,7 +39,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         ++transportGeneration; commandIntent = null
         beforeExternal = saved; external = controls
         state.value = state.value.copy(mode = mode, playing = false, playRequested = false, resolving = false, loading = false,
-            canControlPlayback = mode != PlayerMode.ROOM, bufferedPositionMs = 0, audioFullyCached = false)
+            canControlPlayback = mode != PlayerMode.ROOM, bufferedPositionMs = 0, audioFullyCached = false, listenTogether = null)
         // Await this command before telling a TV to play: it cancels pending source resolution too.
         try { connect().sendCustomCommand(SessionCommand(MusicService.QUIESCE, Bundle.EMPTY), Bundle.EMPTY).await() }
         catch (e: Exception) { endExternal(controls); throw e }
@@ -55,13 +55,15 @@ class PlayerController(private val context: Context, override val queue: Playbac
     }
     override suspend fun roomTrack(song: Song?, url: String?, position: Long, playing: Boolean) {
         if (state.value.mode != PlayerMode.ROOM) return
+        val pair = state.value.listenTogether
         if (song == null || url == null) {
             connect().sendCustomCommand(SessionCommand(MusicService.QUIESCE, Bundle.EMPTY), Bundle.EMPTY).await()
-            queue.clear(); state.value = PlayerState(mode = PlayerMode.ROOM, canControlPlayback = state.value.canControlPlayback); return
+            queue.clear(); state.value = PlayerState(mode = PlayerMode.ROOM, canControlPlayback = state.value.canControlPlayback,
+                listenTogether = pair); return
         }
         queue.replace(listOf(song), 0)
         state.value = PlayerState(song = song, loading = true, mode = PlayerMode.ROOM, positionMs = position, durationMs = song.durationMs,
-            canControlPlayback = state.value.canControlPlayback)
+            canControlPlayback = state.value.canControlPlayback, listenTogether = pair)
         connect().sendCustomCommand(SessionCommand(MusicService.ROOM_TRACK, Bundle.EMPTY), Bundle().apply {
             putString("song", ApiJson.encodeToString(song)); putString("url", url); putLong("position", position); putBoolean("play", playing)
         }).await()

@@ -281,6 +281,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val roomSession = io.github.currencortex.music.core.room.RoomSession(roomRepository,
         io.github.currencortex.music.core.room.RoomSseClient(), externalPlayer ?: playerController, playerScope,
         { accountRepository.state.value.account?.id ?: 0 }, accountRepository::expired)
+    val listenTogether = io.github.currencortex.music.core.netease.listen.NeteaseListenTogetherSession(
+        io.github.currencortex.music.data.netease.listen.NeteaseListenTogetherRepository(neteaseTransport),
+        externalPlayer ?: playerController, playerScope, musicRepository::detail,
+        { song -> musicRepository.source(song, AudioQuality.from(musicSettings.state.value.quality.value), audioSession()).url })
     private val dlnaSoap = io.github.currencortex.music.core.dlna.SoapClient(networkSocketFactory = {
         val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
         manager.allNetworks.firstOrNull { manager.getNetworkCapabilities(it)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true }?.socketFactory
@@ -291,6 +295,16 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val ready = CompletableDeferred<Unit>()
     val sessionRestored = CompletableDeferred<Unit>()
     init {
+        playerScope.launch {
+            neteaseSessions.ready.await()
+            var previous = neteaseSessions.state.value.revision
+            neteaseSessions.state.map { it.revision }.distinctUntilChanged().collect { revision ->
+                if (revision != previous) {
+                    listenTogether.disconnect(if (listenTogether.state.value.active) "网易云账号已变更，请重新进入一起听" else null)
+                    previous = revision
+                }
+            }
+        }
         playerScope.launch {
             var previous = navidrome.state.value.revision
             navidrome.state.collect { account ->
@@ -313,7 +327,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         }
         playerScope.launch {
             accountRepository.sessionRevision.collect {
-                audioSources.invalidate(); roomSession.disconnect(); dlnaController.stop()
+                audioSources.invalidate(); roomSession.disconnect(); listenTogether.disconnect(); dlnaController.stop()
                 bindingRepository.clearSession(); neteaseLibrary.invalidate(); neteaseSongActions.clearSession()
             }
         }
@@ -378,6 +392,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         smartTuning.close()
         equalizer.close()
         roomSession.disconnect()
+        listenTogether.disconnect()
         appScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         playerScope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
         database.close()
