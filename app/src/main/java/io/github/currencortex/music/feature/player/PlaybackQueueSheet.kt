@@ -37,9 +37,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.Icon
 
 internal data class NativeQueueActions(val recommended: Boolean, val description: String,
-    val onRecommendation: (Boolean) -> Unit)
+    val onRecommendation: (Boolean) -> Unit, val onCollect: () -> Unit)
 
 internal class QueuePageMotion {
     val animation = Animatable(0f)
@@ -62,8 +63,11 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
     val sharedQueue by vm.together.queue.collectAsStateWithLifecycle()
     val shared = together.active
     val displayed = if (shared) sharedQueue else queue
+    var collecting by remember { mutableStateOf(false) }
+    var batch by remember { mutableStateOf<List<Song>>(emptyList()) }
     val nativeActions = if (shared) NativeQueueActions(together.room?.openHeartRcmd == true,
-        together.room?.playlistCopywriting.orEmpty().ifBlank { "根据双方口味，心动推荐" }, vm.together::setRecommendation) else null
+        together.room?.playlistCopywriting.orEmpty().ifBlank { "根据双方口味，心动推荐" }, vm.together::setRecommendation,
+        { batch = displayed.songs.toList(); collecting = true }) else null
     PlaybackQueueContent(displayed, if (shared) !together.busy else player.mode == PlayerMode.LOCAL,
         if (shared) together.queueLoading else loading,
         !shared && NeteaseSongActionsRepository.songId(queue.current) != null,
@@ -73,6 +77,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         onRemove = { index -> if (shared) displayed.songs.getOrNull(index)?.let { vm.together.removeSong(it.id) } else vm.player.remove(index) },
         onClear = { if (shared) vm.together.clearQueue() else vm.player.clear() },
         onMode = vm::setPlaybackMode, onDismiss = onDismiss, shared = shared, nativeActions = nativeActions)
+    NativeQueueCollectionDialog(vm, batch, collecting) { collecting = false }
 }
 
 /** One viewport and queue for both entry points; no separate dialog queue or audio restart on opening. */
@@ -197,6 +202,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                             Text(nativeActions.description, Modifier.padding(start = 8.dp), fontSize = 12.sp,
                                 maxLines = 2, overflow = TextOverflow.Ellipsis, color = Color.White.copy(alpha = .6f))
                         }
+                        QueueIconAction(MusicIcons.Folder, "收藏全部到歌单", editable && queue.songs.isNotEmpty(), nativeActions.onCollect, "queue_collect_all")
                     }
                 }
             }
@@ -251,6 +257,13 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
 }
 
 private fun Song.queueSummary() = listOf(artists, album).filter { it.isNotBlank() }.joinToString(" · ")
+
+@Composable private fun QueueIconAction(icon: androidx.compose.ui.graphics.vector.ImageVector, description: String,
+    enabled: Boolean, onClick: () -> Unit, tag: String) {
+    Box(Modifier.size(48.dp).testTag(tag).clickable(enabled = enabled, role = Role.Button, onClick = onClick), contentAlignment = Alignment.Center) {
+        Icon(icon, description, Modifier.size(22.dp), tint = Color.White.copy(alpha = if (enabled) .65f else .25f))
+    }
+}
 
 @Composable private fun QueueTextAction(label: String, onClick: () -> Unit, enabled: Boolean, modifier: Modifier, pill: Boolean = false) {
     val interactions = remember { MutableInteractionSource() }
