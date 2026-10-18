@@ -382,6 +382,81 @@ class PlayerSheetCapabilitiesTest {
         assertFalse(container.playerController.state.value.playing)
     }
 
+    @Test fun hiddenControlsRoundTripsKeepArtworkAlignedWithItsLiveLayout(): Unit = runBlocking {
+        container.musicSettings.editLyricsDisplay { it.copy(hideControls = true) }
+        val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        val file = java.io.File(context.cacheDir, "hidden-controls-artwork-${UUID.randomUUID()}.png")
+        coverFixture = file
+        android.graphics.Bitmap.createBitmap(128, 128, android.graphics.Bitmap.Config.ARGB_8888).apply {
+            eraseColor(android.graphics.Color.MAGENTA)
+            file.outputStream().use { compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            recycle()
+        }
+        val original = container.playerController.queue.state.value.current!!
+        val song = original.copy(name = "分かっちゃいないね （feat.花隈千冬）", artists = "monet / 花隈千冬", cover = file.toURI().toString())
+        container.playerController.queue.replace(listOf(song), 0)
+        container.playerController.state.value = container.playerController.state.value.copy(song = song)
+        compose.setContent { io.github.currencortex.music.ui.theme.LeiTheme(io.github.currencortex.music.data.settings.AppearanceSettings(blur = false)) {
+            val vm: io.github.currencortex.music.feature.player.PlayerViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                factory = io.github.currencortex.music.ui.util.viewModelFactory { io.github.currencortex.music.feature.player.PlayerViewModel(container) })
+            io.github.currencortex.music.feature.player.PlayerScreen(vm, {}, {})
+        } }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("player_pager_artwork").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+        val pager = compose.onNodeWithTag("player_content_pager")
+        fun assertAligned(role: String) {
+            compose.waitForIdle()
+            val frame = compose.onNodeWithTag("player_pager_artwork").fetchSemanticsNode()
+                .config[io.github.currencortex.music.feature.player.PlayerPagerArtworkGeometry]
+            val pane = pager.fetchSemanticsNode().boundsInRoot
+            val drawn = frame.bounds.translate(pane.topLeft)
+            val expected = compose.onNodeWithTag(role).fetchSemanticsNode().boundsInRoot
+            assertEquals("Shared cover follows the current layout horizontally", expected.left, drawn.left, 2f)
+            assertEquals("Shared cover follows the current layout vertically", expected.top, drawn.top, 2f)
+            assertEquals("Shared cover follows the current layout size", expected.width, drawn.width, 2f)
+            if (role == "player_cover") {
+                val title = compose.onNodeWithTag("player_song_title").fetchSemanticsNode().boundsInRoot
+                assertTrue("The circular cover must not overlap the song title", drawn.bottom < title.top)
+                val pixels = pager.captureToImage().toPixelMap()
+                var left = pixels.width; var top = pixels.height; var right = -1; var bottom = -1
+                for (y in 0 until pixels.height step 3) for (x in 0 until pixels.width step 3) {
+                    val color = pixels[x, y]
+                    if (color.red > .98f && color.blue > .98f && color.green < .02f) {
+                        left = minOf(left, x); top = minOf(top, y); right = maxOf(right, x); bottom = maxOf(bottom, y)
+                    }
+                }
+                assertTrue("The shared image must actually be drawn", right >= left)
+                assertEquals("Drawn cover top matches the reserved space", expected.top - pane.top, top.toFloat(), 8f)
+                assertEquals("Drawn cover bottom stays above the title", expected.bottom - pane.top, bottom.toFloat(), 8f)
+                assertEquals("Drawn cover diameter matches its live layout", expected.width, (right - left).toFloat(), 8f)
+            }
+        }
+        assertAligned("player_cover")
+        repeat(3) {
+            pager.performTouchInput { swipeLeft(durationMillis = 180) }
+            compose.onNodeWithTag("lyrics_reveal_controls").assertIsDisplayed()
+            compose.onNodeWithTag("player_transport").assertDoesNotExist()
+            assertAligned("player_lyrics_cover")
+            pager.performTouchInput { swipeRight(durationMillis = 180) }
+            compose.onNodeWithTag("player_transport").assertIsDisplayed()
+            assertAligned("player_cover")
+        }
+        pager.performTouchInput { swipeLeft(durationMillis = 180) }
+        compose.onNodeWithTag("lyrics_reveal_controls").performClick()
+        compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        assertAligned("player_lyrics_cover")
+        pager.performTouchInput { swipeRight(durationMillis = 180) }
+        assertAligned("player_cover")
+        assertTrue(container.musicSettings.snapshot().lyricsDisplay.hideControls)
+        assertEquals(song.id, container.playerController.queue.state.value.current!!.id)
+        assertFalse(container.playerController.state.value.playing)
+        compose.onNodeWithTag("player_screen").captureToImage().asAndroidBitmap().let { bitmap ->
+            java.io.File(context.externalCacheDir, "player-hidden-controls-roundtrip.png").outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
+    }
+
     @Test fun coverLyricsAndPagerFollowDragWithoutChangingPlayback() {
         start()
         compose.onNodeWithTag("mini_cover").performClick()

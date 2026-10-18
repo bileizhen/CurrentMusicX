@@ -198,7 +198,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         Modifier.align(Alignment.TopEnd).testTag("lyrics_options"))
                 } else Column(Modifier.fillMaxSize()) {
                     CompositionLocalProvider(LocalPlayerPagerArtwork provides pagerArtwork) {
-                    Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { pagerArtwork.container = it }) {
+                    Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { pagerArtwork.container = it; pagerArtwork.updateBounds() }) {
                     HorizontalPager(pager, Modifier.fillMaxSize().testTag("player_content_pager")
                         .semantics { this[PlayerPagePosition] = pager.currentPage + pager.currentPageOffsetFraction },
                         beyondViewportPageCount = 1,
@@ -207,6 +207,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         Box(Modifier.fillMaxSize().then(if (pager.currentPage != page && !pager.isScrollInProgress)
                             Modifier.clearAndSetSemantics {} else Modifier).onGloballyPositioned {
                             if (page == 0) pagerArtwork.coverPage = it else pagerArtwork.lyricsPage = it
+                            pagerArtwork.updateBounds()
                         }) {
                         if (page == 1) Column(Modifier.fillMaxSize()) {
                             Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 4.dp)

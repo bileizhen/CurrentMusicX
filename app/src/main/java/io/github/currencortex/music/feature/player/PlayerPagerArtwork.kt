@@ -26,15 +26,23 @@ internal class PlayerPagerArtworkTransition(val progress: () -> Float) {
     var lyricsPage by mutableStateOf<LayoutCoordinates?>(null)
     var cover by mutableStateOf<LayoutCoordinates?>(null)
     var lyrics by mutableStateOf<LayoutCoordinates?>(null)
+    private var endpoints by mutableStateOf<Pair<Rect, Rect>?>(null)
     val ready get() = container?.isAttached == true && coverPage?.isAttached == true &&
         lyricsPage?.isAttached == true && cover?.isAttached == true && lyrics?.isAttached == true
 
-    fun frame(bend: Float, rotation: Float): PlayerArtworkFrame? {
-        if (!ready) return null
+    /** Coordinates mutate in place on relayout; publish value snapshots for the cached drawing frame. */
+    fun updateBounds() {
+        if (!ready) { endpoints = null; return }
         val large = cover!!; val small = lyrics!!
         // Measure inside each page: neither endpoint includes the pager's scrolling offset.
         val start = Rect(coverPage!!.localPositionOf(large, Offset.Zero), Size(large.size.width.toFloat(), large.size.height.toFloat()))
         val end = Rect(lyricsPage!!.localPositionOf(small, Offset.Zero), Size(small.size.width.toFloat(), small.size.height.toFloat()))
+        endpoints = start to end
+    }
+
+    fun frame(bend: Float, rotation: Float): PlayerArtworkFrame? {
+        val (start, end) = endpoints ?: return null
+        if (!ready) return null
         val p = progress().coerceIn(0f, 1f)
         val arc = 4 * p * (1 - p) * bend
         val center = start.center * (1 - p) + end.center * p + Offset(arc * .5f, -arc)
