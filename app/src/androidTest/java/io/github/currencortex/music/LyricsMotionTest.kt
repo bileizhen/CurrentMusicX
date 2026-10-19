@@ -86,7 +86,7 @@ class LyricsMotionTest {
         compose.onNodeWithText(document.lines[1].translation, useUnmergedTree = true).assertExists()
     }
 
-    @Test fun hiddenWrappedTranslationReleasesItsGapWhileTheParagraphStaysCentered() {
+    @Test fun subtitleTracksRetargetTheFixedRailWithoutRewrappingTheMainParagraph() {
         val position = mutableLongStateOf(1500)
         val translate = androidx.compose.runtime.mutableStateOf(true)
         val document = LyricsDocument(listOf(
@@ -114,14 +114,18 @@ class LyricsMotionTest {
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { position.longValue = 4000 }
         val closing = mutableListOf<Float>()
+        val movingDown = mutableListOf<Float>()
         repeat(20) {
             compose.mainClock.advanceTimeBy(16)
             closing += rowHeight()
-            centered(0)
+            movingDown += row().top.value
         }
-        assertTrue("Hide the gap over several frames, not in one layout jump: expanded=$expanded, samples=$closing",
-            closing.any { it < expanded - .5f && it > closing.last() + 1f })
-        assertTrue("The translation slot closes continuously", closing.zipWithNext().all { (a, b) -> b <= a + .5f })
+        assertTrue("Reclaimed subtitle space moves the track over multiple spring frames",
+            movingDown.distinct().size > 4)
+        assertTrue("The paragraph moves smoothly toward its new reading anchor",
+            movingDown.zipWithNext().all { (a, b) -> b >= a - .5f })
+        compose.mainClock.advanceTimeBy(1200)
+        centered(0)
         assertTrue("A wrapped translation must no longer occupy space", expanded - closing.last() > 20f)
         assertEquals("The lyric itself does not rewrap or shrink", mainHeight, vocalHeight(), .5f)
         compose.onNodeWithText(document.lines[0].translation, useUnmergedTree = true).assertDoesNotExist()
@@ -134,12 +138,13 @@ class LyricsMotionTest {
         repeat(20) {
             compose.mainClock.advanceTimeBy(16)
             opening += rowHeight()
-            centered(0)
         }
         assertTrue("The translation slot opens continuously", opening.zipWithNext().all { (a, b) -> b >= a - .5f })
+        compose.mainClock.advanceTimeBy(1200)
+        centered(0)
         assertEquals(expanded, opening.last(), .5f)
         compose.runOnIdle { position.longValue = 10500 }
-        compose.mainClock.advanceTimeBy(700)
+        compose.mainClock.advanceTimeBy(1800)
         centered(1)
         compose.mainClock.autoAdvance = true
     }

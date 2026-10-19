@@ -248,3 +248,23 @@ The release bundles the version-bound arm64 NetEase 9.5.30 audio engine and
 MNN dependencies; their SHA-256 hashes are listed in the bundled
 original-effects/engine-manifest.json. No user account data is bundled.
 Member functions require the current account's actual entitlement.
+
+
+## Folia Monet lyric motion (Android port)
+
+Copyright chthollyphile and Folia contributors. Source: https://github.com/chthollyphile/folia-major/tree/26c57f9b1b26b402a09e8943171a332215418ce6/src/components/visualizer/monet
+
+`MonetLyricMotion.kt`, `MonetLyricsRail.kt`, `MonetSweepInk.kt`, and `MonetHaloInk.kt` adapt the Monet rail's
+fixed transform tracks, spring constants, line tone, measured grapheme sweep, feathered
+mask and absolute-media-time glow from `monetLyricMotion.ts`, `monetRailLayout.ts`,
+`MonetLyricsRail.tsx`, `MonetRailLine.tsx`, `MonetRailTokens.tsx`, `monetLyricsModel.ts`,
+and `utils/lyrics/graphemeTiming.ts`. React/Framer Motion and CSS masks are replaced by
+Compose layers and cached Android raster shaders; native lyric sources, duet/background
+vocals, translation preferences, seeking, and Android accessibility remain supported.
+
+The port and its adaptations are AGPL-3.0-only. The full AGPL text is bundled offline at
+`legal/AGPL-3.0.txt`. Existing GPL-3.0 code retains its license; this combined work is
+conveyed under the combination provisions of GPLv3/AGPLv3 section 13. The earlier
+statement about the template's GPL-only license describes the original template, not
+an exemption for these AGPL-covered components. Corresponding application source and
+build instructions are available through the application's configured GitHub source link.

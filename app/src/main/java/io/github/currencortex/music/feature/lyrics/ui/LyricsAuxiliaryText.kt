@@ -17,11 +17,11 @@ import kotlin.math.roundToInt
 /** Fade the entire cached paragraph before reclaiming its space, rather than wiping glyphs. */
 @Composable internal fun LyricsAuxiliaryText(text: String, position: State<Long>, visible: Boolean,
     size: Float, weight: FontWeight, align: TextAlign, tag: String, opacity: Float,
-    reserveSpace: Boolean = false) {
+    reserveSpace: Boolean = false, animateHeight: Boolean = true) {
     if (text.isBlank()) return
     val inkAlpha = animateFloatAsState(if (visible) 1f else 0f,
         tween(if (visible) 180 else 110, delayMillis = if (visible) 60 else 0), label = "$tag opacity")
-    val height = if (reserveSpace) remember { mutableFloatStateOf(1f) } else animateFloatAsState(if (visible) 1f else 0f,
+    val height = if (!animateHeight) rememberUpdatedState(if (visible) 1f else 0f) else if (reserveSpace) remember { mutableFloatStateOf(1f) } else animateFloatAsState(if (visible) 1f else 0f,
         tween(if (visible) 280 else 220, delayMillis = if (visible) 0 else 70, easing = FastOutSlowInEasing), label = "$tag space")
     val auxiliary = remember(text) { LyricLine(0, Long.MAX_VALUE, text) }
     KaraokeText(auxiliary, position, false, Modifier.fillMaxWidth()

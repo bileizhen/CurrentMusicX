@@ -19,8 +19,10 @@ import androidx.compose.ui.unit.LayoutDirection
 
 /** One paragraph raster, with cached isolated halos only for eligible sung glyphs. */
 internal class LyricsTextRaster(private val layout: TextLayoutResult, private val density: Density,
-    private val direction: LayoutDirection, private val glowRadiusScale: Float = 1f) {
+    private val direction: LayoutDirection, private val glowRadiusScale: Float = 1f,
+    private val monet: Boolean = false) {
     private val glyphHalos = mutableMapOf<Rect, Pair<ImageBitmap, Offset>>()
+    private val wideHalos = mutableMapOf<Rect, Pair<ImageBitmap, Offset>>()
     private val untimedParagraphs = mutableMapOf<List<Rect>, ImageBitmap>()
     private val prepared = mutableSetOf<ImageBitmap>()
     /** Optional desktop prefetch: each immutable finished bitmap is uploaded at most once. */
@@ -30,7 +32,12 @@ internal class LyricsTextRaster(private val layout: TextLayoutResult, private va
     private val maskPaint by lazy { Paint().apply {
         // Keep bloom outside the source ink, so a partially sung glyph's halo
         // cannot paint its unsung interior white before the karaoke sweep arrives.
-        maskFilter = BlurMaskFilter(6f * density.density * glowRadiusScale, BlurMaskFilter.Blur.OUTER)
+        maskFilter = BlurMaskFilter(if (monet) layout.layoutInput.style.fontSize.value * density.density * density.fontScale * .28f
+            else 6f * density.density * glowRadiusScale, BlurMaskFilter.Blur.OUTER)
+    } }
+    private val widePaint by lazy { Paint().apply {
+        maskFilter = BlurMaskFilter(layout.layoutInput.style.fontSize.value * density.density * density.fontScale * .65f,
+            BlurMaskFilter.Blur.OUTER)
     } }
     val ink: ImageBitmap by lazy {
         ImageBitmap(layout.size.width.coerceAtLeast(1), layout.size.height.coerceAtLeast(1)).also { bitmap ->
@@ -53,7 +60,9 @@ internal class LyricsTextRaster(private val layout: TextLayoutResult, private va
         val alpha = ink.asAndroidBitmap().extractAlpha(maskPaint, offsets)
         alpha.asImageBitmap() to Offset(offsets[0].toFloat(), offsets[1].toFloat())
     }
-    fun glyphHalo(box: Rect): Pair<ImageBitmap, Offset> = glyphHalos.getOrPut(box) {
+    fun glyphHalo(box: Rect): Pair<ImageBitmap, Offset> = glyphHalos.getOrPut(box) { makeHalo(box, maskPaint) }
+    fun wideGlyphHalo(box: Rect): Pair<ImageBitmap, Offset> = wideHalos.getOrPut(box) { makeHalo(box, widePaint) }
+    private fun makeHalo(box: Rect, paint: Paint): Pair<ImageBitmap, Offset> {
         val left = kotlin.math.floor(box.left).toInt()
         val top = kotlin.math.floor(box.top).toInt()
         val glyph = android.graphics.Bitmap.createBitmap(
@@ -64,8 +73,8 @@ internal class LyricsTextRaster(private val layout: TextLayoutResult, private va
             drawBitmap(ink.asAndroidBitmap(), -left.toFloat(), -top.toFloat(), null)
         }
         val offsets = IntArray(2)
-        val alpha = glyph.extractAlpha(maskPaint, offsets)
+        val alpha = glyph.extractAlpha(paint, offsets)
         glyph.recycle()
-        alpha.asImageBitmap() to Offset((left + offsets[0]).toFloat(), (top + offsets[1]).toFloat())
+        return alpha.asImageBitmap() to Offset((left + offsets[0]).toFloat(), (top + offsets[1]).toFloat())
     }
 }
