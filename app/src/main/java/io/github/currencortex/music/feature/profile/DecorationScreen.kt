@@ -61,7 +61,7 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.background).testTag("decoration_screen")) {
         val compact = maxHeight < 480.dp
         Column(Modifier.fillMaxSize().padding(horizontal = 20.dp).padding(bottom = LocalMusicBottomInset.current)) {
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically,
+            Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Box(Modifier.size(44.dp).clip(CircleShape).background(colors.surfaceContainer)
                     .clickable(role = Role.Button, onClick = onBack).testTag("decoration_back"), Alignment.Center) {
@@ -72,39 +72,38 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
             }
             if (catalog != null && !compact) {
                 Card(Modifier.fillMaxWidth().testTag("decoration_preview")) {
-                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically,
+                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.size(100.dp), Alignment.Center) {
+                        Box(Modifier.size(64.dp), Alignment.Center) {
                             Crossfade(selectedId, label = "decoration_preview") { id ->
-                                Box(Modifier.fillMaxSize(), Alignment.Center) { avatar(id, 44.dp) }
+                                Box(Modifier.fillMaxSize(), Alignment.Center) { avatar(id, 26.dp) }
                             }
                         }
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-                            Text(if (changed) "正在试戴" else "当前装扮", fontSize = 12.sp, color = colors.primary)
-                            Text(name, Modifier.testTag("decoration_preview_name"), fontSize = 19.sp,
-                                fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            Text(if (changed) "确认后应用到你的头像" else "点选下方挂件，直接预览效果", fontSize = 12.sp, color = hint)
-                        }
-                    }
-                    if (!catalog.unlocked) Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 14.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text("听歌解锁 · 可先试戴", fontSize = 12.sp, color = hint)
-                            Text("${catalog.listenMs.coerceAtLeast(0) / 60000} / ${catalog.minListenMs.coerceAtLeast(0) / 60000} 分钟",
-                                fontSize = 12.sp, color = hint)
-                        }
-                        val progress = if (catalog.minListenMs > 0) (catalog.listenMs.toFloat() / catalog.minListenMs).coerceIn(0f, 1f) else 0f
-                        Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(colors.onSurface.copy(alpha = .06f))) {
-                            if (progress > 0f) Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(colors.primary))
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(name, Modifier.testTag("decoration_preview_name"), fontSize = 16.sp,
+                                fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(if (changed) "正在试戴" else "当前装扮", Modifier.weight(1f), fontSize = 11.sp,
+                                    color = colors.primary, maxLines = 1)
+                                if (!catalog.unlocked) Text("${catalog.listenMs.coerceAtLeast(0) / 60000} / ${catalog.minListenMs.coerceAtLeast(0) / 60000} 分钟解锁",
+                                    fontSize = 11.sp, color = hint)
+                            }
+                            if (!catalog.unlocked) {
+                                val progress = if (catalog.minListenMs > 0) (catalog.listenMs.toFloat() / catalog.minListenMs).coerceIn(0f, 1f) else 0f
+                                Box(Modifier.fillMaxWidth().height(3.dp).clip(CircleShape).background(colors.onSurface.copy(alpha = .06f))) {
+                                    if (progress > 0f) Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(colors.primary))
+                                }
+                            }
                         }
                     }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(10.dp))
             }
             if (catalog != null) {
                 MusicSearchBar(state.query, { focus.clearFocus() }, onInput = query, placeholder = "搜索挂件名称或 ID",
                     inputTag = "decoration_query", modifier = Modifier.testTag("decoration_search"))
-                Row(Modifier.fillMaxWidth().padding(top = 14.dp, bottom = 10.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp, bottom = 8.dp), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(if (state.query.isBlank()) "全部挂件" else "搜索结果", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     val count = catalog.decorations.count { it.name.contains(state.query.trim(), true) || it.id.contains(state.query.trim(), true) }
                     Text("$count 款", fontSize = 12.sp, color = hint)
