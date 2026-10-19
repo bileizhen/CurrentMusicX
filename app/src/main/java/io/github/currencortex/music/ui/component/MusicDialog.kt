@@ -18,7 +18,7 @@ import top.yukonga.miuix.kmp.theme.LocalContentColor
 
 /** Shared MIUIX bottom dialog; render inside the application's root Scaffold. */
 @Composable
-fun MusicDialog(title: String, onDismiss: () -> Unit,
+fun MusicDialog(title: String?, onDismiss: () -> Unit,
                    footer: (@Composable ColumnScope.() -> Unit)? = null,
                    alignContent: Boolean = true,
                    content: @Composable ColumnScope.() -> Unit) {

@@ -140,7 +140,7 @@ class PersonalRoamingUiTest {
     @Test fun activePlayerHeaderOpensModeDialogAndQualityRemainsInOptions() {
         val song = seed()
         showPlayer()
-        compose.onNodeWithText("私人漫游 · 默认模式 ⌄").assertIsDisplayed()
+        compose.onNodeWithText("私人漫游 · 默认模式").assertIsDisplayed()
         compose.onNodeWithTag("open_quality_sheet").assertDoesNotExist()
         click("open_roaming_modes")
         compose.waitUntil(8_000) { c.personalRoaming.state.value.catalog.scenes.size == 2 }

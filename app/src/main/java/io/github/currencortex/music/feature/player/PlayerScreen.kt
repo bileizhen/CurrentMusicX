@@ -162,7 +162,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             Row(Modifier.fillMaxWidth().height(if (widePlayer) 48.dp else 52.dp), verticalAlignment = Alignment.CenterVertically) {
                 PlayerIconButton(PlayerIcon.COLLAPSE, "收起播放器", onBack, Modifier.testTag("navigate_back"))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text(if (roaming.active) "私人漫游 · ${roaming.choice.title} ⌄" else
+                    Text(if (roaming.active) "私人漫游 · ${roaming.choice.title}" else
                         if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label,
                         Modifier.testTag(if (roaming.active) "open_roaming_modes" else "open_quality_sheet")
                             .clickable(enabled = roaming.active || state.mode == PlayerMode.LOCAL && state.song?.navidrome == null, role = Role.Button) {

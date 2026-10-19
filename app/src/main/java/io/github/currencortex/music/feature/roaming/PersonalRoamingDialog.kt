@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -53,7 +54,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             { station.updateSettings(state.settings.copy(restoreQueue = it)) }, Modifier.testTag("roaming_restore_queue"))
         Text(if (state.settings.restoreQueue) "结束后恢复之前的队列与进度，保持暂停。" else "结束后保留当前歌曲与队列。",
             fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-    } else MusicDialog("私人漫游", onDismiss, footer = {
+    } else MusicDialog(null, onDismiss, footer = {
         val primary: @Composable (Modifier) -> Unit = { modifier ->
         MusicDialogButton(if (!loggedIn) "登录网易云" else if (state.loading) "正在寻找推荐…"
             else if (changed) if (state.active) "切换到${choice.title}" else "开始漫游"
@@ -77,27 +78,28 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         } else primary(Modifier)
     }) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (state.active) "正在聆听 · ${state.choice.title}" else "选择模式或场景，开始连续推荐",
-                Modifier.weight(1f), fontSize = 12.sp, color = colors.onSurfaceVariantSummary,
-                maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text("私人漫游", Modifier.weight(1f).testTag("music_dialog_title"),
+                fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             MusicTextAction("设置", { settings = true }, Modifier.testTag("roaming_settings"))
         }
         Column(Modifier.fillMaxWidth().heightIn(max = bodyHeight).verticalScroll(rememberScrollState())
             .testTag("roaming_choices"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             state.catalog.modes.forEach { mode ->
                 val selected = choice.key == mode.key
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
                     .background(if (selected) colors.primary.copy(alpha = .1f) else colors.surfaceContainer)
                     .selectable(selected, enabled = state.ready && !state.loading, role = Role.RadioButton,
                         onClick = { draftKey = mode.key }).testTag("roaming_mode_${mode.code}")
-                    .padding(horizontal = 14.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(mode.title, fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                    .padding(horizontal = 14.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
+                    Column(Modifier.fillMaxWidth().padding(horizontal = 26.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(mode.title, Modifier.fillMaxWidth(), fontSize = 15.sp, fontWeight = FontWeight.Medium,
+                            textAlign = TextAlign.Center,
                             color = if (selected) colors.primary else colors.onSurface)
-                        if (mode.subtitle.isNotBlank()) Text(mode.subtitle, fontSize = 11.sp,
+                        if (mode.subtitle.isNotBlank()) Text(mode.subtitle, Modifier.fillMaxWidth(), fontSize = 11.sp, textAlign = TextAlign.Center,
                             color = colors.onSurfaceVariantSummary, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     }
-                    if (selected) Icon(MusicIcons.Check, "已选择", Modifier.size(20.dp), tint = colors.primary)
+                    if (selected) Icon(MusicIcons.Check, "已选择", Modifier.align(Alignment.CenterEnd).size(20.dp), tint = colors.primary)
                 }
             }
             Text("场景模式", Modifier.padding(top = 8.dp, bottom = 4.dp), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
