@@ -25,7 +25,9 @@ CurrentMusicX 是使用 Kotlin、Jetpack Compose 和 Miuix 开发的 [CurrentMus
 
 圆形封面、封面取色背景、逐字歌词与跟手拖拽共同组成播放体验。绑定网易云后，可以直接使用网易云我喜欢和自己的歌单；也可以保留 CurrentMusic 音乐库，在两种方式之间切换。
 
-应用源码位于本仓库的 `main` 分支，同时维护于 [CurrentMusic 的 app 分支](https://github.com/backrooms-yrc/CurrentMusic/tree/app)。音乐资料与本机登录的网易云音乐库由手机直连网易云；未在本机登录时，可复用 CurrentMusic 账号的云端网易云绑定。“设置 → 网络与播放 → 音乐音源”可选择网易云原生：歌曲取流、歌词与 MV 均由手机直接请求网易云，无需 CurrentMusic 服务器或站内账号，不自动回退到服务器取流。默认保留 CurrentMusic 音源，亦可选择 LeiZ API。歌曲与音质的可用性取决于所选音源和账号权限。自建曲库可独立连接 Navidrome，音频直接从自己的服务器播放。
+应用源码位于本仓库的 `main` 分支，同时维护于 [CurrentMusic 的 app 分支](https://github.com/backrooms-yrc/CurrentMusic/tree/app)。音乐资料与本机登录的网易云音乐库由手机直连网易云；未在本机登录时，可复用 CurrentMusic 账号的云端网易云绑定。“设置 → 网络与播放 → 音乐音源”可选择网易云原生：歌曲取流与 MV 由手机直接请求网易云，无需 CurrentMusic 服务器或站内账号，不自动回退到服务器取流。歌词独立于音源选择，使用网易云原生 YRC／LRC 数据，不请求服务端估算逐字时间。默认保留 CurrentMusic 音源，亦可选择 LeiZ API。歌曲与音质的可用性取决于所选音源和账号权限。自建曲库可独立连接 Navidrome，音频直接从自己的服务器播放。
+
+1.1.18 新增私人漫游，恢复原生逐字歌词，修复头像更换后的缓存刷新，并重新对齐头像挂件页。详见[更新记录](CHANGELOG.md)。
 
 ## 功能特性
 
