@@ -54,7 +54,7 @@ object LyricsParser {
         val estimated = (obj["wSynth"] as? JsonPrimitive)?.booleanOrNull == true
         val next = rows.mapNotNull { (it as? JsonObject)?.time("t") }.filter { it > start }.minOrNull()
         val end = obj.time("end")?.takeIf { it > start } ?: next ?: (start + 5000)
-        if (words.isEmpty()) {
+        if (words.isEmpty() && !estimated) {
             val tokens = (obj["w"] as? JsonArray).orEmpty().mapNotNull { value ->
                 val pair = value as? JsonArray ?: return@mapNotNull null
                 val at = (pair.getOrNull(0) as? JsonPrimitive)?.longOrNull ?: return@mapNotNull null
@@ -64,14 +64,14 @@ object LyricsParser {
             if (tokens.joinToString("") { it.second } == text && tokens.zipWithNext().all { it.first.first < it.second.first }) {
                 var cursor = 0
                 words = tokens.mapIndexedNotNull { i, (at, token) ->
-                    val until = tokens.getOrNull(i + 1)?.first ?: if (estimated) minOf(end, start + 8000) else end
+                    val until = tokens.getOrNull(i + 1)?.first ?: end
                     val offset = cursor; cursor += token.length
                     if (until <= at) null else LyricWord(token, at, until, offset, cursor)
                 }
             }
         }
-        LyricLine(start.coerceAtLeast(0), end, text, words,
-            obj.string("trans"), obj.string("romanization").ifBlank { obj.string("roma") }, wordsEstimated = estimated)
+        LyricLine(start.coerceAtLeast(0), end, text, if (estimated) emptyList() else words,
+            obj.string("trans"), obj.string("romanization").ifBlank { obj.string("roma") })
     })
 
     fun lrc(source: String): LyricsDocument {

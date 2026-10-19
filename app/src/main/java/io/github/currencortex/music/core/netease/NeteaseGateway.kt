@@ -14,12 +14,13 @@ class NeteaseGateway(val transport: NeteaseTransport) {
     private var listeningMs = 0L
     private var listeningReported = false
     val sessions get() = transport.sessions
-    // Preserve the existing server source unless the user explicitly selects native media.
+    // Preserve protected media's selected source. Public lyrics always use NetEase,
+    // whose raw YRC/LRC responses never include the project's synthetic word axis.
     fun handles(path: String, nativeMedia: Boolean = false): Boolean {
         if (path == "ncmbind" || path.startsWith("ncmbind/")) return true
         if (!path.startsWith("ncm/")) return false
         return nativeMedia || (!path.startsWith("ncm/song/url") && path !in setOf(
-            "ncm/mv/url", "ncm/video/url", "ncm/song/cloud/download", "ncm/voice/detail", "ncm/lyric", "ncm/lyric/new"))
+            "ncm/mv/url", "ncm/video/url", "ncm/song/cloud/download", "ncm/voice/detail"))
     }
     private fun JsonObject.text(key: String) = (get(key) as? JsonPrimitive)?.contentOrNull.orEmpty()
     private fun JsonObject.long(key: String) = (get(key) as? JsonPrimitive)?.longOrNull ?: 0L

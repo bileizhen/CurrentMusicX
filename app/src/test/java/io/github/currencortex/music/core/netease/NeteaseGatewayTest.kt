@@ -192,44 +192,45 @@ class NeteaseGatewayTest {
         assertEquals(13L, api.decode<SongListDto>(gateway.recent()).songs.single().id)
         assertEquals(0, current.requestCount)
     }
-    @Test fun lyricsUseCurrentMusicWithWordTimingAndAuxiliaryTextDespiteNativeLogin() = runBlocking {
+    @Test fun lyricsUseNativeWordTimingAndAuxiliaryTextEvenWithProjectAudio() = runBlocking {
         login()
-        current.enqueue(response("""{"code":200,"lrc":{"lyric":"[00:01.00]Hello"},"tlyric":{"lyric":"[00:01.00]你好"},"yromalrc":{"lyric":"[00:01.00]test romanization"},"yrc":{"lyric":"[1000,1000](1000,500,0)Hel(1500,500,0)lo"}}"""))
+        enqueue("""{"code":200,"lrc":{"lyric":"[00:01.00]Hello"},"tlyric":{"lyric":"[00:01.00]你好"},"yromalrc":{"lyric":"[00:01.00]test romanization"},"yrc":{"lyric":"[1000,1000](1000,500,0)Hel(1500,500,0)lo"}}""")
         val result = MusicRepository(api).lyricsDocument(11) as AppResult.Success
         assertEquals("CurrentMusic", result.value.metadata.source); assertEquals("你好", result.value.lines.single().translation)
         assertEquals("test romanization", result.value.lines.single().romanization)
         assertEquals(2, result.value.lines.single().words.size)
-        val request = current.takeRequest()
-        assertEquals("/cm/ncm/lyric/new?id=11", request.path)
-        assertNull(request.getHeader("Authorization")); assertNull(request.getHeader("Cookie"))
-        assertEquals(0, upstream.requestCount)
+        val request = upstream.takeRequest()
+        assertEquals("/eapi/song/lyric/v1", request.path)
+        assertEquals("11", payload(request)["id"]!!.jsonPrimitive.content)
+        assertNull(request.getHeader("Authorization"))
+        assertEquals(0, current.requestCount)
     }
-    @Test fun lyricFallbackAndLegacyEntryStayOnCurrentMusic() = runBlocking {
+    @Test fun lyricFallbackAndLegacyEntryStayOnNativeNetease() = runBlocking {
         login()
-        current.enqueue(MockResponse().setResponseCode(404))
-        val body = """{"lines":[{"t":1000,"txt":"Hello","trans":"你好","roma":"test romanization"}]}"""
-        current.enqueue(response(body))
+        upstream.enqueue(MockResponse().setResponseCode(404))
+        val body = """{"code":200,"lrc":{"lyric":"[00:01.00]Hello"},"tlyric":{"lyric":"[00:01.00]你好"},"romalrc":{"lyric":"[00:01.00]test romanization"}}"""
+        enqueue(body)
         val repository = MusicRepository(api)
         val document = (repository.lyricsDocument(11) as AppResult.Success).value
         assertEquals("你好", document.lines.single().translation)
         assertEquals("test romanization", document.lines.single().romanization)
-        current.enqueue(response(body))
+        enqueue(body)
         assertEquals("Hello", (repository.lyrics(11) as AppResult.Success).value.single().txt)
-        for (path in listOf("/cm/ncm/lyric/new?id=11", "/cm/ncm/lyric?id=11", "/cm/ncm/lyric?id=11")) {
-            val request = current.takeRequest()
+        for (path in listOf("/eapi/song/lyric/v1", "/eapi/song/lyric", "/eapi/song/lyric")) {
+            val request = upstream.takeRequest()
             assertEquals(path, request.path)
-            assertNull(request.getHeader("Authorization")); assertNull(request.getHeader("Cookie"))
+            assertNull(request.getHeader("Authorization"))
         }
-        assertEquals(0, upstream.requestCount)
+        assertEquals(0, current.requestCount)
     }
-    @Test fun lyricServerFailureDoesNotSilentlySwitchToNativeNetease() = runBlocking {
-        current.enqueue(MockResponse().setResponseCode(503))
-        current.enqueue(response("""{"code":500,"lrc":{"lyric":"[00:01.00]Rejected"}}"""))
+    @Test fun nativeLyricFailureNeverFallsBackToProjectEstimatedLyrics() = runBlocking {
+        upstream.enqueue(MockResponse().setResponseCode(503))
+        enqueue("""{"code":500,"lrc":{"lyric":"[00:01.00]Rejected"}}""")
         val result = MusicRepository(api).lyricsDocument(11) as AppResult.Failure
         assertEquals(ErrorKind.Server, result.kind)
         assertEquals(500, result.status)
-        assertEquals(2, current.requestCount)
-        assertEquals(0, upstream.requestCount)
+        assertEquals(2, upstream.requestCount)
+        assertEquals(0, current.requestCount)
     }
     @Test fun qrConfirmationCommitsLocalSessionAndSurvivesRecreation() = runBlocking {
         val plainOwner = owner().let { RequestSession(it.server, it.token) }

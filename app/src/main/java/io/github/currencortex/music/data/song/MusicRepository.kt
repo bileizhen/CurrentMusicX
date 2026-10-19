@@ -38,16 +38,10 @@ class MusicRepository(private val api: ApiClient,
             val raw = api.get<JsonObject>("ncm/lyric/new", mapOf("id" to "$id"))
             parseDocument(raw)
         }
-        if (enhanced is AppResult.Success && enhanced.value.hasWordTiming) enhanced.value
-        else {
-            val normalized = appResult { parseDocument(api.get<JsonObject>("ncm/lyric", mapOf("id" to "$id"))) }
-            when {
-                normalized is AppResult.Success && normalized.value.lines.isNotEmpty() -> normalized.value
-                enhanced is AppResult.Success && enhanced.value.lines.isNotEmpty() -> enhanced.value
-                normalized is AppResult.Failure -> throw ApiException(normalized.kind, normalized.status)
-                else -> (normalized as AppResult.Success).value
-            }
-        }
+        // Native /song/lyric/v1 includes LRC for songs without YRC. Keep that
+        // instead of requesting a server-generated approximation of word timing.
+        if (enhanced is AppResult.Success && enhanced.value.lines.isNotEmpty()) enhanced.value
+        else parseDocument(api.get<JsonObject>("ncm/lyric", mapOf("id" to "$id")))
     }
     suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null): AudioSource {
         val access = audioAccess()
