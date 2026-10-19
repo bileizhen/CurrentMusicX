@@ -250,7 +250,7 @@ original-effects/engine-manifest.json. No user account data is bundled.
 Member functions require the current account's actual entitlement.
 
 
-## Folia Monet lyric motion (Android port)
+## Folia Monet lyric motion and transport fade (Android port)
 
 Copyright chthollyphile and Folia contributors. Source: https://github.com/chthollyphile/folia-major/tree/26c57f9b1b26b402a09e8943171a332215418ce6/src/components/visualizer/monet
 
@@ -261,6 +261,13 @@ mask and absolute-media-time glow from `monetLyricMotion.ts`, `monetRailLayout.t
 and `utils/lyrics/graphemeTiming.ts`. React/Framer Motion and CSS masks are replaced by
 Compose layers and cached Android raster shaders; native lyric sources, duet/background
 vocals, translation preferences, seeking, and Android accessibility remain supported.
+
+`core/media/PlaybackPauseFade.kt` also adapts the 200 ms transport envelope and stale-pause
+cancellation behavior from `src/services/playbackFade.ts` and
+`src/components/app/playback/bridges/usePlaybackTransportController.ts` at the same commit.
+Android coroutines and independently multiplied ExoPlayer deck gains replace Web Audio gain
+nodes. Focus/noisy-route safety pauses remain immediate; room commands are acknowledged
+without waiting for the local fade.
 
 The port and its adaptations are AGPL-3.0-only. The full AGPL text is bundled offline at
 `legal/AGPL-3.0.txt`. Existing GPL-3.0 code retains its license; this combined work is

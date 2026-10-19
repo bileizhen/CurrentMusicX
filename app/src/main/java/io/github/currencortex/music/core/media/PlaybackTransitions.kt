@@ -20,6 +20,8 @@ internal class PlaybackTransitions(initial: ExoPlayer, initialProbe: TrackEnergy
     private val promote: (Song, ExoPlayer, ExoPlayer) -> Unit,
     private val discard: (ExoPlayer) -> Unit = {},
     private val currentSong: () -> Song? = { offer()?.from },
+    private val readVolume: (ExoPlayer) -> Float = { it.volume },
+    private val writeVolume: (ExoPlayer, Float) -> Unit = { source, gain -> source.volume = gain },
 ) : AutoCloseable {
     var player: ExoPlayer = initial
         private set
@@ -73,8 +75,8 @@ internal class PlaybackTransitions(initial: ExoPlayer, initialProbe: TrackEnergy
             running.elapsed += delta; running.lastPosition = now
             val progress = (running.elapsed.toFloat() / running.plan.durationMs).coerceIn(0f, 1f)
             val gains = musicTransitionGains(progress, running.plan.incomingGain)
-            running.outgoing.volume = gains.first * running.baseVolume
-            running.staged.player.volume = gains.second * running.baseVolume
+            writeVolume(running.outgoing, gains.first * running.baseVolume)
+            writeVolume(running.staged.player, gains.second * running.baseVolume)
             if (progress >= .5f && !running.promoted) handoff(running)
             if (progress >= 1f || running.outgoing.playbackState == Player.STATE_ENDED) finish(running)
             return
@@ -94,9 +96,9 @@ internal class PlaybackTransitions(initial: ExoPlayer, initialProbe: TrackEnergy
         val duration = minOf(requested.durationMs, player.duration / 3, next.player.duration / 3).coerceAtLeast(250)
         if (remaining > duration + 60) return
         val plan = requested.copy(durationMs = minOf(duration, remaining - 40).coerceAtLeast(200))
-        val newFade = Fade(next, player, plan, player.volume, lastPosition = player.currentPosition)
+        val newFade = Fade(next, player, plan, readVolume(player), lastPosition = player.currentPosition)
         fade = newFade
-        next.player.volume = 0f
+        writeVolume(next.player, 0f)
         next.player.play()
     }
 
@@ -110,7 +112,7 @@ internal class PlaybackTransitions(initial: ExoPlayer, initialProbe: TrackEnergy
                 val media = resolve(current) ?: run { failed = current; this@PlaybackTransitions.cancel(); return@launch }
                 ensureActive()
                 if (offer() != current || staged !== next) return@launch
-                next.player.volume = 0f
+                writeVolume(next.player, 0f)
                 next.player.setMediaItem(media); next.player.prepare()
                 withTimeout(8000) { while (next.player.playbackState != Player.STATE_READY) {
                     next.player.playerError?.let { throw it }; delay(25)
@@ -144,7 +146,7 @@ internal class PlaybackTransitions(initial: ExoPlayer, initialProbe: TrackEnergy
         handoff(running)
         // Remove ownership before release: player listeners may be invoked synchronously.
         fade = null; staged = null; preparing?.cancel(); preparing = null
-        player.volume = running.baseVolume
+        writeVolume(player, running.baseVolume)
         dispose(running.outgoing)
     }
     /** The service suppresses ordinary end-of-track advancement while an overlap owns the boundary. */
@@ -169,7 +171,7 @@ internal class PlaybackTransitions(initial: ExoPlayer, initialProbe: TrackEnergy
         fade = null; staged = null
         preparing?.cancel(); preparing = null
         if (running != null) {
-            player.volume = running.baseVolume
+            writeVolume(player, running.baseVolume)
             dispose(if (running.promoted) running.outgoing else running.staged.player)
         } else if (next != null) dispose(next.player)
     }
