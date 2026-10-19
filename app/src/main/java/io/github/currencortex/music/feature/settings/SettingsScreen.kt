@@ -52,7 +52,7 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
                 ArrowPreference(title = "桌面悬浮歌词", summary = "实时预览、字幕样式与窗口控制",
                     startAction = { SettingIcon(MusicIcons.BottomBar) }, onClick = onDesktopLyrics,
                     modifier = Modifier.testTag("open_desktop_lyrics"))
-                ArrowPreference(title = "网络与播放", summary = "音源、音质与预加载",
+                ArrowPreference(title = "网络与播放", summary = "音源、歌词来源、音质与预加载",
                     startAction = { SettingIcon(MusicIcons.Device) }, onClick = onNetwork,
                     modifier = Modifier.testTag("open_network"))
                 ArrowPreference(title = "存储空间", summary = "缓存与下载占用",

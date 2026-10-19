@@ -6,6 +6,7 @@ import kotlinx.serialization.json.*
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import io.github.currencortex.music.data.settings.AudioProvider
 import io.github.currencortex.music.data.settings.AudioSourceAccess
+import io.github.currencortex.music.data.settings.LyricsSource
 
 class MusicRepository(private val api: ApiClient,
     private val audioAccess: () -> AudioSourceAccess = { AudioSourceAccess(AudioProvider.CURRENT_MUSIC) },
@@ -33,15 +34,25 @@ class MusicRepository(private val api: ApiClient,
             LyricLine(it.startTimeMs, it.text, it.translation)
         }
     }
-    suspend fun lyricsDocument(id: Long) = appResult {
+    suspend fun lyricsDocument(id: Long, source: LyricsSource = LyricsSource.NETEASE, expectedServer: String? = null) = appResult {
+        suspend fun read(path: String): io.github.currencortex.music.feature.lyrics.model.LyricsDocument =
+            parseDocument(api.decode(api.request("GET", path, mapOf("id" to "$id"),
+                expectedSession = expectedServer?.let { RequestSession(it, null) },
+                projectOnly = source == LyricsSource.CURRENT_MUSIC)))
+        // CurrentMusic's normalized endpoint adds LDDC real timing. The parser still
+        // discards wSynth estimates. Native selection never calls this server route.
+        if (source == LyricsSource.CURRENT_MUSIC) {
+            val normalized = appResult { read("ncm/lyric") }
+            if (normalized is AppResult.Success && normalized.value.lines.isNotEmpty()) return@appResult normalized.value
+        }
         val enhanced = appResult {
-            val raw = api.get<JsonObject>("ncm/lyric/new", mapOf("id" to "$id"))
-            parseDocument(raw)
+            read("ncm/lyric/new")
         }
         // Native /song/lyric/v1 includes LRC for songs without YRC. Keep that
         // instead of requesting a server-generated approximation of word timing.
         if (enhanced is AppResult.Success && enhanced.value.lines.isNotEmpty()) enhanced.value
-        else parseDocument(api.get<JsonObject>("ncm/lyric", mapOf("id" to "$id")))
+        else if (source == LyricsSource.CURRENT_MUSIC) throw ApiException(ErrorKind.Server)
+        else read("ncm/lyric")
     }
     suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null): AudioSource {
         val access = audioAccess()

@@ -18,6 +18,31 @@ class LyricsRepositoryTest {
     private val missing = LyricsProvider { LyricsProviderResult.Failure(LyricsErrorCode.NO_LYRICS, "missing") }
     private fun cache() = LyricsCache(temporary.newFolder())
     private val fallback = LyricsProvider { LyricsProviderResult.Parsed(LyricsParser.lrc("[00:01]旧歌词")) }
+    @Test fun explicitSourceIsolatesMemoryAndIgnoresTtmlCacheAcrossSourceAndSessionChanges() = runBlocking {
+        val cache = cache()
+        cache.write(LyricsKey(MusicSource.NETEASE, "123"), raw())
+        var source = "netease"
+        var session = 1
+        var calls = 0
+        val repo = LyricsRepository(fallback, fallback, cache, selection = {
+            val captured = source
+            LyricsSelection(listOf(captured, session), LyricsProvider {
+                calls++; LyricsProviderResult.Parsed(LyricsParser.lrc("[00:01]$captured"))
+            })
+        })
+        val song = Song(123, "fixture")
+        assertEquals("netease", repo.load(song).document.lines.single().text)
+        assertEquals(1, calls)
+        assertEquals("netease", repo.load(song).document.lines.single().text)
+        source = "currentmusic"
+        assertEquals("currentmusic", repo.load(song).document.lines.single().text)
+        source = "netease"
+        assertEquals("netease", repo.load(song).document.lines.single().text)
+        assertEquals(2, calls)
+        session++
+        repo.load(song)
+        assertEquals(3, calls)
+    }
     @Test fun idAddressedFetchAndRestartedOfflineRawCacheWin() = runBlocking {
         val server = MockWebServer()
         try {

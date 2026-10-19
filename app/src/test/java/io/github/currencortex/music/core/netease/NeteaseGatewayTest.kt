@@ -50,6 +50,22 @@ class NeteaseGatewayTest {
             netease = gateway, nativeMedia = { true })
     }
 
+    @Test fun explicitProjectLyricsBypassNativeAudioAndNeverSendAccountTokens(): Unit = runBlocking {
+        val repository = MusicRepository(ApiClient({ current.url("/cm/").toString() }, { "current-secret" },
+            { expired++ }, netease = gateway, nativeMedia = { true }))
+        current.enqueue(response("""{"lines":[{"t":1000,"txt":"LDDC","w":[[1000,"LD"],[1700,"DC"]],"end":3000}],"source":"lddc"}"""))
+        val result = repository.lyricsDocument(7, io.github.currencortex.music.data.settings.LyricsSource.CURRENT_MUSIC)
+        val document = (result as AppResult.Success).value
+        assertEquals("LDDC", document.lines.single().text)
+        assertTrue(document.hasWordTiming)
+        val request = current.takeRequest(1, TimeUnit.SECONDS)!!
+        assertEquals("/cm/ncm/lyric?id=7", request.path)
+        assertNull(request.getHeader("Authorization"))
+        assertFalse(request.getHeader("Cookie").orEmpty().contains("native-cookie"))
+        assertEquals(0, upstream.requestCount)
+        assertEquals(0, expired)
+    }
+
     @Test fun nativeRecommendationsDoNotUseProjectLoginAsAnImplicitServerFallback(): Unit = runBlocking {
         enqueue("""{"code":200,"result":[{"song":${rawSong(11)}}]}""")
         val library = LibraryRepository(nativeApi(), { 7L }, ::owner)

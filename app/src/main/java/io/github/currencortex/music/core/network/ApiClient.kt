@@ -42,12 +42,13 @@ class ApiClient(
     }
     suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
                         body: JsonElement? = null, authenticated: Boolean = false, expectedSession: RequestSession? = null,
-                        retryConnection: Boolean = true, callTimeoutMillis: Long? = null): JsonElement = withContext(Dispatchers.IO) {
+                        retryConnection: Boolean = true, callTimeoutMillis: Long? = null,
+                        projectOnly: Boolean = false): JsonElement = withContext(Dispatchers.IO) {
         val session = RequestSession(server(), if (authenticated) token() else null)
         if (expectedSession != null && (expectedSession.server != session.server || expectedSession.token != session.token)) throw ApiException(ErrorKind.Unauthorized)
         if (netease?.handles(path) == true && expectedSession?.neteaseRevision != null &&
             expectedSession.neteaseRevision != netease.sessions.state.value.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
-        if (useNative(path, authenticated, session.token)) {
+        if (!projectOnly && useNative(path, authenticated, session.token)) {
             val netease = requireNotNull(netease)
             if (expectedSession?.neteaseRevision != null && expectedSession.neteaseRevision != netease.sessions.state.value.revision)
                 throw ApiException(ErrorKind.NeteaseSessionChanged)
