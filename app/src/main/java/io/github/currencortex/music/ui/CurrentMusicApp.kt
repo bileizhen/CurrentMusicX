@@ -570,6 +570,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     entry(route) {
                         when {
                             route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateLibrary)
+                            route == "lib/roaming" -> io.github.currencortex.music.feature.roaming.PersonalRoamingScreen(
+                                container, ::navigateBack, { navigateLibrary("user/binding") }, { navigateTo(PLAYER) })
                             route.startsWith("lib/artist/") -> {
                                 val artistVm: io.github.currencortex.music.feature.artist.ArtistViewModel = viewModel(key = route,
                                     factory = viewModelFactory { io.github.currencortex.music.feature.artist.ArtistViewModel(container,

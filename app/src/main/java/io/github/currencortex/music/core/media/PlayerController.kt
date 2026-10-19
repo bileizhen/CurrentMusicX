@@ -29,6 +29,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
     private var generation = 0L
     private var transportGeneration = 0L
     internal val commandRevision: Long get() = transportGeneration
+    internal var onRadioBoundary: (() -> Unit)? = null
     private var commandIntent: Boolean? = null
     fun queueForPersistence() = beforeExternal ?: beforeVideo ?: queue.state.value
     override suspend fun beginExternal(mode: PlayerMode, controls: ExternalPlayback): Boolean {
@@ -199,7 +200,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
             positionMs = controller?.currentPosition?.coerceAtLeast(0) ?: state.value.positionMs, anchorRealtimeMs = SystemClock.elapsedRealtime())
         controller?.let { it.pause(); commandIntent = null }
     }
-    fun next(play: Boolean = true) { if (!transportAllowed()) return; external?.let { it.next(); return }; queue.next(); load(play) }
+    fun next(play: Boolean = true) { if (!transportAllowed()) return; external?.let { it.next(); return }; if (queue.next()) load(play) else if (queue.state.value.radioSession != null) onRadioBoundary?.invoke() }
     fun previous(play: Boolean = true) { if (!transportAllowed()) return; external?.let { it.previous(); return }; queue.previous(); load(play) }
     fun seek(position: Long) { if (!transportAllowed()) return; external?.let { it.seek(position.coerceAtLeast(0)); return }; val target = position.coerceAtLeast(0)
         state.value = state.value.copy(positionMs = target, anchorRealtimeMs = SystemClock.elapsedRealtime(), timelineRevision = state.value.timelineRevision + 1)

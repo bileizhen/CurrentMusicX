@@ -9,7 +9,7 @@ import kotlin.random.Random
 @Serializable data class QueueSnapshot(val songs: List<Song> = emptyList(), val index: Int = -1,
     val positionMs: Long = 0, val mode: PlaybackMode = PlaybackMode.LIST, val quality: AudioQuality = AudioQuality.AUTO,
     val shuffleHistory: List<Int> = emptyList(), val shuffleHistoryIndex: Int = -1,
-    val heartPlaylistId: Long = 0) {
+    val heartPlaylistId: Long = 0, val radioSession: String? = null) {
     val current get() = songs.getOrNull(index)
 }
 class PlaybackQueue {
@@ -23,7 +23,7 @@ class PlaybackQueue {
         return s.copy(shuffleHistory = emptyList(), shuffleHistoryIndex = -1)
     }
     private fun nextIndex(s: QueueSnapshot, automatic: Boolean, random: Random): Int = when {
-        s.songs.isEmpty() -> -1
+        s.songs.isEmpty() || s.radioSession != null && s.index == s.songs.lastIndex -> -1
         automatic && s.mode == PlaybackMode.ONE -> s.index
         s.mode == PlaybackMode.SHUFFLE && s.songs.size > 1 -> {
             if (s.hasHistory() && s.shuffleHistoryIndex < s.shuffleHistory.lastIndex)
@@ -43,17 +43,18 @@ class PlaybackQueue {
     }
     fun replace(songs: List<Song>, index: Int) {
         state.value = resetHistory(state.value.copy(songs = songs.toList(), index = if (songs.isEmpty()) -1 else index.coerceIn(songs.indices), positionMs = 0,
-            mode = if (state.value.mode == PlaybackMode.HEART) PlaybackMode.LIST else state.value.mode, heartPlaylistId = 0))
+            mode = if (state.value.mode == PlaybackMode.HEART) PlaybackMode.LIST else state.value.mode, heartPlaylistId = 0, radioSession = null))
     }
     fun restore(value: QueueSnapshot) {
         plannedShuffle = null
-        val restored = value.copy(index = if (value.songs.isEmpty()) -1 else value.index.coerceIn(value.songs.indices), positionMs = value.positionMs.coerceAtLeast(0))
+        val restored = value.copy(index = if (value.songs.isEmpty()) -1 else value.index.coerceIn(value.songs.indices), positionMs = value.positionMs.coerceAtLeast(0), radioSession = null)
         state.value = if (restored.mode == PlaybackMode.SHUFFLE && restored.hasHistory()) restored else resetHistory(restored)
     }
-    fun next(automatic: Boolean = false, random: Random = Random.Default) {
+    fun next(automatic: Boolean = false, random: Random = Random.Default): Boolean {
         val s = state.value
-        if (s.songs.isEmpty()) return
+        if (s.songs.isEmpty()) return false
         val next = nextIndex(s, automatic, random)
+        if (next < 0) return false
         plannedShuffle = null
         state.value = if (s.mode == PlaybackMode.SHUFFLE && s.songs.size > 1) {
             val history = if (s.hasHistory()) s.shuffleHistory else listOf(s.index)
@@ -64,10 +65,12 @@ class PlaybackQueue {
                 s.copy(index = next, positionMs = 0, shuffleHistory = extended, shuffleHistoryIndex = extended.lastIndex)
             }
         } else resetHistory(s.copy(index = next, positionMs = 0))
+        return true
     }
     fun previous() {
         val s = state.value
         if (s.songs.isEmpty()) return
+        if (s.radioSession != null && s.index <= 0) { state.value = s.copy(positionMs = 0); return }
         plannedShuffle = null
         state.value = if (s.mode == PlaybackMode.SHUFFLE) {
             if (s.hasHistory()) {
@@ -84,16 +87,16 @@ class PlaybackQueue {
             it.navidrome?.identity == song.navidrome?.identity }
         val index = if (existing >= 0) existing else (current.index + 1).coerceIn(0, current.songs.size)
         val songs = if (existing >= 0) current.songs else current.songs.toMutableList().apply { add(index, song) }
-        state.value = resetHistory(current.copy(songs = songs, index = index, positionMs = 0))
+        state.value = resetHistory(current.copy(songs = songs, index = index, positionMs = 0, radioSession = null))
     }
     fun setMode(mode: PlaybackMode) {
-        if (state.value.mode != mode) state.value = resetHistory(state.value.copy(mode = mode, heartPlaylistId = 0))
+        if (state.value.mode != mode) state.value = resetHistory(state.value.copy(mode = mode, heartPlaylistId = 0, radioSession = null))
     }
     fun startHeart(songs: List<Song>, playlistId: Long, positionMs: Long) {
         val current = state.value.current ?: return
         require(playlistId > 0)
         state.value = resetHistory(state.value.copy(songs = (listOf(current) + songs).distinctBy { it.id },
-            index = 0, positionMs = positionMs.coerceAtLeast(0), mode = PlaybackMode.HEART, heartPlaylistId = playlistId))
+            index = 0, positionMs = positionMs.coerceAtLeast(0), mode = PlaybackMode.HEART, heartPlaylistId = playlistId, radioSession = null))
     }
     fun appendHeart(songs: List<Song>, playlistId: Long) {
         val s = state.value
@@ -117,5 +120,20 @@ class PlaybackQueue {
         }, positionMs = if (changed) 0 else s.positionMs))
         return changed
     }
-    fun clear() { state.value = resetHistory(state.value.copy(songs = emptyList(), index = -1, positionMs = 0)) }
+    fun startRadio(songs: List<Song>, session: String) {
+        require(songs.isNotEmpty() && session.isNotBlank())
+        state.value = resetHistory(state.value.copy(songs = songs.distinctBy { it.id }, index = 0,
+            positionMs = 0, mode = PlaybackMode.LIST, heartPlaylistId = 0, radioSession = session))
+    }
+    fun appendRadio(songs: List<Song>, session: String): Boolean {
+        val current = state.value
+        if (current.radioSession != session) return false
+        val existing = current.songs.map { it.id }.toSet()
+        val additions = songs.distinctBy { it.id }.filter { it.id !in existing }
+        if (additions.isEmpty()) return false
+        val trim = (current.index - 20).coerceAtLeast(0)
+        state.value = current.copy(songs = current.songs.drop(trim) + additions, index = current.index - trim)
+        return true
+    }
+    fun clear() { state.value = resetHistory(state.value.copy(songs = emptyList(), index = -1, positionMs = 0, radioSession = null)) }
 }
