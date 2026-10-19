@@ -19,7 +19,13 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val neteaseMainLibrary: Boolean = true,
                          val allowConcurrentPlayback: Boolean = false,
                          val transitionMode: MusicTransitionMode = MusicTransitionMode.OFF,
-                         val crossfadeSeconds: Int = 5, val likeMode: LikeMode = LikeMode.AUTO)
+                         val crossfadeSeconds: Int = 5, val likeMode: LikeMode = LikeMode.AUTO,
+                         val lyricsSource: LyricsSource = LyricsSource.CURRENT_MUSIC)
+
+enum class LyricsSource(val label: String) {
+    CURRENT_MUSIC("CurrentMusic 歌词"), NETEASE("网易云歌词");
+    companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: CURRENT_MUSIC }
+}
 
 enum class LikeMode(val label: String) {
     AUTO("自动"), NETEASE("网易云 · 我喜欢"), CURRENT_MUSIC("CurrentMusic · 我喜欢");
@@ -79,6 +85,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val lyricsSize = floatPreferencesKey("lyrics.fontSize")
     private val lyricsWeight = stringPreferencesKey("lyrics.weight")
     private val lyricsOffset = longPreferencesKey("lyrics.offsetMs")
+    private val lyricsSource = stringPreferencesKey("lyrics.source")
     private val centered = booleanPreferencesKey("lyrics.centered")
     private val fontWeight = intPreferencesKey("lyrics.fontWeight")
     private val blur = booleanPreferencesKey("lyrics.blur")
@@ -106,7 +113,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[blur] ?: true, p[stagger] ?: true, KaraokeScope.from(p[karaokeScope]), p[hideControls] ?: false,
             p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true,
             p[perspective] ?: true, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false, p[particles] ?: false).normalized(), p[neteaseMain] ?: true,
-        p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), LikeMode.from(p[likeMode]))
+        p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), LikeMode.from(p[likeMode]), LyricsSource.from(p[lyricsSource]))
     // Read the persisted value directly, without the StateFlow's initial defaults.
     val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: false }.distinctUntilChanged()
     val state = store.data.map(::decode)
@@ -126,6 +133,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     suspend fun setLyricsFontSize(value: Float) { store.edit { it[lyricsSize] = LyricsTypography.normalize(value) } }
     suspend fun setLyricsWeight(value: LyricsWeight) { store.edit { it[lyricsWeight] = value.name } }
     suspend fun setLyricsOffset(value: Long) { store.edit { it[lyricsOffset] = value.coerceIn(-60000, 60000) } }
+    suspend fun setLyricsSource(value: LyricsSource) { store.edit { it[lyricsSource] = value.name } }
     suspend fun editLyricsDisplay(transform: (LyricsDisplayOptions) -> LyricsDisplayOptions) {
         store.edit { p ->
             val value = transform(decode(p).lyricsDisplay).normalized()

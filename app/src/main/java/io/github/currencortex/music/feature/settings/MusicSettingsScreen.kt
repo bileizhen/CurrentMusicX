@@ -23,6 +23,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import io.github.currencortex.music.data.settings.AudioProvider
 import io.github.currencortex.music.data.settings.MusicTransitionMode
+import io.github.currencortex.music.data.settings.LyricsSource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import kotlin.math.roundToInt
@@ -36,6 +37,7 @@ import kotlin.math.roundToInt
     // Credentials must not be saved in Bundle/saved instance state.
     var audioKey by remember { mutableStateOf("") }
     var qualityOpen by rememberSaveable { mutableStateOf(false) }
+    var lyricsSourceOpen by rememberSaveable { mutableStateOf(false) }
     var crossfadeSeconds by remember(settings.crossfadeSeconds) { mutableFloatStateOf(settings.crossfadeSeconds.toFloat()) }
     LaunchedEffect(vm) { vm.refreshCache() }
     var server by rememberSaveable(settings.server) { mutableStateOf(settings.server) }
@@ -50,7 +52,7 @@ import kotlin.math.roundToInt
             summary = "连接自己的音乐服务器 · Subsonic") } }
         item { MusicSectionHeader("音乐音源") }
         item { Card { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("网易云原生：歌曲播放、下载、歌词和 MV 由手机直连网易云，无需 CurrentMusic 服务器；音质与可播放范围由本机网易云账号权限决定。CurrentMusic 账号、公共聊天与本站房间仍使用原服务。",
+            Text("网易云原生：歌曲播放、下载和 MV 由手机直连网易云；音质与可播放范围由本机网易云账号权限决定。歌词来源单独设置。CurrentMusic 账号、公共聊天与本站房间仍使用原服务。",
                 Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 12.sp, color = hint)
             AudioProvider.entries.forEach { entry ->
                 MusicDestinationRow((if (provider.provider == entry) "✓ " else "") + entry.label,
@@ -79,6 +81,10 @@ import kotlin.math.roundToInt
             audioState.message?.let { Text(it, fontSize = 13.sp, color = if (audioState.busy) hint else colors.error) }
         } } }
 
+        item { MusicSectionHeader("歌词") }
+        item { Card { MusicDestinationRow("歌词来源", { lyricsSourceOpen = true },
+            Modifier.testTag("lyrics_source"), summary = settings.lyricsSource.label) } }
+
         item { MusicSectionHeader("CurrentMusic 服务器") }
         item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             TextField(server, { server = it }, singleLine = true, label = "服务器地址", modifier = Modifier.testTag("server_input"))
@@ -87,7 +93,7 @@ import kotlin.math.roundToInt
                 MusicTextAction("测试连接", { vm.test() }, enabled = !state.busy)
                 MusicTextAction("恢复默认", { server = ServerDefaults.URL; vm.server(server) }, enabled = !state.busy)
             }
-            Text(if (provider.provider == AudioProvider.NETEASE) "网易云原生不使用此地址。修改它仅影响 CurrentMusic 账户及本站功能，会清除站内登录状态。"
+            Text(if (provider.provider == AudioProvider.NETEASE) "网易云原生音源不使用此地址；CurrentMusic 歌词及本站功能仍使用它。修改地址会清除站内登录状态。"
                 else "修改服务器会清除当前登录状态，需要重新登录。", fontSize = 12.sp, color = hint)
             state.message?.let { Text(it, fontSize = 13.sp, color = if (state.busy) hint else colors.error) }
         } } }
@@ -158,4 +164,15 @@ import kotlin.math.roundToInt
     }
     if (qualityOpen) io.github.currencortex.music.feature.player.AudioQualitySheet(settings.quality, vm::quality,
         { qualityOpen = false }, title = "默认播放音质")
+    if (lyricsSourceOpen) io.github.currencortex.music.ui.component.MusicDialog("歌词来源", { lyricsSourceOpen = false },
+        footer = { io.github.currencortex.music.ui.component.MusicDialogButton("关闭", { lyricsSourceOpen = false }) }) {
+        LyricsSource.entries.forEach { source ->
+            MusicDestinationRow((if (source == settings.lyricsSource) "✓ " else "") + source.label,
+                { vm.lyricsSource(source); lyricsSourceOpen = false },
+                Modifier.testTag("lyrics_source_${source.name.lowercase()}"), chevron = false,
+                summary = if (source == LyricsSource.CURRENT_MUSIC) "由 CurrentMusic 服务提供，支持 LDDC 真实逐字；过滤估算时间轴"
+                    else "手机直连网易云，使用原生逐字或逐行歌词")
+        }
+        Text("独立于音乐音源，切换后立即重新加载当前歌词。", fontSize = 12.sp, color = hint)
+    }
 }
