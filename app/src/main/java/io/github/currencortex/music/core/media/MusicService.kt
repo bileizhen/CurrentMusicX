@@ -243,7 +243,8 @@ class MusicService : MediaSessionService() {
                 if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.ROOM) container.playerController.external?.ended()
                 if (state == Player.STATE_ENDED && container.playerController.state.value.mode == PlayerMode.LOCAL) {
                     if (container.playbackQueue.state.value.current?.video == true) player.pause()
-                    else { container.playbackQueue.next(automatic = true); prepareSong(true, 0, newPlayback = true) }
+                    else if (container.playbackQueue.next(automatic = true)) prepareSong(true, 0, newPlayback = true)
+                    else if (container.playbackQueue.state.value.radioSession != null) container.playerController.onRadioBoundary?.invoke()
                 }
             }
             override fun onPlayerError(error: PlaybackException) {
@@ -387,7 +388,10 @@ class MusicService : MediaSessionService() {
     private suspend fun persistQueue() {
         container.database.music().saveQueue(QueueSnapshotEntity(payload = ApiJson.encodeToString(container.playerController.queueForPersistence())))
     }
-    private fun nextSong() { container.playbackQueue.next(); prepareSong(true, 0) }
+    private fun nextSong() {
+        if (container.playbackQueue.next()) prepareSong(true, 0)
+        else if (container.playbackQueue.state.value.radioSession != null) container.playerController.onRadioBoundary?.invoke()
+    }
     private fun previousSong() { container.playbackQueue.previous(); prepareSong(true, 0) }
     private fun prepareSong(play: Boolean, position: Long, newPlayback: Boolean = false) {
         if (container.playerController.state.value.mode != PlayerMode.LOCAL) return

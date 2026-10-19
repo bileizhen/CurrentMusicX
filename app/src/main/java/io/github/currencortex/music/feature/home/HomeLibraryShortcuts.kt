@@ -35,6 +35,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             MusicTextAction("歌手", { navigate(catalogRoute(false)) }, Modifier.testTag("open_artists"))
             MusicTextAction("专辑", { navigate(catalogRoute(true)) }, Modifier.testTag("open_albums"))
             MusicTextAction("自建曲库", { navigate("navidrome") }, Modifier.testTag("library_navidrome"))
+            MusicTextAction("私人漫游", { navigate("lib/roaming") }, Modifier.testTag("open_personal_roaming"))
         }
     }
 }

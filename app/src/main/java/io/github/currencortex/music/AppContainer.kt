@@ -214,6 +214,11 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val playbackQueue = PlaybackQueue()
     val dockAudioLevel = DockAudioLevel()
     val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)
+    val personalRoaming = io.github.currencortex.music.feature.roaming.PersonalRoamingController(
+        io.github.currencortex.music.data.roaming.PersonalRoamingRepository(neteaseTransport), neteaseSessions, playerController,
+        io.github.currencortex.music.data.roaming.RoamingPreferences(settingsStore), playerScope,
+        audioSettings.state.map { audioSettings.access().identity }.distinctUntilChanged()
+            .stateIn(playerScope, SharingStarted.Eagerly, audioSettings.access().identity))
     val smartTuning = SmartTuningController(equalizerSettings.state, soundEffectsSettings.state,
         playerController.state.map { it.song }, neteaseSoundEffects::analyze, playerScope)
     val originalSoundEffects: OriginalSoundEffectsController = OriginalSoundEffectsController(neteaseSoundEffects, neteaseSessions, originalEffectsSettings, playerScope) {
