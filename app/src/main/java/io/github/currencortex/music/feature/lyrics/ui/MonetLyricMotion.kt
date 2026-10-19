@@ -6,11 +6,17 @@ package io.github.currencortex.music.feature.lyrics.ui
 import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.sqrt
+import androidx.compose.animation.core.SpringSpec
+import androidx.compose.animation.core.spring
 
 internal const val MONET_SCROLL_STIFFNESS = 142f / .82f
 internal val MONET_SCROLL_DAMPING = 28f / (2f * sqrt(142f * .82f))
 internal const val MONET_SCALE_STIFFNESS = 150f / .78f
 internal val MONET_SCALE_DAMPING = 30f / (2f * sqrt(150f * .78f))
+// Compose's default .01 scale threshold snaps roughly 1% of a whole paragraph at ~600ms.
+// Keep subpixel scale motion continuous while the independent position spring finishes.
+internal fun monetScaleSpring(): SpringSpec<Float> =
+    spring(MONET_SCALE_DAMPING, MONET_SCALE_STIFFNESS, visibilityThreshold = .0001f)
 internal const val MONET_IDLE_RESET_MS = 1800L
 
 internal data class MonetTone(val opacity: Float, val scale: Float, val blur: Float, val baseAlpha: Float)
