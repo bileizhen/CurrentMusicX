@@ -44,12 +44,21 @@ import top.yukonga.miuix.kmp.basic.*
     onDialogActive: (Boolean) -> Unit = {}, onBinding: (() -> Unit)? = null) {
     val native by vm.container.listenTogether.state.collectAsStateWithLifecycle()
     var nativePage by rememberSaveable { mutableStateOf(native.active || native.endedRoom != null) }
+    var nativeDialog by remember { mutableStateOf(false) }
+    var roomDialog by remember { mutableStateOf(false) }
+    LaunchedEffect(nativePage, nativeDialog, roomDialog) { onDialogActive(if (nativePage) nativeDialog else roomDialog) }
+    DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     LaunchedEffect(native.active, native.endedRoom?.roomId) { if (native.active || native.endedRoom != null) nativePage = true }
-    if (nativePage) {
-        NeteaseListenTogetherScreen(vm.container, onBack = { nativePage = false }, onSearch = onSearch,
-            onPlayer = onPlayer, onBinding = onBinding, onDialogActive = onDialogActive)
-        return
+    ListenTogetherPageTransition(nativePage, { if (it) "netease" else "rooms" }, { if (it) 1 else 0 }, Modifier.fillMaxSize()) { showNative ->
+        if (showNative) NeteaseListenTogetherScreen(vm.container, onBack = { nativePage = false }, onSearch = onSearch,
+            onPlayer = onPlayer, onBinding = onBinding, onDialogActive = { nativeDialog = it })
+        else CurrentMusicRoomContent(vm, onBack, onSearch, onPlayer, { roomDialog = it }, onNative = { nativePage = true })
     }
+}
+
+@Composable private fun CurrentMusicRoomContent(vm: RoomViewModel, onBack: () -> Unit, onSearch: () -> Unit,
+    onPlayer: () -> Unit, onDialogActive: (Boolean) -> Unit, onNative: () -> Unit) {
+    val native by vm.container.listenTogether.state.collectAsStateWithLifecycle()
     val browser by vm.browser.collectAsPageState()
     val live by vm.session.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
@@ -71,7 +80,7 @@ import top.yukonga.miuix.kmp.basic.*
             Text("一起听", Modifier.weight(1f), fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
         }
         Card(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-            MusicDestinationRow("网易云双人一起听", { nativePage = true }, Modifier.testTag("open_netease_listen_together"),
+            MusicDestinationRow("网易云双人一起听", onNative, Modifier.testTag("open_netease_listen_together"),
                 summary = if (native.active) "正在一起听 · 查看会话" else "和网易云好友同步听歌")
         }
         val detail = live.detail

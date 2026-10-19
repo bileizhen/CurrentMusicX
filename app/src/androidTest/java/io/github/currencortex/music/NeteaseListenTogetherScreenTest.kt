@@ -6,6 +6,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.core.netease.NeteaseAccountState
 import io.github.currencortex.music.core.netease.listen.NeteaseListenTogetherState
+import io.github.currencortex.music.core.netease.listen.ListenTogetherOperation
 import io.github.currencortex.music.data.binding.BoundProfile
 import io.github.currencortex.music.data.netease.listen.ListenTogetherParticipant
 import io.github.currencortex.music.data.netease.listen.ListenTogetherRoom
@@ -49,6 +50,48 @@ class NeteaseListenTogetherScreenTest {
         compose.onNodeWithTag("netease_listen_invite").performScrollTo().performTextInput(invitation)
         compose.onNodeWithTag("netease_listen_join").performScrollTo().assertIsNotEnabled()
         assertEquals(0, creates); assertTrue(joins.isEmpty())
+    }
+    @Test fun initialLookupUsesSkeletonAndJoiningRetainsDraftAndDisablesRepeatedActions() {
+        state.value = NeteaseListenTogetherState(busy = true, operation = ListenTogetherOperation.REFRESH)
+        show()
+        compose.onNodeWithTag("netease_listen_loading").assertExists()
+        compose.onNodeWithTag("netease_listen_create").assertDoesNotExist()
+        compose.runOnIdle { state.value = NeteaseListenTogetherState() }
+        compose.onNodeWithTag("netease_listen_invite").performScrollTo().performTextInput(invitation)
+        compose.runOnIdle { state.value = state.value.copy(busy = true, operation = ListenTogetherOperation.JOIN) }
+        compose.onNodeWithTag("netease_listen_join").performScrollTo().assertIsNotEnabled()
+        compose.onNodeWithTag("netease_listen_join_loading").assertExists()
+        compose.onNodeWithTag("netease_listen_paste").assertIsNotEnabled()
+        compose.onNodeWithTag("netease_listen_invite").assertTextContains(invitation)
+        compose.runOnIdle { state.value = state.value.copy(busy = false, operation = ListenTogetherOperation.NONE, error = "连接失败") }
+        compose.onNodeWithTag("netease_listen_invite").performScrollTo().assertTextContains(invitation)
+        assertEquals(0, creates); assertTrue(joins.isEmpty())
+    }
+    @Test fun loadingIdleAndReconnectingLayoutsHaveRealDeviceScreenshotsWithoutRoomWrites() {
+        fun capture(name: String) {
+            compose.waitForIdle()
+            val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            val directory = java.io.File(instrumentation.targetContext.getExternalFilesDir(null), "listen-ui").apply { mkdirs() }
+            instrumentation.uiAutomation.takeScreenshot().let { bitmap ->
+                java.io.File(directory, "$name.png").outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+                bitmap.recycle()
+            }
+        }
+        state.value = NeteaseListenTogetherState(busy = true, operation = ListenTogetherOperation.REFRESH)
+        show()
+        compose.onNodeWithTag("netease_listen_loading").assertExists()
+        capture("loading")
+        compose.runOnIdle { state.value = NeteaseListenTogetherState() }
+        compose.onNodeWithTag("netease_listen_create").assertExists()
+        capture("idle")
+        compose.runOnIdle { state.value = NeteaseListenTogetherState(room = room.copy(participants = room.participants +
+            ListenTogetherParticipant(9, "好友")), active = true, connected = false, queueCount = 20, invitationUrl = invitation) }
+        compose.onNodeWithTag("netease_listen_connection").assertTextEquals("正在恢复同步…")
+        capture("reconnecting")
+        compose.runOnIdle { state.value = state.value.copy(connected = true) }
+        compose.onNodeWithTag("netease_listen_connection").assertTextEquals("已连接 · 播放同步中")
+        capture("connected")
+        assertEquals(0, creates); assertTrue(joins.isEmpty()); assertEquals(0, leaves)
     }
     @Test fun expiredAccountOffersRealLoginNavigationAndBlocksRoomWrites() {
         account.value = account.value.copy(stale = true)

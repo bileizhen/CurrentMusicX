@@ -43,6 +43,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     onOfficial: (ListenTogetherRecordReport) -> Unit,
     activeRoom: Boolean = false,
     onFate: ((ListenTogetherParticipant, Int) -> Unit)? = null,
+    sharing: Boolean = false,
 ) {
     val colors = MiuixTheme.colorScheme
     val title = when (state.page) {
@@ -68,13 +69,27 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("listen_archive_list"),
             contentPadding = musicScrollPadding(PaddingValues(top = 8.dp, bottom = 24.dp)),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (state.loading) item { ArchiveMessage("正在读取一起听记录…", tag = "listen_archive_loading") }
+            val hasContent = when (state.page) {
+                ListenArchivePage.HISTORY -> state.history != null
+                ListenArchivePage.RANKING -> state.ranking != null
+                ListenArchivePage.REPORT -> state.report != null
+                null -> false
+            }
+            if (state.loading) item(key = "loading") {
+                val label = when (state.page) {
+                    ListenArchivePage.RANKING -> "正在读取一起听排行…"
+                    ListenArchivePage.REPORT -> "正在生成本次一起听报告…"
+                    else -> "正在读取一起听记录…"
+                }
+                if (hasContent) ListenLoadingLabel(label, Modifier.testTag("listen_archive_loading"))
+                else ListenTogetherSkeleton(label, "listen_archive_loading")
+            }
             state.error?.let { error -> item {
                 ArchiveMessage(if (state.permissionRequired) "需要网易云会员权限" else "暂时无法读取", error,
                     if (state.permissionRequired) "网易云限制了这项数据的访问，请在账号具备权限后重试。" else null,
                     "listen_archive_error", onRetry)
             } }
-            when (state.page) {
+            if (!state.loading || hasContent) when (state.page) {
                 ListenArchivePage.HISTORY -> {
                     val page = state.history
                     if (state.peerFilter == null) {
@@ -83,7 +98,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             MusicTextAction("排行", onRanking, Modifier.testTag("listen_archive_ranking"))
                         } }
                         page?.mostListen?.let { most -> item {
-                            Card(Modifier.fillMaxWidth().testTag("listen_archive_most")) {
+                            Card(Modifier.fillMaxWidth().animateItem().testTag("listen_archive_most")) {
                                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         val self = state.self?.let { current -> current.copy(avatarUrl = most.selfAvatarUrl.ifBlank { current.avatarUrl }) }
@@ -117,10 +132,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         val date = record.date.ifBlank { dateLabel(record.startTimeMs, "M月d日") }
                         val previous = records.getOrNull(index - 1)?.let { it.date.ifBlank { dateLabel(it.startTimeMs, "M月d日") } }
                         if (index == 0 || date != previous) item { ArchiveMuted(date.ifBlank { "日期未提供" }) }
-                        item { HistoryRecordCard(record, activeRoom, { onReport(record.roomId) }, { onInvite(record.user) }) }
+                        item(key = "record:${record.id}:$index") { Box(Modifier.animateItem()) { HistoryRecordCard(record, activeRoom, { onReport(record.roomId) }, { onInvite(record.user) }) } }
                     }
                     if (page?.hasMore == true) item {
-                        MusicTextAction(if (state.loadingMore) "正在加载…" else "加载更多", onMore,
+                        if (state.loadingMore) ListenLoadingLabel("正在加载更多记录…", Modifier.fillMaxWidth().padding(12.dp).testTag("listen_archive_more_loading"))
+                        MusicTextAction("加载更多", onMore,
                             Modifier.fillMaxWidth().testTag("listen_archive_more"), enabled = !state.loadingMore && !state.loading)
                     }
                 }
@@ -131,7 +147,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         ArchiveMessage("暂无一起听排行", "暂时没有可展示的排行数据。", tag = "listen_archive_empty")
                     }
                     items(rankings) { entry ->
-                        Card(Modifier.fillMaxWidth().testTag("listen_archive_rank_${entry.user.userId}")) {
+                        Card(Modifier.fillMaxWidth().animateItem().testTag("listen_archive_rank_${entry.user.userId}")) {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(entry.rank.takeIf { it > 0 }?.toString() ?: "—", Modifier.width(28.dp), fontSize = 22.sp,
@@ -158,7 +174,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     if (raw != null) {
                         val report = resolveReportPeople(raw, state)
                         val peer = report.peer
-                        item { Card(Modifier.fillMaxWidth().testTag("listen_archive_partner")) {
+                        item { Card(Modifier.fillMaxWidth().animateItem().testTag("listen_archive_partner")) {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     if (peer != null) ArchiveAvatar(peer, report.online)
@@ -184,7 +200,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                 report.failMessage.takeIf(String::isNotBlank)?.let { ArchiveMuted(it) }
                             }
                         } }
-                        item { Card(Modifier.fillMaxWidth().testTag("listen_archive_report")) {
+                        item { Card(Modifier.fillMaxWidth().animateItem().testTag("listen_archive_report")) {
                             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     Text("这一次的陪伴", Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
@@ -201,12 +217,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                 }
                                 if (report.showCollectButton) Button(onClick = onCollect, enabled = !state.collecting,
                                     modifier = Modifier.fillMaxWidth().testTag("listen_archive_collect")) {
-                                    Text(if (state.collecting) "正在读取歌曲…" else "收藏本次歌曲到歌单", fontSize = 14.sp)
+                                    if (state.collecting) ListenLoadingLabel("正在读取歌曲…")
+                                    else Text("收藏本次歌曲到歌单", fontSize = 14.sp)
                                 }
                                 state.collectionError?.let { Text(it, Modifier.testTag("listen_archive_collection_error"), fontSize = 12.sp, color = colors.error) }
-                                Button(onClick = { onShare(report) }, colors = ButtonDefaults.buttonColorsPrimary(),
+                                Button(onClick = { onShare(report) }, enabled = !sharing && !state.loading, colors = ButtonDefaults.buttonColorsPrimary(),
                                     modifier = Modifier.fillMaxWidth().testTag("listen_archive_share")) {
-                                    Text("分享一起听报告", color = colors.onPrimary, fontSize = 14.sp)
+                                    if (sharing) ListenLoadingLabel("正在生成报告…", primary = true)
+                                    else Text("分享一起听报告", color = colors.onPrimary, fontSize = 14.sp)
                                 }
                                 MusicTextAction("在网易云查看报告", { onOfficial(report) }, Modifier.testTag("listen_archive_official"))
                             }

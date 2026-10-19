@@ -60,7 +60,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("listen_fate_list"),
             contentPadding = musicScrollPadding(PaddingValues(top = 8.dp, bottom = 24.dp)),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (loading) item { FateStatus("正在读取缘分报告…", "listen_fate_loading") }
+            if (loading) item {
+                if (report == null) ListenTogetherSkeleton("正在读取缘分报告…", "listen_fate_loading")
+                else ListenLoadingLabel("正在更新缘分报告…", Modifier.testTag("listen_fate_loading"))
+            }
             if (permissionRequired) item {
                 FateStatus("需要网易云会员权限", "listen_fate_permission", "请使用具备报告访问权限的账号后重试。", onRetry)
             } else if (error) item {
@@ -68,7 +71,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 FateStatus("暂时无法读取报告", "listen_fate_error", "请稍后重试。", onRetry)
             }
             if (report != null && !permissionRequired) {
-                item { Card(Modifier.fillMaxWidth().testTag("listen_fate_summary")) {
+                item { Card(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_summary")) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             val people = listOfNotNull(report.self, report.peer)
@@ -100,7 +103,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         }
                     }
                 } }
-                item { Card(Modifier.fillMaxWidth().testTag("listen_fate_first")) {
+                item { Card(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_first")) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Text("从第一次一起听开始", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -110,7 +113,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     }
                 } }
                 if (report.latestLateNightTimeMs != null || report.mostPlayedSongName.isNotBlank()) item {
-                    Card(Modifier.fillMaxWidth().testTag("listen_fate_memories")) {
+                    Card(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_memories")) {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             Text("难忘的音乐时刻", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                             if (report.latestLateNightTimeMs != null) {
@@ -128,17 +131,18 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         }
                     }
                 }
-                item { Card(Modifier.fillMaxWidth().testTag("listen_fate_longest")) {
+                item { Card(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_longest")) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("一次最长的陪伴", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Text(fateDuration(report.longestDurationMs), fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = colors.primary)
                     }
                 } }
-                item { Card(Modifier.fillMaxWidth().testTag("listen_fate_actions")) {
+                item { Card(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_actions")) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Button(onClick = { onShare(report) }, enabled = !busy && !sharing && !loading,
                             colors = ButtonDefaults.buttonColorsPrimary(), modifier = Modifier.fillMaxWidth().testTag("listen_fate_share")) {
-                            Text(if (sharing) "正在生成报告…" else "分享缘分报告", fontSize = 14.sp, color = colors.onPrimary)
+                            if (sharing) ListenLoadingLabel("正在生成报告…", primary = true)
+                            else Text("分享缘分报告", fontSize = 14.sp, color = colors.onPrimary)
                         }
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             MusicTextAction("一起听记录", { onHistory(report.partnerUid) }, Modifier.weight(1f).testTag("listen_fate_history"),
