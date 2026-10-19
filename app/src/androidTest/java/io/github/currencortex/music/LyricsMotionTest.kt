@@ -23,6 +23,32 @@ import org.junit.Test
 class LyricsMotionTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun aNewLineCanInterruptThePreviousEntranceAndBackwardSeekStillSettles() {
+        val position = mutableLongStateOf(500)
+        val document = LyricsDocument((0..5).map { index ->
+            LyricLine(index * 1000L, (index + 1) * 1000L, "向着星光前行 $index")
+        })
+        compose.setContent {
+            LyricsScreen(document, position, {}, Modifier.width(340.dp).height(600.dp).background(Color.Black),
+                effects = false, translation = false)
+        }
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { position.longValue = 1500 }
+        compose.mainClock.advanceTimeBy(96)
+        val before = compose.onNodeWithTag("lyric_line_2").getUnclippedBoundsInRoot().top
+        compose.runOnIdle { position.longValue = 2500 }
+        compose.mainClock.advanceTimeBy(32)
+        assertTrue("A rapid next cue continues moving on its first frames",
+            compose.onNodeWithTag("lyric_line_2").getUnclippedBoundsInRoot().top < before)
+        compose.mainClock.advanceTimeBy(1200)
+        val anchor = compose.onNodeWithTag("lyric_line_2").getUnclippedBoundsInRoot().top.value
+        compose.runOnIdle { position.longValue = 500 }
+        compose.mainClock.advanceTimeBy(1200)
+        assertEquals("Seeking back cannot retain the abandoned forward motion", anchor,
+            compose.onNodeWithTag("lyric_line_0").getUnclippedBoundsInRoot().top.value, 1f)
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun currentTranslationCollapsesAndLineChangesScrollContinuously() {
         compose.runOnUiThread { compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
         compose.waitUntil(5000) { compose.activity.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE }

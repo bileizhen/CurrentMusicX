@@ -29,9 +29,12 @@ internal const val ACTIVE_LYRIC_SCALE = 1.12f
     val opacity = animateFloatAsState(if (focused) 1f else if (resting) .68f else when (distance) { 1 -> .56f; 2 -> .35f; else -> .24f }, tween(350), label = "lyric focus")
     val scale = animateFloatAsState(if (focused || resting) ACTIVE_LYRIC_SCALE else if (distance == 1) .96f else .94f,
         spring(dampingRatio = 1f, stiffness = 220f), label = "lyric scale")
+    val trailingDistance = animateFloatAsState(distance.coerceIn(0, 4).toFloat(),
+        spring(dampingRatio = 1f, stiffness = 220f), label = "lyric trailing distance")
     val mainFocused by remember(line, position) {
         derivedStateOf { position.value >= line.startTimeMs && position.value < line.endTimeMs }
     }
+    val density = LocalDensity.current.density
     val lagDistance = with(LocalDensity.current) { 5.dp.toPx() }
     Box(Modifier.fillMaxWidth().testTag("lyric_line_$index").semantics { selected = focused }
         .clickable(enabled = canSeek, role = Role.Button) { onSeek(line.startTimeMs) }) {
@@ -45,8 +48,8 @@ internal const val ACTIVE_LYRIC_SCALE = 1.12f
                 else if (line.isDuet) constraints.maxWidth - child.width else 0, (height - child.height) / 2) }
         }.graphicsLayer {
             alpha = opacity.value; scaleX = scale.value; scaleY = scale.value
-            // Shared scroll progress starts and ends at zero: no per-row snap or delayed jobs.
-            translationY = if (display.stagger && !browsing) scrollMotion.lag(distance) * lagDistance else 0f
+            // Velocity also survives a quick line change; the trailing rows do not restart.
+            translationY = if (display.stagger && !browsing) scrollMotion.lag(trailingDistance.value, density) * lagDistance else 0f
             transformOrigin = TransformOrigin(if (display.centered) .5f else if (line.isDuet) 1f else 0f, .5f)
         }) {
             LyricsVocalView(line, position, mainFocused, resting, translation, romanization, wordAnimation,
@@ -91,6 +94,7 @@ internal const val ACTIVE_LYRIC_SCALE = 1.12f
         Modifier.fillMaxWidth().then(vocalModifier), size, weight, align, forceLineAnimation = display.karaokeScope == KaraokeScope.ALWAYS,
         reservedFontWeight = reservedWeight, glow = display.glow && (focused || glowing),
         wordLift = display.wordLift && wordAnimation, glowOpacity = glowOpacity, baseOpacity = baseOpacity,
+        prepareDrawResources = true, prewarmGlow = display.glow && beforeStart && distance == 1,
         smokeColors = smokeColors)
     LyricsAuxiliaryText(line.translation, position, translation && focused, size * .6f,
         auxiliaryWeight, align, "lyric_translation", .65f)

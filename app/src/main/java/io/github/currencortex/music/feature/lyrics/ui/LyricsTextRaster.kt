@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.LayoutDirection
 internal class LyricsTextRaster(private val layout: TextLayoutResult, private val density: Density,
     private val direction: LayoutDirection, private val glowRadiusScale: Float = 1f) {
     private val glyphHalos = mutableMapOf<Rect, Pair<ImageBitmap, Offset>>()
+    private val untimedParagraphs = mutableMapOf<List<Rect>, ImageBitmap>()
     private val prepared = mutableSetOf<ImageBitmap>()
     /** Optional desktop prefetch: each immutable finished bitmap is uploaded at most once. */
     fun prepareForDrawing(bitmap: ImageBitmap) {
@@ -37,6 +38,14 @@ internal class LyricsTextRaster(private val layout: TextLayoutResult, private va
                 drawText(layout, color = Color.White, drawStyle = Fill)
             }
         }
+    }
+    /** Static ink outside timed glyph boxes: punctuation/credits need no per-frame difference mask. */
+    fun untimedInk(boxes: List<Rect>): ImageBitmap = untimedParagraphs.getOrPut(boxes) {
+        ink.asAndroidBitmap().copy(android.graphics.Bitmap.Config.ARGB_8888, true).also { bitmap ->
+            val clear = Paint().apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR) }
+            val canvas = android.graphics.Canvas(bitmap)
+            boxes.forEach { canvas.drawRect(it.left, it.top, it.right, it.bottom, clear) }
+        }.asImageBitmap()
     }
     /** Static line-level bloom for untimed captions; it carries no invented word cues. */
     val lineHalo: Pair<ImageBitmap, Offset> by lazy {
