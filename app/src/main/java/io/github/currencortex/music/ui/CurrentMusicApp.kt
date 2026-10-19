@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-only.
 package io.github.currencortex.music.ui
 
+import kotlinx.coroutines.flow.map
+
 import android.os.Build
 import io.github.currencortex.music.BuildConfig
 import androidx.compose.foundation.background
@@ -553,6 +555,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     entry(route) {
                         Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                             when {
+                                route == "user/announcements" -> {
+                                    val vm: io.github.currencortex.music.feature.announcement.AnnouncementArchiveViewModel =
+                                        viewModel(key = route, factory = viewModelFactory {
+                                            io.github.currencortex.music.feature.announcement.AnnouncementArchiveViewModel(
+                                                container.announcements, container.musicSettings.state.map { it.server })
+                                        })
+                                    io.github.currencortex.music.feature.announcement.AnnouncementArchiveScreen(vm, ::navigateBack)
+                                }
                                 route == "user/security" -> AccountSecurityScreen(profileVm, authVm) {
                                     authVm.begin(); navigateLibrary("user/login")
                                 }

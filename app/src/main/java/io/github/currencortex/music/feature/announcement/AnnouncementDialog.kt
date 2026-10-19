@@ -45,10 +45,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun AnnouncementDialog(items: List<Announcement>, suppressByDefault: Boolean = false,
-    onOpenLink: ((String) -> Unit)? = null, onDismiss: (Boolean) -> Unit) {
+    onOpenLink: ((String) -> Unit)? = null, initialIndex: Int = 0, showSuppressionAction: Boolean = true,
+    onDismiss: (Boolean) -> Unit) {
     if (items.isEmpty()) return
     val context = LocalContext.current
-    val pager = rememberPagerState(pageCount = { items.size })
+    val pager = rememberPagerState(initialPage = initialIndex.coerceIn(items.indices), pageCount = { items.size })
     val scope = rememberCoroutineScope()
     val heights = remember(items) { mutableStateMapOf<Int, Int>() }
     val maxHeight = (LocalConfiguration.current.screenHeightDp - 260).coerceIn(64, 460).dp
@@ -80,7 +81,7 @@ fun AnnouncementDialog(items: List<Announcement>, suppressByDefault: Boolean = f
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val style = TextStyle(fontSize = 15.sp)
                 val margin = PaddingValues(horizontal = 8.dp, vertical = 12.dp)
-                TextButton("不再显示", onClick = { onDismiss(true) }, textStyle = style, insideMargin = margin,
+                if (showSuppressionAction) TextButton("不再显示", onClick = { onDismiss(true) }, textStyle = style, insideMargin = margin,
                     minHeight = 48.dp, modifier = Modifier.weight(1f).testTag("announcement_suppress"))
                 TextButton("知道了", onClick = dismiss, textStyle = style, insideMargin = margin,
                     minHeight = 48.dp, modifier = Modifier.weight(1f).testTag("announcement_dismiss"))

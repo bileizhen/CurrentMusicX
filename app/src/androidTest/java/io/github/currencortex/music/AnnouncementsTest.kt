@@ -72,6 +72,40 @@ class AnnouncementsTest {
         condition()
     }
 
+    @Test fun myPageArchiveReopensSuppressedNoticesWithoutChangingReadPreferences() {
+        release.countDown()
+        val before = runBlocking {
+            container.desktopLyrics.markRecommendationSeen()
+            container.announcementPreferences.acknowledge(server.url("/cm/").toString(),
+                listOf(Announcement(id = 1), Announcement(id = 2)), suppressRead = true)
+        }
+        compose.mainClock.autoAdvance = false
+        compose.setContent { CurrentMusicApp(container) }
+        pumpUntil { compose.onAllNodesWithTag("tab_2").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
+        compose.onNodeWithTag("tab_2").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        compose.mainClock.advanceTimeBy(1000)
+        pumpUntil { compose.onAllNodesWithTag("me_announcements").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
+        compose.onNodeWithTag("me_settings").assertExists()
+        compose.onNodeWithTag("announcements").assertDoesNotExist()
+        compose.onNodeWithTag("me_announcements").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        pumpUntil { compose.onAllNodesWithTag("announcement_item_2").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithText("全部公告 · 2 条").assertIsDisplayed()
+        compose.onNodeWithTag("announcement_item_1").assertIsDisplayed()
+        compose.onNodeWithTag("announcement_item_2").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("announcement_page").assertTextEquals("2 / 2")
+        compose.onNodeWithTag("announcement_details").assertIsDisplayed()
+        compose.onNodeWithTag("announcement_suppress").assertDoesNotExist()
+        compose.onNodeWithTag("announcement_dismiss").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("announcement_archive").assertExists()
+        assertEquals(before, runBlocking { container.announcementPreferences.snapshot() })
+        compose.onNodeWithTag("announcement_back").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("me_settings").assertExists()
+    }
+
     @Test fun fetchedAnnouncementWaitsForLaunchThenDismissesForThisSession() {
         compose.mainClock.autoAdvance = false
         compose.setContent { CurrentMusicApp(container, animateLaunch = true) }
