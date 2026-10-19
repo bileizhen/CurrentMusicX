@@ -47,7 +47,7 @@ class DecorationScreenTest {
         show(false, dark = true)
         compose.onNodeWithTag("decoration_frame-two").performClick().assertIsSelected()
         compose.onNodeWithTag("wear_decoration").assertIsNotEnabled()
-        compose.onNodeWithText("听歌解锁 · 可先试戴").assertIsDisplayed()
+        compose.onNodeWithText("60 / 120 分钟解锁").assertIsDisplayed()
         compose.onNodeWithTag("decoration_none").performClick()
         compose.onNodeWithTag("wear_decoration").assertIsEnabled().performClick()
         assertEquals("", submitted)
