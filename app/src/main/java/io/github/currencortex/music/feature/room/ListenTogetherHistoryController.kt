@@ -42,6 +42,7 @@ internal class ListenTogetherHistoryController(
     private var request: Job? = null
     private var collection: Job? = null
     private var collectionEpoch = 0L
+    private val pages = ArrayDeque<ListenTogetherArchiveState>()
 
     private fun valid(expected: NeteaseSession, generation: Long) {
         if (generation != epoch) throw CancellationException("History page replaced")
@@ -49,9 +50,17 @@ internal class ListenTogetherHistoryController(
     }
 
     private fun load(next: ListenTogetherArchiveState, block: suspend (NeteaseSession, Long) -> Unit) {
+        val previous = mutable.value
+        if (previous.page != null && listOf(previous.page, previous.peerFilter, previous.reportRoomId) !=
+            listOf(next.page, next.peerFilter, next.reportRoomId)) {
+            pages.addLast(previous.copy(loading = false, loadingMore = false, collecting = false, collectionSongs = null, collectionError = null))
+            if (pages.size > 16) pages.removeFirst()
+        }
         request?.cancel(); collection?.cancel()
         val generation = ++epoch
-        mutable.value = next.copy(loading = true, error = null, permissionRequired = false)
+        val samePage = listOf(previous.page, previous.peerFilter, previous.reportRoomId) == listOf(next.page, next.peerFilter, next.reportRoomId)
+        mutable.value = (if (samePage) previous.copy(collecting = false, collectionSongs = null, collectionError = null) else next)
+            .copy(loading = true, loadingMore = false, error = null, permissionRequired = false)
         request = scope.launch {
             try {
                 val expected = repo.captureSession()
@@ -149,7 +158,18 @@ internal class ListenTogetherHistoryController(
         ListenArchivePage.REPORT -> report(mutable.value.reportRoomId, mutable.value.sourceRoom)
         null -> Unit
     } }
-    fun close() { ++epoch; request?.cancel(); collection?.cancel(); mutable.value = ListenTogetherArchiveState() }
+    fun back() {
+        ++epoch; ++collectionEpoch; request?.cancel(); collection?.cancel()
+        val previous = pages.removeLastOrNull()
+        mutable.value = previous ?: ListenTogetherArchiveState()
+        if (previous != null && previous.error == null && when (previous.page) {
+                ListenArchivePage.HISTORY -> previous.history == null
+                ListenArchivePage.RANKING -> previous.ranking == null
+                ListenArchivePage.REPORT -> previous.report == null
+                null -> false
+            }) retry()
+    }
+    fun close() { ++epoch; pages.clear(); request?.cancel(); collection?.cancel(); mutable.value = ListenTogetherArchiveState() }
     private fun message(failure: Exception): String = when (failure) {
         is ApiException -> failure.kind.message
         is IllegalStateException -> failure.message ?: "暂时无法读取一起听记录"
