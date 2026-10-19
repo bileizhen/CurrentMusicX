@@ -115,7 +115,7 @@ private class MonetTrack(val entering: Boolean) {
                 }
                 val tone = tones[slot]
                 val scale = animateFloatAsState(tone.scale,
-                    spring(MONET_SCALE_DAMPING, MONET_SCALE_STIFFNESS), label = "Monet scale")
+                    monetScaleSpring(), label = "Monet scale")
                 val alpha = remember { Animatable(if (track.entering && !browsing) 0f else tone.opacity) }
                 LaunchedEffect(tone.opacity, exiting) {
                     alpha.animateTo(if (exiting) 0f else tone.opacity,

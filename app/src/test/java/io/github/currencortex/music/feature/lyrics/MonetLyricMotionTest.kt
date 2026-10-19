@@ -3,8 +3,23 @@ package io.github.currencortex.music.feature.lyrics
 import io.github.currencortex.music.feature.lyrics.ui.*
 import org.junit.Assert.*
 import org.junit.Test
+import androidx.compose.animation.core.TargetBasedAnimation
+import androidx.compose.animation.core.VectorConverter
+import kotlin.math.abs
 
 class MonetLyricMotionTest {
+    @Test fun scaleDoesNotSnapTheLastPercentWhenThePositionIsStillSettling() {
+        for ((from, to) in listOf(.72f to 1f, 1f to .72f)) {
+            val animation = TargetBasedAnimation(monetScaleSpring(), Float.VectorConverter, from, to)
+            for (hz in listOf(60, 120)) {
+                val previousFrame = animation.durationNanos - 1_000_000_000L / hz
+                val lastStep = abs(to - animation.getValueFromNanos(previousFrame))
+                println("scale $from->$to ${hz}Hz durationMs=${animation.durationNanos / 1_000_000} finalStep=$lastStep")
+                assertTrue("The final scale step must stay below .05 percent, rather than snapping a visible glyph width: $lastStep",
+                    lastStep < .0005f)
+            }
+        }
+    }
     @Test fun wrappedActiveParagraphAndSubtitleStayBetweenScaledNeighbours() {
         val heights = listOf(40f, 180f, 60f)
         val scales = listOf(.72f, 1f, .72f)

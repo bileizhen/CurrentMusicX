@@ -16,9 +16,35 @@ import io.github.currencortex.music.feature.lyrics.ui.LyricsScreen
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
+import kotlin.math.abs
 
 class MonetLyricsRailTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun approachingTheReadingAnchorDoesNotSnapTheParagraphScale() {
+        val position = mutableLongStateOf(500)
+        val document = LyricsDocument((0..3).map { i ->
+            LyricLine(i * 2000L, (i + 1) * 2000L, "让音乐一直陪你向前走 $i")
+        })
+        compose.setContent { LyricsScreen(document, position, {},
+            Modifier.width(340.dp).height(600.dp).background(Color.Black),
+            effects = false, translation = false, fontSize = 30f) }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        compose.runOnIdle { position.longValue = 2500 }
+        val widths = mutableListOf<Float>()
+        repeat(100) {
+            compose.mainClock.advanceTimeBy(16)
+            val bounds = compose.onNodeWithTag("lyric_vocal_1", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            widths += bounds.width
+        }
+        val finalWidth = widths.last()
+        val tail = widths.zipWithNext().drop(28).map { (a, b) -> abs(b - a) / finalWidth }
+        assertTrue("Scale must decelerate through the old ~600ms cutoff without a one-percent step: $tail",
+            tail.zipWithNext().all { (a, b) -> b <= a + .0005f })
+        assertTrue("The reading paragraph still reaches its complete size", finalWidth > widths.first() * 1.3f)
+        compose.mainClock.autoAdvance = true
+    }
 
     @Test fun independentTracksRetargetAndWrappedParagraphSettlesAtMonetAnchor() {
         val position = mutableLongStateOf(500)
