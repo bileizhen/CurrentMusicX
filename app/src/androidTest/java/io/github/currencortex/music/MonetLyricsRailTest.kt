@@ -4,7 +4,10 @@ import androidx.activity.ComponentActivity
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.foundation.Canvas
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
@@ -13,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.currencortex.music.feature.lyrics.model.*
 import io.github.currencortex.music.feature.lyrics.ui.LyricsScreen
+import io.github.currencortex.music.feature.lyrics.ui.MonetLyricsRail
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -20,6 +24,63 @@ import kotlin.math.abs
 
 class MonetLyricsRailTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+
+    @Test fun lyricBloomFadesIntoBothViewportEdgesWithoutMovingTheText() {
+        val duet = mutableStateOf(false)
+        val position = mutableLongStateOf(4800)
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            val text = "怅然若失流连忘返啊"
+            val line = LyricLine(1000, 5000, text,
+                listOf(LyricWord(text, 1000, 5000, 0, text.length)), isDuet = duet.value)
+            LyricsScreen(LyricsDocument(listOf(line)), position, {},
+                Modifier.width(340.dp).height(600.dp).background(Color.Black), fontSize = 30f)
+        }
+        for (right in listOf(false, true)) {
+            compose.runOnIdle { duet.value = right }
+            compose.mainClock.advanceTimeBy(2000)
+            compose.waitForIdle()
+            val image = compose.onNodeWithTag("lyrics_panel").captureToImage().asAndroidBitmap()
+            val edgeX = if (right) image.width - 1 else 0
+            val gutterX = if (right) image.width - 1 - (image.width * 6f / 340f).toInt()
+                else (image.width * 6f / 340f).toInt()
+            fun peak(x: Int) = (image.height / 4..image.height * 3 / 4).maxOf { y ->
+                android.graphics.Color.red(image.getPixel(x, y))
+            }
+            val edge = peak(edgeX)
+            val gutter = peak(gutterX)
+            println("Monet edge right=$right boundary=$edge gutter=$gutter")
+            val context = InstrumentationRegistry.getInstrumentation().targetContext
+            java.io.File(context.filesDir, "monet-edge-${if (right) "right" else "left"}.png").outputStream().use {
+                image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            assertTrue("Bloom must reach the gutter, not stop at the paragraph: $gutter", gutter > 4)
+            assertTrue("Bloom must fade before the viewport boundary: $edge vs $gutter", edge <= 3 && edge < gutter)
+        }
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun fadingBlurredTracksKeepInkOutsideTheirParagraphBounds() {
+        val document = LyricsDocument((0..2).map { LyricLine(it * 2000L, (it + 1) * 2000L, "边缘") })
+        compose.setContent {
+            MonetLyricsRail(document, 1, setOf(1),
+                Modifier.width(340.dp).height(600.dp).background(Color.Black), 30f,
+                centered = false, minimal = false, perspective = false, effects = true,
+                followRequest = 0, onBrowsing = {}) { index, _, _ ->
+                Canvas(Modifier.fillMaxWidth().height(60.dp).testTag("edge_probe_$index")) {
+                    if (index == 0) drawCircle(Color.White, 20.dp.toPx(), androidx.compose.ui.geometry.Offset(0f, size.height / 2))
+                }
+            }
+        }
+        compose.waitForIdle()
+        val panel = compose.onNodeWithTag("lyrics_list").fetchSemanticsNode().boundsInRoot
+        val row = compose.onNodeWithTag("edge_probe_0").fetchSemanticsNode().boundsInRoot
+        val image = compose.onNodeWithTag("lyrics_list").captureToImage().asAndroidBitmap()
+        val y = (row.center.y - panel.top).toInt().coerceIn(0, image.height - 1)
+        val x = (image.width * 4f / 340f).toInt()
+        val ink = android.graphics.Color.red(image.getPixel(x, y))
+        assertTrue("Blur/alpha must retain overscan inside the viewport gutter: $ink", ink > 15)
+    }
 
     @Test fun approachingTheReadingAnchorDoesNotSnapTheParagraphScale() {
         val position = mutableLongStateOf(500)

@@ -9,15 +9,17 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.offset
 import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -32,6 +34,8 @@ private class MonetTrack(val entering: Boolean) {
     perspective: Boolean, effects: Boolean, followRequest: Int, onBrowsing: (Boolean) -> Unit,
     content: @Composable (index: Int, browsing: Boolean, tone: MonetTone) -> Unit) {
     val unit = LocalDensity.current.density
+    val fontScale = LocalDensity.current.fontScale
+    val effectInset = (fontSize * fontScale * 2f + 6f).dp
     var manualAnchor by remember(document) { mutableStateOf<Int?>(null) }
     var gestureRevision by remember(document) { mutableIntStateOf(0) }
     var dragging by remember(document) { mutableStateOf(false) }
@@ -95,10 +99,18 @@ private class MonetTrack(val entering: Boolean) {
             cameraDistance = (size.width / 48f).coerceAtLeast(1f)
             transformOrigin = TransformOrigin(0f, if (minimal) .5f else
                 (.46f + fontSize * density * fontScale * .1f / size.height.coerceAtLeast(1f)).coerceIn(0f, 1f))
-        }.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithContent {
-            drawContent()
-            drawRect(Brush.verticalGradient(0f to Color.Transparent, .11f to Color.Black,
-                .88f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
+        }.graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }.drawWithCache {
+            val verticalFade = Brush.verticalGradient(0f to Color.Transparent, .11f to Color.Black,
+                .88f to Color.Black, 1f to Color.Transparent)
+            // Fade only the existing gutter: glyph positions and wrapping stay unchanged.
+            val edge = (8.dp.toPx() / size.width.coerceAtLeast(1f)).coerceAtMost(.49f)
+            val horizontalFade = Brush.horizontalGradient(0f to Color.Transparent, edge to Color.Black,
+                (1f - edge) to Color.Black, 1f to Color.Transparent)
+            onDrawWithContent {
+                drawContent()
+                drawRect(verticalFade, blendMode = BlendMode.DstIn)
+                drawRect(horizontalFade, blendMode = BlendMode.DstIn)
+            }
         }, content = {
             indices.forEachIndexed { slot, index -> key(index, document.lines[index].startTimeMs) {
                 val track = tracks.getOrPut(index) { MonetTrack(index !in firstWindow) }
@@ -123,17 +135,27 @@ private class MonetTrack(val entering: Boolean) {
                 }
                 val blur = animateFloatAsState(if (effects) { if (exiting) 6f else tone.blur } else 0f,
                     tween(320, easing = CubicBezierEasing(.32f, .72f, 0f, 1f)), label = "Monet blur")
-                Box(Modifier.fillMaxWidth().zIndex(if (index in active) 4f else -abs(index - target).toFloat()).graphicsLayer {
+                Box(Modifier.fillMaxWidth().zIndex(if (index in active) 4f else -abs(index - target).toFloat())
+                    .layout { measurable, constraints ->
+                        // Expand only the layer's drawing space, then report the original paragraph size.
+                        val inset = effectInset.roundToPx()
+                        val child = measurable.measure(constraints.offset(inset * 2, inset * 2))
+                        layout(child.width - inset * 2, child.height - inset * 2) { child.place(-inset, -inset) }
+                    }.graphicsLayer {
                     translationY = y?.value ?: 0f
                     val right = document.lines[index].isDuet
                     val pivot = if (centered) .5f else if (right) 1f else 0f
                     // A top-edge pivot keeps y equal to the visual top of the scaled paragraph.
-                    transformOrigin = TransformOrigin(pivot, 0f)
+                    val inset = effectInset.roundToPx().toFloat()
+                    transformOrigin = TransformOrigin((inset + (size.width - inset * 2) * pivot) / size.width,
+                        inset / size.height)
                     scaleX = scale.value; scaleY = scale.value
                     this.alpha = if (y == null) 0f else alpha.value
+                    // Alpha and RenderEffect create offscreen layers even with clip=false.
+                    // Reserve the raster halo outside the paragraph instead of cutting at its box.
                     renderEffect = if (android.os.Build.VERSION.SDK_INT >= 31 && blur.value > .01f)
                         BlurEffect(blur.value * density, blur.value * density, TileMode.Decal) else null
-                }) { content(index, browsing, tone) }
+                }.padding(effectInset)) { content(index, browsing, tone) }
             } }
         }) { measurables, constraints ->
         val inset = 8.dp.roundToPx()
