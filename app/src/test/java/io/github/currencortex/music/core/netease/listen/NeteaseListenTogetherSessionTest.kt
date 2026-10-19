@@ -146,6 +146,27 @@ class NeteaseListenTogetherSessionTest {
         }
     }
 
+    @Test fun pendingOperationNamesAreAccurateAndDuplicateTapsDoNotStartAnotherRequest() = runTest {
+        val f = Fixture(this)
+        val waiting = CompletableDeferred<Unit>()
+        var creates = 0
+        f.repo.createAction = { creates++; waiting.await(); f.repo.room }
+        f.session.create(); runCurrent()
+        assertEquals(ListenTogetherOperation.CREATE, f.session.state.value.operation)
+        f.session.create(); f.session.join("https://163cn.tv/fixture"); runCurrent()
+        assertEquals(1, creates)
+        waiting.complete(Unit); runCurrent()
+        assertFalse(f.session.state.value.busy)
+        assertEquals(ListenTogetherOperation.NONE, f.session.state.value.operation)
+        val leaving = CompletableDeferred<Unit>()
+        f.repo.leaveAction = { leaving.await() }
+        f.session.leave(); runCurrent()
+        assertEquals(ListenTogetherOperation.LEAVE, f.session.state.value.operation)
+        leaving.complete(Unit); runCurrent()
+        assertFalse(f.session.state.value.active)
+        assertEquals(ListenTogetherOperation.NONE, f.session.state.value.operation)
+    }
+
     @Test fun heartbeatUsesTwentySecondsAndRepeatedSnapshotNeverRewindsProgress() = runTest {
         val f = Fixture(this)
         f.session.resume(); runCurrent()

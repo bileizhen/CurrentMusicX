@@ -14,12 +14,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+enum class ListenTogetherOperation { NONE, CREATE, JOIN, RESTORE, REFRESH, SYNC, LEAVE }
+
 data class NeteaseListenTogetherState(val room: ListenTogetherRoom? = null,
     val availableRoom: ListenTogetherRoom? = null, val active: Boolean = false,
     val busy: Boolean = false, val connected: Boolean = false, val error: String? = null,
     val queueCount: Int = 0, val invitationUrl: String? = null,
     val queueLoading: Boolean = false, val queueError: String? = null,
-    val endedRoom: ListenTogetherRoom? = null, val endedOwnerUid: Long = 0)
+    val endedRoom: ListenTogetherRoom? = null, val endedOwnerUid: Long = 0,
+    val operation: ListenTogetherOperation = ListenTogetherOperation.NONE)
 
 /** Original recovery snapshots are polled; a heartbeat is never interpreted as a playback command. */
 class NeteaseListenTogetherSession internal constructor(private val repo: ListenTogetherProtocol,
@@ -60,10 +63,10 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         if (generation != epoch) throw CancellationException("Listen session replaced")
     }
 
-    private fun operation(block: suspend (Long) -> Unit) {
+    private fun operation(kind: ListenTogetherOperation = ListenTogetherOperation.SYNC, block: suspend (Long) -> Unit) {
         if (state.value.busy) return
         val epoch = generation
-        state.update { it.copy(busy = true, error = null) }
+        state.update { it.copy(busy = true, error = null, operation = kind) }
         scope.launch {
             try { commands.withLock { if (generation == epoch) block(epoch) } }
             catch (cancelled: CancellationException) { throw cancelled }
@@ -72,11 +75,11 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
                         ErrorKind.NeteaseSessionChanged, ErrorKind.NeteaseBindingRequired)) disconnect(message(error))
                 else state.update { it.copy(error = message(error)) }
             } }
-            finally { if (generation == epoch) state.update { it.copy(busy = false) } }
+            finally { if (generation == epoch) state.update { it.copy(busy = false, operation = ListenTogetherOperation.NONE) } }
         }
     }
 
-    fun create() = operation { epoch ->
+    fun create() = operation(ListenTogetherOperation.CREATE) { epoch ->
         check(active == null && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听或结束投屏" }
         val expected = repo.captureSession()
         checkEpoch(epoch)
@@ -107,7 +110,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         }
     }
 
-    fun join(inviteText: String) = operation { epoch ->
+    fun join(inviteText: String) = operation(ListenTogetherOperation.JOIN) { epoch ->
         check(active == null && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听或结束投屏" }
         val expected = repo.captureSession()
         val invitation = repo.resolveInvitation(inviteText)
@@ -119,7 +122,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         startRoom(room, expected, epoch) { synchronize(it, members = true) }
     }
 
-    fun resume() = operation { epoch ->
+    fun resume() = operation(ListenTogetherOperation.RESTORE) { epoch ->
         check(active == null && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听或结束投屏" }
         val expected = repo.captureSession()
         checkEpoch(epoch)
@@ -132,7 +135,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
     }
 
     /** One startup attempt; a user transport action during lookup always wins. */
-    fun restoreAutomatically(eligible: () -> Boolean) = operation { epoch ->
+    fun restoreAutomatically(eligible: () -> Boolean) = operation(ListenTogetherOperation.RESTORE) { epoch ->
         if (active != null || player.state.value.mode != PlayerMode.LOCAL || !eligible()) return@operation
         val expected = repo.captureSession()
         checkEpoch(epoch)
@@ -174,7 +177,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
             repo.checkSession(expected)
             val current = Active(room.roomId, expected, epoch)
             active = current
-            state.value = NeteaseListenTogetherState(room = room, active = true, busy = true, connected = true,
+            state.value = NeteaseListenTogetherState(room = room, active = true, busy = true, connected = true, operation = state.value.operation,
                 invitationUrl = ListenTogetherInvitation(room.roomId, expected.credential.profile!!.uid).shareUrl())
             publishParticipants(current, room)
             player.roomTrack(null, null, 0, false)
@@ -198,7 +201,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
             })) }
     }
 
-    fun refresh() = operation { epoch ->
+    fun refresh() = operation(ListenTogetherOperation.REFRESH) { epoch ->
         val current = active
         if (current == null) {
             val expected = repo.captureSession()
@@ -502,7 +505,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
         sendPlayback(current, "GOTO", id, true, 0)
     }
     override fun stop() = leave()
-    fun leave() = operation {
+    fun leave() = operation(ListenTogetherOperation.LEAVE) {
         val current = active ?: return@operation
         polling?.cancel()
         var failure: String? = null
