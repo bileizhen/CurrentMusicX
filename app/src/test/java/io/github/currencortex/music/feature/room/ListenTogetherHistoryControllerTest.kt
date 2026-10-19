@@ -27,6 +27,43 @@ class ListenTogetherHistoryControllerTest {
     }
     private fun row(id: String) = ListenTogetherHistoryRecord(id, "room-$id", ListenTogetherParticipant(2, "朋友"))
 
+    @Test fun backRestoresLoadedHistoryAndRankingWithoutAnotherRequest() = runTest {
+        val repo = Protocol()
+        repo.page = { ListenTogetherHistoryPage(listOf(row("kept")), hasMore = true, nextCursor = "next") }
+        val controller = ListenTogetherHistoryController(repo, backgroundScope) { emptyList() }
+        controller.history(); runCurrent()
+        val history = controller.state.value.history
+        controller.ranking(); runCurrent()
+        controller.report("old-room"); runCurrent()
+        controller.back(); runCurrent()
+        assertEquals(ListenArchivePage.RANKING, controller.state.value.page)
+        controller.back(); runCurrent()
+        assertSame(history, controller.state.value.history)
+        assertEquals(listOf(""), repo.cursors)
+        controller.back()
+        assertNull(controller.state.value.page)
+    }
+
+    @Test fun backCancelsLateReportAndReloadsAnInterruptedEmptyHistory() = runTest {
+        val repo = Protocol()
+        val first = CompletableDeferred<Unit>()
+        var calls = 0
+        repo.page = {
+            if (++calls == 1) withContext(NonCancellable) { first.await() }
+            ListenTogetherHistoryPage(listOf(row("current")))
+        }
+        val controller = ListenTogetherHistoryController(repo, backgroundScope) { emptyList() }
+        controller.history(); runCurrent()
+        controller.report("old-room"); runCurrent()
+        controller.back(); runCurrent()
+        assertEquals(ListenArchivePage.HISTORY, controller.state.value.page)
+        assertFalse(controller.state.value.loading)
+        assertEquals(2, calls)
+        first.complete(Unit); runCurrent()
+        assertEquals(ListenArchivePage.HISTORY, controller.state.value.page)
+        assertEquals("current", controller.state.value.history!!.records.single().id)
+    }
+
     @Test fun staleRequestCannotReplaceAnotherPageEvenWhenTheTransportIgnoresCancellation() = runTest {
         val repo = Protocol(); val ready = CompletableDeferred<Unit>()
         repo.page = { withContext(NonCancellable) { ready.await() }; ListenTogetherHistoryPage(listOf(row("old"))) }
