@@ -49,6 +49,7 @@ class PlayerSheetCapabilitiesTest {
             start()
         }
         container.ready.await(); container.sessionRestored.await()
+        container.desktopLyrics.markRecommendationSeen()
         val url = server.url("/cm/").toString()
         container.musicSettings.setServer(url); container.accountRepository.server = url
         container.accountRepository.save("isolated-sheet-token", UserDto(7, nickname = "Sheet fixture"))
