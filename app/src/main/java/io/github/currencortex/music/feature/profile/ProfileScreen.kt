@@ -43,7 +43,6 @@ import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.launch
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 @Composable fun UserAvatar(user: ProfileUser, container: AppContainer, size: androidx.compose.ui.unit.Dp = 64.dp,
     decoration: String = user.decoration, reserveOverlay: Boolean = true, flightState: AvatarFlightState? = null) {
@@ -51,9 +50,7 @@ import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
     val scales by container.profileRepository.scales.collectAsStateWithLifecycle()
     val versions by container.profileRepository.avatarVersions.collectAsStateWithLifecycle()
     val repository = container.profileRepository
-    var avatarUrl = repository.avatarUrl(preferences.server, user.avatar)
-    if (!user.avatar.startsWith("http") && versions[user.id] != null)
-        avatarUrl = avatarUrl?.toHttpUrlOrNull()?.newBuilder()?.setQueryParameter("v", versions[user.id].toString())?.build()?.toString()
+    val avatarUrl = repository.avatarUrl(preferences.server, user.avatar, versions)
     val decorationUrl = repository.decorationUrl(preferences.server, decoration)
     val scale = scales[decoration] ?: 1.0
     val density = LocalDensity.current

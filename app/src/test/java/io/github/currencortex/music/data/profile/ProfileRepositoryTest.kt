@@ -10,6 +10,57 @@ import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 class ProfileRepositoryTest {
+    private class RecordingAvatarCache : AvatarCache {
+        override var versions = emptyMap<String, String>()
+        val invalidated = mutableListOf<Set<String>>()
+        override suspend fun invalidate(urls: Set<String>): Map<String, String> {
+            invalidated += urls
+            versions = versions + urls.associateWith { invalidated.size.toString() }
+            return versions
+        }
+    }
+    @Test fun sameAbsoluteAvatarInvalidatesBeforeRefreshWithoutChangingSignedQuery() = runBlocking {
+        MockWebServer().use { s ->
+            val base = s.url("/cm/").toString()
+            val avatar = "https://images.example/avatar.jpg?signature=keep%2Bme"
+            val cache = RecordingAvatarCache()
+            val repo = ProfileRepository(ApiClient({ base }, { "credential" }, {}), cache) { RequestSession(base, "credential") }
+            s.enqueue(MockResponse().setBody("{}"))
+            s.enqueue(MockResponse().setBody("""{"id":7,"avatar":"$avatar"}"""))
+            repo.avatar(byteArrayOf(1), previousAvatar = avatar)
+            assertEquals(listOf(setOf(avatar)), cache.invalidated)
+            val updated = repo.avatarUrl(base, avatar)!!.toHttpUrl()
+            assertEquals(avatar.toHttpUrl().encodedQuery, updated.encodedQuery)
+            assertNotNull(updated.fragment)
+            assertEquals(updated.toString(), ProfileRepository(ApiClient({ base }, { "credential" }, {}), cache) {
+                RequestSession(base, "credential")
+            }.avatarUrl(base, avatar))
+            assertEquals(1L, repo.revision.value)
+            assertEquals("https://other.example/avatar/7.jpg", repo.avatarUrl("https://other.example/", "7.jpg"))
+        }
+    }
+    @Test fun successfulUploadStillInvalidatesOldAvatarWhenAccountRefreshFails() = runBlocking {
+        MockWebServer().use { s ->
+            val base = s.url("/cm/").toString()
+            val cache = RecordingAvatarCache()
+            val repo = ProfileRepository(ApiClient({ base }, { "credential" }, {}), cache) { RequestSession(base, "credential") }
+            s.enqueue(MockResponse().setBody("{}")); s.enqueue(MockResponse().setResponseCode(500))
+            assertTrue(appResult { repo.avatar(byteArrayOf(1), previousAvatar = "7.jpg") } is AppResult.Failure)
+            assertEquals(listOf(setOf(s.url("/cm/avatar/7.jpg").toString())), cache.invalidated)
+            assertEquals(0L, repo.revision.value)
+        }
+    }
+    @Test fun failedUploadKeepsCurrentAvatarCache() = runBlocking {
+        MockWebServer().use { s ->
+            val base = s.url("/cm/").toString()
+            val cache = RecordingAvatarCache()
+            val repo = ProfileRepository(ApiClient({ base }, { "credential" }, {}), cache) { RequestSession(base, "credential") }
+            s.enqueue(MockResponse().setResponseCode(400))
+            assertTrue(appResult { repo.avatar(byteArrayOf(1), previousAvatar = "7.jpg") } is AppResult.Failure)
+            assertTrue(cache.invalidated.isEmpty())
+            assertTrue(repo.avatarVersions.value.isEmpty())
+        }
+    }
     @Test fun editingWithoutKnownVisibilityDoesNotChangePrivacyAndPasswordUsesDedicatedRoute() = runBlocking {
         MockWebServer().use { s ->
             val base = s.url("/cm/").toString()

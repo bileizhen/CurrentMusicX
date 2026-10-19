@@ -24,7 +24,6 @@ import io.github.currencortex.music.data.profile.ProfileUser
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import io.github.currencortex.music.core.media.PlayerState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map as mapPlayback
@@ -45,12 +44,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     val avatar = user?.avatar ?: account.account?.avatar ?: nativeAccount.profile?.avatar.orEmpty()
     val decoration = user?.decoration.orEmpty()
     val decorationUrl = remember(preferences.server, decoration) { vm.container.profileRepository.decorationUrl(preferences.server, decoration) }
-    val version = account.account?.id?.let(avatarVersions::get)
-    val avatarUrl = remember(preferences.server, avatar, version) {
-        vm.container.profileRepository.avatarUrl(preferences.server, avatar)?.let { url ->
-            if (!avatar.startsWith("http") && version != null) url.toHttpUrlOrNull()?.newBuilder()
-                ?.setQueryParameter("v", version.toString())?.build()?.toString() else url
-        }
+    val avatarUrl = remember(preferences.server, avatar, avatarVersions) {
+        vm.container.profileRepository.avatarUrl(preferences.server, avatar, avatarVersions)
     }
     val request = LocalRoomSongRequest.current
     val bottomInset = LocalMusicBottomInset.current
