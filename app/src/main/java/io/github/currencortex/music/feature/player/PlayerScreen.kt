@@ -48,14 +48,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 
 private enum class PlayerContent { COVER, LYRICS }
-private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI }
+private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI, ROAMING }
 internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePosition")
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
     actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null,
     onCast: (() -> Unit)? = null, onRoom: (() -> Unit)? = null, onDialogActive: (Boolean) -> Unit = {},
     onNetwork: (() -> Unit)? = null, onLike: (() -> Unit)? = null, onEqualizer: (() -> Unit)? = null,
-    onAiNavigate: (String) -> Unit = {}) {
+    onAiNavigate: (String) -> Unit = {}, roamingRequest: Int = 0, onRoamingRequestConsumed: () -> Unit = {}) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -66,6 +66,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val sleepState by vm.sleepTimer.state.collectAsStateWithLifecycle()
     val together by vm.together.state.collectAsStateWithLifecycle()
     val sharedQueue by vm.together.queue.collectAsStateWithLifecycle()
+    val roaming by vm.container.personalRoaming.state.collectAsStateWithLifecycle()
     val playbackMode = if (together.active) sharedQueue.mode else queue.mode
     val context = LocalContext.current
     // The timer can expire while the sheet is closed; report it once, on the next composition.
@@ -81,6 +82,10 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val scope = rememberCoroutineScope()
     LaunchedEffect(pager.settledPage) { content = PlayerContent.entries[pager.settledPage] }
     var overlay by rememberSaveable { mutableStateOf(PlayerOverlay.NONE) }
+    LaunchedEffect(roamingRequest) {
+        if (roamingRequest > 0) { overlay = PlayerOverlay.ROAMING; onRoamingRequestConsumed() }
+    }
+    LaunchedEffect(roaming.error) { if (roaming.active) roaming.error?.let(vm.container.errorNotices::show) }
     val queueMotion = remember { QueuePageMotion() }
     var queueGesture by remember { mutableStateOf(false) }
     var queueGestureJob by remember { mutableStateOf<Job?>(null) }
@@ -157,8 +162,13 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             Row(Modifier.fillMaxWidth().height(if (widePlayer) 48.dp else 52.dp), verticalAlignment = Alignment.CenterVertically) {
                 PlayerIconButton(PlayerIcon.COLLAPSE, "收起播放器", onBack, Modifier.testTag("navigate_back"))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text(if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label, Modifier.testTag("open_quality_sheet").clickable(enabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null, role = Role.Button) { overlay = PlayerOverlay.QUALITY }
-                        .padding(horizontal = 16.dp, vertical = 14.dp), color = Color.White.copy(alpha = .55f), fontSize = 12.sp)
+                    Text(if (roaming.active) "私人漫游 · ${roaming.choice.title} ⌄" else
+                        if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label,
+                        Modifier.testTag(if (roaming.active) "open_roaming_modes" else "open_quality_sheet")
+                            .clickable(enabled = roaming.active || state.mode == PlayerMode.LOCAL && state.song?.navidrome == null, role = Role.Button) {
+                                overlay = if (roaming.active) PlayerOverlay.ROAMING else PlayerOverlay.QUALITY
+                            }.padding(horizontal = 8.dp, vertical = 14.dp), color = Color.White.copy(alpha = .65f),
+                        fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 PlayerIconButton(PlayerIcon.MORE, "播放与歌词设置", { overlay = PlayerOverlay.OPTIONS }, Modifier.testTag("lyrics_options"))
             }
@@ -233,7 +243,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                             onPreviewCoordinates = { previewCoordinates = it })
                         }
                     }
-                    PlayerPagerArtwork(pagerArtwork, queue.current?.cover.orEmpty())
+                    if (!roaming.active || roaming.choice.code != "PUZZLE_MODE_RCMD")
+                        PlayerPagerArtwork(pagerArtwork, queue.current?.cover.orEmpty())
                     }
                     }
                     PlayerControlsRegion(controlsVisibility, Modifier.testTag("player_transport_transition")) {
@@ -261,6 +272,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) },
                 commentComposer, vm::editComment, vm::replyTo, vm::sendComment)
             PlayerOverlay.QUEUE -> Unit
+            PlayerOverlay.ROAMING -> io.github.currencortex.music.feature.roaming.PersonalRoamingDialog(vm.container, dismiss) {
+                onAiNavigate("user/binding")
+            }
             PlayerOverlay.MODE -> MusicDialog("播放模式", dismiss) {
                 PlaybackMode.entries.filter { !together.active || it != PlaybackMode.HEART }.forEach { mode -> MusicDialogButton((if (mode == playbackMode) "✓ " else "") + mode.label,
                     onClick = { vm.setPlaybackMode(mode); overlay = PlayerOverlay.QUEUE },
@@ -294,6 +308,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     else { dismiss(); menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false)) }
                 })
                 MusicDestinationRow("播放音质", summary = if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null)
+                MusicDestinationRow("私人漫游", summary = if (roaming.active) roaming.choice.title else "按你的喜好连续推荐",
+                    modifier = Modifier.testTag("open_player_roaming"), onClick = { overlay = PlayerOverlay.ROAMING })
                 if (onEqualizer != null) MusicDestinationRow("音效", onClick = { dismiss(); onEqualizer() },
                     modifier = Modifier.testTag("open_player_equalizer"))
                 MusicDestinationRow("播放模式", summary = playbackMode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL || (together.active && !together.busy))
@@ -342,11 +358,17 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     onPreviewCoordinates: (LayoutCoordinates) -> Unit = {}) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     val song = queue.current
+    val roaming by vm.container.personalRoaming.state.collectAsStateWithLifecycle()
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val coverSize = minOf(maxWidth * .92f, (maxHeight - if (showPreview) 200.dp else 128.dp).coerceAtLeast(72.dp), 360.dp)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            PlayerArtwork(song?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"),
+            val puzzle = roaming.active && roaming.choice.code == "PUZZLE_MODE_RCMD"
+            if (puzzle) Box(Modifier.size(coverSize)) {
+                PlayerArtwork(song?.cover.orEmpty(), Modifier.fillMaxSize().testTag("player_cover")
+                    .graphicsLayer { alpha = 0f }, transitionTarget = transitionTarget)
+                io.github.currencortex.music.feature.roaming.RoamingCoverPuzzle(song?.cover.orEmpty(), song?.id, showCaption = false)
+            } else PlayerArtwork(song?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"),
                 transitionTarget = transitionTarget, pagerRole = pagerRole)
             Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(song?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -361,10 +383,16 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 /** Artwork stays at the center of its pane while controls and lyrics slide beside it. */
 @Composable private fun WideCoverContent(vm: PlayerViewModel, modifier: Modifier) {
     val queue by vm.queue.collectAsStateWithLifecycle()
+    val roaming by vm.container.personalRoaming.state.collectAsStateWithLifecycle()
     BoxWithConstraints(modifier.fillMaxWidth().testTag("player_wide_cover_content")) {
         val coverSize = minOf(maxWidth * .96f, (maxHeight - 8.dp).coerceAtLeast(0.dp), 360.dp)
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"))
+            val puzzle = roaming.active && roaming.choice.code == "PUZZLE_MODE_RCMD"
+            if (puzzle) Box(Modifier.size(coverSize)) {
+                PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.fillMaxSize().testTag("player_cover")
+                    .graphicsLayer { alpha = 0f })
+                io.github.currencortex.music.feature.roaming.RoamingCoverPuzzle(queue.current?.cover.orEmpty(), queue.current?.id, showCaption = false)
+            } else PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"))
         }
     }
 }

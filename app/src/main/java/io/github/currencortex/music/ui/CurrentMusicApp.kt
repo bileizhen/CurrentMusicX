@@ -285,8 +285,17 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             if (route == SEARCH) { searchSheet.source = searchBounds; searchFocus = true }
             backStack = backStack + route.toString()
         }
+        var roamingRequest by rememberSaveable { mutableIntStateOf(0) }
         fun navigateLibrary(route: String) {
+            if (route == "lib/roaming") { roamingRequest++; navigateTo(PLAYER); return }
             if (backStack.last() != route) { playerSheetMotion = PlayerSheetMotion.NONE; backStack = backStack + route }
+        }
+        LaunchedEffect(Unit) {
+            if ("lib/roaming" in backStack) {
+                val reopen = backStack.last() in setOf("lib/roaming", PLAYER.toString())
+                backStack = backStack.filter { it != "lib/roaming" }
+                if (reopen) { roamingRequest++; navigateTo(PLAYER) }
+            }
         }
         LaunchedEffect(openDesktopRequest) { if (openDesktopRequest > 0) navigateLibrary("desktop-lyrics") }
         var showLogs by rememberSaveable { mutableStateOf(false) }
@@ -570,8 +579,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     entry(route) {
                         when {
                             route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateLibrary)
-                            route == "lib/roaming" -> io.github.currencortex.music.feature.roaming.PersonalRoamingScreen(
-                                container, ::navigateBack, { navigateLibrary("user/binding") }, { navigateTo(PLAYER) })
                             route.startsWith("lib/artist/") -> {
                                 val artistVm: io.github.currencortex.music.feature.artist.ArtistViewModel = viewModel(key = route,
                                     factory = viewModelFactory { io.github.currencortex.music.feature.artist.ArtistViewModel(container,
@@ -692,7 +699,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") },
                     onDialogActive = { playerDialogOpen = it }, onNetwork = { navigateTo(NETWORK) },
                     onLike = { currentSong?.let(libraryVm::choosePlaylist) }, onEqualizer = { navigateTo(EQUALIZER) },
-                    onAiNavigate = ::navigateLibrary)
+                    onAiNavigate = ::navigateLibrary, roamingRequest = roamingRequest,
+                    onRoamingRequestConsumed = { roamingRequest = 0 })
             }
         }
         if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm,
