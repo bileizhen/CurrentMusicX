@@ -139,4 +139,63 @@ class LyricsEffectsRenderingTest {
         assertEquals("Seeking before singing resets the lift", normal.second, ink(capture()).second, .5)
         assertEquals(bounds, compose.onNodeWithTag("effect_text").getUnclippedBoundsInRoot())
     }
+
+    @Test fun sungGlyphsKeepTheSameInkWhenTheParagraphFinishes() {
+        val position = mutableLongStateOf(2200)
+        val line = LyricLine(1000, 3500, "星光点", listOf(
+            LyricWord("星", 1000, 1600, 0, 1), LyricWord("光", 1600, 2200, 1, 2),
+            LyricWord("点", 2500, 3500, 2, 3)))
+        compose.setContent {
+            Box(Modifier.size(240.dp, 120.dp).background(Color.Black).testTag("effect_sample")) {
+                KaraokeText(line, position, true, Modifier.padding(24.dp), fontSize = 40f, wordLift = true)
+            }
+        }
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText(line.text, useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        val partial = capture()
+        compose.runOnIdle { position.longValue = 4000 }
+        val finished = capture()
+        // Sample the first completed glyph, away from the waiting word's shared clip edge.
+        val right = (24f * partial.width / 240 + layouts.single().getBoundingBox(0).right).toInt()
+        var difference = 0.0
+        var ink = 0.0
+        for (y in 0 until partial.height) for (x in 0 until right) {
+            difference += kotlin.math.abs(partial[x, y].red - finished[x, y].red)
+            ink += finished[x, y].red
+        }
+        assertTrue("Finishing the paragraph cannot duplicate ink or move sung glyphs: difference=$difference ink=$ink",
+            ink > 100 && difference < ink * .01)
+    }
+
+    @Test fun liftingTimedWordsPreservesUntimedPunctuationAndWrappedText() {
+        val lift = mutableStateOf(false)
+        val position = mutableLongStateOf(1700)
+        val line = LyricLine(1000, 4000, "星 / 光 点", listOf(
+            LyricWord("星", 1000, 2000, 0, 1), LyricWord("光", 2000, 3000, 4, 5),
+            LyricWord("点", 3000, 4000, 6, 7)))
+        compose.setContent {
+            Box(Modifier.size(240.dp, 200.dp).background(Color.Black).testTag("effect_sample")) {
+                KaraokeText(line, position, true, Modifier.padding(24.dp).width(140.dp),
+                    fontSize = 40f, wordLift = lift.value)
+            }
+        }
+        val layouts = mutableListOf<TextLayoutResult>()
+        compose.onNodeWithText(line.text, useUnmergedTree = true)
+            .performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertTrue("The fixture exercises a wrapped word", layouts.single().lineCount > 1)
+        val before = capture()
+        compose.runOnIdle { lift.value = true }
+        val after = capture()
+        val punctuation = layouts.single().getBoundingBox(2)
+        val pad = 24f * before.width / 240
+        var original = 0.0
+        var remaining = 0.0
+        for (y in (pad + punctuation.top).toInt() until (pad + punctuation.bottom).toInt())
+            for (x in (pad + punctuation.left).toInt() until (pad + punctuation.right).toInt()) {
+                original += before[x, y].red
+                remaining += after[x, y].red
+            }
+        assertTrue("Untimed punctuation must retain visible ink", original > 20 && remaining > original * .9)
+    }
 }

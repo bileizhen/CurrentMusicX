@@ -1,7 +1,6 @@
 package io.github.currencortex.music.feature.lyrics.ui
 
 import android.os.SystemClock
-import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.scrollBy
@@ -35,15 +34,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.filterNotNull
 import kotlin.math.abs
-import kotlin.math.sin
 
 enum class LyricsScrollMode { FOLLOWING, BROWSING }
 
 internal class LyricsScrollMotion {
-    var progress by mutableFloatStateOf(1f)
-    var direction = 1f
-    fun lag(distance: Int): Float =
-        sin(progress.coerceIn(0f, 1f) * Math.PI).toFloat() * distance.coerceIn(0, 4) * direction
+    var velocity by mutableFloatStateOf(0f)
+    fun lag(distance: Float, density: Float): Float =
+        (velocity / (900f * density)).coerceIn(-1f, 1f) * distance.coerceIn(0f, 4f)
 }
 internal val LyricsPerspectiveAngle = SemanticsPropertyKey<Float>("LyricsPerspectiveAngle")
 
@@ -108,7 +105,7 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
         return
     }
     val list = rememberLazyListState()
-    val scrollMotion = remember { LyricsScrollMotion() }
+    val scrollMotion = remember(document) { LyricsScrollMotion() }
     var mode by remember(document) { mutableStateOf(LyricsScrollMode.FOLLOWING) }
     LaunchedEffect(list, document) {
         list.interactionSource.interactions.collect {
@@ -124,47 +121,58 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     BoxWithConstraints(modifier.testTag("lyrics_panel")) {
     LaunchedEffect(target, mode, document, size, weightMode, lyricsOffsetMs,
         display.centered, display.fontWeight, minimal, maxWidth, maxHeight) {
-        if (mode != LyricsScrollMode.FOLLOWING || document.lines.isEmpty()) return@LaunchedEffect
+        if (mode != LyricsScrollMode.FOLLOWING || document.lines.isEmpty()) {
+            scrollMotion.velocity = 0f
+            return@LaunchedEffect
+        }
         // Wait for the first layout only. Normal line changes start on the next animation frame.
         snapshotFlow { list.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
-        try {
-            // Seeking outside the viewport needs one relocation, not two competing scrolls.
-            if (list.layoutInfo.visibleItemsInfo.none { it.index == target }) list.scrollToItem(target)
-            var entering = true
-            // Translation height changes are coalesced while a line entrance is running.
-            // Afterwards, resizing follows the same height animation without restarting
-            // the scroll tween each frame or leaving a hidden translation at the anchor.
-            snapshotFlow { list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }?.size }
-                .filterNotNull().collect {
-                    val entrance = entering
-                    entering = false
-                    val visible = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target } ?: return@collect
-                    val travel = visible.offset + if (minimal) visible.size / 2f else 0f
-                    if (abs(travel) < .5f) return@collect
-                    list.scroll {
-                        if (!entrance) {
-                            scrollBy(travel)
-                            return@scroll
-                        }
-                        scrollMotion.direction = if (travel < 0) -1f else 1f
-                        scrollMotion.progress = 0f
-                        var previous = 0f
-                        animate(0f, 1f, animationSpec = tween(460, easing = CubicBezierEasing(.22f, 0f, .18f, 1f))) { progress, _ ->
-                            val row = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }
-                            if (row != null) {
-                                val remaining = row.offset + if (minimal) row.size / 2f else 0f
-                                // Use current geometry as old/new translations resize during
-                                // the entrance; the final frame lands on the actual paragraph.
-                                val fraction = ((progress - previous) / (1f - previous).coerceAtLeast(.0001f)).coerceIn(0f, 1f)
-                                scrollBy(remaining * fraction)
-                            }
-                            previous = progress
-                            scrollMotion.progress = progress
-                        }
-                        scrollMotion.progress = 1f
-                    }
+        // Seeking outside the viewport needs one relocation, not two competing scrolls.
+        if (list.layoutInfo.visibleItemsInfo.none { it.index == target }) {
+            scrollMotion.velocity = 0f
+            list.scrollToItem(target)
+        }
+        var entering = true
+        // Translation height changes are coalesced while a line entrance is running.
+        // Afterwards, resizing follows the same height animation without restarting
+        // the follow animation each frame or leaving a hidden translation at the anchor.
+        snapshotFlow { list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }?.size }
+            .filterNotNull().collect {
+                val entrance = entering
+                entering = false
+                val visible = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target } ?: return@collect
+                val travel = visible.offset + if (minimal) visible.size / 2f else 0f
+                if (abs(travel) < .5f) {
+                    scrollMotion.velocity = 0f
+                    return@collect
                 }
-        } finally { scrollMotion.progress = 1f }
+                list.scroll {
+                    if (!entrance) {
+                        scrollBy(travel)
+                        return@scroll
+                    }
+                    var previousFrame = 0L
+                    while (true) {
+                        val frame = withFrameNanos { it }
+                        val seconds = if (previousFrame == 0L) 1f / 60f else (frame - previousFrame) / 1_000_000_000f
+                        previousFrame = frame
+                        val row = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target } ?: break
+                        val remaining = row.offset + if (minimal) row.size / 2f else 0f
+                        // Centering an odd-pixel paragraph leaves a half-pixel remainder.
+                        if (abs(remaining) <= .5f && abs(scrollMotion.velocity) < 8f) {
+                            scrollBy(remaining)
+                            break
+                        }
+                        // Follow current paragraph geometry while translations open/close.
+                        // A new lyric inherits the velocity instead of restarting a tween.
+                        val step = lyricsFollowStep(remaining, scrollMotion.velocity, seconds)
+                        val consumed = scrollBy(step.distance)
+                        scrollMotion.velocity = step.velocity
+                        if (abs(consumed) < .01f && abs(step.distance) > .5f) break
+                    }
+                    scrollMotion.velocity = 0f
+                }
+            }
     }
         val anchorPadding = maxHeight * if (minimal) .5f else .4f
         LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("lyrics_list")

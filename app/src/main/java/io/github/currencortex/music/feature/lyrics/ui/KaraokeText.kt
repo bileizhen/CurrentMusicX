@@ -41,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
     outline: Boolean = false, onLayout: ((TextLayoutResult) -> Unit)? = null,
     glowColor: Color = color, glowRadiusScale: Float = 1f, untimedLineGlow: Boolean = false,
     effectPadding: Dp = 0.dp, singleLine: Boolean = false, prepareDrawResources: Boolean = false,
+    prewarmGlow: Boolean = false,
     smokeColors: LyricsSmokeColors? = null, smokeFlight: (() -> LyricsSmokeFlight?)? = null,
     particleColors: LyricsSmokeColors? = null, particleExitAt: Long? = null) {
     val measurer = rememberTextMeasurer()
@@ -72,7 +73,8 @@ import androidx.compose.ui.text.style.TextAlign
                     softWrap = !singleLine, maxLines = if (singleLine) 1 else Int.MAX_VALUE)
             }
         }
-        val layout = layouts[if (fontWeight == FontWeight.Normal) 0 else 1]
+        val layoutIndex = if (fontWeight == FontWeight.Normal) 0 else 1
+        val layout = layouts[layoutIndex]
         SideEffect { onLayout?.invoke(layout) }
         val clusters = remember(line.text) { lyricsClusters(line.text) }
         // A display-only line sweep in Always mode; real word timing and cached data remain authoritative.
@@ -82,7 +84,7 @@ import androidx.compose.ui.text.style.TextAlign
                 listOf(LyricWord(line.text, line.startTimeMs, line.endTimeMs, 0, line.text.length))
             else emptyList()
         }
-        val geometry = remember(words, layout, clusters, accurateWordLift) { words.mapIndexed { wordIndex, word ->
+        val geometries = remember(words, layouts, clusters, accurateWordLift) { layouts.map { layout -> words.mapIndexed { wordIndex, word ->
             val segments = clusters.filter { it.first >= word.startOffset && it.first < word.endOffset }.mapNotNull { range ->
                 val boxes = range.map { layout.getBoundingBox(it) }.filter { it.width > 0 }
                 if (boxes.isEmpty()) null else {
@@ -102,7 +104,8 @@ import androidx.compose.ui.text.style.TextAlign
                     segment.rtl)
             }
             WordGeometry(segments, total, Path().apply { segments.forEach { addRect(it.box) } }, glyphs)
-        } }
+        } } }
+        val geometry = geometries[layoutIndex]
         val timed = animateWords && words.isNotEmpty()
         // Retain the lift when Current-line karaoke stops animating a completed row.
         val safeRaster = layout.size.width.toLong() * layout.size.height <= 4_000_000 && layout.size.height < 8192 && layout.size.width < 8192
@@ -116,7 +119,17 @@ import androidx.compose.ui.text.style.TextAlign
         val glowLine = untimedLineGlow && safeRaster && line.words.isEmpty() && !forceLineAnimation
         val liftHeight = 2f * density.density
         val radius = glowRadiusScale.takeIf(Float::isFinite)?.coerceIn(.5f, 2f) ?: 1f
-        val raster = remember(layout, density, direction, radius) { LyricsTextRaster(layout, density, direction, radius) }
+        // Keep both weights' raster caches when focus changes, just like text measurement.
+        val rasters = remember(layouts, density, direction, radius) {
+            layouts.map { LyricsTextRaster(it, density, direction, radius) }
+        }
+        val raster = rasters[layoutIndex]
+        val untimedInk = remember(liftTimed, raster, glyphs, clusters, words) {
+            if (liftTimed && clusters.any { range ->
+                line.text.substring(range).any { !it.isWhitespace() } &&
+                    words.none { range.first >= it.startOffset && range.first < it.endOffset }
+            }) raster.untimedInk(glyphs.map { it.box }) else null
+        }
         val smokeGeometry = remember(line, layout, smokeColors != null, safeRaster) {
             if (smokeColors != null && safeRaster && layout.size.width.toLong() * layout.size.height <= 1_000_000)
                 smokeGlyphs(line, layout) else emptyList()
@@ -141,7 +154,25 @@ import androidx.compose.ui.text.style.TextAlign
         } else null
         val haloTint = remember(glowColor) { ColorFilter.tint(glowColor) }
         // Prepare once when enabled, never run a blur filter or text rasterization per frame.
-        if (liftTimed) raster.ink.let { if (prepareDrawResources) raster.prepareForDrawing(it) }
+        if (liftTimed) {
+            if (prepareDrawResources) rasters.forEach { it.prepareForDrawing(it.ink) }
+            else raster.ink
+        }
+        LaunchedEffect(prewarmGlow, safeRaster, geometries, rasters, glowWeights) {
+            if (prewarmGlow && safeRaster && line.words.isNotEmpty()) {
+                // Warm the next paragraph over separate display frames, before its entrance.
+                // Both cached weights are needed when Current-line bold changes at that cue.
+                geometries.forEachIndexed { index, shapes ->
+                    shapes.filterIndexed { wordIndex, _ -> glowWeights[wordIndex] > 0f }.forEach { shape ->
+                        shape.glyphs.forEach { glyph ->
+                            withFrameNanos { }
+                            val halo = rasters[index].glyphHalo(glyph.box).first
+                            if (prepareDrawResources) rasters[index].prepareForDrawing(halo)
+                        }
+                    }
+                }
+            }
+        }
         if (glowLine) raster.lineHalo.first.let { if (prepareDrawResources) raster.prepareForDrawing(it) }
         if (glowTimed) glyphs.filter { glowWeights[it.wordIndex] > 0f }.forEach {
             val halo = raster.glyphHalo(it.box).first
@@ -160,7 +191,6 @@ import androidx.compose.ui.text.style.TextAlign
             }
         } }
         val sung = remember { Path() }
-        val cutouts = remember { Path() }
         Canvas(Modifier.fillMaxWidth().height(with(density) { (layouts.maxOf { it.size.height } + padding * 2).toDp() })
             .semantics {
                 if (exposeText) {
@@ -186,19 +216,17 @@ import androidx.compose.ui.text.style.TextAlign
                 if (phase == 2 && liftTimed) {
                     // Draw the completed paragraph in two cached masks, without reading the
                     // frame clock or returning sung glyphs to their original baseline.
-                    clipPath(liftedInk, ClipOp.Difference) { drawText(layout, color = color, drawStyle = Fill) }
+                    clipPath(liftedInk, ClipOp.Difference) { drawImage(raster.ink, colorFilter = tint) }
                     translate(top = -liftHeight) {
-                        clipPath(liftedInk) { drawText(layout, color = color, drawStyle = Fill) }
+                        clipPath(liftedInk) { drawImage(raster.ink, colorFilter = tint) }
                     }
                     return@translate
                 }
                 val baseAlpha = if (timed && phase < 2) baseOpacity?.value ?: .32f else 1f
                 val glowAlpha = glowOpacity?.value ?: 1f
-                cutouts.reset()
                 val now = if (phase == 1) position.value else 0L
                 if (phase == 1 && liftTimed) glyphs.forEachIndexed { index, glyph ->
                     lifts[index] = lyricGlyphLift(now, glyph.start) * liftHeight
-                    if (lifts[index] > .01f) cutouts.addRect(glyph.box)
                 }
                 // Only the currently sung sustained/emphasized word can glow. Completed
                 // words, future words and untimed ordinary lines never receive a halo.
@@ -223,9 +251,34 @@ import androidx.compose.ui.text.style.TextAlign
                         }
                     }
                 }
-                clipPath(cutouts, ClipOp.Difference) {
-                    drawText(layout, color = color.copy(alpha = color.alpha * baseAlpha), drawStyle = Fill)
+                if (phase == 1 && liftTimed) {
+                    // Timed glyphs share the cached paragraph texture. Only simple rectangle
+                    // clips move per frame; no whole-line cutout or swept union is rebuilt.
+                    untimedInk?.let { drawImage(it, alpha = baseAlpha, colorFilter = tint) }
+                    glyphs.forEachIndexed { index, glyph ->
+                        val shape = geometry[glyph.wordIndex]
+                        val progress = LyricsSynchronizer.wordProgress(words[glyph.wordIndex], now)
+                        val filled = (shape.width * progress - glyph.widthOffset).coerceIn(0f, glyph.box.width)
+                        translate(top = -lifts[index]) {
+                            val box = glyph.box
+                            clipRect(box.left, box.top, box.right, box.bottom) {
+                                // A completed glyph needs one opaque pass. Painting the dim
+                                // ink underneath it both costs a draw and brightens its AA edge.
+                                if (timed && (progress >= 1f || filled >= box.width)) {
+                                    drawImage(raster.ink, colorFilter = tint)
+                                } else {
+                                    drawImage(raster.ink, alpha = baseAlpha, colorFilter = tint)
+                                    if (timed && filled > 0f) clipRect(if (glyph.rtl) box.right - filled else box.left, box.top,
+                                        if (glyph.rtl) box.right else box.left + filled, box.bottom) {
+                                        drawImage(raster.ink, colorFilter = tint)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    return@translate
                 }
+                drawText(layout, color = color.copy(alpha = color.alpha * baseAlpha), drawStyle = Fill)
                 if (phase == 1) {
                     sung.reset()
                     words.forEachIndexed { index, word ->
@@ -248,25 +301,8 @@ import androidx.compose.ui.text.style.TextAlign
                             remaining -= box.width
                         }
                     }
-                    clipPath(cutouts, ClipOp.Difference) {
-                        if (timed) clipPath(sung) { drawText(layout, color = color, drawStyle = Fill) }
-                    }
-                    if (liftTimed) glyphs.forEachIndexed { index, glyph ->
-                        if (lifts[index] <= .01f) return@forEachIndexed
-                        val shape = geometry[glyph.wordIndex]
-                        val progress = LyricsSynchronizer.wordProgress(words[glyph.wordIndex], now)
-                        val filled = (shape.width * progress - glyph.widthOffset).coerceIn(0f, glyph.box.width)
-                        translate(top = -lifts[index]) {
-                            val box = glyph.box
-                            clipRect(box.left, box.top, box.right, box.bottom) {
-                                drawImage(raster.ink, alpha = baseAlpha, colorFilter = tint)
-                                if (timed && filled > 0f) clipRect(if (glyph.rtl) box.right - filled else box.left, box.top,
-                                    if (glyph.rtl) box.right else box.left + filled, box.bottom) {
-                                    drawImage(raster.ink, colorFilter = tint)
-                                }
-                            }
-                        }
-                    }
+                    if (timed) clipPath(sung) { drawText(layout, color = color, drawStyle = Fill) }
+
                 }
             }
         }
