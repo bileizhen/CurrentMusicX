@@ -104,9 +104,10 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
     fun upload(resolver: ContentResolver) = action("头像已更新") {
         val uri = avatar.value ?: return@action
         val expected = session()
+        val previousAvatar = container.accountRepository.state.value.account?.avatar.orEmpty()
         val bytes = withContext(Dispatchers.IO) { avatarBytes(resolver, uri) }
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
-        applyUser(container.profileRepository.avatar(bytes, expected), expected)
+        applyUser(container.profileRepository.avatar(bytes, expected, previousAvatar), expected)
     }
     fun password(old: String, new: String) = action("密码已更新，请确认当前会话") {
         container.profileRepository.password(old, new); dialog.value = null

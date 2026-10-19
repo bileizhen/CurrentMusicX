@@ -194,7 +194,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             },
             onFailure = { platform, kind -> logger.warn("Player", "$platform listening report failed: $kind") })
     }
-    val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
+    val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient,
+        AvatarImageCache(context, storageSuffix)) { RequestSession(accountRepository.server, accountRepository.token) }
     val bindingRepository: io.github.currencortex.music.data.binding.BindingRepository = io.github.currencortex.music.data.binding.BindingRepository(apiClient,
         { musicSession() }) { libraryRepository.invalidate(); neteaseLibrary.invalidate() }
     val neteaseLibrary = io.github.currencortex.music.data.library.NeteaseLibraryRepository(apiClient, bindingRepository,

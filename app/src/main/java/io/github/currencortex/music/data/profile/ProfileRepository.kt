@@ -7,10 +7,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.serialization.json.*
 import java.util.Base64
 
-class ProfileRepository(private val api: ApiClient, private val session: () -> RequestSession) {
+class ProfileRepository(private val api: ApiClient, private val avatarCache: AvatarCache? = null,
+    private val session: () -> RequestSession) {
     val revision = MutableStateFlow(0L)
     val scales = MutableStateFlow<Map<String, Double>>(emptyMap())
-    val avatarVersions = MutableStateFlow<Map<Long, Long>>(emptyMap())
+    val avatarVersions = MutableStateFlow(avatarCache?.versions.orEmpty())
     private suspend fun own(expected: RequestSession) = api.decode<ProfileUser>(
         api.request("GET", "auth/me", authenticated = true, expectedSession = expected))
     suspend fun me() = own(session())
@@ -32,11 +33,21 @@ class ProfileRepository(private val api: ApiClient, private val session: () -> R
         require(nickname.isNotBlank())
         return write("profile", buildJsonObject { put("nickname", nickname.trim()); put("bio", bio); if (visible != null) put("publicSquare", visible) }, expected)
     }
-    suspend fun avatar(bytes: ByteArray, expected: RequestSession = session()): ProfileUser {
+    suspend fun avatar(bytes: ByteArray, expected: RequestSession = session(), previousAvatar: String = ""): ProfileUser {
         require(bytes.isNotEmpty() && bytes.size <= 1024 * 1024)
-        return write("profile/avatar", buildJsonObject { put("data", Base64.getEncoder().encodeToString(bytes)) }, expected).also { user ->
-            avatarVersions.update { it + (user.id to System.currentTimeMillis()) }
-        }
+        api.request("PUT", "profile/avatar", body = buildJsonObject { put("data", Base64.getEncoder().encodeToString(bytes)) },
+            authenticated = true, expectedSession = expected)
+        val previousUrl = rawAvatarUrl(expected.server, previousAvatar)
+        // The upload already succeeded even if the subsequent account refresh fails.
+        previousUrl?.let { invalidateAvatar(it) }
+        val user = own(expected)
+        rawAvatarUrl(expected.server, user.avatar)?.takeIf { it != previousUrl }?.let { invalidateAvatar(it) }
+        revision.update { it + 1 }
+        return user
+    }
+    private suspend fun invalidateAvatar(url: String) {
+        avatarVersions.value = avatarCache?.invalidate(setOf(url))
+            ?: (avatarVersions.value + (url to java.util.UUID.randomUUID().toString()))
     }
     suspend fun decorate(id: String): ProfileUser = write("decorations/mine", buildJsonObject { put("id", id) })
     suspend fun password(oldPassword: String, newPassword: String) {
@@ -44,7 +55,9 @@ class ProfileRepository(private val api: ApiClient, private val session: () -> R
         api.request("PUT", "profile/password", body = buildJsonObject { put("oldPassword", oldPassword); put("newPassword", newPassword) },
             authenticated = true, expectedSession = session())
     }
-    fun avatarUrl(server: String, filename: String): String? {
+    fun avatarUrl(server: String, filename: String, versions: Map<String, String> = avatarVersions.value): String? =
+        rawAvatarUrl(server, filename)?.let { versionedAvatarUrl(it, versions[it]) }
+    private fun rawAvatarUrl(server: String, filename: String): String? {
         if (filename.startsWith("https://") || filename.startsWith("http://")) return filename
         if (!filename.matches(Regex("[a-zA-Z0-9_.-]+")) || filename.contains("..")) return null
         return ServerUrl.endpoint(server, "avatar/$filename", emptyMap()).toString()
