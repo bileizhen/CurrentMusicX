@@ -100,6 +100,7 @@ import kotlinx.coroutines.launch
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
         item { Row(Modifier.fillMaxWidth().then(LocalRootTabSwipe.current), verticalAlignment = Alignment.CenterVertically) {
             Text("我的", Modifier.weight(1f), fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
+            MusicTextAction("公告", { navigate("user/announcements") }, Modifier.testTag("me_announcements"))
             MusicTextAction("设置", onSettings, Modifier.testTag("me_settings"))
         } }
         account.profile?.let { native -> item {
@@ -170,7 +171,8 @@ import kotlinx.coroutines.launch
             // No back button here either: system/predictive back is handled by the navigation layer.
             Text(if (onBack == null) "我的" else "用户主页", Modifier.weight(1f), fontSize = 28.sp,
                 fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-            MusicTextAction("刷新", vm::reload, enabled = !state.loading)
+            if (onBack == null) MusicTextAction("公告", { navigate("user/announcements") }, Modifier.testTag("me_announcements"))
+            else MusicTextAction("刷新", vm::reload, enabled = !state.loading)
             onSettings?.let { MusicTextAction("设置", it, Modifier.testTag("me_settings")) }
         } }
         if ((state.loading || account.loading) && user == null) item { LoadingSongList(2) }

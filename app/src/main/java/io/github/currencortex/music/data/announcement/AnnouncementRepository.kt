@@ -38,11 +38,16 @@ private data class AnnouncementResponse(val items: List<Announcement> = emptyLis
 
 /** Public CurrentMusic announcements, independent of login and the audio provider. */
 class AnnouncementRepository(private val api: ApiClient, private val timeoutMillis: Long = 8_000) {
-    suspend fun fetch(server: String): List<Announcement> {
+    suspend fun fetch(server: String): List<Announcement> = fetch(server, 20)
+
+    /** Manual browsing includes read notices and is not restricted to the startup batch. */
+    suspend fun fetchAll(server: String): List<Announcement> = fetch(server, 1000)
+
+    private suspend fun fetch(server: String, limit: Int): List<Announcement> {
         val response = api.decode<AnnouncementResponse>(api.request("GET", "announcements",
-            query = mapOf("limit" to "20"), expectedSession = RequestSession(server, null), callTimeoutMillis = timeoutMillis))
+            query = mapOf("limit" to limit.toString()), expectedSession = RequestSession(server, null), callTimeoutMillis = timeoutMillis))
         // Keep the server's pinned/date/id ordering.
-        return response.items.filter { it.title.isNotBlank() && !it.removed }.take(20)
+        return response.items.filter { it.title.isNotBlank() && !it.removed }.take(limit)
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)

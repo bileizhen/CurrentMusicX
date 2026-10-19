@@ -10,6 +10,18 @@ import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 class AnnouncementRepositoryTest {
+    @Test fun manualArchiveIsNotTruncatedToTheStartupBatchAndRemainsPublic() = runBlocking {
+        MockWebServer().use { server ->
+            val base = server.url("/cm/").toString()
+            val repository = AnnouncementRepository(ApiClient({ base }, { "private-token" }, {}))
+            val items = (1..35).joinToString(",") { """{"id":$it,"title":"Notice $it"}""" }
+            server.enqueue(MockResponse().setBody("""{"items":[$items]}"""))
+            assertEquals((1L..35L).toList(), repository.fetchAll(base).map { it.id })
+            val request = server.takeRequest()
+            assertEquals("/cm/announcements?limit=1000", request.path)
+            assertNull(request.getHeader("Authorization"))
+        }
+    }
     private val fixture = """{"items":[
         {"id":1,"title":"Pinned notice","body":"**Markdown**","pinned":true,"createdAt":1791646979,"author":"站长Rcst20"},
         {"id":2,"title":"Second notice","link":"https://bilibili.com","updatedAt":1791647770},
