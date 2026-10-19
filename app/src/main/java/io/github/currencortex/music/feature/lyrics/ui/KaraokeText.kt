@@ -1,3 +1,4 @@
+// Monet sweep/glow adapter: Folia contributors, AGPL-3.0-only; see THIRD_PARTY_NOTICES.md.
 package io.github.currencortex.music.feature.lyrics.ui
 
 import androidx.compose.foundation.Canvas
@@ -41,7 +42,7 @@ import androidx.compose.ui.text.style.TextAlign
     outline: Boolean = false, onLayout: ((TextLayoutResult) -> Unit)? = null,
     glowColor: Color = color, glowRadiusScale: Float = 1f, untimedLineGlow: Boolean = false,
     effectPadding: Dp = 0.dp, singleLine: Boolean = false, prepareDrawResources: Boolean = false,
-    prewarmGlow: Boolean = false,
+    prewarmGlow: Boolean = false, monet: Boolean = false,
     smokeColors: LyricsSmokeColors? = null, smokeFlight: (() -> LyricsSmokeFlight?)? = null,
     particleColors: LyricsSmokeColors? = null, particleExitAt: Long? = null) {
     val measurer = rememberTextMeasurer()
@@ -113,15 +114,15 @@ import androidx.compose.ui.text.style.TextAlign
         val glyphs = remember(geometry) { geometry.flatMap { it.glyphs } }
         val liftedInk = remember(glyphs) { Path().apply { glyphs.forEach { addRect(it.box) } } }
         val lifts = remember(glyphs) { FloatArray(glyphs.size) }
-        val glowWeights = remember(words, line.roles) { words.map { lyricGlowWeight(it, line.roles) } }
+        val glowWeights = remember(words, line.roles, monet) { words.map { if (monet) 1f else lyricGlowWeight(it, line.roles) } }
         val wordGlows = remember(words) { FloatArray(words.size) }
         val glowTimed = glow && safeRaster && line.words.isNotEmpty() && glowWeights.any { it > 0f }
         val glowLine = untimedLineGlow && safeRaster && line.words.isEmpty() && !forceLineAnimation
         val liftHeight = 2f * density.density
         val radius = glowRadiusScale.takeIf(Float::isFinite)?.coerceIn(.5f, 2f) ?: 1f
         // Keep both weights' raster caches when focus changes, just like text measurement.
-        val rasters = remember(layouts, density, direction, radius) {
-            layouts.map { LyricsTextRaster(it, density, direction, radius) }
+        val rasters = remember(layouts, density, direction, radius, monet) {
+            layouts.map { LyricsTextRaster(it, density, direction, radius, monet) }
         }
         val raster = rasters[layoutIndex]
         val untimedInk = remember(liftTimed, raster, glyphs, clusters, words) {
@@ -158,7 +159,7 @@ import androidx.compose.ui.text.style.TextAlign
             if (prepareDrawResources) rasters.forEach { it.prepareForDrawing(it.ink) }
             else raster.ink
         }
-        LaunchedEffect(prewarmGlow, safeRaster, geometries, rasters, glowWeights) {
+        LaunchedEffect(prewarmGlow, safeRaster, geometries, rasters, glowWeights, monet) {
             if (prewarmGlow && safeRaster && line.words.isNotEmpty()) {
                 // Warm the next paragraph over separate display frames, before its entrance.
                 // Both cached weights are needed when Current-line bold changes at that cue.
@@ -168,6 +169,10 @@ import androidx.compose.ui.text.style.TextAlign
                             withFrameNanos { }
                             val halo = rasters[index].glyphHalo(glyph.box).first
                             if (prepareDrawResources) rasters[index].prepareForDrawing(halo)
+                            if (monet) {
+                                val wide = rasters[index].wideGlyphHalo(glyph.box).first
+                                if (prepareDrawResources) rasters[index].prepareForDrawing(wide)
+                            }
                         }
                     }
                 }
@@ -177,14 +182,23 @@ import androidx.compose.ui.text.style.TextAlign
         if (glowTimed) glyphs.filter { glowWeights[it.wordIndex] > 0f }.forEach {
             val halo = raster.glyphHalo(it.box).first
             if (prepareDrawResources) raster.prepareForDrawing(halo)
+            if (monet) raster.wideGlyphHalo(it.box).first.let { wide -> if (prepareDrawResources) raster.prepareForDrawing(wide) }
         }
+        val monetSweeps = if (monet && safeRaster) remember(rasters, color) { rasters.map { MonetSweepInk(it.ink, color) } } else emptyList()
+        val monetHalo = if (monet && glowTimed) remember(raster, glyphs, glowColor) {
+            MonetHaloInk(glyphs.flatMap { glyph -> listOf(
+                glyph.wordIndex to raster.glyphHalo(glyph.box),
+                glyph.wordIndex to raster.wideGlyphHalo(glyph.box)) }, glowColor)
+        } else null
+        val monetWidths = remember(geometry) { geometry.map { shape -> shape.segments.map { it.box.width } } }
         val begin = words.minOfOrNull { it.startTimeMs } ?: 0
-        val finish = maxOf(words.maxOfOrNull { it.endTimeMs } ?: 0,
+        val finish = maxOf(if (monet && glowTimed) maxOf(line.endTimeMs, (words.maxOfOrNull { it.endTimeMs } ?: 0) + 1050)
+            else words.maxOfOrNull { it.endTimeMs } ?: 0,
             if (liftTimed) (glyphs.maxOfOrNull { it.start } ?: 0) + LYRIC_GLYPH_RISE_MS else 0)
         // Static future/past lines do not subscribe their Canvas to the per-frame clock.
-        val phase by remember(begin, finish, position, timed, glowTimed, liftTimed) { derivedStateOf {
+        val phase by remember(begin, finish, position, timed, glowTimed, liftTimed, monet) { derivedStateOf {
             when {
-                !timed && !glowTimed && !liftTimed -> 2
+                !monet && !timed && !glowTimed && !liftTimed -> 2
                 position.value < begin -> 0
                 position.value >= finish -> 2
                 else -> 1
@@ -205,6 +219,39 @@ import androidx.compose.ui.text.style.TextAlign
                 }
                 if (smokeInk != null) {
                     with(smokeInk) { draw(position.value, smokeColors!!, color, smokeFlight?.invoke()) }
+                    return@translate
+                }
+                if (monet && safeRaster && words.isNotEmpty()) {
+                    // Folia's media-time envelope survives line changes, pause and backward seeks.
+                    val now = when (phase) { 0 -> begin - 1; 1 -> position.value; else -> Long.MAX_VALUE }
+                    val sweep = monetSweeps[layoutIndex]
+                    val softness = monetSweepSoftness(size * density.fontScale) * density.density
+                    val base = baseOpacity?.value ?: .34f
+                    if (monetHalo != null) {
+                        words.forEachIndexed { index, word ->
+                            wordGlows[index] = monetGlow(now, word.startTimeMs, word.endTimeMs, line.endTimeMs)
+                        }
+                        monetHalo.draw(this, wordGlows)
+                    }
+                    drawImage(raster.ink, alpha = base, colorFilter = tint)
+                    sweep.begin()
+                    words.forEachIndexed { wordIndex, word ->
+                        val shape = geometry[wordIndex]
+                        val progress = LyricsSynchronizer.wordProgress(word, now)
+                        // Equal-time graphemes interpolate their measured positions, including wrapped words.
+                        val filled = monetFillWidth(progress, monetWidths[wordIndex])
+                        val edgeEnd = monetSweepEnd(filled, shape.width, softness)
+                        if (now >= word.endTimeMs) {
+                            shape.segments.forEach { sweep.opaque(it.box) }
+                        } else if (timed && now > word.startTimeMs) {
+                            var offset = 0f
+                            shape.segments.forEach { segment ->
+                                sweep.add(segment.box, edgeEnd - offset, softness, segment.rtl)
+                                offset += segment.box.width
+                            }
+                        }
+                    }
+                    sweep.draw(this)
                     return@translate
                 }
                 if (glowLine) {

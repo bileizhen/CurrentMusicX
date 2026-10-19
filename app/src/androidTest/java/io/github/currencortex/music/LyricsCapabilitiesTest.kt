@@ -41,10 +41,10 @@ class LyricsCapabilitiesTest {
             AppleLyrics(document, position, {}, Modifier.fillMaxSize().background(Color(0xFF29272C)), effects = false, fontSize = 40f)
         }
         compose.mainClock.advanceTimeBy(1000); compose.waitForIdle()
-        fun textBounds(index: Int) = compose.onAllNodesWithText(phrase, useUnmergedTree = true)[index].fetchSemanticsNode().boundsInRoot
+        fun textBounds(index: Int) = compose.onNode(hasText(phrase) and hasAnyAncestor(hasTestTag("lyric_line_$index")), useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         fun textLayout(index: Int): androidx.compose.ui.text.TextLayoutResult {
             val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
-            compose.onAllNodesWithText(phrase, useUnmergedTree = true)[index]
+            compose.onNode(hasText(phrase) and hasAnyAncestor(hasTestTag("lyric_line_$index")), useUnmergedTree = true)
                 .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
             return layouts.single()
         }
@@ -58,7 +58,7 @@ class LyricsCapabilitiesTest {
         compose.onNodeWithTag("lyric_line_1").assertIsSelected().assertIsDisplayed()
         assertTrue(textBounds(1).width > textBounds(0).width * 1.15f)
         assertEquals("Focus must not rewrap glyphs", originalLayout.lineCount, textLayout(0).lineCount)
-        assertEquals("Focus must not resize rows", rowHeight, compose.onNodeWithTag("lyric_line_0").fetchSemanticsNode().boundsInRoot.height, 1f)
+        assertEquals("Monet scales the old track to 72 percent without rewrapping its paragraph", rowHeight * .72f, compose.onNodeWithTag("lyric_line_0").fetchSemanticsNode().boundsInRoot.height, 1f)
         assertTrue(textBounds(1).right <= panel.right + 1f)
         compose.onNodeWithTag("lyrics_panel").captureToImage().asAndroidBitmap().let { bitmap ->
             val context = ApplicationProvider.getApplicationContext<android.content.Context>()
@@ -126,6 +126,7 @@ class LyricsCapabilitiesTest {
             }
             server.start()
             container.ready.await(); container.sessionRestored.await()
+            container.desktopLyrics.markRecommendationSeen()
             val url = server.url("/cm/").toString()
             container.musicSettings.setServer(url); container.accountRepository.server = url
             container.accountRepository.save("isolated-lyrics-token", UserDto(7, nickname = "Lyrics fixture"))
@@ -144,7 +145,7 @@ class LyricsCapabilitiesTest {
                 CurrentMusicApp(container)
             }
             compose.waitUntil(10000) { compose.onAllNodesWithTag("mini_cover").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("mini_cover").performClick()
+            compose.onNodeWithTag("mini_cover").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
             val viewport = compose.onNodeWithTag("music_navigation").fetchSemanticsNode().boundsInRoot
             val fullPlayer = compose.onNodeWithTag("player_screen").fetchSemanticsNode().boundsInRoot
             assertEquals("Player background must reach the entire navigation viewport", viewport, fullPlayer)

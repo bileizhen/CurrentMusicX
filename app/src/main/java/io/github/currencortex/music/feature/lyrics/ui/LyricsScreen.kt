@@ -3,16 +3,12 @@ package io.github.currencortex.music.feature.lyrics.ui
 import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.scrollBy
-import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -30,18 +26,9 @@ import io.github.currencortex.music.data.settings.LyricsDisplayOptions
 import io.github.currencortex.music.feature.lyrics.model.*
 import io.github.currencortex.music.feature.lyrics.timeline.*
 import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.filterNotNull
-import kotlin.math.abs
 
 enum class LyricsScrollMode { FOLLOWING, BROWSING }
 
-internal class LyricsScrollMotion {
-    var velocity by mutableFloatStateOf(0f)
-    fun lag(distance: Float, density: Float): Float =
-        (velocity / (900f * density)).coerceIn(-1f, 1f) * distance.coerceIn(0f, 4f)
-}
 internal val LyricsPerspectiveAngle = SemanticsPropertyKey<Float>("LyricsPerspectiveAngle")
 
 @Composable fun rememberLyricsPosition(player: PlayerState, sampleDisplayFrames: Boolean = false,
@@ -104,115 +91,25 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
             particles = display.particles)
         return
     }
-    val list = rememberLazyListState()
-    val scrollMotion = remember(document) { LyricsScrollMotion() }
     var mode by remember(document) { mutableStateOf(LyricsScrollMode.FOLLOWING) }
-    LaunchedEffect(list, document) {
-        list.interactionSource.interactions.collect {
-            if (it is DragInteraction.Start) mode = LyricsScrollMode.BROWSING
-        }
-    }
-    LaunchedEffect(mode, list.isScrollInProgress) {
-        if (mode == LyricsScrollMode.BROWSING && !list.isScrollInProgress) {
-            delay(4000)
-            mode = LyricsScrollMode.FOLLOWING
-        }
-    }
-    BoxWithConstraints(modifier.testTag("lyrics_panel")) {
-    LaunchedEffect(target, mode, document, size, weightMode, lyricsOffsetMs,
-        display.centered, display.fontWeight, minimal, maxWidth, maxHeight) {
-        if (mode != LyricsScrollMode.FOLLOWING || document.lines.isEmpty()) {
-            scrollMotion.velocity = 0f
-            return@LaunchedEffect
-        }
-        // Wait for the first layout only. Normal line changes start on the next animation frame.
-        snapshotFlow { list.layoutInfo.visibleItemsInfo.isNotEmpty() }.first { it }
-        // Seeking outside the viewport needs one relocation, not two competing scrolls.
-        if (list.layoutInfo.visibleItemsInfo.none { it.index == target }) {
-            scrollMotion.velocity = 0f
-            list.scrollToItem(target)
-        }
-        var entering = true
-        // Translation height changes are coalesced while a line entrance is running.
-        // Afterwards, resizing follows the same height animation without restarting
-        // the follow animation each frame or leaving a hidden translation at the anchor.
-        snapshotFlow { list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target }?.size }
-            .filterNotNull().collect {
-                val entrance = entering
-                entering = false
-                val visible = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target } ?: return@collect
-                val travel = visible.offset + if (minimal) visible.size / 2f else 0f
-                if (abs(travel) < .5f) {
-                    scrollMotion.velocity = 0f
-                    return@collect
-                }
-                list.scroll {
-                    if (!entrance) {
-                        scrollBy(travel)
-                        return@scroll
-                    }
-                    var previousFrame = 0L
-                    while (true) {
-                        val frame = withFrameNanos { it }
-                        val seconds = if (previousFrame == 0L) 1f / 60f else (frame - previousFrame) / 1_000_000_000f
-                        previousFrame = frame
-                        val row = list.layoutInfo.visibleItemsInfo.firstOrNull { it.index == target } ?: break
-                        val remaining = row.offset + if (minimal) row.size / 2f else 0f
-                        // Centering an odd-pixel paragraph leaves a half-pixel remainder.
-                        if (abs(remaining) <= .5f && abs(scrollMotion.velocity) < 8f) {
-                            scrollBy(remaining)
-                            break
-                        }
-                        // Follow current paragraph geometry while translations open/close.
-                        // A new lyric inherits the velocity instead of restarting a tween.
-                        val step = lyricsFollowStep(remaining, scrollMotion.velocity, seconds)
-                        val consumed = scrollBy(step.distance)
-                        scrollMotion.velocity = step.velocity
-                        if (abs(consumed) < .01f && abs(step.distance) > .5f) break
-                    }
-                    scrollMotion.velocity = 0f
-                }
-            }
-    }
-        val anchorPadding = maxHeight * if (minimal) .5f else .4f
-        LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("lyrics_list")
-            .semantics { this[LyricsPerspectiveAngle] = if (perspective) LYRIC_PERSPECTIVE_ANGLE else 0f }
-            .graphicsLayer {
-                // One rigid plane and one camera. Every glyph shares this 3D
-                // projection, with no per-row roll, pitch or artificial depth scale.
-                rotationY = if (perspective) LYRIC_PERSPECTIVE_ANGLE else 0f
-                cameraDistance = (this.size.width / 48f).coerceAtLeast(1f)
-                // A fixed camera at the portrait reading line. Wrapped paragraphs,
-                // translation resizing and browsing never move its vanishing point.
-                transformOrigin = TransformOrigin(0f,
-                    if (minimal) .5f else (.4f + size.sp.toPx() * ACTIVE_LYRIC_SCALE * .6f /
-                        this.size.height.coerceAtLeast(1f)).coerceIn(0f, 1f))
-            }
-            .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-            .drawWithContent {
-                drawContent()
-                drawRect(Brush.verticalGradient(0f to Color.Transparent, .10f to Color.Black,
-                    .87f to Color.Black, 1f to Color.Transparent), blendMode = BlendMode.DstIn)
-            }, contentPadding = PaddingValues(top = anchorPadding, bottom = maxHeight - anchorPadding,
-                // Reserve the near edge for the whole plane, including centered
-                // paragraphs and right-aligned duet vocals, not just left-aligned text.
-                start = 8.dp, end = 8.dp + if (perspective) maxWidth * .16f else 0.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            itemsIndexed(document.lines, key = { index, line -> "$index:${line.startTimeMs}" }) { index, line ->
-                val distance = if (mode == LyricsScrollMode.BROWSING) 1 else abs(index - target)
-                val resting = mode == LyricsScrollMode.FOLLOWING && activeLines.isEmpty() && index == target
-                LyricsLineView(line, index, effectivePosition, index in activeLines, resting, distance,
-                    mode == LyricsScrollMode.BROWSING, canSeek, {
-                        onSeek(LyricsSynchronizer.seekPosition(it, lyricsOffsetMs)); mode = LyricsScrollMode.FOLLOWING
-                    }, translation, romanization, wordAnimation, effects, size, weightMode, display, scrollMotion, smokeColors)
-            }
+    var followRequest by remember(document) { mutableIntStateOf(0) }
+    Box(modifier.testTag("lyrics_panel")) {
+        MonetLyricsRail(document, target, activeLines.toSet(), Modifier.fillMaxSize(), size,
+            display.centered, minimal, perspective, effects, followRequest,
+            onBrowsing = { mode = if (it) LyricsScrollMode.BROWSING else LyricsScrollMode.FOLLOWING }) { index, browsing, tone ->
+            val line = document.lines[index]
+            LyricsLineView(line, index, effectivePosition, index in activeLines,
+                !browsing && activeLines.isEmpty() && index == target, kotlin.math.abs(index - target),
+                canSeek, {
+                    onSeek(LyricsSynchronizer.seekPosition(it, lyricsOffsetMs)); followRequest++
+                }, translation, romanization, wordAnimation, effects, size, weightMode, display, monetTone = tone)
         }
         if (!minimal && interlude != null && mode == LyricsScrollMode.FOLLOWING)
             LyricsInterludeView(interlude!!, effectivePosition, Modifier.align(Alignment.TopStart).padding(16.dp))
         if (!minimal && mode == LyricsScrollMode.BROWSING) BasicText("回到当前歌词",
             Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).testTag("lyrics_follow")
                 .background(Color.White.copy(alpha = .14f), RoundedCornerShape(24.dp))
-                .clickable(role = Role.Button) { mode = LyricsScrollMode.FOLLOWING }.padding(horizontal = 20.dp, vertical = 14.dp),
+                .clickable(role = Role.Button) { followRequest++ }.padding(horizontal = 20.dp, vertical = 14.dp),
             style = TextStyle(color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold))
     }
 }

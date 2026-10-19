@@ -285,7 +285,7 @@ Debug APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。Windows 项目路
 
 ## 开源协议
 
-CurrentMusicX 按 [GPL-3.0-only](LICENSE) 分发。CurrentMusic 上游、界面组件、歌词资源和下载依赖保留各自的版权与许可声明，完整来源见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+CurrentMusicX 的既有代码按 [GPL-3.0-only](LICENSE) 分发；Folia 莫奈歌词动画移植组件按 [AGPL-3.0-only](app/src/main/assets/legal/AGPL-3.0.txt) 分发，组合遵循两份许可证第 13 节。CurrentMusic 上游、界面组件、歌词资源和下载依赖保留各自的版权与许可声明，完整来源见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 ## 致谢
 

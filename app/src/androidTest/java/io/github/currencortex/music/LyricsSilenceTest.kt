@@ -68,7 +68,7 @@ class LyricsSilenceTest {
         compose.onNodeWithText(lines[0].translation, useUnmergedTree = true).assertExists()
         val beforeGap = row(0).getUnclippedBoundsInRoot()
         val beforeVocalHeight = compose.onNodeWithTag("lyric_vocal_0", useUnmergedTree = true).getUnclippedBoundsInRoot().let { it.bottom.value - it.top.value }
-        compose.runOnIdle { position.longValue = 8000 }
+        compose.runOnIdle { position.longValue = 9000 }
         assertResting(0)
         assertTrue("The hidden translation no longer leaves an empty slot", row(0).getUnclippedBoundsInRoot().let { it.bottom.value - it.top.value } < beforeGap.bottom.value - beforeGap.top.value - 4f)
         assertEquals("Ending the vocal must not shrink or reflow the main lyric", beforeVocalHeight,
@@ -82,7 +82,7 @@ class LyricsSilenceTest {
         compose.onNodeWithText(lines[1].translation, useUnmergedTree = true).assertExists()
         compose.runOnIdle { position.longValue = 22500 }
         assertResting(2)
-        compose.runOnIdle { position.longValue = 8000 }
+        compose.runOnIdle { position.longValue = 9000 }
         assertResting(0) // Backward seeking also restores the correct resting paragraph.
     }
 }

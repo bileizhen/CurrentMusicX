@@ -103,7 +103,7 @@ class LyricsPerspectiveTest {
         assertTrue("The preceding lyric must slope upward: $above", above < -6)
         assertEquals("The reading line remains approximately level", 0.0, current, 5.0)
         assertTrue("The upcoming lyric must slope downward: $below", below > 6)
-        assertTrue("A real perspective plane enlarges the nearer glyphs, rather than merely rolling each row",
+        assertTrue("A real perspective plane enlarges the nearer glyphs: ratio=${nearToFarGlyphSize()}",
             nearToFarGlyphSize() > 1.12)
         compose.runOnIdle { perspective.value = false }
         compose.waitForIdle()
