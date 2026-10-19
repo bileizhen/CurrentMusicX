@@ -559,7 +559,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                 route == "user/login" -> LoginScreen(authVm, addingAccount = true, onDone = ::navigateBack)
                                 route == "user/decorations" -> {
                                     val vm: DecorationViewModel = viewModel(key = route, factory = viewModelFactory { DecorationViewModel(container) })
-                                    DecorationScreen(vm)
+                                    DecorationScreen(vm, ::navigateBack)
                                 }
                                 route == "user/binding" -> {
                                     val vm: BindingViewModel = viewModel(key = route, factory = viewModelFactory { BindingViewModel(container) })

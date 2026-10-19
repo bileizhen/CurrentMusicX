@@ -22,7 +22,8 @@ class ProfileRepository(private val api: ApiClient, private val avatarCache: Ava
         return api.get("users/square", mapOf("query" to query, "sort" to sort, "offset" to "$offset", "limit" to "$limit", "listening" to if (listening) "1" else "0"))
     }
     suspend fun loadScales() { scales.value = api.get<DecorationScales>("decorations/scales").scales }
-    suspend fun decorations(): DecorationsDto = api.get<DecorationsDto>("decorations", authenticated = true).also { scales.value = it.scales }
+    suspend fun decorations(expected: RequestSession = session()): DecorationsDto = api.decode<DecorationsDto>(
+        api.request("GET", "decorations", authenticated = true, expectedSession = expected)).also { scales.value = it.scales }
     private suspend fun write(path: String, body: JsonObject, expected: RequestSession = session()): ProfileUser {
         api.request("PUT", path, body = body, authenticated = true, expectedSession = expected)
         val user = own(expected)
@@ -49,7 +50,8 @@ class ProfileRepository(private val api: ApiClient, private val avatarCache: Ava
         avatarVersions.value = avatarCache?.invalidate(setOf(url))
             ?: (avatarVersions.value + (url to java.util.UUID.randomUUID().toString()))
     }
-    suspend fun decorate(id: String): ProfileUser = write("decorations/mine", buildJsonObject { put("id", id) })
+    suspend fun decorate(id: String, expected: RequestSession = session()): ProfileUser =
+        write("decorations/mine", buildJsonObject { put("id", id) }, expected)
     suspend fun password(oldPassword: String, newPassword: String) {
         require(oldPassword.isNotEmpty() && newPassword.length >= 6)
         api.request("PUT", "profile/password", body = buildJsonObject { put("oldPassword", oldPassword); put("newPassword", newPassword) },

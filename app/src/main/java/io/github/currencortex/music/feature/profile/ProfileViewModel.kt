@@ -255,34 +255,53 @@ class DecorationViewModel(val container: AppContainer) : ViewModel() {
     val busy = MutableStateFlow(false)
     val message = MutableStateFlow<String?>(null)
     private var task: Job? = null
+    private var saving: Job? = null
+    private fun session() = RequestSession(container.accountRepository.server, container.accountRepository.token)
     init {
         viewModelScope.launch {
             container.sessionRestored.await()
-            combine(container.accountRepository.state.map { it.account?.id }.distinctUntilChanged(),
-                container.musicSettings.state.map { it.server }.distinctUntilChanged()) { id, server -> id to server }
-                .collect { state.value = DecorationState(); reload() }
+            combine(container.accountRepository.sessionRevision,
+                container.musicSettings.state.map { it.server }.distinctUntilChanged()) { revision, server -> revision to server }
+                .collect {
+                    saving?.cancel(); busy.value = false; message.value = null
+                    state.value = DecorationState(); reload()
+                }
         }
     }
     fun reload() {
+        val expected = session()
         task?.cancel(); task = viewModelScope.launch {
             state.update { it.copy(loading = true, error = null) }
-            when (val r = appResult { container.profileRepository.decorations() }) {
-                is AppResult.Success -> state.update { it.copy(loading = false, catalog = r.value) }
+            when (val r = appResult { container.profileRepository.decorations(expected) }) {
+                is AppResult.Success -> state.update { old -> old.copy(loading = false, catalog = r.value,
+                    preview = old.preview?.takeIf { item -> item.id.isEmpty() || r.value.decorations.any { it.id == item.id } }) }
                 is AppResult.Failure -> state.update { it.copy(loading = false, error = r.kind.message) }
             }
         }
     }
     fun query(value: String) { state.update { it.copy(query = value) } }
-    fun preview(item: Decoration?) { state.update { it.copy(preview = item) } }
+    fun preview(item: Decoration?) {
+        if (busy.value) return
+        message.value = null
+        state.update { it.copy(preview = item) }
+    }
     fun set(id: String) {
         if (busy.value) return
+        val catalog = state.value.catalog ?: return
+        if (id == catalog.current || (id.isNotEmpty() && (!catalog.unlocked || catalog.decorations.none { it.id == id }))) return
+        val expected = session()
         busy.value = true
-        viewModelScope.launch {
-            try { when (val r = appResult { container.profileRepository.decorate(id) }) {
-                is AppResult.Success -> { message.value = if (id.isEmpty()) "已取消佩戴" else "挂件已设置"; state.update { it.copy(preview = null) }; reload() }
+        message.value = null
+        saving = viewModelScope.launch {
+            try { when (val r = appResult { container.profileRepository.decorate(id, expected) }) {
+                is AppResult.Success -> {
+                    message.value = if (id.isEmpty()) "已取消佩戴" else "挂件已设置"
+                    state.update { it.copy(preview = null, catalog = it.catalog?.copy(current = r.value.decoration)) }
+                    reload()
+                }
                 is AppResult.Failure -> container.errorNotices.show(r.kind.message)
             } } finally { busy.value = false }
         }
     }
-    override fun onCleared() { task?.cancel() }
+    override fun onCleared() { task?.cancel(); saving?.cancel() }
 }
