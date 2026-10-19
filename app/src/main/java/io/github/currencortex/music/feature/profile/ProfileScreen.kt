@@ -6,7 +6,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
@@ -356,39 +355,5 @@ import kotlinx.coroutines.launch
             Text("会移除本机保存的当前账号凭据，其他已保存账号保留。")
             MusicDialogButton("确认退出", onClick = { vm.container.playerController.pause(); vm.dialog.value = null; auth.logout() })
         }
-    }
-}
-
-@Composable fun DecorationScreen(vm: DecorationViewModel) {
-    val state by vm.state.collectAsPageState()
-    val busy by vm.busy.collectAsStateWithLifecycle()
-    val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
-    val catalog = state.catalog
-    val user = ProfileUser(id = account.account?.id ?: 0L, avatar = account.account?.avatar.orEmpty())
-    Column(Modifier.fillMaxSize().padding(20.dp).testTag("decoration_screen"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Text("头像挂件", fontSize = 28.sp)
-        if (state.loading) Text("正在加载挂件…")
-        state.error?.let { Text(it); TextButton("重试", onClick = vm::reload) }
-        if (catalog != null) {
-            if (!catalog.unlocked) Text("累计 ${listeningDuration(catalog.listenMs)}；解锁需 ${listeningDuration(catalog.minListenMs)}")
-            TextField(state.query, vm::query, singleLine = true, modifier = Modifier.testTag("decoration_query"))
-            Text("搜索名称或 ID，可预览挂件。")
-            TextButton("取消佩戴", onClick = { vm.set("") }, enabled = catalog.current.isNotEmpty() && !busy)
-            LazyVerticalGrid(GridCells.Adaptive(110.dp), Modifier.weight(1f), contentPadding = musicScrollPadding(PaddingValues(0.dp)), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(catalog.decorations.filter { it.name.contains(state.query, true) || it.id.contains(state.query, true) }, key = { it.id }) { item ->
-                    Column(Modifier.clickable { vm.preview(item) }.testTag("decoration_${item.id}"), horizontalAlignment = Alignment.CenterHorizontally) {
-                        UserAvatar(user, vm.container, 38.dp, item.id)
-                        Text((if (catalog.current == item.id) "✓ " else "") + item.name)
-                    }
-                }
-            }
-            state.preview?.let { item -> MusicDialog("挂件预览：${item.name}", { if (!busy) vm.preview(null) }) {
-                UserAvatar(user, vm.container, 64.dp, item.id)
-                MusicDialogButton("佩戴", onClick = { vm.set(item.id) }, enabled = catalog.unlocked && !busy, modifier = Modifier.testTag("wear_decoration"))
-                if (!catalog.unlocked) Text("尚未达到服务器解锁条件")
-            } }
-        }
-        val message by vm.message.collectAsStateWithLifecycle()
-        message?.let { Text(it) }
     }
 }

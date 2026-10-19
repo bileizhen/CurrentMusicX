@@ -277,10 +277,16 @@ class UserCapabilitiesTest {
         compose.waitUntil(10000) { compose.onAllNodesWithTag("decoration_frame-one").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("decoration_query").performTextInput("frame-one")
         compose.onNodeWithTag("decoration_frame-one").performClick()
+        assertEquals("Selecting a tile must only preview", "", decoration)
+        compose.onNodeWithTag("decoration_preview_name").assertTextEquals("Frame one")
         compose.onNodeWithTag("wear_decoration").performClick()
         compose.waitUntil(10000) { decoration == "frame-one" }
         compose.waitUntil(10000) { compose.onAllNodesWithText("挂件已设置").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("取消佩戴").performClick()
+        compose.onNodeWithTag("decoration_query").performTextClearance()
+        compose.onNodeWithTag("decoration_grid").performScrollToNode(hasTestTag("decoration_none"))
+        compose.onNodeWithTag("decoration_none").performClick()
+        assertEquals("Removing a frame also requires confirmation", "frame-one", decoration)
+        compose.onNodeWithTag("wear_decoration").performClick()
         compose.waitUntil(10000) { decoration.isEmpty() }
     }
     @Test fun avatarPreviewAndUploadCompressTheSelectedImageInMemory() {
