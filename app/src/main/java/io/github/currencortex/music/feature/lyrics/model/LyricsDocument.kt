@@ -6,6 +6,14 @@ import kotlinx.serialization.Serializable
 @Immutable @Serializable
 data class LyricsDocument(val lines: List<LyricLine> = emptyList(), val metadata: LyricsMetadata = LyricsMetadata()) {
     val hasWordTiming: Boolean get() = lines.any { it.words.isNotEmpty() || it.backgroundVocals.any { bg -> bg.words.isNotEmpty() } }
+
+    /** Compatibility with cached documents written by the old estimation adapter. */
+    fun withoutEstimatedTiming(): LyricsDocument {
+        fun clean(line: LyricLine): LyricLine = line.copy(
+            words = if (line.wordsEstimated) emptyList() else line.words,
+            wordsEstimated = false, backgroundVocals = line.backgroundVocals.map(::clean))
+        return copy(lines = lines.map(::clean))
+    }
 }
 
 @Immutable @Serializable

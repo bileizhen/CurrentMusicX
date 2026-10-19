@@ -49,15 +49,14 @@ class MusicRepositoryTest {
             assertEquals(1, server.requestCount)
         }
     }
-    @Test fun songsWithoutYrcKeepOrdinaryLyricsWhenNormalizedAxisIsUnavailable() = runBlocking {
+    @Test fun songsWithoutYrcKeepNativeLrcWithoutRequestingEstimatedAxis() = runBlocking {
         MockWebServer().use { server ->
             val repo = MusicRepository(ApiClient({ server.url("/cm/").toString() }, { null }, {}))
             server.enqueue(MockResponse().setBody("""{"code":200,"yrc":{"lyric":""},"lrc":{"lyric":"[00:01.00]普通歌词"},"tlyric":{"lyric":"[00:01.00]Translation"}}"""))
-            server.enqueue(MockResponse().setResponseCode(404))
             val document = (repo.lyricsDocument(7) as AppResult.Success).value
             assertFalse(document.hasWordTiming)
             assertEquals("Translation", document.lines.single().translation)
-            assertEquals(2, server.requestCount)
+            assertEquals(1, server.requestCount)
         }
     }
     @Test fun olderServersFallBackToNormalizedLyrics() = runBlocking {

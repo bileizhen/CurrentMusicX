@@ -24,7 +24,10 @@ class CurrentMusicLyricsProvider(private val music: MusicRepository, private val
             cache.lyrics(id)?.payload?.let { payload ->
                 val json = ApiJson.parseToJsonElement(payload)
                 val saved = if (json is JsonArray) LyricsParser.parse(json) else ApiJson.decodeFromString<LyricsDocument>(payload)
-                if (saved.lines.isNotEmpty()) return LyricsProviderResult.Parsed(saved)
+                val cleaned = saved.withoutEstimatedTiming()
+                if (cleaned != saved) try { cache.cacheLyrics(CachedLyrics(id, ApiJson.encodeToString(cleaned))) }
+                catch (e: java.io.IOException) { log("CurrentMusic cache migration: ${e.javaClass.simpleName}") }
+                if (cleaned.lines.isNotEmpty()) return LyricsProviderResult.Parsed(cleaned)
             }
         } catch (e: SerializationException) { log("CurrentMusic cache parse: ${e.javaClass.simpleName}") }
         return if (result is AppResult.Failure) LyricsProviderResult.Failure(LyricsErrorCode.NETWORK_ERROR, result.kind.message)
