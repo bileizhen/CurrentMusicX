@@ -40,7 +40,7 @@ CurrentMusicX 是 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic) 
 <img src=".github/img/player.jpg" width="30%" alt="播放器：封面与歌词">
 <img src=".github/img/search.jpg" width="30%" alt="搜索：歌曲、歌手与专辑">
 
-<sub>首页 · 播放器 · 搜索（截图仅作界面参考，实际以安装版本为准）</sub>
+<sub>首页 · 播放器 · 搜索（RMX5060 真机截图，2026-10-21）</sub>
 
 </div>
 
@@ -49,8 +49,11 @@ CurrentMusicX 是 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic) 
 
 <div align="center">
 
-<img src=".github/img/artist.jpg" width="40%" alt="艺人主页">
-<img src=".github/img/discover.jpg" width="40%" alt="发现与音乐风格">
+<img src=".github/img/lyrics.jpg" width="30%" alt="莫奈歌词与翻译">
+<img src=".github/img/artist.jpg" width="30%" alt="艺人主页">
+<img src=".github/img/discover.jpg" width="30%" alt="发现与音乐风格">
+
+<sub>歌词 · 艺人主页 · 发现（界面以实际安装版本为准）</sub>
 
 </div>
 
