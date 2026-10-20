@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108" role="img" aria-labelledby="title desc">
   <title id="title">CurrentMusicX</title>
-  <desc id="desc">蓝色圆角方形与白色音符，沿用应用启动图标。</desc>
+  <desc id="desc">蓝色圆角方形与白色音符，圆角外透明，沿用应用启动图标。</desc>
   <!-- Matches res/drawable/ic_launcher_background.xml and ic_launcher_foreground.xml. -->
   <rect width="108" height="108" rx="25" fill="#1677FF"/>
   <path fill="#FFFFFF" d="M46,30L77,24L77,65C77,75 57,79 57,68C57,62 64,58 70,59L70,38L46,43L46,73C46,83 26,87 26,76C26,70 33,66 39,67L39,32Z"/>
