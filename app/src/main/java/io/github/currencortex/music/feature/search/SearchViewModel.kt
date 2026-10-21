@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.serialization.json.*
 
 enum class SearchCategory(val label: String, val route: String) {
-    SONG("歌曲", "song"), ALBUM("专辑", "album"), ARTIST("作者", "artist")
+    SONG("歌曲", "song"), ALBUM("专辑", "album"), ARTIST("作者", "artist"), PLAYLIST("歌单", "playlist")
 }
 data class SearchCategoryPage(val songs: List<Song> = emptyList(), val entries: List<CatalogEntry> = emptyList(),
     val total: Int = 0, val nextOffset: Int = 0, val more: Boolean = false, val loading: Boolean = false,
@@ -107,7 +107,10 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
             is AppResult.Success -> AppResult.Success(SearchCategoryPage(songs = result.value.songs,
                 total = result.value.total, nextOffset = offset + result.value.songs.size, more = result.value.hasMore))
             is AppResult.Failure -> result
-        } else when (val result = appResult { container.libraryRepository.catalog(query, category == SearchCategory.ALBUM, offset) }) {
+        } else when (val result = appResult {
+            if (category == SearchCategory.PLAYLIST) container.libraryRepository.searchPlaylists(query, offset)
+            else container.libraryRepository.catalog(query, category == SearchCategory.ALBUM, offset)
+        }) {
             is AppResult.Success -> AppResult.Success(SearchCategoryPage(entries = result.value.entries,
                 total = result.value.total, nextOffset = offset + result.value.entries.size, more = result.value.more))
             is AppResult.Failure -> result

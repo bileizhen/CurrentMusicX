@@ -175,11 +175,12 @@ class NeteaseGatewayTest {
     }
     @Test fun playlistReferenceSearchUsesNativeCloudSearchAndKeepsThePlaylistNamespace() = runBlocking {
         login()
-        enqueue("""{"code":200,"result":{"playlistCount":1,"playlists":[{"id":42,"name":"歌单","coverImgUrl":"https://example.com/p.jpg","creator":{"nickname":"作者"}}]}}""")
+        enqueue("""{"code":200,"result":{"playlistCount":1,"playlists":[{"id":42,"name":"歌单","coverImgUrl":"https://example.com/p.jpg","creator":{"nickname":"作者"},"trackCount":80}]}}""")
         val result = call("ncm/search", mapOf("keywords" to "歌单", "type" to "playlist")).jsonObject
         val card = result["playlists"]!!.jsonArray.single().jsonObject
         assertEquals(42L, card["id"]!!.jsonPrimitive.long)
         assertEquals("作者", card["creator"]!!.jsonPrimitive.content)
+        assertEquals(80, card["trackCount"]!!.jsonPrimitive.int)
         assertEquals("/eapi/cloudsearch/pc", upstream.takeRequest().path)
         assertEquals(0, current.requestCount)
     }

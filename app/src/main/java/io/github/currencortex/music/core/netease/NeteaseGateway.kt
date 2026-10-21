@@ -201,6 +201,7 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                         else -> buildJsonObject {
                             put("id", record.long("id")); put("name", record.text("name")); put("pic", record.text("coverImgUrl"))
                             put("creator", record.obj("creator").text("nickname"))
+                            put("trackCount", record.long("trackCount"))
                         }
                     } }))
                     put("totals", buildJsonObject { put(key, count) }); put("hasMore", buildJsonObject { put(key, records.isNotEmpty() && offset + records.size < count) })

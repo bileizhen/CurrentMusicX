@@ -35,10 +35,12 @@ data class Artist(val id: Long, val name: String, val cover: String, val descrip
 @Serializable data class ArtistIntroduction(@SerialName("ti") val title: String = "", @SerialName("txt") val text: String = "")
 @Serializable data class ArtistBiography(val briefDesc: String = "", val introduction: List<ArtistIntroduction> = emptyList(), val code: Int = 200)
 @Serializable data class ArtistAlbumsDto(val albums: List<AlbumDto> = emptyList(), val more: Boolean = false)
+@Serializable data class SearchPlaylistDto(val id: Long = 0, val name: String = "", val pic: String = "", val creator: String = "", val trackCount: Int = 0)
 @Serializable data class CatalogSearchDto(val artists: List<ArtistDto> = emptyList(), val albums: List<AlbumDto> = emptyList(),
+    val playlists: List<SearchPlaylistDto> = emptyList(),
     val hasMore: CatalogMore = CatalogMore(), val totals: CatalogTotals = CatalogTotals())
-@Serializable data class CatalogMore(val artist: Boolean = false, val album: Boolean = false)
-@Serializable data class CatalogTotals(val artist: Int = 0, val album: Int = 0)
+@Serializable data class CatalogMore(val artist: Boolean = false, val album: Boolean = false, val playlist: Boolean = false)
+@Serializable data class CatalogTotals(val artist: Int = 0, val album: Int = 0, val playlist: Int = 0)
 data class CatalogEntry(val id: Long, val name: String, val cover: String, val subtitle: String = "")
 data class CatalogPage(val entries: List<CatalogEntry>, val more: Boolean, val total: Int = 0)
 @Serializable data class MvDto(val id: Long = 0, val name: String = "", val cover: String = "", val artistName: String = "",

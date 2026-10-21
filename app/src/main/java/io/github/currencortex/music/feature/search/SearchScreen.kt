@@ -57,10 +57,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val songScroll = rememberLazyListState()
     val artistScroll = rememberLazyListState()
     val albumScroll = rememberLazyListState()
+    val playlistScroll = rememberLazyListState()
     val scroll = when (category) {
         SearchCategory.SONG -> songScroll
         SearchCategory.ARTIST -> artistScroll
         SearchCategory.ALBUM -> albumScroll
+        SearchCategory.PLAYLIST -> playlistScroll
     }
     var target by remember { mutableStateOf<Rect?>(null) }
     var historyExpanded by rememberSaveable { mutableStateOf(false) }
@@ -69,7 +71,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     LaunchedEffect(autoFocus) {
         if (autoFocus) { withFrameNanos { }; requester.requestFocus(); keyboard?.show(); onFocused() }
     }
-    LaunchedEffect(state.submitted) { songScroll.scrollToItem(0); artistScroll.scrollToItem(0); albumScroll.scrollToItem(0) }
+    LaunchedEffect(state.submitted) { songScroll.scrollToItem(0); artistScroll.scrollToItem(0); albumScroll.scrollToItem(0); playlistScroll.scrollToItem(0) }
     PreloadMusicCovers(page.songs.take(12).map { it.cover } + page.entries.take(8).map { it.cover })
     fun submit(keyword: String = state.query) { focus.clearFocus(); keyboard?.hide(); vm.search(keyword) }
     fun back() { focus.clearFocus(); keyboard?.hide(); onBack?.invoke() }
@@ -189,6 +191,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 SearchCategory.SONG -> "${page.total} 首歌曲"
                 SearchCategory.ARTIST -> "${page.total} 位作者"
                 SearchCategory.ALBUM -> "${page.total} 张专辑"
+                SearchCategory.PLAYLIST -> "${page.total} 个歌单"
             }
             Text("找到 $count", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
         }
@@ -197,12 +200,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         }
         itemsIndexed(page.entries, key = { _, entry -> "${category.route}-${entry.id}" }) { _, entry ->
             Row(Modifier.fillMaxWidth().clickable(enabled = entry.id > 0, role = Role.Button) {
-                navigate("lib/${category.route}/${entry.id}")
+                navigate("lib/${if (category == SearchCategory.PLAYLIST) "ncmplaylist" else category.route}/${entry.id}")
             }.padding(vertical = 8.dp).testTag("search_${category.route}_${entry.id}"), verticalAlignment = Alignment.CenterVertically) {
                 MusicCover(entry.cover, Modifier.size(64.dp), 240, cornerRadius = if (category == SearchCategory.ARTIST) 32.dp else 18.dp)
                 Column(Modifier.weight(1f).padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(entry.name, fontSize = 17.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text(entry.subtitle.ifBlank { if (category == SearchCategory.ARTIST) "艺人" else "专辑" }, fontSize = 12.sp,
+                    Text(entry.subtitle.ifBlank { when (category) {
+                        SearchCategory.ARTIST -> "艺人"
+                        SearchCategory.PLAYLIST -> "网易云歌单"
+                        else -> "专辑"
+                    } }, fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Text("›", fontSize = 22.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .35f))

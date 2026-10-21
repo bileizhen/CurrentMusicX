@@ -7,6 +7,23 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SearchArtistRepositoryTest {
+    @Test fun playlistSearchKeepsNativeIdsCountsAndPublicPagination() = runBlocking {
+        MockWebServer().use { server ->
+            server.enqueue(MockResponse().setBody("""{"playlists":[{"id":42,"name":"夜晚","pic":"http://example.com/p.jpg","creator":"作者","trackCount":80}],"totals":{"playlist":61},"hasMore":{"playlist":true}}"""))
+            val page = repository(server).searchPlaylists("夜晚", offset = 30)
+            assertEquals(61, page.total); assertTrue(page.more)
+            assertEquals(CatalogEntry(42, "夜晚", "https://example.com/p.jpg", "80 首 · 创建者：作者"), page.entries.single())
+            val request = server.takeRequest()
+            assertEquals("/configured/ncm/search", request.requestUrl!!.encodedPath)
+            assertEquals("playlist", request.requestUrl!!.queryParameter("type"))
+            assertEquals("30", request.requestUrl!!.queryParameter("offset"))
+            assertEquals("夜晚", request.requestUrl!!.queryParameter("keywords"))
+            assertNull(request.getHeader("Authorization"))
+            server.enqueue(MockResponse().setBody("""{"playlists":[],"totals":{"playlist":0}}"""))
+            val empty = repository(server).searchPlaylists("nothing")
+            assertTrue(empty.entries.isEmpty()); assertFalse(empty.more); assertEquals(0, empty.total)
+        }
+    }
     private fun repository(server: MockWebServer) = LibraryRepository(
         ApiClient({ server.url("/configured/").toString() }, { "private-project-token" }, {}), { 7L },
         { RequestSession(server.url("/configured/").toString(), "private-project-token") })

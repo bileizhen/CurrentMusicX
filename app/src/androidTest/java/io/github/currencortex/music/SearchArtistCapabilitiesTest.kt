@@ -24,6 +24,8 @@ class SearchArtistCapabilitiesTest {
     private val requests = CopyOnWriteArrayList<RecordedRequest>()
     @Volatile private var songPageFail = true
     @Volatile private var biographyFail = true
+    @Volatile private var playlistPageFail = true
+    @Volatile private var playlistFixture = false
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
     private fun song(id: Int) = """{"ncm_id":$id,"name":"Fixture song $id","artists":"Fixture Artist","artist_ids":[31]}"""
     private fun album(id: Int) = """{"id":$id,"name":"Fixture Album $id","artist":"Fixture Artist","size":2,"publishTime":1790870400000}"""
@@ -38,6 +40,11 @@ class SearchArtistCapabilitiesTest {
                 val url = request.requestUrl!!
                 return when (url.encodedPath) {
                     "/cm/ncm/search" -> when (url.queryParameter("type")) {
+                        "playlist" -> when {
+                            url.queryParameter("offset") == "2" && playlistPageFail -> MockResponse().setResponseCode(503)
+                            url.queryParameter("offset") == "2" -> json("""{"playlists":[{"id":72,"name":"Fixture playlist 72"},{"id":73,"name":"Fixture playlist 73"}],"totals":{"playlist":3},"hasMore":{"playlist":false}}""")
+                            else -> json("""{"playlists":[{"id":71,"name":"Fixture playlist 71","creator":"Fixture creator","trackCount":1},{"id":72,"name":"Fixture playlist 72"}],"totals":{"playlist":3},"hasMore":{"playlist":true}}""")
+                        }
                         "artist" -> json("""{"artists":[{"id":${if (url.queryParameter("keywords") == "draft") 32 else 31},"name":"Fixture Artist"}],"totals":{"artist":1},"hasMore":{"artist":false}}""")
                         "album" -> json("""{"albums":[${album(41)}],"totals":{"album":1},"hasMore":{"album":false}}""")
                         else -> when {
@@ -53,6 +60,8 @@ class SearchArtistCapabilitiesTest {
                         else json("""{"code":200,"briefDesc":"Fixture biography","introduction":[{"ti":"Career","txt":"Fixture career details"}]}""")
                     "/cm/ncm/artist/albums" -> json("""{"albums":[${album(42)}],"more":false}""")
                     "/cm/ncm/album" -> json("""{"id":41,"name":"Fixture Album 41","songs":[${song(11)}]}""")
+                    "/cm/ncmbind" -> if (playlistFixture) json("""{"bound":true,"profile":{"uid":8,"nickname":"Fixture creator"}}""") else MockResponse().setResponseCode(404)
+                    "/cm/ncm/playlist/detail" -> json("""{"code":200,"playlist":{"id":71,"name":"Fixture playlist 71","creator":{"userId":8,"nickname":"Fixture creator"},"trackCount":1,"tracks":[{"id":11,"name":"Playlist fixture song","ar":[{"name":"Fixture artist"}]}]}}""")
                     "/cm/daily" -> json("""{"daily":[],"forYou":[],"artists":[]}""")
                     "/cm/playlists" -> json("""{"playlists":[]}""")
                     "/cm/plays/recent", "/cm/likes/mine" -> json("""{"songs":[]}""")
@@ -91,12 +100,42 @@ class SearchArtistCapabilitiesTest {
         compose.onNodeWithTag(parent).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollBy) { it(0f, 10_000f) }
         compose.onNodeWithTag(tag).assertIsEnabled()
         val action = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
-        val mini = compose.onNodeWithTag("mini_player").fetchSemanticsNode().boundsInRoot
+        val mini = compose.onNodeWithTag("mini_player", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
         assertTrue("Footer must scroll above the floating player: $action / $mini", action.bottom <= mini.top)
         compose.onNodeWithTag(tag).performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
     }
     private fun artistTab(tab: String) { compose.onNodeWithTag("artist_home").performScrollToIndex(0); compose.onNodeWithTag("artist_tab_$tab").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() } }
     private fun searchCount() = requests.count { it.requestUrl!!.encodedPath == "/cm/ncm/search" }
+
+    @Test fun playlistSearchRetriesDeduplicatesAndOpensTheExistingNativeDetail() {
+        playlistFixture = true
+        compose.setContent { CurrentMusicApp(container) }
+        awaitTag("open_home_search")
+        compose.onNodeWithTag("open_home_search").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        awaitTag("search_input"); compose.onNodeWithTag("search_input").performTextInput("fixture")
+        compose.onNodeWithTag("submit_search").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        awaitTag("search_category_playlist")
+        compose.onNodeWithTag("search_category_playlist").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        awaitTag("search_playlist_71")
+        compose.onNodeWithText("找到 3 个歌单").assertExists()
+        compose.onNodeWithTag("search_input").performTextReplacement("draft")
+        clickFooter("search_screen", "search_load_more")
+        awaitTag("search_retry"); playlistPageFail = false
+        compose.onNodeWithTag("search_retry").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        awaitTag("search_playlist_73")
+        compose.onAllNodesWithTag("search_playlist_72").assertCountEquals(1)
+        compose.onNodeWithTag("search_playlist_71").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        awaitTag("library_detail"); compose.onNodeWithText("Playlist fixture song").assertExists()
+        compose.onNodeWithTag("navigate_back").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        awaitTag("search_playlist_73")
+        compose.onNodeWithTag("search_input").assertTextContains("draft")
+        val pages = requests.filter { it.requestUrl!!.encodedPath == "/cm/ncm/search" && it.requestUrl!!.queryParameter("type") == "playlist" }
+        assertEquals(listOf("0", "2", "2"), pages.map { it.requestUrl!!.queryParameter("offset") })
+        assertTrue(pages.all { it.requestUrl!!.queryParameter("keywords") == "fixture" && it.getHeader("Authorization") == null })
+        assertTrue(requests.any { it.requestUrl!!.encodedPath == "/cm/ncm/playlist/detail" && it.requestUrl!!.queryParameter("id") == "71" })
+        assertEquals(listOf(900L), container.playerController.queue.state.value.songs.map { it.id })
+        assertFalse(container.playerController.state.value.playing)
+    }
 
     @Test fun tappingSearchResultsKeepsExistingQueueAndOnlyAddsSelectedSong() {
         check(ApplicationProvider.getApplicationContext<CurrentMusicApplication>().packageName.endsWith(".verification"))

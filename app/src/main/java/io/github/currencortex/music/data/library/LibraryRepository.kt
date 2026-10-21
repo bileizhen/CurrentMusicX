@@ -132,6 +132,14 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
         return if (albums) CatalogPage(d.albums.map { CatalogEntry(it.id, it.name, it.pic.replace("http:", "https:"), it.artist) }, d.hasMore.album, d.totals.album)
         else CatalogPage(d.artists.map { CatalogEntry(it.id, it.name, it.pic.replace("http:", "https:"), it.alias) }, d.hasMore.artist, d.totals.artist)
     }
+    suspend fun searchPlaylists(query: String, offset: Int = 0): CatalogPage {
+        val d = api.get<CatalogSearchDto>("ncm/search", mapOf("keywords" to query, "type" to "playlist", "limit" to "30", "offset" to "$offset"))
+        return CatalogPage(d.playlists.map { playlist ->
+            CatalogEntry(playlist.id, playlist.name, playlist.pic.replace("http:", "https:"),
+                listOfNotNull(playlist.trackCount.takeIf { it > 0 }?.let { "$it 首" },
+                    playlist.creator.takeIf(String::isNotBlank)?.let { "创建者：$it" }).joinToString(" · "))
+        }, d.hasMore.playlist, d.totals.playlist)
+    }
     suspend fun mv(id: Long) = api.get<MvDetailDto>("ncm/mv/detail", mapOf("mvid" to "$id")).data
     suspend fun mvSource(id: Long, resolution: Int = 1080): String {
         require(resolution in listOf(240, 480, 720, 1080))
