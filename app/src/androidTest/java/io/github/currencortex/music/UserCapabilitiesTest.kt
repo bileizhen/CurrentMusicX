@@ -369,7 +369,7 @@ class UserCapabilitiesTest {
             })
             androidx.compose.runtime.CompositionLocalProvider(androidx.lifecycle.compose.LocalLifecycleOwner provides owner) {
                 io.github.currencortex.music.ui.theme.LeiTheme(io.github.currencortex.music.data.settings.AppearanceSettings(blur = false)) {
-                    io.github.currencortex.music.feature.binding.BindingScreen(vm) {}
+                    io.github.currencortex.music.feature.binding.BindingScreen(vm, onBack = {})
                 }
             }
         }
