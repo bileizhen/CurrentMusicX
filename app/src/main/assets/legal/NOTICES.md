@@ -1,5 +1,9 @@
 # Third-party notices
 
+## Native NetEase task center references
+
+The native Kotlin task center uses the existing NetEase transport. Feature organization was informed by [ncmm](https://github.com/3899/ncmm) (MIT); task endpoint and response field documentation was checked against [NeteaseCloudMusicApiEnhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced) and [chaunsin/netease-cloud-music](https://github.com/chaunsin/netease-cloud-music) (MIT). No Go executable, WebUI, multi-account playback automation, or simulated playback implementation is embedded.
+
 This template uses the following libraries at runtime:
 
 - MIUIX KMP by Yukonga and contributors (`top.yukonga.miuix.kmp`), Apache-2.0.
