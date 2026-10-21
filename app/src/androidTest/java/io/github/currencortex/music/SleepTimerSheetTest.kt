@@ -7,6 +7,7 @@ import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.CurrentMusicApp
 import kotlinx.coroutines.runBlocking
+import okhttp3.mockwebserver.*
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -18,17 +19,28 @@ class SleepTimerSheetTest {
 
     @Test fun sleepSheetSelectsPresetCustomTimeAndExtension(): Unit = runBlocking {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        val server = MockWebServer().apply {
+            dispatcher = object : Dispatcher() {
+                override fun dispatch(request: RecordedRequest) = MockResponse().setBody("""{"items":[]}""")
+            }
+            start()
+        }
         val container = AppContainer(context, "sleep-ui-${UUID.randomUUID()}")
         try {
             container.ready.await(); container.sessionRestored.await()
+            val base = server.url("/cm/").toString()
+            container.musicSettings.setServer(base); container.accountRepository.server = base
             container.updateSettings.setAutoCheck(false)
             val song = Song(880101, "定时关闭界面验证", "测试歌手")
             container.playbackQueue.replace(listOf(song), 0)
             container.playerController.state.value = PlayerState(song = song, durationMs = 180_000)
             compose.setContent { CurrentMusicApp(container) }
-            compose.onNodeWithTag("mini_cover").performClick()
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("launch_animation").fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithTag("mini_cover").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+            compose.waitUntil(5_000) { compose.onNodeWithTag("player_sleep_timer").isDisplayed() }
             // The function-bar alarm button is the shortcut entry point.
-            compose.onNodeWithTag("player_sleep_timer").performClick()
+            compose.onNodeWithTag("player_sleep_timer").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+            compose.waitUntil(5_000) { compose.onNodeWithTag("sleep_timer_sheet").isDisplayed() }
             compose.onNodeWithTag("sleep_timer_sheet").assertIsDisplayed()
             compose.onNodeWithTag("sleep_timer_switch").assertIsDisplayed()
             // Presets fill the countdown and flip the switch on.
@@ -40,6 +52,7 @@ class SleepTimerSheetTest {
             assertTrue(container.sleepTimer.state.value.extendToSongEnd)
             // Custom hours + minutes confirm a duration.
             compose.onNodeWithTag("sleep_timer_custom").performClick()
+            compose.waitUntil(5_000) { compose.onNodeWithTag("sleep_custom_minutes").isDisplayed() }
             compose.onNodeWithTag("sleep_custom_confirm").assertIsNotEnabled()
             compose.onNodeWithTag("sleep_custom_minutes").performTouchInput { swipeUp() }
             compose.waitForIdle()
@@ -48,6 +61,6 @@ class SleepTimerSheetTest {
             assertTrue(container.sleepTimer.state.value.enabled)
             assertTrue("Custom minutes must be applied",
                 container.sleepTimer.state.value.minutes in 1..59)
-        } finally { container.close() }
+        } finally { container.close(); server.shutdown() }
     }
 }

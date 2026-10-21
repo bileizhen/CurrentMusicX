@@ -191,7 +191,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
         }
     }
-    if (dialog == "menu") MusicDialog("曲库操作", { dialog = "" }) {
+    if (dialog == "menu") MusicChoiceDialog("曲库操作", { dialog = "" }) {
         MusicDestinationRow("刷新曲库", { dialog = ""; vm.refresh() }, enabled = !state.loading, chevron = false)
         if (state.page.kind == "playlists") MusicDestinationRow("新建歌单", { action("create") }, enabled = !busy, chevron = false)
         if (state.page.kind == "playlist" && state.owned) {

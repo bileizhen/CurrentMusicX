@@ -1,5 +1,8 @@
 package io.github.currencortex.music.feature.mv
 
+import io.github.currencortex.music.ui.component.MusicChoiceDialog
+import io.github.currencortex.music.ui.component.MusicDialogChoiceRow
+
 import io.github.currencortex.music.ui.component.MusicDialogActions
 import io.github.currencortex.music.ui.component.MusicDialogButton
 import android.content.Intent
@@ -40,11 +43,10 @@ internal fun WorkInfo?.mvLabel(): String = when {
 }
 
 @Composable internal fun MvQualityDialog(current: Int, onSelect: (Int) -> Unit, onDismiss: () -> Unit) {
-    MusicDialog("清晰度", onDismiss) {
-        Text("优先使用所选清晰度，实际画质以视频源为准。", fontSize = 13.sp)
+    MusicChoiceDialog("清晰度", onDismiss) {
+        Text("优先使用所选清晰度，实际画质以视频源为准。", Modifier.padding(horizontal = 24.dp, vertical = 12.dp), fontSize = 13.sp)
         listOf(1080, 720, 480, 240).forEach { value ->
-            MusicDestinationRow("${value}P", { onSelect(value); onDismiss() },
-                summary = if (current == value) "当前选择" else null, chevron = false,
+            MusicDialogChoiceRow("${value}P", current == value, { onSelect(value); onDismiss() },
                 modifier = Modifier.testTag("mv_quality_$value"))
         }
     }

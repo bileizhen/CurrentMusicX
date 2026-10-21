@@ -23,7 +23,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable fun SongLikeSheet(selection: SongLikeSelection, toggle: (LikeDestination) -> Unit, dismiss: () -> Unit) {
-    MusicDialog("收录到哪个「我喜欢」？", dismiss, footer = { MusicDialogButton("关闭", onClick = dismiss) }) {
+    MusicDialog("收录到哪个「我喜欢」？", dismiss, edgeToEdgeContent = true, footer = { MusicDialogButton("关闭", onClick = dismiss) }) {
         Column(Modifier.testTag("song_like_sheet")) {
             LikeRow("CurrentMusic · 我喜欢的音乐", selection.currentMusic, LikeDestination.CURRENT_MUSIC, toggle)
             LikeRow("网易云音乐 APP · 我喜欢的音乐", selection.netease, LikeDestination.NETEASE, toggle)
@@ -42,7 +42,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     } + if (target == LikeDestination.NETEASE && !state.busy && state.error == null) " · 红心同步到网易云 APP" else ""
     Row(Modifier.fillMaxWidth().testTag("like_destination_${target.name}")
         .clickable(enabled = !state.busy, role = Role.Button) { toggle(target) }
-        .semantics { selected = state.liked == true }.heightIn(min = 76.dp).padding(horizontal = 16.dp, vertical = 12.dp),
+        .semantics { selected = state.liked == true }.heightIn(min = 76.dp).padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         Image(painterResource(if (state.liked == true) R.drawable.player_symbol_favorite_fill1 else R.drawable.player_symbol_favorite),
             null, Modifier.size(24.dp), colorFilter = ColorFilter.tint(ink))

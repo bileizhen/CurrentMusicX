@@ -43,7 +43,7 @@ import java.util.Locale
 
 @Composable internal fun PlayerCommentsDialog(state: PlayerComments, dismiss: () -> Unit, reload: () -> Unit, more: () -> Unit,
     composer: PlayerCommentComposer = PlayerCommentComposer(), edit: (String) -> Unit = {}, reply: (NeteaseComment?) -> Unit = {}, send: () -> Unit = {}) {
-    val colors = MiuixTheme.colorScheme
+    val colors = io.github.currencortex.music.ui.component.musicDialogColors()
     val indication = LocalIndication.current
     val density = LocalDensity.current
     val windowHeight = with(density) { LocalWindowInfo.current.containerSize.height.toDp() }
@@ -151,7 +151,7 @@ import java.util.Locale
 }
 
 @Composable private fun CommentTab(title: String, selected: Boolean, tag: String, onClick: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = io.github.currencortex.music.ui.component.musicDialogColors()
     Column(Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClick = onClick).semantics { this.selected = selected; role = Role.Tab }
         .testTag(tag).padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(title, Modifier.padding(top = 4.dp, bottom = 10.dp), fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
@@ -167,7 +167,7 @@ import java.util.Locale
 }
 
 @Composable private fun CommentContent(comment: NeteaseComment, enabled: Boolean, reply: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = io.github.currencortex.music.ui.component.musicDialogColors()
     var expanded by rememberSaveable(comment.commentId) { mutableStateOf(false) }
     var overflow by remember(comment.content) { mutableStateOf(false) }
     val time = remember(comment.time) {

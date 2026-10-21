@@ -1,5 +1,8 @@
 package io.github.currencortex.music.feature.settings
 
+import io.github.currencortex.music.ui.component.MusicChoiceDialog
+import io.github.currencortex.music.ui.component.MusicDialogChoiceRow
+
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -164,15 +167,15 @@ import kotlin.math.roundToInt
     }
     if (qualityOpen) io.github.currencortex.music.feature.player.AudioQualitySheet(settings.quality, vm::quality,
         { qualityOpen = false }, title = "默认播放音质")
-    if (lyricsSourceOpen) io.github.currencortex.music.ui.component.MusicDialog("歌词来源", { lyricsSourceOpen = false },
+    if (lyricsSourceOpen) io.github.currencortex.music.ui.component.MusicChoiceDialog("歌词来源", { lyricsSourceOpen = false },
         footer = { io.github.currencortex.music.ui.component.MusicDialogButton("关闭", { lyricsSourceOpen = false }) }) {
         LyricsSource.entries.forEach { source ->
-            MusicDestinationRow((if (source == settings.lyricsSource) "✓ " else "") + source.label,
+            MusicDialogChoiceRow(source.label, source == settings.lyricsSource,
                 { vm.lyricsSource(source); lyricsSourceOpen = false },
-                Modifier.testTag("lyrics_source_${source.name.lowercase()}"), chevron = false,
+                Modifier.testTag("lyrics_source_${source.name.lowercase()}"),
                 summary = if (source == LyricsSource.CURRENT_MUSIC) "由 CurrentMusic 服务提供，支持 LDDC 真实逐字；过滤估算时间轴"
                     else "手机直连网易云，使用原生逐字或逐行歌词")
         }
-        Text("独立于音乐音源，切换后立即重新加载当前歌词。", fontSize = 12.sp, color = hint)
+        Text("独立于音乐音源，切换后立即重新加载当前歌词。", Modifier.padding(horizontal = 24.dp, vertical = 12.dp), fontSize = 12.sp, color = hint)
     }
 }

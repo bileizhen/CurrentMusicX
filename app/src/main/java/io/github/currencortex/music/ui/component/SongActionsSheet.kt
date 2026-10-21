@@ -25,7 +25,7 @@ val LocalRoomSongRequest = staticCompositionLocalOf<RoomSongRequest?> { null }
         io.github.currencortex.music.feature.share.SongShareDialog(menu.song, onDismiss)
         return
     }
-    MusicDialog(menu.song.name, onDismiss) {
+    MusicChoiceDialog(menu.song.name, onDismiss) {
         Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()).testTag("song_actions_sheet")) {
             Text(menu.song.artists, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))

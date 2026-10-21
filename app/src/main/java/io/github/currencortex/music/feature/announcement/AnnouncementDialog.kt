@@ -40,7 +40,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
+import io.github.currencortex.music.ui.component.MusicDialogButton as TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
