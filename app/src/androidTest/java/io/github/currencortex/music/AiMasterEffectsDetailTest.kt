@@ -22,11 +22,11 @@ class AiMasterEffectsDetailTest {
 
     @Test fun closingDraftDoesNotSaveAndExplicitSaveCommitsOnlyCurrentFiveChoices() {
         val saved = mutableListOf<Set<String>>()
-        compose.setContent { LeiTheme(AppearanceSettings()) {
+        compose.setContent { LeiTheme(AppearanceSettings()) { top.yukonga.miuix.kmp.basic.Scaffold {
             CompositionLocalProvider(LocalMusicPageActive provides false) {
                 AiMasterEffectsDetail(fixture, Song(186016, "歌曲"), false, {}, {}, {}, { saved += it })
             }
-        } }
+        } } }
         compose.onNodeWithTag("sound_ai_master_diy_open").performClick()
         compose.onNodeWithTag("sound_ai_master_diy_treble").assertIsOn()
         compose.onNodeWithTag("sound_ai_master_diy_bass").performClick()
@@ -35,37 +35,37 @@ class AiMasterEffectsDetailTest {
         compose.onNodeWithTag("sound_ai_master_diy_open").performClick()
         compose.onNodeWithTag("sound_ai_master_diy_bass").assertIsOff()
         compose.onNodeWithTag("sound_ai_master_diy_vibe").performClick()
-        compose.onNodeWithTag("sound_ai_master_diy_save").performScrollTo().performClick()
+        compose.onNodeWithTag("sound_ai_master_diy_save").assertIsDisplayed().performClick()
         assertEquals(listOf(setOf("en_treble", "en_vibe")), saved)
         compose.onNodeWithTag("sound_ai_master_diy_save").assertDoesNotExist()
     }
 
     @Test fun trueMetadataAndNativeInformationSheetAreVisibleAndDismissible() {
-        compose.setContent { LeiTheme(AppearanceSettings()) {
+        compose.setContent { LeiTheme(AppearanceSettings()) { top.yukonga.miuix.kmp.basic.Scaffold {
             CompositionLocalProvider(LocalMusicPageActive provides false) {
                 AiMasterEffectsDetail(fixture, Song(186016, "歌曲"), false, {}, {}, {}, {})
             }
-        } }
+        } } }
         compose.onNodeWithTag("sound_ai_master_keyword").assertTextEquals("温润")
         compose.onNodeWithTag("sound_ai_master_description").assertTextEquals("真实接口长说明")
         compose.onNodeWithTag("sound_ai_master_info").performClick()
         compose.onNodeWithText("AI调音大师说明").assertIsDisplayed()
         compose.onNodeWithText("3.DIY偏好").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithTag("sound_ai_master_info_close").performScrollTo().performClick()
+        compose.onNodeWithTag("sound_ai_master_info_close").assertIsDisplayed().performClick()
         compose.onNodeWithText("AI调音大师说明").assertDoesNotExist()
     }
 
     @Test fun originalAndProcessedPreviewControlsStartAndStopSeparateCallbacks() {
         val active = mutableStateOf(false); val processed = mutableStateOf(false)
         val starts = mutableListOf<Boolean>(); var stops = 0
-        compose.setContent { LeiTheme(AppearanceSettings()) {
+        compose.setContent { LeiTheme(AppearanceSettings()) { top.yukonga.miuix.kmp.basic.Scaffold {
             CompositionLocalProvider(LocalMusicPageActive provides false) {
                 AiMasterEffectsDetail(fixture.copy(enabled = false, requestedEnabled = false), Song(186016, "歌曲"),
                     false, {}, {}, {}, {}, onPreview = { starts += it; active.value = true; processed.value = it },
                     previewing = active.value, previewProcessed = processed.value,
                     onPreviewStop = { stops++; active.value = false })
             }
-        } }
+        } } }
         compose.onNodeWithTag("sound_ai_master_preview_original").performScrollTo().performClick()
         compose.onNodeWithTag("sound_ai_master_preview_original").performClick()
         compose.onNodeWithTag("sound_ai_master_preview_processed").performClick()
