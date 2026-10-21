@@ -95,7 +95,7 @@ private val updateDialogShape = RoundedCornerShape(32.dp)
 
 @Composable private fun Modifier.updateDialogMaterial(backdrop: Backdrop?, dark: Boolean): Modifier {
     val material = if (Build.VERSION.SDK_INT >= 33 && backdrop != null) Modifier.frostedUpdateDialog(backdrop, dark)
-    else Modifier.background(if (dark) Color(0xF22C2D30) else Color(0xF5F2F3F5), updateDialogShape)
+    else Modifier.background(if (dark) Color(0xF22C2D30) else Color(0xDDF2F3F5), updateDialogShape)
     return then(material).border(.7.dp, Color.White.copy(alpha = if (dark) .12f else .65f), updateDialogShape)
 }
 
@@ -105,7 +105,7 @@ private fun Modifier.frostedUpdateDialog(backdrop: Backdrop, dark: Boolean): Mod
         colorControls(brightness = 0f, contrast = 1f, saturation = .35f)
         blur(28.dp.toPx(), 28.dp.toPx())
     }, onDrawSurface = {
-        drawRect(if (dark) Color(0xFF292A2D).copy(alpha = .86f) else Color(0xFFF3F4F6).copy(alpha = .88f))
+        drawRect(if (dark) Color(0xFF292A2D).copy(alpha = .86f) else Color(0xFFF3F4F6).copy(alpha = .68f))
     }))
 
 @Composable internal fun UpdateDialogAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
@@ -117,7 +117,7 @@ private fun Modifier.frostedUpdateDialog(backdrop: Backdrop, dark: Boolean): Mod
             scaleX = 1f - .025f * press.amount.value
             scaleY = 1f - .025f * press.amount.value
         }.clip(CircleShape)
-        .background(if (dark) Color.White.copy(alpha = .13f) else Color.White.copy(alpha = .85f))
+        .background(if (dark) Color.White.copy(alpha = .13f) else Color.White.copy(alpha = .66f))
         .drawBehind { drawRect(colors.onBackground.copy(alpha = .055f * press.amount.value)) }
         .clickable(enabled = enabled, role = Role.Button, interactionSource = press.source, indication = null, onClick = onClick)
         .padding(horizontal = 12.dp, vertical = if (compact) 10.dp else 13.dp), contentAlignment = Alignment.Center) {
