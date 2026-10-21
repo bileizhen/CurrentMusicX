@@ -149,6 +149,8 @@ class UpdatePageTest {
         compose.onNodeWithText(UpdateSource.GITHUB.label).assertIsSelected()
         capture("update-source-sheet.png")
         compose.onNodeWithText(UpdateSource.DPIK.label).performClick()
+        compose.runOnIdle { assertNull(selected) }
+        compose.onNodeWithTag("update_source_confirm").performClick()
         compose.runOnIdle { assertEquals(UpdateSource.DPIK, selected) }
         compose.onNodeWithTag("update_menu").performClick()
         compose.onNodeWithText("更新设置").performClick()
@@ -156,10 +158,58 @@ class UpdatePageTest {
         compose.onNodeWithContentDescription("关闭更新设置").assertIsDisplayed()
         capture("update-settings-sheet.png")
         compose.onNodeWithText("预发布版").performClick()
+        compose.runOnIdle { assertNull(channel) }
+        compose.onNodeWithTag("update_settings_save").performClick()
         compose.runOnIdle { assertEquals(UpdateChannel.PRERELEASE, channel); state.value = UpdateTransferState() }
         compose.onNodeWithTag("update_menu").performClick()
         compose.onNodeWithText("忽略此版本").performClick()
         compose.runOnIdle { assertTrue(ignored) }
+    }
+
+    @Test fun cancellingDraftSettingsAndSourceKeepsTheActiveDownloadAndPreferences() {
+        var sourceChanges = 0; var channelChanges = 0; var checkChanges = 0
+        compose.setContent { TestTheme {
+            UpdatePageContent(UpdateState.Available(release),
+                UpdateTransferState(UpdateDownloadState.Downloading(42, 100), activeSource = UpdateSource.GITHUB),
+                onChangeSource = { sourceChanges++ }, onChannel = { channelChanges++ }, onAutoCheck = { checkChanges++ })
+        } }
+        compose.onNodeWithTag("update_menu").performClick()
+        compose.onNodeWithText("下载源").performClick()
+        compose.onNodeWithText(UpdateSource.DPIK.label).performClick()
+        compose.onNodeWithTag("update_source_cancel").performClick()
+        compose.onNodeWithTag("update_progress").assertTextContains("42%", substring = true)
+        compose.onNodeWithTag("update_menu").performClick()
+        compose.onNodeWithText("下载源").performClick()
+        compose.onNodeWithText(UpdateSource.GITHUB.label).assertIsSelected()
+        compose.onNodeWithTag("update_source_cancel").performClick()
+        compose.onNodeWithTag("update_menu").performClick()
+        compose.onNodeWithText("更新设置").performClick()
+        compose.onNodeWithTag("update_auto_check").performClick()
+        compose.onNodeWithText("预发布版").performClick()
+        compose.onNodeWithTag("update_settings_cancel").performClick()
+        compose.onNodeWithTag("update_menu").performClick()
+        compose.onNodeWithText("更新设置").performClick()
+        compose.onNode(hasText("正式版") and hasAnyAncestor(hasTestTag("update_options_sheet"))).assertIsSelected()
+        compose.onNodeWithTag("update_auto_check").assertIsOn()
+        compose.runOnIdle { assertEquals(0, sourceChanges); assertEquals(0, channelChanges); assertEquals(0, checkChanges) }
+    }
+
+    @Test fun settingsDialogSupportsBothThemesAndAlignedActions() {
+        val theme = mutableStateOf(io.github.currencortex.music.data.settings.ThemeMode.LIGHT)
+        compose.setContent { LeiTheme(AppearanceSettings(themeMode = theme.value, blur = false)) {
+            top.yukonga.miuix.kmp.basic.Scaffold { UpdatePageContent(UpdateState.UpToDate) }
+        } }
+        compose.onNodeWithTag("update_menu").performClick()
+        compose.onNodeWithText("更新设置").performClick()
+        val cancel = compose.onNodeWithTag("update_settings_cancel").getUnclippedBoundsInRoot()
+        val save = compose.onNodeWithTag("update_settings_save").getUnclippedBoundsInRoot()
+        assertEquals(cancel.top.value, save.top.value, .5f)
+        assertEquals((cancel.right - cancel.left).value, (save.right - save.left).value, .5f)
+        capture("update-settings-light.png")
+        compose.runOnIdle { theme.value = io.github.currencortex.music.data.settings.ThemeMode.DARK }
+        compose.waitForIdle()
+        compose.onNodeWithTag("update_settings_save").assertIsDisplayed()
+        capture("update-settings-dark.png")
     }
 
     @Test fun overflowMenuAnimatesFromButtonAndOutsideTapDoesNotActivatePage() {

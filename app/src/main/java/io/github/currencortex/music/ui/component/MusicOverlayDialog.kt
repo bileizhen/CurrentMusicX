@@ -1,9 +1,16 @@
 package io.github.currencortex.music.ui.component
 
 import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.*
@@ -30,6 +37,8 @@ fun MusicOverlayDialog(
     insideMargin: DpSize = DpSize(20.dp, 20.dp),
     outsideMargin: DpSize = DialogDefaults.outsideMargin,
     alignContent: Boolean = true,
+    backgroundColor: Color? = null,
+    matchPanelMotion: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val visible = remember { mutableStateOf(show) }
@@ -43,6 +52,11 @@ fun MusicOverlayDialog(
     val currentInsideMargin = rememberUpdatedState(insideMargin)
     val currentOutsideMargin = rememberUpdatedState(outsideMargin)
     val aligned = rememberUpdatedState(alignContent)
+    val currentBackground = rememberUpdatedState(backgroundColor)
+    val panelMotion = rememberUpdatedState(matchPanelMotion)
+    val panelHeight = remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val bottomGap = WindowInsets.navigationBars.getBottom(density) + with(density) { outsideMargin.height.roundToPx() }
     val body = rememberUpdatedState(content)
     // DialogLayout retains its root entry through exit even when this caller is disposed.
     // Native OverlayDialog keeps entrance/layout/predictive back; the root owns exit + dim.
@@ -53,10 +67,12 @@ fun MusicOverlayDialog(
             MiuixTheme(colors = colors.value, textStyles = styles.value) {
                 // A local host keeps native presentation inside the root's animated layer.
                 Scaffold(containerColor = Color.Transparent, contentWindowInsets = WindowInsets(0, 0, 0, 0)) {
-                    OverlayDialog(show = true, modifier = currentModifier.value,
+                    OverlayDialog(show = true, modifier = currentModifier.value.then(if (panelMotion.value)
+                        Modifier.onSizeChanged { panelHeight.intValue = it.height } else Modifier),
                         title = currentTitle.value.takeUnless { aligned.value },
                         summary = currentSummary.value.takeUnless { aligned.value },
                         insideMargin = currentInsideMargin.value, outsideMargin = currentOutsideMargin.value,
+                        backgroundColor = currentBackground.value ?: DialogDefaults.backgroundColor(),
                         enableWindowDim = false, renderInRootScaffold = false,
                         onDismissRequest = { if (visible.value) dismiss.value?.invoke() }) {
                         if (!aligned.value) body.value() else CompositionLocalProvider(LocalMusicDialogContent provides true) {
@@ -79,5 +95,11 @@ fun MusicOverlayDialog(
         }
     }
     DialogLayout(visible = visible, enterTransition = EnterTransition.None,
+        exitTransition = if (matchPanelMotion) slideOutVertically(tween(260,
+            easing = CubicBezierEasing(.32f, 0f, .67f, .2f))) { fullHeight ->
+                (panelHeight.intValue + bottomGap).takeIf { panelHeight.intValue > 0 }?.coerceAtMost(fullHeight) ?: fullHeight
+            } else null,
+        dimEnterTransition = if (matchPanelMotion) fadeIn(tween(260)) else null,
+        dimExitTransition = if (matchPanelMotion) fadeOut(tween(260)) else null,
         onDismissFinished = onDismissFinished, content = retainedContent)
 }
