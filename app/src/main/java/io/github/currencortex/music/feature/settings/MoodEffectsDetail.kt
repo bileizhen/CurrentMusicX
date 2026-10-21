@@ -46,8 +46,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import io.github.currencortex.music.core.media.OriginalMoodState
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
@@ -263,34 +261,16 @@ import kotlin.math.sin
 }
 
 @Composable private fun MoodInformationSheet(onDismiss: () -> Unit) {
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            Box(Modifier.fillMaxSize().clickable(onClick = onDismiss))
-            Column(Modifier.align(Alignment.BottomCenter).widthIn(max = 420.dp).fillMaxWidth().heightIn(max = maxHeight * .61f)
-                .clip(RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)).background(Color.White)
-                // Register this panel in the hit path so text/empty space cannot hit the backdrop.
-                // No child gestures are consumed: text scrolling and the two close buttons stay usable.
-                .pointerInput(Unit) { awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false); waitForUpOrCancellation()
-                } }.testTag("mood_info_panel")
-                .navigationBarsPadding().padding(horizontal = 20.dp)) {
-                Row(Modifier.fillMaxWidth().heightIn(min = 58.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text("AI情绪调音师说明", Modifier.weight(1f), color = Color.Black, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                    Box { MoodDetailIcon("关闭说明", onDismiss) {
-                        Icon(Icons.Default.Close, null, tint = Color(0xFF777777), modifier = Modifier.size(20.dp))
-                    } }
-                }
-                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())) {
-                    MoodEffectsPresentation.explanation.forEach { (heading, text) ->
-                        Text(heading, color = Color(0xFF414141), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                        Text(text, color = Color(0xFF909090), fontSize = 12.sp, lineHeight = 19.sp)
-                        Spacer(Modifier.height(18.dp))
-                    }
-                }
-                Box(Modifier.fillMaxWidth().padding(vertical = 12.dp).height(48.dp).clip(CircleShape)
-                    .background(Color(0xFFFF393C)).clickable(role = Role.Button, onClick = onDismiss)
-                    .testTag("mood_info_done"),
-                    contentAlignment = Alignment.Center) { Text("知道了", color = Color.White, fontSize = 15.sp) }
+    io.github.currencortex.music.ui.component.MusicDialog("AI情绪调音师说明", onDismiss, footer = {
+        io.github.currencortex.music.ui.component.MusicDialogButton("知道了", onDismiss,
+            Modifier.testTag("mood_info_done").semantics { contentDescription = "关闭说明" })
+    }) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()).testTag("mood_info_panel")) {
+            MoodEffectsPresentation.explanation.forEach { (heading, text) ->
+                Text(heading, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                Text(text, color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    fontSize = 13.sp, lineHeight = 20.sp)
+                Spacer(Modifier.height(18.dp))
             }
         }
     }

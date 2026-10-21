@@ -30,11 +30,11 @@ class MoodEffectsDetailTest {
         songId = 186016, emotion = "nostalgic", family = "pop-family", visualExtra = visual)
 
     @Test fun originalInformationSheetTextAndScrollingDoNotDismissUntilExplicitClose() {
-        compose.setContent { LeiTheme(AppearanceSettings()) {
+        compose.setContent { LeiTheme(AppearanceSettings()) { top.yukonga.miuix.kmp.basic.Scaffold {
             CompositionLocalProvider(LocalMusicPageActive provides false) {
                 MoodEffectsDetail(fixture, Song(186016, "当前歌曲"), false, {}, {}, {})
             }
-        } }
+        } } }
         compose.onNodeWithContentDescription("AI情绪调音师说明").performClick()
         compose.onNodeWithText("1.功能说明").performTouchInput { click() }
         compose.onNodeWithText("AI情绪调音师说明").assertIsDisplayed()
@@ -45,11 +45,11 @@ class MoodEffectsDetailTest {
 
     @Test fun actualMatchingSongShowsOriginalKeywordRadarAndCallbacksRemainSeparate() {
         var playback = 0; var toggles = 0
-        compose.setContent { LeiTheme(AppearanceSettings()) {
+        compose.setContent { LeiTheme(AppearanceSettings()) { top.yukonga.miuix.kmp.basic.Scaffold {
             CompositionLocalProvider(LocalMusicPageActive provides false) {
                 MoodEffectsDetail(fixture, Song(186016, "当前歌曲"), true, {}, { toggles++ }, { playback++ })
             }
-        } }
+        } } }
         compose.onNodeWithTag("mood_emotion_title").performScrollTo().assertTextEquals("思念藏在歌里")
         compose.onNodeWithTag("mood_adjustment_radar").performScrollTo().assertExists()
         compose.onNodeWithTag("mood_song_playback").performScrollTo().performClick()
@@ -58,11 +58,11 @@ class MoodEffectsDetailTest {
     }
 
     @Test fun staleSongMeasurementsCannotBeShownAsTheNewSongsResults() {
-        compose.setContent { LeiTheme(AppearanceSettings()) {
+        compose.setContent { LeiTheme(AppearanceSettings()) { top.yukonga.miuix.kmp.basic.Scaffold {
             CompositionLocalProvider(LocalMusicPageActive provides false) {
                 MoodEffectsDetail(fixture, Song(2, "下一首歌"), false, {}, {}, {})
             }
-        } }
+        } } }
         compose.onNodeWithTag("mood_emotion_title").performScrollTo().assertTextEquals("情绪调音师")
         compose.onNodeWithTag("mood_adjustment_radar").assertDoesNotExist()
         compose.onNodeWithText("原算法返回的当前歌曲调节说明").assertDoesNotExist()
