@@ -108,7 +108,7 @@ import java.util.Locale
                     }
                 }
             }
-            if (binding.stale) BindingNotice("登录态已失效，请重新登录后继续使用音乐库。")
+            if (binding.stale) BindingNotice("网易云登录已失效，请重新登录网易云后继续使用音乐库。")
             else if (mainLibrary) Text("已直接连接网易云我喜欢与歌单", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
             else if (binding.lastSync > 0) {
                 val date = remember(binding.lastSync) { SimpleDateFormat("MM月dd日 HH:mm", Locale.getDefault()).format(Date(binding.lastSync * 1000)) }

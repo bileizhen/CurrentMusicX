@@ -112,7 +112,9 @@ class ApiClientTest {
             var expired = 0
             val api = ApiClient({ server.url("/").toString() }, { "test-secret" }, { expired++ })
             server.enqueue(MockResponse().setResponseCode(401).setBody("""{"error":"登录已过期"}"""))
-            assertEquals(ErrorKind.Unauthorized, (appResult { api.get<Value>("auth/me", authenticated = true) } as AppResult.Failure).kind)
+            val failure = appResult { api.get<Value>("auth/me", authenticated = true) } as AppResult.Failure
+            assertEquals(ErrorKind.Unauthorized, failure.kind)
+            assertEquals("CurrentMusic 登录已过期，请重新登录", failure.message)
             assertEquals(1, expired)
             server.enqueue(MockResponse().setResponseCode(401).setBody("""{"error":"尚未绑定网易云"}"""))
             assertEquals(ErrorKind.Forbidden, (appResult { api.get<Value>("ncm/test", authenticated = true) } as AppResult.Failure).kind)

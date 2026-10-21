@@ -86,9 +86,9 @@ import java.time.format.DateTimeFormatter
             if (!connected) item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text(if (account.stale) "登录已过期" else "连接网易云账号", fontSize = 18.sp, fontWeight = FontWeight.Medium)
+                        Text(if (account.stale) "网易云登录已过期" else "连接网易云账号", fontSize = 18.sp, fontWeight = FontWeight.Medium)
                         Text("登录后查看任务、签到和已完成的奖励。", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
-                        TaskAction(if (account.stale) "重新登录" else "登录网易云", onLogin, Modifier.testTag("tasks_login"), primary = true)
+                        TaskAction(if (account.stale) "重新登录网易云" else "登录网易云", onLogin, Modifier.testTag("tasks_login"), primary = true)
                     }
                 }
             } else {

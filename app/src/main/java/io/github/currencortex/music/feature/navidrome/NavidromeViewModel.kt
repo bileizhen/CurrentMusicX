@@ -114,7 +114,7 @@ class NavidromeViewModel(val container: AppContainer) : ViewModel() {
             }
             when (result) {
                 is AppResult.Success -> if (expected == repository.session()) browser.finish(key, result.value.copy(page = state.value.page))
-                is AppResult.Failure -> if (expected == repository.session() && state.value.page.key == key) state.value = old.copy(loading = false, error = result.kind.message)
+                is AppResult.Failure -> if (expected == repository.session() && state.value.page.key == key) state.value = old.copy(loading = false, error = result.message)
             }
             if (libraryRefreshPending && expected == repository.session() && state.value.page.key == key) {
                 libraryRefreshPending = false; load = null; refresh()
@@ -141,7 +141,7 @@ class NavidromeViewModel(val container: AppContainer) : ViewModel() {
         val fresh = repository.playlist(target.playlist.id)
         val index = fresh.indices.filter { fresh[it].navidrome?.id == target.song.navidrome?.id }.getOrNull(target.occurrence)
             ?: throw ApiException(ErrorKind.NotFound)
-        if (expected != repository.session()) throw ApiException(ErrorKind.Unauthorized)
+        if (expected != repository.session()) throw io.github.currencortex.music.core.navidrome.navidromeUnauthorized()
         repository.remove(target.playlist.id, index)
     }, done)
     fun clearError() { actionError.value = null }
@@ -151,7 +151,7 @@ class NavidromeViewModel(val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             try { when (val result = appResult { block() }) {
                 is AppResult.Success -> { message.value = success; done(true) }
-                is AppResult.Failure -> { actionError.value = result.kind.message; done(false) }
+                is AppResult.Failure -> { actionError.value = result.message; done(false) }
             } } finally { busy.value = false }
         }
     }

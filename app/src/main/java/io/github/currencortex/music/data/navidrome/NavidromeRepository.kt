@@ -71,7 +71,7 @@ class NavidromeRepository(private val vault: TokenStore, scope: CoroutineScope) 
     fun session(): RequestSession = state.value.let { RequestSession(it.server, it.revision.takeIf { _ -> it.configured }) }
     fun accepts(song: Song) = song.navidrome?.identity == state.value.identity && state.value.configured
     private fun track(song: Song): NavidromeTrackRef {
-        if (!accepts(song)) throw ApiException(ErrorKind.Unauthorized)
+        if (!accepts(song)) throw navidromeUnauthorized()
         return song.navidrome ?: throw ApiException(ErrorKind.NotFound)
     }
     private fun changed() { revision.update { it + 1 } }

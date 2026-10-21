@@ -51,7 +51,10 @@ class NavidromeRepositoryTest {
     @Test fun failedLoginDoesNotReplaceExistingAccountAndRestoreRetainsIdentity() = runBlocking {
         login(); val previous = repo.state.value
         server.enqueue(MockResponse().setBody("""{"subsonic-response":{"status":"failed","error":{"code":40,"message":"private details"}}}"""))
-        try { repo.connect(server.url("/").toString(), "wrong", "wrong"); fail() } catch (e: ApiException) { assertEquals(ErrorKind.Unauthorized, e.kind); assertFalse(e.message!!.contains("private details")) }
+        val failure = appResult { repo.connect(server.url("/").toString(), "wrong", "wrong") } as AppResult.Failure
+        assertEquals(ErrorKind.Unauthorized, failure.kind)
+        assertEquals("Navidrome 登录已失效，请重新连接", failure.message)
+        assertFalse(failure.message.contains("private details"))
         assertEquals(previous, repo.state.value)
         repo.home(true)
         val restored = NavidromeRepository(vault, scope); restored.ready.await()

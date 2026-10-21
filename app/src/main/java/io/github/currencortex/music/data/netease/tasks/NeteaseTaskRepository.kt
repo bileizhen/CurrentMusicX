@@ -28,7 +28,9 @@ class NeteaseTaskRepository(private val transport: NeteaseTransport) {
         throw ApiException(when (code) {
             301, 401 -> ErrorKind.NeteaseBindingRequired; 403 -> ErrorKind.Forbidden
             429, 406 -> ErrorKind.RateLimited; else -> ErrorKind.Server
-        }, code, raw.text("message", "msg").takeIf { it.isNotBlank() }?.take(180))
+        }, code, if (code in setOf(301, 401))
+            "网易云登录已过期：${raw.text("message", "msg").takeIf { it.isNotBlank() }?.take(180) ?: "请重新登录"}"
+        else raw.text("message", "msg").takeIf { it.isNotBlank() }?.take(180))
     }
     suspend fun load(group: NeteaseTaskGroup): NeteaseTaskPage {
         val owner = owner()

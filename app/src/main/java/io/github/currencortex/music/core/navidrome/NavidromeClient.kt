@@ -32,9 +32,9 @@ class NavidromeClient(private val access: () -> NavidromeAccess?) {
     private val wire = OkHttpClient.Builder().connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(45, TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build()
     private val random = SecureRandom()
-    fun current() = access() ?: throw ApiException(ErrorKind.Unauthorized)
+    fun current() = access() ?: throw navidromeUnauthorized()
     fun ensure(expected: NavidromeAccess) {
-        if (access()?.revision != expected.revision) throw ApiException(ErrorKind.Unauthorized)
+        if (access()?.revision != expected.revision) throw navidromeUnauthorized()
     }
     private fun url(account: NavidromeAccess, endpoint: String, params: List<Pair<String, String>>, signed: Boolean): HttpUrl {
         require(endpoint.matches(Regex("[A-Za-z0-9]+")))
@@ -91,7 +91,8 @@ class NavidromeClient(private val access: () -> NavidromeAccess?) {
             })
         }
         response.use {
-            if (!it.isSuccessful) throw ApiException(if (it.code in setOf(401, 403)) ErrorKind.Unauthorized else ErrorKind.Server, it.code)
+            if (it.code in setOf(401, 403)) throw navidromeUnauthorized(it.code)
+            if (!it.isSuccessful) throw ApiException(ErrorKind.Server, it.code)
             val body = it.body ?: throw IOException("Navidrome 响应为空")
             val source = body.source(); source.request(MAX_BYTES + 1)
             if (source.buffer.size > MAX_BYTES) throw IOException("曲库响应过大，请分页读取")
@@ -99,7 +100,8 @@ class NavidromeClient(private val access: () -> NavidromeAccess?) {
                 .getOrNull() ?: throw IOException("服务器未返回 Subsonic 接口，请检查地址或反向代理")
             if (root.string("status") != "ok") {
                 val code = root["error"]?.jsonObject?.number("code")?.toInt() ?: 0
-                throw ApiException(when (code) { 40, 41 -> ErrorKind.Unauthorized; 50 -> ErrorKind.Forbidden; 70 -> ErrorKind.NotFound; else -> ErrorKind.Server }, code)
+                if (code in setOf(40, 41)) throw navidromeUnauthorized(code)
+                throw ApiException(when (code) { 50 -> ErrorKind.Forbidden; 70 -> ErrorKind.NotFound; else -> ErrorKind.Server }, code)
             }
             if (!provisional) ensure(expected)
             root
@@ -111,6 +113,9 @@ class NavidromeClient(private val access: () -> NavidromeAccess?) {
         private val MEDIA_ENDPOINTS = setOf("stream", "download", "getCoverArt")
     }
 }
+
+internal fun navidromeUnauthorized(status: Int = 0) =
+    ApiException(ErrorKind.Unauthorized, status, "Navidrome 登录已失效，请重新连接")
 
 internal fun JsonObject.string(key: String) = (get(key) as? JsonPrimitive)?.contentOrNull.orEmpty()
 internal fun JsonObject.number(key: String) = (get(key) as? JsonPrimitive)?.longOrNull ?: 0L

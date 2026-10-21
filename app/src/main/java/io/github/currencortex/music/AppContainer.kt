@@ -429,7 +429,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 } else authRepository.restore(initial.server)
             } catch (_: Exception) {
                 ready.complete(Unit)
-                accountRepository.state.value = AccountState(error = "本地会话恢复失败，请重新登录")
+                accountRepository.state.value = AccountState(error = "CurrentMusic 本地会话恢复失败，请重新登录")
             } finally {
                 sessionRestored.complete(Unit)
             }
