@@ -6,7 +6,7 @@ import java.io.IOException
 import java.net.SocketTimeoutException
 
 enum class ErrorKind(val message: String) {
-    Network("网络连接失败"), Timeout("请求超时，请重试"), Unauthorized("登录已过期"),
+    Network("网络连接失败"), Timeout("请求超时，请重试"), Unauthorized("CurrentMusic 登录已过期，请重新登录"),
     Forbidden("没有访问权限"), NotFound("内容不存在"), RateLimited("请求过于频繁"),
     Server("服务器异常"), Parse("数据格式异常"), Unknown("操作失败，请重试"),
     AudioKeyRequired("请在网络与播放设置中填写 LeiZ API Key"),

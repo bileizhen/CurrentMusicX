@@ -70,10 +70,17 @@ class NeteaseTasksTest {
     @Test fun expiredLoginStopsFurtherTaskCallsAndPreservesUpstreamReason() = runBlocking<Unit> {
         login(); enqueue("""{"code":301,"message":"请重新登录"}""")
         val result = appResult { repository.load(NeteaseTaskGroup.VIP) } as AppResult.Failure
-        assertEquals("请重新登录", result.message)
+        assertEquals("网易云登录已过期：请重新登录", result.message)
         assertTrue(sessions.state.value.stale)
         assertTrue(appResult { repository.load(NeteaseTaskGroup.YUNBEI) } is AppResult.Failure)
         assertEquals(1, server.requestCount)
+    }
+    @Test fun expiredLoginWithoutUpstreamReasonStillNamesNetease() = runBlocking<Unit> {
+        login(); enqueue("""{"code":401}""")
+        val result = appResult { repository.load(NeteaseTaskGroup.DAILY) } as AppResult.Failure
+        assertEquals(ErrorKind.NeteaseBindingRequired, result.kind)
+        assertEquals("网易云登录已过期：请重新登录", result.message)
+        assertTrue(sessions.state.value.stale)
     }
     @Test fun rewardsMustComeFromAFreshServerListAndOnlyClaimableIdsAreUsed() = runBlocking<Unit> {
         login()
