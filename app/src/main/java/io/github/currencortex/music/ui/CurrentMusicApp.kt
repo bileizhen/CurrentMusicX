@@ -575,6 +575,15 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     val vm: BindingViewModel = viewModel(key = route, factory = viewModelFactory { BindingViewModel(container) })
                                     BindingScreen(vm, ::navigateBack)
                                 }
+                                route == "user/netease-tasks" -> {
+                                    val vm: io.github.currencortex.music.feature.tasks.NeteaseTasksViewModel = viewModel(key = route,
+                                        factory = viewModelFactory {
+                                            io.github.currencortex.music.feature.tasks.NeteaseTasksViewModel(container.neteaseTasks,
+                                                container.neteaseTaskAutomation) { container.errorNotices.show(it) }
+                                        })
+                                    io.github.currencortex.music.feature.tasks.NeteaseTasksScreen(vm, ::navigateBack,
+                                        onLogin = { navigateLibrary("user/binding") }, onNavigate = ::navigateLibrary)
+                                }
                                 route.startsWith("user/profile/") -> {
                                     val id = route.substringAfterLast('/').toLongOrNull() ?: 0L
                                     val vm: ProfileViewModel = if (id == account.account?.id) profileVm else viewModel(key = route,

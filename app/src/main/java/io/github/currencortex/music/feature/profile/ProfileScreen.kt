@@ -84,6 +84,7 @@ import kotlinx.coroutines.launch
 }
 
 @Composable private fun NativeMeScreen(container: AppContainer, navigate: (String) -> Unit, onSettings: () -> Unit) {
+    val tasksEnabled by container.neteaseTasksEnabled.collectAsStateWithLifecycle()
     val account by container.neteaseSessions.state.collectAsStateWithLifecycle()
     val bottomInset = LocalMusicBottomInset.current
     val avatarFlight = LocalAvatarFlight.current
@@ -129,6 +130,8 @@ import kotlinx.coroutines.launch
         item { Card(Modifier.fillMaxWidth()) {
             MusicDestinationRow(if (account.loggedIn) "网易云账号" else "登录网易云", { navigate("user/binding") },
                 Modifier.testTag("open_binding"), "我喜欢、歌单与最近播放")
+            if (tasksEnabled == true) MusicDestinationRow("网易云任务", { navigate("user/netease-tasks") },
+                Modifier.testTag("open_netease_tasks"), "签到、云贝与会员成长")
             MusicDestinationRow("Navidrome 曲库", { navigate("navidrome") }, Modifier.testTag("profile_navidrome"), "自己的音乐服务器")
             MusicDestinationRow("CurrentMusic 账户", { navigate("user/login") }, Modifier.testTag("open_currentmusic_login"),
                 "头像装饰与一起听房间")
@@ -141,6 +144,7 @@ import kotlinx.coroutines.launch
     onBack: (() -> Unit)? = null, onSettings: (() -> Unit)? = null) {
     val state = vm.state.collectAsPageState().value
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
+    val tasksEnabled by vm.container.neteaseTasksEnabled.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) { vm.avatar.value = uri; vm.dialog.value = "avatar" }
@@ -225,6 +229,8 @@ import kotlinx.coroutines.launch
                 } }
                 item { Card(Modifier.fillMaxWidth()) {
                     MusicDestinationRow("网易云账号", { navigate("user/binding") }, Modifier.testTag("open_binding"), "绑定与同步歌单")
+                    if (tasksEnabled == true) MusicDestinationRow("网易云任务", { navigate("user/netease-tasks") },
+                        Modifier.testTag("open_netease_tasks"), "签到、云贝与会员成长")
                     MusicDestinationRow("头像挂件", { navigate("user/decorations") }, Modifier.testTag("open_decorations"))
                     MusicDestinationRow("账号与安全", { navigate("user/security") }, Modifier.testTag("open_security"), "切换账号、修改密码、退出登录")
                 } }
