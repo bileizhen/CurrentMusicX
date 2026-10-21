@@ -40,7 +40,7 @@ private const val DEFAULT_SLEEP_MINUTES = 30
         SleepCustomTimeDialog(onDismiss = { custom = false },
             onConfirm = { minutes -> custom = false; timer.start(minutes, state.extendToSongEnd) })
     } else MusicDialog("定时关闭", onDismiss) {
-        val colors = MiuixTheme.colorScheme
+        val colors = io.github.currencortex.music.ui.component.musicDialogColors()
         Column(Modifier.testTag("sleep_timer_sheet").heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Column(Modifier.fillMaxWidth().background(colors.onSurface.copy(alpha = .05f), RoundedCornerShape(20.dp))
@@ -100,7 +100,7 @@ private const val DEFAULT_SLEEP_MINUTES = 30
 
 /** Hours + minutes wheel, matching NetEase's custom sheet but with the app's primary action. */
 @Composable private fun SleepCustomTimeDialog(onDismiss: () -> Unit, onConfirm: (Int) -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = io.github.currencortex.music.ui.component.musicDialogColors()
     var hours by rememberSaveable { mutableStateOf(0) }
     var minutes by rememberSaveable { mutableStateOf(0) }
     MusicDialog("自定义关闭", onDismiss) {
@@ -116,15 +116,11 @@ private const val DEFAULT_SLEEP_MINUTES = 30
                 Text("分钟", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
             }
         }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(), modifier = Modifier.weight(1f).testTag("sleep_custom_cancel")) {
-                Text("取消", fontSize = 16.sp)
-            }
-            Button(onClick = { onConfirm(hours * 60 + minutes) }, enabled = hours > 0 || minutes > 0,
-                colors = ButtonDefaults.buttonColorsPrimary(),
-                modifier = Modifier.weight(1f).testTag("sleep_custom_confirm")) {
-                Text("确定", fontSize = 16.sp)
-            }
+        io.github.currencortex.music.ui.component.MusicDialogActions {
+            io.github.currencortex.music.ui.component.MusicDialogButton("取消", onDismiss,
+                Modifier.weight(1f).testTag("sleep_custom_cancel"))
+            io.github.currencortex.music.ui.component.MusicDialogButton("确定", { onConfirm(hours * 60 + minutes) },
+                Modifier.weight(1f).testTag("sleep_custom_confirm"), enabled = hours > 0 || minutes > 0)
         }
     }
 }

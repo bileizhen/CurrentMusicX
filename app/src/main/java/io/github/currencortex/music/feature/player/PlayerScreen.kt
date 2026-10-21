@@ -278,8 +278,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlayerOverlay.ROAMING -> io.github.currencortex.music.feature.roaming.PersonalRoamingDialog(vm.container, dismiss) {
                 onAiNavigate("user/binding")
             }
-            PlayerOverlay.MODE -> MusicDialog("播放模式", dismiss) {
-                PlaybackMode.entries.filter { !together.active || it != PlaybackMode.HEART }.forEach { mode -> MusicDialogButton((if (mode == playbackMode) "✓ " else "") + mode.label,
+            PlayerOverlay.MODE -> MusicChoiceDialog("播放模式", dismiss) {
+                PlaybackMode.entries.filter { !together.active || it != PlaybackMode.HEART }.forEach { mode -> MusicDialogChoiceRow(mode.label, mode == playbackMode,
                     onClick = { vm.setPlaybackMode(mode); overlay = PlayerOverlay.QUEUE },
                     enabled = (if (together.active) !together.busy else state.mode == PlayerMode.LOCAL) && (mode != PlaybackMode.HEART ||
                         (!heartLoading && io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(queue.current) != null)),
@@ -287,8 +287,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             }
             PlayerOverlay.QUALITY -> AudioQualitySheet(settings.quality, vm::quality, dismiss, state.mode == PlayerMode.LOCAL,
                 onNetwork = onNetwork?.let { { dismiss(); it() } })
-            PlayerOverlay.ACTIONS -> if (queue.current != null) MusicDialog("歌曲操作", dismiss) { actions?.invoke(queue.current!!) }
-            PlayerOverlay.OPTIONS -> MusicDialog("播放与歌词", dismiss) {
+            PlayerOverlay.ACTIONS -> if (queue.current != null) MusicChoiceDialog("歌曲操作", dismiss) { actions?.invoke(queue.current!!) }
+            PlayerOverlay.OPTIONS -> MusicChoiceDialog("播放与歌词", dismiss) {
                 Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
                 if (io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(queue.current) != null)
                     MusicDestinationRow("问AI", summary = "了解这首歌 · 私有对话", modifier = Modifier.testTag("open_player_ai"),
@@ -330,22 +330,22 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 if (card.type == "song") vm.playAiCard(card)
                 else onAiNavigate("lib/${if (card.type == "playlist") "ncmplaylist" else card.type}/${card.id}")
             }
-            PlayerOverlay.WEIGHT -> MusicDialog("歌词字重", { overlay = PlayerOverlay.LYRICS }) {
+            PlayerOverlay.WEIGHT -> MusicChoiceDialog("歌词字重", { overlay = PlayerOverlay.LYRICS }) {
                 LyricsWeight.entries.forEach { weight ->
-                    MusicDestinationRow((if (weight == settings.lyricsWeight) "✓ " else "") + weight.label,
-                        modifier = Modifier.testTag("lyrics_weight_${weight.name}"), chevron = false,
+                    MusicDialogChoiceRow(weight.label, weight == settings.lyricsWeight,
+                        modifier = Modifier.testTag("lyrics_weight_${weight.name}"),
                         onClick = { vm.lyricsWeight(weight); overlay = PlayerOverlay.LYRICS })
                 }
             }
-            PlayerOverlay.KARAOKE -> MusicDialog("卡拉OK（逐字）歌词动画兼容策略", { overlay = PlayerOverlay.LYRICS }) {
+            PlayerOverlay.KARAOKE -> MusicChoiceDialog("卡拉OK（逐字）歌词动画兼容策略", { overlay = PlayerOverlay.LYRICS }) {
                 KaraokeScope.entries.forEach { scope ->
-                    MusicDestinationRow((if (scope == settings.lyricsDisplay.karaokeScope) "✓ " else "") + scope.label,
+                    MusicDialogChoiceRow(scope.label, scope == settings.lyricsDisplay.karaokeScope,
                         summary = when (scope) {
                             KaraokeScope.CURRENT -> "只对正在播放的行逐字高亮"
                             KaraokeScope.ALL -> "所有含逐字时间的可见行跟随进度高亮"
                             KaraokeScope.ALWAYS -> "全部行启用；普通歌词按行时长近似扫亮"
                         },
-                        modifier = Modifier.testTag("karaoke_scope_${scope.name}"), chevron = false,
+                        modifier = Modifier.testTag("karaoke_scope_${scope.name}"),
                         onClick = { vm.lyricsDisplay { it.copy(karaokeScope = scope) }; overlay = PlayerOverlay.LYRICS })
                 }
             }

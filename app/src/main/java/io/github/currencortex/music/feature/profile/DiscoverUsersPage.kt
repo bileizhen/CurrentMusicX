@@ -144,19 +144,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
         }
     }
-    if (sorting) MusicDialog("用户排序", { sorting = false }) {
+    if (sorting) MusicChoiceDialog("用户排序", { sorting = false }) {
         Column(Modifier.selectableGroup()) {
             userSortOptions.forEach { (key, label) ->
-                Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(10.dp))
-                    .selectable(state.sort == key, role = Role.RadioButton) { sorting = false; vm.sort(key) }
-                    .padding(horizontal = 12.dp).testTag("discover_sort_$key"), verticalAlignment = Alignment.CenterVertically) {
-                    Text(label, Modifier.weight(1f), fontSize = 15.sp,
-                        color = if (state.sort == key) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface)
-                    if (state.sort == key) Icon(Icons.Default.Check, null, Modifier.size(18.dp), tint = MiuixTheme.colorScheme.primary)
-                }
+                MusicDialogChoiceRow(label, state.sort == key, { sorting = false; vm.sort(key) },
+                    Modifier.testTag("discover_sort_$key"))
             }
         }
-        MusicDialogButton("取消", { sorting = false })
     }
 }
 

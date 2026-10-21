@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.room
 
+import io.github.currencortex.music.ui.component.MusicChoiceDialog
+
 import io.github.currencortex.music.ui.component.MusicDialogButton
 
 import io.github.currencortex.music.ui.component.musicScrollPadding
@@ -233,7 +235,7 @@ import top.yukonga.miuix.kmp.basic.*
                     MusicTextAction("管理", onClick = { target = member }) }
         }
     }
-    target?.let { member -> MusicDialog("管理 ${member.nickname}", onDismiss = { target = null }) {
+    target?.let { member -> MusicChoiceDialog("管理 ${member.nickname}", onDismiss = { target = null }) {
         if (role == RoomRole.OWNER) {
             MusicTextAction(if (RoomRole.parse(member.role) == RoomRole.ADMIN) "取消管理员" else "设为管理员", onClick = {
                 vm.session.action("admins", buildJsonObject { put("userId", member.userId); put("on", RoomRole.parse(member.role) != RoomRole.ADMIN) }, { it == RoomRole.OWNER }); target = null })

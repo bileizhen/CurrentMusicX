@@ -133,8 +133,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             MusicDialogButton("关闭", onClick = onDismiss, modifier = Modifier.weight(0.9f))
             if (saved) MusicDialogButton(if (deleting) "删除中" else "删除", onClick = { deleteSaved() }, enabled = !deleting,
-                colors = ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.error,
-                    textColor = MiuixTheme.colorScheme.onError),
+                destructive = true,
                 modifier = Modifier.weight(0.9f).testTag("song_download_delete"))
             MusicDialogButton(when { active -> "取消下载"; info?.state == WorkInfo.State.FAILED -> "重试下载"
                 saved -> "打开歌曲"; else -> "开始下载" }, onClick = {

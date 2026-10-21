@@ -38,11 +38,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable internal fun AudioQualitySheet(selected: AudioQuality, onSelect: (AudioQuality) -> Unit,
     onDismiss: () -> Unit, enabled: Boolean = true, title: String = "当前歌曲音质", onNetwork: (() -> Unit)? = null) {
     MusicDialog(title, onDismiss, footer = {
-        Box(Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("close_quality_sheet")
-            .clickable(role = Role.Button, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onDismiss),
-            contentAlignment = Alignment.Center) {
-            Text("收起", fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-        }
+        io.github.currencortex.music.ui.component.MusicDialogButton("收起", onDismiss,
+            Modifier.testTag("close_quality_sheet"))
     }) {
         AudioQualityChoices(selected, { quality ->
             if (quality != selected) onSelect(quality)

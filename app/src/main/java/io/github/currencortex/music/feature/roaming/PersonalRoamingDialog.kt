@@ -37,7 +37,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val choice = state.catalog.choices.find { it.key == draftKey } ?: state.choice
     val loggedIn = account.loggedIn && !account.stale
     val changed = !state.active || choice.key != state.choice.key
-    val colors = MiuixTheme.colorScheme
+    val colors = io.github.currencortex.music.ui.component.musicDialogColors()
     val bodyHeight = (LocalConfiguration.current.screenHeightDp * .48f).dp
     LaunchedEffect(Unit) { station.loadCatalog() }
     LaunchedEffect(account.revision) { draftKey = null; submitted = null }

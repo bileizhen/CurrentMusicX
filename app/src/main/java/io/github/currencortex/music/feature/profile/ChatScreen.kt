@@ -203,7 +203,7 @@ import java.util.Locale
     if (referenceOpen) {
         var query by remember { mutableStateOf("") }
         var type by remember { mutableStateOf("song") }
-        MusicDialog("引用内容", { referenceOpen = false }) {
+        MusicChoiceDialog("引用内容", { referenceOpen = false }) {
             MusicTextAction("引用当前歌曲", { vm.attachCurrent(); referenceOpen = false })
             Row(Modifier.fillMaxWidth()) { listOf("song" to "歌曲", "album" to "专辑", "artist" to "歌手", "playlist" to "歌单").forEach { (key, label) ->
                 MusicTextAction((if (key == type) "✓ " else "") + label, { type = key; vm.searchReferences(query, type) }, Modifier.weight(1f))
@@ -232,7 +232,7 @@ import java.util.Locale
         }
         MusicDialogButton("关闭", { membersOpen = false })
     }
-    selected?.let { message -> MusicDialog("消息操作", { selected = null }) {
+    selected?.let { message -> MusicChoiceDialog("消息操作", { selected = null }) {
         if (message.content.isNotEmpty()) MusicDialogButton("复制文字", { clipboard.setText(AnnotatedString(message.content)); selected = null })
         if (message.userId == account.account?.id) MusicDialogButton("删除消息", { selected = null; confirming = message }, Modifier.testTag("chat_delete"))
         MusicDialogButton("关闭", { selected = null })

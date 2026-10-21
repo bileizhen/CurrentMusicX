@@ -323,13 +323,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
         }
     }
-    if (sortOpen) MusicDialog("歌曲排序", onDismiss = { sortOpen = false }) {
+    if (sortOpen) MusicChoiceDialog("歌曲排序", onDismiss = { sortOpen = false }) {
         listOf("默认顺序", "歌名 A–Z", "歌手 A–Z").forEachIndexed { index, label ->
-            MusicDestinationRow(label, { order = index; sortOpen = false }, summary = if (order == index) "当前排序" else null,
-                modifier = Modifier.testTag("playlist_order_$index"), chevron = false)
+            MusicDialogChoiceRow(label, order == index, { order = index; sortOpen = false },
+                modifier = Modifier.testTag("playlist_order_$index"))
         }
     }
-    if (menuOpen) MusicDialog("歌单操作", onDismiss = { menuOpen = false }) {
+    if (menuOpen) MusicChoiceDialog("歌单操作", onDismiss = { menuOpen = false }) {
         MusicDestinationRow("歌单信息", { menuOpen = false; infoOpen = true }, modifier = Modifier.testTag("playlist_menu_info"), chevron = false)
         MusicDestinationRow("刷新歌单", { menuOpen = false; vm.reload(force = true) }, chevron = false)
         if (state.playlist?.editable(account.account?.id ?: 0) == true) {
