@@ -37,7 +37,8 @@ import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDi
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
-fun AppearanceScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenScale: () -> Unit) {
+fun AppearanceScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenScale: () -> Unit,
+    onOpenLaunchStyle: () -> Unit = {}, onPreviewLaunch: () -> Unit = {}) {
     val uiText: (String) -> String = { it }
     val config by viewModel.settings.collectAsStateWithLifecycle()
     top.yukonga.miuix.kmp.basic.Scaffold(
@@ -58,6 +59,15 @@ fun AppearanceScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSca
                 SettingsSwitch(uiText("Monet 动态颜色"), config.monet, { value -> viewModel.edit { it.copy(monet = value) } },
                     enabled = Build.VERSION.SDK_INT >= 31, summary = if (Build.VERSION.SDK_INT < 31) "需要 Android 12 或更高版本" else null,
                     startAction = { SettingIcon(MusicIcons.Image) }, modifier = Modifier.testTag("setting_monet"))
+            }
+            Card(Modifier.padding(top = 12.dp).fillMaxWidth()) {
+                BasicComponent(title = "开屏动画", summary = "${config.launchStyle.label} · 下次启动时生效",
+                    startAction = { SettingIcon(MusicIcons.Image) },
+                    endActions = { Icon(MusicIcons.Forward, contentDescription = null) },
+                    onClick = onOpenLaunchStyle, modifier = Modifier.testTag("setting_launch_style"))
+                BasicComponent(title = "预览开屏动画", summary = "查看当前样式与用户名效果",
+                    startAction = { SettingIcon(MusicIcons.Play) },
+                    onClick = onPreviewLaunch, modifier = Modifier.testTag("setting_launch_preview"))
             }
             Card(Modifier.padding(top = 12.dp).fillMaxWidth()) {
                 SettingsSwitch(uiText("模糊"), config.blur, { value -> viewModel.edit { it.copy(blur = value) } },
@@ -119,6 +129,21 @@ fun AppearanceScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSca
     }
 }
 
+}
+
+@Composable
+fun LaunchStyleDialog(selected: io.github.currencortex.music.data.settings.LaunchStyle,
+    onSelect: (io.github.currencortex.music.data.settings.LaunchStyle) -> Unit, onDismiss: () -> Unit) {
+    io.github.currencortex.music.ui.component.MusicChoiceDialog("开屏动画", onDismiss) {
+        io.github.currencortex.music.data.settings.LaunchStyle.entries.forEach { style ->
+            io.github.currencortex.music.ui.component.MusicDialogChoiceRow(
+                label = if (style == io.github.currencortex.music.data.settings.LaunchStyle.CLASSIC) "经典（默认）" else style.label,
+                summary = style.description, selected = selected == style,
+                onClick = { onSelect(style); onDismiss() },
+                modifier = Modifier.testTag("launch_style_${style.name.lowercase()}"),
+                showDivider = style != io.github.currencortex.music.data.settings.LaunchStyle.entries.last())
+        }
+    }
 }
 
 // Hosted outside NavDisplay entries so a back gesture dismisses the popup first.

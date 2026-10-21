@@ -279,3 +279,17 @@ conveyed under the combination provisions of GPLv3/AGPLv3 section 13. The earlie
 statement about the template's GPL-only license describes the original template, not
 an exemption for these AGPL-covered components. Corresponding application source and
 build instructions are available through the application's configured GitHub source link.
+
+
+## CurrentMusic halo startup wordmark
+
+The fixed CurrentMusic vector lettering in `current_music_wordmark.json` was
+produced using the RoG Sans lettering and -0.4 shear of the user-provided
+BlueArchive-style generator: https://symbolon.pages.dev/ . Generator source:
+https://github.com/nulla2011/Bluearchive-logo (MIT, copyright 2023 nulla).
+The application bundles only this fixed wordmark artwork, not the font files.
+Font names and their respective rights remain with their original owners.
+The ring, star, particles and animation timeline are rendered with native Canvas.
+Ring motion keyframes were measured from the user-supplied animation reference;
+the reference video and its audio are not bundled. Usernames are rendered locally
+using Android fonts and are never sent to the generator.

@@ -139,11 +139,13 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     var launchFinished by rememberSaveable { mutableStateOf(!animateLaunch) }
     val launchBrand = remember { LaunchBrandState() }
     val avatarFlight = remember { AvatarFlightState() }
+    var launchStyle by remember { mutableStateOf<io.github.currencortex.music.data.settings.LaunchStyle?>(null) }
+    var launchPreview by remember { mutableStateOf<io.github.currencortex.music.data.settings.LaunchStyle?>(null) }
     launchBrand.active = !launchFinished
     val launchReady by androidx.compose.runtime.produceState(!animateLaunch, container) {
         if (animateLaunch) {
             container.ready.await()
-            container.settings.snapshot()
+            launchStyle = container.settings.snapshot().launchStyle
             container.sessionRestored.await()
         }
         value = true
@@ -172,7 +174,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     var showUpdatePreview by rememberSaveable { mutableStateOf(false) }
     val updateDialogVisible = updateRequested || updateTransitionVisible
     val updateTransferState by container.updateTransfer.state.collectAsStateWithLifecycle()
-    val announcementVisible = launchFinished && announcements.isNotEmpty() && !updateDialogVisible
+    val announcementVisible = launchFinished && launchPreview == null && announcements.isNotEmpty() && !updateDialogVisible
 
     // Decide from DataStore directly: the StateFlow's initial value can race the first disk read.
     LaunchedEffect(Unit) {
@@ -212,8 +214,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
     var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
     val playlistPage = isPlaylistRoute(backStack.last())
-    LeiTheme(settings, darkSystemBars = if (updateDialogVisible || miniQueueOpen || (playlistPage && settings.playlistDepthRibbon) || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
-        darkStatusBars = if (updateDialogVisible || playlistPage) true else null) {
+    val haloVisible = (!launchFinished && launchStyle == io.github.currencortex.music.data.settings.LaunchStyle.HALO) ||
+        launchPreview == io.github.currencortex.music.data.settings.LaunchStyle.HALO
+    LeiTheme(settings, darkSystemBars = if (haloVisible || updateDialogVisible || miniQueueOpen || (playlistPage && settings.playlistDepthRibbon) || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
+        darkStatusBars = if (haloVisible || updateDialogVisible || playlistPage) true else null) {
         CompositionLocalProvider(LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight,
             LocalRefreshRatePreference provides settings.refreshRate) {
         Box(Modifier.fillMaxSize().musicRefreshRate(settings.refreshRate)) {
@@ -302,6 +306,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         LaunchedEffect(openDesktopRequest) { if (openDesktopRequest > 0) navigateLibrary("desktop-lyrics") }
         var showLogs by rememberSaveable { mutableStateOf(false) }
         var showScale by rememberSaveable { mutableStateOf(false) }
+        var showLaunchStyle by rememberSaveable { mutableStateOf(false) }
         var memberFocus by remember { mutableStateOf<MemberFocus?>(null) }
         var shownMember by remember { mutableStateOf<MemberFocus?>(null) }
         LaunchedEffect(memberFocus) { memberFocus?.let { shownMember = it } }
@@ -426,7 +431,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             }
         }
         val page: @Composable () -> Unit = {
-        Box(Modifier.fillMaxSize().then(if (launchBrand.active || playerPresented || miniQueueOpen || updateDialogVisible) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
+        Box(Modifier.fillMaxSize().then(if (launchBrand.active || launchPreview != null || playerPresented || miniQueueOpen || updateDialogVisible) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
         Column(Modifier.fillMaxSize().then(if (searchPresented) Modifier else Modifier.imePadding())) {
         NavDisplay(
             backStack = sceneStack,
@@ -537,7 +542,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 }
                 entry(APPEARANCE.toString()) {
                     Box(Modifier.fillMaxSize().navigationBarsPadding()) {
-                        AppearanceScreen(settingsVm, onBack = ::navigateBack, onOpenScale = { showScale = true })
+                        AppearanceScreen(settingsVm, onBack = ::navigateBack, onOpenScale = { showScale = true },
+                            onOpenLaunchStyle = { showLaunchStyle = true }, onPreviewLaunch = { launchPreview = settings.launchStyle })
                     }
                 }
                 entry(ABOUT.toString()) {
@@ -711,7 +717,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             origin = playerOrigin, viewport = navigationBounds, artwork = artworkTransition,
             artworkUrl = currentSong?.cover.orEmpty(), predictiveBack = predictiveBack,
             backEnabled = !showLogs && pendingPlay == null && !updateDialogVisible && !announcementVisible &&
-                !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null &&
+                !showScale && !showLaunchStyle && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null &&
                 !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
             onBack = ::navigateBack, onSettled = { playerSheetMotion = PlayerSheetMotion.NONE }) {
             playerSavedState.SaveableStateProvider(PLAYER) {
@@ -741,10 +747,12 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !playerPresented && !searchPresented && !predictiveBack && !showLogs &&
-                pendingPlay == null && !updateDialogVisible && !announcementVisible && !showScale && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
+                pendingPlay == null && !updateDialogVisible && !announcementVisible && !showScale && !showLaunchStyle && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }
+        if (showLaunchStyle) io.github.currencortex.music.feature.settings.LaunchStyleDialog(settings.launchStyle,
+            onSelect = { style -> settingsVm.edit { it.copy(launchStyle = style) } }, onDismiss = { showLaunchStyle = false })
         MemberDetailDialog(show = memberFocus != null, focus = shownMember, onDismiss = { memberFocus = null })
         LogExportDialog(showLogs, container.logger) { showLogs = false }
         if (announcementVisible) io.github.currencortex.music.feature.announcement.AnnouncementDialog(announcements,
@@ -803,11 +811,26 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val landingOnHome = selected == HOME_TAB && backStack.last() == ROOT.toString()
         val pageReady = launchReady && startupRouted && (!account.loading || container.nativeNetease != null) &&
             (!landingOnHome || (libraryHome.loaded && !libraryHome.loading))
-        if (!launchFinished) LaunchBrandOverlay(launchBrand, pageReady,
-            canLandOnHome = landingOnHome,
-            windowReady = launchWindowReady,
-            enableBlur = settings.blur,
-            onFinished = { launchBrand.active = false; launchFinished = true })
+        if (!launchFinished) {
+            val finish = { launchBrand.active = false; launchFinished = true }
+            when (launchStyle) {
+                io.github.currencortex.music.data.settings.LaunchStyle.HALO -> HaloLaunchOverlay(
+                    launchUsername(account.account), pageReady, launchWindowReady, onFinished = finish)
+                io.github.currencortex.music.data.settings.LaunchStyle.CLASSIC -> LaunchBrandOverlay(launchBrand, pageReady,
+                    canLandOnHome = landingOnHome, windowReady = launchWindowReady, enableBlur = settings.blur, onFinished = finish)
+                null -> LaunchPreparationOverlay()
+            }
+        }
+        launchPreview?.let { style ->
+            val previewBrand = remember(style) { LaunchBrandState() }
+            androidx.activity.compose.BackHandler { launchPreview = null }
+            when (style) {
+                io.github.currencortex.music.data.settings.LaunchStyle.HALO -> HaloLaunchOverlay(
+                    launchUsername(account.account), ready = true, preview = true, onFinished = { launchPreview = null })
+                io.github.currencortex.music.data.settings.LaunchStyle.CLASSIC -> LaunchBrandOverlay(previewBrand,
+                    ready = true, canLandOnHome = false, enableBlur = settings.blur, onFinished = { launchPreview = null })
+            }
+        }
         }
         }
     }
