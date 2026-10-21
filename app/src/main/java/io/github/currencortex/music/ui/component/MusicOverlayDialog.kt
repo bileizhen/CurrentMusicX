@@ -16,6 +16,9 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.Alignment
+import top.yukonga.miuix.kmp.theme.LocalContentColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Text
@@ -34,24 +37,28 @@ fun MusicOverlayDialog(
     summary: String? = null,
     onDismissRequest: (() -> Unit)? = null,
     onDismissFinished: (() -> Unit)? = null,
-    insideMargin: DpSize = DpSize(20.dp, 20.dp),
-    outsideMargin: DpSize = DialogDefaults.outsideMargin,
+    insideMargin: DpSize = DpSize(24.dp, 24.dp),
+    outsideMargin: DpSize = DpSize(16.dp, 12.dp),
     alignContent: Boolean = true,
     backgroundColor: Color? = null,
-    matchPanelMotion: Boolean = false,
+    matchPanelMotion: Boolean = true,
+    edgeToEdgeContent: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val visible = remember { mutableStateOf(show) }
     SideEffect { visible.value = show }
     val dismiss = rememberUpdatedState(onDismissRequest)
-    val colors = rememberUpdatedState(MiuixTheme.colorScheme)
+    val styled = backgroundColor == null
+    val colors = rememberUpdatedState(if (styled) musicDialogColors() else MiuixTheme.colorScheme)
+    val backdrop = rememberUpdatedState(LocalMusicDialogBackdrop.current)
+    val commonStyle = rememberUpdatedState(styled)
+    val edgeContent = rememberUpdatedState(edgeToEdgeContent)
     val styles = rememberUpdatedState(MiuixTheme.textStyles)
     val currentModifier = rememberUpdatedState(modifier)
     val currentTitle = rememberUpdatedState(title)
     val currentSummary = rememberUpdatedState(summary)
     val currentInsideMargin = rememberUpdatedState(insideMargin)
     val currentOutsideMargin = rememberUpdatedState(outsideMargin)
-    val aligned = rememberUpdatedState(alignContent)
     val currentBackground = rememberUpdatedState(backgroundColor)
     val panelMotion = rememberUpdatedState(matchPanelMotion)
     val panelHeight = remember { mutableIntStateOf(0) }
@@ -69,24 +76,28 @@ fun MusicOverlayDialog(
                 Scaffold(containerColor = Color.Transparent, contentWindowInsets = WindowInsets(0, 0, 0, 0)) {
                     OverlayDialog(show = true, modifier = currentModifier.value.then(if (panelMotion.value)
                         Modifier.onSizeChanged { panelHeight.intValue = it.height } else Modifier),
-                        title = currentTitle.value.takeUnless { aligned.value },
-                        summary = currentSummary.value.takeUnless { aligned.value },
-                        insideMargin = currentInsideMargin.value, outsideMargin = currentOutsideMargin.value,
-                        backgroundColor = currentBackground.value ?: DialogDefaults.backgroundColor(),
+                        insideMargin = DpSize(0.dp, 0.dp), outsideMargin = currentOutsideMargin.value,
+                        backgroundColor = currentBackground.value ?: Color.Transparent,
                         enableWindowDim = false, renderInRootScaffold = false,
                         onDismissRequest = { if (visible.value) dismiss.value?.invoke() }) {
-                        if (!aligned.value) body.value() else CompositionLocalProvider(LocalMusicDialogContent provides true) {
-                            Column(Modifier.fillMaxWidth()) {
-                                if (currentTitle.value != null || currentSummary.value != null) {
-                                    Column(Modifier.fillMaxWidth().padding(bottom = 16.dp),
-                                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        currentTitle.value?.let { Text(it, Modifier.fillMaxWidth().testTag("music_dialog_title"),
-                                            fontSize = 20.sp, fontWeight = FontWeight.SemiBold) }
-                                        currentSummary.value?.let { Text(it, Modifier.fillMaxWidth(), fontSize = 13.sp,
-                                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }
-                                    }
+                        // Paint the entire material inside the native animated layer, together with the text.
+                        Box(Modifier.fillMaxWidth().testTag("music_dialog_surface")
+                            .then(if (commonStyle.value) Modifier.musicDialogMaterial(backdrop.value) else Modifier)) {
+                            val inset = currentInsideMargin.value
+                            CompositionLocalProvider(LocalMusicDialogContent provides true,
+                                LocalMusicDialogEdgeToEdge provides edgeContent.value,
+                                LocalContentColor provides colors.value.onBackground) {
+                                Column(Modifier.fillMaxWidth().padding(top = inset.height, bottom = if (edgeContent.value) 16.dp else inset.height)) {
+                                    currentTitle.value?.let { Text(it, Modifier.fillMaxWidth().padding(horizontal = inset.width)
+                                        .testTag("music_dialog_title"), fontSize = 20.sp, lineHeight = 27.sp,
+                                        fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                                        color = colors.value.onBackground) }
+                                    currentSummary.value?.let { Text(it,
+                                        Modifier.fillMaxWidth().padding(horizontal = inset.width).padding(top = 12.dp),
+                                        fontSize = 14.sp, lineHeight = 22.sp, color = colors.value.onSurfaceVariantSummary) }
+                                    Box(Modifier.fillMaxWidth().padding(top = if (currentTitle.value != null || currentSummary.value != null) (if (edgeContent.value) 8.dp else 16.dp) else 0.dp)
+                                        .padding(horizontal = if (edgeContent.value) 0.dp else inset.width)) { body.value() }
                                 }
-                                body.value()
                             }
                         }
                     }

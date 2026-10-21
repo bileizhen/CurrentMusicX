@@ -383,12 +383,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             selectTab(HOME_TAB)
         }
 
+        val dialogBackdrop = rememberMusicDialogBackdrop()
+        CompositionLocalProvider(LocalMusicDialogBackdrop provides dialogBackdrop) {
         top.yukonga.miuix.kmp.basic.Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = MiuixTheme.colorScheme.background) {
         CompositionLocalProvider(LocalSongMenu provides { songMenu = it }, LocalRoomSongRequest provides roomRequest,
             LocalPlayerSheetDrag provides playerDrag, LocalPlayerArtworkRotation provides artworkRotation,
             LocalRecordFlightTarget provides { miniArtworkOrigin?.invoke()?.bounds }) {
-        BoxWithConstraints(Modifier.fillMaxSize().testTag("music_window")
+        BoxWithConstraints(Modifier.fillMaxSize().musicDialogBackdropSource().testTag("music_window")
             .onGloballyPositioned { navigationBounds = it.boundsInRoot() }) {
         val wideLayout = maxWidth >= 700.dp
         val rootWide = rootPage && wideLayout
@@ -794,6 +796,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsRecommendation(container,
             eligible = launchFinished && announcements.isEmpty() && !updateDialogVisible && pendingPlay == null)
+        }
         }
         AvatarFlightOverlay(avatarFlight)
         io.github.currencortex.music.feature.lyrics.desktop.SoundEffectIslandFallback(container)
