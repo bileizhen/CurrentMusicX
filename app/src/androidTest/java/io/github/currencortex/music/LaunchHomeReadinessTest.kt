@@ -74,6 +74,23 @@ class LaunchHomeReadinessTest {
         condition()
     }
 
+    @Test fun storedHaloStartsDirectlyWithRestoredAccountAndDoesNotReplayOnRecomposition() {
+        runBlocking { container.settings.edit { it.copy(launchStyle = io.github.currencortex.music.data.settings.LaunchStyle.HALO) } }
+        daily.countDown(); recent.countDown(); playlists.countDown()
+        compose.mainClock.autoAdvance = false
+        compose.setContent { CurrentMusicApp(container, animateLaunch = true) }
+        pumpUntil { compose.onAllNodesWithTag("halo_launch_frame").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("launch_wordmark", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("halo_launch_frame").assertContentDescriptionEquals("CurrentMusic · Fixture user")
+        pumpUntil { paths.containsAll(listOf("/cm/daily", "/cm/plays/recent", "/cm/playlists")) }
+        compose.mainClock.advanceTimeBy(9500)
+        pumpUntil { compose.onAllNodesWithTag("launch_animation").fetchSemanticsNodes().isEmpty() }
+        runBlocking { container.settings.edit { it.copy(launchStyle = io.github.currencortex.music.data.settings.LaunchStyle.CLASSIC) } }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("launch_animation").assertDoesNotExist()
+        assertFalse(container.playerController.state.value.playing)
+    }
+
     @Test fun launchWaitsForEveryHomeSectionAndFailureOffersRetryWithoutReplaying() {
         compose.mainClock.autoAdvance = false
         compose.setContent { CurrentMusicApp(container, animateLaunch = true) }

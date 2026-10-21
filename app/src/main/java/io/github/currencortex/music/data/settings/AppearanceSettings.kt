@@ -1,6 +1,10 @@
 package io.github.currencortex.music.data.settings
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
+enum class LaunchStyle(val label: String, val description: String) {
+    CLASSIC("经典", "原有文字与头像开屏动画"),
+    HALO("光环", "光环展开、星芒与蓝色粒子，展示当前用户名"),
+}
 /** Device-reported rates are not limited to a fixed list of 60/90/120 Hz. */
 data class RefreshRatePreference(val hz: Int) {
     init { require(hz in 0..1000) }
@@ -35,6 +39,7 @@ data class AppearanceSettings(
     val refreshRate: RefreshRatePreference = RefreshRatePreference.SYSTEM,
     val playerBackground: String = "",
     val playerBackgroundBlur: Float = 35f,
+    val launchStyle: LaunchStyle = LaunchStyle.CLASSIC,
 ) {
     fun normalized() = copy(uiScale = if (uiScale.isFinite()) uiScale.coerceIn(MIN_SCALE, MAX_SCALE) else 1f,
         playerBackgroundBlur = if (playerBackgroundBlur.isFinite()) playerBackgroundBlur.coerceIn(0f, 100f) else 35f)
