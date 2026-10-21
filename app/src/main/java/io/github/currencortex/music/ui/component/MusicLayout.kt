@@ -3,6 +3,9 @@ package io.github.currencortex.music.ui.component
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,8 +57,18 @@ val LocalMusicPageActive = staticCompositionLocalOf { true }
 
 @Composable fun MusicDestinationRow(title: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     summary: String? = null, enabled: Boolean = true, chevron: Boolean = true) {
-    Row(modifier.fillMaxWidth().clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-        .heightIn(min = 52.dp).padding(horizontal = if (LocalMusicDialogContent.current) 0.dp else 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+    val dialog = LocalMusicDialogContent.current
+    val press = rememberMusicDialogPress()
+    val clicks = remember { MutableInteractionSource() }
+    val ink = MiuixTheme.colorScheme.onBackground
+    Row(modifier.fillMaxWidth().then(if (dialog) Modifier.drawBehind {
+        drawRect(ink.copy(alpha = .06f * press.amount.value))
+    }.then(if (enabled) Modifier.musicDialogRowPress(press) else Modifier) else Modifier)
+        .clickable(enabled = enabled, role = Role.Button, interactionSource = clicks,
+            indication = if (dialog) null else androidx.compose.foundation.LocalIndication.current, onClick = onClick)
+        .heightIn(min = if (dialog) 48.dp else 52.dp)
+        .padding(horizontal = if (!dialog) 16.dp else if (LocalMusicDialogEdgeToEdge.current) 24.dp else 0.dp,
+            vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(title, fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else .4f))
             summary?.let { Text(it, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f),

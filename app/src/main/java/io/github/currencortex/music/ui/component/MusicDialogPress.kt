@@ -1,4 +1,4 @@
-package io.github.currencortex.music.feature.update
+package io.github.currencortex.music.ui.component
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
@@ -16,11 +16,11 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-internal class UpdateDialogPress(val source: MutableInteractionSource,
+internal class MusicDialogPress(val source: MutableInteractionSource,
     val amount: Animatable<Float, AnimationVector1D>)
 
 /** Observe without consuming: a scroll cancels the highlight, while a tap still reaches selectable. */
-internal fun Modifier.updateDialogRowPress(feedback: UpdateDialogPress): Modifier = pointerInput(feedback) {
+internal fun Modifier.musicDialogRowPress(feedback: MusicDialogPress): Modifier = pointerInput(feedback) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         val press = PressInteraction.Press(down.position)
@@ -31,8 +31,8 @@ internal fun Modifier.updateDialogRowPress(feedback: UpdateDialogPress): Modifie
 }
 
 /** A quick tap still gets a short pulse; cancelled drags return without firing an action. */
-@Composable internal fun rememberUpdateDialogPress(): UpdateDialogPress {
-    val feedback = remember { UpdateDialogPress(MutableInteractionSource(), Animatable(0f)) }
+@Composable internal fun rememberMusicDialogPress(): MusicDialogPress {
+    val feedback = remember { MusicDialogPress(MutableInteractionSource(), Animatable(0f)) }
     LaunchedEffect(feedback) {
         var pulse: Job? = null
         feedback.source.interactions.collect { interaction ->
