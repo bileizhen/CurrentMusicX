@@ -48,7 +48,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 
 private enum class PlayerContent { COVER, LYRICS }
-private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI, ROAMING }
+private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI, ROAMING, BACKGROUND }
 internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePosition")
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
@@ -59,6 +59,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val appearance by vm.container.settings.state.collectAsStateWithLifecycle()
+    val backgroundImage = remember(appearance.playerBackground) { vm.container.playerBackgrounds.file(appearance.playerBackground) }
     val songActions by vm.actions.collectAsStateWithLifecycle()
     val comments by vm.comments.collectAsStateWithLifecycle()
     val commentComposer by vm.commentComposer.collectAsStateWithLifecycle()
@@ -173,7 +175,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 PlayerIconButton(PlayerIcon.MORE, "播放与歌词设置", { overlay = PlayerOverlay.OPTIONS }, Modifier.testTag("lyrics_options"))
             }
         }
-        PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize())
+        PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize(), backgroundImage, appearance.playerBackgroundBlur)
         // The artwork viewport uses light ink; dialogs below inherit the app appearance.
         MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
         CompositionLocalProvider(LocalIndication provides indication) {
@@ -269,6 +271,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss, actions)
         when (overlay) {
             PlayerOverlay.NONE -> Unit
+            PlayerOverlay.BACKGROUND -> PlayerBackgroundDialog(vm.container, dismiss)
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) },
                 commentComposer, vm::editComment, vm::replyTo, vm::sendComment)
             PlayerOverlay.QUEUE -> Unit
@@ -308,6 +311,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     else { dismiss(); menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false)) }
                 })
                 MusicDestinationRow("播放音质", summary = if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null)
+                MusicDestinationRow("播放背景", summary = if (backgroundImage == null) "跟随歌曲封面" else "自定义图片 · 模糊 ${appearance.playerBackgroundBlur.toInt()}%",
+                    modifier = Modifier.testTag("open_player_background"), onClick = { overlay = PlayerOverlay.BACKGROUND })
                 MusicDestinationRow("私人漫游", summary = if (roaming.active) roaming.choice.title else "按你的喜好连续推荐",
                     modifier = Modifier.testTag("open_player_roaming"), onClick = { overlay = PlayerOverlay.ROAMING })
                 if (onEqualizer != null) MusicDestinationRow("音效", onClick = { dismiss(); onEqualizer() },

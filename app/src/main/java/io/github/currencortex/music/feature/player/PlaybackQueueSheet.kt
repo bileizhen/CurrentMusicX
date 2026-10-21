@@ -67,6 +67,8 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
     val actions by vm.actions.collectAsStateWithLifecycle()
     val together by vm.together.state.collectAsStateWithLifecycle()
     val sharedQueue by vm.together.queue.collectAsStateWithLifecycle()
+    val appearance by vm.container.settings.state.collectAsStateWithLifecycle()
+    val background = remember(appearance.playerBackground) { vm.container.playerBackgrounds.file(appearance.playerBackground) }
     val shared = together.active
     val displayed = if (shared) sharedQueue else queue
     val openMenu = LocalSongMenu.current
@@ -87,7 +89,8 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         onSelect = { index -> if (shared) displayed.songs.getOrNull(index)?.let { vm.together.selectSong(it.id) } else vm.player.select(index) },
         onRemove = { index -> if (shared) displayed.songs.getOrNull(index)?.let { vm.together.removeSong(it.id) } else vm.player.remove(index) },
         onClear = { if (shared) vm.together.clearQueue() else vm.player.clear() },
-        onMode = vm::setPlaybackMode, onDismiss = onDismiss, shared = shared, nativeActions = nativeActions)
+        onMode = vm::setPlaybackMode, onDismiss = onDismiss, shared = shared, nativeActions = nativeActions,
+        customBackground = background, backgroundBlur = appearance.playerBackgroundBlur)
     NativeQueueCollectionDialog(vm, batch, collecting) { collecting = false }
     io.github.currencortex.music.feature.download.QueueDownloadDialog(vm.container, batch, downloading) { downloading = false }
 }
@@ -97,7 +100,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
     heartAvailable: Boolean, error: String?, motion: QueuePageMotion, backdrop: Boolean, tag: String,
     onSelect: (Int) -> Unit, onRemove: (Int) -> Unit, onClear: () -> Unit,
     onMode: (PlaybackMode) -> Unit, onDismiss: () -> Unit, shared: Boolean = false,
-    nativeActions: NativeQueueActions? = null) {
+    nativeActions: NativeQueueActions? = null, customBackground: java.io.File? = null, backgroundBlur: Float = 35f) {
     val scope = rememberCoroutineScope()
     val dismiss by rememberUpdatedState(onDismiss)
     val list = rememberLazyListState((queue.index - 2).coerceAtLeast(0))
@@ -177,7 +180,8 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         .semantics { this[QueuePageProgress] = motion.progress; isTraversalGroup = true }
         .pointerInput(Unit) { detectTapGestures {} }) {
         height = constraints.maxHeight.toFloat().coerceAtLeast(1f)
-        if (backdrop) PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize().graphicsLayer { alpha = motion.progress })
+        if (backdrop) PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize().graphicsLayer { alpha = motion.progress },
+            customBackground, backgroundBlur)
         Column(Modifier.fillMaxSize().graphicsLayer { translationY = size.height * (1 - motion.progress) }
             .statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)
             .align(Alignment.TopCenter)) {

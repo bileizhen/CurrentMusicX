@@ -33,7 +33,10 @@ data class AppearanceSettings(
     val navigationGlow: Boolean = true,
     val playlistDepthRibbon: Boolean = false,
     val refreshRate: RefreshRatePreference = RefreshRatePreference.SYSTEM,
+    val playerBackground: String = "",
+    val playerBackgroundBlur: Float = 35f,
 ) {
-    fun normalized() = copy(uiScale = if (uiScale.isFinite()) uiScale.coerceIn(MIN_SCALE, MAX_SCALE) else 1f)
+    fun normalized() = copy(uiScale = if (uiScale.isFinite()) uiScale.coerceIn(MIN_SCALE, MAX_SCALE) else 1f,
+        playerBackgroundBlur = if (playerBackgroundBlur.isFinite()) playerBackgroundBlur.coerceIn(0f, 100f) else 35f)
     companion object { const val MIN_SCALE = 0.8f; const val MAX_SCALE = 1.2f }
 }
