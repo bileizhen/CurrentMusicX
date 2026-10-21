@@ -61,6 +61,8 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
     val message by vm.message.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val settings by vm.container.musicSettings.state.collectAsStateWithLifecycle()
+    val tasksEnabled by vm.container.neteaseTasksEnabled.collectAsStateWithLifecycle()
+    val taskScope = rememberCoroutineScope()
     val sessionRevision by vm.container.accountRepository.sessionRevision.collectAsStateWithLifecycle()
     var qr by rememberSaveable(account.account?.id, settings.server, sessionRevision) { mutableStateOf(true) }
     var generation by remember { mutableIntStateOf(0) }
@@ -144,6 +146,15 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
             }
         }
         if (vm.container.nativeNetease != null) item {
+            Card(Modifier.fillMaxWidth()) {
+                io.github.currencortex.music.ui.component.SettingsSwitch("网易云任务", tasksEnabled == true, { enabled ->
+                    taskScope.launch {
+                        val result = io.github.currencortex.music.core.network.appResult { vm.container.neteaseTaskPreferences.enable(enabled) }
+                        if (result is io.github.currencortex.music.core.network.AppResult.Failure) vm.container.errorNotices.show(result.message)
+                    }
+                }, Modifier.testTag("netease_tasks_enabled"), summary = "开启后在“我的”的网易云账号下方显示任务入口", enabled = tasksEnabled != null)
+            }
+            Spacer(Modifier.height(12.dp))
             Text(if (vm.container.apiClient.hasLocalNeteaseLogin)
                 "当前使用本机网易云登录，登录信息加密保存在此设备。CurrentMusic 云端资产独立同步。"
                 else if (state.binding?.bound == true)
