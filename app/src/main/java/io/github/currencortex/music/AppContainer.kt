@@ -429,6 +429,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         }
     }
     val settings = SettingsRepository(settingsStore, appScope)
+    val playerBackgrounds = io.github.currencortex.music.data.settings.PlayerBackgroundStore(context, settings, storageSuffix)
     val updateSettings = UpdateSettingsRepository(settingsStore, appScope)
     val updates = UpdateService(
         checker = GitHubUpdateChecker(

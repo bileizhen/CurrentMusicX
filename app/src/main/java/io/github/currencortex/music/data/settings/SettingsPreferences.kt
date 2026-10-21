@@ -17,6 +17,8 @@ internal object SettingsPreferences {
     private val DEPTH_RIBBON = booleanPreferencesKey("playlist_depth_ribbon")
     private val NAVIGATION_GLOW = booleanPreferencesKey("navigation_glow")
     private val REFRESH_RATE = stringPreferencesKey("refresh_rate")
+    private val PLAYER_BACKGROUND = stringPreferencesKey("player_background")
+    private val PLAYER_BACKGROUND_BLUR = floatPreferencesKey("player_background_blur")
 
     fun read(p: Preferences) = AppearanceSettings(
         themeMode = runCatching { ThemeMode.valueOf(p[THEME] ?: ThemeMode.SYSTEM.name) }.getOrDefault(ThemeMode.SYSTEM),
@@ -29,6 +31,8 @@ internal object SettingsPreferences {
         navigationGlow = p[NAVIGATION_GLOW] ?: true,
         playlistDepthRibbon = p[DEPTH_RIBBON] ?: false,
         refreshRate = runCatching { RefreshRatePreference.valueOf(p[REFRESH_RATE] ?: RefreshRatePreference.SYSTEM.name) }.getOrDefault(RefreshRatePreference.SYSTEM),
+        playerBackground = p[PLAYER_BACKGROUND].orEmpty(),
+        playerBackgroundBlur = p[PLAYER_BACKGROUND_BLUR] ?: 35f,
     ).normalized()
 
     fun write(p: MutablePreferences, s: AppearanceSettings) {
@@ -43,5 +47,7 @@ internal object SettingsPreferences {
         p[NAVIGATION_GLOW] = v.navigationGlow
         p[DEPTH_RIBBON] = v.playlistDepthRibbon
         p[REFRESH_RATE] = v.refreshRate.name
+        p[PLAYER_BACKGROUND] = v.playerBackground
+        p[PLAYER_BACKGROUND_BLUR] = v.playerBackgroundBlur
     }
 }
