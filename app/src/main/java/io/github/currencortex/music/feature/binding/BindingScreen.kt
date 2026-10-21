@@ -49,7 +49,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
         mapOf(EncodeHintType.MARGIN to 4, EncodeHintType.CHARACTER_SET to "UTF-8"))
     return IntArray(size * size) { index -> if (matrix[index % size, index / size]) android.graphics.Color.BLACK else android.graphics.Color.WHITE }
 }
-@Composable fun BindingScreen(vm: BindingViewModel, onBack: () -> Unit) {
+@Composable fun BindingScreen(vm: BindingViewModel, onBack: () -> Unit, onCurrentMusicLogin: () -> Unit = {}) {
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     fun finishInput() { focus.clearFocus(); keyboard?.hide() }
@@ -64,6 +64,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
     val tasksEnabled by vm.container.neteaseTasksEnabled.collectAsStateWithLifecycle()
     val taskScope = rememberCoroutineScope()
     val sessionRevision by vm.container.accountRepository.sessionRevision.collectAsStateWithLifecycle()
+    val canLoginNetease = account.account != null && vm.canLoginNetease
     var qr by rememberSaveable(account.account?.id, settings.server, sessionRevision) { mutableStateOf(true) }
     var generation by remember { mutableIntStateOf(0) }
     var phone by rememberSaveable(account.account?.id, settings.server, sessionRevision) { mutableStateOf("") }
@@ -84,7 +85,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
         (state.binding == null && !state.loading && state.error != null)
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(vm, owner, qr, loginVisible, generation, account.account?.id, settings.server, sessionRevision) {
-        if (qr && loginVisible && (account.account != null || vm.container.nativeNetease != null)) owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+        if (qr && loginVisible && canLoginNetease) owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             vm.qrSession(); awaitCancellation()
         } else vm.clearQr()
     }
@@ -113,6 +114,19 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
     LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("binding_screen"), state = list,
         contentPadding = musicScrollPadding(PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 28.dp)),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (!canLoginNetease) item {
+            Card(Modifier.fillMaxWidth().testTag("binding_currentmusic_required")) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Text("先登录 CurrentMusic", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Text("请先注册并登录 CurrentMusic 账号，再登录网易云。已有账号可直接登录。",
+                        fontSize = 14.sp, lineHeight = 22.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    Button(onClick = onCurrentMusicLogin, colors = ButtonDefaults.buttonColorsPrimary(),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("binding_currentmusic_login")) {
+                        Text("注册 / 登录 CurrentMusic", fontSize = 14.sp, color = MiuixTheme.colorScheme.onPrimary)
+                    }
+                }
+            }
+        }
         if (state.loading && state.binding == null) item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -137,7 +151,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                     Spacer(Modifier.height(16.dp))
                     BindingMedalsCard(medals, vm::reloadMedals)
                 }
-            } else item {
+            } else if (canLoginNetease) item {
                 Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("连接你的音乐库", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
                     Text("连接网易云的我喜欢和歌单，在 CurrentMusic 中继续聆听。", fontSize = 13.sp, lineHeight = 21.sp,
@@ -159,7 +173,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                 "当前使用本机网易云登录，登录信息加密保存在此设备。CurrentMusic 云端资产独立同步。"
                 else if (state.binding?.bound == true)
                     "已复用当前 CurrentMusic 账号的云端网易云绑定，无需再次扫码。本机登录可用于直连和原版音效。"
-                else "登录 CurrentMusic 后可复用云端网易云绑定，也可在此单独登录，凭据加密保存在此设备。",
+                else "注册并登录 CurrentMusic 后，可在此登录网易云。网易云凭据加密保存在此设备，原生接口仍直连网易云。",
                 fontSize = 12.sp, lineHeight = 19.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f),
                 modifier = Modifier.testTag("netease_direct_notice"))
         }
@@ -172,7 +186,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
         }
         if (busy) item { BindingNotice("正在处理，请稍候…", busy = true) }
         message?.let { value -> item { BindingNotice(value, Modifier.testTag("binding_result")) } }
-        if (loginVisible) {
+        if (loginVisible && canLoginNetease) {
             if (state.binding?.bound == true) item {
                 Text("重新登录网易云", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             }

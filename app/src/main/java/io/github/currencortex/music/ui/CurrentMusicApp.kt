@@ -573,7 +573,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                 }
                                 route == "user/binding" -> {
                                     val vm: BindingViewModel = viewModel(key = route, factory = viewModelFactory { BindingViewModel(container) })
-                                    BindingScreen(vm, ::navigateBack)
+                                    BindingScreen(vm, ::navigateBack) { authVm.begin(); navigateLibrary("user/login") }
                                 }
                                 route == "user/netease-tasks" -> {
                                     val vm: io.github.currencortex.music.feature.tasks.NeteaseTasksViewModel = viewModel(key = route,

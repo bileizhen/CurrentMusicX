@@ -44,11 +44,14 @@ class NeteaseSessionStore(private val vault: TokenStore, scope: CoroutineScope) 
     internal fun check(expected: NeteaseSession) {
         if (state.value.revision != expected.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
     }
-    internal suspend fun login(cookies: Map<String, String>, profile: BoundProfile, expected: NeteaseSession) {
+    internal suspend fun login(cookies: Map<String, String>, profile: BoundProfile, expected: NeteaseSession,
+        beforeCommit: () -> Unit = {}) {
         require(!cookies["MUSIC_U"].isNullOrBlank() && profile.uid > 0)
         ready.await()
         withContext(Dispatchers.IO) { mutex.withLock {
             check(expected)
+            currentCoroutineContext().ensureActive()
+            beforeCommit()
             val record = NeteaseCredential(cookies, profile, current.deviceId)
             vault.write(ApiJson.encodeToString(NeteaseCredential.serializer(), record))
             current = record; publish(state.value.revision + 1)

@@ -23,6 +23,8 @@ class ApiClient(
         .callTimeout(90, TimeUnit.SECONDS).followRedirects(false).build(),
     val netease: NeteaseGateway? = null,
     private val nativeMedia: () -> Boolean = { false },
+    private val currentMusicAccountReady: () -> Boolean = { !token().isNullOrBlank() },
+    private val currentMusicSessionRevision: () -> Long = { 0L },
 ) {
     private val http = client.newBuilder().addInterceptor(AuthInterceptor()).build()
     private val singleAttemptHttp = http.newBuilder().retryOnConnectionFailure(false).build()
@@ -45,6 +47,16 @@ class ApiClient(
                         retryConnection: Boolean = true, callTimeoutMillis: Long? = null,
                         projectOnly: Boolean = false): JsonElement = withContext(Dispatchers.IO) {
         val session = RequestSession(server(), if (authenticated) token() else null)
+        val requiresAccount = path.startsWith("ncmbind/qr/") || path.startsWith("ncmbind/phone/") || path == "ncm/captcha/sent/v1"
+        val loginOwner = RequestSession(server(), token())
+        val loginRevision = currentMusicSessionRevision()
+        fun checkLoginOwner() {
+            if (requiresAccount && (loginOwner.token.isNullOrBlank() || !currentMusicAccountReady() ||
+                loginOwner != RequestSession(server(), token()) || loginRevision != currentMusicSessionRevision()))
+                throw ApiException(ErrorKind.CurrentMusicAccountRequired)
+        }
+        // Native routes bypass project HTTP authentication, so login needs its own prerequisite.
+        checkLoginOwner()
         if (expectedSession != null && (expectedSession.server != session.server || expectedSession.token != session.token)) throw ApiException(ErrorKind.Unauthorized)
         if (netease?.handles(path) == true && expectedSession?.neteaseRevision != null &&
             expectedSession.neteaseRevision != netease.sessions.state.value.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
@@ -52,7 +64,8 @@ class ApiClient(
             val netease = requireNotNull(netease)
             if (expectedSession?.neteaseRevision != null && expectedSession.neteaseRevision != netease.sessions.state.value.revision)
                 throw ApiException(ErrorKind.NeteaseSessionChanged)
-            val response = netease.request(method, path, query, body, expectedSession?.neteaseRevision)
+            val response = netease.request(method, path, query, body, expectedSession?.neteaseRevision, ::checkLoginOwner)
+            checkLoginOwner()
             if (expectedSession != null && (expectedSession.server != server() || expectedSession.token != if (authenticated) token() else null))
                 throw ApiException(ErrorKind.Unauthorized)
             val changesLogin = path == "ncmbind/phone/login" || path == "ncmbind/qr/check" || path == "ncmbind/refresh" || (path == "ncmbind" && method == "DELETE")
@@ -77,6 +90,7 @@ class ApiClient(
             })
         }
         response.use {
+            checkLoginOwner()
             if (expectedSession != null && (expectedSession.server != server() || expectedSession.token != if (authenticated) token() else null))
                 throw ApiException(ErrorKind.Unauthorized)
             if (netease?.handles(path) == true && expectedSession?.neteaseRevision != null &&

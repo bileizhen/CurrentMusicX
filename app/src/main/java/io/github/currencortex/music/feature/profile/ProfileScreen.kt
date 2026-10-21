@@ -129,12 +129,12 @@ import kotlinx.coroutines.launch
         } }
         item { Card(Modifier.fillMaxWidth()) {
             MusicDestinationRow(if (account.loggedIn) "网易云账号" else "登录网易云", { navigate("user/binding") },
-                Modifier.testTag("open_binding"), "我喜欢、歌单与最近播放")
+                Modifier.testTag("open_binding"), if (account.loggedIn) "我喜欢、歌单与最近播放" else "需先注册并登录 CurrentMusic")
             if (tasksEnabled == true) MusicDestinationRow("网易云任务", { navigate("user/netease-tasks") },
                 Modifier.testTag("open_netease_tasks"), "签到、云贝与会员成长")
             MusicDestinationRow("Navidrome 曲库", { navigate("navidrome") }, Modifier.testTag("profile_navidrome"), "自己的音乐服务器")
             MusicDestinationRow("CurrentMusic 账户", { navigate("user/login") }, Modifier.testTag("open_currentmusic_login"),
-                "头像装饰与一起听房间")
+                "注册与登录、头像装饰与一起听房间")
         } }
     }
 }
