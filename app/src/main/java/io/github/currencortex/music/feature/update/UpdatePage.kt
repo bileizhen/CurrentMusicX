@@ -305,22 +305,20 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
             }
         })
         if (showSources) {
-            var draftSource by remember { mutableStateOf(source) }
             UpdateOptionsDialog("下载来源",
-            summary = if (transferState.download is UpdateDownloadState.Downloading) "确认切换来源后，将从头重新下载。" else "选择优先使用的下载来源，失败时会自动尝试其他来源。",
+            summary = if (transferState.download is UpdateDownloadState.Downloading) "切换来源后，将从头重新下载。" else "选择优先使用的下载来源，失败时会自动尝试其他来源。",
             onDismiss = { showSources = false }, backdrop = glassBackdrop, actions = {
                 UpdateDialogAction("取消", { showSources = false }, Modifier.weight(1f).testTag("update_source_cancel"))
-                UpdateDialogAction("确定", {
-                    if (source != draftSource) {
-                        source = draftSource
-                        if (transferState.download is UpdateDownloadState.Downloading) onChangeSource(draftSource)
-                    }
-                    showSources = false
-                }, Modifier.weight(1f).testTag("update_source_confirm"))
             }) {
             UpdateOptionGroup { UpdateSource.available.forEachIndexed { index, candidate ->
-                UpdateChoiceRow(candidate.label, selected = candidate == draftSource,
-                    showDivider = index < UpdateSource.available.lastIndex) { draftSource = candidate }
+                UpdateChoiceRow(candidate.label, selected = candidate == source,
+                    showDivider = index < UpdateSource.available.lastIndex) {
+                    if (source != candidate) {
+                        source = candidate
+                        if (transferState.download is UpdateDownloadState.Downloading) onChangeSource(candidate)
+                    }
+                    showSources = false
+                }
             } }
             }
         }
