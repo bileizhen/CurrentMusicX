@@ -51,13 +51,13 @@ class NeteaseGateway(val transport: NeteaseTransport) {
     private fun data(vararg values: Pair<String, String>) = JsonObject(values.associate { it.first to JsonPrimitive(it.second) })
     private suspend fun official(path: String, body: JsonObject = buildJsonObject {}, web: Boolean = false,
         expected: NeteaseSession? = null, authenticated: Boolean = false, clientLog: Boolean = false,
-        clientProfile: NeteaseClientProfile = NeteaseClientProfile.DESKTOP): JsonObject {
+        clientProfile: NeteaseClientProfile = NeteaseClientProfile.DESKTOP, saveCookies: Boolean = true): JsonObject {
         val owner = expected ?: sessions.snapshot()
         if (authenticated && (owner.credential.cookies["MUSIC_U"].isNullOrBlank() || owner.credential.stale))
             throw ApiException(ErrorKind.NeteaseBindingRequired)
         val raw = transport.request(path, body, when {
             clientLog -> NeteaseEncoding.LOG; web -> NeteaseEncoding.WEB; else -> NeteaseEncoding.DESKTOP
-        }, session = owner, clientProfile = clientProfile).body
+        }, session = owner, clientProfile = clientProfile, saveCookies = saveCookies).body
         val code = (raw["code"] as? JsonPrimitive)?.intOrNull ?: 200
         if (code != 200) {
             if (code in setOf(301, 401) && authenticated) sessions.markStale(owner)
@@ -70,16 +70,17 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         val info = (raw["profile"] ?: raw.obj("data")["profile"]) as? JsonObject ?: return null
         return BoundProfile(info.long("userId"), info.text("nickname"), info.text("avatarUrl")).takeIf { it.uid > 0 }
     }
-    private suspend fun acceptLogin(response: NeteaseResponse, expected: NeteaseSession): BoundProfile {
+    private suspend fun acceptLogin(response: NeteaseResponse, expected: NeteaseSession, loginGuard: () -> Unit): BoundProfile {
+        loginGuard()
         if (response.cookies["MUSIC_U"].isNullOrBlank()) throw ApiException(ErrorKind.Parse)
         val user = profile(response.body) ?: profile(transport.request("/api/w/nuser/account/get", encoding = NeteaseEncoding.WEB,
             session = expected, cookieOverride = response.cookies, saveCookies = false).body) ?: throw ApiException(ErrorKind.Parse)
         currentCoroutineContext().ensureActive()
-        sessions.login(response.cookies, user, expected)
+        sessions.login(response.cookies, user, expected, beforeCommit = loginGuard)
         return user
     }
     private suspend fun binding(method: String, path: String, query: Map<String, String>, body: JsonObject,
-        expected: NeteaseSession): JsonElement {
+        expected: NeteaseSession, loginGuard: () -> Unit): JsonElement {
         val current = expected.credential
         when (path) {
             "ncmbind/medals" -> {
@@ -120,7 +121,7 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 return ApiJson.encodeToJsonElement(LiveBinding.serializer(), LiveBinding(true, user != null, user ?: current.profile))
             }
             "ncmbind/qr/key" -> {
-                val raw = official("/api/login/qrcode/unikey", params("type" to JsonPrimitive(3)), expected = expected)
+                val raw = official("/api/login/qrcode/unikey", params("type" to JsonPrimitive(3)), expected = expected, saveCookies = false)
                 val key = raw.text("unikey").ifBlank { raw.obj("data").text("unikey") }
                 if (key.isBlank()) throw ApiException(ErrorKind.Parse)
                 return buildJsonObject { put("key", key) }
@@ -129,17 +130,17 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 val result = transport.request("/api/login/qrcode/client/login", data("key" to query.getValue("key"), "type" to "3"),
                     session = expected, saveCookies = false)
                 val code = result.body.long("code").toInt()
-                val user = if (code == 803) acceptLogin(result, expected) else null
+                val user = if (code == 803) acceptLogin(result, expected, loginGuard) else null
                 return ApiJson.encodeToJsonElement(QrStatus.serializer(), QrStatus(code, user))
             }
             "ncmbind/phone/code" -> return official("/api/sms/captcha/sent", data("cellphone" to body.text("phone"),
-                "ctcode" to body.text("ctcode").ifBlank { "86" }, "secrete" to "music_middleuser_pclogin"), web = true, expected = expected)
+                "ctcode" to body.text("ctcode").ifBlank { "86" }, "secrete" to "music_middleuser_pclogin"), web = true, expected = expected, saveCookies = false)
             "ncmbind/phone/login" -> {
                 val result = transport.request("/api/w/login/cellphone", data("phone" to body.text("phone"), "captcha" to body.text("captcha"),
                     "countrycode" to body.text("ctcode").ifBlank { "86" }, "type" to "1", "https" to "true", "remember" to "true"),
                     NeteaseEncoding.WEB, session = expected, saveCookies = false)
                 if (result.body.long("code") != 200L) throw ApiException(ErrorKind.Server, result.body.long("code").toInt())
-                acceptLogin(result, expected)
+                acceptLogin(result, expected, loginGuard)
                 return buildJsonObject { put("code", 200); put("ok", true) }
             }
             "ncmbind/likelist" -> return official("/api/song/like/get", data("uid" to "${current.profile?.uid ?: 0}"), expected = expected, authenticated = true)
@@ -161,10 +162,12 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         }
         throw ApiException(ErrorKind.NotFound)
     }
-    suspend fun request(method: String, path: String, query: Map<String, String>, body: JsonElement?, expectedRevision: Long? = null): JsonElement {
+    suspend fun request(method: String, path: String, query: Map<String, String>, body: JsonElement?, expectedRevision: Long? = null,
+        loginGuard: () -> Unit = {}): JsonElement {
+        loginGuard()
         val expected = sessions.snapshot()
         if (expectedRevision != null && expectedRevision != expected.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
-        if (path.startsWith("ncmbind")) return binding(method, path, query, body as? JsonObject ?: buildJsonObject {}, expected)
+        if (path.startsWith("ncmbind")) return binding(method, path, query, body as? JsonObject ?: buildJsonObject {}, expected, loginGuard)
         fun arg(name: String, fallback: String = "") = query[name] ?: fallback
         fun page(name: String, fallback: Int, min: Int = 0, max: Int = 1000) = arg(name).toIntOrNull()?.coerceIn(min, max) ?: fallback
         val id = arg("id")
@@ -253,7 +256,7 @@ class NeteaseGateway(val transport: NeteaseTransport) {
             "mv/detail" -> return official("/api/v1/mv/detail", data("id" to arg("mvid")), web = true, expected = expected)
             "mv/url" -> return official("/api/song/enhance/play/mv/url", data("id" to id, "r" to arg("r", "1080")), web = true, expected = expected)
             "captcha/sent/v1" -> return official("/api/middle/captcha/sent/v1", data("cellphone" to arg("phone"), "ctcode" to arg("ctcode", "86"),
-                "secrete" to "music_middleuser_pclogin", "scene" to "0"), expected = expected)
+                "secrete" to "music_middleuser_pclogin", "scene" to "0"), expected = expected, saveCookies = false)
             "user/detail" -> return official("/api/v1/user/detail/${arg("uid")}", web = true, expected = expected)
             "user/subcount" -> return official("/api/subcount", web = true, expected = expected, authenticated = true)
             "playlist/create" -> return official("/api/playlist/create", data("name" to arg("name"), "privacy" to arg("privacy", "0"), "type" to "NORMAL"), web = true, expected = expected, authenticated = true)

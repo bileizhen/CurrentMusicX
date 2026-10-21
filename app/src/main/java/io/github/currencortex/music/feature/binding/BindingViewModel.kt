@@ -35,6 +35,10 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
     private var qrGeneration = 0L
     private var qrTerminal = false
     private fun session() = RequestSession(container.accountRepository.server, container.accountRepository.token)
+    val canLoginNetease get() = container.accountRepository.state.value.account != null && !container.accountRepository.token.isNullOrBlank()
+    private fun requireCurrentMusicAccount() {
+        if (!canLoginNetease) throw ApiException(ErrorKind.CurrentMusicAccountRequired)
+    }
     init {
         viewModelScope.launch {
             container.neteaseSessions.ready.await()
@@ -162,6 +166,7 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
     fun code(phone: String, country: String, alternate: Boolean = false) {
         if (SystemClock.elapsedRealtime() < state.value.codeUntil) return
         action(if (alternate) "备用验证码发送" else "验证码发送") { expected ->
+            requireCurrentMusicAccount()
             // A gateway timeout does not prove that the SMS was not delivered.
             state.update { it.copy(codeUntil = SystemClock.elapsedRealtime() + 60_000, codeFailed = false) }
             when (val result = appResult { container.bindingRepository.sendCode(phone, country, alternate, expected) }) {
@@ -174,12 +179,14 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
         }
     }
     fun phone(phone: String, captcha: String, country: String) = action("手机验证码登录") { expected ->
+        requireCurrentMusicAccount()
         container.bindingRepository.bindPhone(phone, captcha, country, expected)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         state.update { it.copy(phoneBoundRevision = it.phoneBoundRevision + 1) }
         afterBinding(expected)
     }
     suspend fun qrSession() {
+        if (!canLoginNetease) { clearQr(); return }
         val expected = session()
         if (qrOwner != expected) clearQr()
         qrOwner = expected

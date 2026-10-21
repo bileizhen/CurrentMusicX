@@ -117,6 +117,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         log = { logger.info("Network", it) },
         netease = nativeNetease,
         nativeMedia = { audioSettings.access().provider == AudioProvider.NETEASE },
+        currentMusicAccountReady = { accountRepository.state.value.account != null && !accountRepository.token.isNullOrBlank() },
+        currentMusicSessionRevision = { accountRepository.sessionRevision.value },
     )
     val authRepository = AuthRepository(apiClient, accountRepository, "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
         persistServer = musicSettings::setServer, persistAccount = musicSettings::setAccount)
