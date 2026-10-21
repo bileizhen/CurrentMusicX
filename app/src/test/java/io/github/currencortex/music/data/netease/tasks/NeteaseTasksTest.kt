@@ -55,7 +55,7 @@ class NeteaseTasksTest {
     }
     @Test fun taskQueriesUseOfficialPathsAndOnlyNeteaseCredentials() = runBlocking<Unit> {
         login()
-        val paths = listOf("point/signed/get", "usertool/task/list/all", "vipnewcenter/app/level/task/list", "nmusician/workbench/mission/cycle/list")
+        val paths = listOf("v1/user/info", "usertool/task/list/all", "vipnewcenter/app/level/task/list", "nmusician/workbench/mission/cycle/list")
         NeteaseTaskGroup.entries.forEachIndexed { index, group ->
             enqueue("""{"code":200,"data":[]}""")
             if (group in setOf(NeteaseTaskGroup.YUNBEI, NeteaseTaskGroup.VIP)) enqueue()
@@ -185,5 +185,12 @@ class NeteaseTasksTest {
         enqueue("""{"code":200,"data":false}""")
         assertTrue(appResult { automation().claim(NeteaseTaskGroup.VIP) } is AppResult.Failure)
         assertFalse(preferences.snapshot(42).logs.single().success)
+    }
+    @Test fun dailyStatusUsesOfficialSignFlagInsteadOfUnrelatedCloudConsecutiveDays() {
+        val signed = Json.parseToJsonElement("""{"code":200,"pcSign":true,"mobileSign":true,"userPoint":{"balance":520}}""").jsonObject
+        assertEquals("今日签到已完成", NeteaseTaskRepository.parsePage(NeteaseTaskGroup.DAILY, signed).summary)
+        assertEquals(true, NeteaseTaskRepository.parsePage(NeteaseTaskGroup.DAILY, signed).signedToday)
+        val unsigned = Json.parseToJsonElement("""{"code":200,"pcSign":false,"days":30}""").jsonObject
+        assertEquals("今日尚未签到", NeteaseTaskRepository.parsePage(NeteaseTaskGroup.DAILY, unsigned).summary)
     }
 }
