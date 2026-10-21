@@ -304,32 +304,54 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 }
             }
         })
-        if (showSources) UpdateOptionsDialog("下载来源",
-            summary = if (transferState.download is UpdateDownloadState.Downloading) "切换来源会从头重新下载" else "失败时自动尝试其他来源",
-            onDismiss = { showSources = false }) {
-            UpdateOptionGroup { UpdateSource.available.forEach { candidate ->
-                UpdateChoiceRow(candidate.label, selected = candidate == source) {
-                    if (source != candidate) {
-                        source = candidate
-                        if (transferState.download is UpdateDownloadState.Downloading) onChangeSource(candidate)
+        if (showSources) {
+            var draftSource by remember { mutableStateOf(source) }
+            UpdateOptionsDialog("下载来源",
+            summary = if (transferState.download is UpdateDownloadState.Downloading) "确认切换来源后，将从头重新下载。" else "选择优先使用的下载来源，失败时会自动尝试其他来源。",
+            onDismiss = { showSources = false }, backdrop = glassBackdrop, actions = {
+                UpdateDialogAction("取消", { showSources = false }, Modifier.weight(1f).testTag("update_source_cancel"))
+                UpdateDialogAction("确定", {
+                    if (source != draftSource) {
+                        source = draftSource
+                        if (transferState.download is UpdateDownloadState.Downloading) onChangeSource(draftSource)
                     }
                     showSources = false
-                }
+                }, Modifier.weight(1f).testTag("update_source_confirm"))
+            }) {
+            UpdateOptionGroup { UpdateSource.available.forEachIndexed { index, candidate ->
+                UpdateChoiceRow(candidate.label, selected = candidate == draftSource,
+                    showDivider = index < UpdateSource.available.lastIndex) { draftSource = candidate }
             } }
+            }
         }
-        if (showSettings) UpdateOptionsDialog("更新设置", onDismiss = { showSettings = false }) {
-            UpdateOptionGroup { UpdateAutoCheckRow(settings.autoCheckOnLaunch, onAutoCheck) }
+        if (showSettings) {
+            var draftAutoCheck by remember { mutableStateOf(settings.autoCheckOnLaunch) }
+            var draftChannel by remember { mutableStateOf(settings.channel) }
+            UpdateOptionsDialog("更新设置", summary = "设置检查更新的方式和接收的版本。",
+                onDismiss = { showSettings = false }, backdrop = glassBackdrop, actions = {
+                    UpdateDialogAction("取消", { showSettings = false }, Modifier.weight(1f)
+                        .semantics { contentDescription = "关闭更新设置" }.testTag("update_settings_cancel"))
+                    UpdateDialogAction("保存", {
+                        if (draftAutoCheck != settings.autoCheckOnLaunch) onAutoCheck(draftAutoCheck)
+                        if (draftChannel != settings.channel) onChannel(draftChannel)
+                        showSettings = false
+                    }, Modifier.weight(1f).testTag("update_settings_save"))
+                }) {
+            UpdateOptionGroup { UpdateAutoCheckRow(draftAutoCheck) { draftAutoCheck = it } }
             UpdateOptionSectionLabel("更新渠道")
             UpdateOptionGroup { listOf(UpdateChannel.STABLE to "正式版", UpdateChannel.PRERELEASE to "预发布版").forEach { (channel, label) ->
-                UpdateChoiceRow(label, selected = settings.channel == channel) {
-                    showSettings = false; onChannel(channel)
-                }
+                UpdateChoiceRow(label, selected = draftChannel == channel,
+                    showDivider = channel == UpdateChannel.STABLE) { draftChannel = channel }
             } }
+            }
         }
-        if (confirmCancel) UpdateOptionsDialog("取消下载？", onDismiss = { confirmCancel = false }) {
-            Text("返回页面后仍会在后台下载。只有取消下载才会停止当前任务。", fontSize = 14.sp)
-            PageButton("继续下载", "update_keep_download") { confirmCancel = false }
-            PageButton("取消下载", "update_confirm_cancel", primary = false) { confirmCancel = false; onCancel() }
+        if (confirmCancel) UpdateOptionsDialog("取消下载？",
+            summary = "返回页面后仍会在后台下载。取消下载将停止当前任务。",
+            onDismiss = { confirmCancel = false }, backdrop = glassBackdrop, actions = {
+                UpdateDialogAction("取消下载", { confirmCancel = false; onCancel() },
+                    Modifier.weight(1f).testTag("update_confirm_cancel"), destructive = true)
+                UpdateDialogAction("继续下载", { confirmCancel = false }, Modifier.weight(1f).testTag("update_keep_download"))
+            }) {
         }
     }
     }
