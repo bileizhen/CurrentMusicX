@@ -148,10 +148,10 @@ class UpdatePageTest {
         compose.onNodeWithText("下载源").performClick()
         compose.onNodeWithText(UpdateSource.GITHUB.label).assertIsSelected()
         capture("update-source-sheet.png")
+        compose.onNodeWithTag("update_source_confirm").assertDoesNotExist()
         compose.onNodeWithText(UpdateSource.DPIK.label).performClick()
-        compose.runOnIdle { assertNull(selected) }
-        compose.onNodeWithTag("update_source_confirm").performClick()
         compose.runOnIdle { assertEquals(UpdateSource.DPIK, selected) }
+        compose.onNodeWithTag("update_options_sheet").assertDoesNotExist()
         compose.onNodeWithTag("update_menu").performClick()
         compose.onNodeWithText("更新设置").performClick()
         compose.onNode(hasText("正式版") and hasAnyAncestor(hasTestTag("update_options_sheet"))).assertIsSelected()
@@ -166,7 +166,7 @@ class UpdatePageTest {
         compose.runOnIdle { assertTrue(ignored) }
     }
 
-    @Test fun cancellingDraftSettingsAndSourceKeepsTheActiveDownloadAndPreferences() {
+    @Test fun selectingCurrentSourceAndCancellingSettingsKeepsTheActiveDownloadAndPreferences() {
         var sourceChanges = 0; var channelChanges = 0; var checkChanges = 0
         compose.setContent { TestTheme {
             UpdatePageContent(UpdateState.Available(release),
@@ -175,8 +175,8 @@ class UpdatePageTest {
         } }
         compose.onNodeWithTag("update_menu").performClick()
         compose.onNodeWithText("下载源").performClick()
-        compose.onNodeWithText(UpdateSource.DPIK.label).performClick()
-        compose.onNodeWithTag("update_source_cancel").performClick()
+        compose.onNodeWithText(UpdateSource.GITHUB.label).performClick()
+        compose.onNodeWithTag("update_options_sheet").assertDoesNotExist()
         compose.onNodeWithTag("update_progress").assertTextContains("42%", substring = true)
         compose.onNodeWithTag("update_menu").performClick()
         compose.onNodeWithText("下载源").performClick()
