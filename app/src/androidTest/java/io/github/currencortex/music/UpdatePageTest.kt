@@ -211,6 +211,21 @@ class UpdatePageTest {
         assertEquals(cancel.top.value, save.top.value, .5f)
         assertEquals((cancel.right - cancel.left).value, (save.right - save.left).value, .5f)
         capture("update-settings-light.png")
+        compose.mainClock.autoAdvance = false
+        val option = compose.onNodeWithText("预发布版")
+        val rowBounds = option.fetchSemanticsNode().boundsInRoot
+        val beforePress = compose.onRoot().captureToImage().asAndroidBitmap()
+        option.performTouchInput { down(Offset(2f, centerY)) }
+        compose.mainClock.advanceTimeBy(120); compose.waitForIdle()
+        val heldPress = compose.onRoot().captureToImage().asAndroidBitmap()
+        capture("update-settings-pressed-width.png")
+        for (edgeX in listOf(rowBounds.left.toInt() + 6, rowBounds.right.toInt() - 6)) {
+            val y = rowBounds.center.y.toInt()
+            assertTrue("Pressed highlight must reach both sheet edges",
+                android.graphics.Color.red(heldPress.getPixel(edgeX, y)) < android.graphics.Color.red(beforePress.getPixel(edgeX, y)))
+        }
+        option.performTouchInput { cancel() }
+        compose.mainClock.autoAdvance = true
         compose.runOnIdle { theme.value = io.github.currencortex.music.data.settings.ThemeMode.DARK }
         compose.waitForIdle()
         compose.onNodeWithTag("update_settings_save").assertIsDisplayed()

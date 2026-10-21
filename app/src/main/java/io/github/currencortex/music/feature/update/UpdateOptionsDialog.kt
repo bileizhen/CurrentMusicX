@@ -8,6 +8,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -17,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -60,10 +62,13 @@ private val updateDialogShape = RoundedCornerShape(32.dp)
         CompositionLocalProvider(LocalContentColor provides colors.onBackground) {
         MusicOverlayDialog(show = true, onDismissRequest = onDismiss, onDismissFinished = onDismissFinished,
             matchPanelMotion = true,
-            backgroundColor = Color.Transparent, modifier = Modifier.updateDialogMaterial(backdrop, dark),
-            insideMargin = if (choiceLayout) DpSize(0.dp, 0.dp) else DpSize(24.dp, 24.dp),
+            backgroundColor = Color.Transparent, insideMargin = DpSize(0.dp, 0.dp),
             outsideMargin = DpSize(16.dp, 12.dp)) {
-            Column(Modifier.fillMaxWidth().then(if (choiceLayout) Modifier.padding(top = 24.dp, bottom = 16.dp) else Modifier)
+            // The material belongs inside the native animated surface, alongside its content.
+            // An outer OverlayDialog modifier is drawn before the native entrance transform.
+            Box(Modifier.fillMaxWidth().testTag("update_options_surface").updateDialogMaterial(backdrop, dark)) {
+            Column(Modifier.fillMaxWidth().then(if (choiceLayout) Modifier.padding(top = 24.dp, bottom = 16.dp)
+                else Modifier.padding(24.dp))
                 .testTag("update_options_sheet")) {
                 Text(title, Modifier.fillMaxWidth().padding(horizontal = if (choiceLayout) 24.dp else 0.dp).testTag("update_options_title"),
                     color = colors.onBackground, fontSize = 20.sp, lineHeight = 27.sp,
@@ -81,6 +86,7 @@ private val updateDialogShape = RoundedCornerShape(32.dp)
                     if (actions != null) actions() else UpdateDialogAction("完成", onDismiss,
                         Modifier.weight(1f).semantics { contentDescription = "关闭$title" })
                 }
+            }
             }
         }
         }
@@ -130,13 +136,15 @@ private fun Modifier.frostedUpdateDialog(backdrop: Backdrop, dark: Boolean): Mod
     val dark = isInDarkTheme()
     val selectedRing = androidx.compose.ui.graphics.lerp(colors.primary, colors.onBackground, .12f).copy(alpha = .78f)
     val press = rememberUpdateDialogPress()
+    val clickInteractions = remember { MutableInteractionSource() }
     val selection = animateFloatAsState(if (selected) 1f else 0f, tween(180), label = "update choice ring")
     Row(Modifier.fillMaxWidth().drawBehind {
             drawRect(colors.onBackground.copy(alpha = .06f * press.amount.value))
             if (showDivider) drawLine(colors.onBackground.copy(alpha = if (dark) .065f else .045f),
                 Offset(24.dp.toPx(), size.height), Offset(size.width - 24.dp.toPx(), size.height), .5.dp.toPx())
         }
-        .selectable(selected = selected, role = Role.RadioButton, interactionSource = press.source, indication = null, onClick = onClick)
+        .updateDialogRowPress(press)
+        .selectable(selected = selected, role = Role.RadioButton, interactionSource = clickInteractions, indication = null, onClick = onClick)
         .heightIn(min = 48.dp).padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = colors.onBackground,
@@ -157,10 +165,12 @@ private fun Modifier.frostedUpdateDialog(backdrop: Backdrop, dark: Boolean): Mod
 
 @Composable internal fun UpdateAutoCheckRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     val press = rememberUpdateDialogPress()
+    val clickInteractions = remember { MutableInteractionSource() }
     val ink = MiuixTheme.colorScheme.onBackground
     Row(Modifier.fillMaxWidth().testTag("update_auto_check")
         .drawBehind { drawRect(ink.copy(alpha = .06f * press.amount.value)) }
-        .toggleable(checked, role = Role.Switch, interactionSource = press.source, indication = null, onValueChange = onCheckedChange)
+        .updateDialogRowPress(press)
+        .toggleable(checked, role = Role.Switch, interactionSource = clickInteractions, indication = null, onValueChange = onCheckedChange)
         .heightIn(min = 48.dp).padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("启动时自动检查", color = MiuixTheme.colorScheme.onBackground, fontSize = 15.sp, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(12.dp))
