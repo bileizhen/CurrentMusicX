@@ -306,9 +306,9 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
         })
         if (showSources) {
             UpdateOptionsDialog("下载来源",
-            summary = if (transferState.download is UpdateDownloadState.Downloading) "切换来源后，将从头重新下载。" else "选择优先使用的下载来源，失败时会自动尝试其他来源。",
-            onDismiss = { showSources = false }, backdrop = glassBackdrop, actions = {
-                UpdateDialogAction("取消", { showSources = false }, Modifier.weight(1f).testTag("update_source_cancel"))
+            summary = if (transferState.download is UpdateDownloadState.Downloading) "切换来源后，将从头重新下载。" else null,
+            onDismiss = { showSources = false }, backdrop = glassBackdrop, choiceLayout = true, actions = {
+                UpdateDialogAction("取消", { showSources = false }, Modifier.weight(1f).testTag("update_source_cancel"), compact = true)
             }) {
             UpdateOptionGroup { UpdateSource.available.forEachIndexed { index, candidate ->
                 UpdateChoiceRow(candidate.label, selected = candidate == source,
@@ -325,15 +325,15 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
         if (showSettings) {
             var draftAutoCheck by remember { mutableStateOf(settings.autoCheckOnLaunch) }
             var draftChannel by remember { mutableStateOf(settings.channel) }
-            UpdateOptionsDialog("更新设置", summary = "设置检查更新的方式和接收的版本。",
-                onDismiss = { showSettings = false }, backdrop = glassBackdrop, actions = {
+            UpdateOptionsDialog("更新设置", onDismiss = { showSettings = false }, backdrop = glassBackdrop,
+                choiceLayout = true, actions = {
                     UpdateDialogAction("取消", { showSettings = false }, Modifier.weight(1f)
-                        .semantics { contentDescription = "关闭更新设置" }.testTag("update_settings_cancel"))
+                        .semantics { contentDescription = "关闭更新设置" }.testTag("update_settings_cancel"), compact = true)
                     UpdateDialogAction("保存", {
                         if (draftAutoCheck != settings.autoCheckOnLaunch) onAutoCheck(draftAutoCheck)
                         if (draftChannel != settings.channel) onChannel(draftChannel)
                         showSettings = false
-                    }, Modifier.weight(1f).testTag("update_settings_save"))
+                    }, Modifier.weight(1f).testTag("update_settings_save"), compact = true)
                 }) {
             UpdateOptionGroup { UpdateAutoCheckRow(draftAutoCheck) { draftAutoCheck = it } }
             UpdateOptionSectionLabel("更新渠道")

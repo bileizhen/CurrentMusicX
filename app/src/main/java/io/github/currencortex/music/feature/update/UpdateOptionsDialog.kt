@@ -49,7 +49,8 @@ private val updateDialogShape = RoundedCornerShape(32.dp)
 /** Update-only neutral material. Artwork must not tint the controls purple. */
 @Composable internal fun UpdateOptionsDialog(title: String, summary: String? = null,
     onDismiss: () -> Unit, backdrop: Backdrop? = null, onDismissFinished: (() -> Unit)? = null,
-    actions: (@Composable RowScope.() -> Unit)? = null, content: @Composable ColumnScope.() -> Unit) {
+    actions: (@Composable RowScope.() -> Unit)? = null, choiceLayout: Boolean = false,
+    content: @Composable ColumnScope.() -> Unit) {
     val dark = isInDarkTheme()
     val colors = if (dark) darkColorScheme(primary = Color(0xFF6BA5FF), background = Color(0xFF292A2D),
         surface = Color(0xFF37383C), onBackground = Color(0xFFF5F5F7))
@@ -60,18 +61,22 @@ private val updateDialogShape = RoundedCornerShape(32.dp)
         MusicOverlayDialog(show = true, onDismissRequest = onDismiss, onDismissFinished = onDismissFinished,
             matchPanelMotion = true,
             backgroundColor = Color.Transparent, modifier = Modifier.updateDialogMaterial(backdrop, dark),
-            insideMargin = DpSize(24.dp, 24.dp), outsideMargin = DpSize(16.dp, 12.dp)) {
-            Column(Modifier.fillMaxWidth().testTag("update_options_sheet")) {
-                Text(title, Modifier.fillMaxWidth().testTag("update_options_title"),
+            insideMargin = if (choiceLayout) DpSize(0.dp, 0.dp) else DpSize(24.dp, 24.dp),
+            outsideMargin = DpSize(16.dp, 12.dp)) {
+            Column(Modifier.fillMaxWidth().then(if (choiceLayout) Modifier.padding(top = 24.dp, bottom = 16.dp) else Modifier)
+                .testTag("update_options_sheet")) {
+                Text(title, Modifier.fillMaxWidth().padding(horizontal = if (choiceLayout) 24.dp else 0.dp).testTag("update_options_title"),
                     color = colors.onBackground, fontSize = 20.sp, lineHeight = 27.sp,
                     fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                 summary?.let {
                     Text(it, color = colors.onSurfaceVariantSummary, fontSize = 14.sp, lineHeight = 22.sp,
-                        modifier = Modifier.padding(top = 12.dp))
+                        modifier = Modifier.padding(horizontal = if (choiceLayout) 24.dp else 0.dp).padding(top = 12.dp))
                 }
-                Column(Modifier.fillMaxWidth().padding(top = 20.dp).heightIn(max = 420.dp)
+                Column(Modifier.fillMaxWidth()
+                    .padding(top = if (choiceLayout) 8.dp else 20.dp).heightIn(max = 420.dp)
                     .verticalScroll(rememberScrollState()), content = content)
-                Row(Modifier.fillMaxWidth().padding(top = 24.dp).height(IntrinsicSize.Min),
+                Row(Modifier.fillMaxWidth().padding(horizontal = if (choiceLayout) 16.dp else 0.dp)
+                    .padding(top = if (choiceLayout) 20.dp else 24.dp).height(IntrinsicSize.Min),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     if (actions != null) actions() else UpdateDialogAction("完成", onDismiss,
                         Modifier.weight(1f).semantics { contentDescription = "关闭$title" })
@@ -98,18 +103,18 @@ private fun Modifier.frostedUpdateDialog(backdrop: Backdrop, dark: Boolean): Mod
     }))
 
 @Composable internal fun UpdateDialogAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
-    enabled: Boolean = true, destructive: Boolean = false) {
+    enabled: Boolean = true, destructive: Boolean = false, compact: Boolean = false) {
     val colors = MiuixTheme.colorScheme
     val dark = isInDarkTheme()
     val press = rememberUpdateDialogPress()
-    Box(modifier.heightIn(min = 48.dp).graphicsLayer {
+    Box(modifier.heightIn(min = if (compact) 44.dp else 48.dp).graphicsLayer {
             scaleX = 1f - .025f * press.amount.value
             scaleY = 1f - .025f * press.amount.value
         }.clip(CircleShape)
         .background(if (dark) Color.White.copy(alpha = .13f) else Color.White.copy(alpha = .85f))
         .drawBehind { drawRect(colors.onBackground.copy(alpha = .055f * press.amount.value)) }
         .clickable(enabled = enabled, role = Role.Button, interactionSource = press.source, indication = null, onClick = onClick)
-        .padding(horizontal = 12.dp, vertical = 13.dp), contentAlignment = Alignment.Center) {
+        .padding(horizontal = 12.dp, vertical = if (compact) 10.dp else 13.dp), contentAlignment = Alignment.Center) {
         Text(label, fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium,
             color = (if (destructive) colors.error else colors.onBackground).copy(alpha = if (enabled) 1f else .35f),
             textAlign = TextAlign.Center)
@@ -122,26 +127,28 @@ private fun Modifier.frostedUpdateDialog(backdrop: Backdrop, dark: Boolean): Mod
 
 @Composable internal fun UpdateChoiceRow(label: String, selected: Boolean, showDivider: Boolean = false, onClick: () -> Unit) {
     val colors = MiuixTheme.colorScheme
+    val dark = isInDarkTheme()
+    val selectedRing = androidx.compose.ui.graphics.lerp(colors.primary, colors.onBackground, .12f).copy(alpha = .78f)
     val press = rememberUpdateDialogPress()
     val selection = animateFloatAsState(if (selected) 1f else 0f, tween(180), label = "update choice ring")
     Row(Modifier.fillMaxWidth().drawBehind {
             drawRect(colors.onBackground.copy(alpha = .06f * press.amount.value))
-            if (showDivider) drawLine(colors.onBackground.copy(alpha = .1f),
-                Offset(16.dp.toPx(), size.height), Offset(size.width - 16.dp.toPx(), size.height), 1.dp.toPx())
+            if (showDivider) drawLine(colors.onBackground.copy(alpha = if (dark) .065f else .045f),
+                Offset(24.dp.toPx(), size.height), Offset(size.width - 24.dp.toPx(), size.height), .5.dp.toPx())
         }
         .selectable(selected = selected, role = Role.RadioButton, interactionSource = press.source, indication = null, onClick = onClick)
-        .padding(horizontal = 16.dp).heightIn(min = 52.dp).padding(vertical = 12.dp),
+        .heightIn(min = 48.dp).padding(horizontal = 24.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically) {
         Text(label, color = colors.onBackground,
-            fontSize = 15.sp, modifier = Modifier.weight(1f))
+            fontSize = 15.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(16.dp))
         Canvas(Modifier.size(20.dp)) {
             val stroke = 1.5.dp.toPx()
-            drawCircle(colors.onSurfaceVariantSummary.copy(alpha = .5f),
+            drawCircle(colors.onSurfaceVariantSummary.copy(alpha = if (dark) .32f else .27f),
                 radius = (size.minDimension - stroke) / 2, style = Stroke(stroke))
             val progress = selection.value
             if (progress > 0f) {
-                drawCircle(colors.primary.copy(alpha = progress), radius = size.minDimension / 2 * (.75f + .25f * progress))
+                drawCircle(selectedRing.copy(alpha = selectedRing.alpha * progress), radius = size.minDimension / 2 * (.75f + .25f * progress))
                 drawCircle(Color.White.copy(alpha = progress), radius = 6.dp.toPx() * (.75f + .25f * progress))
             }
         }
@@ -154,7 +161,7 @@ private fun Modifier.frostedUpdateDialog(backdrop: Backdrop, dark: Boolean): Mod
     Row(Modifier.fillMaxWidth().testTag("update_auto_check")
         .drawBehind { drawRect(ink.copy(alpha = .06f * press.amount.value)) }
         .toggleable(checked, role = Role.Switch, interactionSource = press.source, indication = null, onValueChange = onCheckedChange)
-        .padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        .heightIn(min = 48.dp).padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("启动时自动检查", color = MiuixTheme.colorScheme.onBackground, fontSize = 15.sp, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(12.dp))
         Switch(checked = checked, onCheckedChange = null)
@@ -163,5 +170,5 @@ private fun Modifier.frostedUpdateDialog(backdrop: Backdrop, dark: Boolean): Mod
 
 @Composable internal fun UpdateOptionSectionLabel(label: String) {
     Text(label, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp,
-        modifier = Modifier.padding(start = 2.dp, top = 18.dp, bottom = 10.dp))
+        modifier = Modifier.padding(start = 24.dp, top = 12.dp, end = 24.dp, bottom = 4.dp))
 }

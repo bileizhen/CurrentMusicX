@@ -149,7 +149,7 @@ class UpdatePageTest {
         compose.onNodeWithText(UpdateSource.GITHUB.label).assertIsSelected()
         capture("update-source-sheet.png")
         compose.onNodeWithTag("update_source_confirm").assertDoesNotExist()
-        compose.onNodeWithText(UpdateSource.DPIK.label).performClick()
+        compose.onNodeWithText(UpdateSource.DPIK.label).performTouchInput { click(Offset(2f, centerY)) }
         compose.runOnIdle { assertEquals(UpdateSource.DPIK, selected) }
         compose.onNodeWithTag("update_options_sheet").assertDoesNotExist()
         compose.onNodeWithTag("update_menu").performClick()
@@ -175,7 +175,7 @@ class UpdatePageTest {
         } }
         compose.onNodeWithTag("update_menu").performClick()
         compose.onNodeWithText("下载源").performClick()
-        compose.onNodeWithText(UpdateSource.GITHUB.label).performClick()
+        compose.onNodeWithText(UpdateSource.GITHUB.label).performTouchInput { click(Offset(width - 2f, centerY)) }
         compose.onNodeWithTag("update_options_sheet").assertDoesNotExist()
         compose.onNodeWithTag("update_progress").assertTextContains("42%", substring = true)
         compose.onNodeWithTag("update_menu").performClick()
@@ -203,6 +203,11 @@ class UpdatePageTest {
         compose.onNodeWithText("更新设置").performClick()
         val cancel = compose.onNodeWithTag("update_settings_cancel").getUnclippedBoundsInRoot()
         val save = compose.onNodeWithTag("update_settings_save").getUnclippedBoundsInRoot()
+        val sheetBounds = compose.onNodeWithTag("update_options_sheet").fetchSemanticsNode().boundsInRoot
+        val optionBounds = compose.onNode(hasText("正式版") and hasAnyAncestor(hasTestTag("update_options_sheet")))
+            .fetchSemanticsNode().boundsInRoot
+        assertEquals(sheetBounds.left, optionBounds.left, 1f)
+        assertEquals(sheetBounds.right, optionBounds.right, 1f)
         assertEquals(cancel.top.value, save.top.value, .5f)
         assertEquals((cancel.right - cancel.left).value, (save.right - save.left).value, .5f)
         capture("update-settings-light.png")
@@ -210,6 +215,15 @@ class UpdatePageTest {
         compose.waitForIdle()
         compose.onNodeWithTag("update_settings_save").assertIsDisplayed()
         capture("update-settings-dark.png")
+        compose.onNodeWithTag("update_settings_cancel").performClick()
+        compose.onNodeWithTag("update_menu").performClick()
+        compose.onNodeWithText("下载源").performClick()
+        compose.onNodeWithTag("update_source_cancel").assertIsDisplayed()
+        compose.onNodeWithTag("update_source_confirm").assertDoesNotExist()
+        capture("update-sources-dark.png")
+        compose.runOnIdle { theme.value = io.github.currencortex.music.data.settings.ThemeMode.LIGHT }
+        compose.waitForIdle()
+        capture("update-sources-light.png")
     }
 
     @Test fun overflowMenuAnimatesFromButtonAndOutsideTapDoesNotActivatePage() {
