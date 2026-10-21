@@ -25,6 +25,7 @@ class NeteaseTasksCapabilitiesTest {
     private lateinit var server: MockWebServer
     private val paths = CopyOnWriteArrayList<String>()
     @Volatile private var cloudFails = false
+    @Volatile private var signed = false
     private val context get() = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
     private fun json(body: String) = MockResponse().setBody(body).setHeader("Content-Type", "application/json")
     @Before fun prepare() = runBlocking<Unit> {
@@ -37,11 +38,12 @@ class NeteaseTasksCapabilitiesTest {
                         "/weapi/w/nuser/account/get" -> json("""{"code":200,"profile":{"userId":42,"nickname":"Task fixture"}}""")
                         "/weapi/point/signed/get" -> json("""{"code":200,"data":{"days":3}}""")
                         "/weapi/usertool/task/list/all" -> if (cloudFails) MockResponse().setResponseCode(503) else json("""{"code":200,"data":[{"taskId":1,"userTaskId":0,"taskName":"听音乐30分钟","taskDescription":"每日听日推歌曲满30分钟","currentCount":12,"targetCount":30},{"taskId":2,"userTaskId":0,"taskName":"关注歌手"}]}""")
-                        "/weapi/v1/user/info" -> json("""{"code":200,"userPoint":{"balance":470}}""")
+                        "/weapi/v1/user/info" -> json("""{"code":200,"pcSign":$signed,"userPoint":{"balance":470}}""")
                         "/weapi/vipnewcenter/app/level/task/list" -> json("""{"code":200,"data":{"taskList":[{"taskItems":[{"taskId":"99_7","name":"","action":"浏览黑胶时光机","description":"成长值+3","unGetIds":["99_7"]}]}]}}""")
                         "/weapi/vipnewcenter/app/level/growhpoint/basic" -> json("""{"code":200,"data":{"userLevel":{"levelName":"黑胶·陆","growthPoint":19018}}}""")
                         "/weapi/nmusician/workbench/mission/cycle/list" -> json("""{"code":403,"message":"你还不是音乐人，请先入驻成为音乐人"}""")
-                        "/weapi/point/dailyTask", "/weapi/pointmall/user/sign" -> json("""{"code":200,"data":{"sign":true}}""")
+                        "/weapi/point/dailyTask" -> { signed = true; json("""{"code":200}""") }
+                        "/weapi/pointmall/user/sign" -> json("""{"code":200,"data":{"sign":true}}""")
                         "/cm/announcements" -> json("""{"items":[]}""")
                         else -> json("""{"code":200,"data":[],"items":[],"songs":[]}""")
                     }
@@ -127,6 +129,14 @@ class NeteaseTasksCapabilitiesTest {
         compose.onNodeWithTag("tab_4").assertDoesNotExist()
         click("tab_3"); compose.onNodeWithTag("tab_3").assertIsSelected()
         assertFalse(container.neteaseTaskPreferences.enabled.first())
+    }
+    @Test fun alreadySignedOnAnotherClientDisablesSignWithoutSendingAnotherCheckIn() = runBlocking<Unit> {
+        signed = true
+        container.neteaseTaskPreferences.enable(true)
+        show(); awaitTag("tab_2"); openTasks()
+        compose.waitUntil(10_000) { compose.onAllNodesWithText("今日签到已完成").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("tasks_sign").assertIsNotEnabled()
+        assertEquals(0, paths.count { it == "/weapi/point/dailyTask" })
     }
     @Test fun taskPageRetriesOfficialErrorsShowsVipNamesAndCheckInDoesNotChangeTheQueue() = runBlocking<Unit> {
         cloudFails = true

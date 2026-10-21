@@ -97,7 +97,8 @@ import java.time.format.DateTimeFormatter
                         NeteaseTaskGroup.DAILY -> NeteaseCheckIn.DAILY; NeteaseTaskGroup.YUNBEI -> NeteaseCheckIn.YUNBEI
                         NeteaseTaskGroup.VIP -> NeteaseCheckIn.VIP; NeteaseTaskGroup.MUSICIAN -> NeteaseCheckIn.MUSICIAN
                     }
-                    val done = options.signedDay(kind) == NeteaseTaskPreferences.day()
+                    val done = options.signedDay(kind) == NeteaseTaskPreferences.day() ||
+                        (state.group == NeteaseTaskGroup.DAILY && state.page?.signedToday == true)
                     Card(Modifier.fillMaxWidth().animateContentSize(tween(200))) {
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

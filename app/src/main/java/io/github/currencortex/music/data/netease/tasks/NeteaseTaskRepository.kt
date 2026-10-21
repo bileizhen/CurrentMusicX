@@ -8,7 +8,7 @@ enum class NeteaseTaskGroup(val title: String) { DAILY("日常"), YUNBEI("云贝
 enum class NeteaseCheckIn(val title: String) { DAILY("日常"), YUNBEI("云贝"), VIP("黑胶乐签"), MUSICIAN("音乐人") }
 data class NeteaseTaskItem(val id: String, val title: String, val detail: String, val progress: String, val destination: String = "")
 data class NeteaseTaskPage(val items: List<NeteaseTaskItem> = emptyList(), val summary: String = "",
-    val rewardIds: List<String> = emptyList())
+    val rewardIds: List<String> = emptyList(), val signedToday: Boolean? = null)
 
 /** Native, single-account task queries. Playback completion is never fabricated here. */
 class NeteaseTaskRepository(private val transport: NeteaseTransport) {
@@ -33,7 +33,7 @@ class NeteaseTaskRepository(private val transport: NeteaseTransport) {
     suspend fun load(group: NeteaseTaskGroup): NeteaseTaskPage {
         val owner = owner()
         val path = when (group) {
-            NeteaseTaskGroup.DAILY -> "/api/point/signed/get"
+            NeteaseTaskGroup.DAILY -> "/api/v1/user/info"
             NeteaseTaskGroup.YUNBEI -> "/api/usertool/task/list/all"
             NeteaseTaskGroup.VIP -> "/api/vipnewcenter/app/level/task/list"
             NeteaseTaskGroup.MUSICIAN -> "/api/nmusician/workbench/mission/cycle/list"
@@ -63,7 +63,9 @@ class NeteaseTaskRepository(private val transport: NeteaseTransport) {
             NeteaseCheckIn.VIP -> "/api/vip-center-bff/task/sign"
             NeteaseCheckIn.MUSICIAN -> "/api/creator/user/access"
         }
-        val raw = request(path, owner, buildJsonObject { if (kind == NeteaseCheckIn.DAILY) put("type", 0) }, duplicateOkay = true)
+        // The legacy Android type=0 endpoint rejects otherwise valid local logins. The supported
+        // type=1 check-in is confirmed by pcSign in the official user info response.
+        val raw = request(path, owner, buildJsonObject { if (kind == NeteaseCheckIn.DAILY) put("type", 1) }, duplicateOkay = true)
         val message = raw.text("message", "msg")
         if (message.contains("不支持") || message.contains("失败")) throw ApiException(ErrorKind.Server, userMessage = message.take(180))
         if (kind == NeteaseCheckIn.VIP && raw["data"] == JsonPrimitive(false))
@@ -160,11 +162,13 @@ class NeteaseTaskRepository(private val transport: NeteaseTransport) {
             visit(root, 0)
             val objectRoot = root as? JsonObject ?: raw
             val summary = when (group) {
-                NeteaseTaskGroup.DAILY -> objectRoot.number("signedCount", "signDays", "days")?.let { "连续签到 $it 天" }
-                    ?: "每日签到 · 安卓端经验"
+                NeteaseTaskGroup.DAILY -> when ((objectRoot["pcSign"] as? JsonPrimitive)?.booleanOrNull) {
+                    true -> "今日签到已完成"; false -> "今日尚未签到"; null -> "每日签到"
+                }
                 else -> "${items.size} 项任务 · 官方进度"
             }
-            return NeteaseTaskPage(items.distinctBy { it.id }, summary, rewards.distinct())
+            return NeteaseTaskPage(items.distinctBy { it.id }, summary, rewards.distinct(),
+                if (group == NeteaseTaskGroup.DAILY) (objectRoot["pcSign"] as? JsonPrimitive)?.booleanOrNull else null)
         }
     }
 }
