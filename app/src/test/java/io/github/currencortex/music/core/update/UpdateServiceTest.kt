@@ -20,7 +20,7 @@ class UpdateServiceTest {
     }
     private val release = AppRelease("1.2.0", "Notes", "https://github.com/example/app/releases/tag/v1.2.0", null, null, false)
 
-    private suspend fun scenario(block: suspend (UpdateSettingsRepository) -> Unit) {
+    private suspend fun scenario(failUpdates: () -> Boolean = { false }, block: suspend (UpdateSettingsRepository) -> Unit) {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         // State-machine tests use the DataStore contract; Android instrumentation
         // verifies real disk writes without Windows File.renameTo limitations.
@@ -28,7 +28,10 @@ class UpdateServiceTest {
             override val data = MutableStateFlow<Preferences>(emptyPreferences())
             private val mutex = Mutex()
             override suspend fun updateData(transform: suspend (Preferences) -> Preferences): Preferences =
-                mutex.withLock { transform(data.value).also { data.value = it } }
+                mutex.withLock {
+                    if (failUpdates()) throw java.io.IOException("disk unavailable")
+                    transform(data.value).also { data.value = it }
+                }
         }
         try { block(UpdateSettingsRepository(store, scope)) } finally { scope.cancel() }
     }
@@ -53,15 +56,19 @@ class UpdateServiceTest {
             settings.setChannel(UpdateChannel.STABLE)
             val service = UpdateService(ReleaseChecker { release }, settings, logger)
             service.check()
-            assertTrue(service.dialogVisible.value)
+            assertFalse(service.dialogVisible.value)
+            assertEquals(release, service.prompt.value?.release)
             service.ignoreCurrentRelease()
+            assertNull(service.prompt.value)
             service.check()
             assertFalse(service.dialogVisible.value)
+            assertNull(service.prompt.value)
             settings.ignoreRelease(UpdateChannel.PRERELEASE, "2.0.0-rc.1")
             assertEquals("1.2.0", settings.snapshot().ignoredVersions[UpdateChannel.STABLE])
             assertEquals("2.0.0-rc.1", settings.snapshot().ignoredVersions[UpdateChannel.PRERELEASE])
             service.check(manual = true)
             assertTrue(service.dialogVisible.value)
+            assertNull(service.prompt.value)
             assertTrue(service.state.value is UpdateState.Available)
         }
     }
@@ -82,6 +89,84 @@ class UpdateServiceTest {
             fails = false
             service.check(manual = true)
             assertEquals(UpdateState.UpToDate, service.state.value)
+        }
+    }
+
+    @Test fun viewingAutomaticPromptOpensThePageWithoutAnotherCheck() = runBlocking {
+        scenario { settings ->
+            var checks = 0
+            val service = UpdateService(ReleaseChecker { checks++; release }, settings, logger)
+            service.checkOnLaunch()
+            assertFalse(service.dialogVisible.value)
+            assertEquals(release, service.prompt.value?.release)
+            service.viewPrompt()
+            assertNull(service.prompt.value)
+            assertTrue(service.dialogVisible.value)
+            assertEquals(UpdateState.Available(release), service.state.value)
+            assertEquals(1, checks)
+        }
+    }
+
+    @Test fun dismissingPromptDoesNotIgnoreAndManualEntryDoesNotShowAnotherPrompt() = runBlocking {
+        scenario { settings ->
+            val service = UpdateService(ReleaseChecker { release }, settings, logger)
+            service.check()
+            service.dismissPrompt()
+            assertFalse(service.dialogVisible.value)
+            assertNull(service.prompt.value)
+            assertTrue(settings.snapshot().ignoredVersions[UpdateChannel.STABLE].isNullOrEmpty())
+            service.check()
+            assertNotNull(service.prompt.value)
+            service.present()
+            assertTrue(service.dialogVisible.value)
+            assertNull(service.prompt.value)
+            service.check()
+            assertNull(service.prompt.value)
+        }
+    }
+
+    @Test fun aLaterVersionPromptsAgainAfterIgnoringThePreviousVersion() = runBlocking {
+        scenario { settings ->
+            var latest = release
+            val service = UpdateService(ReleaseChecker { latest }, settings, logger)
+            service.check()
+            service.ignoreCurrentRelease()
+            latest = release.copy(version = "1.3.0")
+            service.check()
+            assertEquals("1.3.0", service.prompt.value?.release?.version)
+            assertFalse(service.dialogVisible.value)
+            service.reopenDownload()
+            assertNull(service.prompt.value)
+            assertTrue(service.dialogVisible.value)
+        }
+    }
+
+    @Test fun failedIgnoreStaysInThePromptAndCanBeRetried() = runBlocking {
+        var fail = true
+        scenario(failUpdates = { fail }) { settings ->
+            val service = UpdateService(ReleaseChecker { release }, settings, logger)
+            service.check()
+            service.ignoreCurrentRelease()
+            assertNotNull(service.prompt.value?.error)
+            assertFalse(service.prompt.value!!.saving)
+            assertFalse(service.dialogVisible.value)
+            fail = false
+            service.ignoreCurrentRelease()
+            assertNull(service.prompt.value)
+            assertEquals(release.version, settings.snapshot().ignoredVersions[UpdateChannel.STABLE])
+        }
+    }
+
+    @Test fun cancelledIgnoreAllowsAnotherAttempt() = runBlocking {
+        var cancel = true
+        scenario(failUpdates = { if (cancel) throw CancellationException("fixture") else false }) { settings ->
+            val service = UpdateService(ReleaseChecker { release }, settings, logger)
+            service.check()
+            assertTrue(runCatching { service.ignoreCurrentRelease() }.exceptionOrNull() is CancellationException)
+            assertFalse(service.prompt.value!!.saving)
+            cancel = false
+            service.ignoreCurrentRelease()
+            assertNull(service.prompt.value)
         }
     }
 

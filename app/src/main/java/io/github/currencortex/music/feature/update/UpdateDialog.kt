@@ -39,6 +39,7 @@ fun UpdatePage(service: UpdateService, transfer: UpdateTransfer, cover: String =
     origin: UpdatePageOrigin? = null, onPresentedChanged: (Boolean) -> Unit = {},
     versionPreview: String = BuildConfig.UPDATE_ANIMATION_PREVIEW_VERSION) {
     val visible by service.dialogVisible.collectAsStateWithLifecycle()
+    val prompt by service.prompt.collectAsStateWithLifecycle()
     val state by service.state.collectAsStateWithLifecycle()
     val download by transfer.state.collectAsStateWithLifecycle()
     val selectedRelease by transfer.selectedRelease.collectAsStateWithLifecycle()
@@ -74,6 +75,10 @@ fun UpdatePage(service: UpdateService, transfer: UpdateTransfer, cover: String =
         settings = settings, onAutoCheck = { scope.launch { service.settings.setAutoCheck(it) } },
         onChannel = { scope.launch { service.settings.setChannel(it); service.check(manual = true) } }, cover = cover,
         origin = origin, onPresentedChanged = onPresentedChanged, versionPreview = versionPreview)
+    if (!visible) prompt?.let { available ->
+        UpdateAvailablePrompt(available, onIgnore = { scope.launch { service.ignoreCurrentRelease() } },
+            onView = service::viewPrompt, onDismiss = service::dismissPrompt)
+    }
 }
 
 @Composable
