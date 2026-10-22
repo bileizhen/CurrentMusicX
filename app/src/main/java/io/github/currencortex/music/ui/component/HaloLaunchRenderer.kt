@@ -15,8 +15,20 @@ import kotlin.random.Random
  * All blur masks, glyphs, gradients, paths and paints are allocated before the first animated frame.
  */
 internal class HaloLaunchRenderer(resources: Resources, username: String) {
+    private companion object {
+        const val FLIP_FRAME_RATE = 30f
+        const val FLIP_CACHE_SCALE = .4f
+        const val FLIP_CACHE_TOP = 180f
+        const val FIRST_FLIP_START = 866.6667f
+        const val SECOND_FLIP_START = 1633.3333f
+    }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val ringPath = Path()
+    private val projectedRingPath = Path()
+    private val projectedInner = FloatArray(194)
+    private val projectionMatrix = Matrix()
+    private val projectionValues = FloatArray(9)
+    private val additive = PorterDuffXfermode(PorterDuff.Mode.ADD)
     private val glowSector = Path()
     private val glowSectorBounds = RectF(-1200f, -1200f, 1200f, 1200f)
     private val scratchPath = Path()
@@ -70,6 +82,9 @@ internal class HaloLaunchRenderer(resources: Resources, username: String) {
     }
     private val nameImage: Bitmap
     private val nameWidth: Float
+    private data class FlipFrame(val image: Bitmap, val bounds: RectF)
+    private val firstFlipFrames: Array<FlipFrame>
+    private val secondFlipFrames: Array<FlipFrame>
 
     init {
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -85,6 +100,17 @@ internal class HaloLaunchRenderer(resources: Resources, username: String) {
         textPaint.alpha = 100; c.drawText(displayName, 20f, 60f, textPaint)
         textPaint.maskFilter = null; textPaint.alpha = 255; c.drawText(displayName, 20f, 60f, textPaint)
         nameWidth = minOf(470f, width.toFloat())
+        // Prepared on HaloLaunchFrame's background worker. Tight crops keep the two short
+        // shutters bounded in memory; playback only blends two already-uploaded textures.
+        val working = Bitmap.createBitmap(768, 576, Bitmap.Config.ARGB_8888)
+        val frameCanvas = Canvas(working).apply {
+            scale(FLIP_CACHE_SCALE, FLIP_CACHE_SCALE); translate(0f, FLIP_CACHE_TOP)
+        }
+        val pixels = IntArray(working.width * working.height)
+        firstFlipFrames = prepareFlipFrames(FIRST_FLIP_START, 9, working, frameCanvas, pixels)
+        secondFlipFrames = prepareFlipFrames(SECOND_FLIP_START, 11, working, frameCanvas, pixels)
+        working.recycle()
+        sampleRing(0f)
     }
 
     private fun sprite(path: Path, width: Int, height: Int, x: Float, y: Float): Bitmap {
@@ -164,6 +190,163 @@ internal class HaloLaunchRenderer(resources: Resources, username: String) {
     }
 
     private fun drawRing(c: Canvas, t: Float, opacity: Float) {
+        val strength = HaloRingProjection.strength(t)
+        if (strength < .005f) {
+            drawSharpRing(c, t, opacity)
+            return
+        }
+        val frames = if (t < 1400f) firstFlipFrames else secondFlipFrames
+        val start = if (t < 1400f) FIRST_FLIP_START else SECOND_FLIP_START
+        val frame = ((t - start) * (FLIP_FRAME_RATE / 1000f)).coerceIn(0f, frames.lastIndex.toFloat())
+        val index = frame.toInt().coerceAtMost(frames.lastIndex - 1)
+        val progress = frame - index
+        paint.colorFilter = null; paint.shader = null; paint.style = Paint.Style.FILL
+        paint.xfermode = additive
+        paint.alpha = (255 * opacity * (1f - progress)).toInt()
+        c.drawBitmap(frames[index].image, null, frames[index].bounds, paint)
+        paint.alpha = (255 * opacity * progress).toInt()
+        c.drawBitmap(frames[index + 1].image, null, frames[index + 1].bounds, paint)
+        paint.xfermode = null
+    }
+
+    private fun prepareFlipFrames(start: Float, count: Int, working: Bitmap,
+        canvas: Canvas, pixels: IntArray): Array<FlipFrame> {
+        val blurCanvas = Canvas(working)
+        val blurPaint = Paint(Paint.ANTI_ALIAS_FLAG)
+        val whiteMask = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE }
+        val blurOffset = IntArray(2)
+        return Array(count) { index ->
+            working.eraseColor(Color.TRANSPARENT)
+            val time = start + index * (1000f / FLIP_FRAME_RATE)
+            sampleRing(time)
+            drawRingExposure(canvas, time, 1f)
+            val strength = HaloRingProjection.strength(time)
+            if (strength >= .005f) {
+                // Integrate adjacent exposure lines into a soft shutter trail. The ring is
+                // monochrome here, so blurring its alpha preserves the emitted white light.
+                blurPaint.maskFilter = BlurMaskFilter(4f * strength, BlurMaskFilter.Blur.NORMAL)
+                val alpha = working.extractAlpha(blurPaint, blurOffset)
+                working.eraseColor(Color.TRANSPARENT)
+                blurCanvas.drawBitmap(alpha, blurOffset[0].toFloat(), blurOffset[1].toFloat(), whiteMask)
+                alpha.recycle()
+            }
+            working.getPixels(pixels, 0, working.width, 0, 0, working.width, working.height)
+            var left = working.width; var top = working.height; var right = 0; var bottom = 0
+            for (y in 0 until working.height) for (x in 0 until working.width) {
+                if (pixels[y * working.width + x] ushr 24 == 0) continue
+                left = minOf(left, x); right = maxOf(right, x)
+                top = minOf(top, y); bottom = maxOf(bottom, y)
+            }
+            val image = Bitmap.createBitmap(working, left, top, right - left + 1, bottom - top + 1)
+            image.prepareToDraw()
+            FlipFrame(image, RectF(left / FLIP_CACHE_SCALE, top / FLIP_CACHE_SCALE - FLIP_CACHE_TOP,
+                (right + 1) / FLIP_CACHE_SCALE, (bottom + 1) / FLIP_CACHE_SCALE - FLIP_CACHE_TOP))
+        }
+    }
+
+    private fun drawRingExposure(c: Canvas, t: Float, opacity: Float) {
+        val strength = HaloRingProjection.strength(t)
+        if (strength < .005f) {
+            drawSharpRing(c, t, opacity)
+            return
+        }
+        // Evaluate the real trajectory over a 1/30 s shutter. This is deterministic when
+        // seeking/previewing; the cached exposure never depends on past display frames.
+        paint.xfermode = additive
+        for (sample in -4..4) {
+            val time = t + sample * (1000f / 240f) * strength
+            val weight = (5 - abs(sample)) / 25f
+            sampleRing(time)
+            drawProjectedRing(c, time, opacity * weight)
+        }
+        paint.xfermode = null
+        sampleRing(t)
+    }
+
+    private fun drawProjectedRing(c: Canvas, t: Float, opacity: Float) {
+        val mix = HaloRingProjection.strength(t)
+        val squeeze = HaloRingProjection.heightScale(t)
+        val depth = HaloRingProjection.depth(t, ring[3] / ring[2]) * if (squeeze < 0f) -1f else 1f
+        val rx = ring[2]
+        val ry = ring[3]
+        val height = ry * abs(squeeze)
+        val rotation = ring[4] * PI.toFloat() / 180f
+        val cr = cos(rotation)
+        val sr = sin(rotation)
+        val sweep = if (t < 933f) 3f + 320f * phase(t, 400f, 933f).pow(2.1f)
+            else 323f + 37f * smooth(phase(t, 933f, 1200f))
+        val start = if (t < 1000f) 90f else 270f
+        val thickness = 27f - 8f * smooth(phase(t, 1100f, 2200f))
+        val radialWidth = thickness / (2f * rx)
+        projectedRingPath.rewind()
+        ringPath.rewind()
+        for (i in 0..96) {
+            val theta = (start + i * sweep / 96f) * PI.toFloat() / 180f
+            val ct = cos(theta)
+            val st = sin(theta)
+            val nx = ct / rx
+            val ny = st / ry
+            val normal = sqrt(nx * nx + ny * ny)
+            val normalX = nx / normal * thickness / 2f
+            val normalY = ny / normal * thickness / 2f
+            val outerX = rx * ct + normalX
+            val outerY = ry * st + normalY
+            val innerX = rx * ct - normalX
+            val innerY = ry * st - normalY
+            val x = outerX + (HaloRingProjection.x(rx, ct, st, 1f + radialWidth, depth) - outerX) * mix
+            val y = outerY + (HaloRingProjection.y(height, st, 1f + radialWidth, depth) - outerY) * mix
+            val ix = innerX + (HaloRingProjection.x(rx, ct, st, 1f - radialWidth, depth) - innerX) * mix
+            val iy = innerY + (HaloRingProjection.y(height, st, 1f - radialWidth, depth) - innerY) * mix
+            val px = ring[0] + x * cr - y * sr
+            val py = ring[1] + x * sr + y * cr
+            if (i == 0) projectedRingPath.moveTo(px, py) else projectedRingPath.lineTo(px, py)
+            val cx = rx * ct + (HaloRingProjection.x(rx, ct, st, 1f, depth) - rx * ct) * mix
+            val cy = ry * st + (HaloRingProjection.y(height, st, 1f, depth) - ry * st) * mix
+            val centerX = ring[0] + cx * cr - cy * sr
+            val centerY = ring[1] + cx * sr + cy * cr
+            if (i == 0) ringPath.moveTo(centerX, centerY) else ringPath.lineTo(centerX, centerY)
+            projectedInner[i * 2] = ring[0] + ix * cr - iy * sr
+            projectedInner[i * 2 + 1] = ring[1] + ix * sr + iy * cr
+        }
+        for (i in 96 downTo 0) projectedRingPath.lineTo(projectedInner[i * 2], projectedInner[i * 2 + 1])
+        projectedRingPath.close()
+        if (sweep >= 359.9f) ringPath.close()
+
+        // Project the cached bloom through the same plane as the luminous ribbon.
+        c.save(); c.translate(ring[0], ring[1]); c.rotate(ring[4])
+        projectionValues[0] = rx * sqrt(1f - depth * depth) / 400f
+        projectionValues[1] = 0f; projectionValues[2] = 0f
+        projectionValues[3] = 0f; projectionValues[4] = height / 400f; projectionValues[5] = height * depth
+        projectionValues[6] = 0f; projectionValues[7] = depth / 400f; projectionValues[8] = 1f
+        projectionMatrix.setValues(projectionValues)
+        c.concat(projectionMatrix)
+        if (sweep < 359.9f) {
+            glowSector.rewind(); glowSector.moveTo(0f, 0f)
+            glowSector.arcTo(glowSectorBounds, start, sweep, false); glowSector.close()
+            c.clipPath(glowSector)
+        }
+        paint.colorFilter = null; paint.shader = null; paint.style = Paint.Style.FILL
+        paint.alpha = (255 * opacity).toInt()
+        c.drawBitmap(ringGlow, -640f, -640f, paint)
+        c.restore()
+        paint.color = white; paint.alpha = (255 * opacity).toInt()
+        c.drawPath(projectedRingPath, paint)
+        // A luminous tube still radiates when its plane is edge-on. Screen-space bloom
+        // conserves that light and joins adjacent shutter samples into a continuous smear.
+        paint.style = Paint.Style.STROKE
+        paint.strokeJoin = Paint.Join.ROUND; paint.strokeCap = Paint.Cap.ROUND
+        for (i in 3 downTo 1) {
+            paint.strokeWidth = thickness + i * 16f
+            paint.alpha = (255 * opacity * mix * when (i) { 3 -> .13f; 2 -> .25f; else -> .45f }).toInt()
+            c.drawPath(ringPath, paint)
+        }
+        paint.strokeWidth = thickness * .55f
+        paint.alpha = (255 * opacity * mix * 2.7f).toInt().coerceAtMost(255)
+        c.drawPath(ringPath, paint)
+        paint.style = Paint.Style.FILL
+    }
+
+    private fun drawSharpRing(c: Canvas, t: Float, opacity: Float) {
         if (t < 367f) return
         val sweep = if (t < 933f) 3f + 320f * phase(t, 400f, 933f).pow(2.1f)
             else 323f + 37f * smooth(phase(t, 933f, 1200f))
@@ -207,19 +390,14 @@ internal class HaloLaunchRenderer(resources: Resources, username: String) {
     private fun drawStar(c: Canvas, t: Float, opacity: Float, colorPhase: Float) {
         val shift = ring[0] - 937.7f
         // Two independently arriving pointed arms, with a small damped overshoot on landing.
-        for (arm in 0..1) {
-            val p = phase(t, if (arm == 0) 2233f else 2367f, if (arm == 0) 2467f else 2633f)
+        for (arm in HaloStarArm.entries) {
+            val p = arm.progress(t)
             if (p <= 0f) continue
             val settle = 1f + 1.1f * (p - 1).pow(3) + .1f * (p - 1).pow(2)
-            c.save(); c.translate(shift + (1f - settle) * if (arm == 0) 640f else -820f, (1f - settle) * -800f)
+            c.save(); c.translate(shift + (1f - settle) * arm.travelX, (1f - settle) * arm.travelY)
             scratchPath.rewind()
-            if (arm == 0) {
-                scratchPath.moveTo(1075f, 145f); scratchPath.lineTo(958f, 438f)
-                scratchPath.lineTo(800f, 765f); scratchPath.lineTo(932f, 445f)
-            } else {
-                scratchPath.moveTo(655f, 285f); scratchPath.lineTo(949f, 429f)
-                scratchPath.lineTo(1178f, 590f); scratchPath.lineTo(938f, 456f)
-            }
+            scratchPath.moveTo(arm.points[0], arm.points[1])
+            for (i in 2 until arm.points.size step 2) scratchPath.lineTo(arm.points[i], arm.points[i + 1])
             scratchPath.close()
             paint.color = blend(white, cyan, colorPhase); paint.alpha = (255 * opacity).toInt()
             c.drawPath(scratchPath, paint); c.restore()

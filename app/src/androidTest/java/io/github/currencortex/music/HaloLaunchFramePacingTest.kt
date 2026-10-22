@@ -33,19 +33,25 @@ class HaloLaunchFramePacingTest {
                 ids.map { metrics.getMetric(it) }
         }
         var refresh = 60f
+        var finishedAt = 0L
         scenario.onActivity {
             refresh = it.display?.refreshRate ?: 60f
             it.window.addOnFrameMetricsAvailableListener(listener, Handler(worker.looper))
-            it.setContent { HaloLaunchOverlay("bileizhen", ready = true) { done.countDown() } }
+            it.setContent { HaloLaunchOverlay("bileizhen", ready = true) {
+                finishedAt = SystemClock.elapsedRealtime(); done.countDown()
+            } }
         }
         try {
             check(done.await(15, TimeUnit.SECONDS)) { "Animation did not complete" }
             val captured = synchronized(frames) { frames.toList() }
-            val active = captured.filter { it[0] in 350..8400 }
+            // Exclude background artwork preparation, but include both flips even if preparing
+            // the textures took longer than a few frames before the production clock started.
+            val preparationMs = (finishedAt - started - 8500L - 240L).coerceAtLeast(0L)
+            val active = captured.filter { it[0] in (preparationMs + 350)..(preparationMs + 8400) }
             val samples = active.map { it[2] }.sorted()
             check(samples.size > 100) { "No continuous rendering sample" }
             fun percentile(p: Float) = samples[((samples.size - 1) * p).toInt()] / 1_000_000.0
-            val summary = "frames=${samples.size}, displayHz=$refresh, p50Ms=${percentile(.5f)}, " +
+            val summary = "frames=${samples.size}, preparationMs=$preparationMs, displayHz=$refresh, p50Ms=${percentile(.5f)}, " +
                 "p95Ms=${percentile(.95f)}, p99Ms=${percentile(.99f)}, " +
                 "overBudget=${samples.count { it > 1_000_000_000.0 / refresh }}, " +
                 "over33Ms=${samples.count { it > 33_333_333 }}, droppedReports=${captured.sumOf { it[1] }}"

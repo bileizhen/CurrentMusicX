@@ -103,11 +103,29 @@ class HaloLaunchAnimationTest {
         compose.onNodeWithTag("halo_launch_frame").assertContentDescriptionEquals("CurrentMusic · 新账号")
     }
 
+    @Test fun edgeOnFlipsKeepALuminousCore() {
+        var frame by mutableFloatStateOf(1000f)
+        compose.setContent { HaloLaunchFrame("bileizhen", { frame }) }
+        awaitArtwork()
+        for (time in listOf(1000f, 1800f)) {
+            frame = time
+            compose.waitForIdle()
+            val image = compose.onNodeWithTag("halo_launch_frame").captureToImage().asAndroidBitmap()
+            val pixels = IntArray(image.width * image.height)
+            image.getPixels(pixels, 0, image.width, 0, 0, image.width, image.height)
+            val hot = pixels.count { android.graphics.Color.red(it) > 210 &&
+                android.graphics.Color.green(it) > 210 && android.graphics.Color.blue(it) > 210 }
+            assertTrue("The $time ms flip must keep emitting light rather than fade to thin grey outlines",
+                hot > pixels.size * .0002f)
+        }
+    }
+
     @Test fun captureReferenceMilestones() {
         var frame by mutableFloatStateOf(0f)
         compose.setContent { HaloLaunchFrame("bileizhen", { frame }) }
         awaitArtwork()
-        for (ms in listOf(400, 800, 1000, 1400, 1800, 2200, 2467, 2900, 3267, 3400, 3700, 4300, 6200, 7800)) {
+        for (ms in listOf(400, 800, 967, 983, 1000, 1017, 1033, 1400, 1767, 1783, 1800, 1817, 1833,
+            2200, 2300, 2400, 2467, 2900, 3267, 3400, 3700, 4300, 6200, 7800)) {
             frame = ms.toFloat()
             compose.waitForIdle()
             capture("halo-frame-$ms.png")
