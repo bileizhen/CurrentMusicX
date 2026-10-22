@@ -185,6 +185,10 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
             } finally { busy.value = false }
         }
     }
+    fun refreshSearchLikes(songs: List<Song>) = viewModelScope.launch { appResult {
+        if (container.primaryLibrary.resolveLikeNetease()) container.neteaseSongActions.likedIds()
+        else container.libraryRepository.refreshStatus(songs.filterNot { it.video }.map { it.id })
+    } }
     fun refreshStatuses(songs: List<Song>) = viewModelScope.launch { appResult {
         if (songs.all { it.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME }) return@appResult
         val legacySongs = songs.filterNot { it.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME }

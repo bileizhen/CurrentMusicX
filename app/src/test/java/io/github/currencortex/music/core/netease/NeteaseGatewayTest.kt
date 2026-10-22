@@ -14,6 +14,13 @@ import java.net.URLDecoder
 import java.util.concurrent.TimeUnit
 
 class NeteaseGatewayTest {
+    @Test fun chorusUsesNativeSongRangeWithoutTouchingTheProjectServer() = runBlocking {
+        enqueue("""{"code":200,"chorus":[{"id":33894312,"startTime":47500,"endTime":88500}]}""")
+        val clip = MusicRepository(api).previewClip(Song(33894312, "Sample", durationMs = 180000))
+        assertEquals(SongPreviewClip(47500, 67500, true), clip)
+        assertEquals("/eapi/song/chorus", upstream.takeRequest().path)
+        assertNull(current.takeRequest(50, TimeUnit.MILLISECONDS))
+    }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val vault = object : TokenStore {
         var value: String? = null
@@ -48,6 +55,22 @@ class NeteaseGatewayTest {
         current.enqueue(MockResponse().setResponseCode(503).setBody("{}"))
         return ApiClient({ current.url("/cm/").toString() }, { "current-secret" }, { expired++ },
             netease = gateway, nativeMedia = { true })
+    }
+
+    @Test fun searchChartsUseOriginalSearchHomepageProtocolAndOpaqueIds(): Unit = runBlocking {
+        login()
+        enqueue("""{"code":200,"data":{"tabInfo":{"list":[{"id":"HOT_SEARCH_SONG#@#","name":"热搜榜"}]},"items":{"HOT_SEARCH_SONG#@#":[{"searchWord":"Song","toUserWord":"Visible label"}]}}}""")
+        val chart = io.github.currencortex.music.feature.search.parseSearchCharts(call("ncm/search/chart/list"))
+        assertEquals("HOT_SEARCH_SONG#@#", chart.charts.single().id)
+        assertEquals("Song", chart.pages.values.single().words.single().text)
+        assertEquals("Visible label", chart.pages.values.single().words.single().displayText)
+        assertEquals("/eapi/search/chart/list", upstream.takeRequest().path)
+        enqueue("""{"code":200,"data":{"itemList":[{"searchWord":"ACG word"}]}}""")
+        val words = io.github.currencortex.music.feature.search.parseSearchChartWords(
+            call("ncm/search/chart/detail", mapOf("id" to "HOT_SEARCH_STYLE_ACG#@#")))
+        assertEquals("ACG word", words.single().text)
+        assertEquals("/eapi/search/chart/detail", upstream.takeRequest().path)
+        assertEquals(0, current.requestCount)
     }
 
     @Test fun explicitProjectLyricsBypassNativeAudioAndNeverSendAccountTokens(): Unit = runBlocking {
@@ -182,6 +205,34 @@ class NeteaseGatewayTest {
         assertEquals("作者", card["creator"]!!.jsonPrimitive.content)
         assertEquals(80, card["trackCount"]!!.jsonPrimitive.int)
         assertEquals("/eapi/cloudsearch/pc", upstream.takeRequest().path)
+        assertEquals(0, current.requestCount)
+    }
+    @Test fun mobileSuggestionsAreAnonymousNativeRequestsAndRemoveEmptyDuplicates() = runBlocking {
+        enqueue("""{"code":200,"result":{"allMatch":[{"keyword":" 海阔天空 "},{"keyword":"海阔天空"},{"keyword":" "},{"keyword":"海阔天空 live"}]}}""")
+        val result = MusicRepository(api).searchSuggestions("海阔") as AppResult.Success
+        assertEquals(listOf("海阔天空", "海阔天空 live"), result.value)
+        val request = upstream.takeRequest()
+        assertEquals("/weapi/search/suggest/keyword", request.path)
+        assertNull(request.getHeader("Authorization"))
+        assertEquals(0, current.requestCount)
+    }
+    @Test fun lyricSearchPrefersHighlightedLinesFromTheOfficialArrayShape() = runBlocking {
+        val hit = rawSong(11).dropLast(1) + """, "lyrics":["context", "<b>命中歌词</b>", "<b>命中歌词</b>", "after"]}"""
+        enqueue("""{"code":200,"result":{"songCount":1,"songs":[$hit]}}""")
+        val result = MusicRepository(api).searchLyrics("命中歌词") as AppResult.Success
+        assertEquals("命中歌词", result.value.matchedLyrics[11])
+    }
+    @Test fun lyricSearchUsesOfficialTypeAndPreservesReadableMatchMetadata() = runBlocking {
+        val hit = rawSong(11).dropLast(1) + """, "lyrics":{"txt":"<b>你好</b> &amp; 世界\n下一句"}}"""
+        enqueue("""{"code":200,"result":{"songCount":31,"songs":[$hit]}}""")
+        val result = MusicRepository(api).searchLyrics("你好", 30) as AppResult.Success
+        assertEquals("你好 & 世界 下一句", result.value.matchedLyrics[11])
+        assertEquals("Artist", result.value.songs.single().artists)
+        assertFalse(result.value.hasMore)
+        val request = upstream.takeRequest()
+        val sent = payload(request)
+        assertEquals(1006, sent["type"]!!.jsonPrimitive.int)
+        assertEquals(30, sent["offset"]!!.jsonPrimitive.int)
         assertEquals(0, current.requestCount)
     }
     @Test fun searchBypassesCurrentMusicAndPreservesQueryAndArtistMetadata() = runBlocking {

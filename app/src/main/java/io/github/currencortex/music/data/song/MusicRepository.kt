@@ -25,6 +25,20 @@ class MusicRepository(private val api: ApiClient,
         val result = api.get<SearchDto>("ncm/search", mapOf("keywords" to keyword, "offset" to "$offset", "limit" to "30", "type" to "song"))
         SearchPage(result.songs.map(SongDto::toDomain), result.totals.song, result.hasMore.song)
     }
+    suspend fun searchLyrics(keyword: String, offset: Int = 0): AppResult<SearchPage> = appResult {
+        val result = api.get<SearchDto>("ncm/search", mapOf("keywords" to keyword, "offset" to "$offset", "limit" to "30", "type" to "lyric"))
+        SearchPage(result.songs.map(SongDto::toDomain), result.totals.song, result.hasMore.song,
+            result.songs.mapNotNull { song -> cleanSearchLyric(song.lyric).takeIf(String::isNotBlank)?.let { song.id to it } }.toMap())
+    }
+    suspend fun searchSuggestions(keyword: String): AppResult<List<String>> = appResult {
+        val raw = api.request("GET", "ncm/search/suggest", mapOf("keywords" to keyword, "type" to "mobile"),
+            callTimeoutMillis = 5000).jsonObject
+        if (raw["code"]?.jsonPrimitive?.intOrNull?.let { it != 200 } == true) throw ApiException(ErrorKind.Server)
+        val result = raw["result"] as? JsonObject ?: raw
+        (result["allMatch"] as? JsonArray).orEmpty().mapNotNull {
+            (it as? JsonObject)?.get("keyword")?.jsonPrimitive?.contentOrNull?.trim()?.takeIf(String::isNotEmpty)
+        }.distinct().take(8)
+    }
     suspend fun detail(id: Long): Song = api.get<SongDetailDto>("ncm/song/detail", mapOf("ids" to "$id")).songs.first().toDomain()
     suspend fun details(ids: List<Long>): List<Song> = ids.distinct().chunked(200).flatMap { batch ->
         api.get<SongDetailDto>("ncm/song/detail", mapOf("ids" to batch.joinToString(","))).songs.map(SongDto::toDomain)
@@ -76,3 +90,9 @@ class MusicRepository(private val api: ApiClient,
             validForSeconds = dto.expi.takeIf { it > 0 } ?: 300)
     }
 }
+
+/** Upstream highlights are display text, never rendered as markup. */
+internal fun cleanSearchLyric(value: String): String = value.replace(Regex("<[^>]*>"), "")
+    .replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+    .replace("&quot;", "\"").replace("&#39;", "'").replace("&nbsp;", " ")
+    .replace(Regex("\\s+"), " ").trim().take(240)

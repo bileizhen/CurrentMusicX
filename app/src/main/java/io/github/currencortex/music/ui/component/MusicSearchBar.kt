@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.testTag
@@ -29,15 +30,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Both ends of the search transition use the same padding, material and submit action. */
 @Composable fun MusicSearchBar(value: String, onSubmit: () -> Unit, modifier: Modifier = Modifier,
-    onInput: ((String) -> Unit)? = null, onActivate: (() -> Unit)? = null, requester: FocusRequester? = null, placeholder: String = "搜索歌曲、歌手",
-    inputTag: String = "search_input", submitTag: String? = null) {
+    onInput: ((String) -> Unit)? = null, onActivate: (() -> Unit)? = null, requester: FocusRequester? = null, placeholder: String = "搜索歌曲、歌手或歌词",
+    inputTag: String = "search_input", submitTag: String? = null, onInputFocus: (Boolean) -> Unit = {}) {
     val colors = MiuixTheme.colorScheme
     Row(modifier.then(if (onInput == null) Modifier.clickable(role = Role.Button) { onActivate?.invoke() } else Modifier).fillMaxWidth().height(48.dp).background(colors.surfaceContainer, RoundedCornerShape(24.dp))
         .padding(start = 14.dp, end = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Icon(Icons.Default.Search, null, Modifier.size(20.dp), tint = colors.primary)
         val textModifier = Modifier.weight(1f).padding(horizontal = 12.dp)
         if (onInput != null) BasicTextField(value, onInput, singleLine = true,
-            modifier = textModifier.then(if (requester != null) Modifier.focusRequester(requester) else Modifier).testTag(inputTag),
+            modifier = textModifier.then(if (requester != null) Modifier.focusRequester(requester) else Modifier).onFocusChanged { onInputFocus(it.isFocused) }.testTag(inputTag),
             textStyle = TextStyle(fontSize = 14.sp, color = colors.onSurface), cursorBrush = SolidColor(colors.primary),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { onSubmit() }),
             decorationBox = { input -> Box {
