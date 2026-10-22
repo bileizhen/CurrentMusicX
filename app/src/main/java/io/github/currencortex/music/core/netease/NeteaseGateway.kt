@@ -35,6 +35,17 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         put("album", album.text("name")); put("pic", album.text("picUrl").ifBlank { raw.text("picUrl") }.replace("http:", "https:"))
         put("duration", raw["dt"] ?: raw["duration"] ?: JsonPrimitive(0)); put("mv", raw["mv"] ?: raw["mvid"] ?: JsonPrimitive(0))
     }
+    private fun searchLyric(raw: JsonObject): String {
+        val value = raw["lyrics"]
+        val lines = when (value) {
+            is JsonArray -> value.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+            is JsonObject -> listOf(value.text("txt"))
+            is JsonPrimitive -> listOfNotNull(value.contentOrNull)
+            else -> listOf(raw.text("lyric"))
+        }.filter(String::isNotBlank)
+        val matches = lines.filter { it.contains("<b>", true) || it.contains("<em>", true) }.ifEmpty { lines }
+        return matches.distinct().take(2).joinToString(" · ")
+    }
     private fun songs(raw: JsonArray) = JsonArray(raw.mapNotNull { (it as? JsonObject)?.let(::song) }.filter { it.long("ncm_id") > 0 })
     private fun artist(raw: JsonObject) = buildJsonObject {
         put("id", raw.long("id")); put("name", raw.text("name")); put("pic", raw.text("picUrl").ifBlank { raw.text("img1v1Url") })
@@ -172,6 +183,10 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         fun page(name: String, fallback: Int, min: Int = 0, max: Int = 1000) = arg(name).toIntOrNull()?.coerceIn(min, max) ?: fallback
         val id = arg("id")
         when (path.removePrefix("ncm/")) {
+            "song/chorus" -> {
+                require(id.toLongOrNull()?.let { it > 0 } == true)
+                return official("/api/song/chorus", data("ids" to "[$id]"), expected = expected)
+            }
             "song/url", "song/url/v1" -> {
                 val level = arg("level", "auto").let { if (it == "auto") "jymaster" else it }
                 val raw = official("/api/song/enhance/player/url/v1", buildJsonObject {
@@ -188,17 +203,21 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                     put("id", id); put("cp", false)
                     listOf("tv", "lv", "rv", "kv", "yv", "ytv", "yrv").forEach { put(it, 0) }
                 }, expected = expected)
+            "search/suggest" -> return official("/api/search/suggest/keyword",
+                data("s" to arg("keywords")), web = true, expected = expected)
             "search" -> {
-                val type = when (arg("type", "song")) { "song", "1" -> 1; "album", "10" -> 10; "artist", "100" -> 100; "playlist", "1000" -> 1000; else -> throw ApiException(ErrorKind.NotFound) }
+                val type = when (arg("type", "song")) { "song", "1" -> 1; "album", "10" -> 10; "artist", "100" -> 100; "playlist", "1000" -> 1000; "lyric", "1006" -> 1006; else -> throw ApiException(ErrorKind.NotFound) }
                 val offset = page("offset", 0, max = Int.MAX_VALUE)
                 val raw = official("/api/cloudsearch/pc", params("s" to JsonPrimitive(arg("keywords")), "type" to JsonPrimitive(type),
                     "limit" to JsonPrimitive(page("limit", 30, min = 1)), "offset" to JsonPrimitive(offset)), expected = expected).obj("result")
-                val key = when (type) { 1 -> "song"; 10 -> "album"; 100 -> "artist"; else -> "playlist" }
+                val key = when (type) { 1, 1006 -> "song"; 10 -> "album"; 100 -> "artist"; else -> "playlist" }
                 val field = key + "s"
                 val records = raw.array(field)
                 val count = raw.long(key + "Count").toInt()
                 return buildJsonObject {
-                    put(field, if (type == 1) songs(records) else JsonArray(records.mapNotNull { it as? JsonObject }.map { record -> when (type) {
+                    put(field, if (type == 1006) JsonArray(records.mapNotNull { it as? JsonObject }.filter { it.long("id") > 0 }.map { record ->
+                        JsonObject(song(record) + ("lyric" to JsonPrimitive(searchLyric(record))))
+                    }) else if (type == 1) songs(records) else JsonArray(records.mapNotNull { it as? JsonObject }.map { record -> when (type) {
                         10 -> album(record)
                         100 -> artist(record)
                         else -> buildJsonObject {
@@ -230,6 +249,11 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 "limit" to JsonPrimitive(page("limit", 20, min = 1)), "offset" to JsonPrimitive(page("offset", 0, max = Int.MAX_VALUE)), "beforeTime" to JsonPrimitive(0)), web = true, expected = expected)
             "playmode/intelligence/list" -> return official("/api/playmode/intelligence/list", data("songId" to id, "type" to "fromPlayOne",
                 "playlistId" to arg("pid"), "startMusicId" to arg("sid", id), "count" to arg("count", "20")), expected = expected, authenticated = true)
+            "search/chart/list" -> return official("/api/search/chart/list",
+                data("channel" to arg("channel", "recommendpersonal"), "adextjson" to ""), expected = expected,
+                clientProfile = NeteaseClientProfile.ANDROID)
+            "search/chart/detail" -> return official("/api/search/chart/detail", data("id" to id, "adextjson" to ""),
+                expected = expected, clientProfile = NeteaseClientProfile.ANDROID)
             "search/hot/detail" -> return official("/api/hotsearchlist/get", web = true, expected = expected)
             "style/list" -> return official("/api/tag/list/get", web = true, expected = expected)
             "style/detail" -> return official("/api/style-tag/home/head", data("tagId" to arg("tagId")), web = true, expected = expected)

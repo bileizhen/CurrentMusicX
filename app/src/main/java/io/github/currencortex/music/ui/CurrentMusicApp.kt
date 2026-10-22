@@ -482,6 +482,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         onBack = ::navigateBack) {
                         CompositionLocalProvider(LocalMusicBottomInset provides if (miniAvailable) miniHeight else 0.dp) {
                             SearchScreen(searchVm, container.playerController,
+                                quickActions = { io.github.currencortex.music.feature.search.SearchResultLibraryActions(libraryVm, it) },
+                                onResults = libraryVm::refreshSearchLikes,
+                                onPlayAll = { songs -> playWithPermission { container.playerController.playList(songs, 0) } },
                                 actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) }, navigate = ::navigateLibrary,
                                 onBack = ::navigateBack, sheet = searchSheet, autoFocus = searchFocus, onFocused = { searchFocus = false },
                                 recommendations = libraryHome.daily + libraryHome.forYou, recent = libraryHome.recent) { song ->

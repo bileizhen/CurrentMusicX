@@ -365,7 +365,9 @@ class HomeAvatarTest {
         compose.onNodeWithTag("search_input").assertIsFocused()
         val end = compose.onNodeWithTag("search_header_field").fetchSemanticsNode().boundsInRoot
         assertTrue(end.top < source.top)
-        assertEquals("Search bar must keep the home width", source.width, end.width, 1f)
+        compose.onNodeWithTag("search_back").assertDoesNotExist()
+        assertEquals("Search input keeps the home left edge", source.left, end.left, 1f)
+        assertEquals("Search input keeps the full home width", source.width, end.width, 1f)
         assertEquals("Search bar must keep the home height", source.height, end.height, 1f)
         assertEquals(1f, progress(), .001f)
         pumpUntil { compose.onAllNodesWithTag("search_hot_0").fetchSemanticsNodes().isNotEmpty() }

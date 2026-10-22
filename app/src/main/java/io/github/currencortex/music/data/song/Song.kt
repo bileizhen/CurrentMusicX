@@ -16,13 +16,14 @@ import kotlinx.serialization.SerialName
     val appleMusicId: String? = null, val spotifyId: String? = null)
 @Serializable data class SongDto(@SerialName("ncm_id") val id: Long, val name: String, val artists: String = "",
                                 val album: String = "", val pic: String = "", val duration: Long = 0, val mv: Long = 0,
-                                @SerialName("artist_ids") val artistIds: List<Long> = emptyList()) {
+                                @SerialName("artist_ids") val artistIds: List<Long> = emptyList(), val lyric: String = "") {
     fun toDomain() = Song(id, name, artists, album, pic.replace("http:", "https:"), duration, mv, artistIds)
 }
 @Serializable data class SearchDto(val songs: List<SongDto> = emptyList(), val totals: SearchTotals = SearchTotals(), val hasMore: SearchMore = SearchMore())
 @Serializable data class SearchTotals(val song: Int = 0)
 @Serializable data class SearchMore(val song: Boolean = false)
-data class SearchPage(val songs: List<Song>, val total: Int, val hasMore: Boolean)
+data class SearchPage(val songs: List<Song>, val total: Int, val hasMore: Boolean,
+    val matchedLyrics: Map<Long, String> = emptyMap())
 @Serializable data class SongDetailDto(val songs: List<SongDto> = emptyList())
 @Serializable data class SongUrlDto(val url: String? = null, val type: String = "", val level: String = "",
                                   val sr: Int = 0, val ch: Int = 0, val sampleRate: Int = 0, val channelCount: Int = 0, val md5: String = "",

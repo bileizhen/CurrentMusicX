@@ -3,27 +3,17 @@ package io.github.currencortex.music.feature.search
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,51 +21,61 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import io.github.currencortex.music.core.media.PlayerController
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun SearchScreen(vm: SearchViewModel, player: PlayerController,
     actions: (@Composable (Song) -> Unit)? = null, roomName: String? = null, onBack: (() -> Unit)? = null,
     navigate: (String) -> Unit = {}, sheet: SearchSheetState? = null, autoFocus: Boolean = false, onFocused: () -> Unit = {},
     recommendations: List<Song> = emptyList(), recent: List<Song> = emptyList(),
+    quickActions: (@Composable (Song) -> Unit)? = null, onResults: (List<Song>) -> Unit = {},
+    onPlayAll: ((List<Song>) -> Unit)? = null,
     onPlay: (Song) -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
+    val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
     val landing by vm.landing.collectAsStateWithLifecycle()
+    val charts by vm.charts.collectAsStateWithLifecycle()
+    val playing by remember(player) { player.state.map { it.song?.id to it.playing }.distinctUntilChanged() }
+        .collectAsStateWithLifecycle(initialValue = null to false)
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val requester = remember { FocusRequester() }
     val bottomInset = LocalMusicBottomInset.current
-    val category = if (roomName != null) SearchCategory.SONG else state.category
+    val categories = if (roomName != null) listOf(SearchCategory.SONG, SearchCategory.LYRIC) else SearchCategory.entries
+    val category = state.category.takeIf { it in categories } ?: SearchCategory.SONG
     val page = state.pages[category] ?: SearchCategoryPage()
+    val lyricScroll = rememberLazyListState()
     val songScroll = rememberLazyListState()
     val artistScroll = rememberLazyListState()
     val albumScroll = rememberLazyListState()
     val playlistScroll = rememberLazyListState()
     val scroll = when (category) {
+        SearchCategory.LYRIC -> lyricScroll
         SearchCategory.SONG -> songScroll
         SearchCategory.ARTIST -> artistScroll
         SearchCategory.ALBUM -> albumScroll
         SearchCategory.PLAYLIST -> playlistScroll
     }
+    var inputFocused by remember { mutableStateOf(false) }
     var target by remember { mutableStateOf<Rect?>(null) }
-    var historyExpanded by rememberSaveable { mutableStateOf(false) }
-    var recommendationOffset by rememberSaveable { mutableIntStateOf(0) }
-    LaunchedEffect(roomName != null) { if (roomName != null) vm.select(SearchCategory.SONG) else vm.loadLanding() }
+    LaunchedEffect(roomName != null) { if (roomName != null && state.category !in categories) vm.select(SearchCategory.SONG) else if (roomName == null) vm.loadLanding() }
     LaunchedEffect(autoFocus) {
         if (autoFocus) { withFrameNanos { }; requester.requestFocus(); keyboard?.show(); onFocused() }
     }
-    LaunchedEffect(state.submitted) { songScroll.scrollToItem(0); artistScroll.scrollToItem(0); albumScroll.scrollToItem(0); playlistScroll.scrollToItem(0) }
-    PreloadMusicCovers(page.songs.take(12).map { it.cover } + page.entries.take(8).map { it.cover })
+    LaunchedEffect(state.submitted) { lyricScroll.scrollToItem(0); songScroll.scrollToItem(0); artistScroll.scrollToItem(0); albumScroll.scrollToItem(0); playlistScroll.scrollToItem(0) }
+    PreloadMusicCovers((page.songs.take(8).map { it.cover } + page.entries.take(8).map { it.cover }).distinct())
+    LaunchedEffect(page.songs) { if (page.songs.isNotEmpty()) onResults(page.songs) }
     fun submit(keyword: String = state.query) { focus.clearFocus(); keyboard?.hide(); vm.search(keyword) }
     fun back() { focus.clearFocus(); keyboard?.hide(); onBack?.invoke() }
     val colors = MiuixTheme.colorScheme
+    val showSuggestions = inputFocused && state.query.isNotBlank() && state.query.trim() != state.submitted && suggestions.query == state.query.trim()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val height = with(LocalDensity.current) { maxHeight.toPx() }
         Column(Modifier.fillMaxSize().then(if (sheet != null) Modifier.statusBarsPadding().imePadding() else Modifier)) {
@@ -93,93 +93,25 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                 translationX = (source.left - end.left) * (1f - p)
                                 translationY = (source.top - end.top) * (1f - p)
                             }
-                        }.testTag("search_header_field"), onInput = vm::input, requester = requester)
+                        }.testTag("search_header_field"), onInput = vm::input, requester = requester, onInputFocus = { inputFocused = it })
                 }
             }
-            LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("search_screen").graphicsLayer {
+            MusicCategoryTabs(categories.map { it.route to it.label }, category.route,
+                { key -> focus.clearFocus(); keyboard?.hide(); vm.select(SearchCategory.entries.first { it.route == key }) }, "search_category",
+                Modifier.padding(horizontal = 20.dp))
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+            if (!showSuggestions) LazyColumn(Modifier.fillMaxSize().testTag("search_screen").graphicsLayer {
                 val p = sheet?.progress ?: 1f
                 translationY = height * (1f - p); alpha = (p / .65f).coerceIn(0f, 1f)
             }, state = scroll, contentPadding = PaddingValues(start = 20.dp, top = 6.dp, end = 20.dp, bottom = 20.dp + bottomInset),
-                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                verticalArrangement = Arrangement.spacedBy(if (state.searched) 2.dp else 16.dp)) {
                 if (roomName != null) item { Text("$roomName · 点击歌曲提交点歌", fontSize = 13.sp) }
-                if (roomName == null && state.searched) item {
-                    MusicCategoryTabs(SearchCategory.entries.map { it.route to it.label }, category.route,
-                        { key -> vm.select(SearchCategory.entries.first { it.route == key }) }, "search_category")
-                }
-                if (!state.searched) {
-                    item {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("搜索历史", Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                            Box(Modifier.size(40.dp).clickable(enabled = history.isNotEmpty()) { vm.clearHistory() }.testTag("search_clear_history"), contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Delete, "清空搜索历史", Modifier.size(20.dp), tint = colors.onSurface.copy(alpha = .4f))
-                            }
-                        }
-                        if (history.isEmpty()) Text("搜索过的音乐会留在这里", fontSize = 13.sp, color = colors.onSurface.copy(alpha = .4f), modifier = Modifier.padding(vertical = 12.dp))
-                        else FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            (if (historyExpanded) history else history.take(4)).forEach { h ->
-                                Box(Modifier.background(colors.onSurface.copy(alpha = .045f), RoundedCornerShape(20.dp))
-                                    .combinedClickable(onClick = { submit(h.keyword) }, onLongClick = { vm.deleteHistory(h.keyword) }, onLongClickLabel = "删除这条搜索记录", role = Role.Button).padding(horizontal = 14.dp, vertical = 9.dp)) {
-                                    Text(h.keyword, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                }
-                            }
-                            if (history.size > 4) MusicTextAction(if (historyExpanded) "收起" else "展开", { historyExpanded = !historyExpanded })
-                        }
-                    }
-                    if (roomName == null && recommendations.isNotEmpty()) item {
-                        val unique = recommendations.distinctBy { it.name }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("猜你喜欢", Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                            Box(Modifier.size(40.dp).clickable { recommendationOffset = (recommendationOffset + 6) % unique.size }, contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Refresh, "换一批", Modifier.size(20.dp), tint = colors.onSurface.copy(alpha = .4f))
-                            }
-                        }
-                        val words = (unique.drop(recommendationOffset) + unique.take(recommendationOffset)).take(6)
-                        words.chunked(2).forEach { pair -> Row(Modifier.fillMaxWidth()) { pair.forEachIndexed { index, song ->
-                            Text(song.name, Modifier.weight(1f).clickable(role = Role.Button) { submit(song.name) }.padding(vertical = 10.dp, horizontal = 2.dp),
-                                fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                color = if (index == 0 && song == words.first()) colors.primary else colors.onSurface.copy(alpha = .75f))
-                        }; if (pair.size == 1) Spacer(Modifier.weight(1f)) } }
-                    }
-                    if (roomName == null) item {
-                        LazyRow(Modifier.fillMaxWidth().testTag("search_rankings"), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            item {
-                                Card(Modifier.width(280.dp)) { Column(Modifier.padding(18.dp)) {
-                                    Text("热搜榜", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
-                                    Spacer(Modifier.height(16.dp))
-                                    if (landing.loading && landing.words.isEmpty()) LoadingSongList(3)
-                                    else if (landing.error != null) {
-                                        Text("热搜暂时不可用", fontSize = 13.sp, color = colors.onSurface.copy(alpha = .5f))
-                                        MusicTextAction("重新加载", { vm.loadLanding(true) }, Modifier.testTag("search_hot_retry"))
-                                    } else if (landing.words.isEmpty()) Text("暂无热搜", fontSize = 13.sp, color = colors.onSurface.copy(alpha = .5f))
-                                    landing.words.take(10).forEachIndexed { index, word ->
-                                        Row(Modifier.fillMaxWidth().clickable(role = Role.Button) { submit(word.text) }.padding(vertical = 12.dp)
-                                            .testTag("search_hot_$index"), verticalAlignment = Alignment.CenterVertically) {
-                                            Text("${index + 1}", Modifier.width(30.dp), fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
-                                                color = if (index < 3) colors.primary else colors.onSurface.copy(alpha = .4f))
-                                            Column(Modifier.weight(1f)) {
-                                                Text(word.text, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                if (word.description.isNotBlank()) Text(word.description, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                                    color = colors.onSurface.copy(alpha = .4f))
-                                            }
-                                        }
-                                    }
-                                } }
-                            }
-                            if (recent.isNotEmpty()) item {
-                                Card(Modifier.width(280.dp)) { Column(Modifier.padding(18.dp)) {
-                                    Text("最近播放", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
-                                    Spacer(Modifier.height(16.dp))
-                                    recent.take(10).forEach { song -> Row(Modifier.fillMaxWidth().clickable { submit(song.name) }.padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                                        MusicCover(song.cover, Modifier.size(36.dp), 160)
-                                        Column(Modifier.padding(start = 10.dp).weight(1f)) {
-                                            Text(song.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                            Text(song.artists, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.onSurface.copy(alpha = .4f))
-                                        }
-                                    } }
-                                } }
-                            }
-                        }
-                    }
+                if (!state.searched) item {
+                    SearchLandingContent(history, landing, charts, recommendations, recent,
+                        onSearch = ::submit, onClearHistory = { vm.clearHistory() }, onDeleteHistory = { vm.deleteHistory(it) },
+                        onRetryHot = { vm.loadLanding(true) }, onRetryCharts = { vm.loadCharts(true) },
+                        onLoadChart = { id, retry -> vm.loadChart(id, retry) },
+                        roomSearch = roomName != null)
                 }
         page.error?.let { error -> item {
             Text(error)
@@ -189,11 +121,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         if (state.searched && page.loaded) item {
             val count = when (category) {
                 SearchCategory.SONG -> "${page.total} 首歌曲"
+                SearchCategory.LYRIC -> "${page.total} 首歌词匹配歌曲"
                 SearchCategory.ARTIST -> "${page.total} 位作者"
                 SearchCategory.ALBUM -> "${page.total} 张专辑"
                 SearchCategory.PLAYLIST -> "${page.total} 个歌单"
             }
-            Text("找到 $count", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+            if (roomName == null && page.songs.isNotEmpty() && onPlayAll != null)
+                SearchResultsToolbar(page.songs.size, page.total, { onPlayAll(page.songs) }, { page.songs.forEach { player.add(it) } })
+            else Text("找到 $count", Modifier.padding(vertical = 12.dp), fontSize = 13.sp, color = colors.onSurface.copy(alpha = .45f))
         }
         if (state.searched && page.loaded && !page.loading && page.error == null && page.count == 0) item {
             Text("没有找到${category.label}，试试其他关键词", fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
@@ -202,9 +137,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             Row(Modifier.fillMaxWidth().clickable(enabled = entry.id > 0, role = Role.Button) {
                 navigate("lib/${if (category == SearchCategory.PLAYLIST) "ncmplaylist" else category.route}/${entry.id}")
             }.padding(vertical = 8.dp).testTag("search_${category.route}_${entry.id}"), verticalAlignment = Alignment.CenterVertically) {
-                MusicCover(entry.cover, Modifier.size(64.dp), 240, cornerRadius = if (category == SearchCategory.ARTIST) 32.dp else 18.dp)
+                MusicCover(entry.cover, Modifier.size(52.dp), 160, cornerRadius = if (category == SearchCategory.ARTIST) 26.dp else 14.dp)
                 Column(Modifier.weight(1f).padding(horizontal = 14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(entry.name, fontSize = 17.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(searchMatchText(entry.name, state.submitted, colors.primary), fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(entry.subtitle.ifBlank { when (category) {
                         SearchCategory.ARTIST -> "艺人"
                         SearchCategory.PLAYLIST -> "网易云歌单"
@@ -216,16 +151,25 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
         }
         itemsIndexed(page.songs, key = { _, song -> song.id }) { _, song ->
-            Box(Modifier.testTag("search_song_${song.id}")) {
-                SongRow(SongRowUi(song), { onPlay(song) }, { player.add(song, true) }, { player.add(song) }) {
-                    actions?.invoke(song)
-                }
+            Column(Modifier.testTag("search_song_${song.id}")) {
+                SearchResultSongRow(song, state.submitted, playing.first == song.id && playing.second,
+                    { onPlay(song) }, { player.add(song, true) }, { player.add(song) },
+                    lyric = page.matchedLyrics[song.id].takeIf { category == SearchCategory.LYRIC },
+                    quickActions = { quickActions?.invoke(song) },
+                    extraActions = { actions?.invoke(song) })
             }
         }
         if (page.loading && page.count > 0) item { LoadingSongList(2) }
         if (page.more && page.error == null) item {
             MusicTextAction("加载更多", { vm.search(more = true) }, Modifier.fillMaxWidth().testTag("search_load_more"), enabled = !page.loading)
         }
+            }
+                if (showSuggestions) SearchSuggestionsContent(state.query.trim(), suggestions, ::submit,
+                    Modifier.fillMaxSize().background(colors.background).graphicsLayer {
+                        val p = sheet?.progress ?: 1f
+                        translationY = height * (1f - p); alpha = (p / .65f).coerceIn(0f, 1f)
+                    })
+
             }
         }
     }
