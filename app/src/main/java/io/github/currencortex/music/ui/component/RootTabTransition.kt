@@ -24,6 +24,9 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.rememberLifecycleOwner
 import kotlinx.coroutines.flow.first
 import kotlin.coroutines.coroutineContext
 import kotlin.math.abs
@@ -43,7 +46,7 @@ class RootTabPlacement(private val viewport: () -> LayoutCoordinates?, private v
 }
 val LocalRootTabPlacement = staticCompositionLocalOf<RootTabPlacement?> { null }
 /** Only root-page title containers opt into moving the root pager. */
-val LocalRootTabSwipe = staticCompositionLocalOf<Modifier> { Modifier }
+val LocalRootTabSwipe = compositionLocalOf<Modifier> { Modifier }
 
 /** Continuous full-width pages, including intermediate tabs; no fade, overshoot or pre-jump. */
 @Composable fun RootTabTransition(selected: Int, states: SaveableStateHolder,
@@ -53,12 +56,15 @@ val LocalRootTabSwipe = staticCompositionLocalOf<Modifier> { Modifier }
     var viewport by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var gesturePending by remember { mutableStateOf(false) }
     val latestSelected by rememberUpdatedState(selected)
+    val parentActive = LocalMusicPageActive.current
     val select by rememberUpdatedState(onSelected)
     val interactions = remember { MutableInteractionSource() }
     val fling = PagerDefaults.flingBehavior(pager, snapAnimationSpec = tween(320, easing = easing))
-    val swipe = Modifier.scrollable(pager, Orientation.Horizontal,
-        reverseDirection = LocalLayoutDirection.current == LayoutDirection.Ltr,
-        flingBehavior = fling, interactionSource = interactions).testTag("root_swipe_header")
+    val reverseDirection = LocalLayoutDirection.current == LayoutDirection.Ltr
+    val swipe = remember(pager, reverseDirection, fling, interactions) {
+        Modifier.scrollable(pager, Orientation.Horizontal, reverseDirection = reverseDirection,
+            flingBehavior = fling, interactionSource = interactions).testTag("root_swipe_header")
+    }
     LaunchedEffect(pager) {
         interactions.interactions.collect { if (it is DragInteraction.Start) gesturePending = true }
     }
@@ -90,13 +96,22 @@ val LocalRootTabSwipe = staticCompositionLocalOf<Modifier> { Modifier }
     }
     HorizontalPager(pager, modifier = Modifier.fillMaxSize().testTag("root_tab_transition")
         .onGloballyPositioned { viewport = it },
-        // Measure the requested page immediately for hero anchors, then retain only neighbours.
-        beyondViewportPageCount = maxOf(1, abs(selected - pager.currentPage)), key = { it },
+        // Four fixed root pages fit in a bounded cache. Retaining them avoids composing and
+        // discarding the nested Discover pager in the middle of every Settings -> Me slide.
+        beyondViewportPageCount = 3, key = { it },
         userScrollEnabled = false, flingBehavior = fling) { tab ->
         states.SaveableStateProvider(tab) {
             var page by remember { mutableStateOf<LayoutCoordinates?>(null) }
             val placement = remember { RootTabPlacement({ viewport }, { page }) }
-            CompositionLocalProvider(LocalRootTabPlacement provides placement, LocalRootTabSwipe provides swipe) {
+            val moving = pager.isScrollInProgress || pager.settledPage != selected
+            val active = parentActive && tab == selected && !moving
+            val lifecycle = rememberLifecycleOwner(maxLifecycle = when {
+                active -> Lifecycle.State.RESUMED
+                parentActive && moving && tab in setOf(selected, pager.currentPage, pager.settledPage) -> Lifecycle.State.STARTED
+                else -> Lifecycle.State.CREATED
+            })
+            CompositionLocalProvider(LocalRootTabPlacement provides placement, LocalRootTabSwipe provides swipe,
+                LocalLifecycleOwner provides lifecycle, LocalMusicPageActive provides active) {
                 Box(Modifier.fillMaxSize().onGloballyPositioned { page = it }
                     .then(if (tab != selected) Modifier.clearAndSetSemantics {} else Modifier)) { content(tab) }
             }

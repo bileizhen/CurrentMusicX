@@ -17,6 +17,10 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import io.github.currencortex.music.ui.util.collectAsPageState
+import kotlinx.coroutines.flow.MutableStateFlow
 import io.github.currencortex.music.ui.component.RootTabTransition
 import io.github.currencortex.music.ui.component.LocalRootTabSwipe
 import org.junit.Assert.*
@@ -157,5 +161,46 @@ class RootTabTransitionTest {
         compose.onNodeWithTag("root_swipe_header").performTouchInput { up() }
         compose.mainClock.advanceTimeBy(800)
         assertEquals(Color.RED, pixel())
+    }
+
+    @Test fun settingsToMeRetainsPagesAndResumesDatasetUpdatesOnlyAfterTheSlide() {
+        compose.mainClock.autoAdvance = false
+        var selected by mutableIntStateOf(3)
+        val entries = IntArray(4)
+        val owners = mutableMapOf<Int, androidx.lifecycle.LifecycleOwner>()
+        val datasets = List(4) { MutableStateFlow(0) }
+        compose.setContent {
+            RootTabTransition(selected, rememberSaveableStateHolder(), { selected = it }) { tab ->
+                val value by datasets[tab].collectAsPageState()
+                val owner = LocalLifecycleOwner.current
+                DisposableEffect(tab) { entries[tab]++; owners[tab] = owner; onDispose {} }
+                BasicText("retained$tab:$value", Modifier.fillMaxSize())
+            }
+        }
+        compose.mainClock.advanceTimeBy(64)
+        compose.runOnUiThread {
+            assertEquals(Lifecycle.State.RESUMED, owners.getValue(3).lifecycle.currentState)
+            assertEquals(Lifecycle.State.CREATED, owners.getValue(2).lifecycle.currentState)
+            selected = 2
+        }
+        compose.mainClock.advanceTimeBy(64)
+        compose.runOnUiThread {
+            assertEquals(Lifecycle.State.STARTED, owners.getValue(2).lifecycle.currentState)
+            assertEquals(Lifecycle.State.CREATED, owners.getValue(1).lifecycle.currentState)
+            datasets[2].value = 9
+        }
+        compose.mainClock.advanceTimeBy(64)
+        compose.onNodeWithText("retained2:0").assertExists()
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithText("retained2:9").assertExists()
+        compose.runOnUiThread { assertEquals(Lifecycle.State.RESUMED, owners.getValue(2).lifecycle.currentState) }
+        repeat(2) {
+            compose.runOnUiThread { selected = 3 }
+            compose.mainClock.advanceTimeBy(500)
+            compose.runOnUiThread { selected = 2 }
+            compose.mainClock.advanceTimeBy(500)
+        }
+        assertArrayEquals(intArrayOf(1, 1, 1, 1), entries)
+        compose.mainClock.autoAdvance = true
     }
 }

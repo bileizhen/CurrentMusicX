@@ -32,7 +32,8 @@ val LocalMusicBottomInset = staticCompositionLocalOf { 0.dp }
 /** Fixed composers avoid the dock without the extra clearance used by scrolling content. */
 val LocalMusicComposerBottomInset = staticCompositionLocalOf { 0.dp }
 /** Retained navigation pages yield input and animation while a sheet covers them. */
-val LocalMusicPageActive = staticCompositionLocalOf { true }
+// This changes on each page transition. Invalidate only readers, not every row of retained pages.
+val LocalMusicPageActive = androidx.compose.runtime.compositionLocalOf { true }
 
 @Composable fun musicScrollPadding(padding: PaddingValues = PaddingValues(20.dp)): PaddingValues {
     val direction = LocalLayoutDirection.current
