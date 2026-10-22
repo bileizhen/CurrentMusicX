@@ -79,6 +79,7 @@ class HomeAvatarTest {
         container.musicSettings.setServer(base); container.accountRepository.server = base
         container.accountRepository.save("isolated-test-token", UserDto(7, nickname = "Avatar fixture", avatar = "fixture.png"))
         container.updateSettings.setAutoCheck(false)
+        container.desktopLyrics.markRecommendationSeen()
         container.settings.edit { AppearanceSettings(blur = false) }
     }
     @After fun finish() = runBlocking {
