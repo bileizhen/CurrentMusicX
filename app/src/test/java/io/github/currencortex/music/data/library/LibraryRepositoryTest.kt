@@ -10,6 +10,21 @@ import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 class LibraryRepositoryTest {
+    @Test fun restoringLikeIsIdempotentAndReadsCurrentMembershipBeforeWriting() = runBlocking {
+        MockWebServer().use { s ->
+            val r = repo(s)
+            s.enqueue(MockResponse().setBody("""{"liked":[]}"""))
+            s.enqueue(MockResponse().setBody("""{"on":true}"""))
+            assertTrue(r.setLiked(Song(1, "A"), true) is AppResult.Success)
+            assertTrue(r.statuses.value[1]!!.liked)
+            s.takeRequest(); assertEquals("/cm/likes/1", s.takeRequest().path)
+            s.enqueue(MockResponse().setBody("""{"liked":[1]}"""))
+            assertTrue(r.setLiked(Song(1, "A"), true) is AppResult.Success)
+            assertTrue(r.statuses.value[1]!!.liked)
+            s.takeRequest(); assertNull(s.takeRequest(50, TimeUnit.MILLISECONDS))
+        }
+    }
+
     @Test fun refreshingOnePlaylistBypassesOnlyItsOwnReadCache() = runBlocking {
         MockWebServer().use { s ->
             val r = repo(s)

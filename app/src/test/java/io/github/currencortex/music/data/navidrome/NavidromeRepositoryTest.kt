@@ -114,6 +114,17 @@ class NavidromeRepositoryTest {
         server.enqueue(ok()); server.enqueue(ok(""""lyrics":{"value":"[00:02.00]Embedded LRC"}"""))
         assertEquals(2000L, repo.lyrics(track).lines.single().startTimeMs)
     }
+    @Test fun restoringAnAlreadyStarredSongDoesNotUnstarIt() = runBlocking {
+        login(); repeat(2) { server.takeRequest() }
+        val song = song(); server.takeRequest()
+        val starred = track.dropLast(1) + ",\"starred\":\"2026-10-22T00:00:00Z\"}"
+        server.enqueue(ok("\"song\":$starred"))
+        assertTrue(repo.setLiked(song, true))
+        assertTrue(repo.likes.value[song.id] == true)
+        assertTrue(server.takeRequest().path!!.contains("getSong"))
+        assertNull(server.takeRequest(100, TimeUnit.MILLISECONDS))
+    }
+
     @Test fun likesAndPlaylistWritesUseOpaqueSongIdsAndRemovalIndex() = runBlocking {
         login(); val song = song()
         server.enqueue(ok("\"song\":$track")); server.enqueue(ok())

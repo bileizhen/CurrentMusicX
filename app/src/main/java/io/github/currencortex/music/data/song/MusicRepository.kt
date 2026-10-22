@@ -12,6 +12,16 @@ class MusicRepository(private val api: ApiClient,
     private val audioAccess: () -> AudioSourceAccess = { AudioSourceAccess(AudioProvider.CURRENT_MUSIC) },
     private val leiz: LeizAudioClient = LeizAudioClient(),
     private val navidrome: io.github.currencortex.music.data.navidrome.NavidromeRepository? = null) {
+    suspend fun previewClip(song: Song): SongPreviewClip {
+        val id = NeteaseSongActionsRepository.songId(song)
+        val raw = if (song.navidrome == null && id != null) {
+            when (val response = appResult { api.get<JsonObject>("ncm/song/chorus", mapOf("id" to "$id")) }) {
+                is AppResult.Success -> response.value
+                is AppResult.Failure -> null
+            }
+        } else null
+        return songPreviewClip(raw, id ?: song.id, song.durationMs)
+    }
     suspend fun detail(song: Song): Song = if (song.musicSource == MusicSource.NAVIDROME) requireNotNull(navidrome).detail(song) else detail(song.id)
     suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.NAVIDROME) appResult { requireNotNull(navidrome).lyrics(song) } else lyricsDocument(song.id)
     suspend fun source(song: Song, quality: AudioQuality, session: RequestSession? = null): AudioSource =

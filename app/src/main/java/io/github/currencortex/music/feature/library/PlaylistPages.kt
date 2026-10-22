@@ -131,8 +131,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     play: (List<Song>, Int) -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val statuses by library.statuses.collectAsStateWithLifecycle()
+    val likesUseNetease by vm.container.primaryLibrary.likesUseNetease.collectAsStateWithLifecycle()
     val neteaseMain by vm.container.primaryLibrary.usesNetease.collectAsStateWithLifecycle()
     val neteaseLikes by vm.container.neteaseSongActions.likedState.collectAsStateWithLifecycle()
+    val navidromeLikes by vm.container.navidrome.likes.collectAsStateWithLifecycle()
+    val likeBusy by library.primaryLikeBusy.collectAsStateWithLifecycle()
     val playback by vm.container.playerController.state.collectAsStateWithLifecycle()
     val queue by vm.container.playbackQueue.state.collectAsStateWithLifecycle()
     val busy by library.busy.collectAsStateWithLifecycle()
@@ -170,6 +173,43 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     val songKeys = remember(songs) { playlistSongKeys(songs) }
     val canPlay = room == null && playback.mode == PlayerMode.LOCAL
+    if (appearance.playlistRecordShelf && state.songs.isNotEmpty()) {
+        val previewContext = androidx.compose.ui.platform.LocalContext.current
+        val previewLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
+        val preview = remember(vm.container) { RecordShelfPreview(previewContext, vm.container) }
+        val previewPageActive = io.github.currencortex.music.ui.component.LocalMusicPageActive.current
+        val previewAllowed by rememberUpdatedState(canPlay && previewPageActive)
+        DisposableEffect(preview, previewLifecycle) {
+            val observer = androidx.lifecycle.LifecycleEventObserver { _, _ ->
+                preview.setActive(previewAllowed && previewLifecycle.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))
+            }
+            previewLifecycle.lifecycle.addObserver(observer)
+            onDispose { previewLifecycle.lifecycle.removeObserver(observer); preview.close() }
+        }
+        SideEffect {
+            preview.setActive(previewAllowed && previewLifecycle.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.RESUMED))
+            preview.setFullLength(appearance.recordShelfFullPreview)
+            preview.setMode(appearance.recordShelfPreviewMode)
+        }
+        LaunchedEffect(state.songs, likesUseNetease) {
+            library.refreshSearchLikes(state.songs.filter { it.navidrome == null })
+        }
+        PlaylistRecordShelf(state.songs, canPlay, onPlay = { index -> preview.commit { play(state.songs, index) } },
+            onPreview = preview::select,
+            previewMode = appearance.recordShelfPreviewMode,
+            fullPreview = appearance.recordShelfFullPreview,
+            onFullPreviewChange = { full -> scope.launch { vm.container.settings.edit { it.copy(recordShelfFullPreview = full) } } },
+            onPreviewModeChange = { mode -> scope.launch { vm.container.settings.edit { it.copy(recordShelfPreviewMode = mode) } } },
+            nextPreviewRequests = preview.nextRequests,
+            isSaved = { song -> when {
+                song.navidrome != null -> navidromeLikes[song.id] == true
+                likesUseNetease -> io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) in neteaseLikes
+                else -> statuses[song.id]?.liked == true
+            } },
+            onSave = { library.togglePrimaryLike(it, undoable = true) }, saveEnabled = !likeBusy,
+            onClose = { scope.launch { vm.container.settings.edit { it.copy(playlistRecordShelf = false) } } })
+        return
+    }
     if (appearance.playlistDepthRibbon && songs.isNotEmpty()) {
         PlaylistDepthRibbon(songs, canPlay, onPlay = { index -> play(songs, index) },
             onPrepare = { index -> val job = vm.preloadForPlayback(songs[index]); { job.cancel() } },
@@ -219,9 +259,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 if (searching) closeSearch() else searching = true
                 scope.launch { list.animateScrollToItem(1) }
             }, Modifier.testTag("playlist_search_toggle"), background = Color.Transparent)
-            PlaylistIconAction(MusicIcons.Image, "立体缎带", {
-                scope.launch { vm.container.settings.edit { it.copy(playlistDepthRibbon = true) } }
-            }, Modifier.testTag("playlist_depth_ribbon_toggle"), background = Color.Transparent)
+            Row(Modifier.height(40.dp).clip(RoundedCornerShape(20.dp))
+                .clickable(role = Role.Button) {
+                    scope.launch { vm.container.settings.edit { it.copy(playlistRecordShelf = true, playlistDepthRibbon = false) } }
+                }.semantics { contentDescription = "CD 唱片架" }.testTag("playlist_record_shelf_toggle")
+                .padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                Icon(MusicIcons.Image, null, Modifier.size(18.dp), tint = Color.White)
+                Text("唱片架", color = Color.White, fontSize = 13.sp)
+            }
             PlaylistIconAction(Icons.Default.MoreVert, "歌单操作", { menuOpen = true }, Modifier.testTag("playlist_more"), background = Color.Transparent)
         }
         Box(Modifier.weight(1f).background(backdrop).testTag("playlist_refresh")) {
@@ -330,6 +376,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         }
     }
     if (menuOpen) MusicChoiceDialog("歌单操作", onDismiss = { menuOpen = false }) {
+        MusicDestinationRow("CD 唱片架", {
+            menuOpen = false
+            scope.launch { vm.container.settings.edit { it.copy(playlistRecordShelf = true, playlistDepthRibbon = false) } }
+        }, modifier = Modifier.testTag("playlist_record_shelf_menu"), chevron = false)
+        MusicDestinationRow("立体缎带", {
+            menuOpen = false
+            scope.launch { vm.container.settings.edit { it.copy(playlistDepthRibbon = true, playlistRecordShelf = false) } }
+        }, modifier = Modifier.testTag("playlist_depth_ribbon_toggle"), chevron = false)
         MusicDestinationRow("歌单信息", { menuOpen = false; infoOpen = true }, modifier = Modifier.testTag("playlist_menu_info"), chevron = false)
         MusicDestinationRow("刷新歌单", { menuOpen = false; vm.reload(force = true) }, chevron = false)
         if (state.playlist?.editable(account.account?.id ?: 0) == true) {

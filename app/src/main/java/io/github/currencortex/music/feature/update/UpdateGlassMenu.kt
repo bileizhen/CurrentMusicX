@@ -56,7 +56,8 @@ internal val UpdateButtonGlowKey = SemanticsPropertyKey<Float>("UpdateButtonGlow
         rememberLayerBackdrop() else null
 
 @Composable internal fun UpdateGlassButton(backdrop: Backdrop?, tag: String, description: String,
-    onClick: () -> Unit, onBoundsChanged: (Rect) -> Unit = {}, content: @Composable () -> Unit) {
+    onClick: () -> Unit, onBoundsChanged: (Rect) -> Unit = {},
+    enabled: Boolean = true, buttonSize: androidx.compose.ui.unit.Dp = 48.dp, content: @Composable () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .92f else 1f,
@@ -88,7 +89,7 @@ internal val UpdateButtonGlowKey = SemanticsPropertyKey<Float>("UpdateButtonGlow
             }
         }
     }
-    Box(Modifier.size(48.dp).onGloballyPositioned { onBoundsChanged(it.boundsInWindow()) }
+    Box(Modifier.size(buttonSize).onGloballyPositioned { onBoundsChanged(it.boundsInWindow()) }
         .graphicsLayer { scaleX = scale; scaleY = scale }
         .updateGlass(backdrop, CircleShape, .23f)
         .drawBehind {
@@ -102,7 +103,7 @@ internal val UpdateButtonGlowKey = SemanticsPropertyKey<Float>("UpdateButtonGlow
                     style = Stroke(edge))
             }
         }
-        .clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
+        .clickable(enabled = enabled, interactionSource = interaction, indication = null, role = Role.Button, onClick = onClick)
         .semantics { contentDescription = description; this[UpdateButtonGlowKey] = light.value }
         .testTag(tag), contentAlignment = Alignment.Center) { content() }
 }

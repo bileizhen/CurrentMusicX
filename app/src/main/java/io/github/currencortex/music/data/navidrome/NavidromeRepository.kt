@@ -132,11 +132,14 @@ class NavidromeRepository(private val vault: TokenStore, scope: CoroutineScope) 
         val ref = track(song); val access = client.current()
         return client.request("getSong", listOf("id" to ref.id), access)["song"]?.jsonObject?.let { song(it, access) } ?: song
     }
-    suspend fun toggleLike(song: Song): Boolean {
+    suspend fun toggleLike(song: Song): Boolean = changeLike(song, null)
+    suspend fun setLiked(song: Song, liked: Boolean): Boolean = changeLike(song, liked)
+    private suspend fun changeLike(song: Song, desired: Boolean?): Boolean {
         val ref = track(song); val access = client.current()
         val current = client.request("getSong", listOf("id" to ref.id), access)["song"]?.jsonObject ?: throw ApiException(ErrorKind.NotFound)
-        val next = current.string("starred").isBlank()
-        client.request(if (next) "star" else "unstar", listOf("id" to ref.id), access)
+        val before = current.string("starred").isNotBlank()
+        val next = desired ?: !before
+        if (before != next) client.request(if (next) "star" else "unstar", listOf("id" to ref.id), access)
         likes.update { it + (song.id to next) }; changed(); return next
     }
     suspend fun add(playlist: String, song: Song) { val ref = track(song)
