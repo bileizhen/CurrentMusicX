@@ -343,11 +343,9 @@ import kotlinx.coroutines.launch
                     modifier = Modifier.testTag("save_profile"))
             }
         }
-        "avatar" -> MusicDialog("更换头像", ::close) {
-            AsyncImage(avatar, contentDescription = "新头像预览", modifier = Modifier.size(120.dp))
-            Text("上传后将替换当前头像。")
-            MusicDialogButton("确认上传", onClick = { vm.upload(context.contentResolver) }, enabled = !busy, modifier = Modifier.testTag("confirm_avatar_upload"))
-        }
+        "avatar" -> avatar?.let { uri -> AvatarCropDialog(uri, busy, ::close) { crop ->
+            vm.upload(context.contentResolver, crop)
+        } }
         "password" -> {
             var old by remember { mutableStateOf("") }; var new by remember { mutableStateOf("") }; var confirm by remember { mutableStateOf("") }
             MusicDialog("修改密码", ::close) {

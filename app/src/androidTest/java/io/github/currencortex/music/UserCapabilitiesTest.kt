@@ -304,6 +304,9 @@ class UserCapabilitiesTest {
             bitmap.eraseColor(android.graphics.Color.GREEN)
             file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
             compose.runOnIdle { profileVm.avatar.value = android.net.Uri.fromFile(file); profileVm.dialog.value = "avatar" }
+            compose.waitUntil(5000) {
+                compose.onAllNodes(hasTestTag("confirm_avatar_upload") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+            }
             compose.onNodeWithTag("confirm_avatar_upload").performClick()
             compose.waitUntil(10000) { uploadedAvatar != null }
             val bytes = uploadedAvatar!!

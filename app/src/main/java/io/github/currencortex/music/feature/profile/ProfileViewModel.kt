@@ -101,11 +101,11 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
     fun update(nickname: String, bio: String, visible: Boolean?) = action("资料已更新") {
         val expected = session(); applyUser(container.profileRepository.update(nickname, bio, visible, expected), expected)
     }
-    fun upload(resolver: ContentResolver) = action("头像已更新") {
+    fun upload(resolver: ContentResolver, crop: AvatarCrop? = null) = action("头像已更新") {
         val uri = avatar.value ?: return@action
         val expected = session()
         val previousAvatar = container.accountRepository.state.value.account?.avatar.orEmpty()
-        val bytes = withContext(Dispatchers.IO) { avatarBytes(resolver, uri) }
+        val bytes = withContext(Dispatchers.IO) { avatarBytes(resolver, uri, crop) }
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         applyUser(container.profileRepository.avatar(bytes, expected, previousAvatar), expected)
     }
@@ -114,7 +114,8 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         container.authRepository.restore(container.accountRepository.server); reload()
     }
     companion object {
-        fun avatarBytes(resolver: ContentResolver, uri: Uri): ByteArray {
+        fun avatarBytes(resolver: ContentResolver, uri: Uri, crop: AvatarCrop? = null): ByteArray {
+            if (crop != null) return avatarCropBytes(resolver, uri, crop)
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             resolver.openInputStream(uri).use { BitmapFactory.decodeStream(it, null, options) }
             require(options.outWidth > 0 && options.outHeight > 0)
