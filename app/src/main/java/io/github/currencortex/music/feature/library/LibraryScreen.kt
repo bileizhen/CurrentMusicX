@@ -123,7 +123,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     var name by rememberSaveable { mutableStateOf("") }
     val editable = vm.editable(state.playlist, account.account?.id ?: 0)
     LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
-    LaunchedEffect(state.refreshError) { state.refreshError?.let { library.message.value = "刷新失败，已保留原列表：$it" } }
+    LaunchedEffect(state.refreshError) { state.refreshError?.let { library.container.errorNotices.show("刷新失败，已保留原列表：$it") } }
     PreloadMusicCovers(state.songs.take(12).map { it.cover })
     if (vm.route.startsWith("lib/mv/")) {
         io.github.currencortex.music.feature.mv.MvDetailScreen(state, vm.container, onBack, playMv,

@@ -1,6 +1,5 @@
 package io.github.currencortex.music.feature.navidrome
 
-import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -78,7 +77,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         else -> Unit
     } }
     BackHandler(configuration || filterOpen || vm.nested) { back() }
-    LaunchedEffect(message) { message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); vm.message.value = null } }
+    LaunchedEffect(message) { message?.let { vm.container.errorNotices.showMessage(it); vm.message.value = null } }
     val shownSongs = remember(state.songs, filter) {
         if (filter.isBlank()) state.songs else state.songs.filter { song ->
             listOf(song.name, song.artists, song.album).any { it.contains(filter.trim(), ignoreCase = true) }

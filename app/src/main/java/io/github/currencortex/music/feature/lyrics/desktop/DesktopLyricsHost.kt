@@ -18,6 +18,7 @@ import io.github.currencortex.music.R
 import io.github.currencortex.music.core.media.MusicService
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.core.media.isUpdateInstallNotice
+import io.github.currencortex.music.core.media.isActionableIslandNotice
 import io.github.currencortex.music.feature.lyrics.data.PlaybackLyricsState
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -103,7 +104,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
             // A notice may become install-ready without changing its presence. Recheck first,
             // before the input-window delay, so every temporary phase can appear on any page.
             visibility()
-            val showing = notice != null && !notice.isUpdateInstallNotice()
+            val showing = notice != null && !notice.isActionableIslandNotice()
             effectTransitioning = true
             removeIslandTouchWindow()
             // No input-window resize transactions while the visual capsule morphs.
@@ -260,7 +261,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         if (target == null) {
             val input = View(visual).apply {
                 setOnClickListener {
-                    if (effectNotices.value.isUpdateInstallNotice()) installUpdate()
+                    if (effectNotices.value?.action != null) effectNotices.value?.action?.invoke?.invoke()
+                    else if (effectNotices.value.isUpdateInstallNotice()) installUpdate()
                     else if (effectNotices.value == null) islandTapRequest.intValue++
                 }
                 setOnLongClickListener { if (effectNotices.value == null && !current.locked) editRequest.intValue++; true }
@@ -271,7 +273,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                     }
                     override fun onSingleTapUp(e: MotionEvent): Boolean {
                         if (effectNotices.value != null) {
-                            if (effectNotices.value.isUpdateInstallNotice()) performClick()
+                            if (effectNotices.value.isActionableIslandNotice()) performClick()
                             return true
                         }
                         val origin = params ?: return false
@@ -287,7 +289,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                 }).apply { setOnDoubleTapListener(null) }
                 setOnTouchListener { _, event ->
                     // A transient effect result never controls the song or changes the saved display mode.
-                    if (effectNotices.value != null && !effectNotices.value.isUpdateInstallNotice()) return@setOnTouchListener true
+                    if (effectNotices.value != null && !effectNotices.value.isActionableIslandNotice()) return@setOnTouchListener true
                     gestures.onTouchEvent(event)
                     if (event.actionMasked == MotionEvent.ACTION_UP && !held) {
                         val dx = event.rawX - startX; val dy = event.rawY - startY
@@ -317,7 +319,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                 try { window.updateViewLayout(target, p) } catch (_: RuntimeException) { removeIslandTouchWindow() }
             }
         }
-        islandTouchView?.contentDescription = if (effectNotices.value.isUpdateInstallNotice()) "CurrentMusic 更新下载完成，点击查看"
+        islandTouchView?.contentDescription = if (effectNotices.value?.action != null) "${effectNotices.value?.message}，点击${effectNotices.value?.action?.label}"
+            else if (effectNotices.value.isUpdateInstallNotice()) "CurrentMusic 更新下载完成，点击查看"
             else "灵动岛：点击封面播放或暂停，点击歌词切换帧率，左右滑动切歌，未锁定时长按编辑"
     }
     private fun placement(area: DesktopSafeArea, width: Int, height: Int): DesktopPlacement {

@@ -18,7 +18,7 @@ class DesktopIslandVisibilityPolicyTest {
     }
 
     @Test fun everyTransientNoticeAndDownloadPhaseIsAllowedInForeground() {
-        for (kind in listOf(IslandNoticeKind.SOUND_EFFECT, IslandNoticeKind.UPDATE_DOWNLOAD, IslandNoticeKind.ERROR)) {
+        for (kind in IslandNoticeKind.entries) {
             for (phase in SoundEffectNoticePhase.entries) {
                 assertTrue("$kind/$phase must appear in-app", desktopIslandContentAllowed(true, notice(kind, phase)))
                 assertTrue("$kind/$phase needs fallback without an overlay", fallbackIslandNoticeVisible(notice(kind, phase), false))

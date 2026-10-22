@@ -81,9 +81,10 @@ class OriginalEffectsPageApi(private val container: AppContainer, private val vm
             "abTestList", "abtest.getList" -> hostCapabilities(params)
             "openUrl", "openURL", "nm.navigator.openURL" -> navigationRequest(params)
             "exitApp" -> buildJsonObject { put("action", "close"); put("handled", false) }
-            "showToast", "toast.show", "showVipToast", "nm.vipToast.show" -> buildJsonObject {
-                put("action", "toast"); put("text", params.text("text").ifBlank { params.text("message") }.take(200))
-                put("handled", false)
+            "showToast", "toast.show", "showVipToast", "nm.vipToast.show" -> {
+                val text = params.text("text").ifBlank { params.text("message") }.take(200)
+                container.errorNotices.showMessage(text)
+                buildJsonObject { put("action", "toast"); put("text", text); put("handled", true) }
             }
             else -> fail("此原版页面功能尚未移植：${method.take(100)}")
         }

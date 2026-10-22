@@ -3,7 +3,7 @@ package io.github.currencortex.music.feature.logs
 
 import io.github.currencortex.music.ui.component.MusicDialogButton
 import android.content.Intent
-import android.widget.Toast
+import io.github.currencortex.music.ui.util.showMusicMessage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -41,7 +41,7 @@ fun LogExportDialog(show: Boolean, logger: AppLogger, onDismiss: () -> Unit) {
         if (uri != null && !busy) scope.launch { generate {
             val file = DiagnosticExporter.create(context, logger)
             try { DiagnosticExporter.save(context, file, uri) } finally { file.delete() }
-            Toast.makeText(context, "日志已保存", Toast.LENGTH_SHORT).show()
+            context.showMusicMessage("日志已保存")
         } }
     }
     OverlayDialog(show = show && !busy, title = "导出日志",

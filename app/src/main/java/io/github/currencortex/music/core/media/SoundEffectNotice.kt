@@ -11,14 +11,19 @@ enum class SoundEffectNoticeTier { STANDARD, VIP, SVIP;
     companion object { fun fromMembership(value: Int) = when (value) { 4 -> SVIP; 3 -> VIP; else -> STANDARD } }
 }
 enum class SoundEffectNoticePhase { APPLYING, READY, WAITING, FAILED }
-enum class IslandNoticeKind { SOUND_EFFECT, UPDATE_DOWNLOAD, ERROR }
+enum class IslandNoticeKind { SOUND_EFFECT, UPDATE_DOWNLOAD, ERROR, MESSAGE }
+data class IslandNoticeAction(val label: String, val invoke: () -> Unit)
+
 data class SoundEffectNotice(val id: Long, val name: String, val tier: SoundEffectNoticeTier,
     val phase: SoundEffectNoticePhase = SoundEffectNoticePhase.APPLYING, val message: String = "正在启用音效…",
-    val kind: IslandNoticeKind = IslandNoticeKind.SOUND_EFFECT, val progress: Int? = null)
+    val kind: IslandNoticeKind = IslandNoticeKind.SOUND_EFFECT, val progress: Int? = null,
+    val action: IslandNoticeAction? = null)
 data class SoundEffectNoticeResult(val phase: SoundEffectNoticePhase, val message: String)
 
 internal fun SoundEffectNotice?.isUpdateInstallNotice() =
     this?.kind == IslandNoticeKind.UPDATE_DOWNLOAD && phase == SoundEffectNoticePhase.READY
+
+internal fun SoundEffectNotice?.isActionableIslandNotice() = this?.action != null || isUpdateInstallNotice()
 
 /** One transient, latest-intent-wins notice shared by the in-app and desktop island. */
 class SoundEffectNoticeCenter(private val scope: CoroutineScope) {

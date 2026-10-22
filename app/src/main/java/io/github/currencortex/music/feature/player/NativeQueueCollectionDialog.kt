@@ -7,7 +7,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
-import android.widget.Toast
+import io.github.currencortex.music.ui.util.showMusicMessage
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.library.Playlist
 import io.github.currencortex.music.data.song.Song
@@ -48,7 +48,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
                     MusicDestinationRow(playlist.name, {
                         if (!busy) { busy = true; error = null; scope.launch {
                             when (val result = appResult { collect(playlist.id, songs) }) {
-                                is AppResult.Success -> { Toast.makeText(context, "已收藏到${playlist.name}", Toast.LENGTH_SHORT).show(); onDismiss() }
+                                is AppResult.Success -> { context.showMusicMessage("已收藏到${playlist.name}"); onDismiss() }
                                 is AppResult.Failure -> error = result.kind.message
                             }
                             busy = false

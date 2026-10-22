@@ -207,7 +207,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             append("来自 CurrentMusic")
         }
         runCatching { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
-            .putExtra(Intent.EXTRA_TEXT, text), "分享歌单")) }.onFailure { library.message.value = "暂时无法打开分享" }
+            .putExtra(Intent.EXTRA_TEXT, text), "分享歌单")) }.onFailure { library.container.errorNotices.show("暂时无法打开分享") }
     }
     Column(Modifier.fillMaxSize().background(backdrop).statusBarsPadding().navigationBarsPadding().testTag("library_detail")) {
         Row(Modifier.fillMaxWidth().background(backdrop).height(52.dp).padding(horizontal = 12.dp).testTag("playlist_top_bar"), verticalAlignment = Alignment.CenterVertically) {
