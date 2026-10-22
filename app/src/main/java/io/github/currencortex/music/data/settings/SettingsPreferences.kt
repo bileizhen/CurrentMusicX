@@ -16,6 +16,9 @@ internal object SettingsPreferences {
     private val GLASS = booleanPreferencesKey("liquid_glass")
     private val PREDICTIVE = booleanPreferencesKey("predictive_back")
     private val DEPTH_RIBBON = booleanPreferencesKey("playlist_depth_ribbon")
+    private val RECORD_SHELF = booleanPreferencesKey("playlist_record_shelf")
+    private val RECORD_PREVIEW_MODE = stringPreferencesKey("record_shelf_preview_mode")
+    private val RECORD_FULL_PREVIEW = booleanPreferencesKey("record_shelf_full_preview")
     private val NAVIGATION_GLOW = booleanPreferencesKey("navigation_glow")
     private val REFRESH_RATE = stringPreferencesKey("refresh_rate")
     private val PLAYER_BACKGROUND = stringPreferencesKey("player_background")
@@ -32,6 +35,9 @@ internal object SettingsPreferences {
         predictiveBack = p[PREDICTIVE] ?: true,
         navigationGlow = p[NAVIGATION_GLOW] ?: true,
         playlistDepthRibbon = p[DEPTH_RIBBON] ?: false,
+        playlistRecordShelf = p[RECORD_SHELF] ?: false,
+        recordShelfPreviewMode = runCatching { RecordShelfPreviewMode.valueOf(p[RECORD_PREVIEW_MODE].orEmpty()) }.getOrDefault(RecordShelfPreviewMode.ONCE),
+        recordShelfFullPreview = p[RECORD_FULL_PREVIEW] ?: false,
         refreshRate = runCatching { RefreshRatePreference.valueOf(p[REFRESH_RATE] ?: RefreshRatePreference.SYSTEM.name) }.getOrDefault(RefreshRatePreference.SYSTEM),
         playerBackground = p[PLAYER_BACKGROUND].orEmpty(),
         playerBackgroundBlur = p[PLAYER_BACKGROUND_BLUR] ?: 35f,
@@ -49,6 +55,9 @@ internal object SettingsPreferences {
         p[PREDICTIVE] = v.predictiveBack
         p[NAVIGATION_GLOW] = v.navigationGlow
         p[DEPTH_RIBBON] = v.playlistDepthRibbon
+        p[RECORD_SHELF] = v.playlistRecordShelf
+        p[RECORD_PREVIEW_MODE] = v.recordShelfPreviewMode.name
+        p[RECORD_FULL_PREVIEW] = v.recordShelfFullPreview
         p[REFRESH_RATE] = v.refreshRate.name
         p[PLAYER_BACKGROUND] = v.playerBackground
         p[PLAYER_BACKGROUND_BLUR] = v.playerBackgroundBlur

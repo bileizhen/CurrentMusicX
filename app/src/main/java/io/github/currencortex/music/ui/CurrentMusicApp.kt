@@ -217,7 +217,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val playlistPage = isPlaylistRoute(backStack.last())
     val haloVisible = (!launchFinished && launchStyle == io.github.currencortex.music.data.settings.LaunchStyle.HALO) ||
         launchPreview == io.github.currencortex.music.data.settings.LaunchStyle.HALO
-    LeiTheme(settings, darkSystemBars = if (haloVisible || updateDialogVisible || miniQueueOpen || (playlistPage && settings.playlistDepthRibbon) || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
+    LeiTheme(settings, darkSystemBars = if (haloVisible || updateDialogVisible || miniQueueOpen || (playlistPage && (settings.playlistDepthRibbon || settings.playlistRecordShelf)) || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
         darkStatusBars = if (haloVisible || updateDialogVisible || playlistPage) true else null) {
         CompositionLocalProvider(LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight,
             LocalRefreshRatePreference provides settings.refreshRate) {
@@ -263,7 +263,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
         val miniRetainedAvailable = currentSong != null || playerState.mode == PlayerMode.ROOM
         val miniAvailable = !keyboardOpen && miniRetainedAvailable
-        val showMini = miniAvailable && !playerPresented && sceneStack.last() != "lib/video"
+        val showMini = miniAvailable && !playerPresented && sceneStack.last() != "lib/video" &&
+            !(settings.playlistRecordShelf && isPlaylistRoute(sceneStack.last()))
         PreloadMusicCovers(listOf(currentSong?.cover.orEmpty()), 800)
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
         var roomDialogOpen by remember { mutableStateOf(false) }
@@ -409,7 +410,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         // renders both scenes before committing; changing the shared viewport makes them jump.
         val rootFloating = (settings.floatingBar || wideLayout) && !keyboardOpen
         val rootTabSpace = if (!wideLayout && !keyboardOpen && !settings.floatingBar) 92.dp else 0.dp
-        val ribbonEnabled = androidx.compose.runtime.rememberUpdatedState(settings.playlistDepthRibbon)
+        val ribbonEnabled = androidx.compose.runtime.rememberUpdatedState(settings.playlistDepthRibbon || settings.playlistRecordShelf)
         val availableMini = androidx.compose.runtime.rememberUpdatedState(miniAvailable)
         val miniInset = androidx.compose.runtime.rememberUpdatedState(miniHeight)
         val pageInteractive = androidx.compose.runtime.rememberUpdatedState(!playerPresented && !searchPresented)
@@ -655,8 +656,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         }
         }
-        val dockVisible by remember(keyboardOpen, sceneStack) { derivedStateOf {
-            sceneStack.last() != "lib/video" && playerExpansion.value < .9999f
+        val dockVisible by remember(keyboardOpen, sceneStack, settings.playlistRecordShelf) { derivedStateOf {
+            sceneStack.last() != "lib/video" && playerExpansion.value < .9999f &&
+                !(settings.playlistRecordShelf && isPlaylistRoute(sceneStack.last()))
         } }
         val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
         KeyboardDockOverlay(keyboardOpen) {

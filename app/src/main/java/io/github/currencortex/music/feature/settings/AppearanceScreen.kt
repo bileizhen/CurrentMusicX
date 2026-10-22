@@ -96,9 +96,12 @@ fun AppearanceScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSca
                     })
             }
             Card(Modifier.padding(top = 12.dp).fillMaxWidth()) {
-                SettingsSwitch("歌单立体缎带", config.playlistDepthRibbon, { value -> viewModel.edit { it.copy(playlistDepthRibbon = value) } },
+                SettingsSwitch("歌单立体缎带", config.playlistDepthRibbon, { value -> viewModel.edit { it.copy(playlistDepthRibbon = value, playlistRecordShelf = if (value) false else it.playlistRecordShelf) } },
                     summary = "沿歌曲封面穿行，左右拖动，长按查看全景",
                     startAction = { SettingIcon(MusicIcons.Image) }, modifier = Modifier.testTag("setting_depth_ribbon"))
+                SettingsSwitch("歌单 CD 唱片架", config.playlistRecordShelf, { value -> viewModel.edit { it.copy(playlistRecordShelf = value, playlistDepthRibbon = if (value) false else it.playlistDepthRibbon) } },
+                    summary = "透明唱片盒斜向排列，滑动浏览、抽出封面，帮你挑一首",
+                    startAction = { SettingIcon(MusicIcons.Image) }, modifier = Modifier.testTag("setting_record_shelf"))
                 SettingsSwitch(uiText("预测性返回手势"), config.predictiveBack, { value -> viewModel.edit { it.copy(predictiveBack = value) } },
                     enabled = Build.VERSION.SDK_INT >= 34, summary = uiText("启用预测性返回手势支持"),
                     startAction = { SettingIcon(MusicIcons.Back) }, modifier = Modifier.testTag("setting_predictive"))

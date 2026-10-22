@@ -137,27 +137,67 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
             if (song.navidrome == null) container.libraryRepository.invalidate(); selectedSong.value = null
         }
     }
-    fun togglePrimaryLike(song: Song) {
+    private var likeUndoNotice: Long? = null
+    fun togglePrimaryLike(song: Song, undoable: Boolean = false) {
         if (primaryLikeBusy.value || song.video) return
         primaryLikeBusy.value = true
+        likeUndoNotice?.let(container.errorNotices::clear); likeUndoNotice = null
         val expected = container.musicSession()
+        var restore: (suspend () -> Unit)? = null
         viewModelScope.launch {
             try {
                 when (val result = appResult {
-                    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) return@appResult container.navidrome.toggleLike(song)
+                    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) {
+                        val navSession = container.navidrome.session()
+                        restore = {
+                            if (navSession != container.navidrome.session()) throw ApiException(ErrorKind.Unauthorized)
+                            container.navidrome.setLiked(song, true); Unit
+                        }
+                        return@appResult container.navidrome.toggleLike(song)
+                    }
                     val native = container.primaryLibrary.resolveLikeNetease()
                     if (expected != container.musicSession()) throw ApiException(ErrorKind.Unauthorized)
                     if (native) {
                         val id = io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound)
+                        restore = { container.neteaseSongActions.setLiked(id, true, expected, song) }
                         container.neteaseSongActions.toggleLiked(id, song)
-                    } else when (val write = container.libraryRepository.toggleLike(song)) {
+                    } else {
+                        restore = {
+                            when (val write = container.libraryRepository.setLiked(song, true)) {
+                                is AppResult.Failure -> throw ApiException(write.kind)
+                                is AppResult.Success -> Unit
+                            }
+                        }
+                        when (val write = container.libraryRepository.toggleLike(song)) {
                         is AppResult.Success -> container.libraryRepository.statuses.value[song.id]?.liked == true
                         is AppResult.Failure -> throw ApiException(write.kind)
+                        }
                     }
                 }) {
                     is AppResult.Success -> if (expected == container.musicSession()) {
                         if (song.navidrome == null) container.libraryRepository.invalidate()
-                        message.value = if (result.value) "已加入我喜欢" else "已取消喜欢"
+                        if (undoable && !result.value) {
+                            val restoreLike = requireNotNull(restore)
+                            likeUndoNotice = container.errorNotices.showUndo("已取消喜欢") {
+                                if (!primaryLikeBusy.value && expected == container.musicSession()) {
+                                    primaryLikeBusy.value = true
+                                    viewModelScope.launch {
+                                        try {
+                                            when (val undone = appResult {
+                                                if (expected != container.musicSession()) throw ApiException(ErrorKind.Unauthorized)
+                                                restoreLike()
+                                            }) {
+                                                is AppResult.Success -> if (expected == container.musicSession()) {
+                                                    if (song.navidrome == null) container.libraryRepository.invalidate()
+                                                    container.errorNotices.showMessage("已恢复喜欢")
+                                                }
+                                                is AppResult.Failure -> if (expected == container.musicSession()) container.errorNotices.show(undone.kind.message)
+                                            }
+                                        } finally { primaryLikeBusy.value = false }
+                                    }
+                                }
+                            }
+                        } else message.value = if (result.value) "已加入我喜欢" else "已取消喜欢"
                     }
                     is AppResult.Failure -> if (expected == container.musicSession()) container.errorNotices.show(result.kind.message)
                 }

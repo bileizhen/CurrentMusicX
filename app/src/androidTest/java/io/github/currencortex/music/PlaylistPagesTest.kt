@@ -2,6 +2,7 @@ package io.github.currencortex.music
 
 import android.graphics.Bitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.core.app.ApplicationProvider
@@ -36,6 +37,8 @@ class PlaylistPagesTest {
     @Volatile private var customPlaylist = false
     private val importedLikes = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>().apply { add(2L) }
     private val importWrites = java.util.concurrent.CopyOnWriteArrayList<Long>()
+    private val currentLikes = java.util.concurrent.ConcurrentHashMap.newKeySet<Long>().apply { add(2L) }
+    private val likeWrites = java.util.concurrent.CopyOnWriteArrayList<Boolean>()
     private val sourcePlaylistReads = java.util.concurrent.atomic.AtomicInteger()
     private val refreshEntered = CountDownLatch(1)
     private val releaseRefresh = CountDownLatch(1)
@@ -73,6 +76,12 @@ class PlaylistPagesTest {
                 if (request.requestUrl!!.encodedPath == "/cm/playlists/3" && refreshFailure)
                     return MockResponse().setResponseCode(502)
                 val cover = artwork
+                if (request.requestUrl!!.encodedPath == "/cm/likes/2") {
+                    assertEquals("POST", request.method)
+                    val liked = if (currentLikes.remove(2L)) false else { currentLikes.add(2L); true }
+                    likeWrites += liked
+                    return json("""{"on":$liked}""")
+                }
                 val source = if (customPlaylist) "currentmusic" else "ncm"
                 if (request.requestUrl!!.encodedPath.startsWith("/cm/ncmbind/like/")) {
                     val id = request.requestUrl!!.pathSegments.last().toLong()
@@ -97,7 +106,7 @@ class PlaylistPagesTest {
                     "/cm/ncmbind" -> json(if (customPlaylist) """{"bound":true,"profile":{"uid":9}}""" else """{"bound":false}""")
                     "/cm/ncmbind/likelist" -> json("""{"ids":[${importedLikes.sorted().joinToString(",")}]}""")
                     "/cm/plays/recent", "/cm/likes/mine" -> json("""{"songs":[]}""")
-                    "/cm/songs/status" -> json("""{"liked":[2],"faved":[]}""")
+                    "/cm/songs/status" -> json("""{"liked":[${currentLikes.sorted().joinToString(",")}],"faved":[]}""")
                     "/cm/room/active" -> json("""{"room":null}""")
                     else -> MockResponse().setResponseCode(404)
                 }
@@ -157,8 +166,82 @@ class PlaylistPagesTest {
         assertEquals(2, importWrites.size)
     }
 
+    @Test fun recordShelfHeartCanUnlikeAndUndoThroughTheIsland() {
+        fun screenshot(name: String) {
+            lateinit var window: android.view.Window
+            compose.runOnUiThread {
+                window = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).first().window
+            }
+            val bitmap = Bitmap.createBitmap(window.decorView.width, window.decorView.height, Bitmap.Config.ARGB_8888)
+            val copied = CountDownLatch(1)
+            var result = -1
+            android.view.PixelCopy.request(window, bitmap, { result = it; copied.countDown() }, android.os.Handler(android.os.Looper.getMainLooper()))
+            assertTrue(copied.await(3, TimeUnit.SECONDS)); assertEquals(android.view.PixelCopy.SUCCESS, result)
+            File(context.getExternalFilesDir(null), name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
+        open()
+        compose.onNodeWithTag("playlist_record_shelf_toggle").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("record_shelf_canvas").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("record_shelf_canvas").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollToIndex) { it(1) }
+        compose.waitUntil(5000) { compose.onNodeWithTag("record_shelf_title").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.Text].first().text == "Alpha night" }
+        compose.onNodeWithTag("record_shelf_title").assertTextEquals("Alpha night")
+        compose.onNodeWithTag("record_shelf_save").assertContentDescriptionEquals("取消喜欢")
+        screenshot("record-shelf-heart-filled.png")
+        compose.onNodeWithTag("record_shelf_save").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("island_notice_action").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("record_shelf_save").assertContentDescriptionEquals("喜欢当前歌曲")
+        assertFalse(2L in currentLikes)
+        screenshot("record-shelf-heart-undo.png")
+        compose.onNodeWithTag("island_notice_action").assertIsDisplayed().performClick()
+        compose.waitUntil(5000) { likeWrites.size == 2 && container.libraryRepository.statuses.value[2]?.pending == false }
+        compose.onNodeWithTag("record_shelf_save").assertContentDescriptionEquals("取消喜欢")
+        assertTrue(2L in currentLikes)
+        assertEquals(listOf(false, true), likeWrites.toList())
+        compose.onNodeWithText("已恢复喜欢").assertIsDisplayed()
+        assertEquals(listOf(99L), container.playbackQueue.state.value.songs.map { it.id })
+    }
+
+    @Test fun recordShelfSearchAndSelectionKeepTheQueueUntilExplicitPlaybackAndReturnToList() {
+        longPlaylist = true
+        open()
+        compose.onNodeWithText("唱片架").assertIsDisplayed()
+        compose.onNodeWithTag("playlist_more").performClick()
+        compose.onNodeWithText("CD 唱片架").assertIsDisplayed()
+        compose.onNodeWithTag("playlist_record_shelf_menu").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("record_shelf_canvas").fetchSemanticsNodes().isNotEmpty() }
+        assertTrue(runBlocking { container.settings.snapshot().playlistRecordShelf })
+        compose.onNodeWithTag("mini_player").assertDoesNotExist()
+        compose.onNodeWithTag("record_shelf_canvas").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollToIndex) { it(29) }
+        compose.waitUntil(5000) { compose.onNodeWithTag("record_shelf_title").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.Text].first().text == "Playlist track 30" }
+        assertEquals(listOf(99L), container.playbackQueue.state.value.songs.map { it.id })
+        compose.onNodeWithTag("record_shelf_search").performClick()
+        compose.onNodeWithTag("record_shelf_query").performTextInput("track 60")
+        compose.onNodeWithText("查看唱片").performClick()
+        compose.waitUntil(5000) {
+            compose.onNodeWithTag("record_shelf_canvas").fetchSemanticsNode().config
+                .getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Disabled) == null &&
+                compose.onNodeWithTag("record_shelf_title").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.Text].first().text == "Playlist track 60"
+        }
+        compose.onNodeWithTag("record_shelf_title").assertTextEquals("Playlist track 60")
+        compose.onNodeWithTag("record_shelf_canvas").performClick()
+        if (compose.onAllNodesWithText("继续播放").fetchSemanticsNodes().isNotEmpty()) compose.onNodeWithText("继续播放").performClick()
+        compose.waitUntil(5000) { container.playbackQueue.state.value.current?.id == 60L }
+        assertEquals(60, container.playbackQueue.state.value.songs.size)
+        compose.onNodeWithTag("playlist_record_shelf").assertExists()
+        compose.runOnUiThread { container.playerController.pause() }
+        compose.onNodeWithTag("record_shelf_close").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("playlist_song_2").fetchSemanticsNodes().isNotEmpty() }
+        assertFalse(runBlocking { container.settings.snapshot().playlistRecordShelf })
+        compose.onNodeWithTag("mini_player").assertIsDisplayed()
+        compose.onNodeWithTag("playlist_record_shelf_toggle").performClick()
+        compose.onNodeWithTag("record_shelf_canvas").assertExists()
+    }
+
     @Test fun depthRibbonFocusDoesNotPlayUntilRequestedAndReturnsToTheList() {
         open()
+        compose.onNodeWithTag("playlist_more").performClick()
         compose.onNodeWithTag("playlist_depth_ribbon_toggle").performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("playlist_depth_ribbon").fetchSemanticsNodes().isNotEmpty() }
         assertTrue(runBlocking { container.settings.snapshot().playlistDepthRibbon })
@@ -190,6 +273,7 @@ class PlaylistPagesTest {
         container.playbackQueue.clear()
         container.playerController.state.value = PlayerState()
         open()
+        compose.onNodeWithTag("playlist_more").performClick()
         compose.onNodeWithTag("playlist_depth_ribbon_toggle").performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("depth_ribbon_canvas").fetchSemanticsNodes().isNotEmpty() }
         fun renderer(): io.github.currencortex.music.feature.library.DepthRibbonView {
@@ -238,6 +322,7 @@ class PlaylistPagesTest {
         compose.waitUntil(5000) { android.animation.ValueAnimator.areAnimatorsEnabled() }
         longPlaylist = true
         open()
+        compose.onNodeWithTag("playlist_more").performClick()
         compose.onNodeWithTag("playlist_depth_ribbon_toggle").performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("depth_ribbon_canvas").fetchSemanticsNodes().isNotEmpty() }
         compose.mainClock.advanceTimeBy(1500)
