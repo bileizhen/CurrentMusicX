@@ -48,8 +48,8 @@ android {
         applicationId = "com.bileizhen.currentmusic"
         minSdk = 26
         targetSdk = 36
-        versionCode = 27
-        versionName = "1.2.0"
+        versionCode = 28
+        versionName = "1.2.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "NETEASE_ORIGINAL_EFFECTS", originalEffectsBundled.toString())
         buildConfigField("boolean", "UPDATE_DOWNLOAD_EXPERIENCE", "false")
