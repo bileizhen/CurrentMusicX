@@ -12,6 +12,6 @@ internal fun fallbackIslandNoticeVisible(notice: SoundEffectNotice?, desktopAtta
     notice.isTemporaryIslandNotice() && !desktopAttached
 
 private fun SoundEffectNotice?.isTemporaryIslandNotice(): Boolean = when (this?.kind) {
-    IslandNoticeKind.SOUND_EFFECT, IslandNoticeKind.UPDATE_DOWNLOAD, IslandNoticeKind.ERROR -> true
+    IslandNoticeKind.SOUND_EFFECT, IslandNoticeKind.UPDATE_DOWNLOAD, IslandNoticeKind.ERROR, IslandNoticeKind.MESSAGE -> true
     null -> false
 }

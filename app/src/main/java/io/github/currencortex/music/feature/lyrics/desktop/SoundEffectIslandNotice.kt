@@ -64,7 +64,7 @@ import kotlin.math.roundToInt
 @Composable internal fun SoundEffectIslandPill(notice: SoundEffectNotice, modifier: Modifier = Modifier,
     material: Boolean = true, height: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE,
     onUpdateInstall: () -> Unit = {}) {
-    if (notice.kind == IslandNoticeKind.ERROR) {
+    if (notice.kind == IslandNoticeKind.ERROR || notice.kind == IslandNoticeKind.MESSAGE) {
         AppErrorIslandPill(notice, modifier, material, height, font)
         return
     }

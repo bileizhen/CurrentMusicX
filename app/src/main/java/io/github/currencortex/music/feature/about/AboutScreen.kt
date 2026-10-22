@@ -98,6 +98,7 @@ import io.github.currencortex.music.core.config.AboutMember
 import io.github.currencortex.music.core.config.AppMetadata
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.util.openExternalLink
+import io.github.currencortex.music.ui.util.showMusicMessage
 
 @Composable
 fun AboutScreen(onBack: () -> Unit, onOpenDocument: (LegalDocument) -> Unit, enableBlur: Boolean,
@@ -110,7 +111,7 @@ fun AboutScreen(onBack: () -> Unit, onOpenDocument: (LegalDocument) -> Unit, ena
                 val clipboard = context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                 clipboard.setPrimaryClip(android.content.ClipData.newPlainText("version",
                     "${AppMetadata.APP_NAME} ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})\n${BuildConfig.APPLICATION_ID}"))
-                android.widget.Toast.makeText(context, "版本信息已复制", android.widget.Toast.LENGTH_SHORT).show()
+                context.showMusicMessage("版本信息已复制")
             }
             link.startsWith("currentmusic:") -> onOpenDocument(LegalDocument.valueOf(link.substringAfter(':')))
             else -> openExternalLink(context, link)

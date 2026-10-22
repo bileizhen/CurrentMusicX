@@ -1,6 +1,5 @@
 package io.github.currencortex.music.feature.player
 
-import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
@@ -74,7 +73,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     // The timer can expire while the sheet is closed; report it once, on the next composition.
     LaunchedEffect(sleepState.notice) {
         sleepState.notice?.let {
-            Toast.makeText(context, it, Toast.LENGTH_LONG).show()
+            vm.container.errorNotices.showMessage(it, longDuration = true)
             vm.sleepTimer.consumeNotice()
         }
     }

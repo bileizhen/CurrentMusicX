@@ -5,7 +5,7 @@ import io.github.currencortex.music.ui.component.MusicDialogButton
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
-import android.widget.Toast
+import io.github.currencortex.music.ui.util.showMusicMessage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -77,7 +77,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     else { context.contentResolver.delete(uri, null, null); true }
                 }.getOrDefault(false).not() } }
                 if (failed.isEmpty()) withContext(Dispatchers.IO) { manager.hideCompleted(completed.id) }
-                if (failed.isEmpty()) Toast.makeText(context, "已删除下载文件", Toast.LENGTH_LONG).show()
+                if (failed.isEmpty()) context.showMusicMessage("已删除下载文件", longDuration = true)
                 else context.showMusicError("部分文件删除失败，请重新尝试或到保存位置检查")
             } catch (cancelled: CancellationException) { throw cancelled }
               catch (_: Exception) { context.showMusicError("下载记录更新失败，请重试") }

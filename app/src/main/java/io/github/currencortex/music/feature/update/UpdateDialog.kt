@@ -2,7 +2,7 @@
 package io.github.currencortex.music.feature.update
 
 import io.github.currencortex.music.ui.component.MusicDialogButton
-import android.widget.Toast
+import io.github.currencortex.music.ui.util.showMusicMessage
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.animation.core.animateFloatAsState
@@ -186,7 +186,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                 }
                 Button(onClick = {
                     if (preview) {
-                        if (ready) Toast.makeText(context, "测试预览不会安装应用", Toast.LENGTH_SHORT).show()
+                        if (ready) context.showMusicMessage("测试预览不会安装应用")
                         else scope.launch {
                             previewProgress = 0f
                             repeat(10) { delay(120); previewProgress = (it + 1) / 10f }

@@ -6,7 +6,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
+import io.github.currencortex.music.ui.util.showMusicMessage
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
@@ -47,7 +47,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     val poster = result?.getOrNull()
     fun message(text: String, error: Boolean = false) {
-        if (error) context.showMusicError(text) else Toast.makeText(context, text, Toast.LENGTH_SHORT).show()
+        if (error) context.showMusicError(text) else context.showMusicMessage(text)
     }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
         val selected = pendingSave
