@@ -168,6 +168,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val announcements by announcementVm.items.collectAsStateWithLifecycle()
     val suppressReadAnnouncements by announcementVm.suppressRead.collectAsStateWithLifecycle()
     val updateRequested by container.updates.dialogVisible.collectAsStateWithLifecycle()
+    val updatePrompt by container.updates.prompt.collectAsStateWithLifecycle()
     var updateTransitionVisible by remember { mutableStateOf(false) }
     var updateLaunchOrigin by remember { mutableStateOf<io.github.currencortex.music.feature.update.UpdatePageOrigin?>(null) }
     var updatePreviewVersion by rememberSaveable { mutableStateOf(BuildConfig.UPDATE_ANIMATION_PREVIEW_VERSION) }
@@ -750,7 +751,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !playerPresented && !searchPresented && !predictiveBack && !showLogs &&
-                pendingPlay == null && !updateDialogVisible && !announcementVisible && !showScale && !showLaunchStyle && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
+                pendingPlay == null && !updateDialogVisible && updatePrompt == null && !announcementVisible && !showScale && !showLaunchStyle && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }
