@@ -7,6 +7,9 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.shape.CircleShape
@@ -34,11 +37,18 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.hideFromAccessibility
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 
 internal const val PLAYER_SHEET_DURATION = 420
 internal const val PLAYER_SHEET_CLOSE_DURATION = 360
@@ -112,6 +122,7 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
     expansion: PlayerSheetState,
     origin: PlayerSheetOrigin?, viewport: Rect?, artwork: PlayerArtworkTransition, artworkUrl: String,
     predictiveBack: Boolean, backEnabled: Boolean,
+    miniOpenBounds: Rect? = null, onReopen: () -> Unit = {},
     onBack: () -> Unit, onSettled: () -> Unit, content: @Composable () -> Unit) {
     val settled by rememberUpdatedState(onSettled)
     val scope = rememberCoroutineScope()
@@ -149,6 +160,33 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
             PlayerSheetExpansion(origin, viewport, expansion::value) { content() }
         }
         PlayerArtworkFlight(artwork, artworkUrl, viewport)
+        // The shrinking player still owns its full touch layer. Keep the mini's opening
+        // area above it so the next press reverses the close immediately, before release
+        // (the old layer may otherwise disappear between that press and release).
+        if (!open && motion == PlayerSheetMotion.CLOSE && backEnabled && miniOpenBounds != null) {
+            val density = LocalDensity.current
+            val bounds = miniOpenBounds.translate(-(viewport?.topLeft ?: Offset.Zero))
+            val reopen by rememberUpdatedState(onReopen)
+            fun reopenNow() {
+                scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                    expansion.animation.stop()
+                    reopen()
+                }
+            }
+            Box(Modifier.offset { IntOffset(bounds.left.roundToInt(), bounds.top.roundToInt()) }
+                .requiredSize(with(density) { bounds.width.toDp() }, with(density) { bounds.height.toDp() })
+                .testTag("player_sheet_reopen_mini")
+                .semantics {
+                    role = Role.Button; contentDescription = "重新打开播放器"
+                    onClick { reopenNow(); true }
+                }.pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        down.consume()
+                        reopenNow()
+                    }
+                })
+        }
     }
 }
 
