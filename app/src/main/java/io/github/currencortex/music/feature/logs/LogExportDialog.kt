@@ -46,23 +46,26 @@ fun LogExportDialog(show: Boolean, logger: AppLogger, onDismiss: () -> Unit) {
     }
     OverlayDialog(show = show && !busy, title = "导出日志",
         summary = "应用日志与设备信息会打包为 ZIP，并自动隐藏敏感信息。", onDismissRequest = onDismiss) {
-        ArrowPreference(title = "保存日志", summary = "选择保存位置",
-            startAction = { Icon(MusicIcons.Download, null, Modifier.padding(end = 12.dp)) },
-            modifier = Modifier.testTag("export_logs_save"), onClick = {
-                onDismiss()
-                try { save.launch("${io.github.currencortex.music.core.config.AppMetadata.GITHUB_REPO}_logs_${System.currentTimeMillis()}.zip") }
-                catch (cancelled: CancellationException) { throw cancelled }
-                catch (_: Exception) { context.showMusicError("无法打开文件选择器") }
-            })
-        ArrowPreference(title = "分享日志", summary = "使用系统分享",
-            startAction = { Icon(MusicIcons.Share, null, Modifier.padding(end = 12.dp)) },
-            modifier = Modifier.testTag("export_logs_share"), onClick = {
-                if (!busy) scope.launch { onDismiss(); generate {
-                    val file = DiagnosticExporter.create(context, logger)
-                    context.startActivity(Intent.createChooser(DiagnosticExporter.shareIntent(context, file), "分享日志"))
-                } }
-            })
-        MusicDialogButton("取消", onClick = onDismiss, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
+        Column(Modifier.fillMaxWidth()) {
+            ArrowPreference(title = "保存日志", summary = "选择保存位置",
+                startAction = { Icon(MusicIcons.Download, null, Modifier.padding(end = 12.dp)) },
+                modifier = Modifier.testTag("export_logs_save"), onClick = {
+                    onDismiss()
+                    try { save.launch("${io.github.currencortex.music.core.config.AppMetadata.GITHUB_REPO}_logs_${System.currentTimeMillis()}.zip") }
+                    catch (cancelled: CancellationException) { throw cancelled }
+                    catch (_: Exception) { context.showMusicError("无法打开文件选择器") }
+                })
+            ArrowPreference(title = "分享日志", summary = "使用系统分享",
+                startAction = { Icon(MusicIcons.Share, null, Modifier.padding(end = 12.dp)) },
+                modifier = Modifier.testTag("export_logs_share"), onClick = {
+                    if (!busy) scope.launch { onDismiss(); generate {
+                        val file = DiagnosticExporter.create(context, logger)
+                        context.startActivity(Intent.createChooser(DiagnosticExporter.shareIntent(context, file), "分享日志"))
+                    } }
+                })
+            MusicDialogButton("取消", onClick = onDismiss,
+                modifier = Modifier.fillMaxWidth().padding(top = 12.dp).testTag("export_logs_cancel"))
+        }
     }
     OverlayDialog(show = busy, title = "正在生成日志", onDismissRequest = {}) {
         Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
