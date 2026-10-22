@@ -70,7 +70,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         if (autoFocus) { withFrameNanos { }; requester.requestFocus(); keyboard?.show(); onFocused() }
     }
     LaunchedEffect(state.submitted) { lyricScroll.scrollToItem(0); songScroll.scrollToItem(0); artistScroll.scrollToItem(0); albumScroll.scrollToItem(0); playlistScroll.scrollToItem(0) }
-    PreloadMusicCovers((page.songs.take(8).map { it.cover } + page.entries.take(8).map { it.cover }).distinct())
+    val covers = remember(page.songs, page.entries) {
+        (page.songs.take(8).map { it.cover } + page.entries.take(8).map { it.cover }).distinct()
+    }
+    val categoryTabs = remember(categories) { categories.map { it.route to it.label } }
+    PreloadMusicCovers(covers)
     LaunchedEffect(page.songs) { if (page.songs.isNotEmpty()) onResults(page.songs) }
     fun submit(keyword: String = state.query) { focus.clearFocus(); keyboard?.hide(); vm.search(keyword) }
     fun back() { focus.clearFocus(); keyboard?.hide(); onBack?.invoke() }
@@ -96,7 +100,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         }.testTag("search_header_field"), onInput = vm::input, requester = requester, onInputFocus = { inputFocused = it })
                 }
             }
-            MusicCategoryTabs(categories.map { it.route to it.label }, category.route,
+            MusicCategoryTabs(categoryTabs, category.route,
                 { key -> focus.clearFocus(); keyboard?.hide(); vm.select(SearchCategory.entries.first { it.route == key }) }, "search_category",
                 Modifier.padding(horizontal = 20.dp))
             Box(Modifier.weight(1f).fillMaxWidth()) {
