@@ -533,7 +533,7 @@ class PlaylistPagesTest {
         compose.onNodeWithTag("mini_queue").performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("mini_queue_sheet").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("queue_song_0").assertIsDisplayed()
-        compose.onNodeWithText("向下轻扫关闭播放队列").performClick()
+        compose.onNodeWithTag("queue_current_song").performClick()
         compose.waitUntil(5000) { compose.onAllNodesWithTag("mini_queue_sheet").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithTag("mini_player").assertIsDisplayed()
         compose.onNodeWithTag("mini_cover").performClick()
