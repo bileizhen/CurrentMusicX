@@ -14,6 +14,8 @@ class UpdateSourceTest {
     }
 
     @Test fun mirrorsPrefixTheOfficialUrlOverHttps() {
+        assertEquals("https://github.tbap.top/" + release.apkUrl, UpdateSource.TBAP.url(release))
+        assertEquals("https://gh-proxy.com/" + release.apkUrl, UpdateSource.GH_PROXY.url(release))
         assertEquals("https://ghfile.geekertao.top/" + release.apkUrl, UpdateSource.GEEKERTAO.url(release))
         assertEquals("https://github.dpik.top/" + release.apkUrl, UpdateSource.DPIK.url(release))
     }

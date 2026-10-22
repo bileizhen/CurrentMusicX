@@ -66,7 +66,8 @@ private fun Modifier.frostedMusicDialog(backdrop: Backdrop, dark: Boolean): Modi
 
 /** Full panel-width hit target and press wash; text, divider and radio share a 24dp inset. */
 @Composable fun MusicDialogChoiceRow(label: String, selected: Boolean, onClick: () -> Unit,
-    modifier: Modifier = Modifier, summary: String? = null, enabled: Boolean = true, showDivider: Boolean = true) {
+    modifier: Modifier = Modifier, summary: String? = null, enabled: Boolean = true, showDivider: Boolean = true,
+    leadingContent: (@Composable () -> Unit)? = null) {
     val colors = MiuixTheme.colorScheme
     val dark = isInDarkTheme()
     val press = rememberMusicDialogPress()
@@ -79,6 +80,10 @@ private fun Modifier.frostedMusicDialog(backdrop: Backdrop, dark: Boolean): Modi
     }.then(if (enabled) Modifier.musicDialogRowPress(press) else Modifier)
         .selectable(selected, enabled = enabled, role = Role.RadioButton, interactionSource = clicks, indication = null, onClick = onClick)
         .heightIn(min = 48.dp).padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (leadingContent != null) {
+            leadingContent()
+            Spacer(Modifier.width(12.dp))
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(label, color = colors.onBackground.copy(alpha = if (enabled) 1f else .4f), fontSize = 15.sp, fontWeight = FontWeight.Medium)
             summary?.let { Text(it, color = colors.onSurfaceVariantSummary.copy(alpha = if (enabled) 1f else .4f), fontSize = 12.sp, lineHeight = 18.sp) }
