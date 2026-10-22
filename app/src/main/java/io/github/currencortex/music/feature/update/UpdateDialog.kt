@@ -32,7 +32,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
 import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDialog
-import top.yukonga.miuix.kmp.preference.OverlaySpinnerPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
@@ -88,6 +87,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     var source by remember(release?.version) { mutableStateOf(UpdateSource.default) }
+    var showSources by remember { mutableStateOf(false) }
     var previewProgress by remember { mutableFloatStateOf(-1f) }
     val previewDownloading = previewProgress in 0f..<1f
     val downloading = transferState.download is UpdateDownloadState.Downloading || previewDownloading
@@ -131,15 +131,13 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
             if (preview) Text("测试预览", fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
             Spacer(Modifier.height(12.dp))
             HorizontalDivider()
-            OverlaySpinnerPreference(title = "下载源 · ${source.compactLabel()}", summary = if (downloading) "切换来源会从头重新下载" else null,
-                items = UpdateSource.available.map { DropdownItem(it.label) },
-                selectedIndex = UpdateSource.available.indexOf(source).coerceAtLeast(0),
-                showValue = false, insideMargin = PaddingValues(vertical = 8.dp),
+            Row(Modifier.fillMaxWidth().clickable(
                 enabled = (!downloading || onChangeSource != null) && !ready && !transferState.installing,
-                onSelectedIndexChange = {
-                    val next = UpdateSource.available[it]
-                    if (next != source) { source = next; if (downloading) onChangeSource?.invoke(next) }
-                }, modifier = Modifier.testTag("update_source"))
+                role = Role.Button, onClick = { showSources = true })
+                .padding(vertical = 14.dp).testTag("update_source"), verticalAlignment = Alignment.CenterVertically) {
+                Text("下载源 · ${source.compactLabel()}", modifier = Modifier.weight(1f), fontSize = 15.sp)
+                Text("选择 ›", color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
+            }
             when {
                 previewDownloading -> {
                     Text("${formatReceived((release.size * previewProgress).toLong())} / ${formatSize(release.size)}", fontSize = 13.sp)
@@ -210,11 +208,18 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
         }
         }
     }
+    if (showSources && release != null) UpdateSourceDialog(release, source,
+        downloading = downloading, onDismiss = { showSources = false }, onSelect = { next ->
+            if (next != source) { source = next; if (downloading) onChangeSource?.invoke(next) }
+            showSources = false
+        })
 }
 
 private fun UpdateSource.compactLabel() = when (this) {
     UpdateSource.CURRENTMUSIC -> "专用镜像"
     UpdateSource.GITHUB -> "GitHub 原站"
+    UpdateSource.TBAP -> "TBAP 镜像"
+    UpdateSource.GH_PROXY -> "GH-Proxy 镜像"
     UpdateSource.GEEKERTAO -> "Geekertao 镜像"
     UpdateSource.DPIK -> "DPIK 镜像"
 }

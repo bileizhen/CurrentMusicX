@@ -7,12 +7,14 @@ import okhttp3.HttpUrl.Companion.toHttpUrl
 enum class UpdateSource(val label: String, val prefix: String) {
     CURRENTMUSIC("CurrentMusic 专用镜像", ""),
     GITHUB("GitHub 原站", ""),
+    TBAP("github.tbap.top", "https://github.tbap.top/"),
+    GH_PROXY("gh-proxy.com", "https://gh-proxy.com/"),
     GEEKERTAO("ghfile.geekertao.top", "https://ghfile.geekertao.top/"),
     DPIK("github.dpik.top", "https://github.dpik.top/");
 
     /** Try the requested source once, then the other mirrors, with the origin as the final fallback. */
     fun fallbacks(): List<UpdateSource> = when (this) {
-        CURRENTMUSIC -> listOf(CURRENTMUSIC, GITHUB, GEEKERTAO, DPIK)
+        CURRENTMUSIC -> listOf(CURRENTMUSIC, GITHUB) + available.filter { it != CURRENTMUSIC && it != GITHUB }
         GITHUB -> listOf(GITHUB) + available.filter { it != GITHUB }
         else -> listOf(this) + available.filter { it != this && it != GITHUB } + GITHUB
     }
