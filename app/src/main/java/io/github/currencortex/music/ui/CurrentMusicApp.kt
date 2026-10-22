@@ -239,6 +239,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         var miniCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
         var dockOrigin by remember { mutableStateOf<(() -> PlayerSheetOrigin?)?>(null) }
         var playerOrigin by remember { mutableStateOf<PlayerSheetOrigin?>(null) }
+        var miniOpenBounds by remember { mutableStateOf<Rect?>(null) }
         val playerExpansion = remember { PlayerSheetState() }
         val artworkRotation = rememberPlayerArtworkRotation(playerVm)
         val artworkTransition = remember { PlayerArtworkTransition(playerExpansion::value) }
@@ -282,11 +283,13 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         fun navigateTo(route: Int) {
             if (backStack.last() == route.toString()) return
             if (route == PLAYER) {
-                val bounds = miniCoordinates?.takeIf { it.isAttached }?.boundsInRoot() ?: miniBounds
-                playerOrigin = dockOrigin?.invoke() ?: bounds?.let { PlayerSheetOrigin(it, it.height / 2f) }
-                // Capture the placed dock once for both directions. Hidden retained coordinates
-                // omit the secondary-page dock translation until it is placed again.
-                artworkTransition.origin = miniArtworkOrigin?.invoke()
+                if (playerExpansion.value <= .0001f) {
+                    val bounds = miniCoordinates?.takeIf { it.isAttached }?.boundsInRoot() ?: miniBounds
+                    playerOrigin = dockOrigin?.invoke() ?: bounds?.let { PlayerSheetOrigin(it, it.height / 2f) }
+                    // Keep these endpoints when reversing an unfinished close. Re-measuring
+                    // the retained dock mid-transition can move the cover and panel suddenly.
+                    artworkTransition.origin = miniArtworkOrigin?.invoke()
+                }
                 playerSheetMotion = PlayerSheetMotion.OPEN
             }
             else playerSheetMotion = PlayerSheetMotion.NONE
@@ -677,7 +680,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             onPrevious = { container.playerController.previous(container.playerController.state.value.showPause) },
             onQueue = { if (playerState.mode == PlayerMode.ROOM && !container.listenTogether.state.value.active) navigateLibrary("room/list") else miniQueueOpen = true },
             onSurfaceBounds = { miniBounds = it }, active = showMini, onSurfaceCoordinates = { miniCoordinates = it },
-            onArtworkOrigin = { miniArtworkOrigin = it }, artworkVisible = { !artworkTransition.moving })
+            onArtworkOrigin = { miniArtworkOrigin = it }, artworkVisible = { !artworkTransition.moving },
+            onOpenBounds = { miniOpenBounds = it })
         }
         if (unifiedDock) {
             val glassNavigation = LocalMusicDockNavigation.current
@@ -725,6 +729,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             backEnabled = !showLogs && pendingPlay == null && !updateDialogVisible && !announcementVisible &&
                 !showScale && !showLaunchStyle && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null &&
                 !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
+            miniOpenBounds = miniOpenBounds.takeIf { miniAvailable },
+            onReopen = { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
             onBack = ::navigateBack, onSettled = { playerSheetMotion = PlayerSheetMotion.NONE }) {
             playerSavedState.SaveableStateProvider(PLAYER) {
                 PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },

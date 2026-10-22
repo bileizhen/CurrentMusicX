@@ -81,6 +81,62 @@ class PlayerSheetCapabilitiesTest {
         }
     }
 
+    @Test fun miniPressImmediatelyReopensAnUnfinishedCollapseOnHome() = verifyImmediateReopen(false)
+
+    @Test fun miniPressImmediatelyReopensAnUnfinishedCollapseOnSecondaryPage() = verifyImmediateReopen(true)
+
+    private fun verifyImmediateReopen(secondary: Boolean) {
+        start()
+        if (secondary) {
+            compose.onNodeWithTag("tab_3").performClick()
+            compose.mainClock.advanceTimeBy(700)
+            compose.onNodeWithTag("open_network").performScrollTo().performClick()
+            compose.onNodeWithTag("network_settings").assertIsDisplayed()
+        }
+        val root = compose.onNodeWithTag("music_window")
+        val rootBounds = root.fetchSemanticsNode().boundsInRoot
+        val miniCenter = compose.onNodeWithTag("mini_title", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.center - rootBounds.topLeft
+        val originalQueue = container.playbackQueue.state.value.songs
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        for (delay in listOf(32L, 96L, 192L, 288L)) {
+            compose.onNodeWithContentDescription("收起播放器").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+            // Flush navigation and effect startup in separate frames before timing the close.
+            repeat(4) { compose.mainClock.advanceTimeByFrame(); compose.waitForIdle() }
+            compose.mainClock.advanceTimeBy(delay)
+            compose.waitForIdle()
+            val closing = frame()
+            assertTrue("The press must happen during close at ${delay}ms: ${closing.progress}", closing.progress > 0f && closing.progress < 1f)
+            // Send a real pointer down at the mini title's original physical position while
+            // the old player still covers it. Do not bypass hit testing via semantics clicks.
+            root.performTouchInput { down(miniCenter) }
+            compose.mainClock.advanceTimeBy(16)
+            val accepted = frame()
+            assertTrue("New input must not restart the expansion from zero", accepted.progress >= closing.progress - .025f)
+            compose.onNodeWithTag("player_sheet_reopen_mini").assertDoesNotExist()
+            compose.mainClock.advanceTimeBy(64)
+            assertTrue("The panel must already expand before the finger lifts", frame().progress > closing.progress)
+            root.performTouchInput { up() }
+            compose.waitForIdle()
+            compose.mainClock.advanceTimeBy(1000)
+            compose.waitForIdle()
+            assertEquals(1f, frame().progress, .001f)
+            compose.onNodeWithTag("player_transport").assertIsDisplayed()
+            assertEquals(originalQueue, container.playbackQueue.state.value.songs)
+            assertFalse(container.playerController.state.value.playing)
+        }
+        compose.onNodeWithContentDescription("收起播放器").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+        compose.onNodeWithTag("player_sheet_reopen_mini").assertDoesNotExist()
+        if (secondary) compose.onNodeWithTag("network_settings").assertIsDisplayed()
+    }
+
     @Test fun profileCollapseIncludingMiniPlayerRestoration() {
         start()
         val handlerThread = android.os.HandlerThread("collapse-frame-metrics").apply { start() }

@@ -72,7 +72,8 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
     onPrevious: () -> Unit = { vm.player.previous(vm.state.value.showPause) }, onQueue: () -> Unit = onOpen,
     onSurfaceBounds: (Rect) -> Unit = {}, active: Boolean = true,
     onSurfaceCoordinates: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {},
-    onArtworkOrigin: (() -> PlayerArtworkOrigin?) -> Unit = {}, artworkVisible: () -> Boolean = { true }) {
+    onArtworkOrigin: (() -> PlayerArtworkOrigin?) -> Unit = {}, artworkVisible: () -> Boolean = { true },
+    onOpenBounds: (Rect) -> Unit = {}) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
@@ -94,6 +95,15 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
     val coverBorder = MiuixTheme.colorScheme.onSurface.copy(alpha = .85f)
     val borderColor by rememberUpdatedState(coverBorder)
     val loading = state.loading || state.resolving
+    val openAreas = remember { arrayOfNulls<Rect>(2) }
+    val reportOpenBounds by rememberUpdatedState(onOpenBounds)
+    fun reportOpenArea(index: Int, coordinates: androidx.compose.ui.layout.LayoutCoordinates) {
+        openAreas[index] = coordinates.boundsInRoot()
+        val cover = openAreas[0] ?: return
+        val title = openAreas[1] ?: return
+        reportOpenBounds(Rect(minOf(cover.left, title.left), minOf(cover.top, title.top),
+            maxOf(cover.right, title.right), maxOf(cover.bottom, title.bottom)))
+    }
     val loadingAngle = if (loading && active) {
         val transition = rememberInfiniteTransition(label = "mini audio loading")
         transition.animateFloat(0f, 360f, infiniteRepeatable(tween(900, easing = LinearEasing)), label = "loading ring")
@@ -122,6 +132,7 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
         Row(Modifier.heightIn(min = 52.dp).onGloballyPositioned { onSurfaceBounds(it.boundsInRoot()); onSurfaceCoordinates(it) }
             .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(if (pair == null) 42.dp else 42.dp * listeningPairArtworkAspectRatio).height(42.dp).onGloballyPositioned { coordinates ->
+                reportOpenArea(0, coordinates)
                 onArtworkOrigin {
                     if (pair != null || !coordinates.isAttached) null else PlayerArtworkOrigin(
                         Rect(coordinates.localToRoot(androidx.compose.ui.geometry.Offset.Zero),
@@ -136,6 +147,7 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
                 .border(2.dp, coverBorder, CircleShape).clickable(onClick = onOpen))
             }
             Column(Modifier.weight(1f).heightIn(min = 48.dp).padding(horizontal = 8.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
+                .onGloballyPositioned { reportOpenArea(1, it) }
                 .testTag("mini_song_gesture").playerSheetDrag(fromMini = true)
                 .pointerInput(enabled, threshold) {
                     detectHorizontalDragGestures(onDragStart = { dragged = 0f },
