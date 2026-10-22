@@ -205,6 +205,19 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         AvatarImageCache(context, storageSuffix)) { RequestSession(accountRepository.server, accountRepository.token) }
     val bindingRepository: io.github.currencortex.music.data.binding.BindingRepository = io.github.currencortex.music.data.binding.BindingRepository(apiClient,
         { musicSession() }) { libraryRepository.invalidate(); neteaseLibrary.invalidate() }
+    private val neteaseAvatarImporter by lazy {
+        val image = io.github.currencortex.music.data.profile.RemoteAvatarImage()
+        io.github.currencortex.music.data.profile.NeteaseAvatarImporter(accountRepository, authRepository,
+            profileRepository, bindingRepository, { musicSession() }, image::download)
+    }
+    fun importNeteaseAvatarAfterLogin(expected: RequestSession) {
+        appScope.launch {
+            when (val result = appResult { neteaseAvatarImporter.importAfterLogin(expected) }) {
+                is AppResult.Success -> Unit
+                is AppResult.Failure -> logger.warn("Profile", "NetEase avatar import failed: ${result.kind}")
+            }
+        }
+    }
     val neteaseLibrary = io.github.currencortex.music.data.library.NeteaseLibraryRepository(apiClient, bindingRepository,
         neteaseSongActions) { musicSession() }
     val primaryLibrary = io.github.currencortex.music.data.library.PrimaryMusicLibrary(libraryRepository,

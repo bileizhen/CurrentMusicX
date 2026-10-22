@@ -145,6 +145,7 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
         "音乐库已更新"
     }
     private suspend fun afterBinding(expected: RequestSession): String {
+        container.importNeteaseAvatarAfterLogin(expected)
         if (container.musicSettings.snapshot().neteaseMainLibrary || container.apiClient.hasLocalNeteaseLogin) {
             val status = appResult { container.bindingRepository.status() }
             container.neteaseLibrary.invalidate()

@@ -4,6 +4,8 @@ import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.auth.UserDto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
 import java.util.Base64
 
@@ -12,6 +14,7 @@ class ProfileRepository(private val api: ApiClient, private val avatarCache: Ava
     val revision = MutableStateFlow(0L)
     val scales = MutableStateFlow<Map<String, Double>>(emptyMap())
     val avatarVersions = MutableStateFlow(avatarCache?.versions.orEmpty())
+    private val avatarMutex = Mutex()
     private suspend fun own(expected: RequestSession) = api.decode<ProfileUser>(
         api.request("GET", "auth/me", authenticated = true, expectedSession = expected))
     suspend fun me() = own(session())
@@ -34,7 +37,18 @@ class ProfileRepository(private val api: ApiClient, private val avatarCache: Ava
         require(nickname.isNotBlank())
         return write("profile", buildJsonObject { put("nickname", nickname.trim()); put("bio", bio); if (visible != null) put("publicSquare", visible) }, expected)
     }
-    suspend fun avatar(bytes: ByteArray, expected: RequestSession = session(), previousAvatar: String = ""): ProfileUser {
+    suspend fun avatar(bytes: ByteArray, expected: RequestSession = session(), previousAvatar: String = ""): ProfileUser =
+        avatarMutex.withLock { uploadAvatar(bytes, expected, previousAvatar) }
+
+    suspend fun avatarIfDefault(bytes: ByteArray, expected: RequestSession, accountId: Long,
+        stillAllowed: () -> Boolean): ProfileUser? = avatarMutex.withLock {
+        if (!stillAllowed()) return@withLock null
+        val current = own(expected)
+        if (current.id != accountId || current.avatar.isNotBlank() || !stillAllowed()) return@withLock null
+        uploadAvatar(bytes, expected, current.avatar)
+    }
+
+    private suspend fun uploadAvatar(bytes: ByteArray, expected: RequestSession, previousAvatar: String): ProfileUser {
         require(bytes.isNotEmpty() && bytes.size <= 1024 * 1024)
         api.request("PUT", "profile/avatar", body = buildJsonObject { put("data", Base64.getEncoder().encodeToString(bytes)) },
             authenticated = true, expectedSession = expected)
