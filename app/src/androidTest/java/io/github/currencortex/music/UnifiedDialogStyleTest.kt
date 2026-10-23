@@ -70,7 +70,11 @@ class UnifiedDialogStyleTest {
     @Test fun formConfirmationAnnouncementAndQualityUseSharedSurfaceInBothThemes() {
         val theme = mutableStateOf(ThemeMode.LIGHT)
         val kind = mutableIntStateOf(0)
-        compose.setContent { LeiTheme(AppearanceSettings(themeMode = theme.value)) { Scaffold {
+        compose.setContent { LeiTheme(AppearanceSettings(themeMode = theme.value)) {
+            val backdrop = rememberMusicDialogBackdrop()
+            CompositionLocalProvider(LocalMusicDialogBackdrop provides backdrop) { Scaffold {
+            Box(Modifier.fillMaxSize().musicDialogBackdropSource().background(
+                Brush.horizontalGradient(listOf(Color(0xFFD37258), Color(0xFF397CB1)))))
             when (kind.intValue) {
                 0 -> MusicDialog("修改歌单名称", {}, footer = {
                     MusicDialogActions { MusicDialogButton("取消", {}, Modifier.weight(1f)); MusicDialogButton("保存", {}, Modifier.weight(1f)) }
@@ -81,12 +85,12 @@ class UnifiedDialogStyleTest {
                 2 -> AnnouncementDialog(listOf(Announcement(id = 1, title = "更新公告", body = "播放体验和界面交互已更新。")), onDismiss = {})
                 else -> AudioQualitySheet(AudioQuality.LOSSLESS, {}, {})
             }
-        } } }
+        } } } }
         for (dark in listOf(false, true)) {
             compose.runOnIdle { theme.value = if (dark) ThemeMode.DARK else ThemeMode.LIGHT }
             for (index in 0..3) {
                 compose.runOnIdle { kind.intValue = index }
-                compose.onNodeWithTag("music_dialog_surface").assertIsDisplayed()
+                compose.onNodeWithTag(if (index == 3) "bottom_sheet_material" else "music_dialog_surface").assertIsDisplayed()
                 capture("common-${listOf("form", "confirmation", "announcement", "quality")[index]}-${if (dark) "dark" else "light"}.png")
             }
         }
