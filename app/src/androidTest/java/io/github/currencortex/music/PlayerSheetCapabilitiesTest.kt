@@ -748,6 +748,55 @@ class PlayerSheetCapabilitiesTest {
         assertFalse(container.playerController.state.value.playing)
     }
 
+    @Test fun entireMiniSurfaceFollowsHeldAndReversedOpeningDrags() {
+        start()
+        val root = compose.onNodeWithTag("music_window")
+        for (secondary in listOf(false, true)) {
+            if (secondary) {
+                compose.mainClock.autoAdvance = true
+                compose.onNodeWithTag("tab_3").performClick()
+                compose.onNodeWithTag("open_network").performScrollTo().performClick()
+                compose.onNodeWithTag("network_settings").assertIsDisplayed()
+            }
+            compose.mainClock.autoAdvance = false
+            val rootBounds = root.fetchSemanticsNode().boundsInRoot
+            val distance = rootBounds.height
+            for (tag in listOf("mini_cover", "mini_song_gesture", "mini_toggle", "mini_queue")) {
+                val start = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot.center - rootBounds.topLeft
+                root.performTouchInput {
+                    down(start)
+                    moveBy(androidx.compose.ui.geometry.Offset(0f, -distance * .06f))
+                    moveBy(androidx.compose.ui.geometry.Offset(0f, -distance * .16f))
+                }
+                compose.mainClock.advanceTimeBy(64)
+                val held = frame().progress
+                assertTrue("$tag must follow the finger before release", held > .14f && held < .5f)
+                compose.mainClock.advanceTimeBy(500)
+                assertEquals("$tag must remain at the held position", held, frame().progress, .001f)
+                if (tag == "mini_cover") save("player-whole-mini-held-$secondary.png")
+                root.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(0f, distance * .18f)) }
+                compose.mainClock.advanceTimeBy(64)
+                assertTrue("Reversing $tag must shrink the same sheet", frame().progress in 0f.. .14f)
+                root.performTouchInput { advanceEventTime(400); up() }
+                compose.mainClock.advanceTimeBy(1000)
+                compose.onNodeWithTag("player_sheet").assertDoesNotExist()
+                compose.onNodeWithTag("queue_drag_handle").assertDoesNotExist()
+                assertFalse("Dragging $tag must not toggle playback", container.playerController.state.value.playing)
+                assertEquals(55L, container.playerController.queue.state.value.current?.id)
+            }
+            compose.onNodeWithTag("mini_cover").performTouchInput {
+                swipe(center, center - androidx.compose.ui.geometry.Offset(0f, distance * .4f), 160)
+            }
+            compose.mainClock.advanceTimeBy(1000)
+            assertEquals("A decisive cover drag opens the full player", 1f, frame().progress, .001f)
+            compose.runOnIdle { dispatcher.onBackPressed() }
+            compose.waitForIdle()
+            compose.mainClock.advanceTimeBy(1000)
+            compose.onNodeWithTag("player_sheet").assertDoesNotExist()
+            if (secondary) compose.onNodeWithTag("network_settings").assertIsDisplayed()
+        }
+    }
+
     @Test fun miniTitleAndPlayerArtworkOrLyricsHeaderCanBeDragged() {
         start()
         compose.mainClock.autoAdvance = false

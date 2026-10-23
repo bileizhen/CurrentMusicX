@@ -82,7 +82,7 @@ internal data class PlayerControlsDownDrag(val area: () -> LayoutCoordinates?, v
     enabled: Boolean = true,
     excludedArea: () -> List<LayoutCoordinates> = { emptyList() }): Modifier {
     val controller = LocalPlayerSheetDrag.current
-    if (controller == null && fromMini) return this
+    if (fromMini && (controller == null || !enabled)) return this
     val exclusion by rememberUpdatedState(excludedArea)
     val upward by rememberUpdatedState(upDrag)
     val downward by rememberUpdatedState(controlsDownDrag)
