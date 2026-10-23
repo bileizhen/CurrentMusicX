@@ -27,6 +27,7 @@ import kotlin.math.abs
 
 private class MonetTrack(val entering: Boolean) {
     var target by mutableFloatStateOf(Float.NaN)
+    var position: State<Float>? = null
 }
 
 /** A bounded window of keyed tracks. Only layers move while the current line advances. */
@@ -38,7 +39,10 @@ private class MonetTrack(val entering: Boolean) {
     val unit = LocalDensity.current.density
     val fontScale = LocalDensity.current.fontScale
     var viewportHeight by remember { mutableFloatStateOf(0f) }
-    val radius = if (expandWindow) monetViewportRadius(viewportHeight, fontSize * unit * fontScale) else 4
+    // Pixel-by-pixel viewport changes must not recompose every lyric track during a pager drag.
+    val radius by remember(expandWindow, fontSize, unit, fontScale) { derivedStateOf {
+        if (expandWindow) monetViewportRadius(viewportHeight, fontSize * unit * fontScale) else 4
+    } }
     val effectInset = (fontSize * fontScale * 2f + 6f).dp
     var manualAnchor by remember(document) { mutableStateOf<Int?>(null) }
     var gestureRevision by remember(document) { mutableIntStateOf(0) }
@@ -131,6 +135,7 @@ private class MonetTrack(val entering: Boolean) {
                     }
                     motion.asState()
                 }
+                track.position = y
                 val tone = tones[slot]
                 val scale = animateFloatAsState(tone.scale,
                     monetScaleSpring(), label = "Monet scale")
@@ -141,6 +146,10 @@ private class MonetTrack(val entering: Boolean) {
                 }
                 val blur = animateFloatAsState(if (effects) { if (exiting) 6f else tone.blur } else 0f,
                     tween(320, easing = CubicBezierEasing(.32f, .72f, 0f, 1f)), label = "Monet blur")
+                val renderBlur = remember(blur, unit) { derivedStateOf {
+                    if (android.os.Build.VERSION.SDK_INT >= 31 && blur.value > .01f)
+                        BlurEffect(blur.value * unit, blur.value * unit, TileMode.Decal) else null
+                } }
                 Box(Modifier.fillMaxWidth().zIndex(if (index in active) 4f else -abs(index - target).toFloat())
                     .layout { measurable, constraints ->
                         // Expand only the layer's drawing space, then report the original paragraph size.
@@ -159,8 +168,7 @@ private class MonetTrack(val entering: Boolean) {
                     this.alpha = if (y == null) 0f else alpha.value
                     // Alpha and RenderEffect create offscreen layers even with clip=false.
                     // Reserve the raster halo outside the paragraph instead of cutting at its box.
-                    renderEffect = if (android.os.Build.VERSION.SDK_INT >= 31 && blur.value > .01f)
-                        BlurEffect(blur.value * density, blur.value * density, TileMode.Decal) else null
+                    renderEffect = renderBlur.value
                 }.padding(effectInset)) { content(index, browsing, tone) }
             } }
         }) { measurables, constraints ->
@@ -171,11 +179,19 @@ private class MonetTrack(val entering: Boolean) {
         val desiredSlots = desired.map { indices.indexOf(it) }
         val positions = monetTrackPositions(desiredSlots.map { rows[it].height.toFloat() },
             desiredSlots.map { tones[it].scale }, desired.indexOf(anchor),
-            constraints.maxHeight * if (minimal) .5f else .46f,
+            0f,
             fontSize * density * fontScale, desired.mapIndexedNotNull { slot, i -> if (i in active) slot else null }.toSet())
         desired.forEachIndexed { slot, i -> tracks.getValue(i).target = positions[slot] }
         layout(constraints.maxWidth, constraints.maxHeight) {
-            rows.forEach { it.placeRelative(inset, 0) }
+            // Viewport movement is shared placement, not a new spring target for every line.
+            val focus = (constraints.maxHeight * if (minimal) .5f else .46f).toInt()
+            val halo = effectInset.roundToPx()
+            rows.forEachIndexed { slot, row ->
+                val y = tracks.getValue(indices[slot]).position?.value
+                // Expanded windows prewarm nearby rows. Do not raster/blur those outside the viewport.
+                if (y == null || (focus + y < constraints.maxHeight + halo && focus + y + row.height > -halo))
+                    row.placeRelative(inset, focus)
+            }
         }
     }
 }

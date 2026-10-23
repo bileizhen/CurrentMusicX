@@ -25,6 +25,30 @@ import kotlin.math.abs
 class MonetLyricsRailTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun resizingViewportKeepsCurrentLineAtItsLiveFocusWithoutSpringLag() {
+        val height = mutableStateOf(300.dp)
+        val document = LyricsDocument((0..99).map { LyricLine(it * 2000L, (it + 1) * 2000L, "歌词 $it") })
+        compose.setContent {
+            MonetLyricsRail(document, 50, setOf(50), Modifier.width(340.dp).height(height.value),
+                30f, centered = false, minimal = false, perspective = false, effects = false,
+                followRequest = 0, onBrowsing = {}, expandWindow = true) { index, _, _ ->
+                Canvas(Modifier.fillMaxWidth().height(30.dp).testTag("live_focus_$index")) { drawRect(Color.White) }
+            }
+        }
+        compose.waitForIdle()
+        compose.mainClock.autoAdvance = false
+        for (size in listOf(450.dp, 600.dp, 420.dp, 300.dp)) {
+            compose.runOnUiThread { height.value = size }
+            compose.mainClock.advanceTimeBy(32)
+            compose.waitForIdle()
+            val viewport = compose.onNodeWithTag("lyrics_list").fetchSemanticsNode().boundsInRoot
+            val current = compose.onNodeWithTag("live_focus_50").fetchSemanticsNode().boundsInRoot
+            assertEquals("Current lyric follows viewport resize immediately in both directions",
+                viewport.top + viewport.height * .46f, current.center.y, 2f)
+        }
+        compose.mainClock.autoAdvance = true
+    }
+
     @Test fun expandedLyricsUseTheNewSpaceWithoutMountingTheWholeSong() {
         val expanded = mutableStateOf(false)
         val document = LyricsDocument((0..99).map { LyricLine(it * 2000L, (it + 1) * 2000L, "歌词 $it") })

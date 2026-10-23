@@ -149,11 +149,12 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         val wideVerticalInset = with(density) { maxOf(WindowInsets.safeDrawing.getTop(density),
             WindowInsets.safeDrawing.getBottom(density)).toDp() }
         LaunchedEffect(widePlayer) { if (widePlayer) pager.scrollToPage(PlayerContent.LYRICS.ordinal) }
-        val hideControls by animateFloatAsState(
+        val hideControls = animateFloatAsState(
             if (settings.lyricsDisplay.hideControls && !controlsRevealed) 1f else 0f,
             tween(260, easing = LinearOutSlowInEasing), label = "lyricsControls")
-        val lyricsProgress = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
-        val controlsVisibility = 1f - hideControls * lyricsProgress
+        val controlsVisibility = {
+            1f - hideControls.value * (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
+        }
         val openQueue: () -> Unit = { scope.launch { queueMotion.animation.snapTo(0f); overlay = PlayerOverlay.QUEUE } }
         val functions: @Composable () -> Unit = {
             PlayerSongActionsBar(vm, { overlay = PlayerOverlay.COMMENTS }, openQueue,
@@ -262,7 +263,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 }
             }
             if (!widePlayer) {
-                PlayerControlsRegion(1f - controlsVisibility) {
+                PlayerControlsRegion({ 1f - controlsVisibility() }) {
                     Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
                         Text("显示控制面板", color = Color.White.copy(alpha = .65f), fontSize = 12.sp,
                             modifier = Modifier.testTag("lyrics_reveal_controls").clickable(role = Role.Button) { controlsRevealed = true }

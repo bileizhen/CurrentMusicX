@@ -58,7 +58,8 @@ internal val LocalPlayerPagerArtwork = staticCompositionLocalOf<PlayerPagerArtwo
     val rotation = LocalPlayerArtworkRotation.current
     val density = LocalDensity.current
     val bend = with(density) { 20.dp.toPx() }
-    val geometry by remember(transfer, bend) { derivedStateOf { transfer.frame(bend, 0f) } }
+    val geometry = remember(transfer, bend) { derivedStateOf { transfer.frame(bend, 0f) } }
+    val ready by remember(geometry) { derivedStateOf { geometry.value != null } }
     val destination = remember(transfer, sheet, bend) {
         {
             val root = sheet?.sheet?.takeIf { it.isAttached }
@@ -73,19 +74,20 @@ internal val LocalPlayerPagerArtwork = staticCompositionLocalOf<PlayerPagerArtwo
     DisposableEffect(transfer, sheet) { onDispose {
         if (sheet?.destination === destination) { sheet?.destination = null; sheet?.target = null }
     } }
-    val frame = geometry ?: return
+    if (!ready) return
     val width = transfer.cover!!.size.width
     if (width <= 0) return
     MusicCover(url, Modifier.requiredSize(with(density) { width.toDp() }).testTag("player_pager_artwork")
         .semantics {
-            this[PlayerPagerArtworkGeometry] = frame.copy(rotation = rotation?.value ?: 0f)
+            geometry.value?.let { this[PlayerPagerArtworkGeometry] = it.copy(rotation = rotation?.value ?: 0f) }
             this[CoverRotation] = rotation?.value ?: 0f
         }
         .graphicsLayer {
             alpha = if (sheet?.moving == true) 0f else 1f
             transformOrigin = TransformOrigin(0f, 0f)
-            translationX = geometry?.bounds?.left ?: 0f
-            translationY = geometry?.bounds?.top ?: 0f
-            scaleX = (geometry?.bounds?.width ?: 0f) / width; scaleY = scaleX
+            val frame = geometry.value
+            translationX = frame?.bounds?.left ?: 0f
+            translationY = frame?.bounds?.top ?: 0f
+            scaleX = (frame?.bounds?.width ?: 0f) / width; scaleY = scaleX
         }.graphicsLayer { rotationZ = rotation?.value ?: 0f }.clip(CircleShape), pixels = 800)
 }
