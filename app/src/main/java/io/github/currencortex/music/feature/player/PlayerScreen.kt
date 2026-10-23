@@ -47,7 +47,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 
 private enum class PlayerContent { COVER, LYRICS }
-private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI, ROAMING, BACKGROUND }
+private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, SHARE, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI, ROAMING, BACKGROUND }
 internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePosition")
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
@@ -154,10 +154,11 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             tween(260, easing = LinearOutSlowInEasing), label = "lyricsControls")
         val lyricsProgress = (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
         val controlsVisibility = 1f - hideControls * lyricsProgress
+        val openQueue: () -> Unit = { scope.launch { queueMotion.animation.snapTo(0f); overlay = PlayerOverlay.QUEUE } }
         val functions: @Composable () -> Unit = {
-            PlayerSongActionsBar(vm, { overlay = PlayerOverlay.COMMENTS }, {
-                scope.launch { queueMotion.animation.snapTo(0f); overlay = PlayerOverlay.QUEUE }
-            }, { overlay = PlayerOverlay.SLEEP }, onLike)
+            PlayerSongActionsBar(vm, { overlay = PlayerOverlay.COMMENTS }, openQueue,
+                { overlay = PlayerOverlay.SLEEP }, onLike, onEffects = onEqualizer,
+                onOptions = if (widePlayer) null else ({ overlay = PlayerOverlay.OPTIONS }))
         }
         val header: @Composable () -> Unit = {
             Row(Modifier.fillMaxWidth().height(if (widePlayer) 48.dp else 52.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -169,7 +170,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                             .padding(horizontal = 8.dp, vertical = 14.dp), color = Color.White.copy(alpha = .65f),
                         fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                PlayerIconButton(PlayerIcon.MORE, "播放与歌词设置", { overlay = PlayerOverlay.OPTIONS }, Modifier.testTag("lyrics_options"))
+                PlayerIconButton(PlayerIcon.SHARE, "分享歌曲", { overlay = PlayerOverlay.SHARE }, Modifier.testTag("player_share"),
+                    enabled = queue.current != null)
             }
         }
         PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize(), backgroundImage, appearance.playerBackgroundBlur)
@@ -255,7 +257,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                         overlay = PlayerOverlay.QUALITY
                                     }.padding(horizontal = 8.dp), color = Color.White.copy(alpha = .65f),
                                 fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        })
+                        }, leadingAction = { PlayerPlaybackModeButton(vm) }, trailingAction = { PlayerQueueButton(vm, openQueue) })
                     }
                 }
             }
@@ -276,6 +278,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         when (overlay) {
             PlayerOverlay.NONE -> Unit
             PlayerOverlay.BACKGROUND -> PlayerBackgroundDialog(vm.container, dismiss)
+            PlayerOverlay.SHARE -> queue.current?.let { io.github.currencortex.music.feature.share.SongShareDialog(it, dismiss) }
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) },
                 commentComposer, vm::editComment, vm::replyTo, vm::sendComment)
             PlayerOverlay.QUEUE -> Unit
