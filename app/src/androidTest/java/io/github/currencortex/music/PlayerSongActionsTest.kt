@@ -98,6 +98,9 @@ class PlayerSongActionsTest {
                 assertEquals("Mode and queue share the transport row", left.center.y, right.center.y, 1f)
             }
             assertEquals("Play stays centered", bar.center.x, transportButtons[2].center.x, 1f)
+            bounds.zip(transportButtons).forEachIndexed { index, (action, transport) ->
+                assertEquals("Upper action $index aligns with its transport button", transport.center.x, action.center.x, 1f)
+            }
             val share = compose.onNodeWithTag("player_share").fetchSemanticsNode().boundsInRoot
             assertTrue("Share stays in the top-right header", share.bottom < bar.top && share.center.x > bar.center.x)
             val badge = compose.onNodeWithTag("like_count", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
