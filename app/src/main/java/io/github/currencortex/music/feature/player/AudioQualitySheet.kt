@@ -30,10 +30,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.core.media.AudioQuality
-import io.github.currencortex.music.ui.component.MusicDialogButton
-import io.github.currencortex.music.ui.component.musicDialogColors
+import io.github.currencortex.music.ui.component.MusicBottomSheet
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Quality is a requested level, never a claim about the stream returned by the provider. */
@@ -43,23 +41,20 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var afterDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
     val dismiss by rememberUpdatedState(onDismiss)
     val maxContentHeight = (LocalConfiguration.current.screenHeightDp * .8f).dp
-    MiuixTheme(colors = musicDialogColors()) {
-        OverlayBottomSheet(show = visible, title = title,
-            modifier = Modifier.testTag("audio_quality_sheet"),
-            onDismissRequest = { visible = false },
-            onDismissFinished = { dismiss(); afterDismiss?.invoke() }) {
-            Column(Modifier.fillMaxWidth().heightIn(max = maxContentHeight).navigationBarsPadding(),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                AudioQualityChoices(selected, { quality ->
-                    if (visible) {
-                        if (quality != selected) onSelect(quality)
-                        visible = false
-                    }
-                }, enabled, onNetwork?.let { action -> { afterDismiss = action; visible = false } },
-                    Modifier.weight(1f, fill = false))
-                MusicDialogButton("收起", { visible = false }, Modifier.testTag("close_quality_sheet"))
-                Spacer(Modifier.height(12.dp))
-            }
+    MusicBottomSheet(show = visible, title = title,
+        modifier = Modifier.testTag("audio_quality_sheet"),
+        onDismissRequest = { visible = false },
+        onDismissFinished = { dismiss(); afterDismiss?.invoke() }) {
+        Column(Modifier.fillMaxWidth().heightIn(max = maxContentHeight).navigationBarsPadding(),
+            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            AudioQualityChoices(selected, { quality ->
+                if (visible) {
+                    if (quality != selected) onSelect(quality)
+                    visible = false
+                }
+            }, enabled, onNetwork?.let { action -> { afterDismiss = action; visible = false } },
+                Modifier.weight(1f, fill = false))
+            Spacer(Modifier.height(12.dp))
         }
     }
 }

@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
@@ -48,16 +49,17 @@ else lightColorScheme(primary = Color(0xFF3485FF), background = Color(0xFFF2F3F5
     return if (backdrop != null) then(Modifier.layerBackdrop(backdrop)) else this
 }
 
-@Composable internal fun Modifier.musicDialogMaterial(backdrop: Backdrop? = LocalMusicDialogBackdrop.current): Modifier {
+@Composable internal fun Modifier.musicDialogMaterial(backdrop: Backdrop? = LocalMusicDialogBackdrop.current,
+    shape: Shape = MusicDialogShape): Modifier {
     val dark = isInDarkTheme()
-    val material = if (Build.VERSION.SDK_INT >= 33 && backdrop != null) Modifier.frostedMusicDialog(backdrop, dark)
-    else Modifier.background(if (dark) Color(0xF22C2D30) else Color(0xDDF2F3F5), MusicDialogShape)
-    return then(material).border(.7.dp, Color.White.copy(alpha = if (dark) .12f else .65f), MusicDialogShape)
+    val material = if (Build.VERSION.SDK_INT >= 33 && backdrop != null) Modifier.frostedMusicDialog(backdrop, dark, shape)
+    else Modifier.background(if (dark) Color(0xF22C2D30) else Color(0xDDF2F3F5), shape)
+    return then(material).border(.7.dp, Color.White.copy(alpha = if (dark) .12f else .65f), shape)
 }
 
 @RequiresApi(33)
-private fun Modifier.frostedMusicDialog(backdrop: Backdrop, dark: Boolean): Modifier =
-    then(Modifier.drawBackdrop(backdrop, shape = { MusicDialogShape }, effects = {
+private fun Modifier.frostedMusicDialog(backdrop: Backdrop, dark: Boolean, shape: Shape): Modifier =
+    then(Modifier.drawBackdrop(backdrop, shape = { shape }, effects = {
         colorControls(brightness = 0f, contrast = 1f, saturation = .35f)
         blur(28.dp.toPx(), 28.dp.toPx())
     }, onDrawSurface = {

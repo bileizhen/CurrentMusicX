@@ -46,7 +46,17 @@ class AudioQualitySheetTest {
             assertEquals("The picker is anchored to the bottom", host.bottom, sheet.bottom, 2f)
             assertTrue("There is a backdrop above the sheet", sheet.top > host.top)
         }
+        fun assertMaterialFollowsPanel() {
+            val sheet = compose.onNodeWithTag("audio_quality_sheet").fetchSemanticsNode().boundsInRoot
+            val material = compose.onNodeWithTag("bottom_sheet_material").fetchSemanticsNode().boundsInRoot
+            assertEquals("Material covers the native title and drag handle", sheet.top, material.top, 2f)
+            assertEquals(sheet.left, material.left, 2f)
+            assertEquals(sheet.right, material.right, 2f)
+            assertEquals(sheet.bottom, material.bottom, 2f)
+        }
         assertBottomAnchored()
+        assertMaterialFollowsPanel()
+        compose.onNodeWithTag("close_quality_sheet").assertDoesNotExist()
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         compose.onNodeWithTag("quality_choices").captureToImage().asAndroidBitmap().let { bitmap ->
             java.io.File(context.externalCacheDir, "quality-light.png").outputStream().use {
@@ -84,6 +94,17 @@ class AudioQualitySheetTest {
             }
         }
         assertBottomAnchored()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("audio_quality_sheet").performTouchInput {
+            down(androidx.compose.ui.geometry.Offset(centerX, 12.dp.toPx()))
+            moveBy(androidx.compose.ui.geometry.Offset(0f, 60.dp.toPx()), delayMillis = 300)
+        }
+        compose.mainClock.advanceTimeBy(64)
+        compose.waitForIdle()
+        assertMaterialFollowsPanel()
+        compose.onNodeWithTag("audio_quality_sheet").performTouchInput { advanceEventTime(400); up() }
+        compose.mainClock.autoAdvance = true
+        compose.waitForIdle()
         compose.onNodeWithTag("audio_quality_sheet").performTouchInput {
             swipe(androidx.compose.ui.geometry.Offset(centerX, 12.dp.toPx()),
                 androidx.compose.ui.geometry.Offset(centerX, height * .8f), 300)
@@ -109,7 +130,12 @@ class AudioQualitySheetTest {
             compose.onNodeWithTag("default_quality").performClick()
             compose.onNodeWithTag("quality_choices").performScrollToNode(hasTestTag("quality_LOSSLESS"))
             compose.onNodeWithTag("quality_LOSSLESS").assertIsSelected()
-            compose.onNodeWithTag("close_quality_sheet").performClick()
+            compose.onNodeWithTag("close_quality_sheet").assertDoesNotExist()
+            compose.onNodeWithTag("audio_quality_sheet").performTouchInput {
+                swipe(androidx.compose.ui.geometry.Offset(centerX, 12.dp.toPx()),
+                    androidx.compose.ui.geometry.Offset(centerX, height * .8f), 300)
+            }
+            compose.onNodeWithTag("quality_choices").assertDoesNotExist()
             assertEquals(AudioQuality.LOSSLESS, container.musicSettings.snapshot().quality)
             assertNull(container.playbackQueue.state.value.current)
         } finally { compose.runOnUiThread { store.clear() }; container.close() }
