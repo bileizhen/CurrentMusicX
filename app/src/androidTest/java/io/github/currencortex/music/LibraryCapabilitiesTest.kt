@@ -267,11 +267,15 @@ class LibraryCapabilitiesTest {
         compose.runOnUiThread { dispatcher.onBackPressed() }
         compose.waitForIdle()
         compose.onNodeWithTag("tab_2").performClick()
-        compose.onNodeWithTag("open_artists").performScrollTo().performClick()
-        compose.onNodeWithTag("catalog_query").performTextInput("Artist");assertEquals(0,catalogRequests)
-        compose.onNodeWithTag("catalog_submit").performClick()
+        compose.onNodeWithTag("library_categories").assertDoesNotExist()
+        compose.onNodeWithTag("open_artists").assertDoesNotExist()
+        compose.onNodeWithTag("tab_0").performClick()
+        compose.onNodeWithTag("open_home_search").performClick()
+        compose.onNodeWithTag("search_category_artist").performClick()
+        compose.onNodeWithTag("search_input").performTextInput("Artist");assertEquals(0,catalogRequests)
+        compose.onNodeWithTag("search_input").performImeAction()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Artist").fetchSemanticsNodes().size>=2 }
-        compose.onNodeWithTag("catalog_entry_12").performClick()
+        compose.onNodeWithTag("search_artist_12").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithTag("artist_tab_albums").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("artist_tab_albums").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Album").fetchSemanticsNodes().isNotEmpty() }
