@@ -65,7 +65,8 @@ fun AppearanceScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSca
                     startAction = { SettingIcon(MusicIcons.Image) },
                     endActions = { Icon(MusicIcons.Forward, contentDescription = null) },
                     onClick = onOpenLaunchStyle, modifier = Modifier.testTag("setting_launch_style"))
-                BasicComponent(title = "预览开屏动画", summary = "查看当前样式与用户名效果",
+                if (config.launchStyle != io.github.currencortex.music.data.settings.LaunchStyle.NONE)
+                    BasicComponent(title = "预览开屏动画", summary = "查看当前样式与用户名效果",
                     startAction = { SettingIcon(MusicIcons.Play) },
                     onClick = onPreviewLaunch, modifier = Modifier.testTag("setting_launch_preview"))
             }

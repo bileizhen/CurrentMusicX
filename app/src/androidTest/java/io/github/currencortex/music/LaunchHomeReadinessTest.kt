@@ -91,6 +91,38 @@ class LaunchHomeReadinessTest {
         assertFalse(container.playerController.state.value.playing)
     }
 
+    @Test fun disabledLaunchDoesNotWaitForHomeRequestsOrBlockNavigation() {
+        runBlocking {
+            container.desktopLyrics.markRecommendationSeen()
+            container.settings.edit { it.copy(launchStyle = io.github.currencortex.music.data.settings.LaunchStyle.NONE) }
+        }
+        compose.mainClock.autoAdvance = false
+        compose.setContent { CurrentMusicApp(container, animateLaunch = true, launchWindowReady = false) }
+        pumpUntil { paths.containsAll(listOf("/cm/daily", "/cm/plays/recent", "/cm/playlists")) }
+        compose.onNodeWithTag("launch_preparing").assertDoesNotExist()
+        compose.onNodeWithTag("launch_animation").assertDoesNotExist()
+        compose.onNodeWithTag("launch_wordmark", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("home_brand_title").assertIsDisplayed()
+        // All three home responses are still held back; users can already leave the page.
+        assertEquals(1L, daily.count); assertEquals(1L, recent.count); assertEquals(1L, playlists.count)
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithTag("tab_3").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("settings_screen").assertIsDisplayed()
+        compose.onNodeWithText("外观").performScrollTo().performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("setting_launch_preview").assertDoesNotExist()
+        compose.onNodeWithTag("setting_launch_style").performScrollTo().performClick()
+        compose.onNodeWithTag("launch_style_none").assertIsSelected()
+        compose.onNodeWithTag("launch_style_classic").performClick()
+        compose.waitUntil(5000) { container.settings.state.value.launchStyle == io.github.currencortex.music.data.settings.LaunchStyle.CLASSIC }
+        compose.onNodeWithTag("setting_launch_preview").assertExists()
+        compose.onNodeWithTag("launch_animation").assertDoesNotExist()
+        daily.countDown(); recent.countDown(); playlists.countDown()
+        compose.mainClock.advanceTimeBy(3000)
+        compose.onNodeWithTag("launch_animation").assertDoesNotExist()
+    }
+
     @Test fun launchWaitsForEveryHomeSectionAndFailureOffersRetryWithoutReplaying() {
         compose.mainClock.autoAdvance = false
         compose.setContent { CurrentMusicApp(container, animateLaunch = true) }
