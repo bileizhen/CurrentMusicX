@@ -1,7 +1,9 @@
 package io.github.currencortex.music.feature.player
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -19,19 +21,27 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
     val id = NeteaseSongActionsRepository.songId(queue.current)
     val navidrome = queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME
     val current = actions.takeIf { it.songId == if (navidrome) queue.current?.id else id }
-    PlayerFunctionBar(actionCount = 5) {
+    PlayerFunctionBar(actionCount = 5, transportAligned = onOptions != null) {
+        // Match transport: fixed 48dp end buttons, three equally weighted middle slots.
+        val middleSlot = if (onOptions != null) Modifier.weight(1f) else Modifier
         val liked = if (neteaseMain || navidrome) current?.liked == true else statuses[queue.current?.id]?.liked == true
         PlayerIconButton(PlayerIcon.LIKE, if (liked) "取消喜欢" else "喜欢", vm::togglePrimaryLike,
             Modifier.testTag("player_like"), selected = liked, count = current?.likeCount,
             showCount = true, enabled = queue.current?.video == false && current?.liking != true,
             loading = current?.liking == true, onLongClick = onLike)
-        PlayerIconButton(PlayerIcon.COMMENT, "评论区", onComments, Modifier.testTag("player_comments"),
-            count = current?.commentCount, showCount = true, enabled = id != null)
+        Box(middleSlot, contentAlignment = Alignment.Center) {
+            PlayerIconButton(PlayerIcon.COMMENT, "评论区", onComments, Modifier.testTag("player_comments"),
+                count = current?.commentCount, showCount = true, enabled = id != null)
+        }
         // Lit while a timer is running, so an armed timer is visible without opening the sheet.
-        PlayerIconButton(PlayerIcon.ALARM, "定时关闭${if (sleep.enabled) "，正在计时" else ""}", onSleep,
-            Modifier.testTag("player_sleep_timer"), selected = sleep.enabled)
+        Box(middleSlot, contentAlignment = Alignment.Center) {
+            PlayerIconButton(PlayerIcon.ALARM, "定时关闭${if (sleep.enabled) "，正在计时" else ""}", onSleep,
+                Modifier.testTag("player_sleep_timer"), selected = sleep.enabled)
+        }
         if (onOptions != null) {
-            PlayerIconButton(PlayerIcon.EFFECTS, "音效", onEffects ?: {}, Modifier.testTag("player_effects"), enabled = onEffects != null)
+            Box(middleSlot, contentAlignment = Alignment.Center) {
+                PlayerIconButton(PlayerIcon.EFFECTS, "音效", onEffects ?: {}, Modifier.testTag("player_effects"), enabled = onEffects != null)
+            }
             PlayerIconButton(PlayerIcon.MORE, "播放与歌词设置", onOptions, Modifier.testTag("lyrics_options"))
         } else {
             PlayerPlaybackModeButton(vm)

@@ -41,9 +41,12 @@ internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("Pla
 internal val PlayerBufferedProgress = SemanticsPropertyKey<Float>("PlayerBufferedProgress")
 
 /** Keep 48dp touch targets while grouping the secondary actions near the center. */
-@Composable internal fun PlayerFunctionBar(modifier: Modifier = Modifier, actionCount: Int = 3, content: @Composable RowScope.() -> Unit) {
-    BoxWithConstraints(modifier.fillMaxWidth().height(56.dp).testTag("player_function_bar")) {
-        val gap = if (actionCount <= 3) 24.dp else ((maxWidth - 48.dp * actionCount) / (actionCount - 1)).coerceIn(0.dp, 12.dp)
+@Composable internal fun PlayerFunctionBar(modifier: Modifier = Modifier, actionCount: Int = 3,
+    transportAligned: Boolean = false, content: @Composable RowScope.() -> Unit) {
+    BoxWithConstraints(modifier.fillMaxWidth().then(if (transportAligned) Modifier.padding(horizontal = 8.dp) else Modifier)
+        .height(56.dp).testTag("player_function_bar")) {
+        val gap = if (transportAligned) 0.dp else if (actionCount <= 3) 24.dp
+            else ((maxWidth - 48.dp * actionCount) / (actionCount - 1)).coerceIn(0.dp, 12.dp)
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(gap, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically, content = content)
     }
