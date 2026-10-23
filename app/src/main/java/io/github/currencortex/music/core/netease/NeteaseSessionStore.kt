@@ -29,10 +29,24 @@ class NeteaseSessionStore(private val vault: TokenStore, scope: CoroutineScope) 
     val ready = CompletableDeferred<Unit>()
     init { scope.launch(Dispatchers.IO) {
         mutex.withLock {
-            current = runCatching { vault.read()?.let { ApiJson.decodeFromString(NeteaseCredential.serializer(), it) } }
-                .getOrNull() ?: NeteaseCredential()
-            // Persist the device identity even before first login, keeping QR checks consistent.
-            vault.write(ApiJson.encodeToString(NeteaseCredential.serializer(), current))
+            var restored = false
+            current = try {
+                (vault.read()?.let { ApiJson.decodeFromString(NeteaseCredential.serializer(), it) }
+                    ?: NeteaseCredential()).also { restored = true }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // A temporarily unavailable Keystore must not block app startup or
+                // replace an existing encrypted session with an anonymous one.
+                NeteaseCredential()
+            }
+            if (restored) {
+                // Keep the device identity across launches when storage is available.
+                // Login and subsequent credential mutations still require a durable write.
+                try { vault.write(ApiJson.encodeToString(NeteaseCredential.serializer(), current)) }
+                catch (error: CancellationException) { throw error }
+                catch (_: Exception) { /* Keep the restored session usable in memory. */ }
+            }
             publish(0)
             ready.complete(Unit)
         }
