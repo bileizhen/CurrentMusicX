@@ -1,6 +1,7 @@
 package io.github.currencortex.music.feature.player
 
 import androidx.compose.animation.*
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -80,6 +81,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val pager = rememberPagerState(initialPage = content.ordinal) { 2 }
     val pagerArtwork = remember(pager) { PlayerPagerArtworkTransition { pager.currentPage + pager.currentPageOffsetFraction } }
     val scope = rememberCoroutineScope()
+    val sidePage = remember(scope) { PlayerSidePageState(scope) }
+    var sideDialog by remember { mutableStateOf(false) }
     LaunchedEffect(pager.settledPage) { content = PlayerContent.entries[pager.settledPage] }
     var overlay by rememberSaveable { mutableStateOf(PlayerOverlay.NONE) }
     LaunchedEffect(roamingRequest) {
@@ -99,7 +102,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         queueGesture = false
         overlay = PlayerOverlay.NONE
     }
-    LaunchedEffect(overlay, queueGesture) { onDialogActive(overlay != PlayerOverlay.NONE || queueGesture) }
+    LaunchedEffect(overlay, queueGesture, sidePage.active) {
+        onDialogActive(overlay != PlayerOverlay.NONE || queueGesture || sidePage.active)
+    }
     LaunchedEffect(overlay) { if (overlay != PlayerOverlay.AI) vm.ai.close() }
     LaunchedEffect(overlay, songActions.songId) { if (overlay == PlayerOverlay.COMMENTS) vm.loadComments() }
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
@@ -150,7 +155,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         .then(if (overlay == PlayerOverlay.NONE) Modifier.playerSheetDrag(fromMini = false,
             upDrag = if (expanded) upDrag else null,
             controlsDownDrag = if (expanded && pager.settledPage == PlayerContent.LYRICS.ordinal && !pager.isScrollInProgress)
-                controlsDownDrag else null, enabled = !queueGesture) {
+                controlsDownDrag else null, enabled = !queueGesture && !sidePage.active) {
                 listOfNotNull(lyricsCoordinates, previewCoordinates)
             } else Modifier)) {
         val widePlayer = maxWidth > maxHeight
@@ -161,7 +166,12 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             WindowInsets.safeDrawing.getRight(density, layoutDirection)).toDp() }
         val wideVerticalInset = with(density) { maxOf(WindowInsets.safeDrawing.getTop(density),
             WindowInsets.safeDrawing.getBottom(density)).toDp() }
-        LaunchedEffect(widePlayer) { if (widePlayer) pager.scrollToPage(PlayerContent.LYRICS.ordinal) }
+        LaunchedEffect(widePlayer) {
+            if (widePlayer) {
+                sidePage.close()
+                pager.scrollToPage(PlayerContent.LYRICS.ordinal)
+            }
+        }
         val hideControls = animateFloatAsState(
             if ((settings.lyricsDisplay.hideControls || controlsHidden) && !controlsRevealed) 1f else 0f,
             tween(260, easing = LinearOutSlowInEasing), label = "lyricsControls")
@@ -188,6 +198,31 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     enabled = queue.current != null)
             }
         }
+        PlayerSidePageLayout(sidePage,
+            enabled = expanded && !widePlayer && !sideDialog && overlay == PlayerOverlay.NONE && !queueGesture && sheetDrag?.state?.dragging != true,
+            openingDirection = { if (kotlin.math.abs(pager.currentPageOffsetFraction) > .001f) 0f
+                else if (pager.currentPage == 0) 1f else -1f },
+            pagerScrolling = { pager.isScrollInProgress },
+            excludedArea = { controlsCoordinates }, side = {
+                MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
+                    if (sidePage.direction > 0f) PlayerListeningPage(vm.container, onPlay = sidePage::close,
+                        onBinding = { sidePage.close(); onAiNavigate("user/binding") },
+                        onDialogActive = { sideDialog = it })
+                    else PlayerSidePageContent(queue.current,
+                        quality = if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label,
+                        qualityEnabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null,
+                        onQuality = { overlay = PlayerOverlay.QUALITY },
+                        onEffects = onEqualizer?.let { action -> { sidePage.close(); action() } },
+                        onShare = { overlay = PlayerOverlay.SHARE },
+                        onComments = { overlay = PlayerOverlay.COMMENTS },
+                        onActions = if (actions != null && queue.current != null) ({
+                            queue.current?.let { song ->
+                                if (menuHost == null) overlay = PlayerOverlay.ACTIONS
+                                else menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false))
+                            }
+                        }) else null)
+                }
+            }) {
         PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize(), backgroundImage, appearance.playerBackgroundBlur)
         // The artwork viewport uses light ink; dialogs below inherit the app appearance.
         MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
@@ -211,7 +246,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                             HorizontalPager(pager, Modifier.weight(1f).fillMaxHeight().testTag("player_wide_pager")
                                 .semantics { this[PlayerPagePosition] = pager.currentPage + pager.currentPageOffsetFraction },
                                 beyondViewportPageCount = 1,
-                                userScrollEnabled = expanded && sheetDrag?.state?.dragging != true,
+                                userScrollEnabled = expanded && !sidePage.active && sheetDrag?.state?.dragging != true,
                                 flingBehavior = PagerDefaults.flingBehavior(pager,
                                     snapAnimationSpec = tween(240, easing = LinearOutSlowInEasing))) { page ->
                                 Box(Modifier.fillMaxSize().then(if (pager.currentPage != page && !pager.isScrollInProgress)
@@ -232,7 +267,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     HorizontalPager(pager, Modifier.fillMaxSize().testTag("player_content_pager")
                         .semantics { this[PlayerPagePosition] = pager.currentPage + pager.currentPageOffsetFraction },
                         beyondViewportPageCount = 1,
-                        userScrollEnabled = expanded && sheetDrag?.state?.dragging != true,
+                        userScrollEnabled = expanded && (!sidePage.active || sidePage.pagerDragging) && sheetDrag?.state?.dragging != true,
+                        overscrollEffect = null,
                         flingBehavior = PagerDefaults.flingBehavior(pager, snapAnimationSpec = tween(240, easing = LinearOutSlowInEasing))) { page ->
                         Box(Modifier.fillMaxSize().then(if (pager.currentPage != page && !pager.isScrollInProgress)
                             Modifier.clearAndSetSemantics {} else Modifier).onGloballyPositioned {
@@ -293,6 +329,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         }
         }
         }
+        }
+        BackHandler(enabled = sidePage.active && !sideDialog && overlay == PlayerOverlay.NONE && !queueGesture) { sidePage.close() }
         if (queueGesture || overlay == PlayerOverlay.QUEUE)
             PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss, actions)
         when (overlay) {

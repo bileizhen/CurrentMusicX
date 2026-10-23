@@ -28,6 +28,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Uses the existing full player. Browsing a mode never replaces the playing queue. */
 @Composable internal fun PersonalRoamingDialog(container: AppContainer, onDismiss: () -> Unit, onBinding: () -> Unit) {
+    PersonalRoamingContent(container, onDismiss, onBinding)
+}
+
+@Composable internal fun PersonalRoamingPage(container: AppContainer, modifier: Modifier = Modifier,
+    onPlay: () -> Unit, onBinding: () -> Unit, onDialogActive: (Boolean) -> Unit,
+    header: @Composable () -> Unit) {
+    PersonalRoamingContent(container, onPlay, onBinding, embedded = true, modifier = modifier,
+        onDialogActive = onDialogActive, header = header)
+}
+
+@Composable private fun PersonalRoamingContent(container: AppContainer, onDismiss: () -> Unit,
+    onBinding: () -> Unit, embedded: Boolean = false, modifier: Modifier = Modifier,
+    onDialogActive: (Boolean) -> Unit = {}, header: @Composable () -> Unit = {}) {
     val station = container.personalRoaming
     val state by station.state.collectAsStateWithLifecycle()
     val account by container.neteaseSessions.state.collectAsStateWithLifecycle()
@@ -37,7 +50,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val choice = state.catalog.choices.find { it.key == draftKey } ?: state.choice
     val loggedIn = account.loggedIn && !account.stale
     val changed = !state.active || choice.key != state.choice.key
-    val colors = io.github.currencortex.music.ui.component.musicDialogColors()
+    val colors = if (embedded) MiuixTheme.colorScheme else musicDialogColors()
     val bodyHeight = (LocalConfiguration.current.screenHeightDp * .48f).dp
     LaunchedEffect(Unit) { station.loadCatalog() }
     LaunchedEffect(account.revision) { draftKey = null; submitted = null }
@@ -45,6 +58,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         if (submitted != null && state.active && !state.loading && state.error == null && submitted == state.choice.key) onDismiss()
         state.error?.let(container.errorNotices::show)
     }
+    LaunchedEffect(settings) { onDialogActive(settings) }
+    DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     if (settings) MusicDialog("漫游设置", { settings = false }, footer = {
         MusicDialogButton("返回模式选择", { settings = false }, Modifier.testTag("roaming_settings_done"))
     }) {
@@ -54,7 +69,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             { station.updateSettings(state.settings.copy(restoreQueue = it)) }, Modifier.testTag("roaming_restore_queue"))
         Text(if (state.settings.restoreQueue) "结束后恢复之前的队列与进度，保持暂停。" else "结束后保留当前歌曲与队列。",
             fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-    } else MusicDialog(null, onDismiss, footer = {
+    }
+    val footer: @Composable () -> Unit = {
         val primary: @Composable (Modifier) -> Unit = { modifier ->
         MusicDialogButton(if (!loggedIn) "登录网易云" else if (state.loading) "正在寻找推荐…"
             else if (changed) if (state.active) "切换到${choice.title}" else "开始漫游"
@@ -75,14 +91,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 Modifier.weight(1f).testTag("roaming_stop"), cornerRadius = 14.dp,
                 colors = ButtonDefaults.textButtonColors(textColor = colors.error))
             primary(Modifier.weight(1f))
-        } else primary(Modifier)
-    }) {
+        } else primary(Modifier.fillMaxWidth())
+    }
+    val body: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("私人漫游", Modifier.weight(1f).testTag("music_dialog_title"),
                 fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
             MusicTextAction("设置", { settings = true }, Modifier.testTag("roaming_settings"))
         }
-        Column(Modifier.fillMaxWidth().heightIn(max = bodyHeight).verticalScroll(rememberScrollState())
+        Column(Modifier.fillMaxWidth().then(if (embedded) Modifier else
+            Modifier.heightIn(max = bodyHeight).verticalScroll(rememberScrollState()))
             .testTag("roaming_choices"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             state.catalog.modes.forEach { mode ->
                 val selected = choice.key == mode.key
@@ -127,4 +145,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             if (state.catalogError != null) MusicTextAction("重新加载场景", station::loadCatalog, Modifier.testTag("roaming_reload_catalog"))
         }
     }
+    if (embedded) Column(modifier.verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        header()
+        Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            body()
+            footer()
+        } }
+    } else if (!settings) MusicDialog(null, onDismiss, footer = { footer() }) { body() }
+
 }
