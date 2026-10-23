@@ -105,6 +105,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
                     }, onOpen = { navigate("lib/daily") }, onRetry = vm::refresh,
                     onConnect = { navigate("user/binding") }, dateLabel = "${today.monthValue}月${today.dayOfMonth}日", room = request)
             }
+            item(key = "personal-roaming") { HomePersonalRoamingEntry { navigate("lib/roaming") } }
             item(key = "shortcuts") { HomeLibraryShortcuts(navigate, request != null) }
             if (!direct && !account.loading && account.account == null) item(key = "login") {
                 MusicTextAction("登录后查看推荐与音乐库 ›", { navigate("user/login") })
@@ -156,6 +157,21 @@ import androidx.lifecycle.compose.LifecycleEventEffect
             item(key = "refresh") { MusicTextAction(if (home.loading) "正在更新音乐库…" else "刷新音乐库", vm::refresh,
                 Modifier.fillMaxWidth().testTag("refresh_home"), !home.loading) }
             account.error?.let { item { Text(it, fontSize = 13.sp) } }
+        }
+    }
+}
+
+@Composable private fun HomePersonalRoamingEntry(onOpen: () -> Unit) {
+    Card(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onOpen)
+            .testTag("open_personal_roaming").padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text("私人漫游", fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface)
+                Text("按你的喜好，连续听点好音乐", fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+            }
+            MusicTransportButton("打开私人漫游", onOpen)
         }
     }
 }

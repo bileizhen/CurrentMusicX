@@ -266,7 +266,8 @@ class LibraryCapabilitiesTest {
         compose.waitForIdle()
         compose.runOnUiThread { dispatcher.onBackPressed() }
         compose.waitForIdle()
-        compose.onNodeWithText("歌手").performScrollTo().performClick()
+        compose.onNodeWithTag("tab_2").performClick()
+        compose.onNodeWithTag("open_artists").performScrollTo().performClick()
         compose.onNodeWithTag("catalog_query").performTextInput("Artist");assertEquals(0,catalogRequests)
         compose.onNodeWithTag("catalog_submit").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithText("Artist").fetchSemanticsNodes().size>=2 }

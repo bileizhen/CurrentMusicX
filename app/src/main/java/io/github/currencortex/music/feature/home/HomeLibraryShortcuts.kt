@@ -15,7 +15,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import io.github.currencortex.music.feature.library.catalogRoute
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -30,12 +29,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             HomeShortcut("最近播放", MusicIcons.Update, "open_recent", { navigate("lib/recent") }, Modifier.weight(1f))
             HomeShortcut(if (inRoom) "回到房间" else "一起听", MusicIcons.Headphones, "open_rooms",
                 { navigate("room/list") }, Modifier.weight(1f))
-        }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
-            MusicTextAction("歌手", { navigate(catalogRoute(false)) }, Modifier.testTag("open_artists"))
-            MusicTextAction("专辑", { navigate(catalogRoute(true)) }, Modifier.testTag("open_albums"))
-            MusicTextAction("自建曲库", { navigate("navidrome") }, Modifier.testTag("library_navidrome"))
-            MusicTextAction("私人漫游", { navigate("lib/roaming") }, Modifier.testTag("open_personal_roaming"))
         }
     }
 }
