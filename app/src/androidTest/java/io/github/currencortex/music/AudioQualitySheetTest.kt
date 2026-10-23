@@ -2,11 +2,14 @@ package io.github.currencortex.music
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.text.TextLayoutResult
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelStore
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.core.media.AudioQuality
@@ -30,11 +33,20 @@ class AudioQualitySheetTest {
         var theme by mutableStateOf(ThemeMode.LIGHT)
         var changes = 0
         var closes = 0
+        var open by mutableStateOf(true)
         compose.setContent {
-            LeiTheme(AppearanceSettings(themeMode = theme)) { Scaffold { Box(Modifier.fillMaxSize()) {
-                AudioQualitySheet(selected, { selected = it; changes++ }, { closes++ }, enabled)
+            LeiTheme(AppearanceSettings(themeMode = theme)) { Scaffold { Box(Modifier.fillMaxSize().testTag("quality_host")) {
+                Box(Modifier.size(48.dp).testTag("reopen_quality").clickable { open = true })
+                if (open) AudioQualitySheet(selected, { selected = it; changes++ }, { closes++; open = false }, enabled)
             } } }
         }
+        fun assertBottomAnchored() {
+            val host = compose.onNodeWithTag("quality_host").fetchSemanticsNode().boundsInRoot
+            val sheet = compose.onNodeWithTag("audio_quality_sheet").fetchSemanticsNode().boundsInRoot
+            assertEquals("The picker is anchored to the bottom", host.bottom, sheet.bottom, 2f)
+            assertTrue("There is a backdrop above the sheet", sheet.top > host.top)
+        }
+        assertBottomAnchored()
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         compose.onNodeWithTag("quality_choices").captureToImage().asAndroidBitmap().let { bitmap ->
             java.io.File(context.externalCacheDir, "quality-light.png").outputStream().use {
@@ -48,9 +60,14 @@ class AudioQualitySheetTest {
         compose.onNodeWithTag("quality_choices").performScrollToNode(hasTestTag("quality_STANDARD"))
         compose.onNodeWithTag("quality_STANDARD").assertIsSelected().performClick()
         compose.runOnIdle { assertEquals(0, changes); assertEquals(1, closes) }
+        compose.onNodeWithTag("quality_choices").assertDoesNotExist()
+        compose.onNodeWithTag("reopen_quality").performClick()
         compose.onNodeWithTag("quality_choices").performScrollToNode(hasTestTag("quality_JYMASTER"))
-        compose.onNodeWithTag("quality_JYMASTER").performClick().assertIsSelected()
+        compose.onNodeWithTag("quality_JYMASTER").performClick()
         compose.runOnIdle { assertEquals(AudioQuality.JYMASTER, selected); assertEquals(1, changes) }
+        compose.onNodeWithTag("reopen_quality").performClick()
+        compose.onNodeWithTag("quality_choices").performScrollToNode(hasTestTag("quality_JYMASTER"))
+        compose.onNodeWithTag("quality_JYMASTER").assertIsSelected()
         fun titleRed(): Float {
             val layouts = mutableListOf<TextLayoutResult>()
             compose.onNodeWithText("当前歌曲音质", useUnmergedTree = true)
@@ -66,6 +83,13 @@ class AudioQualitySheetTest {
                 bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
             }
         }
+        assertBottomAnchored()
+        compose.onNodeWithTag("audio_quality_sheet").performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(centerX, 12.dp.toPx()),
+                androidx.compose.ui.geometry.Offset(centerX, height * .8f), 300)
+        }
+        compose.onNodeWithTag("quality_choices").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(3, closes) }
     }
     @Test fun networkSettingsUsesTheSamePickerAndPersistsDefaultWithoutStartingAudio(): Unit = runBlocking {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()

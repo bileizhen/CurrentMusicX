@@ -30,29 +30,45 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.core.media.AudioQuality
-import io.github.currencortex.music.ui.component.MusicDialog
+import io.github.currencortex.music.ui.component.MusicDialogButton
+import io.github.currencortex.music.ui.component.musicDialogColors
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Quality is a requested level, never a claim about the stream returned by the provider. */
 @Composable internal fun AudioQualitySheet(selected: AudioQuality, onSelect: (AudioQuality) -> Unit,
     onDismiss: () -> Unit, enabled: Boolean = true, title: String = "当前歌曲音质", onNetwork: (() -> Unit)? = null) {
-    MusicDialog(title, onDismiss, footer = {
-        io.github.currencortex.music.ui.component.MusicDialogButton("收起", onDismiss,
-            Modifier.testTag("close_quality_sheet"))
-    }) {
-        AudioQualityChoices(selected, { quality ->
-            if (quality != selected) onSelect(quality)
-            onDismiss()
-        }, enabled, onNetwork)
+    var visible by remember { mutableStateOf(true) }
+    var afterDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
+    val dismiss by rememberUpdatedState(onDismiss)
+    val maxContentHeight = (LocalConfiguration.current.screenHeightDp * .8f).dp
+    MiuixTheme(colors = musicDialogColors()) {
+        OverlayBottomSheet(show = visible, title = title,
+            modifier = Modifier.testTag("audio_quality_sheet"),
+            onDismissRequest = { visible = false },
+            onDismissFinished = { dismiss(); afterDismiss?.invoke() }) {
+            Column(Modifier.fillMaxWidth().heightIn(max = maxContentHeight).navigationBarsPadding(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                AudioQualityChoices(selected, { quality ->
+                    if (visible) {
+                        if (quality != selected) onSelect(quality)
+                        visible = false
+                    }
+                }, enabled, onNetwork?.let { action -> { afterDismiss = action; visible = false } },
+                    Modifier.weight(1f, fill = false))
+                MusicDialogButton("收起", { visible = false }, Modifier.testTag("close_quality_sheet"))
+                Spacer(Modifier.height(12.dp))
+            }
+        }
     }
 }
 
 @Composable internal fun AudioQualityChoices(selected: AudioQuality, onSelect: (AudioQuality) -> Unit,
-    enabled: Boolean = true, onNetwork: (() -> Unit)? = null) {
+    enabled: Boolean = true, onNetwork: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val colors = MiuixTheme.colorScheme
     val maxHeight = (LocalConfiguration.current.screenHeightDp * .68f).dp
-    LazyColumn(Modifier.fillMaxWidth().heightIn(max = maxHeight).testTag("quality_choices"),
+    LazyColumn(modifier.fillMaxWidth().heightIn(max = maxHeight).testTag("quality_choices"),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
