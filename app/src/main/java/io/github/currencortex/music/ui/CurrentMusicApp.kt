@@ -480,7 +480,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
                                     onStorage = { navigateTo(STORAGE) },
                                     onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
-                                    onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, updateTransfer = updateTransferState)
+                                    onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") }, updateTransfer = updateTransferState)
                             }
                         }
                         }
@@ -510,10 +510,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
                             onStorage = { navigateTo(STORAGE) },
                             onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
-                            onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, updateTransfer = updateTransferState) }
+                            onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") }, updateTransfer = updateTransferState) }
                     }
                 }
                 entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onEqualizer = { navigateTo(EQUALIZER) }, onNavidrome = { navigateLibrary("navidrome") }, onDesktopLyrics = { navigateLibrary("desktop-lyrics") }) { navigateTo(STORAGE) } }
+                entry("audio-output") { io.github.currencortex.music.feature.settings.AudioOutputScreen(container) }
                 entry("desktop-lyrics") { io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsSettingsScreen(container) }
                 entry("navidrome") {
                     io.github.currencortex.music.feature.navidrome.NavidromeScreen(navidromeVm, libraryVm, ::navigateLibrary,

@@ -1,0 +1,8 @@
+cmake_minimum_required(VERSION 3.22)
+project(currentmusic_output LANGUAGES C CXX)
+set(CMAKE_CXX_STANDARD 17)
+set(BUILD_SHARED_LIBS OFF)
+add_subdirectory(oboe)
+add_library(currentmusic_output SHARED audio_output.cpp)
+target_link_libraries(currentmusic_output PRIVATE oboe android log)
+target_link_options(currentmusic_output PRIVATE "-Wl,-z,max-page-size=16384" "-Wl,--exclude-libs,ALL")

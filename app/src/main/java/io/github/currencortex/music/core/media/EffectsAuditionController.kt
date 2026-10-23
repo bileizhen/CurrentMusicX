@@ -102,6 +102,10 @@ class EffectsAuditionController internal constructor(private val context: Contex
         val position: Long = 0, val deadline: Long = Long.MAX_VALUE)
 
     private fun start(processed: Boolean, scene: OriginalSpeakerScene?, prepare: suspend () -> Audition) {
+        if (container.audioOutput.state.value.mode.bypassProcessing) {
+            mutableState.value = EffectsAuditionState(error = "当前输出已跳过音效，请先在音频输出中切换模式")
+            return
+        }
         if (container.playerController.state.value.mode != PlayerMode.LOCAL) {
             mutableState.value = EffectsAuditionState(error = "请先退出投屏或一起听，再试听音效")
             return
@@ -132,9 +136,13 @@ class EffectsAuditionController internal constructor(private val context: Contex
                         if (token == generation && !state.value.processing) mutableState.value = state.value.copy(processing = true)
                     } }, originalFailure = { _, _ -> scope.launch {
                         if (token == generation) fail("原版音效试听处理失败，请重新导入兼容引擎")
-                    } }))
+                    } }, outputSampleRate = { container.audioOutput.state.value.sampleRate },
+                    outputSettings = { container.audioOutput.state.value },
+                    outputStatus = { container.audioOutput.status.value = it }))
                     .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory)).build()
                 player = samplePlayer
+                samplePlayer.setPreferredAudioDevice(context.getSystemService(android.media.AudioManager::class.java)
+                    .preferredOutput(container.audioOutput.state.value.deviceKey))
                 samplePlayer.setAudioAttributes(androidx.media3.common.AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
                     .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), true)
                 samplePlayer.setHandleAudioBecomingNoisy(true)
