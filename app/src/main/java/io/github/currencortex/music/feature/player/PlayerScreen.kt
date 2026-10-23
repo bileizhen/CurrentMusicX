@@ -91,7 +91,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     var queueGesture by remember { mutableStateOf(false) }
     var queueGestureJob by remember { mutableStateOf<Job?>(null) }
     var controlsRevealed by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(settings.lyricsDisplay.hideControls) { controlsRevealed = false }
+    var controlsHidden by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(settings.lyricsDisplay.hideControls) { controlsRevealed = false; controlsHidden = false }
     val menuHost = LocalSongMenu.current
     val dismiss = {
         queueGestureJob?.cancel()
@@ -106,12 +107,23 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val indication = LocalIndication.current
     var lyricsCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var previewCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    var controlsCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val sheetProgress = LocalPlayerSheetProgress.current
     val expanded by remember(sheetProgress) { derivedStateOf { sheetProgress() >= .995f } }
     val sheetDrag = LocalPlayerSheetDrag.current
     val colors = remember { darkColorScheme(primary = Color.White, onPrimary = Color(0xFF282629),
         background = Color(0xFF262428), surface = Color(0xFF262428)) }
     val queueFling = with(LocalDensity.current) { 700.dp.toPx() }
+    val controlsHideDistance = with(LocalDensity.current) { 48.dp.toPx() }
+    var controlsPull by remember { mutableFloatStateOf(0f) }
+    val controlsDownDrag = PlayerControlsDownDrag({ controlsCoordinates }, PlayerUpDrag(
+        begin = { controlsPull = 0f },
+        drag = { controlsPull = (controlsPull + it).coerceAtLeast(0f) },
+        end = { velocity, cancelled ->
+            if (!cancelled && (controlsPull >= controlsHideDistance || (controlsPull > 0f && velocity > queueFling))) {
+                controlsHidden = true; controlsRevealed = false
+            }
+        }))
     var queueHeight by remember { mutableFloatStateOf(1f) }
     val upDrag = PlayerUpDrag(begin = {
             queueMotion.dragged = 0f
@@ -137,7 +149,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     BoxWithConstraints(Modifier.fillMaxSize().testTag("player_screen")
         .onSizeChanged { queueHeight = it.height.toFloat().coerceAtLeast(1f) }
         .then(if (overlay == PlayerOverlay.NONE) Modifier.playerSheetDrag(fromMini = false,
-            upDrag = if (expanded) upDrag else null, enabled = !queueGesture) {
+            upDrag = if (expanded) upDrag else null,
+            controlsDownDrag = if (expanded && pager.settledPage == PlayerContent.LYRICS.ordinal && !pager.isScrollInProgress)
+                controlsDownDrag else null, enabled = !queueGesture) {
                 listOfNotNull(lyricsCoordinates, previewCoordinates)
             } else Modifier)) {
         val widePlayer = maxWidth > maxHeight
@@ -150,7 +164,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             WindowInsets.safeDrawing.getBottom(density)).toDp() }
         LaunchedEffect(widePlayer) { if (widePlayer) pager.scrollToPage(PlayerContent.LYRICS.ordinal) }
         val hideControls = animateFloatAsState(
-            if (settings.lyricsDisplay.hideControls && !controlsRevealed) 1f else 0f,
+            if ((settings.lyricsDisplay.hideControls || controlsHidden) && !controlsRevealed) 1f else 0f,
             tween(260, easing = LinearOutSlowInEasing), label = "lyricsControls")
         val controlsVisibility = {
             1f - hideControls.value * (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
@@ -238,7 +252,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                 }
                             }
                             LyricsPanel(vm, Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { lyricsCoordinates = it },
-                                active = pager.currentPage == 1 || pager.isScrollInProgress)
+                                active = pager.currentPage == 1 || pager.isScrollInProgress,
+                                expandLyricsWindow = controlsHidden)
                         } else CoverContent(vm, Modifier.fillMaxSize(), transitionTarget = pager.currentPage == 0,
                             active = pager.currentPage == 0 || pager.isScrollInProgress,
                             pagerRole = PlayerPagerArtworkRole.COVER,
@@ -249,16 +264,19 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         PlayerPagerArtwork(pagerArtwork, queue.current?.cover.orEmpty())
                     }
                     }
-                    PlayerControlsRegion(controlsVisibility) { functions() }
-                    PlayerControlsRegion(controlsVisibility, Modifier.testTag("player_transport_transition")) {
-                        PlayerTransport(vm, onToggle, quality = {
-                            if (!roaming.active) Text(if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label,
-                                Modifier.testTag("open_quality_sheet")
-                                    .clickable(enabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null, role = Role.Button) {
-                                        overlay = PlayerOverlay.QUALITY
-                                    }.padding(horizontal = 8.dp), color = Color.White.copy(alpha = .65f),
-                                fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        }, leadingAction = { PlayerPlaybackModeButton(vm) }, trailingAction = { PlayerQueueButton(vm, openQueue) })
+                    Column(Modifier.fillMaxWidth().testTag("player_controls")
+                        .onGloballyPositioned { controlsCoordinates = it }) {
+                        PlayerControlsRegion(controlsVisibility) { functions() }
+                        PlayerControlsRegion(controlsVisibility, Modifier.testTag("player_transport_transition")) {
+                            PlayerTransport(vm, onToggle, quality = {
+                                if (!roaming.active) Text(if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label,
+                                    Modifier.testTag("open_quality_sheet")
+                                        .clickable(enabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null, role = Role.Button) {
+                                            overlay = PlayerOverlay.QUALITY
+                                        }.padding(horizontal = 8.dp), color = Color.White.copy(alpha = .65f),
+                                    fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }, leadingAction = { PlayerPlaybackModeButton(vm) }, trailingAction = { PlayerQueueButton(vm, openQueue) })
+                        }
                     }
                 }
             }
@@ -266,7 +284,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 PlayerControlsRegion({ 1f - controlsVisibility() }) {
                     Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
                         Text("显示控制面板", color = Color.White.copy(alpha = .65f), fontSize = 12.sp,
-                            modifier = Modifier.testTag("lyrics_reveal_controls").clickable(role = Role.Button) { controlsRevealed = true }
+                            modifier = Modifier.testTag("lyrics_reveal_controls").clickable(role = Role.Button) {
+                                controlsHidden = false; controlsRevealed = true
+                            }
                                 .padding(horizontal = 24.dp, vertical = 14.dp))
                     }
                 }
@@ -430,7 +450,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     }
 }
 
-@Composable private fun LyricsPanel(vm: PlayerViewModel, modifier: Modifier, active: Boolean = true, minimal: Boolean = false) {
+@Composable private fun LyricsPanel(vm: PlayerViewModel, modifier: Modifier, active: Boolean = true, minimal: Boolean = false,
+    expandLyricsWindow: Boolean = false) {
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
     val player by vm.state.collectAsStateWithLifecycle()
     val position = rememberLyricsPosition(if (active) player else player.copy(playing = false))
@@ -439,7 +460,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         LyricsScreen(lyrics.document, position, vm.player::seek, modifier, player.canControlPlayback,
             settings.lyricsDisplay.translation, settings.lyricsDisplay.romanization, settings.lyricsDisplay.wordAnimation,
             settings.lyricsDisplay.blur, if (minimal) settings.lyricsFontSize * .75f else settings.lyricsFontSize,
-            settings.lyricsWeight, settings.lyricsOffsetMs, settings.lyricsDisplay,
+            settings.lyricsWeight, settings.lyricsOffsetMs,
+            settings.lyricsDisplay.copy(hideControls = settings.lyricsDisplay.hideControls || expandLyricsWindow),
             minimal = minimal, perspective = settings.lyricsDisplay.perspective, cover = player.song?.cover.orEmpty())
     } else Box(modifier.testTag("lyrics_panel"), contentAlignment = Alignment.Center) {
         if (lyrics.loading) Column(Modifier.fillMaxWidth().padding(28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {

@@ -439,6 +439,59 @@ class PlayerSheetCapabilitiesTest {
         assertFalse(container.playerController.state.value.playing)
     }
 
+    @Test fun pullingDownLyricsControlsHidesThemWithoutCollapsingThePlayer(): Unit = runBlocking {
+        container.musicSettings.editLyricsDisplay { it.copy(hideControls = false) }
+        verifyLyricsControlsPullDown()
+        assertFalse("The gesture does not change the saved preference", container.musicSettings.snapshot().lyricsDisplay.hideControls)
+    }
+
+    @Test fun revealedLyricsControlsCanBeHiddenAgainWithAPullDown(): Unit = runBlocking {
+        container.musicSettings.editLyricsDisplay { it.copy(hideControls = true) }
+        verifyLyricsControlsPullDown()
+        assertTrue(container.musicSettings.snapshot().lyricsDisplay.hideControls)
+    }
+
+    private fun verifyLyricsControlsPullDown() {
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.onNodeWithTag("player_content_pager").performTouchInput { swipeLeft(durationMillis = 180) }
+        if (container.musicSettings.state.value.lyricsDisplay.hideControls)
+            compose.onNodeWithTag("lyrics_reveal_controls").performClick()
+        compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        compose.onNodeWithTag("player_seek").performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(width * .2f, centerY),
+                androidx.compose.ui.geometry.Offset(width * .6f, centerY), 300)
+        }
+        compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        assertEquals("Horizontal seek does not dismiss the player", 1f, frame().progress, .001f)
+        val before = compose.onNodeWithTag("lyrics_panel").fetchSemanticsNode().boundsInRoot
+        val originalQueue = container.playbackQueue.state.value.songs
+        // A short, reversed movement must not hide the controls or dismiss the player.
+        compose.onNodeWithTag("player_controls").performTouchInput {
+            down(androidx.compose.ui.geometry.Offset(centerX, height * .3f))
+            moveBy(androidx.compose.ui.geometry.Offset(0f, height * .12f), delayMillis = 200)
+            moveBy(androidx.compose.ui.geometry.Offset(0f, -height * .12f), delayMillis = 200)
+            up()
+        }
+        compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        compose.onNodeWithTag("player_controls").performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(centerX, height * .12f),
+                androidx.compose.ui.geometry.Offset(centerX, height * .92f), 300)
+        }
+        compose.onNodeWithTag("player_transport").assertDoesNotExist()
+        compose.onNodeWithTag("lyrics_reveal_controls").assertIsDisplayed()
+        assertEquals("The downward gesture belongs to controls, not the player sheet", 1f, frame().progress, .001f)
+        val after = compose.onNodeWithTag("lyrics_panel").fetchSemanticsNode().boundsInRoot
+        assertTrue("Lyrics use the released control area", after.height > before.height + 100f)
+        compose.onNodeWithTag("lyrics_reveal_controls").performClick()
+        compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        // The same bottom controls remain available on the cover page after a manual hide.
+        compose.onNodeWithTag("player_content_pager").performTouchInput { swipeRight(durationMillis = 180) }
+        compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        assertEquals(originalQueue, container.playbackQueue.state.value.songs)
+        assertFalse(container.playerController.state.value.playing)
+    }
+
     @Test fun hiddenControlsRoundTripsKeepArtworkAlignedWithItsLiveLayout(): Unit = runBlocking {
         container.musicSettings.editLyricsDisplay { it.copy(hideControls = true) }
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
