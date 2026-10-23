@@ -130,6 +130,7 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
     val surface = LocalMusicGlassSurface.current
     surface(modifier.fillMaxWidth().testTag("mini_player")) {
         Row(Modifier.heightIn(min = 52.dp).onGloballyPositioned { onSurfaceBounds(it.boundsInRoot()); onSurfaceCoordinates(it) }
+            .playerSheetDrag(fromMini = true, enabled = song?.video != true)
             .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(if (pair == null) 42.dp else 42.dp * listeningPairArtworkAspectRatio).height(42.dp).onGloballyPositioned { coordinates ->
                 reportOpenArea(0, coordinates)
@@ -148,7 +149,7 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
             }
             Column(Modifier.weight(1f).heightIn(min = 48.dp).padding(horizontal = 8.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
                 .onGloballyPositioned { reportOpenArea(1, it) }
-                .testTag("mini_song_gesture").playerSheetDrag(fromMini = true)
+                .testTag("mini_song_gesture")
                 .pointerInput(enabled, threshold) {
                     detectHorizontalDragGestures(onDragStart = { dragged = 0f },
                         onHorizontalDrag = { change, dx -> change.consume(); if (allowed) dragged += dx },
