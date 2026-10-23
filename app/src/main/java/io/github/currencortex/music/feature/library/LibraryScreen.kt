@@ -25,7 +25,7 @@ import java.nio.charset.StandardCharsets
 fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) "album" else "artist"}/${URLEncoder.encode(query, StandardCharsets.UTF_8.name())}"
 
 @Composable fun LibraryLinks(navigate: (String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             listOf(Triple("我喜欢", "lib/likes", "open_likes"), Triple("歌单", "lib/playlists", "open_playlists"),
                 Triple("最近播放", "lib/recent", "open_recent")).forEach { (title, route, tag) ->
@@ -37,10 +37,11 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
                 }
             }
         }
-        Row {
-            MusicTextAction("歌手", { navigate(catalogRoute(false)) })
-            MusicTextAction("专辑", { navigate(catalogRoute(true)) })
-            MusicTextAction("自建曲库", { navigate("navidrome") }, Modifier.testTag("library_navidrome"))
+        Card(Modifier.fillMaxWidth().testTag("library_categories")) {
+            MusicDestinationRow("歌手", { navigate(catalogRoute(false)) }, Modifier.testTag("open_artists"))
+            MusicDestinationRow("专辑", { navigate(catalogRoute(true)) }, Modifier.testTag("open_albums"))
+            MusicDestinationRow("自建曲库", { navigate("navidrome") }, Modifier.testTag("library_navidrome"),
+                summary = "连接与浏览 Navidrome 曲库")
         }
     }
 }
