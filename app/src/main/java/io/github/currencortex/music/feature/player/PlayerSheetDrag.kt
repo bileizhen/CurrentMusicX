@@ -73,14 +73,19 @@ internal data class PlayerUpDrag(
     val end: (Float, Boolean) -> Unit,
 )
 
+internal data class PlayerControlsDownDrag(val area: () -> LayoutCoordinates?, val gesture: PlayerUpDrag)
+
 /** Direction locking leaves the mini player's horizontal song gesture and lyric scrolling intact. */
 @Composable internal fun Modifier.playerSheetDrag(fromMini: Boolean,
     upDrag: PlayerUpDrag? = null,
+    controlsDownDrag: PlayerControlsDownDrag? = null,
     enabled: Boolean = true,
     excludedArea: () -> List<LayoutCoordinates> = { emptyList() }): Modifier {
-    val controller = LocalPlayerSheetDrag.current ?: return this
+    val controller = LocalPlayerSheetDrag.current
+    if (controller == null && fromMini) return this
     val exclusion by rememberUpdatedState(excludedArea)
     val upward by rememberUpdatedState(upDrag)
+    val downward by rememberUpdatedState(controlsDownDrag)
     val available by rememberUpdatedState(enabled)
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     return onGloballyPositioned { coordinates = it }.pointerInput(controller, fromMini) {
@@ -99,13 +104,19 @@ internal data class PlayerUpDrag(
                         point.x >= 0 && point.y >= 0 && point.x < excluded.size.width && point.y < excluded.size.height
                     }
                 }) return@awaitEachGesture
+                val controlsDrag = downward?.takeIf { action ->
+                    action.area()?.takeIf { it.isAttached }?.let { area ->
+                        val point = area.localPositionOf(root, down.position)
+                        point.x >= 0 && point.y >= 0 && point.x < area.size.width && point.y < area.size.height
+                    } == true
+                }?.gesture
                 velocity.resetTracking()
                 velocity.addPosition(down.uptimeMillis, rootDown)
                 var travel = Offset.Zero
                 var started = false
-                var queueDrag: PlayerUpDrag? = null
+                var routedDrag: PlayerUpDrag? = null
                 fun finish(speed: Float, cancelled: Boolean = false) {
-                    queueDrag?.end?.invoke(speed, cancelled) ?: controller.end(speed, cancelled)
+                    routedDrag?.end?.invoke(speed, cancelled) ?: controller?.end(speed, cancelled)
                 }
                 try {
                     while (true) {
@@ -122,12 +133,13 @@ internal data class PlayerUpDrag(
                             travel += delta
                             if (abs(travel.x) > viewConfiguration.touchSlop && abs(travel.x) >= abs(travel.y)) break
                             if (abs(travel.y) <= viewConfiguration.touchSlop) continue
-                            queueDrag = upward.takeIf { travel.y < 0 }
-                            queueDrag?.begin?.invoke() ?: controller.begin(fromMini = false)
+                            routedDrag = if (travel.y < 0) upward else controlsDrag
+                            if (routedDrag == null && controller == null) break
+                            routedDrag?.begin?.invoke() ?: controller?.begin(fromMini = false)
                             started = true
                             val amount = travel.y - sign(travel.y) * viewConfiguration.touchSlop
-                            queueDrag?.drag?.invoke(amount) ?: controller.drag(amount)
-                        } else queueDrag?.drag?.invoke(delta.y) ?: controller.drag(delta.y)
+                            routedDrag?.drag?.invoke(amount) ?: controller?.drag(amount)
+                        } else routedDrag?.drag?.invoke(delta.y) ?: controller?.drag(delta.y)
                         change.consume()
                     }
                 } finally {
@@ -136,6 +148,7 @@ internal data class PlayerUpDrag(
             }
             return@pointerInput
         }
+        if (controller == null) return@pointerInput
         detectDragGestures(orientationLock = Orientation.Vertical,
             onDragStart = { down, trigger, _ ->
                 velocity.resetTracking()
