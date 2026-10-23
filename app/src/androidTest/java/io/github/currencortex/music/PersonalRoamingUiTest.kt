@@ -164,6 +164,14 @@ class PersonalRoamingUiTest {
         click("open_player_roaming"); click("roaming_stop")
         compose.onNodeWithTag("open_quality_sheet").assertIsDisplayed()
         compose.onNodeWithTag("open_roaming_modes").assertDoesNotExist()
+        val quality = compose.onNodeWithTag("open_quality_sheet").fetchSemanticsNode().boundsInRoot
+        val seek = compose.onNodeWithTag("player_seek").fetchSemanticsNode().boundsInRoot
+        val toggle = compose.onNodeWithTag("player_toggle").fetchSemanticsNode().boundsInRoot
+        assertEquals("Quality stays centered beneath the seek bar", seek.center.x, quality.center.x, 1f)
+        assertTrue(quality.top >= seek.bottom && quality.bottom <= toggle.top)
+        save("player-quality-position.png")
+        compose.onNodeWithTag("open_quality_sheet").performClick()
+        compose.onNodeWithText("当前歌曲音质").assertIsDisplayed()
     }
     @Test fun longSceneCatalogScrollsAndKeepsConfirmationVisible() {
         showDialog()

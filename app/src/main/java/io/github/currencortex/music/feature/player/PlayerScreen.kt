@@ -163,12 +163,10 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             Row(Modifier.fillMaxWidth().height(if (widePlayer) 48.dp else 52.dp), verticalAlignment = Alignment.CenterVertically) {
                 PlayerIconButton(PlayerIcon.COLLAPSE, "收起播放器", onBack, Modifier.testTag("navigate_back"))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    Text(if (roaming.active) "私人漫游 · ${roaming.choice.title}" else
-                        if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label,
-                        Modifier.testTag(if (roaming.active) "open_roaming_modes" else "open_quality_sheet")
-                            .clickable(enabled = roaming.active || state.mode == PlayerMode.LOCAL && state.song?.navidrome == null, role = Role.Button) {
-                                overlay = if (roaming.active) PlayerOverlay.ROAMING else PlayerOverlay.QUALITY
-                            }.padding(horizontal = 8.dp, vertical = 14.dp), color = Color.White.copy(alpha = .65f),
+                    if (roaming.active) Text("私人漫游 · ${roaming.choice.title}",
+                        Modifier.testTag("open_roaming_modes")
+                            .clickable(role = Role.Button) { overlay = PlayerOverlay.ROAMING }
+                            .padding(horizontal = 8.dp, vertical = 14.dp), color = Color.White.copy(alpha = .65f),
                         fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 PlayerIconButton(PlayerIcon.MORE, "播放与歌词设置", { overlay = PlayerOverlay.OPTIONS }, Modifier.testTag("lyrics_options"))
@@ -249,7 +247,14 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     }
                     }
                     PlayerControlsRegion(controlsVisibility, Modifier.testTag("player_transport_transition")) {
-                        PlayerTransport(vm, onToggle)
+                        PlayerTransport(vm, onToggle, quality = {
+                            if (!roaming.active) Text(if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label,
+                                Modifier.testTag("open_quality_sheet")
+                                    .clickable(enabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null, role = Role.Button) {
+                                        overlay = PlayerOverlay.QUALITY
+                                    }.padding(horizontal = 8.dp), color = Color.White.copy(alpha = .65f),
+                                fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        })
                     }
                 }
             }
