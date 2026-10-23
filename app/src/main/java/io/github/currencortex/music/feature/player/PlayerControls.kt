@@ -50,7 +50,7 @@ internal val PlayerBufferedProgress = SemanticsPropertyKey<Float>("PlayerBuffere
 }
 
 @Composable internal fun PlayerTransport(vm: PlayerViewModel, onToggle: () -> Unit,
-    compact: Boolean = false) {
+    compact: Boolean = false, quality: (@Composable () -> Unit)? = null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
@@ -64,9 +64,14 @@ internal val PlayerBufferedProgress = SemanticsPropertyKey<Float>("PlayerBuffere
                 enabled && knownDuration > 0, { drag = it }, {
                     vm.player.seek((it * knownDuration).toLong()); drag = null
                 }, { drag = null }, bufferedValue = if (state.song?.id == queue.current?.id) state.bufferedProgress(knownDuration) else 0f) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(formatPlayerTime(position), fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
-                Text("−" + formatPlayerTime((knownDuration - position).coerceAtLeast(0)), fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
+            Box(Modifier.fillMaxWidth()) {
+                Text(formatPlayerTime(position), Modifier.align(Alignment.CenterStart),
+                    fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
+                quality?.let { entry ->
+                    Box(Modifier.align(Alignment.Center).fillMaxWidth(.5f), contentAlignment = Alignment.Center) { entry() }
+                }
+                Text("−" + formatPlayerTime((knownDuration - position).coerceAtLeast(0)), Modifier.align(Alignment.CenterEnd),
+                    fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
             }
         }
     }
