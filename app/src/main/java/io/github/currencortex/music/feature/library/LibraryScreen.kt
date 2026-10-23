@@ -37,12 +37,6 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
                 }
             }
         }
-        Card(Modifier.fillMaxWidth().testTag("library_categories")) {
-            MusicDestinationRow("歌手", { navigate(catalogRoute(false)) }, Modifier.testTag("open_artists"))
-            MusicDestinationRow("专辑", { navigate(catalogRoute(true)) }, Modifier.testTag("open_albums"))
-            MusicDestinationRow("自建曲库", { navigate("navidrome") }, Modifier.testTag("library_navidrome"),
-                summary = "连接与浏览 Navidrome 曲库")
-        }
     }
 }
 
