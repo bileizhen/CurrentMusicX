@@ -3,6 +3,18 @@ import io.github.currencortex.music.data.song.Song
 import org.junit.Assert.*
 import org.junit.Test
 class PlaybackModeTest {
+    @Test fun restoringUnfinishedHeartSelectionKeepsTheSongAndPositionButDropsThePendingMode() {
+        val songs = listOf(Song(1, "当前歌曲"), Song(2, "原列表"))
+        val queue = PlaybackQueue()
+        val pending = QueueSnapshot(songs, 0, positionMs = 1500, mode = PlaybackMode.HEART)
+        queue.restore(pending)
+        assertEquals(PlaybackMode.LIST, queue.state.value.mode)
+        assertEquals(songs, queue.state.value.songs)
+        assertEquals(1500L, queue.state.value.positionMs)
+        queue.restore(pending.copy(heartPlaylistId = 42))
+        assertEquals(PlaybackMode.HEART, queue.state.value.mode)
+        assertEquals(42L, queue.state.value.heartPlaylistId)
+    }
     @Test fun heartRecommendationsPreserveCurrentPlaybackAndAppendInServerOrder() {
         val queue = PlaybackQueue()
         val songs = (1L..5L).map { Song(it, "$it") }

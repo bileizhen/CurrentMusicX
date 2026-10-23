@@ -137,7 +137,8 @@ class PlayerSongActionsTest {
             compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
             for (mode in listOf(PlaybackMode.ONE, PlaybackMode.SHUFFLE, PlaybackMode.HEART, PlaybackMode.LIST)) {
                 compose.onNodeWithTag("player_cycle_mode").performClick()
-                compose.waitUntil(5000) { container.playbackQueue.state.value.mode == mode }
+                compose.waitUntil(5000) { container.playbackQueue.state.value.mode == mode &&
+                    (mode != PlaybackMode.HEART || container.playbackQueue.state.value.heartPlaylistId > 0) }
                 compose.onNodeWithTag("player_cycle_mode").assertContentDescriptionEquals(mode.label)
                 if (mode == PlaybackMode.HEART) compose.onNodeWithTag("player_cycle_mode").assertIsSelected()
             }
@@ -147,7 +148,7 @@ class PlayerSongActionsTest {
             PlaybackMode.entries.forEach { compose.onNodeWithTag("playback_mode_${it.name}").assertIsDisplayed() }
             compose.onNodeWithTag("playback_mode_LIST").assertIsSelected()
             compose.onNodeWithTag("playback_mode_HEART").performClick()
-            compose.waitUntil(5000) { container.playbackQueue.state.value.mode == PlaybackMode.HEART }
+            compose.waitUntil(5000) { container.playbackQueue.state.value.mode == PlaybackMode.HEART && container.playbackQueue.state.value.heartPlaylistId > 0 }
             compose.runOnIdle {
                 assertEquals(11L, container.playbackQueue.state.value.current!!.id)
                 assertEquals(9918106457L, container.playbackQueue.state.value.heartPlaylistId)

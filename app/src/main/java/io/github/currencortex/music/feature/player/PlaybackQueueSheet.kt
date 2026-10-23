@@ -269,7 +269,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
             PlaybackMode.entries.filter { !shared || it != PlaybackMode.HEART }.forEach { mode ->
                 MusicDialogChoiceRow(mode.label, mode == queue.mode,
                     { onMode(mode); modeOpen = false }, enabled = editable &&
-                        (mode != PlaybackMode.HEART || (!loading && heartAvailable)),
+                        (mode != PlaybackMode.HEART || heartAvailable),
                     modifier = Modifier.testTag("playback_mode_${mode.name}").semantics { selected = mode == queue.mode })
             }
             }
