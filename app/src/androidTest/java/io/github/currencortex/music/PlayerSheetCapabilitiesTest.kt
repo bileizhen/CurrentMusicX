@@ -13,6 +13,7 @@ import io.github.currencortex.music.data.settings.ThemeMode
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.player.PlayerSheetGeometry
 import io.github.currencortex.music.feature.player.PlayerSheetFrame
+import io.github.currencortex.music.feature.player.PlayerSideProgress
 import io.github.currencortex.music.ui.CurrentMusicApp
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.*
@@ -746,6 +747,132 @@ class PlayerSheetCapabilitiesTest {
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
         assertEquals(1500L, container.playerController.state.value.positionMs)
         assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun reversingPagerDragHandsRemainingDistanceToBothSidePages() {
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.mainClock.autoAdvance = false
+        val host = compose.onNodeWithTag("player_side_host")
+        val pager = compose.onNodeWithTag("player_content_pager", useUnmergedTree = true)
+        fun side() = host.fetchSemanticsNode().config[PlayerSideProgress]
+        fun page() = pager.fetchSemanticsNode().config[io.github.currencortex.music.feature.player.PlayerPagePosition]
+        for (edge in 0..1) {
+            val direction = if (edge == 0) 1f else -1f
+            host.performTouchInput {
+                down(androidx.compose.ui.geometry.Offset(width * .5f, height * .35f))
+                moveBy(androidx.compose.ui.geometry.Offset(-direction * width * .14f, 0f))
+            }
+            compose.mainClock.advanceTimeBy(64)
+            assertTrue("The pager owns the initial inward drag", page() > .02f && page() < .98f)
+            host.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(direction * width * .43f, 0f)) }
+            compose.mainClock.advanceTimeBy(64)
+            assertTrue("Reversing across edge $edge must reveal its side without lifting", side() > .1f)
+            assertEquals("The inner pager must stop exactly at its edge", edge.toFloat(), page(), .001f)
+            val held = side()
+            compose.mainClock.advanceTimeBy(300)
+            assertEquals(held, side(), .001f)
+            // Reverse again: fully return the side, then continue into the pager with the same finger.
+            host.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(-direction * width * .43f, 0f)) }
+            compose.mainClock.advanceTimeBy(64)
+            assertEquals(0f, side(), .001f)
+            assertTrue("Returning the side hands movement back to the pager", page() > .02f && page() < .98f)
+            host.performTouchInput { advanceEventTime(400); up() }
+            compose.mainClock.advanceTimeBy(1000)
+            assertEquals(edge.toFloat(), page(), .001f)
+            if (edge == 0) {
+                runBlocking { container.musicSettings.editLyricsDisplay { it.copy(hideControls = true) } }
+                pager.performTouchInput { swipeLeft(durationMillis = 200) }
+                compose.mainClock.advanceTimeBy(700)
+            }
+        }
+        assertEquals(55L, container.playerController.queue.state.value.current?.id)
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun rightSwipeRevealsScalingSidePageAndReturnsWithoutClosingPlayer() {
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.mainClock.autoAdvance = false
+        val host = compose.onNodeWithTag("player_side_host")
+        val original = host.fetchSemanticsNode().boundsInRoot
+        fun progress() = host.fetchSemanticsNode().config[PlayerSideProgress]
+        val y = original.height * .35f
+        fun openSide() {
+            host.performTouchInput {
+                swipe(androidx.compose.ui.geometry.Offset(width * .15f, y),
+                    androidx.compose.ui.geometry.Offset(width * .85f, y), 200)
+            }
+            compose.mainClock.advanceTimeBy(700)
+            assertEquals(1f, progress(), .001f)
+        }
+        host.performTouchInput {
+            down(androidx.compose.ui.geometry.Offset(width * .15f, y))
+            moveBy(androidx.compose.ui.geometry.Offset(width * .08f, 0f))
+            moveBy(androidx.compose.ui.geometry.Offset(width * .16f, 0f))
+        }
+        compose.mainClock.advanceTimeBy(64)
+        val held = progress()
+        assertTrue("Right drag reveals the side page before release", held in .1f.. .4f)
+        val front = compose.onNodeWithTag("player_side_foreground").fetchSemanticsNode().boundsInRoot
+        assertTrue("Player shrinks vertically and moves right", front.top > original.top && front.height < original.height && front.left > original.left)
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals("Both layers remain finger-controlled", held, progress(), .001f)
+        save("player-side-held.png")
+        host.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(-width * .2f, 0f)); advanceEventTime(400); up() }
+        compose.mainClock.advanceTimeBy(700)
+        assertEquals(0f, progress(), .001f)
+        assertEquals(1f, frame().progress, .001f)
+        openSide()
+        compose.onNodeWithTag("player_side_username").assertTextEquals("Sheet fixture")
+        compose.onNodeWithTag("player_today_listening").assertTextEquals("0 分钟")
+        compose.onNodeWithTag("music_dialog_title").assertTextEquals("私人漫游")
+        compose.onNodeWithTag("side_open_quality").assertDoesNotExist()
+        save("player-side-open.png")
+        host.performTouchInput { swipe(androidx.compose.ui.geometry.Offset(width * .5f, height * .7f),
+            androidx.compose.ui.geometry.Offset(width * .5f, height * .4f), 250) }
+        compose.mainClock.advanceTimeBy(500)
+        assertEquals("Vertical side-page scrolling does not collapse either page", 1f, progress(), .001f)
+        assertEquals(1f, frame().progress, .001f)
+        host.performTouchInput { click(androidx.compose.ui.geometry.Offset(width * .96f, centerY)) }
+        compose.mainClock.advanceTimeBy(700)
+        assertEquals("Tapping the retained player strip returns", 0f, progress(), .001f)
+        openSide()
+        compose.runOnIdle { dispatcher.onBackPressed() }
+        compose.waitForIdle()
+        compose.mainClock.advanceTimeBy(700)
+        assertEquals("Back closes the side page first", 0f, progress(), .001f)
+        assertEquals(1f, frame().progress, .001f)
+        openSide()
+        host.performTouchInput { swipe(androidx.compose.ui.geometry.Offset(width * .75f, y),
+            androidx.compose.ui.geometry.Offset(width * .15f, y), 180) }
+        compose.mainClock.advanceTimeBy(700)
+        assertEquals("Left swipe returns to the player", 0f, progress(), .001f)
+        compose.onNodeWithTag("player_content_pager").performTouchInput { swipeLeft(durationMillis = 200) }
+        compose.mainClock.advanceTimeBy(700)
+        host.performTouchInput { swipe(androidx.compose.ui.geometry.Offset(width * .85f, y),
+            androidx.compose.ui.geometry.Offset(width * .15f, y), 200) }
+        compose.mainClock.advanceTimeBy(700)
+        assertEquals("Lyrics left swipe opens song information", 1f, progress(), .001f)
+        compose.onNodeWithTag("side_open_quality").assertIsDisplayed()
+        compose.onNodeWithTag("player_side_username").assertDoesNotExist()
+        val rightFront = compose.onNodeWithTag("player_side_foreground").fetchSemanticsNode().boundsInRoot
+        assertTrue("Right-side reveal mirrors the player strip", rightFront.right < original.right && rightFront.height < original.height)
+        save("player-right-side-open.png")
+        host.performTouchInput { click(androidx.compose.ui.geometry.Offset(width * .04f, centerY)) }
+        compose.mainClock.advanceTimeBy(700)
+        assertEquals(0f, progress(), .001f)
+        assertEquals("Return stays on lyrics", 1f, compose.onNodeWithTag("player_content_pager").fetchSemanticsNode().config[
+            io.github.currencortex.music.feature.player.PlayerPagePosition], .001f)
+        compose.onNodeWithTag("player_content_pager").performTouchInput { swipeRight(durationMillis = 200) }
+        compose.mainClock.advanceTimeBy(700)
+        assertEquals("Lyrics right swipe still returns to cover", 0f, progress(), .001f)
+        assertEquals(0f, compose.onNodeWithTag("player_content_pager").fetchSemanticsNode().config[
+            io.github.currencortex.music.feature.player.PlayerPagePosition], .001f)
+        assertFalse(container.playerController.state.value.playing)
+        assertEquals(55L, container.playerController.queue.state.value.current?.id)
     }
 
     @Test fun entireMiniSurfaceFollowsHeldAndReversedOpeningDrags() {
