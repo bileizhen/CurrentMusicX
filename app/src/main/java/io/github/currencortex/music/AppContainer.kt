@@ -177,6 +177,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             ?: musicRepository.source(request.songId, request.quality, request.session) }, load = musicRepository::source)
     val libraryRepository = io.github.currencortex.music.data.library.LibraryRepository(apiClient,
         { accountRepository.state.value.account?.id ?: 0L }, { musicSession() })
+    val todayListening = TodayListeningStore(context.applicationContext, storageSuffix)
     val listeningReports = run {
         val listened = mutableMapOf<Pair<Long, RequestSession>, Long>()
         val submitted = mutableSetOf<Pair<Long, RequestSession>>()
