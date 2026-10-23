@@ -25,6 +25,30 @@ import kotlin.math.abs
 class MonetLyricsRailTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun expandedLyricsUseTheNewSpaceWithoutMountingTheWholeSong() {
+        val expanded = mutableStateOf(false)
+        val document = LyricsDocument((0..99).map { LyricLine(it * 2000L, (it + 1) * 2000L, "歌词 $it") })
+        compose.setContent {
+            MonetLyricsRail(document, 50, setOf(50),
+                Modifier.width(340.dp).height(if (expanded.value) 600.dp else 300.dp).background(Color.Black),
+                30f, centered = false, minimal = false, perspective = false, effects = false,
+                followRequest = 0, onBrowsing = {}, expandWindow = true) { index, _, _ ->
+                Canvas(Modifier.fillMaxWidth().height(30.dp).testTag("viewport_line_$index")) { drawRect(Color.White) }
+            }
+        }
+        compose.onNodeWithTag("viewport_line_57").assertDoesNotExist()
+        compose.runOnIdle { expanded.value = true }
+        compose.onNodeWithTag("viewport_line_57").assertIsDisplayed()
+        compose.onNodeWithTag("viewport_line_0").assertDoesNotExist()
+        compose.onNodeWithTag("viewport_line_99").assertDoesNotExist()
+        val viewport = compose.onNodeWithTag("lyrics_list").fetchSemanticsNode().boundsInRoot
+        val extra = compose.onNodeWithTag("viewport_line_57").fetchSemanticsNode().boundsInRoot
+        assertTrue("Extra lyrics occupy the lower half of the expanded area", extra.top > viewport.center.y && extra.bottom < viewport.bottom)
+        compose.runOnIdle { expanded.value = false }
+        compose.waitForIdle()
+        compose.onNodeWithTag("viewport_line_57").assertDoesNotExist()
+    }
+
     @Test fun lyricBloomFadesIntoBothViewportEdgesWithoutMovingTheText() {
         val duet = mutableStateOf(false)
         val position = mutableLongStateOf(4800)

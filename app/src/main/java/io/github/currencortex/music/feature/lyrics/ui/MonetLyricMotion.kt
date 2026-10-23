@@ -6,6 +6,7 @@ package io.github.currencortex.music.feature.lyrics.ui
 import kotlin.math.abs
 import kotlin.math.pow
 import kotlin.math.sqrt
+import kotlin.math.ceil
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
 
@@ -18,6 +19,10 @@ internal val MONET_SCALE_DAMPING = 30f / (2f * sqrt(150f * .78f))
 internal fun monetScaleSpring(): SpringSpec<Float> =
     spring(MONET_SCALE_DAMPING, MONET_SCALE_STIFFNESS, visibilityThreshold = .0001f)
 internal const val MONET_IDLE_RESET_MS = 1800L
+
+/** Extra tracks fill a taller lyric viewport without mounting the entire song. */
+internal fun monetViewportRadius(height: Float, fontPx: Float): Int =
+    (ceil(height.coerceAtLeast(0f) * .54f / (fontPx * 1.1f).coerceAtLeast(1f)).toInt() + 1).coerceIn(4, 24)
 
 internal data class MonetTone(val opacity: Float, val scale: Float, val blur: Float, val baseAlpha: Float)
 

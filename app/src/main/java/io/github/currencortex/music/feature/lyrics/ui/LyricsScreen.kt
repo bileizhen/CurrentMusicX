@@ -96,7 +96,8 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     Box(modifier.testTag("lyrics_panel")) {
         MonetLyricsRail(document, target, activeLines.toSet(), Modifier.fillMaxSize(), size,
             display.centered, minimal, perspective, effects, followRequest,
-            onBrowsing = { mode = if (it) LyricsScrollMode.BROWSING else LyricsScrollMode.FOLLOWING }) { index, browsing, tone ->
+            onBrowsing = { mode = if (it) LyricsScrollMode.BROWSING else LyricsScrollMode.FOLLOWING },
+            expandWindow = display.hideControls && !minimal) { index, browsing, tone ->
             val line = document.lines[index]
             LyricsLineView(line, index, effectivePosition, index in activeLines,
                 !browsing && activeLines.isEmpty() && index == target, kotlin.math.abs(index - target),

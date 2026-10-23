@@ -523,6 +523,9 @@ class PlayerSheetCapabilitiesTest {
             assertAligned("player_cover")
         }
         pager.performTouchInput { swipeLeft(durationMillis = 180) }
+        val expandedLyrics = compose.onNodeWithTag("lyrics_panel").fetchSemanticsNode().boundsInRoot
+        val restoreRegion = compose.onNodeWithTag("lyrics_reveal_controls").fetchSemanticsNode().parent!!.boundsInRoot
+        assertEquals("Lyrics fill the released space down to the restore control", restoreRegion.top, expandedLyrics.bottom, 2f)
         compose.mainClock.autoAdvance = false
         compose.onNodeWithTag("lyrics_reveal_controls").performClick()
         compose.mainClock.advanceTimeBy(80)
@@ -531,6 +534,9 @@ class PlayerSheetCapabilitiesTest {
         assertTrue("Manually showing controls has an intermediate frame", controlsFraction() in .01f.. .99f)
         compose.mainClock.advanceTimeBy(400)
         compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        val restoredLyrics = compose.onNodeWithTag("lyrics_panel").fetchSemanticsNode().boundsInRoot
+        assertTrue("Hiding controls gives their space to the actual lyric viewport",
+            expandedLyrics.height - restoredLyrics.height > fullControlsHeight * .8f)
         assertAligned("player_lyrics_cover")
         compose.onNodeWithTag("lyrics_options").performClick()
         compose.mainClock.advanceTimeBy(400)

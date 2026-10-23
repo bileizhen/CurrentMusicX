@@ -8,6 +8,14 @@ import androidx.compose.animation.core.VectorConverter
 import kotlin.math.abs
 
 class MonetLyricMotionTest {
+    @Test fun expandedViewportAddsTracksAndKeepsLongSongsBounded() {
+        val normal = monetViewportRadius(360f, 30f)
+        val tall = monetViewportRadius(720f, 30f)
+        assertTrue(tall > normal)
+        assertTrue(monetViewportRadius(720f, 60f) < tall)
+        assertEquals(4, monetViewportRadius(0f, 30f))
+        assertEquals(24, monetViewportRadius(100_000f, 12f))
+    }
     @Test fun scaleDoesNotSnapTheLastPercentWhenThePositionIsStillSettling() {
         for ((from, to) in listOf(.72f to 1f, 1f to .72f)) {
             val animation = TargetBasedAnimation(monetScaleSpring(), Float.VectorConverter, from, to)
