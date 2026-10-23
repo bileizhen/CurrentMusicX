@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -28,13 +29,16 @@ private class MonetTrack(val entering: Boolean) {
     var target by mutableFloatStateOf(Float.NaN)
 }
 
-/** Nine stable keyed tracks. Only their layers move; text measurement never follows scroll pixels. */
+/** A bounded window of keyed tracks. Only layers move while the current line advances. */
 @Composable internal fun MonetLyricsRail(document: LyricsDocument, target: Int, active: Set<Int>,
     modifier: Modifier = Modifier, fontSize: Float, centered: Boolean, minimal: Boolean,
     perspective: Boolean, effects: Boolean, followRequest: Int, onBrowsing: (Boolean) -> Unit,
+    expandWindow: Boolean = false,
     content: @Composable (index: Int, browsing: Boolean, tone: MonetTone) -> Unit) {
     val unit = LocalDensity.current.density
     val fontScale = LocalDensity.current.fontScale
+    var viewportHeight by remember { mutableFloatStateOf(0f) }
+    val radius = if (expandWindow) monetViewportRadius(viewportHeight, fontSize * unit * fontScale) else 4
     val effectInset = (fontSize * fontScale * 2f + 6f).dp
     var manualAnchor by remember(document) { mutableStateOf<Int?>(null) }
     var gestureRevision by remember(document) { mutableIntStateOf(0) }
@@ -47,9 +51,9 @@ private class MonetTrack(val entering: Boolean) {
     LaunchedEffect(gestureRevision, dragging, browsing) {
         if (browsing && !dragging) { delay(MONET_IDLE_RESET_MS); manualAnchor = null }
     }
-    val start = (anchor - 4).coerceAtLeast(0)
+    val start = (anchor - radius).coerceAtLeast(0)
     val desired = if (document.lines.isEmpty()) emptyList() else
-        (start..minOf(anchor + 4, document.lines.lastIndex)).toList()
+        (start..minOf(anchor + radius, document.lines.lastIndex)).toList()
     var previousWindow by remember(document) { mutableStateOf(desired) }
     var retiring by remember(document) { mutableStateOf(emptyList<Int>()) }
     SideEffect {
@@ -65,8 +69,10 @@ private class MonetTrack(val entering: Boolean) {
     // Retain only the virtual window; a long song cannot accumulate animation or raster objects.
     val keepKeys = (indices + previousWindow).toSet()
     SideEffect { tracks.keys.retainAll(keepKeys) }
-    val tones = indices.map { monetTone(it in active || (!browsing && active.isEmpty() && it == target), it - target) }
-    Layout(modifier = modifier.testTag("lyrics_list")
+    // Keep the existing far-line blur when extra tracks become visible in the larger area.
+    val tones = indices.map { monetTone(it in active || (!browsing && active.isEmpty() && it == target),
+        if (expandWindow) (it - target).coerceIn(-4, 4) else it - target) }
+    Layout(modifier = modifier.testTag("lyrics_list").onSizeChanged { viewportHeight = it.height.toFloat() }
         .semantics {
             this[LyricsPerspectiveAngle] = if (perspective) LYRIC_PERSPECTIVE_ANGLE else 0f
             verticalScrollAxisRange = ScrollAxisRange({ anchor.toFloat() }, { document.lines.lastIndex.coerceAtLeast(0).toFloat() })
