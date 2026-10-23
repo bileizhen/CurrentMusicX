@@ -47,7 +47,9 @@ class PlaybackQueue {
     }
     fun restore(value: QueueSnapshot) {
         plannedShuffle = null
-        val restored = value.copy(index = if (value.songs.isEmpty()) -1 else value.index.coerceIn(value.songs.indices), positionMs = value.positionMs.coerceAtLeast(0), radioSession = null)
+        val restored = value.copy(index = if (value.songs.isEmpty()) -1 else value.index.coerceIn(value.songs.indices), positionMs = value.positionMs.coerceAtLeast(0), radioSession = null,
+            // A killed process cannot resume an unfinished optimistic recommendation request.
+            mode = if (value.mode == PlaybackMode.HEART && value.heartPlaylistId <= 0) PlaybackMode.LIST else value.mode)
         state.value = if (restored.mode == PlaybackMode.SHUFFLE && restored.hasHistory()) restored else resetHistory(restored)
     }
     fun next(automatic: Boolean = false, random: Random = Random.Default): Boolean {

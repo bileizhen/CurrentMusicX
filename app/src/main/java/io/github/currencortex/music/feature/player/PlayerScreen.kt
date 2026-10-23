@@ -63,7 +63,6 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val songActions by vm.actions.collectAsStateWithLifecycle()
     val comments by vm.comments.collectAsStateWithLifecycle()
     val commentComposer by vm.commentComposer.collectAsStateWithLifecycle()
-    val heartLoading by vm.heartLoading.collectAsStateWithLifecycle()
     val sleepState by vm.sleepTimer.state.collectAsStateWithLifecycle()
     val together by vm.together.state.collectAsStateWithLifecycle()
     val sharedQueue by vm.together.queue.collectAsStateWithLifecycle()
@@ -310,7 +309,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 PlaybackMode.entries.filter { !together.active || it != PlaybackMode.HEART }.forEach { mode -> MusicDialogChoiceRow(mode.label, mode == playbackMode,
                     onClick = { vm.setPlaybackMode(mode); overlay = PlayerOverlay.QUEUE },
                     enabled = (if (together.active) !together.busy else state.mode == PlayerMode.LOCAL) && (mode != PlaybackMode.HEART ||
-                        (!heartLoading && io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(queue.current) != null)),
+                        io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(queue.current) != null),
                     modifier = Modifier.testTag("playback_mode_${mode.name}").semantics { selected = mode == playbackMode }) }
             }
             PlayerOverlay.QUALITY -> AudioQualitySheet(settings.quality, vm::quality, dismiss, state.mode == PlayerMode.LOCAL,
