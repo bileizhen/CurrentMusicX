@@ -39,6 +39,8 @@ internal val LocalMusicDialogEdgeToEdge = staticCompositionLocalOf { false }
 else lightColorScheme(primary = Color(0xFF3485FF), background = Color(0xFFF2F3F5),
     surface = Color.White, onBackground = Color(0xFF17181B))
 
+@Composable internal fun musicDialogFallbackColor() = if (isInDarkTheme()) Color(0xF22C2D30) else Color(0xDDF2F3F5)
+
 /** Capture page content, never the root overlay itself (which would feed back into the blur). */
 @Composable internal fun rememberMusicDialogBackdrop(): LayerBackdrop? =
     if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported())
@@ -50,10 +52,10 @@ else lightColorScheme(primary = Color(0xFF3485FF), background = Color(0xFFF2F3F5
 }
 
 @Composable internal fun Modifier.musicDialogMaterial(backdrop: Backdrop? = LocalMusicDialogBackdrop.current,
-    shape: Shape = MusicDialogShape): Modifier {
+    shape: Shape = MusicDialogShape, drawFallback: Boolean = true): Modifier {
     val dark = isInDarkTheme()
     val material = if (Build.VERSION.SDK_INT >= 33 && backdrop != null) Modifier.frostedMusicDialog(backdrop, dark, shape)
-    else Modifier.background(if (dark) Color(0xF22C2D30) else Color(0xDDF2F3F5), shape)
+    else if (drawFallback) Modifier.background(musicDialogFallbackColor(), shape) else Modifier
     return then(material).border(.7.dp, Color.White.copy(alpha = if (dark) .12f else .65f), shape)
 }
 

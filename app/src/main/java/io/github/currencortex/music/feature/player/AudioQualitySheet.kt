@@ -9,8 +9,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -21,7 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
@@ -40,32 +39,30 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var visible by remember { mutableStateOf(true) }
     var afterDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
     val dismiss by rememberUpdatedState(onDismiss)
-    val maxContentHeight = (LocalConfiguration.current.screenHeightDp * .8f).dp
     MusicBottomSheet(show = visible, title = title,
         modifier = Modifier.testTag("audio_quality_sheet"),
         onDismissRequest = { visible = false },
         onDismissFinished = { dismiss(); afterDismiss?.invoke() }) {
-        Column(Modifier.fillMaxWidth().heightIn(max = maxContentHeight).navigationBarsPadding(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            AudioQualityChoices(selected, { quality ->
-                if (visible) {
-                    if (quality != selected) onSelect(quality)
-                    visible = false
-                }
-            }, enabled, onNetwork?.let { action -> { afterDismiss = action; visible = false } },
-                Modifier.weight(1f, fill = false))
-            Spacer(Modifier.height(12.dp))
-        }
+        AudioQualityChoices(selected, { quality ->
+            if (visible) {
+                if (quality != selected) onSelect(quality)
+                visible = false
+            }
+        }, enabled, onNetwork?.let { action -> { afterDismiss = action; visible = false } })
     }
 }
 
 @Composable internal fun AudioQualityChoices(selected: AudioQuality, onSelect: (AudioQuality) -> Unit,
     enabled: Boolean = true, onNetwork: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val colors = MiuixTheme.colorScheme
-    val maxHeight = (LocalConfiguration.current.screenHeightDp * .68f).dp
-    LazyColumn(modifier.fillMaxWidth().heightIn(max = maxHeight).testTag("quality_choices"),
+    // This is a fixed, short list. Compose it before the native entrance starts instead of
+    // subcomposing every text row during the first animated layout pass.
+    // Let the native sheet supply the available screen height. Keep the safe-area spacing
+    // inside the scroll content rather than reserving a fixed footer below its viewport.
+    Column(modifier.fillMaxWidth().verticalScroll(rememberScrollState()).testTag("quality_choices")
+        .navigationBarsPadding().padding(bottom = 12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        item {
+        run {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text("已选 · ${selected.label}", Modifier.weight(1f), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
                 onNetwork?.let { action -> Text("网络与播放 ›", Modifier.heightIn(min = 48.dp).testTag("quality_network_settings")
@@ -73,17 +70,17 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     .padding(horizontal = 8.dp, vertical = 14.dp), fontSize = 12.sp, color = colors.primary) }
             }
         }
-        item {
+        run {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 FeaturedQuality(AudioQuality.SKY, selected, enabled, onSelect, Modifier.weight(1f))
                 FeaturedQuality(AudioQuality.JYMASTER, selected, enabled, onSelect, Modifier.weight(1f))
             }
         }
-        items(listOf(AudioQuality.JYEFFECT, AudioQuality.HIRES, AudioQuality.LOSSLESS, AudioQuality.EXHIGH, AudioQuality.STANDARD)) { quality ->
+        listOf(AudioQuality.JYEFFECT, AudioQuality.HIRES, AudioQuality.LOSSLESS, AudioQuality.EXHIGH, AudioQuality.STANDARD).forEach { quality ->
             QualityRow(quality, selected, enabled, onSelect)
         }
-        item { QualityRow(AudioQuality.AUTO, selected, enabled, onSelect) }
-        item {
+        QualityRow(AudioQuality.AUTO, selected, enabled, onSelect)
+        run {
             Text(if (enabled) "按所选档位请求音源，实际音质取决于歌曲、音源及账号权限。自动最高会优先请求可用高音质。"
                 else "请先退出一起听或结束投屏，再切换音质。",
                 Modifier.padding(horizontal = 4.dp, vertical = 8.dp).testTag("quality_note"),
