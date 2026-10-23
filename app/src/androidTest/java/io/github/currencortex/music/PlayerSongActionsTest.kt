@@ -83,12 +83,23 @@ class PlayerSongActionsTest {
                 it.config[SemanticsProperties.Text].any { text -> text.text == "1w+" }
             } }
             compose.onNodeWithTag("comment_count", useUnmergedTree = true).assertTextEquals("2w+")
-            val tags = listOf("player_like", "player_comments", "player_cycle_mode", "open_player_queue")
+            val tags = listOf("player_like", "player_comments", "player_sleep_timer", "player_effects", "lyrics_options")
             compose.onNodeWithTag("player_heart_mode").assertDoesNotExist()
             val bounds = tags.map { compose.onNodeWithTag(it).fetchSemanticsNode().boundsInRoot }
-            bounds.zipWithNext().forEach { (left, right) -> assertTrue("Four touch targets cannot overlap", left.right <= right.left + 1) }
+            bounds.zipWithNext().forEach { (left, right) -> assertTrue("Action touch targets cannot overlap", left.right <= right.left + 1) }
             val bar = compose.onNodeWithTag("player_function_bar").fetchSemanticsNode().boundsInRoot
             assertTrue(bounds.first().left >= bar.left && bounds.last().right <= bar.right)
+            val transportButtons = listOf(compose.onNodeWithTag("player_cycle_mode"),
+                compose.onNodeWithContentDescription("上一首"), compose.onNodeWithTag("player_toggle"),
+                compose.onNodeWithContentDescription("下一首"), compose.onNodeWithTag("open_player_queue"))
+                .map { it.fetchSemanticsNode().boundsInRoot }
+            transportButtons.zipWithNext().forEach { (left, right) ->
+                assertTrue("Transport buttons must not overlap", left.right <= right.left + 1)
+                assertEquals("Mode and queue share the transport row", left.center.y, right.center.y, 1f)
+            }
+            assertEquals("Play stays centered", bar.center.x, transportButtons[2].center.x, 1f)
+            val share = compose.onNodeWithTag("player_share").fetchSemanticsNode().boundsInRoot
+            assertTrue("Share stays in the top-right header", share.bottom < bar.top && share.center.x > bar.center.x)
             val badge = compose.onNodeWithTag("like_count", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
             assertTrue("The real quantity belongs at the icon's upper right", badge.top < bounds.first().center.y && badge.center.x > bounds.first().center.x)
             // A tap toggles the selected library directly; wait for the acknowledged UI state.
@@ -104,14 +115,14 @@ class PlayerSongActionsTest {
             compose.waitUntil(10000) { !liked.get() && mutations.get() == 2 && likeReady(false) }
             compose.onNodeWithTag("player_like").performClick()
             compose.waitUntil(10000) { liked.get() && mutations.get() == 3 && likeReady(true) }
-            container.musicSettings.setNeteaseMainLibrary(false)
-            compose.waitUntil(10000) { !container.primaryLibrary.usesNetease.value && likeReady(false) }
+            container.musicSettings.setLikeMode(io.github.currencortex.music.data.settings.LikeMode.CURRENT_MUSIC)
+            compose.waitUntil(10000) { !container.primaryLibrary.likesUseNetease.value && likeReady(false) }
             compose.onNodeWithTag("player_like").performClick()
             compose.waitUntil(10000) { cmLiked.get() && container.libraryRepository.statuses.value[11]?.pending == false && likeReady(true) }
             assertTrue(liked.get())
             compose.onNodeWithTag("player_like").performClick()
             compose.waitUntil(10000) { !cmLiked.get() && container.libraryRepository.statuses.value[11]?.pending == false && likeReady(false) }
-            container.musicSettings.setNeteaseMainLibrary(true)
+            container.musicSettings.setLikeMode(io.github.currencortex.music.data.settings.LikeMode.AUTO)
             compose.waitUntil(10000) { likeReady(true) }
             assertEquals(3, mutations.get())
             compose.onNodeWithTag("player_comments").performClick()
@@ -153,6 +164,15 @@ class PlayerSongActionsTest {
             compose.onNodeWithTag("lyrics_options").performClick()
             compose.onNodeWithTag("open_lyrics").assertIsDisplayed()
             compose.onNodeWithTag("open_player_cast").assertIsDisplayed()
+            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("player_share").performClick()
+            compose.onNodeWithTag("song_share_dialog").assertExists()
+            compose.onNodeWithTag("song_share_copy").assertExists()
+            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("player_effects").performClick()
+            compose.onNodeWithTag("sound_effects_screen").assertExists()
+            compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
+            compose.onNodeWithTag("player_screen").assertIsDisplayed()
         } finally { container.close(); server.shutdown() }
     }
 }

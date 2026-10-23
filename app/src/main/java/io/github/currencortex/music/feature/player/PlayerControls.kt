@@ -50,7 +50,8 @@ internal val PlayerBufferedProgress = SemanticsPropertyKey<Float>("PlayerBuffere
 }
 
 @Composable internal fun PlayerTransport(vm: PlayerViewModel, onToggle: () -> Unit,
-    compact: Boolean = false, quality: (@Composable () -> Unit)? = null) {
+    compact: Boolean = false, quality: (@Composable () -> Unit)? = null,
+    leadingAction: (@Composable () -> Unit)? = null, trailingAction: (@Composable () -> Unit)? = null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
@@ -78,10 +79,13 @@ internal val PlayerBufferedProgress = SemanticsPropertyKey<Float>("PlayerBuffere
     val buttons: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth().padding(top = if (compact) 6.dp else 12.dp), horizontalArrangement = Arrangement.SpaceEvenly,
             verticalAlignment = Alignment.CenterVertically) {
-            PlayerTransportButton("上一首", { vm.player.previous() }, enabled = enabled, direction = -1, compact = compact)
+            leadingAction?.invoke()
+            val transportSlot = if (leadingAction != null || trailingAction != null) Modifier.weight(1f) else Modifier
+            PlayerTransportButton("上一首", { vm.player.previous() }, transportSlot, enabled = enabled, direction = -1, compact = compact)
             PlayerTransportButton(if (state.showPause) "暂停" else "播放", onToggle,
-                Modifier.testTag("player_toggle"), enabled, state.showPause, compact = compact)
-            PlayerTransportButton("下一首", { vm.player.next() }, enabled = enabled, direction = 1, compact = compact)
+                transportSlot.testTag("player_toggle"), enabled, state.showPause, compact = compact)
+            PlayerTransportButton("下一首", { vm.player.next() }, transportSlot, enabled = enabled, direction = 1, compact = compact)
+            trailingAction?.invoke()
         }
     }
     Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp).testTag("player_transport")) {
@@ -163,7 +167,7 @@ internal val PlayerBufferedProgress = SemanticsPropertyKey<Float>("PlayerBuffere
     }
 }
 
-internal enum class PlayerIcon { COLLAPSE, MORE, LYRICS, QUEUE, CAST, LIKE, COMMENT, ALARM, REPEAT, REPEAT_ONE, SHUFFLE, HEART_MODE }
+internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, CAST, LIKE, COMMENT, ALARM, REPEAT, REPEAT_ONE, SHUFFLE, HEART_MODE }
 
 @Composable internal fun PlayerIconButton(icon: PlayerIcon, label: String, onClick: () -> Unit,
     modifier: Modifier = Modifier, selected: Boolean = false, count: Long? = null, showCount: Boolean = false,
@@ -190,6 +194,8 @@ internal enum class PlayerIcon { COLLAPSE, MORE, LYRICS, QUEUE, CAST, LIKE, COMM
         } else Image(painterResource(when (icon) {
             PlayerIcon.COLLAPSE -> R.drawable.player_symbol_keyboard_arrow_down
             PlayerIcon.MORE -> R.drawable.player_symbol_more_horiz
+            PlayerIcon.SHARE -> R.drawable.player_symbol_share
+            PlayerIcon.EFFECTS -> R.drawable.player_symbol_graphic_eq
             PlayerIcon.LYRICS -> R.drawable.player_symbol_lyrics
             PlayerIcon.QUEUE -> R.drawable.player_symbol_queue_music
             PlayerIcon.CAST -> R.drawable.player_symbol_airplay
