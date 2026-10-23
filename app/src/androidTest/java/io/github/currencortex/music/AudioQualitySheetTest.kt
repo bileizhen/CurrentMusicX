@@ -46,10 +46,17 @@ class AudioQualitySheetTest {
             assertEquals("The picker is anchored to the bottom", host.bottom, sheet.bottom, 2f)
             assertTrue("There is a backdrop above the sheet", sheet.top > host.top)
         }
+        var titleMaterialInset: Float? = null
         fun assertMaterialFollowsPanel() {
             val sheet = compose.onNodeWithTag("audio_quality_sheet").fetchSemanticsNode().boundsInRoot
             val material = compose.onNodeWithTag("bottom_sheet_material").fetchSemanticsNode().boundsInRoot
-            assertEquals("Material covers the native title and drag handle", sheet.top, material.top, 2f)
+            val titleTop = compose.onNodeWithText("当前歌曲音质", useUnmergedTree = true)
+                .fetchSemanticsNode().boundsInRoot.top
+            // The caller's sheet modifier is outside Miuix's translation layer. During
+            // a drag compare with the actual moving title, not that stationary outer tag.
+            val expectedTop = titleMaterialInset?.let { titleTop - it } ?: sheet.top
+            assertEquals("Material follows the native title and drag handle", expectedTop, material.top, 2f)
+            if (titleMaterialInset == null) titleMaterialInset = titleTop - material.top
             assertEquals(sheet.left, material.left, 2f)
             assertEquals(sheet.right, material.right, 2f)
             assertEquals(sheet.bottom, material.bottom, 2f)
@@ -64,19 +71,19 @@ class AudioQualitySheetTest {
             }
         }
         AudioQuality.entries.forEach { quality ->
-            compose.onNodeWithTag("quality_choices").performScrollToNode(hasTestTag("quality_${quality.name}"))
+            compose.onNodeWithTag("quality_${quality.name}").performScrollTo()
             compose.onNodeWithTag("quality_${quality.name}").assertIsDisplayed()
         }
-        compose.onNodeWithTag("quality_choices").performScrollToNode(hasTestTag("quality_STANDARD"))
+        compose.onNodeWithTag("quality_STANDARD").performScrollTo()
         compose.onNodeWithTag("quality_STANDARD").assertIsSelected().performClick()
         compose.runOnIdle { assertEquals(0, changes); assertEquals(1, closes) }
         compose.onNodeWithTag("quality_choices").assertDoesNotExist()
         compose.onNodeWithTag("reopen_quality").performClick()
-        compose.onNodeWithTag("quality_choices").performScrollToNode(hasTestTag("quality_JYMASTER"))
+        compose.onNodeWithTag("quality_JYMASTER").performScrollTo()
         compose.onNodeWithTag("quality_JYMASTER").performClick()
         compose.runOnIdle { assertEquals(AudioQuality.JYMASTER, selected); assertEquals(1, changes) }
         compose.onNodeWithTag("reopen_quality").performClick()
-        compose.onNodeWithTag("quality_choices").performScrollToNode(hasTestTag("quality_JYMASTER"))
+        compose.onNodeWithTag("quality_JYMASTER").performScrollTo()
         compose.onNodeWithTag("quality_JYMASTER").assertIsSelected()
         fun titleRed(): Float {
             val layouts = mutableListOf<TextLayoutResult>()
@@ -123,12 +130,12 @@ class AudioQualitySheetTest {
             compose.setContent { LeiTheme(AppearanceSettings(themeMode = ThemeMode.LIGHT)) { Scaffold { MusicSettingsScreen(vm) {} } } }
             compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("default_quality"))
             compose.onNodeWithTag("default_quality").performClick()
-            compose.onNodeWithTag("quality_choices").performScrollToNode(hasTestTag("quality_LOSSLESS"))
+            compose.onNodeWithTag("quality_LOSSLESS").performScrollTo()
             compose.onNodeWithTag("quality_LOSSLESS").performClick()
             compose.waitUntil(5000) { container.musicSettings.state.value.quality == AudioQuality.LOSSLESS }
             compose.onNodeWithTag("quality_choices").assertDoesNotExist()
             compose.onNodeWithTag("default_quality").performClick()
-            compose.onNodeWithTag("quality_choices").performScrollToNode(hasTestTag("quality_LOSSLESS"))
+            compose.onNodeWithTag("quality_LOSSLESS").performScrollTo()
             compose.onNodeWithTag("quality_LOSSLESS").assertIsSelected()
             compose.onNodeWithTag("close_quality_sheet").assertDoesNotExist()
             compose.onNodeWithTag("audio_quality_sheet").performTouchInput {

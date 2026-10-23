@@ -96,6 +96,31 @@ class UnifiedDialogStyleTest {
         }
     }
 
+    @Test fun elasticQualitySheetKeepsItsMaterialAtTheBottomEdge() {
+        compose.setContent { LeiTheme(AppearanceSettings(themeMode = ThemeMode.LIGHT)) {
+            val backdrop = rememberMusicDialogBackdrop()
+            CompositionLocalProvider(LocalMusicDialogBackdrop provides backdrop) { Scaffold {
+                Box(Modifier.fillMaxSize().musicDialogBackdropSource().background(Color.Magenta))
+                AudioQualitySheet(AudioQuality.STANDARD, {}, {})
+            } }
+        } }
+        compose.onNodeWithTag("audio_quality_sheet").assertIsDisplayed()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("audio_quality_sheet").performTouchInput {
+            down(Offset(centerX, 12.dp.toPx()))
+            moveBy(Offset(0f, -160.dp.toPx()), delayMillis = 300)
+        }
+        compose.mainClock.advanceTimeBy(64)
+        compose.waitForIdle()
+        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+        val pixel = bitmap.getPixel(bitmap.width / 4, bitmap.height - 4)
+        assertTrue("Elastic movement must keep a tinted bottom fill, not expose the magenta page",
+            android.graphics.Color.green(pixel) > 100)
+        capture("quality-elastic-bottom-fill.png")
+        compose.onNodeWithTag("audio_quality_sheet").performTouchInput { up() }
+        compose.mainClock.autoAdvance = true
+    }
+
     private fun capture(name: String) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         check(context.packageName.endsWith(".verification"))
