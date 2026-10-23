@@ -22,6 +22,9 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -91,6 +94,7 @@ import kotlinx.coroutines.launch
     val placement = LocalRootTabPlacement.current
     val density = LocalDensity.current
     val listState = rememberLazyListState()
+    var avatarPreview by rememberSaveable(account.profile?.uid) { mutableStateOf(false) }
     LaunchedEffect(avatarFlight?.request) { if (avatarFlight?.active == true && !avatarFlight.returning) listState.scrollToItem(0) }
     LaunchedEffect(listState, avatarFlight) {
         snapshotFlow { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
@@ -106,7 +110,8 @@ import kotlinx.coroutines.launch
         } }
         account.profile?.let { native -> item {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                Box(Modifier.testTag("my_profile_avatar").onGloballyPositioned {
+                Box(Modifier.testTag("my_profile_avatar").clickable(role = Role.Button) { avatarPreview = true }
+                    .semantics { contentDescription = "查看头像" }.onGloballyPositioned {
                     val center = (placement?.landingBounds(it) ?: it.boundsInRoot()).center
                     val radius = with(density) { 32.dp.toPx() }
                     val landing = Rect(center - Offset(radius, radius), center + Offset(radius, radius))
@@ -137,6 +142,10 @@ import kotlinx.coroutines.launch
                 "注册与登录、头像装饰与一起听房间")
         } }
     }
+    if (avatarPreview) account.profile?.let { native ->
+        AvatarPreviewDialog(ProfileUser(id = native.uid, nickname = native.nickname, avatar = native.avatar),
+            container, onDismiss = { avatarPreview = false })
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -146,8 +155,9 @@ import kotlinx.coroutines.launch
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val tasksEnabled by vm.container.neteaseTasksEnabled.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
+    var avatarPreview by rememberSaveable(vm.container.accountRepository.server, account.account?.id) { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-        if (uri != null) { vm.avatar.value = uri; vm.dialog.value = "avatar" }
+        if (uri != null) { avatarPreview = false; vm.avatar.value = uri; vm.dialog.value = "avatar" }
     }
     val user = state.profile?.user ?: account.account?.takeIf { onBack == null }?.let {
         ProfileUser(id = it.id, username = it.username, nickname = it.nickname, avatar = it.avatar,
@@ -184,7 +194,8 @@ import kotlinx.coroutines.launch
         if (user != null) {
             item {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    Box(Modifier.testTag("my_profile_avatar").onGloballyPositioned {
+                    Box(Modifier.testTag("my_profile_avatar").clickable(role = Role.Button) { avatarPreview = true }
+                        .semantics { contentDescription = "查看头像" }.onGloballyPositioned {
                         val center = (placement?.landingBounds(it) ?: it.boundsInRoot()).center
                         val radius = with(density) { 32.dp.toPx() }
                         val landing = Rect(center - Offset(radius, radius), center + Offset(radius, radius))
@@ -202,12 +213,12 @@ import kotlinx.coroutines.launch
                             UserRoleBadge(user.role, Modifier.align(Alignment.CenterVertically))
                         }
                         UserIdentityDetails(user.title, user.ipRegion)
-                        Text(if (state.loading && state.profile == null) "正在加载资料…" else user.bio.ifBlank { "还没有填写简介" }, fontSize = 13.sp, maxLines = 2,
+                        Text(if (state.loading && state.profile == null) "正在加载资料…" else user.bio.ifBlank { "还没有填写简介" },
+                            modifier = if (own) Modifier.testTag("edit_profile")
+                                .clickable(enabled = !busy && state.profile != null, role = Role.Button) { vm.dialog.value = "edit" }
+                                .semantics { contentDescription = "编辑资料" } else Modifier,
+                            fontSize = 13.sp, maxLines = 2,
                             color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-                        if (own) FlowRow {
-                            MusicTextAction("编辑资料", { vm.dialog.value = "edit" }, Modifier.testTag("edit_profile"), !busy && state.profile != null)
-                            MusicTextAction("更换头像", { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }, enabled = !busy)
-                        }
                     }
                 }
             }
@@ -259,6 +270,10 @@ import kotlinx.coroutines.launch
         state.sectionErrors.forEach { item { Text(it, fontSize = 13.sp) } }
     }
     }
+    if (avatarPreview && user != null) AvatarPreviewDialog(user, vm.container,
+        onDismiss = { avatarPreview = false },
+        onChange = if (own && !busy) ({ picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) else null,
+        onDecorations = if (own) ({ avatarPreview = false; navigate("user/decorations") }) else null)
 }
 
 /** Accounts and security are one page: switching accounts and changing credentials are the same job. */

@@ -3,6 +3,7 @@ package io.github.currencortex.music
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.test.core.app.ApplicationProvider
 import androidx.datastore.preferences.preferencesDataStoreFile
 import io.github.currencortex.music.core.network.ApiJson
@@ -24,6 +25,7 @@ class UserCapabilitiesTest {
     private lateinit var server: MockWebServer
     private lateinit var namespace: String
     @Volatile private var nickname = "First user"
+    @Volatile private var avatarUrl = ""
     @Volatile private var decoration = ""
     @Volatile private var bound = false
     @Volatile private var sentPhone = ""
@@ -40,7 +42,7 @@ class UserCapabilitiesTest {
     @Volatile private var listeningUser = false
     private val receivedListenMs = AtomicLong()
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
-    private fun user(id: Int = 7): String = """{"id":$id,"username":"user$id","nickname":"${if (id == 7) nickname else "Second user"}","title":"${if (id == 7) "创作者" else ""}","bio":"Profile bio","avatarDecoration":"$decoration","publicSquare":true,"isAdmin":true,"isSuper":false,"stat":{"likes":3,"favs":2,"playDays":5,"listenMs":${7200000 + receivedListenMs.get()}}}"""
+    private fun user(id: Int = 7): String = """{"id":$id,"username":"user$id","nickname":"${if (id == 7) nickname else "Second user"}","title":"${if (id == 7) "创作者" else ""}","bio":"Profile bio","avatar":"$avatarUrl","avatarDecoration":"$decoration","publicSquare":true,"isAdmin":true,"isSuper":false,"stat":{"likes":3,"favs":2,"playDays":5,"listenMs":${7200000 + receivedListenMs.get()}}}"""
     @Before fun prepare() = runBlocking {
         namespace = "user-test-${UUID.randomUUID()}"
         container = AppContainer(ApplicationProvider.getApplicationContext<CurrentMusicApplication>(), namespace)
@@ -249,8 +251,50 @@ class UserCapabilitiesTest {
         compose.onNodeWithTag("user_role_super_admin").assertIsDisplayed()
         compose.onNodeWithTag("user_title").assertDoesNotExist()
         compose.onNodeWithTag("edit_profile").assertDoesNotExist()
+        compose.onNodeWithTag("my_profile_avatar").performClick()
+        compose.onNodeWithTag("avatar_preview").assertIsDisplayed()
+        compose.onNodeWithTag("avatar_preview_change").assertDoesNotExist()
+        compose.onNodeWithTag("avatar_preview_decorations").assertDoesNotExist()
+        compose.onNodeWithTag("avatar_preview_save").assertIsNotEnabled()
+        compose.onNodeWithTag("avatar_preview_close").performClick()
         restoration.emulateSavedInstanceStateRestore()
         compose.onNodeWithText("Public user").assertExists()
+    }
+    @Test fun avatarTapOpensOwnerPreviewAndSavesTheDisplayedImage() = runBlocking {
+        avatarUrl = server.url("/fixture/frame.gif").toString()
+        compose.setContent { CurrentMusicApp(container) }; me()
+        compose.onNodeWithTag("edit_profile").assertTextEquals("Profile bio")
+        compose.onNodeWithText("编辑资料").assertDoesNotExist()
+        compose.onNodeWithText("更换头像").assertDoesNotExist()
+        compose.onNodeWithTag("my_profile_avatar").performClick()
+        compose.waitUntil(10000) { compose.onAllNodes(hasTestTag("avatar_preview_save") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("avatar_preview_image").assertIsDisplayed()
+        compose.onNodeWithTag("avatar_preview_change").assertIsDisplayed()
+        compose.onNodeWithTag("avatar_preview_decorations").assertIsDisplayed()
+        val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        compose.onNodeWithTag("avatar_preview").captureToImage().asAndroidBitmap().let { bitmap ->
+            java.io.File(context.externalCacheDir, "profile-avatar-preview.png").outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
+        val image = (coil3.SingletonImageLoader.get(context).execute(coil3.request.ImageRequest.Builder(context)
+            .data(avatarUrl).size(64).build()) as coil3.request.SuccessResult).image
+        val file = java.io.File(context.cacheDir, "avatar-preview-saved.png")
+        try {
+            io.github.currencortex.music.feature.profile.saveAvatarImage(context.contentResolver, image, android.net.Uri.fromFile(file))
+            val bitmap = android.graphics.BitmapFactory.decodeFile(file.path)
+            assertNotNull(bitmap)
+            assertEquals(64, bitmap.width); assertEquals(64, bitmap.height)
+            assertArrayEquals(byteArrayOf(-119, 80, 78, 71), file.readBytes().take(4).toByteArray())
+            bitmap.recycle()
+        } finally { file.delete() }
+        compose.onNodeWithTag("avatar_preview_close").performClick()
+        compose.onNodeWithTag("avatar_preview").assertDoesNotExist()
+        compose.onNodeWithTag("edit_profile").assertTextEquals("Profile bio")
+        compose.onNodeWithTag("my_profile_avatar").performClick()
+        compose.onNodeWithTag("avatar_preview_decorations").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("decoration_frame-one").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("avatar_preview").assertDoesNotExist()
     }
     @Test fun multipleAccountsSwitchWithoutPlaintextCredentialsInMetadata() {
         compose.setContent { CurrentMusicApp(container) }; me()
