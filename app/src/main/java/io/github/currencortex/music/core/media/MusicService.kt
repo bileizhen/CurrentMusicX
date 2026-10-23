@@ -92,6 +92,7 @@ class MusicService : MediaSessionService() {
     private fun audioRequest(song: Song, quality: AudioQuality) = container.audioRequest(song, quality)
     private fun flushListening() {
         val ms = listening.drain(SystemClock.elapsedRealtime())
+        if (trackedSong?.video == false && ms > 0) container.todayListening.add(ms)
         trackedSong?.takeIf { recorded && ms > 0 && !it.video }?.let { container.listeningReports.report(it, trackedSession, ms) }
     }
     private fun updateListening(isPlaying: Boolean) {
