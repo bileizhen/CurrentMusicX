@@ -293,3 +293,19 @@ The ring, star, particles and animation timeline are rendered with native Canvas
 Ring motion keyframes were measured from the user-supplied animation reference;
 the reference video and its audio are not bundled. Usernames are rendered locally
 using Android fonts and are never sent to the generator.
+
+## Oboe 1.10.0
+
+Copyright The Android Open Source Project. Apache License 2.0.
+https://github.com/google/oboe
+Source revision: a81bb9f87d4105b84b682685d3bfbb5beca371d1.
+Used for OpenSL ES / AAudio / Oboe audio output. Compatibility declarations and enum ABI checks in AAudioLoader are adjusted for NDK 30; the original copyright notices are retained. The full license is included in legal/APACHE-2.0.txt.
+
+## Lucide Icons 0.468.0
+
+https://github.com/lucide-icons/lucide/tree/0.468.0
+
+The audio output settings use audio-lines, waves, activity, cable, guitar and binary,
+converted from the original SVGs to Android Vector Drawables with 24dp bounds
+and 2-unit rounded strokes. The original copyright and ISC license are included
+in legal/LUCIDE-LICENSE.txt.

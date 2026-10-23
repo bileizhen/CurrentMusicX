@@ -51,6 +51,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         if (storageNamespace.isEmpty()) io.github.currencortex.music.core.update.WorkManagerUpdateBackground(context) else null)
     val logger = AppLogger(context)
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
+    val audioOutput = io.github.currencortex.music.data.settings.AudioOutputSettingsRepository(settingsStore, appScope)
     val soundEffectNotices = io.github.currencortex.music.core.media.SoundEffectNoticeCenter(playerScope)
     val errorNotices = io.github.currencortex.music.core.media.IslandErrorNoticeCenter(playerScope)
     val desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsPreferences(settingsStore, appScope)

@@ -22,7 +22,10 @@ internal class RecordShelfPreview(context: Context, private val container: AppCo
     private var blocked = false
     private var active = true
     private var audioOwner: AudioRequest? = null
-    private val player = ExoPlayer.Builder(context.applicationContext)
+    private val player = ExoPlayer.Builder(context.applicationContext, DockRenderersFactory(context.applicationContext, DockAudioLevel(),
+        outputSampleRate = { container.audioOutput.state.value.sampleRate },
+        outputSettings = { container.audioOutput.state.value },
+        outputStatus = { container.audioOutput.status.value = it }))
         .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory)).build().apply {
             volume = 0f
             setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
@@ -38,7 +41,8 @@ internal class RecordShelfPreview(context: Context, private val container: AppCo
     private val engine = RecordPreviewController(scope, object : RecordPreviewAudio {
         override var gain: Float
             get() = player.volume
-            set(value) { player.volume = value }
+            set(value) { player.volume = if (container.audioOutput.state.value.mode ==
+                io.github.currencortex.music.data.settings.AudioOutputMode.DIRECT && value > 0f) 1f else value }
         override val positionMs get() = player.currentPosition
         override val playing get() = player.isPlaying
         override val ended get() = player.playbackState == Player.STATE_ENDED
@@ -47,6 +51,8 @@ internal class RecordShelfPreview(context: Context, private val container: AppCo
         override val buffering get() = player.playbackState == Player.STATE_BUFFERING && player.playWhenReady &&
             player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_NONE
         override suspend fun prepare(source: RecordPreviewSource) {
+            player.setPreferredAudioDevice(context.getSystemService(android.media.AudioManager::class.java)
+                .preferredOutput(container.audioOutput.state.value.deviceKey))
             val item = MediaItem.Builder().setUri(source.uri).setCustomCacheKey(source.cacheKey)
             if (!source.fullLength) item.setClippingConfiguration(MediaItem.ClippingConfiguration.Builder()
                 .setStartPositionMs(source.clip.startMs).setEndPositionMs(source.clip.endMs).build())
@@ -61,6 +67,9 @@ internal class RecordShelfPreview(context: Context, private val container: AppCo
         override fun stop() { player.stop(); player.clearMediaItems() }
         override fun release() { player.release() }
     }, resolve = { song ->
+        check(container.audioOutput.state.value.mode != io.github.currencortex.music.data.settings.AudioOutputMode.BIT_PERFECT) {
+            "Bit-perfect 使用独占 USB 输出，请使用主播放器播放歌曲"
+        }
         coroutineScope {
             val request = container.audioRequest(song, container.musicSettings.state.value.quality)
             audioOwner = request

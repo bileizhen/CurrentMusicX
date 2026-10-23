@@ -43,10 +43,13 @@ android {
     namespace = "io.github.currencortex.music"
     compileSdk = 37
     compileSdkMinor = 0
+    ndkVersion = "30.0.16248370"
+    externalNativeBuild { cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "4.1.2" } }
 
     defaultConfig {
         applicationId = "com.bileizhen.currentmusic"
         minSdk = 26
+        externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
         targetSdk = 36
         versionCode = 28
         versionName = "1.2.1"
