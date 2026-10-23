@@ -146,6 +146,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         if (animateLaunch) {
             container.ready.await()
             launchStyle = container.settings.snapshot().launchStyle
+            if (launchStyle == io.github.currencortex.music.data.settings.LaunchStyle.NONE) {
+                launchBrand.active = false
+                launchFinished = true
+            }
             container.sessionRestored.await()
         }
         value = true
@@ -551,7 +555,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 entry(APPEARANCE.toString()) {
                     Box(Modifier.fillMaxSize().navigationBarsPadding()) {
                         AppearanceScreen(settingsVm, onBack = ::navigateBack, onOpenScale = { showScale = true },
-                            onOpenLaunchStyle = { showLaunchStyle = true }, onPreviewLaunch = { launchPreview = settings.launchStyle })
+                            onOpenLaunchStyle = { showLaunchStyle = true }, onPreviewLaunch = {
+                                if (settings.launchStyle != io.github.currencortex.music.data.settings.LaunchStyle.NONE)
+                                    launchPreview = settings.launchStyle
+                            })
                     }
                 }
                 entry(ABOUT.toString()) {
@@ -827,6 +834,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     launchUsername(account.account), pageReady, launchWindowReady, onFinished = finish)
                 io.github.currencortex.music.data.settings.LaunchStyle.CLASSIC -> LaunchBrandOverlay(launchBrand, pageReady,
                     canLandOnHome = landingOnHome, windowReady = launchWindowReady, enableBlur = settings.blur, onFinished = finish)
+                io.github.currencortex.music.data.settings.LaunchStyle.NONE -> Unit
                 null -> LaunchPreparationOverlay()
             }
         }
@@ -838,6 +846,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     launchUsername(account.account), ready = true, preview = true, onFinished = { launchPreview = null })
                 io.github.currencortex.music.data.settings.LaunchStyle.CLASSIC -> LaunchBrandOverlay(previewBrand,
                     ready = true, canLandOnHome = false, enableBlur = settings.blur, onFinished = { launchPreview = null })
+                io.github.currencortex.music.data.settings.LaunchStyle.NONE -> Unit
             }
         }
         }
