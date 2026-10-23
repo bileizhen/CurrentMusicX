@@ -246,6 +246,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         PlayerPagerArtwork(pagerArtwork, queue.current?.cover.orEmpty())
                     }
                     }
+                    PlayerControlsRegion(controlsVisibility) { functions() }
                     PlayerControlsRegion(controlsVisibility, Modifier.testTag("player_transport_transition")) {
                         PlayerTransport(vm, onToggle, quality = {
                             if (!roaming.active) Text(if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label,
@@ -266,7 +267,6 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                 .padding(horizontal = 24.dp, vertical = 14.dp))
                     }
                 }
-                PlayerControlsRegion(controlsVisibility) { functions() }
             }
         }
         }
