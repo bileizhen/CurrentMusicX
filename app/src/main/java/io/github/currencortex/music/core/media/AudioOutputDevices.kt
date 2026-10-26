@@ -2,8 +2,12 @@ package io.github.currencortex.music.core.media
 
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
+import android.os.Build
 
-internal fun AudioDeviceInfo.outputKey() = "$type:$address:$productName"
+internal fun AudioDeviceInfo.outputKey(): String {
+    val route = if (Build.VERSION.SDK_INT >= 28) address else id.toString()
+    return "$type:$route:$productName"
+}
 internal fun AudioDeviceInfo.outputLabel(): String = when (type) {
     AudioDeviceInfo.TYPE_BUILTIN_SPEAKER -> "设备扬声器"
     AudioDeviceInfo.TYPE_BUILTIN_EARPIECE -> "听筒"

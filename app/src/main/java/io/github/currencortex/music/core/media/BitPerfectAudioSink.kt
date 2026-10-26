@@ -21,8 +21,9 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
 ) : ForwardingAudioSink(normal) {
     constructor(context: Context, normal: AudioSink, settings: () -> AudioOutputSettings, report: (String) -> Unit) :
         this(normal, settings, report, { format, attributes, clock ->
-            check(Build.VERSION.SDK_INT >= 34) { "Bit-perfect 需要 Android 14 或更新版本" }
-            AndroidBitPerfectStream.open(context, format, settings(), attributes, clock, report)
+            if (Build.VERSION.SDK_INT >= 34)
+                AndroidBitPerfectStream.open(context, format, settings(), attributes, clock, report)
+            else throw IllegalStateException("Bit-perfect 需要 Android 14 或更新版本")
         })
     private fun selected() = settings().mode == AudioOutputMode.BIT_PERFECT
     private var active = false
