@@ -2,7 +2,7 @@
 
 <img src=".github/img/icon.svg" width="104" height="104" alt="CurrentMusicX 应用图标">
 
-# CurrentMusicX
+# CurrentMusic
 
 让封面、歌词与音乐一起流动
 
