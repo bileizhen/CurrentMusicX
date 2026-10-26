@@ -66,8 +66,12 @@ class DampedDragAnimation(
     val velocity: Float get() = velocityAnimation.value
 
     val modifier: Modifier = Modifier.pointerInput(Unit) {
+        var dragOffset = Offset.Zero
+        var ownsDrag = false
         inspectDragGestures(
             onDragStart = { down ->
+                dragOffset = Offset.Zero
+                ownsDrag = false
                 onDragStarted(down.position)
                 press()
             },
@@ -80,6 +84,13 @@ class DampedDragAnimation(
                 release()
             }
         ) { change, dragAmount ->
+            // Own the drag even at the range/track edge: otherwise the parent
+            // tab swipe can take over and select another page on the same up.
+            // Keep normal tap tolerance until the pointer crosses touch slop.
+            dragOffset += dragAmount
+            if (dragOffset.getDistance() >= viewConfiguration.touchSlop) ownsDrag = true
+            if (ownsDrag && dragAmount != Offset.Zero) change.consume()
+
             val position = change.position
             val previousPosition = change.previousPosition
 

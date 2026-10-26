@@ -90,6 +90,8 @@ class InteractiveHighlight(
     val gestureModifier: Modifier =
         Modifier.pointerInput(animationScope) {
             inspectDragGestures(
+                // Observe the indicator's owned drag without competing for it.
+                ignoreConsumed = true,
                 onDragStart = { down ->
                     startPosition = down.position
                     animationScope.launch {
