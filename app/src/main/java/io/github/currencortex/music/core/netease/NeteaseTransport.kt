@@ -7,6 +7,8 @@ import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.io.InputStream
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 import kotlin.coroutines.resume
@@ -26,6 +28,7 @@ class NeteaseTransport(val sessions: NeteaseSessionStore, private val endpoints:
         .connectTimeout(8, TimeUnit.SECONDS).readTimeout(18, TimeUnit.SECONDS).callTimeout(25, TimeUnit.SECONDS)
         .followRedirects(false).retryOnConnectionFailure(false).build()) {
     private val http = client.newBuilder().followRedirects(false).retryOnConnectionFailure(false).build()
+    private class BufferedResponse(val code: Int, val headers: Headers, val bytes: ByteArray)
     internal suspend fun request(path: String, data: JsonObject = buildJsonObject {},
         encoding: NeteaseEncoding = NeteaseEncoding.DESKTOP, session: NeteaseSession? = null,
         cookieOverride: Map<String, String>? = null, saveCookies: Boolean = true,
@@ -60,35 +63,73 @@ class NeteaseTransport(val sessions: NeteaseSessionStore, private val endpoints:
             .header("Referer", "https://music.163.com/")
             .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36")
             .header("Cookie", requestCommon.entries.joinToString("; ") { "${it.key}=${it.value}" }).build()
-        val response = suspendCancellableCoroutine<Response> { cont ->
+        val response = suspendCancellableCoroutine<BufferedResponse> { cont ->
             val call = http.newCall(request)
             cont.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) { if (!cont.isCancelled) cont.resumeWithException(e) }
-                override fun onResponse(call: Call, response: Response) { cont.resume(response, onCancellation = { _, value, _ -> value.close() }) }
+                override fun onResponse(call: Call, response: Response) {
+                    try {
+                        // Stay suspended until the body is consumed: cancellation can then
+                        // interrupt a stalled read, including after response headers arrived.
+                        val buffered = response.use {
+                            val bytes = if (!it.isSuccessful) ByteArray(0) else {
+                                val body = it.body ?: throw ApiException(ErrorKind.Parse)
+                                if (body.contentLength() > MAX_JSON_BYTES) throw oversized()
+                                val source = body.source()
+                                source.request(MAX_JSON_BYTES.toLong() + 1)
+                                if (source.buffer.size > MAX_JSON_BYTES) throw oversized()
+                                source.readByteArray()
+                            }
+                            BufferedResponse(it.code, it.headers, bytes)
+                        }
+                        if (cont.isActive) cont.resume(buffered)
+                    } catch (failure: Exception) {
+                        if (cont.isActive) cont.resumeWithException(failure)
+                    }
+                }
             })
         }
-        response.use {
-            log("NetEase $path HTTP ${it.code}")
+        currentCoroutineContext().ensureActive()
+        run {
+            log("NetEase $path HTTP ${response.code}")
             sessions.check(expected)
-            if (!it.isSuccessful) throw ApiException(when (it.code) {
+            if (response.code !in 200..299) throw ApiException(when (response.code) {
                 401 -> ErrorKind.NeteaseBindingRequired; 403 -> ErrorKind.Forbidden; 404 -> ErrorKind.NotFound
                 429 -> ErrorKind.RateLimited; in 500..599 -> ErrorKind.Server; else -> ErrorKind.Unknown
-            }, it.code)
-            val bytes = it.body?.bytes() ?: throw ApiException(ErrorKind.Parse)
+            }, response.code)
+            val bytes = response.bytes
             val raw = try {
                 val decoded = if (bytes.firstOrNull { value -> value.toInt() !in setOf(9, 10, 13, 32) }?.toInt() == '{'.code) bytes
                     else NeteaseCrypto.decryptResponse(bytes)
                 val plain = if (decoded.size > 2 && decoded[0] == 0x1f.toByte() && decoded[1] == 0x8b.toByte())
-                    GZIPInputStream(ByteArrayInputStream(decoded)).use { stream -> stream.readBytes() } else decoded
+                    GZIPInputStream(ByteArrayInputStream(decoded)).use { stream -> limited(stream) } else decoded
+                if (plain.size > MAX_JSON_BYTES) throw oversized()
                 ApiJson.parseToJsonElement(plain.toString(Charsets.UTF_8)) as? JsonObject ?: throw ApiException(ErrorKind.Parse)
+            } catch (failure: ApiException) { throw failure
             } catch (_: Exception) { throw ApiException(ErrorKind.Parse) }
-            val changed = it.headers.values("Set-Cookie").mapNotNull { value -> Cookie.parse(url, value) }
+            val changed = response.headers.values("Set-Cookie").mapNotNull { value -> Cookie.parse(url, value) }
                 .filter { cookie -> cookie.expiresAt > System.currentTimeMillis() }.associate { cookie -> cookie.name to cookie.value }
             currentCoroutineContext().ensureActive()
             sessions.check(expected)
             if (saveCookies) sessions.updateCookies(changed, expected)
             NeteaseResponse(raw, cookies + changed)
         }
+    }
+
+    private fun limited(input: InputStream): ByteArray {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (true) {
+            val size = input.read(buffer)
+            if (size < 0) return output.toByteArray()
+            if (output.size().toLong() + size > MAX_JSON_BYTES) throw oversized()
+            output.write(buffer, 0, size)
+        }
+    }
+    companion object {
+        // Shared native routes include large playlists; lyric adapters enforce their tighter caps.
+        internal const val MAX_JSON_BYTES = 16 * 1024 * 1024
+        private fun oversized() = ApiException(ErrorKind.Parse, userMessage = "网易云响应超过 16 MB 限制")
     }
 }
