@@ -499,7 +499,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             settings.lyricsDisplay.blur, if (minimal) settings.lyricsFontSize * .75f else settings.lyricsFontSize,
             settings.lyricsWeight, settings.lyricsOffsetMs,
             settings.lyricsDisplay.copy(hideControls = settings.lyricsDisplay.hideControls || expandLyricsWindow),
-            minimal = minimal, perspective = settings.lyricsDisplay.perspective, cover = player.song?.cover.orEmpty())
+            minimal = minimal, perspective = settings.lyricsDisplay.perspective, cover = player.song?.cover.orEmpty(),
+            mediaDurationMs = player.durationMs)
     } else Box(modifier.testTag("lyrics_panel"), contentAlignment = Alignment.Center) {
         if (lyrics.loading) Column(Modifier.fillMaxWidth().padding(28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             MusicPlaceholder(Modifier.fillMaxWidth(.8f).height(30.dp))

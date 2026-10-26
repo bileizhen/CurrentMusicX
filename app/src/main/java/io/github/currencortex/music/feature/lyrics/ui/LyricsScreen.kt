@@ -76,16 +76,18 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     romanization: Boolean = false, wordAnimation: Boolean = true, effects: Boolean = true,
     fontSize: Float = LyricsTypography.DEFAULT_SIZE, weightMode: LyricsWeight = LyricsWeight.CURRENT, lyricsOffsetMs: Long = 0,
     display: LyricsDisplayOptions = LyricsDisplayOptions(), minimal: Boolean = false, perspective: Boolean = false,
-    cover: String = "") {
+    cover: String = "", mediaDurationMs: Long = 0) {
     val smokeColors = if (display.smoke || display.particles) rememberLyricsSmokeColors(cover) else null
     val size = LyricsTypography.normalize(fontSize)
     val timeline = remember(document) { LyricsSynchronizer(document) }
-    val effectivePosition = remember(position, lyricsOffsetMs) { derivedStateOf { LyricsSynchronizer.effectivePosition(position.value, lyricsOffsetMs) } }
+    val effectivePosition = remember(position, lyricsOffsetMs) { derivedStateOf { LyricsSynchronizer.lyricPosition(position.value, lyricsOffsetMs) } }
     val activeLines by remember(timeline, effectivePosition) { derivedStateOf { timeline.activeLines(effectivePosition.value) } }
     val target by remember(timeline, effectivePosition) { derivedStateOf { timeline.scrollTarget(effectivePosition.value) } }
     val interlude by remember(timeline, effectivePosition) { derivedStateOf { timeline.interlude(effectivePosition.value) } }
     if (display.smoke || display.particles) {
-        SmokeLyricsStage(document, target, effectivePosition, onSeek = { onSeek(LyricsSynchronizer.seekPosition(it, lyricsOffsetMs)) },
+        SmokeLyricsStage(document, target, effectivePosition, onSeek = {
+            LyricsSynchronizer.seekPositionOrNull(it, lyricsOffsetMs, mediaDurationMs)?.let(onSeek)
+        },
             modifier = modifier, canSeek = canSeek, translation = translation, romanization = romanization,
             fontSize = size, weightMode = weightMode, display = display.normalized(), colors = smokeColors,
             particles = display.particles)
@@ -102,7 +104,9 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
             LyricsLineView(line, index, effectivePosition, index in activeLines,
                 !browsing && activeLines.isEmpty() && index == target, kotlin.math.abs(index - target),
                 canSeek, {
-                    onSeek(LyricsSynchronizer.seekPosition(it, lyricsOffsetMs)); followRequest++
+                    LyricsSynchronizer.seekPositionOrNull(it, lyricsOffsetMs, mediaDurationMs)?.let { target ->
+                        onSeek(target); followRequest++
+                    }
                 }, translation, romanization, wordAnimation, effects, size, weightMode, display, monetTone = tone)
         }
         if (!minimal && interlude != null && mode == LyricsScrollMode.FOLLOWING)

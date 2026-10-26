@@ -58,4 +58,25 @@ class LyricsSynchronizerTest {
         assertEquals(Long.MAX_VALUE, LyricsSynchronizer.effectivePosition(Long.MAX_VALUE, 1))
         assertEquals(-1, LyricsSynchronizer(LyricsDocument()).findCurrentLine(0))
     }
+
+    @Test fun delayedFirstCueUsesNegativeLyricTimeUntilTheActualStart() {
+        val sync = LyricsSynchronizer(LyricsDocument(listOf(LyricLine(0, 1000, "First"))))
+        assertEquals(-250L, LyricsSynchronizer.lyricPosition(0, -250))
+        assertEquals(-1, sync.findCurrentLine(LyricsSynchronizer.lyricPosition(249, -250)))
+        assertEquals(0, sync.findCurrentLine(LyricsSynchronizer.lyricPosition(250, -250)))
+        assertEquals(Long.MIN_VALUE, LyricsSynchronizer.lyricPosition(Long.MIN_VALUE, -1))
+        assertEquals(Long.MAX_VALUE, LyricsSynchronizer.lyricPosition(Long.MAX_VALUE, 1))
+    }
+
+    @Test fun songAndDeviceOffsetsInvertWithoutClippingAndNeverSeekToTrackEnd() {
+        assertEquals(125_000L, LyricsSynchronizer.seekPosition(5_000, -120_000))
+        assertEquals(5_000L, LyricsSynchronizer.seekPosition(125_000, 120_000))
+        assertEquals(0L, LyricsSynchronizer.seekPosition(1_000, 120_000))
+        assertNull(LyricsSynchronizer.seekPositionOrNull(9_500, -500, 10_000))
+        assertNull(LyricsSynchronizer.seekPositionOrNull(10_000, 0, 10_000))
+        assertEquals(9_999L, LyricsSynchronizer.seekPositionOrNull(9_500, -499, 10_000))
+        assertEquals(125_000L, LyricsSynchronizer.seekPositionOrNull(5_000, -120_000, 0))
+        assertEquals(Long.MAX_VALUE, LyricsSynchronizer.seekPosition(0, Long.MIN_VALUE))
+        assertEquals(0L, LyricsSynchronizer.seekPosition(Long.MIN_VALUE, Long.MAX_VALUE))
+    }
 }

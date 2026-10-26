@@ -62,10 +62,20 @@ class LyricsSynchronizer(private val document: LyricsDocument) {
             if (word.endTimeMs <= word.startTimeMs) return if (positionMs >= word.endTimeMs) 1f else 0f
             return ((positionMs.toDouble() - word.startTimeMs) / (word.endTimeMs.toDouble() - word.startTimeMs)).toFloat().coerceIn(0f, 1f)
         }
-        fun effectivePosition(positionMs: Long, offsetMs: Long): Long =
+        /** A negative lyric read-head represents the prelude before a delayed first cue. */
+        fun lyricPosition(positionMs: Long, offsetMs: Long): Long =
             if (offsetMs > 0 && positionMs > Long.MAX_VALUE - offsetMs) Long.MAX_VALUE
-            else if (offsetMs < 0 && positionMs < Long.MIN_VALUE - offsetMs) 0
-            else (positionMs + offsetMs).coerceAtLeast(0)
-        fun seekPosition(lineStartMs: Long, offsetMs: Long): Long = effectivePosition(lineStartMs, -offsetMs.coerceIn(-60000, 60000))
+            else if (offsetMs < 0 && positionMs < Long.MIN_VALUE - offsetMs) Long.MIN_VALUE
+            else positionMs + offsetMs
+        fun effectivePosition(positionMs: Long, offsetMs: Long): Long = lyricPosition(positionMs, offsetMs).coerceAtLeast(0)
+        fun seekPosition(lineStartMs: Long, offsetMs: Long): Long =
+            if (offsetMs > 0 && lineStartMs < Long.MIN_VALUE + offsetMs) 0
+            else if (offsetMs < 0 && lineStartMs > Long.MAX_VALUE + offsetMs) Long.MAX_VALUE
+            else (lineStartMs - offsetMs).coerceAtLeast(0)
+
+        // Folia lyricSeekTime.ts, aecd330b720eb8fc728e6b10ebcec261b144d683 (AGPL-3.0).
+        // A lyric click must not seek to the media end and inadvertently advance the queue.
+        fun seekPositionOrNull(lineStartMs: Long, offsetMs: Long, mediaDurationMs: Long): Long? =
+            seekPosition(lineStartMs, offsetMs).takeUnless { mediaDurationMs > 0 && it >= mediaDurationMs }
     }
 }
