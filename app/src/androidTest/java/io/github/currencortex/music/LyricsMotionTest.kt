@@ -23,6 +23,26 @@ import org.junit.Test
 class LyricsMotionTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
 
+    @Test fun delayedZeroCueAndLyricClicksUseTheSameBoundedReadHead() {
+        val position = mutableLongStateOf(0)
+        val seeks = mutableListOf<Long>()
+        val document = LyricsDocument(listOf(
+            LyricLine(0, 1000, "首句"), LyricLine(5000, 6000, "文件中超出音频的歌词")))
+        compose.setContent {
+            LyricsScreen(document, position, { seeks += it },
+                Modifier.width(340.dp).height(600.dp).background(Color.Black), effects = false,
+                lyricsOffsetMs = -250, mediaDurationMs = 5000)
+        }
+        compose.onNodeWithTag("lyric_line_0").assertIsNotSelected()
+        compose.runOnIdle { position.longValue = 250 }
+        compose.onNodeWithTag("lyric_line_0").assertIsSelected().performClick()
+        compose.runOnIdle { assertEquals(listOf(250L), seeks) }
+        compose.onNodeWithTag("lyric_line_1").performClick()
+        compose.runOnIdle {
+            assertEquals("A lyric outside the loaded media must not finish the track", listOf(250L), seeks)
+        }
+    }
+
     @Test fun aNewLineCanInterruptThePreviousEntranceAndBackwardSeekStillSettles() {
         val position = mutableLongStateOf(500)
         val document = LyricsDocument((0..5).map { index ->
