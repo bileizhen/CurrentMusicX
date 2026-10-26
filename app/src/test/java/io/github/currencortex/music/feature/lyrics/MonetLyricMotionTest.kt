@@ -6,8 +6,43 @@ import org.junit.Test
 import androidx.compose.animation.core.TargetBasedAnimation
 import androidx.compose.animation.core.VectorConverter
 import kotlin.math.abs
+import io.github.currencortex.music.feature.lyrics.model.LyricLine
+import io.github.currencortex.music.feature.lyrics.model.LyricWord
+import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
 
 class MonetLyricMotionTest {
+    @Test fun punctuationUsesAdjacentCuesWithoutInventingPersistedWordTiming() {
+        val hello = LyricWord("Hello", 1000, 2000, 1, 6)
+        val world = LyricWord("world", 3000, 4000, 8, 13)
+        val line = LyricLine(1000, 4500, "\"Hello, world!\"", listOf(hello, world))
+        val display = monetDisplayWords(line)
+        assertEquals(listOf("\"", "Hello", ", ", "world", "!\""), display.map { it.text })
+        assertSame(hello, display[1])
+        assertSame(world, display[3])
+        val comma = display[2]
+        assertEquals(3000L, comma.startTimeMs)
+        assertEquals(comma.startTimeMs, comma.endTimeMs)
+        assertEquals(0f, LyricsSynchronizer.wordProgress(comma, 2999), 0f)
+        assertEquals(1f, LyricsSynchronizer.wordProgress(comma, 3000), 0f)
+        assertEquals(4000L, display.last().startTimeMs)
+        assertEquals(listOf(hello, world), line.words)
+        assertEquals(2, line.words.size)
+    }
+
+    @Test fun displayGapHandlingPreservesUtf16OffsetsAndRejectsEstimatedCues() {
+        val word = LyricWord("你", 1000, 2000, 2, 3)
+        val line = LyricLine(1000, 2500, "🎵你！", listOf(word))
+        val display = monetDisplayWords(line)
+        assertEquals("🎵", display.first().text)
+        assertEquals(0, display.first().startOffset)
+        assertEquals(2, display.first().endOffset)
+        assertEquals("！", display.last().text)
+        assertEquals(3, display.last().startOffset)
+        assertEquals(4, display.last().endOffset)
+        assertTrue(monetDisplayWords(line.copy(wordsEstimated = true)).isEmpty())
+        assertTrue(monetDisplayWords(line.copy(words = emptyList())).isEmpty())
+    }
+
     @Test fun expandedViewportAddsTracksAndKeepsLongSongsBounded() {
         val normal = monetViewportRadius(360f, 30f)
         val tall = monetViewportRadius(720f, 30f)
