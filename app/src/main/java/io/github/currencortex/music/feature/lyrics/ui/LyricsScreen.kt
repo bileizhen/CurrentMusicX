@@ -26,6 +26,7 @@ import io.github.currencortex.music.data.settings.LyricsDisplayOptions
 import io.github.currencortex.music.feature.lyrics.model.*
 import io.github.currencortex.music.feature.lyrics.timeline.*
 import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
+import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
 
 enum class LyricsScrollMode { FOLLOWING, BROWSING }
 
@@ -34,18 +35,22 @@ internal val LyricsPerspectiveAngle = SemanticsPropertyKey<Float>("LyricsPerspec
 @Composable fun rememberLyricsPosition(player: PlayerState, sampleDisplayFrames: Boolean = false,
     onFrameNanos: ((Long) -> Unit)? = null): State<Long> {
     val frameObserver = rememberUpdatedState(onFrameNanos)
-    val anchor = remember(player.song?.id, player.positionMs, player.playing, player.loading, player.durationMs, player.playbackSpeed, player.anchorRealtimeMs, player.timelineRevision) {
+    // Like Folia's displayed-song read-head, reset exactly when the displayed playback changes.
+    // Platform-local ids may coincide, and two Navidrome libraries can expose the same track id.
+    val songKey = remember(player.song) { player.song?.let(SongLyricsStore::identity) }
+    val identity = remember(songKey, player.mode) { songKey to player.mode }
+    val anchor = remember(identity, player.positionMs, player.playing, player.loading, player.durationMs, player.playbackSpeed, player.anchorRealtimeMs, player.timelineRevision) {
         PlaybackAnchor(player.positionMs, player.anchorRealtimeMs.takeIf { it > 0 } ?: SystemClock.elapsedRealtime(),
             player.playing && !player.loading, player.durationMs, player.playbackSpeed, player.timelineRevision)
     }
     val position = remember { mutableLongStateOf(player.positionMs) }
     val clock = remember { LyricsPlaybackClock() }
     SideEffect {
-        clock.update(player.song?.id, anchor)
+        clock.update(identity, anchor)
         position.longValue = clock.positionAt(SystemClock.elapsedRealtime())
     }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(player.song?.id, anchor.playing, lifecycle, sampleDisplayFrames) {
+    LaunchedEffect(identity, anchor.playing, lifecycle, sampleDisplayFrames) {
         position.longValue = clock.positionAt(SystemClock.elapsedRealtime())
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             frameObserver.value?.invoke(0L)

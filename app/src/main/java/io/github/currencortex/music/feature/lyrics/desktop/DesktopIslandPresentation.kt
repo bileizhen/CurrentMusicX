@@ -18,7 +18,7 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 
 /** One finite, window-owned intro per track. Hidden windows suspend it; no lyric timing is invented. */
-@Composable internal fun rememberIslandPresentation(songId: Long?, ready: Boolean, motion: Boolean): State<Float> {
+@Composable internal fun rememberIslandPresentation(songId: Any?, ready: Boolean, motion: Boolean): State<Float> {
     val reveal = remember(songId) { Animatable(if (songId == null || !motion) 1f else 0f) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(songId, ready, motion, lifecycle) {

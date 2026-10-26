@@ -5,6 +5,17 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LyricsPlaybackClockTest {
+    @Test fun platformAndLibraryChangesDoNotSmoothThroughAnUnrelatedSongsClock() {
+        val clock = LyricsPlaybackClock()
+        clock.update(listOf("NETEASE", 1L), PlaybackAnchor(1000, 0, true))
+        clock.update(listOf("QQ_MUSIC", 1L), PlaybackAnchor(1050, 100, true))
+        assertEquals(1050L, clock.positionAt(100))
+        clock.update(listOf("NAVIDROME", 1L, "server-a", "track"), PlaybackAnchor(1150, 200, true))
+        clock.update(listOf("NAVIDROME", 1L, "server-b", "track"), PlaybackAnchor(1160, 300, true))
+        assertEquals(1160L, clock.positionAt(300))
+        assertEquals(1260L, clock.positionAt(400))
+    }
+
     @org.junit.Test fun explicitSmallSeekSnapsInsteadOfSmoothingThroughOldLyric() {
         val clock = io.github.currencortex.music.feature.lyrics.timeline.LyricsPlaybackClock()
         clock.update(1, io.github.currencortex.music.feature.lyrics.timeline.PlaybackAnchor(1000, 0, true))

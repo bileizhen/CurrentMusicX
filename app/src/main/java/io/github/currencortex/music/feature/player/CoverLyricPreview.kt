@@ -30,9 +30,10 @@ import io.github.currencortex.music.feature.lyrics.ui.*
     val settings by vm.settings.collectAsStateWithLifecycle()
     val clock = rememberLyricsPosition(if (active) player else player.copy(playing = false))
     val timeline = remember(lyrics.document) { LyricsSynchronizer(lyrics.document) }
-    val matches = lyrics.songId == song?.id && player.song?.id == song?.id
-    val index by remember(timeline, clock, matches, settings.lyricsOffsetMs) { derivedStateOf {
-        if (matches) timeline.findCurrentLine(LyricsSynchronizer.effectivePosition(clock.value, settings.lyricsOffsetMs)) else -1
+    val matches = lyrics.matches(song) && lyrics.matches(player.song)
+    val totalOffset = settings.lyricsOffsetMs - lyrics.songOffsetMs
+    val index by remember(timeline, clock, matches, totalOffset) { derivedStateOf {
+        if (matches) timeline.findCurrentLine(LyricsSynchronizer.lyricPosition(clock.value, totalOffset)) else -1
     } }
     val fontSize = (settings.lyricsFontSize * .52f).coerceIn(12f, 20f)
     AnimatedContent(index, modifier.testTag("player_cover_lyrics"), transitionSpec = {
@@ -46,7 +47,7 @@ import io.github.currencortex.music.feature.lyrics.ui.*
                     else if (!focused) "" else when {
                         lyrics.loading || !matches -> "正在加载歌词"
                         lyrics.document.lines.isEmpty() -> "暂无歌词"
-                        else -> timeline.interlude(LyricsSynchronizer.effectivePosition(clock.value, settings.lyricsOffsetMs))?.label ?: "音乐正在继续"
+                        else -> timeline.interlude(LyricsSynchronizer.lyricPosition(clock.value, totalOffset))?.label ?: "音乐正在继续"
                     }
                 val weight = lyricsFontWeight(settings.lyricsWeight, focused, settings.lyricsDisplay.fontWeight)
                 BasicText(text.ifBlank { " " }, Modifier.fillMaxWidth().height(22.dp)

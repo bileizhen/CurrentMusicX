@@ -19,7 +19,7 @@ class CurrentMusicLyricsProvider(private val music: MusicRepository, private val
             ?: return LyricsProviderResult.Failure(LyricsErrorCode.NO_LYRICS, "CurrentMusic requires an NCM id")
         val targetServer = server()
         val scope = when {
-            song.musicSource == MusicSource.NAVIDROME -> "navidrome:$targetServer"
+            song.musicSource == MusicSource.NAVIDROME -> SongLyricsStore.identity(song)
             source == LyricsSource.NETEASE -> "netease"
             else -> "currentmusic:$targetServer"
         }

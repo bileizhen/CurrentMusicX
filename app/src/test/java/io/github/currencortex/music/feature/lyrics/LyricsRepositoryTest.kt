@@ -18,6 +18,100 @@ class LyricsRepositoryTest {
     private val missing = LyricsProvider { LyricsProviderResult.Failure(LyricsErrorCode.NO_LYRICS, "missing") }
     private fun cache() = LyricsCache(temporary.newFolder())
     private val fallback = LyricsProvider { LyricsProviderResult.Parsed(LyricsParser.lrc("[00:01]旧歌词")) }
+    @Test fun automaticSelectionBeatsAnExistingDefaultResultAndRawTtmlCache() = runBlocking {
+        val cache = cache()
+        cache.write(LyricsKey(MusicSource.NETEASE, "123"), raw())
+        var automatic = false
+        var providerCalls = 0
+        var matchingCalls = 0
+        val provider = LyricsProvider { providerCalls++; LyricsProviderResult.Parsed(LyricsParser.lrc("[00:01]旧来源")) }
+        val repo = LyricsRepository(provider, provider, cache, selection = {
+            LyricsSelection(listOf("same session"), provider, LyricsOrigin("CurrentMusic", "currentmusic"), automatic)
+        }, autoMatch = {
+            matchingCalls++
+            SavedLyrics(LyricsParser.lrc("[00:01]当前择优"), LyricsOrigin("网易云音乐", "netease"))
+        })
+        val song = Song(123, "fixture")
+        assertEquals("旧来源", repo.load(song).document.lines.single().text)
+        automatic = true
+        val result = repo.load(song)
+        assertEquals("当前择优", result.document.lines.single().text)
+        assertEquals("netease", result.origin?.provider)
+        assertEquals(1, providerCalls)
+        assertEquals(1, matchingCalls)
+        assertEquals(raw(), cache.read(LyricsKey(MusicSource.NETEASE, "123")))
+        // Mode identity also separates diagnostic automatic memory from a manual source.
+        automatic = false
+        assertEquals("旧来源", repo.load(song).document.lines.single().text)
+        assertEquals(1, providerCalls)
+    }
+    @Test fun automaticSelectionRunsAgainOnEveryLoadInsteadOfReturningThePreviousWinner() = runBlocking {
+        var calls = 0
+        val forbidden = LyricsProvider { error("Automatic mode must skip default providers") }
+        val repo = LyricsRepository(forbidden, forbidden, cache(), selection = {
+            LyricsSelection(listOf("auto"), forbidden, automatic = true)
+        }, autoMatch = {
+            calls++
+            SavedLyrics(LyricsParser.lrc("[00:01]winner $calls"), LyricsOrigin("source $calls", "fixture"))
+        })
+        val song = Song(123, "fixture")
+        assertEquals("winner 1", repo.load(song).document.lines.single().text)
+        assertEquals("winner 2", repo.load(song).document.lines.single().text)
+        assertEquals("source 3", repo.load(song).origin?.label)
+        assertEquals(3, calls)
+    }
+    @Test fun automaticFailureAndMissingResultsNeverReuseAnOldCurrentMusicOrAutomaticDocument() = runBlocking {
+        var automatic = false
+        var outcome = "success"
+        var providerCalls = 0
+        val provider = LyricsProvider { providerCalls++; LyricsProviderResult.Parsed(LyricsParser.lrc("[00:01]CurrentMusic cached")) }
+        val repo = LyricsRepository(provider, provider, cache(), selection = {
+            LyricsSelection(listOf("same session"), provider, automatic = automatic)
+        }, autoMatch = {
+            when (outcome) {
+                "failure" -> throw LyricsMatchException("sources unavailable")
+                "missing" -> null
+                "empty" -> SavedLyrics(io.github.currencortex.music.feature.lyrics.model.LyricsDocument(), LyricsOrigin("empty"))
+                else -> SavedLyrics(LyricsParser.lrc("[00:01]automatic cached"), LyricsOrigin("网易云音乐", "netease"))
+            }
+        })
+        val song = Song(123, "fixture")
+        assertEquals("CurrentMusic cached", repo.load(song).document.lines.single().text)
+        automatic = true
+        assertEquals("automatic cached", repo.load(song).document.lines.single().text)
+        outcome = "failure"
+        val failed = repo.load(song)
+        assertTrue(failed.document.lines.isEmpty())
+        assertTrue(failed.error!!.contains("暂时无法读取"))
+        assertEquals(LyricsErrorCode.NETWORK_ERROR, failed.issues.single().code)
+        for (missing in listOf("missing", "empty")) {
+            outcome = missing
+            val result = repo.load(song)
+            assertTrue(result.document.lines.isEmpty())
+            assertEquals("暂无歌词", result.error)
+            assertTrue(result.issues.isEmpty())
+        }
+        assertEquals(1, providerCalls)
+    }
+    @Test fun cancellationOfAutomaticSelectionPropagatesWithoutUsingTheDefaultProvider() = runBlocking {
+        val started = CompletableDeferred<Unit>()
+        var matchingCalls = 0
+        val forbidden = LyricsProvider { error("Cancellation must never start a default lookup") }
+        val repo = LyricsRepository(forbidden, forbidden, cache(), selection = {
+            LyricsSelection(listOf("auto"), forbidden, automatic = true)
+        }, autoMatch = {
+            matchingCalls++
+            if (matchingCalls == 1) { started.complete(Unit); awaitCancellation() }
+            SavedLyrics(LyricsParser.lrc("[00:01]recovered"), LyricsOrigin("网易云音乐", "netease"))
+        })
+        val song = Song(123, "fixture")
+        val job = async(Dispatchers.Default) { repo.load(song) }
+        started.await()
+        withTimeout(1000) { job.cancelAndJoin() }
+        assertTrue(job.isCancelled)
+        assertEquals("recovered", repo.load(song).document.lines.single().text)
+        assertEquals(2, matchingCalls)
+    }
     @Test fun explicitSourceIsolatesMemoryAndIgnoresTtmlCacheAcrossSourceAndSessionChanges() = runBlocking {
         val cache = cache()
         cache.write(LyricsKey(MusicSource.NETEASE, "123"), raw())

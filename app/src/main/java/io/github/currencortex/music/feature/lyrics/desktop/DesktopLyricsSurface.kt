@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.feature.lyrics.data.PlaybackLyricsState
+import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
 import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
 import io.github.currencortex.music.feature.lyrics.ui.rememberLyricsPosition
 import kotlinx.coroutines.delay
@@ -50,10 +51,11 @@ import kotlinx.coroutines.flow.StateFlow
     val effectNotice by effectNotices.collectAsStateWithLifecycle()
     val content by lyrics.collectAsStateWithLifecycle()
     val player by playback.collectAsStateWithLifecycle()
+    val songKey = remember(player.song) { player.song?.let(SongLyricsStore::identity) }
     val options by preferences.collectAsStateWithLifecycle()
-    val hasLyrics = player.song != null && content.songId == player.song?.id &&
+    val hasLyrics = content.matches(player.song) &&
         remember(content.document) { desktopIslandHasLyrics(content.document) }
-    var selectedFps by remember(player.song?.id, player.song?.musicSource, defaultFpsMode) { mutableStateOf(defaultFpsMode) }
+    var selectedFps by remember(songKey, defaultFpsMode) { mutableStateOf(defaultFpsMode) }
     val fpsMode = !hasLyrics || selectedFps
     SideEffect { onIslandModeChanged(fpsMode) }
     val toggle by rememberUpdatedState({ if (hasLyrics) selectedFps = !selectedFps })
@@ -62,9 +64,10 @@ import kotlinx.coroutines.flow.StateFlow
     val frameRate = rememberIslandFrameRate()
     val position = rememberLyricsPosition(player, fpsMode, if (fpsMode) frameRate::onFrame else null)
     val timeline = remember(content.document) { LyricsSynchronizer(content.document) }
-    val effective = remember(position, options.offsetMs) { derivedStateOf { LyricsSynchronizer.effectivePosition(position.value, options.offsetMs) } }
+    val totalOffset = options.offsetMs - content.songOffsetMs
+    val effective = remember(position, totalOffset) { derivedStateOf { LyricsSynchronizer.lyricPosition(position.value, totalOffset) } }
     val index by remember(timeline, effective) { derivedStateOf { desktopIslandLineIndex(content.document, timeline, effective.value) } }
-    val line = content.document.lines.getOrNull(index).takeIf { content.songId == player.song?.id }
+    val line = content.document.lines.getOrNull(index).takeIf { content.matches(player.song) }
     val motion = rememberDesktopMotion()
     val coverTransition = rememberIslandCoverTransition(player.song, motion && player.listenTogether == null)
     val coverFlying by remember(coverTransition) { derivedStateOf { coverTransition.progress.value < 1f } }
@@ -85,7 +88,7 @@ import kotlinx.coroutines.flow.StateFlow
     val font = options.displayFontSize
     val size = rememberIslandSize(player.song, if (fpsMode) "000.0 FPS" else line?.text.orEmpty(), font, fpsMode, showChrome,
         line?.translation?.takeIf { options.translation && !fpsMode }, listeningPair = player.listenTogether != null)
-    val reveal = rememberIslandPresentation(player.song?.id, fpsMode || (!content.loading && content.songId == player.song?.id), motion).value
+    val reveal = rememberIslandPresentation(songKey, fpsMode || (!content.loading && content.matches(player.song)), motion).value
     val introWidth = size.headingWidth.coerceAtMost(maxIslandWidth())
     // Keep the measured heading space until its labels have completely faded.
     val desiredWidth = (size.width + (introWidth - size.width) * (1f - reveal / .55f).coerceIn(0f, 1f))
@@ -93,7 +96,7 @@ import kotlinx.coroutines.flow.StateFlow
     var widthTarget by remember { mutableFloatStateOf(desiredWidth) }
     val width = rememberIslandWidth(widthTarget, motion)
     val entrance = rememberIslandEntrance(motion)
-    SideEffect { if (reveal == 0f || fpsMode || player.song == null || (!content.loading && content.songId == player.song?.id)) widthTarget = desiredWidth }
+    SideEffect { if (reveal == 0f || fpsMode || player.song == null || (!content.loading && content.matches(player.song))) widthTarget = desiredWidth }
     val density = LocalDensity.current
     val morphEnvelope = if (reveal > 0f && reveal < 1f) {
         with(density) { (font * 1.2f + if (options.translation && !line?.translation.isNullOrBlank()) desktopSubtitleSize(font) * 1.2f else 0f).sp.toDp() } +
@@ -145,7 +148,7 @@ import kotlinx.coroutines.flow.StateFlow
             DesktopIslandDisplay(fpsMode, motion, lyrics = {
                 if (line != null) {
                     val next = remember(content.document, index) { desktopIslandNextLineIndex(content.document, index) }
-                    DesktopIslandCueHost(player.song?.id, index, line, next, content.document.lines.getOrNull(next), options to motion) { cue ->
+                    DesktopIslandCueHost(songKey, index, line, next, content.document.lines.getOrNull(next), options to motion) { cue ->
                         DesktopIslandLyrics(cue, effective, options, motion, "desktop_window_translation")
                     }
                 } else Spacer(Modifier.height(0.dp))
