@@ -18,15 +18,15 @@ import androidx.lifecycle.repeatOnLifecycle
 import io.github.currencortex.music.feature.lyrics.model.LyricLine
 import kotlinx.coroutines.awaitCancellation
 
-private data class IslandCueSlot(val index: Int, val line: LyricLine)
+private data class IslandCueSlot(val songIdentity: Any?, val index: Int, val line: LyricLine)
 
 /** Keep the current renderer and one premeasured future cue; promotion retains its layouts and halos. */
-@Composable internal fun DesktopIslandCueHost(songId: Long?, index: Int, line: LyricLine,
+@Composable internal fun DesktopIslandCueHost(songId: Any?, index: Int, line: LyricLine,
     nextIndex: Int, nextLine: LyricLine?, style: Any, modifier: Modifier = Modifier,
     content: @Composable (LyricLine) -> Unit) {
     val state = remember(songId) { SubcomposeLayoutState() }
-    val current = remember(index, line) { IslandCueSlot(index, line) }
-    val next = remember(nextIndex, nextLine) { nextLine?.let { IslandCueSlot(nextIndex, it) } }
+    val current = remember(songId, index, line) { IslandCueSlot(songId, index, line) }
+    val next = remember(songId, nextIndex, nextLine) { nextLine?.let { IslandCueSlot(songId, nextIndex, it) } }
     val render = rememberUpdatedState(content)
     val active = rememberUpdatedState(current)
     // A single content factory gives prepared/promoted slots the same composition

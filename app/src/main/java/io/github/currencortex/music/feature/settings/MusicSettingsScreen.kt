@@ -55,7 +55,7 @@ import kotlin.math.roundToInt
             summary = "连接自己的音乐服务器 · Subsonic") } }
         item { MusicSectionHeader("音乐音源") }
         item { Card { Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("网易云原生：歌曲播放、下载和 MV 由手机直连网易云；音质与可播放范围由本机网易云账号权限决定。歌词来源单独设置。CurrentMusic 账号、公共聊天与本站房间仍使用原服务。",
+            Text("网易云原生：歌曲播放、下载和 MV 由手机直连网易云；音质与可播放范围由本机网易云账号权限决定。歌词默认以网易云歌词为参考，比较各来源后自动择优，也可单独指定来源。CurrentMusic 账号、公共聊天与本站房间仍使用原服务。",
                 Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 12.sp, color = hint)
             AudioProvider.entries.forEach { entry ->
                 MusicDestinationRow((if (provider.provider == entry) "✓ " else "") + entry.label,
@@ -173,9 +173,12 @@ import kotlin.math.roundToInt
             MusicDialogChoiceRow(source.label, source == settings.lyricsSource,
                 { vm.lyricsSource(source); lyricsSourceOpen = false },
                 Modifier.testTag("lyrics_source_${source.name.lowercase()}"),
-                summary = if (source == LyricsSource.CURRENT_MUSIC) "由 CurrentMusic 服务提供，支持 LDDC 真实逐字；过滤估算时间轴"
-                    else "手机直连网易云，使用原生逐字或逐行歌词")
+                summary = when (source) {
+                    LyricsSource.AUTO -> "以网易云歌词为参考，核对候选内容和时间轴，按真实逐字、完整度等选取更合适的歌词"
+                    LyricsSource.CURRENT_MUSIC -> "由 CurrentMusic 服务提供，支持 LDDC 真实逐字；过滤估算时间轴"
+                    LyricsSource.NETEASE -> "手机直连网易云，使用原生逐字或逐行歌词"
+                })
         }
-        Text("独立于音乐音源，切换后立即重新加载当前歌词。", Modifier.padding(horizontal = 24.dp, vertical = 12.dp), fontSize = 12.sp, color = hint)
+        Text("独立于音乐音源。切换默认策略后重新获取歌词；单曲手动导入或匹配仍优先。", Modifier.padding(horizontal = 24.dp, vertical = 12.dp), fontSize = 12.sp, color = hint)
     }
 }

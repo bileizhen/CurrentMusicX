@@ -2,6 +2,8 @@ package io.github.currencortex.music.core.netease
 
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.core.security.TokenStore
+import io.github.currencortex.music.data.settings.LyricsSource
+import io.github.currencortex.music.data.song.MusicRepository
 import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import okhttp3.OkHttpClient
@@ -73,6 +75,27 @@ class NeteaseTransportBodyTest {
             assertEquals(writes, vault.writes.get())
             assertEquals(1, server.requestCount)
         } finally { scope.cancel(); server.shutdown() }
+    }
+
+    @Test fun cancellingNativeLyricMatchingDuringBodyReadDoesNotTryEitherFallback() = runBlocking {
+        val native = MockWebServer(); val project = MockWebServer()
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val sessions = NeteaseSessionStore(Vault(), scope); sessions.ready.await()
+            val bodyStarted = CountDownLatch(1)
+            native.enqueue(MockResponse().setBody("""{"code":200,"lrc":{"lyric":"[00:01]Fixture"}}""")
+                .setBodyDelay(3, TimeUnit.SECONDS).addHeader("Set-Cookie", "MUSIC_U=late-cookie; Path=/"))
+            native.start(); project.start()
+            val gateway = NeteaseGateway(transport(native, sessions, bodyStarted))
+            val repository = MusicRepository(ApiClient({ project.url("/").toString() }, { null }, {}, netease = gateway))
+            val job = async(Dispatchers.Default) { repository.lyricsForMatching(7, LyricsSource.NETEASE) }
+            assertTrue(withContext(Dispatchers.IO) { bodyStarted.await(2, TimeUnit.SECONDS) })
+            withTimeout(1000) { job.cancelAndJoin() }
+            assertTrue(job.isCancelled)
+            assertEquals(1, native.requestCount)
+            assertEquals(0, project.requestCount)
+            assertTrue(sessions.snapshot().credential.cookies.isEmpty())
+        } finally { scope.cancel(); native.shutdown(); project.shutdown() }
     }
 
     @Test fun failedHttpStatusDoesNotWaitForAnErrorBodyOrSaveItsCookies() = runBlocking {

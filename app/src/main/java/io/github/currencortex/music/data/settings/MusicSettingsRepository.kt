@@ -20,11 +20,11 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val allowConcurrentPlayback: Boolean = false,
                          val transitionMode: MusicTransitionMode = MusicTransitionMode.OFF,
                          val crossfadeSeconds: Int = 5, val likeMode: LikeMode = LikeMode.AUTO,
-                         val lyricsSource: LyricsSource = LyricsSource.CURRENT_MUSIC)
+                         val lyricsSource: LyricsSource = LyricsSource.AUTO)
 
 enum class LyricsSource(val label: String) {
-    CURRENT_MUSIC("CurrentMusic 歌词"), NETEASE("网易云歌词");
-    companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: CURRENT_MUSIC }
+    AUTO("自动择优 · 网易云歌词匹配"), CURRENT_MUSIC("CurrentMusic 歌词"), NETEASE("网易云歌词");
+    companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: AUTO }
 }
 
 enum class LikeMode(val label: String) {
@@ -86,6 +86,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val lyricsWeight = stringPreferencesKey("lyrics.weight")
     private val lyricsOffset = longPreferencesKey("lyrics.offsetMs")
     private val lyricsSource = stringPreferencesKey("lyrics.source")
+    private val lyricsSourceMigration = intPreferencesKey("lyrics.source.automaticMigrationVersion")
     private val centered = booleanPreferencesKey("lyrics.centered")
     private val fontWeight = intPreferencesKey("lyrics.fontWeight")
     private val blur = booleanPreferencesKey("lyrics.blur")
@@ -105,6 +106,25 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val concurrentPlayback = booleanPreferencesKey("music.allowConcurrentPlayback")
     private val transition = stringPreferencesKey("music.transitionMode")
     private val crossfadeSeconds = intPreferencesKey("music.crossfadeSeconds")
+    init {
+        scope.launch {
+            try {
+                store.edit { p ->
+                    if ((p[lyricsSourceMigration] ?: 0) < LYRICS_SOURCE_AUTOMATIC_VERSION) {
+                        p[lyricsSource] = LyricsSource.AUTO.name
+                        p[lyricsSourceMigration] = LYRICS_SOURCE_AUTOMATIC_VERSION
+                    }
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: java.io.IOException) {
+                // The read side already uses AUTO until migration commits. A temporarily
+                // unavailable disk must not crash playback; a new repository retries it.
+            }
+        }
+    }
+    private fun decodeLyricsSource(p: Preferences) =
+        if ((p[lyricsSourceMigration] ?: 0) < LYRICS_SOURCE_AUTOMATIC_VERSION) LyricsSource.AUTO
+        else LyricsSource.from(p[lyricsSource])
     private fun decode(p: Preferences) = MusicSettings(p[server] ?: ServerDefaults.URL, AudioQuality.from(p[quality].orEmpty()),
         p[restore] ?: true, p[nickname].orEmpty(), p[account] ?: 0,
         p[preload] ?: true, p[metered] ?: false, LyricsTypography.normalize(p[lyricsSize] ?: LyricsTypography.DEFAULT_SIZE),
@@ -113,7 +133,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[blur] ?: true, p[stagger] ?: true, KaraokeScope.from(p[karaokeScope]), p[hideControls] ?: false,
             p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true,
             p[perspective] ?: true, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false, p[particles] ?: false).normalized(), p[neteaseMain] ?: true,
-        p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), LikeMode.from(p[likeMode]), LyricsSource.from(p[lyricsSource]))
+        p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), LikeMode.from(p[likeMode]), decodeLyricsSource(p))
     // Read the persisted value directly, without the StateFlow's initial defaults.
     val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: false }.distinctUntilChanged()
     val state = store.data.map(::decode)
@@ -133,7 +153,13 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     suspend fun setLyricsFontSize(value: Float) { store.edit { it[lyricsSize] = LyricsTypography.normalize(value) } }
     suspend fun setLyricsWeight(value: LyricsWeight) { store.edit { it[lyricsWeight] = value.name } }
     suspend fun setLyricsOffset(value: Long) { store.edit { it[lyricsOffset] = value.coerceIn(-60000, 60000) } }
-    suspend fun setLyricsSource(value: LyricsSource) { store.edit { it[lyricsSource] = value.name } }
+    suspend fun setLyricsSource(value: LyricsSource) {
+        store.edit {
+            it[lyricsSource] = value.name
+            // A user choice made before startup migration runs must already be authoritative.
+            it[lyricsSourceMigration] = maxOf(it[lyricsSourceMigration] ?: 0, LYRICS_SOURCE_AUTOMATIC_VERSION)
+        }
+    }
     suspend fun editLyricsDisplay(transform: (LyricsDisplayOptions) -> LyricsDisplayOptions) {
         store.edit { p ->
             val value = transform(decode(p).lyricsDisplay).normalized()
@@ -151,3 +177,5 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     suspend fun setNeteaseMainLibrary(value: Boolean) { store.edit { it[neteaseMain] = value } }
     suspend fun setLikeMode(value: LikeMode) { store.edit { it[likeMode] = value.name } }
 }
+
+private const val LYRICS_SOURCE_AUTOMATIC_VERSION = 1

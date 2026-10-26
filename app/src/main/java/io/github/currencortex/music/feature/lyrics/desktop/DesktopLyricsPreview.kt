@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
+import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
 import io.github.currencortex.music.feature.lyrics.ui.rememberLyricsPosition
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
@@ -31,17 +32,19 @@ import androidx.compose.ui.graphics.Color
 @Composable internal fun DesktopLyricsPreview(container: AppContainer, options: DesktopLyricsSettings) {
     val playback by container.playerController.state.collectAsStateWithLifecycle()
     val content by container.playbackLyrics.state.collectAsStateWithLifecycle()
-    val hasLyrics = playback.song != null && content.songId == playback.song?.id &&
+    val songKey = remember(playback.song) { playback.song?.let(SongLyricsStore::identity) }
+    val hasLyrics = content.matches(playback.song) &&
         remember(content.document) { desktopIslandHasLyrics(content.document) }
-    var selectedFps by remember(playback.song?.id, playback.song?.musicSource) { mutableStateOf(true) }
+    var selectedFps by remember(songKey) { mutableStateOf(true) }
     val fpsMode = !hasLyrics || selectedFps
     val toggle by rememberUpdatedState({ if (hasLyrics) selectedFps = !selectedFps })
     val frameRate = rememberIslandFrameRate()
     val clock = rememberLyricsPosition(playback, fpsMode, if (fpsMode) frameRate::onFrame else null)
     val timeline = remember(content.document) { LyricsSynchronizer(content.document) }
-    val time = remember(clock, options.offsetMs) { derivedStateOf { LyricsSynchronizer.effectivePosition(clock.value, options.offsetMs) } }
+    val totalOffset = options.offsetMs - content.songOffsetMs
+    val time = remember(clock, totalOffset) { derivedStateOf { LyricsSynchronizer.lyricPosition(clock.value, totalOffset) } }
     val index by remember(timeline, time) { derivedStateOf { desktopIslandLineIndex(content.document, timeline, time.value) } }
-    val line = content.document.lines.getOrNull(index).takeIf { content.songId == playback.song?.id }
+    val line = content.document.lines.getOrNull(index).takeIf { content.matches(playback.song) }
     val motion = rememberDesktopMotion()
     val font = options.displayFontSize
     val context = LocalContext.current
@@ -49,7 +52,7 @@ import androidx.compose.ui.graphics.Color
     val alpha = desktopWindowAlpha(options.displayOpacity, options.locked, maximum)
     val size = rememberIslandSize(playback.song, if (fpsMode) "000.0 FPS" else line?.text.orEmpty(), font, fpsMode, false,
         line?.translation?.takeIf { options.translation && !fpsMode }, listeningPair = playback.listenTogether != null)
-    val reveal = rememberIslandPresentation(playback.song?.id, fpsMode || line != null || !content.loading, motion).value
+    val reveal = rememberIslandPresentation(songKey, fpsMode || (!content.loading && content.matches(playback.song)), motion).value
     val width = rememberIslandWidth(size.width + (size.headingWidth - size.width) *
         (1f - reveal / .55f).coerceIn(0f, 1f), motion)
     val colors = MiuixTheme.colorScheme
@@ -71,7 +74,7 @@ import androidx.compose.ui.graphics.Color
                     DesktopIslandDisplay(fpsMode, motion, lyrics = {
                         if (line != null) {
                             val next = remember(content.document, index) { desktopIslandNextLineIndex(content.document, index) }
-                            DesktopIslandCueHost(playback.song?.id, index, line, next, content.document.lines.getOrNull(next), options to motion) { cue ->
+                            DesktopIslandCueHost(songKey, index, line, next, content.document.lines.getOrNull(next), options to motion) { cue ->
                                 DesktopIslandLyrics(cue, time, options, motion, "desktop_preview_translation")
                             }
                         }

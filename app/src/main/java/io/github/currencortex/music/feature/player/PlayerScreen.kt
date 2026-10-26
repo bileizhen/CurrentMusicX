@@ -48,7 +48,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 
 private enum class PlayerContent { COVER, LYRICS }
-private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, SHARE, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI, ROAMING, BACKGROUND }
+private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, SHARE, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI, ROAMING, BACKGROUND, LYRICS_MANAGEMENT }
 internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePosition")
 
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
@@ -336,6 +336,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         when (overlay) {
             PlayerOverlay.NONE -> Unit
             PlayerOverlay.BACKGROUND -> PlayerBackgroundDialog(vm.container, dismiss)
+            PlayerOverlay.LYRICS_MANAGEMENT -> queue.current?.let { PlayerLyricsManagementDialog(vm.container, it, dismiss) }
             PlayerOverlay.SHARE -> queue.current?.let { io.github.currencortex.music.feature.share.SongShareDialog(it, dismiss) }
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) },
                 commentComposer, vm::editComment, vm::replyTo, vm::sendComment)
@@ -387,6 +388,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     onClick = { overlay = PlayerOverlay.SLEEP })
                 MusicDestinationRow("歌词显示", summary = "霞鹜文楷 · 字号 ${settings.lyricsFontSize.toInt()}",
                     modifier = Modifier.testTag("open_lyrics_display"), onClick = { overlay = PlayerOverlay.LYRICS })
+                if (queue.current != null && queue.current?.video != true)
+                    MusicDestinationRow("歌词管理", summary = "来源 · 在线匹配 · 单曲偏移 · 导入导出",
+                        modifier = Modifier.testTag("open_lyrics_management"), onClick = { overlay = PlayerOverlay.LYRICS_MANAGEMENT })
                 if (onRoom != null && state.song?.navidrome == null) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
                 }
             }
@@ -492,12 +496,12 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
     val player by vm.state.collectAsStateWithLifecycle()
     val position = rememberLyricsPosition(if (active) player else player.copy(playing = false))
-    if (lyrics.document.lines.isNotEmpty()) key(player.song?.id, lyrics.document) {
+    if (lyrics.matches(player.song) && lyrics.document.lines.isNotEmpty()) key(lyrics.songKey, lyrics.document) {
         val settings by vm.settings.collectAsStateWithLifecycle()
         LyricsScreen(lyrics.document, position, vm.player::seek, modifier, player.canControlPlayback,
             settings.lyricsDisplay.translation, settings.lyricsDisplay.romanization, settings.lyricsDisplay.wordAnimation,
             settings.lyricsDisplay.blur, if (minimal) settings.lyricsFontSize * .75f else settings.lyricsFontSize,
-            settings.lyricsWeight, settings.lyricsOffsetMs,
+            settings.lyricsWeight, settings.lyricsOffsetMs - lyrics.songOffsetMs,
             settings.lyricsDisplay.copy(hideControls = settings.lyricsDisplay.hideControls || expandLyricsWindow),
             minimal = minimal, perspective = settings.lyricsDisplay.perspective, cover = player.song?.cover.orEmpty(),
             mediaDurationMs = player.durationMs)

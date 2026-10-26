@@ -25,6 +25,7 @@ import androidx.core.graphics.drawable.toBitmap
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import io.github.currencortex.music.data.song.Song
+import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
 import io.github.currencortex.music.ui.component.coverRequestUrl
 import io.github.currencortex.music.ui.component.ListeningPairArtwork
 import io.github.currencortex.music.core.media.ListenTogetherPair
@@ -51,10 +52,11 @@ private class CoverTransitionHistory { var current: DesktopIslandCoverTransition
 
 @Composable internal fun rememberIslandCoverTransition(song: Song?, motion: Boolean): DesktopIslandCoverTransition {
     val history = remember { CoverTransitionHistory() }
-    val transition = remember(song?.id, song?.musicSource, motion) {
+    val identity = remember(song) { song?.let(SongLyricsStore::identity) }
+    val transition = remember(identity, motion) {
         val old = history.current
         val change = old?.target != null && song != null &&
-            (old.target?.id != song.id || old.target?.musicSource != song.musicSource)
+            old.target?.let(SongLyricsStore::identity) != identity
         DesktopIslandCoverTransition(old?.visibleSong(), song, motion && change,
             if (motion && change) old?.placement else null, old?.angle ?: 0f, old?.spin ?: 0f,
             if (motion && change) old?.drawingHeight ?: 0 else 0)

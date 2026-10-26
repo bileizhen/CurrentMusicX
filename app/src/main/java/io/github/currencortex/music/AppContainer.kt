@@ -34,7 +34,9 @@ import io.github.currencortex.music.core.netease.*
 class AppContainer(context: Context, storageNamespace: String = "", externalPlayer: ExternalPlayer? = null,
     ttmlProvider: io.github.currencortex.music.feature.lyrics.data.LyricsProvider? = null,
     useNativeNetease: Boolean = storageNamespace.isEmpty(),
-    neteaseEndpoints: NeteaseEndpoints = NeteaseEndpoints()) : java.io.Closeable {
+    neteaseEndpoints: NeteaseEndpoints = NeteaseEndpoints(),
+    automaticLyricsProvider: (suspend (io.github.currencortex.music.data.song.Song) ->
+        io.github.currencortex.music.feature.lyrics.data.SavedLyrics?)? = null) : java.io.Closeable {
     private val storageSuffix = if (storageNamespace.isEmpty()) "" else ".$storageNamespace".also {
         require(storageNamespace.matches(Regex("[a-zA-Z0-9-]+")))
     }
@@ -231,6 +233,36 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     private val projectLyricsProvider = io.github.currencortex.music.feature.lyrics.data.CurrentMusicLyricsProvider(
         musicRepository, database.music(), io.github.currencortex.music.data.settings.LyricsSource.CURRENT_MUSIC,
         { accountRepository.server }) { logger.debug("Lyrics", it) }
+    val songLyrics = io.github.currencortex.music.feature.lyrics.data.SongLyricsStore(
+        java.io.File(context.filesDir, "song-lyrics$storageSuffix"))
+    private val qqLyricsMatching = io.github.currencortex.music.feature.lyrics.data.QqLyricsMatchSource()
+    private val qishuiLyricsMatching = io.github.currencortex.music.feature.lyrics.data.QishuiLyricsMatchSource()
+    val onlineLyrics = io.github.currencortex.music.feature.lyrics.data.OnlineLyricsMatcher(
+        searchNetease = { query -> when (val result = musicRepository.searchForLyricsMatching(query,
+            io.github.currencortex.music.data.settings.LyricsSource.NETEASE)) {
+            is io.github.currencortex.music.core.network.AppResult.Success -> result.value.songs
+            is io.github.currencortex.music.core.network.AppResult.Failure -> throw io.github.currencortex.music.feature.lyrics.data.LyricsMatchException(result.message)
+        } },
+        loadNetease = { id -> when (val result = musicRepository.lyricsForMatching(id,
+            io.github.currencortex.music.data.settings.LyricsSource.NETEASE)) {
+            is io.github.currencortex.music.core.network.AppResult.Success -> result.value
+            is io.github.currencortex.music.core.network.AppResult.Failure -> throw io.github.currencortex.music.feature.lyrics.data.LyricsMatchException(result.message)
+        } },
+        searchCurrentMusic = { query -> when (val result = musicRepository.searchForLyricsMatching(query,
+            io.github.currencortex.music.data.settings.LyricsSource.CURRENT_MUSIC)) {
+            is io.github.currencortex.music.core.network.AppResult.Success -> result.value.songs
+            is io.github.currencortex.music.core.network.AppResult.Failure -> throw io.github.currencortex.music.feature.lyrics.data.LyricsMatchException(result.message)
+        } },
+        loadCurrentMusic = { id -> when (val result = musicRepository.lyricsForMatching(id,
+            io.github.currencortex.music.data.settings.LyricsSource.CURRENT_MUSIC)) {
+            is io.github.currencortex.music.core.network.AppResult.Success -> result.value
+            is io.github.currencortex.music.core.network.AppResult.Failure -> throw io.github.currencortex.music.feature.lyrics.data.LyricsMatchException(result.message)
+        } },
+        additionalSources = mapOf(
+            io.github.currencortex.music.feature.lyrics.data.LyricsMatchSource.QQ_MUSIC to
+                io.github.currencortex.music.feature.lyrics.data.LyricsMatchAdapter(qqLyricsMatching::search, qqLyricsMatching::load),
+            io.github.currencortex.music.feature.lyrics.data.LyricsMatchSource.QISHUI to
+                io.github.currencortex.music.feature.lyrics.data.LyricsMatchAdapter(qishuiLyricsMatching::search, qishuiLyricsMatching::load)))
     // Isolated containers use only explicitly injected external providers, never live GitHub.
     val lyricsRepository = io.github.currencortex.music.feature.lyrics.data.LyricsRepository(
         ttmlProvider ?: if (storageNamespace.isEmpty()) io.github.currencortex.music.feature.lyrics.data.AmllLyricsProvider()
@@ -246,9 +278,19 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                     listOf(source, accountRepository.server, accountRepository.sessionRevision.value,
                         neteaseSessions.state.value.revision, navidrome.state.value.revision),
                     if (source == io.github.currencortex.music.data.settings.LyricsSource.CURRENT_MUSIC)
-                        projectLyricsProvider else nativeLyricsProvider)
+                        projectLyricsProvider else nativeLyricsProvider,
+                    io.github.currencortex.music.feature.lyrics.data.LyricsOrigin(source.label, source.name.lowercase()),
+                    automatic = source == io.github.currencortex.music.data.settings.LyricsSource.AUTO)
             }
-        })
+        }, overrides = songLyrics, autoMatch = if (automaticLyricsProvider != null || (storageNamespace.isEmpty() && ttmlProvider == null)) {
+            { song ->
+                when {
+                    musicSettings.state.value.lyricsSource != io.github.currencortex.music.data.settings.LyricsSource.AUTO -> null
+                    automaticLyricsProvider != null -> automaticLyricsProvider(song)
+                    else -> onlineLyrics.bestMatch(song)
+                }
+            }
+        } else null)
     val playbackQueue = PlaybackQueue()
     val dockAudioLevel = DockAudioLevel()
     val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)
@@ -327,12 +369,13 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         originalSpeakerEffects.refresh()
     }
     val playbackLyrics = io.github.currencortex.music.feature.lyrics.data.PlaybackLyrics(
+        io.github.currencortex.music.feature.lyrics.data.managedLyricsRequests(
         kotlinx.coroutines.flow.combine(playbackQueue.state.map { it.current }.distinctUntilChanged(),
             accountRepository.sessionRevision, neteaseSessions.state.map { it.revision }.distinctUntilChanged(),
             navidrome.state.map { it.revision }.distinctUntilChanged(),
             musicSettings.state.map { it.server to it.lyricsSource }.distinctUntilChanged()) { song, account, netease, navidrome, lyricsSettings ->
             io.github.currencortex.music.feature.lyrics.data.LyricsRequest(song, listOf(account, netease, navidrome, lyricsSettings))
-        }, lyricsRepository::load, playerScope)
+        }, songLyrics.state), lyricsRepository::load, playerScope, songLyrics.state)
     val sleepTimer = io.github.currencortex.music.core.media.SleepTimer(playerController, playerScope)
     val roomRepository = io.github.currencortex.music.data.room.RoomRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
     val roomSession = io.github.currencortex.music.core.room.RoomSession(roomRepository,

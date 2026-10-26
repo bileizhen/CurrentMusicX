@@ -85,7 +85,9 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
     val previous by rememberUpdatedState(onPrevious)
     val allowed by rememberUpdatedState(enabled)
     val threshold = with(LocalDensity.current) { 48.dp.toPx() }
-    val currentMatches = state.song?.id == song?.id
+    val currentMatches = song != null && state.song?.let {
+        io.github.currencortex.music.feature.lyrics.data.SongLyricsStore.identity(it)
+    } == io.github.currencortex.music.feature.lyrics.data.SongLyricsStore.identity(song)
     val duration = (if (currentMatches) state.durationMs.takeIf { it > 0 } else null) ?: song?.durationMs ?: 0L
     val position = if (currentMatches) state.positionMs else queue.positionMs
     val progress = if (duration > 0) (position.toDouble() / duration).toFloat().coerceIn(0f, 1f) else 0f
@@ -116,11 +118,13 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
     }
     val lyricPosition = rememberLyricsPosition(if (active) state else state.copy(playing = false))
     val timeline = remember(lyrics.document) { LyricsSynchronizer(lyrics.document) }
-    val lyric by remember(timeline, lyricPosition, lyrics.songId, song?.id, currentMatches, settings.lyricsOffsetMs) {
+    val totalOffset = settings.lyricsOffsetMs - lyrics.songOffsetMs
+    val lyricsMatch = lyrics.matches(song)
+    val lyric by remember(timeline, lyricPosition, lyrics.songKey, song?.id, currentMatches, lyricsMatch, totalOffset) {
         derivedStateOf {
-            if (!currentMatches || lyrics.songId != song?.id) ""
+            if (!currentMatches || !lyricsMatch) ""
             else {
-                val now = LyricsSynchronizer.effectivePosition(lyricPosition.value, settings.lyricsOffsetMs)
+                val now = LyricsSynchronizer.lyricPosition(lyricPosition.value, totalOffset)
                 val line = lyrics.document.lines.getOrNull(timeline.findCurrentLine(now))
                 line?.text?.takeIf { it.isNotBlank() }
                     ?: line?.backgroundVocals?.firstOrNull { now in it.startTimeMs until it.endTimeMs }?.text.orEmpty()
