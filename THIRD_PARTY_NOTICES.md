@@ -281,6 +281,48 @@ an exemption for these AGPL-covered components. Corresponding application source
 build instructions are available through the application's configured GitHub source link.
 
 
+## Folia per-song lyric management, matching and synchronization (Android port)
+
+Copyright chthollyphile and Folia contributors. Reference version:
+https://github.com/chthollyphile/folia-major/tree/aecd330b720eb8fc728e6b10ebcec261b144d683
+
+`SongLyricsStore.kt`, `LyricsFileCodec.kt`, `OnlineLyricsMatcher.kt` and
+`PlayerLyricsManagementDialog.kt` adapt the per-song imported/online source priority,
+independent offset memory, explicit candidate matching, original-document export and
+Folia lyric-data v1 interchange described in `onlineLyricsState.ts`,
+`lyrics/{lyricOffsetMemory,autoMatchBestLyric,foliaLyricDocument,enhancedLrcSerializer,lyricFileDecoding}.ts`,
+`modal/lyric-match/onlineSongMatch.ts` and the AMLL/Kugou lyric providers. Kotlin coroutines,
+atomic private app files and Android's document picker replace the browser persistence and file APIs.
+
+The synchronized lyric clock retains pre-roll time for delayed cues, rejects seeks at or beyond
+an audio track's end, and separates different platform/library identities. Monet's display-only
+punctuation and space timing follows `utils/lyrics/graphemeTiming.ts`; source documents and
+exported word timing remain unmodified. These adaptations are AGPL-3.0-only, subject to the
+same source-availability and license-combination provisions above. The full AGPL text is
+available offline in `legal/AGPL-3.0.txt`. Lyric content is fetched on user request; no reference
+song lyrics or audio are bundled with this port.
+
+## QQ Music and Qishui public lyric matching
+
+`QqLyricsMatchSource.kt` uses QQ Music's public web catalogue and LRC endpoints.
+It retains real line timing and optional auxiliary lyric tracks; no encrypted QRC
+or estimated word timing is claimed. Its integration follows the Folia source
+registry credited above, with the public web endpoint adaptation implemented in Kotlin.
+
+`QishuiLyricsMatchSource.kt` adapts the anonymous client-token, public search and
+lyric-metadata portions of [qishui-music-api 0.2.2](https://github.com/GSQZ/qishui-music-api/tree/924add376cadf8a2268f11999051eb976e3b8e0d),
+copyright (c) 2026 sayqz, MIT. No Node.js runtime, account session or audio decryption
+component is bundled. The original MIT notice and source archive checksum are
+provided offline in `legal/QISHUI-MIT.txt`. Folia's Qishui lyric normalization remains
+covered by the AGPL attribution above.
+
+Automatic matching obtains NetEase lyrics as a content and timing reference, then
+compares candidates from every configured source. Ordered text agreement, timeline
+compatibility, genuine word-cue coverage and completeness determine the winner;
+source order does not. CurrentMusic matching explicitly uses the configured project
+server, while NetEase matching uses the native official gateway.
+The selected recording and audio metadata are never replaced by a lyric match.
+
 ## CurrentMusic halo startup wordmark
 
 The fixed CurrentMusic vector lettering in `current_music_wordmark.json` was
