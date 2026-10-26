@@ -79,8 +79,10 @@ import androidx.compose.ui.text.style.TextAlign
         SideEffect { onLayout?.invoke(layout) }
         val clusters = remember(line.text) { lyricsClusters(line.text) }
         // A display-only line sweep in Always mode; real word timing and cached data remain authoritative.
-        val words = remember(line, forceLineAnimation) {
-            if (line.words.isNotEmpty()) line.words
+        val words = remember(line, forceLineAnimation, monet) {
+            if (line.words.isNotEmpty() && !line.wordsEstimated) {
+                if (monet) monetDisplayWords(line) else line.words
+            }
             else if (forceLineAnimation && line.text.isNotBlank() && line.endTimeMs > line.startTimeMs)
                 listOf(LyricWord(line.text, line.startTimeMs, line.endTimeMs, 0, line.text.length))
             else emptyList()
@@ -114,7 +116,9 @@ import androidx.compose.ui.text.style.TextAlign
         val glyphs = remember(geometry) { geometry.flatMap { it.glyphs } }
         val liftedInk = remember(glyphs) { Path().apply { glyphs.forEach { addRect(it.box) } } }
         val lifts = remember(glyphs) { FloatArray(glyphs.size) }
-        val glowWeights = remember(words, line.roles, monet) { words.map { if (monet) 1f else lyricGlowWeight(it, line.roles) } }
+        val glowWeights = remember(words, line.roles, monet) { words.map {
+            if (monet) { if (it.endTimeMs > it.startTimeMs) 1f else 0f } else lyricGlowWeight(it, line.roles)
+        } }
         val wordGlows = remember(words) { FloatArray(words.size) }
         val glowTimed = glow && safeRaster && line.words.isNotEmpty() && glowWeights.any { it > 0f }
         val glowLine = untimedLineGlow && safeRaster && line.words.isEmpty() && !forceLineAnimation
@@ -186,7 +190,7 @@ import androidx.compose.ui.text.style.TextAlign
         }
         val monetSweeps = if (monet && safeRaster) remember(rasters, color) { rasters.map { MonetSweepInk(it.ink, color) } } else emptyList()
         val monetHalo = if (monet && glowTimed) remember(raster, glyphs, glowColor) {
-            MonetHaloInk(glyphs.flatMap { glyph -> listOf(
+            MonetHaloInk(glyphs.filter { glowWeights[it.wordIndex] > 0f }.flatMap { glyph -> listOf(
                 glyph.wordIndex to raster.glyphHalo(glyph.box),
                 glyph.wordIndex to raster.wideGlyphHalo(glyph.box)) }, glowColor)
         } else null
@@ -229,7 +233,8 @@ import androidx.compose.ui.text.style.TextAlign
                     val base = baseOpacity?.value ?: .34f
                     if (monetHalo != null) {
                         words.forEachIndexed { index, word ->
-                            wordGlows[index] = monetGlow(now, word.startTimeMs, word.endTimeMs, line.endTimeMs)
+                            wordGlows[index] = if (glowWeights[index] > 0f)
+                                monetGlow(now, word.startTimeMs, word.endTimeMs, line.endTimeMs) else 0f
                         }
                         monetHalo.draw(this, wordGlows)
                     }

@@ -9,6 +9,8 @@ import kotlin.math.sqrt
 import kotlin.math.ceil
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
+import io.github.currencortex.music.feature.lyrics.model.LyricLine
+import io.github.currencortex.music.feature.lyrics.model.LyricWord
 
 internal const val MONET_SCROLL_STIFFNESS = 142f / .82f
 internal val MONET_SCROLL_DAMPING = 28f / (2f * sqrt(142f * .82f))
@@ -76,4 +78,30 @@ internal fun monetFillWidth(progress: Float, widths: List<Float>): Float {
     var width = 0f
     for (i in 0 until whole) width += widths[i]
     return width + if (whole < widths.size) widths[whole] * (index - whole) else 0f
+}
+
+/**
+ * Folia graphemeTiming.ts, aecd330b720eb8fc728e6b10ebcec261b144d683 (AGPL-3.0).
+ * Reveal punctuation omitted by a timed source at the adjacent real cue. These zero-duration
+ * masks are display-only: they are never written into the document or exported as word timing.
+ */
+internal fun monetDisplayWords(line: LyricLine): List<LyricWord> {
+    if (line.wordsEstimated || line.words.isEmpty()) return emptyList()
+    val words = line.words.filter { it.startOffset >= 0 && it.endOffset > it.startOffset &&
+        it.endOffset <= line.text.length && line.text.substring(it.startOffset, it.endOffset) == it.text }
+        .sortedBy { it.startOffset }
+    if (words.isEmpty() || words.zipWithNext().any { (a, b) -> a.endOffset > b.startOffset }) return words
+    val display = mutableListOf<LyricWord>()
+    var cursor = 0
+    fun gap(until: Int, at: Long) {
+        if (cursor < until) display += LyricWord(line.text.substring(cursor, until), at, at,
+            cursor, until, roles = listOf("x-display-gap"))
+    }
+    words.forEach { word ->
+        gap(word.startOffset, word.startTimeMs)
+        display += word
+        cursor = word.endOffset
+    }
+    gap(line.text.length, words.maxOf { it.endTimeMs })
+    return display
 }
