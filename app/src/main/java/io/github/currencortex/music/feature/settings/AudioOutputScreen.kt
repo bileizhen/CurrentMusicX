@@ -101,6 +101,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         AudioOutputMode.OBOE -> "自动选择 AAudio 或 OpenSL ES"
                         AudioOutputMode.DIRECT -> "PCM 16 bit，按音源采样率请求 AAudio 独占，跳过音效与重采样"
                         AudioOutputMode.BIT_PERFECT -> "Android 14+ 与兼容 USB DAC；保留解码后的 PCM 位深、采样率和声道"
+                        AudioOutputMode.NETEASE_USB -> "内置网易云 USB 驱动，通过 USB Host 授权独占；实验性，非 Bit-perfect 保证"
                     }, showDivider = mode != AudioOutputMode.entries.last(), leadingContent = {
                         Icon(
                             painter = painterResource(when (mode) {
@@ -110,6 +111,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                 AudioOutputMode.DIRECT -> R.drawable.ic_lucide_cable
                                 AudioOutputMode.OBOE -> R.drawable.ic_lucide_guitar
                                 AudioOutputMode.BIT_PERFECT -> R.drawable.ic_lucide_binary
+                                AudioOutputMode.NETEASE_USB -> R.drawable.ic_lucide_cable
                             }),
                             contentDescription = null,
                             modifier = Modifier.size(24.dp),
@@ -135,6 +137,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             diagnosticMessage?.let { Text(it, fontSize = 12.sp, color = hint) }
             Text(if (settings.mode == AudioOutputMode.BIT_PERFECT)
                 "逐位输出关闭音效、变速、静音跳过和淡入淡出，使用 DAC 调节音量。设备或格式不支持时停止播放，不自动回退。仅用于主播放器，暂停唱片架及音效试听。"
+                else if (settings.mode == AudioOutputMode.NETEASE_USB)
+                    "USB Host 输出跳过应用音效、变速、重采样与淡入淡出；原驱动自身的音量和启动淡入仍然存在。不使用 Android MixerAttributes，设备不可用时停止播放。"
                 else "原生输出不使用系统音效会话。接口或格式不可用时回退 AudioTrack；Direct 暂停变速与淡入淡出，是否获得独占以实际输出状态为准。",
                 fontSize = 12.sp, color = hint)
         } }
@@ -147,7 +151,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 Modifier.padding(horizontal = 20.dp, vertical = 12.dp), fontSize = 13.sp, color = hint)
         } }
         item { MusicSectionHeader("输出设备") }
-        item { Card {
+        if (settings.mode == AudioOutputMode.NETEASE_USB) item {
+            NeteaseUsbOutputSettings(settings) { key -> save { container.audioOutput.setUsbDevice(key) } }
+        }
+        else item { Card {
             MusicDestinationRow("首选输出设备", { picker = "device" }, Modifier.testTag("output_device"),
                 summary = selectedDevice?.outputLabel() ?: if (settings.deviceKey.isEmpty()) "跟随系统" else
                     if (settings.mode == AudioOutputMode.BIT_PERFECT) "设备未连接 · 逐位输出停止" else "设备未连接 · 跟随系统")

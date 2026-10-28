@@ -23,7 +23,7 @@ internal class MusicAudioOutputProvider(context: Context, private val settings: 
     }
     override fun getAudioOutput(config: AudioOutputProvider.OutputConfig): AudioOutput {
         val requested = settings()
-        check(requested.mode != AudioOutputMode.BIT_PERFECT) { "Bit-perfect 必须通过独立的原始 PCM 输出链路" }
+        check(!requested.mode.rawPcm) { "${requested.mode.label} 必须通过独立的原始 PCM 输出链路" }
         if (requested.mode != AudioOutputMode.AUDIO_TRACK && config.encoding == C.ENCODING_PCM_16BIT) {
             try {
                 val api = when (requested.mode) { AudioOutputMode.OPENSL_ES -> 1; AudioOutputMode.AAUDIO, AudioOutputMode.DIRECT -> 2; else -> 0 }

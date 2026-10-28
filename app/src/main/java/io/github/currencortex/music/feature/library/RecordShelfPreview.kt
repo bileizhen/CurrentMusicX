@@ -67,8 +67,8 @@ internal class RecordShelfPreview(context: Context, private val container: AppCo
         override fun stop() { player.stop(); player.clearMediaItems() }
         override fun release() { player.release() }
     }, resolve = { song ->
-        check(container.audioOutput.state.value.mode != io.github.currencortex.music.data.settings.AudioOutputMode.BIT_PERFECT) {
-            "Bit-perfect 使用独占 USB 输出，请使用主播放器播放歌曲"
+        check(!container.audioOutput.state.value.mode.rawPcm) {
+            "${container.audioOutput.state.value.mode.label} 使用独占 USB 输出，请使用主播放器播放歌曲"
         }
         coroutineScope {
             val request = container.audioRequest(song, container.musicSettings.state.value.quality)

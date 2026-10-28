@@ -21,12 +21,14 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
 ) : ForwardingAudioSink(normal) {
     constructor(context: Context, normal: AudioSink, settings: () -> AudioOutputSettings, report: (String) -> Unit) :
         this(normal, settings, report, { format, attributes, clock ->
-            if (Build.VERSION.SDK_INT >= 34)
+            if (settings().mode == AudioOutputMode.NETEASE_USB)
+                NeteaseUsbStream.open(context, format, settings(), report)
+            else if (Build.VERSION.SDK_INT >= 34)
                 AndroidBitPerfectStream.open(context, format, settings(), attributes, clock, report)
             else throw BitPerfectFailure(BitPerfectFailureCode.ANDROID_VERSION, "Bit-perfect 需要 Android API 34 或更新版本")
         })
     private fun selected() = settings().mode.rawPcm
-    private val label get() = "Bit-perfect"
+    private val label get() = if (settings().mode == AudioOutputMode.NETEASE_USB) "USB 独占（网易云）" else "Bit-perfect"
     private var active = false
     private var format = Format.Builder().build()
     private var next: AudioSink.AudioSinkConfig? = null
