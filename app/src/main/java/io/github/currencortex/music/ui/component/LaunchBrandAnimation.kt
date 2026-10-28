@@ -71,7 +71,8 @@ val LocalLaunchBrand = staticCompositionLocalOf<LaunchBrandState?> { null }
 /** The destination and animated wordmark share one font and measurement, including user scaling. */
 @Composable fun HomeBrandTitle() {
     val launch = LocalLaunchBrand.current
-    BasicText(BRAND, style = brandStyle.copy(color = MiuixTheme.colorScheme.onSurface),
+    BasicText(BRAND, style = brandStyle.copy(color = MiuixTheme.colorScheme.onSurface,
+        fontFamily = io.github.currencortex.music.ui.theme.LocalCustomFont.current ?: FontFamily.SansSerif),
         modifier = Modifier.testTag("home_brand_title").onGloballyPositioned { launch?.anchor = it.boundsInRoot() }
             .graphicsLayer { alpha = if (launch?.active == true) 0f else 1f })
 }
@@ -128,7 +129,7 @@ private fun curve(start: Offset, control: Offset, end: Offset, progress: Float):
     val isDark = LocalDarkTheme.current
     val inkColors = remember(isDark) { BlurColors(blendColors = ColorBlendToken.brandInk(isDark)) }
     val measurer = rememberTextMeasurer()
-    val layout = measurer.measure(BRAND, brandStyle)
+    val layout = measurer.measure(BRAND, brandStyle.copy(fontFamily = io.github.currencortex.music.ui.theme.LocalCustomFont.current ?: FontFamily.SansSerif))
     val displayDensity = LocalDensity.current
     BoxWithConstraints(Modifier.fillMaxSize().testTag("launch_animation")
         .clearAndSetSemantics { contentDescription = "Current Music 正在打开" }

@@ -82,6 +82,10 @@ internal class RecordShelfView(context: Context) : View(context) {
     }
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL) }
+    fun setCustomTypeface(value: Typeface?) {
+        val face = value ?: Typeface.create("sans-serif-medium", Typeface.NORMAL)
+        if (textPaint.typeface != face) { textPaint.typeface = face; invalidate() }
+    }
     private val matrix = Matrix()
     private val unit = floatArrayOf(0f, 0f, 1f, 0f, 1f, 1f, 0f, 1f)
     private class Sleeve { var index = 0; lateinit var song: Song; var distance = 0f; var entryBlur = 0f; var entryOpacity = 1f; val quad = FloatArray(8) }

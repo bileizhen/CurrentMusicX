@@ -17,7 +17,7 @@ import io.github.currencortex.music.data.settings.LyricsWeight
 import io.github.currencortex.music.data.settings.LyricsDisplayOptions
 import io.github.currencortex.music.feature.lyrics.ui.lyricsFontWeight
 import io.github.currencortex.music.ui.component.MusicDestinationRow
-import io.github.currencortex.music.feature.lyrics.ui.LyricsFontFamily
+import io.github.currencortex.music.feature.lyrics.ui.currentLyricsFontFamily
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
@@ -33,7 +33,7 @@ import kotlin.math.roundToInt
     Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
         .testTag("lyrics_display_settings")) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
-            Text("让音乐说话", fontFamily = LyricsFontFamily, fontSize = preview.sp, fontWeight = lyricsFontWeight(weightMode, true, strength),
+            Text("让音乐说话", fontFamily = currentLyricsFontFamily(), fontSize = preview.sp, fontWeight = lyricsFontWeight(weightMode, true, strength),
                 color = ink, modifier = Modifier.testTag("lyrics_font_preview"))
             Text("霞鹜文楷", fontSize = 12.sp, color = ink.copy(alpha = .5f), modifier = Modifier.padding(top = 6.dp))
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {

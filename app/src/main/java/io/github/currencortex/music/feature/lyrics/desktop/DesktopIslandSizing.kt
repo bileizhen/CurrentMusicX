@@ -6,7 +6,7 @@ import androidx.compose.ui.text.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.*
 import io.github.currencortex.music.data.song.Song
-import io.github.currencortex.music.feature.lyrics.ui.LyricsFontFamily
+import io.github.currencortex.music.feature.lyrics.ui.currentLyricsFontFamily
 import io.github.currencortex.music.ui.component.listeningPairArtworkAspectRatio
 
 internal data class DesktopIslandSize(val width: Float, val metadata: Dp, val headingWidth: Float)
@@ -20,19 +20,21 @@ internal val desktopIslandArtistStyle = TextStyle(fontSize = 9.sp)
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val resolver = androidx.compose.ui.platform.LocalFontFamilyResolver.current
-    val face by resolver.resolve(LyricsFontFamily, fontWeight = FontWeight.Medium)
-    return remember(song?.name, song?.artists, text, translation, font, compact, editing, density, face, listeningPair) {
+    val lyricsFont = currentLyricsFontFamily()
+    val customFont = io.github.currencortex.music.ui.theme.LocalCustomFont.current
+    val face by resolver.resolve(lyricsFont, fontWeight = FontWeight.Medium)
+    return remember(song?.name, song?.artists, text, translation, font, compact, editing, density, face, customFont, listeningPair) {
         val artworkRatio = if (listeningPair) listeningPairArtworkAspectRatio else 1f
         fun width(value: String, style: TextStyle) = with(density) {
             measurer.measure(AnnotatedString(islandSingleLine(value)), style, softWrap = false, maxLines = 1).size.width.toDp().value
         }
         val name = song?.name?.takeIf(String::isNotBlank) ?: "CurrentMusic"
         val artist = song?.artists.orEmpty()
-        val titleLayout = measurer.measure(AnnotatedString(islandSingleLine(name)), desktopIslandTitleStyle,
+        val titleLayout = measurer.measure(AnnotatedString(islandSingleLine(name)), desktopIslandTitleStyle.copy(fontFamily = customFont),
             softWrap = false, maxLines = 1)
         val artistLayout = measurer.measure(AnnotatedString(islandSingleLine(artist.ifBlank {
             if (song == null) "等待播放" else "未知歌手"
-        })), desktopIslandArtistStyle, softWrap = false, maxLines = 1)
+        })), desktopIslandArtistStyle.copy(fontFamily = customFont), softWrap = false, maxLines = 1)
         // A subpixel lost between dp and physical pixels can ellipsize several otherwise
         // fitting characters. Give both shaped labels a small, explicit rounding margin.
         val metadataText = with(density) { maxOf(titleLayout.size.width, artistLayout.size.width).toDp().value } + 2f
@@ -41,16 +43,16 @@ internal val desktopIslandArtistStyle = TextStyle(fontSize = 9.sp)
         val headingCover = (maxOf(30f, headingHeight) - 8f).coerceAtLeast(22f)
         val headingWidth = (headingCover * artworkRatio + desktopIslandCoverGap.value + metadataText + 14f)
             .coerceIn(if (editing) 240f else 48f, 640f)
-        val lyricWidth = width(text, TextStyle(fontFamily = if (compact) androidx.compose.ui.text.font.FontFamily.Monospace else LyricsFontFamily,
+        val lyricWidth = width(text, TextStyle(fontFamily = if (compact) androidx.compose.ui.text.font.FontFamily.Monospace else lyricsFont,
             fontSize = font.sp, fontWeight = if (compact) FontWeight.Normal else FontWeight.Medium))
         val subtitleWidth = if (compact || translation.isNullOrBlank()) 0f else width(translation,
-            TextStyle(fontSize = desktopSubtitleSize(font).sp))
-        val primaryStyle = TextStyle(fontFamily = LyricsFontFamily, fontSize = font.sp,
+            TextStyle(fontFamily = customFont, fontSize = desktopSubtitleSize(font).sp))
+        val primaryStyle = TextStyle(fontFamily = lyricsFont, fontSize = font.sp,
             lineHeight = (font * 1.2f).sp, fontWeight = FontWeight.Medium)
         val primaryHeight = with(density) { measurer.measure(AnnotatedString(islandSingleLine(text)), primaryStyle,
             softWrap = false, maxLines = 1).size.height.toDp().value }
         val subtitleHeight = if (compact || translation.isNullOrBlank()) 0f else with(density) {
-            measurer.measure(AnnotatedString(islandSingleLine(translation)), TextStyle(fontSize = desktopSubtitleSize(font).sp,
+            measurer.measure(AnnotatedString(islandSingleLine(translation)), TextStyle(fontFamily = customFont, fontSize = desktopSubtitleSize(font).sp,
                 lineHeight = (desktopSubtitleSize(font) * 1.2f).sp), softWrap = false, maxLines = 1).size.height.toDp().value + desktopLineSpacing().value + desktopIslandTranslationBottomPadding.value
         }
         val cover = if (compact) 22f else (maxOf(30f, primaryHeight + desktopEffectPadding().value * 2 + subtitleHeight) - 8f).coerceAtLeast(22f)

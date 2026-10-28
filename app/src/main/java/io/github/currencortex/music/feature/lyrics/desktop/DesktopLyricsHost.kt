@@ -144,6 +144,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 val config by appearance.collectAsState()
+                val customFont = io.github.currencortex.music.ui.theme.rememberCustomFont(config.customFont)
+                androidx.compose.runtime.CompositionLocalProvider(io.github.currencortex.music.ui.theme.LocalCustomFont provides customFont) {
                 Box(Modifier.musicRefreshRate(config.refreshRate), propagateMinConstraints = true) {
                 val inApp by appForeground.collectAsState()
                 DesktopLyricsSurface(lyrics, playback, preferences.state, effectNotices = effectNotices, installUpdate = installUpdate, noticeOnly = inApp,
@@ -166,7 +168,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                         status.value = status.value.copy(contentWidth = size.width, contentHeight = size.height)
                         updateIslandTouchWindow()
                     }
-                }) } }
+                }) } } }
         }
         val root = object : android.widget.FrameLayout(visual) {
             override fun onLayout(changed: Boolean, left: Int, top: Int, right: Int, bottom: Int) {

@@ -45,6 +45,7 @@ data class AppearanceSettings(
     val playerBackground: String = "",
     val playerBackgroundBlur: Float = 35f,
     val launchStyle: LaunchStyle = LaunchStyle.CLASSIC,
+    val customFont: String = "",
 ) {
     fun normalized() = copy(uiScale = if (uiScale.isFinite()) uiScale.coerceIn(MIN_SCALE, MAX_SCALE) else 1f,
         playerBackgroundBlur = if (playerBackgroundBlur.isFinite()) playerBackgroundBlur.coerceIn(0f, 100f) else 35f)

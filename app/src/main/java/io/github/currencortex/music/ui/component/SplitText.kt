@@ -22,6 +22,7 @@ import kotlin.coroutines.coroutineContext
 
 /** Keep normal text shaping/semantics; stagger grapheme drawing without relaying out the header. */
 @Composable fun SplitText(text: String, ready: Boolean, style: TextStyle, modifier: Modifier = Modifier) {
+    val customFont = io.github.currencortex.music.ui.theme.LocalCustomFont.current
     var finished by rememberSaveable(text) { mutableStateOf(false) }
     val clock = remember(text) { Animatable(if (finished) 1f else 0f) }
     var layout by remember(text) { mutableStateOf<TextLayoutResult?>(null) }
@@ -44,7 +45,7 @@ import kotlin.coroutines.coroutineContext
             finished = true
         }
     }
-    BasicText(text, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis,
+    BasicText(text, style = if (customFont != null) style.copy(fontFamily = customFont) else style, maxLines = 1, overflow = TextOverflow.Ellipsis,
         onTextLayout = { layout = it }, modifier = modifier.drawWithCache {
             val result = layout
             val visibleEnd = result?.getLineEnd(0, visibleEnd = true) ?: 0

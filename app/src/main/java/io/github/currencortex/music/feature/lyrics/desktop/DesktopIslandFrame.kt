@@ -75,11 +75,11 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
                     val name = song?.name?.takeIf(String::isNotBlank) ?: "CurrentMusic"
                     BasicText(islandSingleLine(name),
                         Modifier.testTag("desktop_island_title"),
-                        style = desktopIslandTitleStyle.copy(color = Color.White),
+                        style = desktopIslandTitleStyle.copy(color = Color.White, fontFamily = io.github.currencortex.music.ui.theme.LocalCustomFont.current),
                         maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                     BasicText(islandSingleLine(song?.artists?.takeIf(String::isNotBlank) ?: if (song == null) "等待播放" else "未知歌手"),
                         Modifier.testTag("desktop_island_artist"),
-                        style = desktopIslandArtistStyle.copy(color = Color.White.copy(.65f)),
+                        style = desktopIslandArtistStyle.copy(color = Color.White.copy(.65f), fontFamily = io.github.currencortex.music.ui.theme.LocalCustomFont.current),
                         maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
                 }
             DesktopIslandProgress(coverPosition.takeIf { song != null }, durationMs.takeIf { song != null } ?: 0L,

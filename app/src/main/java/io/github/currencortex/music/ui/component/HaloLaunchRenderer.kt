@@ -14,7 +14,7 @@ import kotlin.random.Random
  * The original logo/video is never played: CurrentMusic and the account name are independent layers.
  * All blur masks, glyphs, gradients, paths and paints are allocated before the first animated frame.
  */
-internal class HaloLaunchRenderer(resources: Resources, username: String) {
+internal class HaloLaunchRenderer(resources: Resources, username: String, customTypeface: Typeface? = null) {
     private companion object {
         const val FLIP_FRAME_RATE = 30f
         const val FLIP_CACHE_SCALE = .4f
@@ -88,7 +88,7 @@ internal class HaloLaunchRenderer(resources: Resources, username: String) {
 
     init {
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = white; textSize = 54f; typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            color = white; textSize = 54f; typeface = customTypeface ?: Typeface.create("sans-serif-medium", Typeface.NORMAL)
         }
         // Render the entire Unicode string with Android shaping, then fit it under the second word.
         val displayName = android.text.TextUtils.ellipsize(username, android.text.TextPaint(textPaint),

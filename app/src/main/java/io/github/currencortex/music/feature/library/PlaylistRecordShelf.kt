@@ -62,6 +62,7 @@ import top.yukonga.miuix.kmp.basic.TextField
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
     val renderer = remember(context) { RecordShelfView(context) }
+    val customTypeface = io.github.currencortex.music.ui.theme.LocalCustomTypeface.current
     val glassBackdrop = rememberUpdateBackdrop()
     val pageActive by rememberUpdatedState(LocalMusicPageActive.current)
     val refreshRate = LocalRefreshRatePreference.current
@@ -114,6 +115,7 @@ import top.yukonga.miuix.kmp.basic.TextField
     }
     DisposableEffect(renderer) { onDispose { renderer.dispose() } }
     SideEffect {
+        renderer.setCustomTypeface(customTypeface)
         renderer.setRunning(pageActive && owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
         // Keep result changes independent of AndroidView layout updates. The renderer owns both
         // the outgoing and incoming phases, including updates delivered behind the search overlay.
