@@ -15,7 +15,8 @@ import io.github.currencortex.music.feature.lyrics.domain.LyricsInterlude
 
 @Composable internal fun LyricsInterludeView(interval: LyricsInterlude, position: State<Long>, modifier: Modifier) {
     Row(modifier.testTag("lyrics_interlude"), verticalAlignment = Alignment.CenterVertically) {
-        BasicText(interval.label, style = TextStyle(color = Color.White.copy(alpha = .65f), fontSize = 13.sp))
+        BasicText(interval.label, style = TextStyle(color = Color.White.copy(alpha = .65f), fontSize = 13.sp,
+            fontFamily = io.github.currencortex.music.ui.theme.LocalCustomFont.current))
         Canvas(Modifier.padding(start = 10.dp).size(48.dp, 20.dp)) {
             val end = interval.endTimeMs
             val progress = if (end != null) ((position.value - interval.startTimeMs).toDouble() / (end - interval.startTimeMs).coerceAtLeast(1)).toFloat().coerceIn(0f, 1f)

@@ -12,6 +12,8 @@ val LyricsFontFamily = FontFamily(
     Font(R.font.lxgw_wenkai_regular, weight = FontWeight.Normal, loadingStrategy = FontLoadingStrategy.Async),
     Font(R.font.lxgw_wenkai_medium, weight = FontWeight.Medium, loadingStrategy = FontLoadingStrategy.Async),
 )
+@androidx.compose.runtime.Composable
+fun currentLyricsFontFamily(): FontFamily = io.github.currencortex.music.ui.theme.LocalCustomFont.current ?: LyricsFontFamily
 
 // Upstream stops at Medium; heavier selections explicitly permit platform weight synthesis.
 fun lyricsFontWeight(mode: LyricsWeight, current: Boolean, strength: Int = 500) =

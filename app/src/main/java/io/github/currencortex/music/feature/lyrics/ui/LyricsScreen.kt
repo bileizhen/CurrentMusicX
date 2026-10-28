@@ -120,6 +120,7 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
             Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).testTag("lyrics_follow")
                 .background(Color.White.copy(alpha = .14f), RoundedCornerShape(24.dp))
                 .clickable(role = Role.Button) { followRequest++ }.padding(horizontal = 20.dp, vertical = 14.dp),
-            style = TextStyle(color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold))
+            style = TextStyle(color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                fontFamily = io.github.currencortex.music.ui.theme.LocalCustomFont.current))
     }
 }

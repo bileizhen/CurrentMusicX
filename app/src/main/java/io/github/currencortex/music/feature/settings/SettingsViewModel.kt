@@ -11,4 +11,17 @@ class SettingsViewModel(private val repository: SettingsRepository) : ViewModel(
     fun edit(change: (AppearanceSettings) -> AppearanceSettings) {
         viewModelScope.launch { repository.edit(change) }
     }
+    fun setFont(context: android.content.Context, name: String, onFailure: () -> Unit = {}) {
+        viewModelScope.launch {
+            val old = try {
+                val old = repository.snapshot().customFont
+                repository.edit { it.copy(customFont = name) }
+                old
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) {
+                io.github.currencortex.music.ui.theme.deleteCustomFont(context, name); onFailure(); return@launch
+            }
+            if (old != name) runCatching { io.github.currencortex.music.ui.theme.deleteCustomFont(context, old) }
+        }
+    }
 }

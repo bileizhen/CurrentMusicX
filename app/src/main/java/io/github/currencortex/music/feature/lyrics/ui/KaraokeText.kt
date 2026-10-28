@@ -51,16 +51,16 @@ import androidx.compose.ui.text.style.TextAlign
     val size = if (fontSize.isFinite()) fontSize.coerceIn(8f, LyricsTypography.MAX_SIZE) else LyricsTypography.DEFAULT_SIZE
     // Async resource resolution must invalidate the cached glyph geometry once the font loads.
     val synthesis = lyricsFontSynthesis(fontWeight)
-    val normalTypeface by LocalFontFamilyResolver.current.resolve(LyricsFontFamily, fontWeight = FontWeight.Normal,
+    val normalTypeface by LocalFontFamilyResolver.current.resolve(currentLyricsFontFamily(), fontWeight = FontWeight.Normal,
         fontSynthesis = lyricsFontSynthesis(FontWeight.Normal))
-    val emphasisTypeface by LocalFontFamilyResolver.current.resolve(LyricsFontFamily, fontWeight = reservedFontWeight,
+    val emphasisTypeface by LocalFontFamilyResolver.current.resolve(currentLyricsFontFamily(), fontWeight = reservedFontWeight,
         fontSynthesis = lyricsFontSynthesis(reservedFontWeight))
     BoxWithConstraints(modifier) {
         // Reserve the entire blur footprint inside layout/layer/scroll bounds.
         // Keep this margin fixed across strengths so adjusting glow never rewraps text.
         val padding = with(density) { effectPadding.value.takeIf(Float::isFinite)?.coerceIn(0f, 24f)?.dp?.roundToPx() ?: 0 }
         val width = (with(density) { maxWidth.roundToPx() } - padding * 2).coerceAtLeast(1)
-        val style = TextStyle(fontFamily = LyricsFontFamily, fontSynthesis = synthesis,
+        val style = TextStyle(fontFamily = currentLyricsFontFamily(), fontSynthesis = synthesis,
             fontSize = size.sp, lineHeight = (size * lineHeightRatio).sp, fontWeight = fontWeight, textAlign = textAlign)
         // Cache both geometries together. Changing the playing line selects a cached layout;
         // it does not measure each visible lyric again or change the reserved row height.

@@ -25,7 +25,7 @@ import io.github.currencortex.music.feature.lyrics.ui.*
     val color = Color(options.textColor.toInt())
     val opacity = remember(stage, options.glowStrength) { mutableFloatStateOf(options.glowStrength * if (stage) 1f else .5f) }
     val base = remember(stage) { mutableFloatStateOf(if (stage) .35f else .55f) }
-    val style = TextStyle(fontFamily = LyricsFontFamily, fontWeight = FontWeight.Medium,
+    val style = TextStyle(fontFamily = currentLyricsFontFamily(), fontWeight = FontWeight.Medium,
         fontSynthesis = lyricsFontSynthesis(FontWeight.Medium), fontSize = font.sp,
         lineHeight = (font * 1.2f).sp, textAlign = TextAlign.Center)
     val bilingual = options.translation && line.translation.isNotBlank()
@@ -46,7 +46,8 @@ import io.github.currencortex.music.feature.lyrics.ui.*
         }
         if (options.translation && !line.translation.isNullOrBlank()) {
             val translation = remember(line.translation) { islandSingleLine(line.translation) }
-            val subtitle = TextStyle(fontSize = desktopSubtitleSize(font).sp, lineHeight = (desktopSubtitleSize(font) * 1.2f).sp,
+            val subtitle = TextStyle(fontFamily = io.github.currencortex.music.ui.theme.LocalCustomFont.current,
+                fontSize = desktopSubtitleSize(font).sp, lineHeight = (desktopSubtitleSize(font) * 1.2f).sp,
                 color = color.copy(.75f), textAlign = TextAlign.Center)
             DesktopIslandMarquee(translation, subtitle, position, line.startTimeMs, motion, padding) {
                 BasicText(translation, Modifier.fillMaxWidth().padding(horizontal = padding).testTag(translationTag),

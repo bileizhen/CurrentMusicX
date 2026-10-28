@@ -53,7 +53,7 @@ import io.github.currencortex.music.feature.lyrics.ui.*
                 BasicText(text.ifBlank { " " }, Modifier.fillMaxWidth().height(22.dp)
                     .testTag(if (focused) "player_cover_lyric_current" else "player_cover_lyric_context_$slot"),
                     style = TextStyle(color = Color.White.copy(alpha = if (focused) .95f else .35f),
-                        fontFamily = LyricsFontFamily, fontWeight = weight, fontSynthesis = lyricsFontSynthesis(weight),
+                        fontFamily = currentLyricsFontFamily(), fontWeight = weight, fontSynthesis = lyricsFontSynthesis(weight),
                         fontSize = fontSize.sp, lineHeight = 22.sp,
                         textAlign = if (settings.lyricsDisplay.centered) TextAlign.Center else TextAlign.Start),
                     maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -73,12 +73,13 @@ internal const val HALO_INTRO_MS = 8500
 @Composable internal fun HaloLaunchFrame(username: String, time: () -> Float,
     reducedMotion: Boolean = false, onPrepared: () -> Unit = {}) {
     val resources = LocalResources.current
+    val customTypeface = io.github.currencortex.music.ui.theme.LocalCustomTypeface.current
     val name = remember(username) {
         username.replace(Regex("[\\r\\n\\t]+"), " ").trim().ifEmpty { "欢迎聆听" }
     }
-    val renderer by produceState<HaloLaunchRenderer?>(null, resources, name) {
+    val renderer by produceState<HaloLaunchRenderer?>(null, resources, name, customTypeface) {
         value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-            HaloLaunchRenderer(resources, name)
+            HaloLaunchRenderer(resources, name, customTypeface)
         }
     }
     val prepared by rememberUpdatedState(onPrepared)

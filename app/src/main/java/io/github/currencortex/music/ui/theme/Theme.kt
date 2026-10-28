@@ -67,11 +67,24 @@ fun LeiTheme(settings: AppearanceSettings, darkSystemBars: Boolean? = null, dark
         }
     }
     val density = LocalDensity.current
+    val typeface = rememberCustomTypeface(settings.customFont)
+    val font = remember(typeface) { typeface?.let { androidx.compose.ui.text.font.FontFamily(it) } }
+    val baseStyles = MiuixTheme.textStyles
+    val fontStyles = remember(baseStyles, font) {
+        if (font == null) baseStyles else baseStyles.copy(
+            main = baseStyles.main.copy(fontFamily = font), paragraph = baseStyles.paragraph.copy(fontFamily = font),
+            body1 = baseStyles.body1.copy(fontFamily = font), body2 = baseStyles.body2.copy(fontFamily = font),
+            button = baseStyles.button.copy(fontFamily = font), footnote1 = baseStyles.footnote1.copy(fontFamily = font),
+            footnote2 = baseStyles.footnote2.copy(fontFamily = font), headline1 = baseStyles.headline1.copy(fontFamily = font),
+            headline2 = baseStyles.headline2.copy(fontFamily = font), subtitle = baseStyles.subtitle.copy(fontFamily = font),
+            title1 = baseStyles.title1.copy(fontFamily = font), title2 = baseStyles.title2.copy(fontFamily = font),
+            title3 = baseStyles.title3.copy(fontFamily = font), title4 = baseStyles.title4.copy(fontFamily = font))
+    }
     val scaled = remember(density.density, density.fontScale, settings.uiScale) {
         Density(density.density * settings.uiScale, density.fontScale)
     }
-    CompositionLocalProvider(LocalDarkTheme provides dark, LocalDensity provides scaled) {
-        MiuixTheme(controller = controller) {
+    CompositionLocalProvider(LocalDarkTheme provides dark, LocalDensity provides scaled, LocalCustomFont provides font, LocalCustomTypeface provides typeface) {
+        MiuixTheme(controller = controller, textStyles = fontStyles) {
             // Override here because MiuixTheme installs its own default press overlay.
             CompositionLocalProvider(LocalIndication provides clearClickIndication, content = content)
         }

@@ -50,7 +50,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.semantics.text
-import io.github.currencortex.music.feature.lyrics.ui.LyricsFontFamily
+import io.github.currencortex.music.feature.lyrics.ui.currentLyricsFontFamily
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.constrainHeight
@@ -138,7 +138,7 @@ private fun soundEffectPhaseLabel(phase: SoundEffectNoticePhase) = when (phase) 
         else -> null
     }
     if (asset == null) BasicText(name, modifier.testTag("sound_effect_island_title"),
-        style = TextStyle(fontFamily = LyricsFontFamily, color = accent, fontSize = font.sp,
+        style = TextStyle(fontFamily = currentLyricsFontFamily(), color = accent, fontSize = font.sp,
             lineHeight = (font * 1.2f).sp, fontWeight = FontWeight.Medium),
         maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
     else {

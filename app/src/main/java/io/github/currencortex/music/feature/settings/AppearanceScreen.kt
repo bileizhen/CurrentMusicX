@@ -4,6 +4,12 @@ package io.github.currencortex.music.feature.settings
 
 import io.github.currencortex.music.ui.component.MusicDialogActions
 import io.github.currencortex.music.ui.component.MusicDialogButton
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.ui.platform.LocalContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import android.os.Build
 import androidx.compose.foundation.layout.*
@@ -41,6 +47,20 @@ fun AppearanceScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSca
     onOpenLaunchStyle: () -> Unit = {}, onPreviewLaunch: () -> Unit = {}) {
     val uiText: (String) -> String = { it }
     val config by viewModel.settings.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var fontError by remember { mutableStateOf<String?>(null) }
+    var importing by remember { mutableStateOf(false) }
+    val fontPicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+        if (uri != null) scope.launch {
+            importing = true; fontError = null
+            try {
+                val name = withContext(Dispatchers.IO) { io.github.currencortex.music.ui.theme.importCustomFont(context, uri) }
+                viewModel.setFont(context.applicationContext, name) { fontError = "无法保存字体设置，请重试" }
+            } catch (e: Exception) { fontError = "字体导入失败：${e.message ?: "文件无效"}" }
+            finally { importing = false }
+        }
+    }
     top.yukonga.miuix.kmp.basic.Scaffold(
         topBar = { top.yukonga.miuix.kmp.basic.SmallTopAppBar(title = "外观", navigationIcon = {
             top.yukonga.miuix.kmp.basic.IconButton(onClick = onBack, modifier = Modifier.size(48.dp).testTag("navigate_back")) {
@@ -59,6 +79,13 @@ fun AppearanceScreen(viewModel: SettingsViewModel, onBack: () -> Unit, onOpenSca
                 SettingsSwitch(uiText("Monet 动态颜色"), config.monet, { value -> viewModel.edit { it.copy(monet = value) } },
                     enabled = Build.VERSION.SDK_INT >= 31, summary = if (Build.VERSION.SDK_INT < 31) "需要 Android 12 或更高版本" else null,
                     startAction = { SettingIcon(MusicIcons.Image) }, modifier = Modifier.testTag("setting_monet"))
+            }
+            Card(Modifier.padding(top = 12.dp).fillMaxWidth()) {
+                BasicComponent(title = "全局字体", summary = if (config.customFont.isBlank()) "使用默认字体 · 点击导入 TTF 或 OTF" else "已使用自定义字体 · 点击更换",
+                    onClick = { if (!importing) fontPicker.launch("*/*") }, modifier = Modifier.testTag("setting_custom_font"))
+                if (config.customFont.isNotBlank()) BasicComponent(title = "恢复默认字体", onClick = { viewModel.setFont(context.applicationContext, "") { fontError = "无法保存字体设置，请重试" } },
+                    modifier = Modifier.testTag("reset_custom_font"))
+                fontError?.let { Text(it, Modifier.padding(16.dp), color = MiuixTheme.colorScheme.error, fontSize = 13.sp) }
             }
             Card(Modifier.padding(top = 12.dp).fillMaxWidth()) {
                 BasicComponent(title = "开屏动画", summary = "${config.launchStyle.label} · 下次启动时生效",

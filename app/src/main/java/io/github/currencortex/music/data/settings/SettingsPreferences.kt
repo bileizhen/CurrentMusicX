@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.MutablePreferences
 
 internal object SettingsPreferences {
     private val THEME = stringPreferencesKey("theme_mode")
+    private val CUSTOM_FONT = stringPreferencesKey("custom_font")
     private val LAUNCH_STYLE = stringPreferencesKey("launch_style")
     private val MONET = booleanPreferencesKey("monet")
     private val UI_SCALE = floatPreferencesKey("ui_scale")
@@ -25,6 +26,7 @@ internal object SettingsPreferences {
     private val PLAYER_BACKGROUND_BLUR = floatPreferencesKey("player_background_blur")
 
     fun read(p: Preferences) = AppearanceSettings(
+        customFont = p[CUSTOM_FONT].orEmpty(),
         launchStyle = runCatching { LaunchStyle.valueOf(p[LAUNCH_STYLE].orEmpty()) }.getOrDefault(LaunchStyle.CLASSIC),
         themeMode = runCatching { ThemeMode.valueOf(p[THEME] ?: ThemeMode.SYSTEM.name) }.getOrDefault(ThemeMode.SYSTEM),
         monet = p[MONET] ?: false,
@@ -45,6 +47,7 @@ internal object SettingsPreferences {
 
     fun write(p: MutablePreferences, s: AppearanceSettings) {
         val v = s.normalized()
+        p[CUSTOM_FONT] = v.customFont
         p[LAUNCH_STYLE] = v.launchStyle.name
         p[THEME] = v.themeMode.name
         p[MONET] = v.monet
