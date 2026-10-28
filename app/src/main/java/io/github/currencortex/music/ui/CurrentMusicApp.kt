@@ -52,6 +52,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -409,10 +410,13 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val wideLayout = maxWidth >= 700.dp
         val rootWide = rootPage && wideLayout
         val showRootNavigation = rootPage && !playerPresented
+        val dockScroll = rememberRootDockScrollBehavior(selected, miniRetainedAvailable,
+            enabled = rootPage && !playerPresented && !miniQueueOpen && miniAvailable && !wideLayout)
+        val dockCollapsed = miniRetainedAvailable && !wideLayout && dockScroll.collapsed
         // Reserve page space once. Animate only the overlay's GPU translation, never the page height.
         val miniRoot = backStack.lastOrNull { it != PLAYER.toString() } == ROOT.toString()
-        val navigationSpace = if (miniRoot && !wideLayout && !keyboardOpen) 92.dp else 0.dp
-        val miniLift = animateDpAsState(navigationSpace, tween(180), label = "mini player lift")
+        val navigationSpace = if (miniRoot && !wideLayout && !keyboardOpen && !dockCollapsed) 92.dp else 0.dp
+        val miniLift = animateDpAsState(navigationSpace, tween(if (settings.floatingBar) 180 else 320), label = "mini player lift")
         // A scene's insets must not depend on which route is currently on top. Predictive back
         // renders both scenes before committing; changing the shared viewport makes them jump.
         val rootFloating = (settings.floatingBar || wideLayout) && !keyboardOpen
@@ -460,7 +464,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             UnifiedMiniScrollClearance else 0.dp).coerceAtLeast(0.dp)
                         CompositionLocalProvider(LocalMusicBottomInset provides scrollBottom,
                             LocalMusicComposerBottomInset provides composerBottom) {
-                        Box(Modifier.fillMaxSize().then(if (searchPresented) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
+                        Box(Modifier.fillMaxSize().nestedScroll(dockScroll)
+                            .then(if (searchPresented) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
                         RootTabTransition(selected, tabsState, onSelected = ::selectTab) { tab ->
                             when (tab) {
                                 HOME_TAB -> if (navidromeAccount.configured && navidromeAccount.home)
@@ -701,9 +706,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         if (unifiedDock) {
             val glassNavigation = LocalMusicDockNavigation.current
-            UnifiedMusicDock(expanded = miniRoot && !keyboardOpen,
+            UnifiedMusicDock(expanded = miniRoot && !keyboardOpen && !dockCollapsed,
                 visible = dockVisible,
-                miniPresent = miniRetainedAvailable, navigationInteractive = showRootNavigation && !keyboardOpen,
+                miniPresent = miniRetainedAvailable, navigationInteractive = showRootNavigation && !keyboardOpen && !dockCollapsed,
                 modifier = Modifier.align(Alignment.BottomCenter)
                     .then(if (playerPresented || miniQueueOpen) Modifier.clearAndSetSemantics {} else Modifier)
                     .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) },
@@ -720,7 +725,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) }) {
             miniBody()
         }
-        if (showRootNavigation && !rootWide && !keyboardOpen && !settings.floatingBar) Box(Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
+        if (showRootNavigation && !rootWide && !keyboardOpen && !settings.floatingBar) ScrollCollapsingNavigation(
+            expanded = !dockCollapsed, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
             StandardNavigationBar(selected, labels, icons, ::selectTab)
             if (settings.navigationGlow && currentSong != null) io.github.currencortex.music.ui.component.NavigationGlow(
                 currentSong?.cover.orEmpty(), playerVm.state, container.dockAudioLevel,
