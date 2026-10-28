@@ -21,6 +21,7 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
                    onStorage: () -> Unit, onLogs: () -> Unit, onAbout: () -> Unit, onUpdates: (UpdatePageOrigin?) -> Unit,
                    onDesktopLyrics: () -> Unit = {},
                    onAudioOutput: () -> Unit = {},
+                   onLocalMusic: () -> Unit = {},
                    updateTransfer: io.github.currencortex.music.core.update.UpdateTransferState = io.github.currencortex.music.core.update.UpdateTransferState()) {
     LazyColumn(Modifier.fillMaxSize().testTag("settings_screen"),
         contentPadding = musicScrollPadding(PaddingValues(12.dp, 30.dp, 12.dp, 32.dp)),
@@ -56,6 +57,9 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
                 ArrowPreference(title = "网络与播放", summary = "音源、歌词来源、音质与预加载",
                     startAction = { SettingIcon(MusicIcons.Device) }, onClick = onNetwork,
                     modifier = Modifier.testTag("open_network"))
+                ArrowPreference(title = "本地音乐", summary = "浏览并播放手机上的歌曲",
+                    startAction = { SettingIcon(MusicIcons.Device) }, onClick = onLocalMusic,
+                    modifier = Modifier.testTag("open_local_music_settings"))
                 ArrowPreference(title = "音频输出", summary = "输出采样率、设备与能力信息",
                     startAction = { SettingIcon(MusicIcons.Device) }, onClick = onAudioOutput,
                     modifier = Modifier.testTag("open_audio_output"))

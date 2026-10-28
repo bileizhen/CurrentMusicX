@@ -24,7 +24,11 @@ class MusicRepository(private val api: ApiClient,
         } else null
         return songPreviewClip(raw, id ?: song.id, song.durationMs)
     }
-    suspend fun detail(song: Song): Song = if (song.musicSource == MusicSource.NAVIDROME) requireNotNull(navidrome).detail(song) else detail(song.id)
+    suspend fun detail(song: Song): Song = when (song.musicSource) {
+        MusicSource.LOCAL -> song
+        MusicSource.NAVIDROME -> requireNotNull(navidrome).detail(song)
+        else -> detail(song.id)
+    }
     suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.NAVIDROME) appResult { requireNotNull(navidrome).lyrics(song) } else lyricsDocument(song.id)
     suspend fun source(song: Song, quality: AudioQuality, session: RequestSession? = null): AudioSource =
         if (song.musicSource == MusicSource.NAVIDROME) requireNotNull(navidrome).source(song, quality) else source(song.id, quality, session)

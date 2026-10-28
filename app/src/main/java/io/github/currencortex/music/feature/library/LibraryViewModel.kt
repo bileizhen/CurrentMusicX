@@ -226,12 +226,15 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         }
     }
     fun refreshSearchLikes(songs: List<Song>) = viewModelScope.launch { appResult {
+        val online = songs.filter { it.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL }
+        if (online.isEmpty()) return@appResult
         if (container.primaryLibrary.resolveLikeNetease()) container.neteaseSongActions.likedIds()
-        else container.libraryRepository.refreshStatus(songs.filterNot { it.video }.map { it.id })
+        else container.libraryRepository.refreshStatus(online.filterNot { it.video }.map { it.id })
     } }
     fun refreshStatuses(songs: List<Song>) = viewModelScope.launch { appResult {
-        if (songs.all { it.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME }) return@appResult
-        val legacySongs = songs.filterNot { it.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME }
+        val legacySongs = songs.filterNot { it.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME,
+            io.github.currencortex.music.data.song.MusicSource.LOCAL) }
+        if (legacySongs.isEmpty()) return@appResult
         if (container.primaryLibrary.resolveNetease()) container.neteaseSongActions.likedIds()
         else container.libraryRepository.refreshStatus(legacySongs.filterNot { it.video }.map { it.id })
     } }
@@ -283,7 +286,9 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
         else container.libraryRepository.remove(id, song)
     }
     init {
-        viewModelScope.launch {
+        // LocalMusicScreen owns MediaStore scanning/permission state and uses the same
+        // playlist renderer. Cloud account/library revisions must not trigger a lookup.
+        if (kind != "local") viewModelScope.launch {
             container.sessionRestored.await()
             var identity: List<Any?>? = null
             combine(container.accountRepository.state.map { it.account?.id }.distinctUntilChanged(),

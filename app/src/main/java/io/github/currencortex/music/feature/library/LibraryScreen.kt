@@ -37,10 +37,17 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
                 }
             }
         }
+        Card(Modifier.fillMaxWidth().testTag("open_local_music"), onClick = { navigate("lib/local") }, showIndication = true) {
+            Column(Modifier.padding(14.dp)) {
+                Text("本地音乐", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                Text("扫描手机里的音乐", fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+            }
+        }
     }
 }
 
 @Composable fun LibrarySongActions(vm: LibraryViewModel, song: Song, navigate: (String) -> Unit) {
+    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL) return
     val statuses by vm.statuses.collectAsStateWithLifecycle()
     val status = statuses[song.id] ?: SongStatus()
     val dismiss = LocalDismissSongMenu.current

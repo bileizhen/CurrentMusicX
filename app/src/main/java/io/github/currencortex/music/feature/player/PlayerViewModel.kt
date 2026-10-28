@@ -136,7 +136,7 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
         }
     }
     fun togglePrimaryLike() {
-        val song = queue.value.current?.takeUnless { it.video } ?: return
+        val song = queue.value.current?.takeUnless { it.video || it.musicSource == MusicSource.LOCAL } ?: return
         val owner = likeOwner()
         likeWrite?.takeIf { it.owner == owner }?.let { pending ->
             pending.desired = !pending.desired; pending.revision++

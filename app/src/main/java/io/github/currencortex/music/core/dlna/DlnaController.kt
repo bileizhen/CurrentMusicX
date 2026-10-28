@@ -50,7 +50,7 @@ class DlnaController(private val player: ExternalPlayer, private val music: Musi
     }
     private suspend fun load(epoch: Long, position: Long = 0, compatible: Boolean = false) {
         val song = player.queue.state.value.current ?: return
-        check(song.musicSource != io.github.currencortex.music.data.song.MusicSource.NAVIDROME) { "私有 Navidrome 曲库暂不支持 DLNA 投屏" }
+        check(song.musicSource != io.github.currencortex.music.data.song.MusicSource.NAVIDROME && song.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL) { "本地或私有曲库歌曲暂不支持 DLNA 投屏" }
         val transport = av ?: return
         state.update { it.copy(busy = true, error = null) }
         val quality = if (compatible) AudioQuality.EXHIGH else AudioQuality.LOSSLESS

@@ -30,7 +30,7 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
             ?: if (neteaseMain || navidrome) current?.liked == true else statuses[queue.current?.id]?.liked == true
         PlayerIconButton(PlayerIcon.LIKE, if (liked) "取消喜欢" else "喜欢", vm::togglePrimaryLike,
             Modifier.testTag("player_like"), selected = liked, count = current?.likeCount,
-            showCount = true, enabled = queue.current?.video == false, onLongClick = onLike)
+            showCount = true, enabled = queue.current?.video == false && queue.current?.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL, onLongClick = onLike)
         Box(middleSlot, contentAlignment = Alignment.Center) {
             PlayerIconButton(PlayerIcon.COMMENT, "评论区", onComments, Modifier.testTag("player_comments"),
                 count = current?.commentCount, showCount = true, enabled = id != null)
