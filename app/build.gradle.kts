@@ -51,8 +51,8 @@ android {
         minSdk = 26
         externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
         targetSdk = 36
-        versionCode = 30
-        versionName = "1.2.3"
+        versionCode = 31
+        versionName = "1.2.4"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "NETEASE_ORIGINAL_EFFECTS", originalEffectsBundled.toString())
         buildConfigField("boolean", "UPDATE_DOWNLOAD_EXPERIENCE", "false")
