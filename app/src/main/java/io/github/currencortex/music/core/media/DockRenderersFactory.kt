@@ -28,19 +28,29 @@ internal class DockRenderersFactory(context: Context, private val meter: DockAud
             override fun getMediaFormat(format: androidx.media3.common.Format, codecMimeType: String,
                 codecMaxInputSize: Int, codecOperatingRate: Float): android.media.MediaFormat {
                 val result = super.getMediaFormat(format, codecMimeType, codecMaxInputSize, codecOperatingRate)
-                if (outputSettings().mode == io.github.currencortex.music.data.settings.AudioOutputMode.BIT_PERFECT)
+                if (outputSettings().mode.rawPcm) {
+                    CurrentMusicAudioDiagnostics.format("source.declared", format)
                     result.setInteger(android.media.MediaFormat.KEY_PCM_ENCODING,
                         format.pcmEncoding.takeIf { it in BitPerfectAudioSink.PCM_ENCODINGS } ?: androidx.media3.common.C.ENCODING_PCM_16BIT)
+                    CurrentMusicAudioDiagnostics.record("decoder.requestedPcmEncoding=${result.getInteger(android.media.MediaFormat.KEY_PCM_ENCODING)}; source metadata is not decoded PCM")
+                }
                 return result
             }
             override fun onOutputFormatChanged(format: androidx.media3.common.Format, mediaFormat: android.media.MediaFormat?) {
-                if (outputSettings().mode == io.github.currencortex.music.data.settings.AudioOutputMode.BIT_PERFECT &&
+                if (outputSettings().mode.rawPcm) {
+                    CurrentMusicAudioDiagnostics.format("source.declared", format)
+                    fun number(key: String) = mediaFormat?.takeIf { it.containsKey(key) }?.getInteger(key)
+                    CurrentMusicAudioDiagnostics.record("decoder.output rate=${number(android.media.MediaFormat.KEY_SAMPLE_RATE)} " +
+                        "encoding=${number(android.media.MediaFormat.KEY_PCM_ENCODING)} channels=${number(android.media.MediaFormat.KEY_CHANNEL_COUNT)}; absent fields are unknown, not hardware limitations")
+                }
+                if (outputSettings().mode.rawPcm &&
                     format.sampleMimeType != androidx.media3.common.MimeTypes.AUDIO_RAW && mediaFormat != null &&
                     format.pcmEncoding in BitPerfectAudioSink.PCM_ENCODINGS) {
                     val actual = if (mediaFormat.containsKey(android.media.MediaFormat.KEY_PCM_ENCODING))
                         mediaFormat.getInteger(android.media.MediaFormat.KEY_PCM_ENCODING) else androidx.media3.common.C.ENCODING_PCM_16BIT
                     if (actual != format.pcmEncoding) {
-                        val reason = "Bit-perfect 已停止：系统解码器未保留音源 PCM 位深"
+                        val reason = "${outputSettings().mode.label} 已停止：[DECODER_PCM_MISMATCH] 解码器输出 ${pcmLabel(actual)}($actual)，与源声明 ${pcmLabel(format.pcmEncoding)}(${format.pcmEncoding}) 不一致"
+                        CurrentMusicAudioDiagnostics.record(reason)
                         outputStatus(reason)
                         throw createRendererException(IllegalStateException(reason), format,
                             androidx.media3.common.PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED)

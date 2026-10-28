@@ -23,9 +23,10 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
         this(normal, settings, report, { format, attributes, clock ->
             if (Build.VERSION.SDK_INT >= 34)
                 AndroidBitPerfectStream.open(context, format, settings(), attributes, clock, report)
-            else throw IllegalStateException("Bit-perfect 需要 Android 14 或更新版本")
+            else throw BitPerfectFailure(BitPerfectFailureCode.ANDROID_VERSION, "Bit-perfect 需要 Android API 34 或更新版本")
         })
-    private fun selected() = settings().mode == AudioOutputMode.BIT_PERFECT
+    private fun selected() = settings().mode.rawPcm
+    private val label get() = "Bit-perfect"
     private var active = false
     private var format = Format.Builder().build()
     private var next: AudioSink.AudioSinkConfig? = null
@@ -56,10 +57,11 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
         active = selected()
         if (!active) { super.configure(config); return }
         format = config.format
+        CurrentMusicAudioDiagnostics.format("decodedPcm.sink", format)
         val mapping = config.outputChannelMapping
         if (getFormatSupport(format) == AudioSink.SINK_FORMAT_UNSUPPORTED || format.sampleRate <= 0 || format.channelCount <= 0 ||
             (mapping != null && (mapping.length() != format.channelCount || (0 until mapping.length()).any { mapping[it] != it }))) {
-            val reason = "Bit-perfect 已停止：不支持此 PCM 格式或声道重排"
+            val reason = "$label 已停止：不支持此 PCM 格式或声道重排"
             report(reason)
             throw AudioSink.ConfigurationException(reason, format)
         }
@@ -74,7 +76,8 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
         trim.flush(AudioProcessor.StreamMetadata(C.TIME_UNSET))
     }
     private fun fail(error: Exception): Nothing {
-        val message = "Bit-perfect 已停止：${error.message ?: "输出条件已改变"}"
+        val message = "$label 已停止：${error.message ?: "输出条件已改变"}"
+        CurrentMusicAudioDiagnostics.record("finalState=FAILED reason=${error.javaClass.simpleName} detail=${error.message?.take(600)}")
         report(message)
         throw AudioSink.InitializationException(message, 0, format, false, error)
     }
@@ -94,7 +97,7 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
             })
             // Never scale PCM. Ducking/mute pauses output instead of changing samples.
             if (playing && volume == 1f) stream!!.output.play()
-            else if (volume != 1f) report("Bit-perfect 已暂停：静音或音频焦点衰减；请使用 DAC 调节音量")
+            else if (volume != 1f) report("$label 已暂停：静音或音频焦点衰减；请使用 DAC 调节音量")
         } catch (error: Exception) { releaseRaw(); fail(error) }
     }
     private fun drain() {
@@ -102,7 +105,12 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
         checkStream()
         val before = pending.remaining()
         try { stream!!.output.write(pending, 1, start) }
-        catch (error: AudioOutput.WriteException) { report("Bit-perfect 已停止：USB 写入失败"); throw AudioSink.WriteException(error.errorCode, format, false) }
+        catch (error: AudioOutput.WriteException) {
+            CurrentMusicAudioDiagnostics.record("failure=WRITE_FAILED errorCode=${error.errorCode}")
+            releaseRaw()
+            report("$label 已停止：[WRITE_FAILED] USB 写入失败，错误码 ${error.errorCode}")
+            throw AudioSink.WriteException(error.errorCode, format, false)
+        } catch (error: Exception) { releaseRaw(); fail(BitPerfectFailure(BitPerfectFailureCode.WRITE_FAILED, "音频写入异常（${error.javaClass.simpleName}）", error)) }
         written += before - pending.remaining()
     }
     override fun handleBuffer(buffer: ByteBuffer, presentationTimeUs: Long, encodedAccessUnitCount: Int): Boolean {
@@ -153,7 +161,7 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
     override fun setVolume(volume: Float) {
         this.volume = volume
         if (!active) { super.setVolume(volume); return }
-        if (volume != 1f) { stream?.output?.pause(); report("Bit-perfect 已暂停：静音或音频焦点衰减；请使用 DAC 调节音量") }
+        if (volume != 1f) { stream?.output?.pause(); report("$label 已暂停：静音或音频焦点衰减；请使用 DAC 调节音量") }
         else if (playing) stream?.output?.play()
     }
     override fun setPlaybackParameters(parameters: PlaybackParameters) { super.setPlaybackParameters(if (selected()) PlaybackParameters.DEFAULT else parameters) }
@@ -164,7 +172,10 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
     override fun setAuxEffectInfo(info: AuxEffectInfo) { if (!selected()) super.setAuxEffectInfo(info) }
     override fun setPreferredDevice(device: AudioDeviceInfo?) { super.setPreferredDevice(device) }
     override fun getAudioTrackBufferSizeUs() = if (active) (stream?.output?.bufferSizeInFrames ?: 0) * 1_000_000 / format.sampleRate else super.getAudioTrackBufferSizeUs()
-    private fun releaseRaw() { stream?.close(); stream = null }
+    private fun releaseRaw() {
+        val previous = stream; stream = null
+        runCatching { previous?.close() }.onFailure { CurrentMusicAudioDiagnostics.record("cleanup.stream=${it.javaClass.simpleName}") }
+    }
     override fun flush() { releaseRaw(); next = null; clearPosition(); super.flush() }
     override fun reset() { flush(); active = false; trim.reset(); super.reset() }
     override fun release() { releaseRaw(); trim.reset(); super.release() }
