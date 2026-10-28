@@ -1,0 +1,11 @@
+{
+  "engineVersion": "NetEase 9.6.15",
+  "adapterRevision": "ncm-usb-v3-status-init",
+  "abi": "arm64-v8a",
+  "sourceApkSha256": "e2b52565f3ca037277ba9850d61750d28102c03abba02219b9839f0136ed06c9",
+  "library": "libncmusbaudio.so",
+  "sha256": "150daa62df3b2f5a9b9bb5d54a3108e90495e50853c4b5ac7df3f63137f70a7a",
+  "modified": false,
+  "sharedRuntimeSha256": "3e6d529147ffd66bd31fab85c8902b526abd1c06e43554ce64b97519e255e4b3",
+  "bitPerfectClaim": false
+}

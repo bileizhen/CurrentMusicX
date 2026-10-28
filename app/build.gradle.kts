@@ -65,6 +65,7 @@ android {
     sourceSets.getByName("main").jniLibs.setSrcDirs(if (originalEffectsBundled) listOf(file("src/main/jniLibs")) else emptyList<File>())
     if (originalEffectsBundled) {
         val pinned = mapOf(
+            "libncmusbaudio.so" to "150daa62df3b2f5a9b9bb5d54a3108e90495e50853c4b5ac7df3f63137f70a7a",
             "libneaudioeffects.so" to "3f8e2eec659080cb8e90bbfc672d327a180e4e0b6c051818e38625c5f01fcbd1",
             "libc++_shared.so" to "3e6d529147ffd66bd31fab85c8902b526abd1c06e43554ce64b97519e255e4b3",
             "libMNN.so" to "be7ad29454cfeecfb30399e32c3f600f963e69c7dd914f0001021fc78435249d",
@@ -74,7 +75,7 @@ android {
             val binary = originalEffectsLibs.resolve(name)
             check(binary.isFile && MessageDigest.getInstance("SHA-256").digest(binary.readBytes())
                 .joinToString("") { "%02x".format(it.toInt() and 255) } == expected) {
-                "Bundled NetEase 9.5.30 library failed verification: $name"
+                "Bundled NetEase library failed verification: $name"
             }
         }
     }

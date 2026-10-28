@@ -351,3 +351,13 @@ The audio output settings use audio-lines, waves, activity, cable, guitar and bi
 converted from the original SVGs to Android Vector Drawables with 24dp bounds
 and 2-unit rounded strokes. The original copyright and ISC license are included
 in legal/LUCIDE-LICENSE.txt.
+
+## NetEase native USB audio engine
+
+USB Host exclusive output embeds the unmodified arm64 `libncmusbaudio.so` from
+NetEase Music 9.6.15, extracted from the user's installed APK. NetEase and its
+component authors retain their rights. This does not imply endorsement.
+Identity, recovered ABI, integration restrictions and validation boundaries are
+recorded in `NETEASE_USB_OUTPUT.md` and the bundled
+`original-usb/engine-manifest.json`. The adapter uses no account data or player
+entitlement bypass. USB exclusive output is not advertised as Bit-perfect.
