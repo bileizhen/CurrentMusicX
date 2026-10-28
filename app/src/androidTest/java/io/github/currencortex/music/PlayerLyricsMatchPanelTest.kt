@@ -38,7 +38,7 @@ class PlayerLyricsMatchPanelTest {
             it.assessment = score
         }
         show(state)
-        compose.onNodeWithTag("lyrics_match_alignment").assertTextContains("提前 1.00 秒")
+        compose.onNodeWithTag("lyrics_match_alignment").assertTextContains("提前 1.00 秒", substring = true)
         compose.onNodeWithTag("lyrics_match_preview_line_0").performScrollTo()
         compose.onNodeWithText("0:00").assertIsDisplayed()
         compose.runOnIdle { assertEquals(1000L, state.preview!!.document.lines.first().startTimeMs) }
@@ -50,15 +50,15 @@ class PlayerLyricsMatchPanelTest {
             it.assessment = score.copy(hasWordTiming = true, score = score.score!!.copy(accepted = false, timingSimilarity = 0.0))
         }
         show(state)
-        compose.onNodeWithTag("lyrics_match_content_score").assertTextContains("90%")
-        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("内容或时间轴未通过")
-        compose.onNodeWithTag("lyrics_match_timing_score").assertTextContains("未通过校验")
+        compose.onNodeWithTag("lyrics_match_content_score").assertTextContains("90%", substring = true)
+        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("内容或时间轴未通过", substring = true)
+        compose.onNodeWithTag("lyrics_match_timing_score").assertTextContains("未通过校验", substring = true)
         compose.runOnIdle {
             state.preview = saved.copy(origin = LyricsOrigin("AMLL 逐字歌词", "amll", "ncm:708"))
             state.assessment = score.copy(hasWordTiming = true, score = score.score!!.copy(similarity = .75, hasWordTiming = true))
         }
-        compose.onNodeWithTag("lyrics_match_reference_score").assertTextContains("75%")
-        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("AMLL 逐字优先")
+        compose.onNodeWithTag("lyrics_match_reference_score").assertTextContains("75%", substring = true)
+        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("AMLL 逐字优先", substring = true)
     }
 
     private class PanelState {
@@ -110,7 +110,7 @@ class PlayerLyricsMatchPanelTest {
         for (source in LyricsMatchSource.entries) {
             val tab = compose.onNodeWithTag("lyrics_match_source_${source.name.lowercase()}")
             tab.performScrollTo().performClick()
-            tab.assertIsSelected().assertTextContains(source.shortLabel)
+            tab.assertIsSelected().assertTextContains(source.shortLabel, substring = true)
         }
         compose.onNodeWithTag("lyrics_match_query").performTextReplacement("Another manual query")
         compose.runOnIdle {
@@ -147,15 +147,15 @@ class PlayerLyricsMatchPanelTest {
     @Test fun listAndPreviewShowTheSamePercentageAndOnlySaveApplies() {
         val state = PanelState()
         show(state)
-        compose.onNodeWithTag("lyrics_match_metadata_0", useUnmergedTree = true).assertTextContains("信息匹配")
-            .assertTextContains("90%")
+        compose.onNodeWithTag("lyrics_match_metadata_0", useUnmergedTree = true).assertTextContains("信息匹配", substring = true)
+            .assertTextContains("90%", substring = true)
         compose.onNodeWithTag("lyrics_match_candidate_0").performClick()
-        compose.onNodeWithTag("lyrics_match_content_score").assertTextContains("歌曲信息").assertTextContains("90%")
-        compose.onNodeWithTag("lyrics_match_timing_score").assertTextContains("通过")
+        compose.onNodeWithTag("lyrics_match_content_score").assertTextContains("歌曲信息", substring = true).assertTextContains("90%", substring = true)
+        compose.onNodeWithTag("lyrics_match_timing_score").assertTextContains("通过", substring = true)
         compose.onNodeWithTag("lyrics_match_quality_score").assertDoesNotExist()
-        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("符合自动条件")
+        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("符合自动条件", substring = true)
         compose.runOnIdle { assertEquals(0, state.applications) }
-        compose.onNodeWithTag("lyrics_match_apply").assertIsEnabled().assertTextContains("保存歌词")
+        compose.onNodeWithTag("lyrics_match_apply").assertIsEnabled().assertTextContains("保存歌词", substring = true)
             .performClick()
         compose.runOnIdle {
             assertEquals(1, state.applications)
@@ -172,11 +172,11 @@ class PlayerLyricsMatchPanelTest {
             assessmentNote = "候选信息尚未读取"
         }
         show(state)
-        compose.onNodeWithTag("lyrics_match_content_score").assertTextContains("未校验")
+        compose.onNodeWithTag("lyrics_match_content_score").assertTextContains("未校验", substring = true)
         compose.onNodeWithTag("lyrics_match_timing_score").assertDoesNotExist()
         compose.onNodeWithTag("lyrics_match_quality_score").assertDoesNotExist()
-        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("未校验 · 可手动保存")
-        compose.onNodeWithTag("lyrics_match_assessment_note").assertTextContains("候选信息尚未读取")
+        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("未校验 · 可手动保存", substring = true)
+        compose.onNodeWithTag("lyrics_match_assessment_note").assertTextContains("候选信息尚未读取", substring = true)
         compose.onNodeWithTag("lyrics_match_apply").assertIsEnabled()
         compose.runOnIdle {
             assertEquals(0, state.applications)

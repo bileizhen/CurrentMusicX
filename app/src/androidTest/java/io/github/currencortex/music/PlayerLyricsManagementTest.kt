@@ -45,6 +45,14 @@ class PlayerLyricsManagementTest {
         container.playerController.state.value = PlayerState(song = value, positionMs = 2_000, durationMs = value.durationMs)
     }
 
+    @Composable private fun Host(content: @Composable () -> Unit) {
+        LeiTheme(AppearanceSettings(blur = false)) {
+            top.yukonga.miuix.kmp.basic.Scaffold(contentWindowInsets = androidx.compose.foundation.layout.WindowInsets(0, 0, 0, 0)) {
+                content()
+            }
+        }
+    }
+
     private fun click(tag: String) = compose.onNodeWithTag(tag).performScrollTo().performClick()
 
     @Test fun offsetButtonsTypedValuesAndResetStayPerSongAndDoNotReloadLyrics() = runBlocking<Unit> {
@@ -52,7 +60,7 @@ class PlayerLyricsManagementTest {
         val container = container(calls)
         try {
             playSilently(container)
-            compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
+            compose.setContent { Host {
                 PlayerLyricsManagementDialog(container, song) {}
             } }
             compose.waitUntil(5_000) { container.playbackLyrics.state.value.document == original }
@@ -82,13 +90,13 @@ class PlayerLyricsManagementTest {
             container.songLyrics.saveMatched(song, matched)
             container.songLyrics.setOffset(song, 500)
             playSilently(container)
-            compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
+            compose.setContent { Host {
                 PlayerLyricsManagementDialog(container, song) {}
             } }
             compose.waitUntil(5_000) { container.playbackLyrics.state.value.origin == matched.origin }
-            compose.onNodeWithTag("lyrics_source_current").assertTextContains(matched.origin.label)
-            compose.onNodeWithTag("lyrics_source_default").assertTextContains("自动择优")
-                .assertTextContains("内容与时间轴校验 · 合格逐字优先 · AMLL 优先")
+            compose.onNodeWithTag("lyrics_source_current").assertTextContains(matched.origin.label, substring = true)
+            compose.onNodeWithTag("lyrics_source_default").assertTextContains("自动择优", substring = true)
+                .assertTextContains("内容与时间轴校验 · 合格逐字优先 · AMLL 优先", substring = true)
             click("lyrics_source_imported")
             compose.waitUntil(5_000) { container.playbackLyrics.state.value.origin == imported.origin }
             assertNotNull(container.songLyrics.settings(song).matchedOrigin)
@@ -97,8 +105,8 @@ class PlayerLyricsManagementTest {
             assertNotNull(container.songLyrics.settings(song).importedOrigin)
             click("lyrics_source_default")
             compose.waitUntil(5_000) { container.playbackLyrics.state.value.document == original }
-            compose.onNodeWithTag("lyrics_source_default").assertIsSelected().assertTextContains("自动择优")
-                .assertTextContains("内容与时间轴校验 · 合格逐字优先 · AMLL 优先")
+            compose.onNodeWithTag("lyrics_source_default").assertIsSelected().assertTextContains("自动择优", substring = true)
+                .assertTextContains("内容与时间轴校验 · 合格逐字优先 · AMLL 优先", substring = true)
             assertNull(container.songLyrics.settings(song).matchedOrigin)
             assertNull(container.songLyrics.settings(song).importedOrigin)
             assertEquals(500L, container.songLyrics.settings(song).offsetMs)
@@ -113,19 +121,19 @@ class PlayerLyricsManagementTest {
         val navidromeSong = song.copy(musicSource = MusicSource.NAVIDROME)
         try {
             assertEquals(LyricsSource.AUTO, container.musicSettings.snapshot().lyricsSource)
-            compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
+            compose.setContent { Host {
                 PlayerLyricsManagementDialog(container, navidromeSong) {}
             } }
-            compose.onNodeWithTag("lyrics_source_default").assertTextContains("自动择优")
-                .assertTextContains("内容与时间轴校验 · 合格逐字优先 · AMLL 优先")
-            compose.onNodeWithTag("lyrics_source_current").assertTextContains("自动择优")
+            compose.onNodeWithTag("lyrics_source_default").assertTextContains("自动择优", substring = true)
+                .assertTextContains("内容与时间轴校验 · 合格逐字优先 · AMLL 优先", substring = true)
+            compose.onNodeWithTag("lyrics_source_current").assertTextContains("自动择优", substring = true)
             container.musicSettings.setLyricsSource(LyricsSource.NETEASE)
             compose.waitUntil(5000) { container.musicSettings.state.value.lyricsSource == LyricsSource.NETEASE }
-            compose.onNodeWithTag("lyrics_source_default").assertTextContains("Navidrome")
+            compose.onNodeWithTag("lyrics_source_default").assertTextContains("Navidrome", substring = true)
             container.musicSettings.setLyricsSource(LyricsSource.AUTO)
             compose.waitUntil(5000) { container.musicSettings.state.value.lyricsSource == LyricsSource.AUTO }
-            compose.onNodeWithTag("lyrics_source_default").assertTextContains("自动择优")
-                .assertTextContains("内容与时间轴校验 · 合格逐字优先 · AMLL 优先")
+            compose.onNodeWithTag("lyrics_source_default").assertTextContains("自动择优", substring = true)
+                .assertTextContains("内容与时间轴校验 · 合格逐字优先 · AMLL 优先", substring = true)
             assertEquals(0, calls.get())
             assertTrue(container.playbackQueue.state.value.songs.isEmpty())
         } finally { container.close() }
@@ -136,14 +144,14 @@ class PlayerLyricsManagementTest {
         val container = container(calls)
         try {
             playSilently(container)
-            compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
+            compose.setContent { Host {
                 PlayerLyricsManagementDialog(container, song) {}
             } }
             compose.waitUntil(5_000) { container.playbackLyrics.state.value.document == original }
             val loads = calls.get()
             click("lyrics_match_open")
             compose.onNodeWithTag("lyrics_match_source_netease").performScrollTo()
-                .assertIsSelected().assertTextContains(LyricsMatchSource.NETEASE.shortLabel)
+                .assertIsSelected().assertTextContains(LyricsMatchSource.NETEASE.shortLabel, substring = true)
             assertEquals(6, LyricsMatchSource.entries.size)
             LyricsMatchSource.entries.forEach { source ->
                 compose.onNodeWithTag("lyrics_match_source_${source.name.lowercase()}").assertExists()
@@ -157,7 +165,7 @@ class PlayerLyricsManagementTest {
             listOf(LyricsMatchSource.CURRENT_MUSIC, LyricsMatchSource.QQ_MUSIC, LyricsMatchSource.QISHUI).forEach { source ->
                 val tag = "lyrics_match_source_${source.name.lowercase()}"
                 click(tag)
-                compose.onNodeWithTag(tag).assertIsSelected().assertTextContains(source.shortLabel)
+                compose.onNodeWithTag(tag).assertIsSelected().assertTextContains(source.shortLabel, substring = true)
                 compose.onNodeWithTag("lyrics_match_source_netease").assertIsNotSelected()
                 compose.onNodeWithTag("lyrics_match_preview_line_0").assertDoesNotExist()
                 compose.runOnIdle {
@@ -185,7 +193,7 @@ class PlayerLyricsManagementTest {
         try {
             container.songLyrics.setOffset(song, 750)
             playSilently(container)
-            compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
+            compose.setContent { Host {
                 if (open) PlayerLyricsManagementDialog(container, shownSong) { open = false }
             } }
             compose.onNodeWithTag("lyrics_management").assertExists()
