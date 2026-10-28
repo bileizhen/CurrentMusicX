@@ -7,7 +7,8 @@ import kotlinx.coroutines.flow.*
 
 enum class AudioOutputMode(val label: String) {
     AUDIO_TRACK("AudioTrack"), OPENSL_ES("OpenSL ES"), AAUDIO("AAudio"), DIRECT("Direct (beta)"), OBOE("Oboe"), BIT_PERFECT("Bit-perfect");
-    val bypassProcessing get() = this == DIRECT || this == BIT_PERFECT
+    val rawPcm get() = this == BIT_PERFECT
+    val bypassProcessing get() = this == DIRECT || rawPcm
 }
 data class AudioOutputSettings(val sampleRate: Int = 0, val deviceKey: String = "", val mode: AudioOutputMode = AudioOutputMode.AUDIO_TRACK) {
     companion object { val rates = listOf(0, 44100, 48000, 88200, 96000, 176400, 192000) }

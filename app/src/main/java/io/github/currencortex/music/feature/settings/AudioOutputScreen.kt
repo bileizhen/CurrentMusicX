@@ -5,6 +5,8 @@ import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import android.os.Handler
 import android.os.Looper
 import androidx.compose.foundation.layout.*
@@ -12,6 +14,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
@@ -21,6 +25,7 @@ import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.R
 import io.github.currencortex.music.core.media.outputKey
 import io.github.currencortex.music.core.media.outputLabel
+import io.github.currencortex.music.core.media.CurrentMusicAudioDiagnostics
 import io.github.currencortex.music.data.settings.AudioOutputSettings
 import io.github.currencortex.music.data.settings.AudioOutputMode
 import io.github.currencortex.music.ui.component.*
@@ -31,6 +36,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable fun AudioOutputScreen(container: AppContainer) {
     val settings by container.audioOutput.state.collectAsStateWithLifecycle()
     val outputStatus by container.audioOutput.status.collectAsStateWithLifecycle()
+    val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     val manager = remember(context) { context.getSystemService(AudioManager::class.java) }
     var devices by remember { mutableStateOf(manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).toList()) }
@@ -55,10 +61,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     .filter { settings.deviceKey.isEmpty() || it.outputKey() == settings.deviceKey }
                 if (usb.isEmpty()) "当前未连接或未选择 USB DAC"
                 else usb.joinToString("\n") { device ->
-                    val count = runCatching { manager.getSupportedMixerAttributes(device).count {
-                        it.mixerBehavior == android.media.AudioMixerAttributes.MIXER_BEHAVIOR_BIT_PERFECT
-                    } }.getOrDefault(0)
-                    "${device.outputLabel()}：" + if (count == 0) "系统未报告逐位输出支持" else "$count 种逐位输出格式，播放时匹配音源"
+                    CurrentMusicAudioDiagnostics.capabilities(manager, device)
                 }
             }
         }
@@ -66,6 +69,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var picker by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    var diagnosticMessage by remember { mutableStateOf<String?>(null) }
+    val exportDiagnostics = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) scope.launch {
+            try {
+                val report = CurrentMusicAudioDiagnostics.fullSnapshot()
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    requireNotNull(context.contentResolver.openOutputStream(uri)) { "无法打开文件" }.bufferedWriter(Charsets.UTF_8).use { it.write(report) }
+                }
+                diagnosticMessage = "完整诊断已导出"
+            } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (_: Exception) { diagnosticMessage = "导出失败，请重试" }
+        }
+    }
     fun save(action: suspend () -> Unit) { scope.launch {
         try { action(); error = null } catch (e: kotlinx.coroutines.CancellationException) { throw e }
         catch (_: Exception) { error = "保存失败，请重试" }
@@ -107,6 +123,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             Text(outputStatus, Modifier.testTag("output_status"), fontSize = 13.sp, color = hint)
             if (settings.mode == AudioOutputMode.BIT_PERFECT)
                 Text(bitPerfectDevices, Modifier.testTag("bit_perfect_capability"), fontSize = 13.sp, color = hint)
+            if (settings.mode.rawPcm)
+                MusicDestinationRow("复制最近一次音频诊断", {
+                    val recent = CurrentMusicAudioDiagnostics.latestAttempt()
+                    clipboard.setText(AnnotatedString(if (CurrentMusicAudioDiagnostics.text.value.isEmpty()) "$recent\n$bitPerfectDevices" else recent))
+                    diagnosticMessage = "已复制最近一次诊断"
+                }, Modifier.testTag("copy_audio_diagnostics"), summary = "包含本次解码格式、支持配置、路由和结果")
+            if (settings.mode.rawPcm)
+                MusicDestinationRow("导出完整音频诊断", { exportDiagnostics.launch("CurrentMusicAudio.txt") },
+                    Modifier.testTag("export_audio_diagnostics"), summary = "保存完整记录，便于分享和排查")
+            diagnosticMessage?.let { Text(it, fontSize = 12.sp, color = hint) }
             Text(if (settings.mode == AudioOutputMode.BIT_PERFECT)
                 "逐位输出关闭音效、变速、静音跳过和淡入淡出，使用 DAC 调节音量。设备或格式不支持时停止播放，不自动回退。仅用于主播放器，暂停唱片架及音效试听。"
                 else "原生输出不使用系统音效会话。接口或格式不可用时回退 AudioTrack；Direct 暂停变速与淡入淡出，是否获得独占以实际输出状态为准。",
@@ -123,13 +149,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         item { MusicSectionHeader("输出设备") }
         item { Card {
             MusicDestinationRow("首选输出设备", { picker = "device" }, Modifier.testTag("output_device"),
-                summary = selectedDevice?.outputLabel() ?: if (settings.deviceKey.isEmpty()) "跟随系统" else "设备未连接 · 跟随系统")
-            Text("向系统请求使用所选设备；实际路由由系统决定。设备断开后回到系统默认输出。",
+                summary = selectedDevice?.outputLabel() ?: if (settings.deviceKey.isEmpty()) "跟随系统" else
+                    if (settings.mode == AudioOutputMode.BIT_PERFECT) "设备未连接 · 逐位输出停止" else "设备未连接 · 跟随系统")
+            Text(if (settings.mode == AudioOutputMode.BIT_PERFECT) "逐位输出必须确认实际 USB 路由；设备断开或路由不符时停止播放。"
+                else "向系统请求使用所选设备；实际路由由系统决定。设备断开后回到系统默认输出。",
                 Modifier.padding(horizontal = 20.dp, vertical = 12.dp), fontSize = 13.sp, color = hint)
         } }
         item { MusicSectionHeader("设备报告的能力") }
         item { Card { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("系统首选采样率：${manager.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)?.plus(" Hz") ?: "未报告"}", fontSize = 14.sp)
+            Text("这是系统默认值，不代表当前 AudioTrack 或 DAC 的实际采样率。", fontSize = 12.sp, color = hint)
             (selectedDevice?.let(::listOf) ?: devices).forEach { device ->
                 Text(device.outputLabel(), fontSize = 15.sp)
                 Text(if (device.sampleRates.isEmpty()) "未限定采样率" else device.sampleRates.sorted().joinToString(" / ") { "$it Hz" },

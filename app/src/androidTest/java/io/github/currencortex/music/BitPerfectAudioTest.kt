@@ -20,11 +20,13 @@ class BitPerfectAudioTest {
         var playing = false
         var closed = false
         var broken = false
+        var writeFails = false
         var volumeCalls = 0
         val frameSize = Util.getPcmFrameSize(format.pcmEncoding, format.channelCount)
         override val output = java.lang.reflect.Proxy.newProxyInstance(AudioOutput::class.java.classLoader,
             arrayOf(AudioOutput::class.java)) { _, method, args -> when (method.name) {
                 "write" -> {
+                    if (writeFails) throw IllegalStateException("synthetic write failure")
                     val buffer = args!![0] as ByteBuffer
                     val data = ByteArray(minOf(buffer.remaining(), frameSize * 7))
                     buffer.get(data); bytes.write(data); !buffer.hasRemaining()
@@ -48,6 +50,69 @@ class BitPerfectAudioTest {
         { status += it }, { format, _, _ ->
             assertEquals(capture.frameSize, Util.getPcmFrameSize(format.pcmEncoding, format.channelCount)); capture
         })
+    @Test fun pcmConstantsAndAndroidFormatPropertyMasksAreNotInterchangeable() {
+        assertEquals(android.media.AudioFormat.ENCODING_PCM_24BIT_PACKED, C.ENCODING_PCM_24BIT)
+        assertNotEquals(C.ENCODING_PCM_24BIT, C.ENCODING_PCM_32BIT)
+        val position = android.media.AudioFormat.Builder().setSampleRate(192000).setEncoding(21).setChannelMask(12).build()
+        val indexed = android.media.AudioFormat.Builder(position).setChannelIndexMask(3).build()
+        assertNotEquals(position, indexed)
+        fun pcm(f: android.media.AudioFormat) = BitPerfectPcm(f.sampleRate, f.encoding, f.channelCount, f.channelMask, f.channelIndexMask)
+        assertTrue(pcm(position).accepts(pcm(indexed)))
+    }
+    @Test fun failedWriteReleasesStreamAndReportsFailure() {
+        val format = Format.Builder().setSampleMimeType(MimeTypes.AUDIO_RAW).setSampleRate(192000)
+            .setChannelCount(2).setPcmEncoding(C.ENCODING_PCM_24BIT).build()
+        val capture = Capture(format).apply { writeFails = true }
+        val status = mutableListOf<String>(); val output = sink(capture, status)
+        try {
+            output.configure(AudioSink.AudioSinkConfig.Builder(format).build()); output.play()
+            assertThrows(AudioSink.InitializationException::class.java) { output.handleBuffer(ByteBuffer.allocateDirect(42), 0, 1) }
+            assertTrue(capture.closed); assertTrue(status.last().contains("WRITE_FAILED"))
+        } finally { output.release() }
+    }
+    @Test fun otherBackendsContinueDelegatingToTheirExistingSink() {
+        val format = Format.Builder().setSampleMimeType(MimeTypes.AUDIO_RAW).setSampleRate(48000)
+            .setChannelCount(2).setPcmEncoding(C.ENCODING_PCM_16BIT).build()
+        for (mode in AudioOutputMode.entries.filter { !it.rawPcm }) {
+            val calls = mutableListOf<String>()
+            val normal = java.lang.reflect.Proxy.newProxyInstance(AudioSink::class.java.classLoader,
+                arrayOf(AudioSink::class.java)) { _, method, args ->
+                calls += method.name
+                when (method.name) {
+                    "getFormatSupport" -> AudioSink.SINK_FORMAT_SUPPORTED_DIRECTLY
+                    "handleBuffer" -> { (args!![0] as ByteBuffer).apply { position(limit()) }; true }
+                    else -> null
+                }
+            } as AudioSink
+            val output = BitPerfectAudioSink(normal, { AudioOutputSettings(mode = mode) }, {},
+                { _, _, _ -> error("Must not open Bit-perfect for $mode") })
+            output.configure(AudioSink.AudioSinkConfig.Builder(format).build()); output.play()
+            assertTrue(output.handleBuffer(ByteBuffer.allocateDirect(28), 0, 1))
+            output.pause(); output.flush(); output.release()
+            assertTrue("$mode: $calls", calls.containsAll(listOf("configure", "play", "handleBuffer", "pause", "flush", "release")))
+        }
+    }
+    @Test fun songFormatChangeDrainsAndClosesBeforeOpeningNewFormat() {
+        val first = Format.Builder().setSampleMimeType(MimeTypes.AUDIO_RAW).setSampleRate(48000)
+            .setChannelCount(2).setPcmEncoding(C.ENCODING_PCM_16BIT).build()
+        val second = first.buildUpon().setSampleRate(192000).setPcmEncoding(C.ENCODING_PCM_24BIT).build()
+        val captures = mutableListOf<Capture>()
+        val output = BitPerfectAudioSink(DefaultAudioSink.Builder(context).build(),
+            { AudioOutputSettings(mode = AudioOutputMode.BIT_PERFECT) }, {}, { f, _, _ ->
+                if (captures.isNotEmpty()) assertTrue(captures.last().closed)
+                Capture(f).also { captures += it }
+            })
+        try {
+            output.configure(AudioSink.AudioSinkConfig.Builder(first).build()); output.play()
+            assertTrue(output.handleBuffer(ByteBuffer.allocateDirect(28), 0, 1))
+            output.configure(AudioSink.AudioSinkConfig.Builder(second).build())
+            val data = ByteArray(42) { (it * 13).toByte() }
+            assertTrue(output.handleBuffer(ByteBuffer.allocateDirect(42).put(data).apply { flip() }, 1_000_000, 1))
+            assertEquals(2, captures.size); assertEquals(6, captures.last().frameSize)
+            assertArrayEquals(data, captures.last().bytes.toByteArray())
+        } finally { output.release() }
+        assertTrue(captures.all { it.closed })
+    }
     @Test fun pcmBytesAreIdenticalForEveryDepthWithPartialWritesAndCodecTrimming() {
         for (encoding in BitPerfectAudioSink.PCM_ENCODINGS) {
             val format = Format.Builder().setSampleMimeType(MimeTypes.AUDIO_RAW).setSampleRate(96000)

@@ -324,13 +324,15 @@ class MusicService : MediaSessionService() {
             }
             override fun onPlayerError(error: PlaybackException) {
                 if (!::transitions.isInitialized || transitions.failed(source)) return
-                if (container.audioOutput.state.value.mode == io.github.currencortex.music.data.settings.AudioOutputMode.BIT_PERFECT &&
-                    !container.audioOutput.status.value.startsWith("Bit-perfect 已停止"))
-                    container.audioOutput.status.value = "Bit-perfect 已停止：音源解码或输出失败，请检查设备与音源格式"
+                if (container.audioOutput.state.value.mode.rawPcm)
+                    CurrentMusicAudioDiagnostics.record("player.finalState=ERROR errorCode=${error.errorCode}")
+                if (container.audioOutput.state.value.mode.rawPcm &&
+                    !container.audioOutput.status.value.contains("已停止"))
+                    container.audioOutput.status.value = "${container.audioOutput.state.value.mode.label} 已停止：音源解码或输出失败，请检查设备与音源格式"
                 player.playWhenReady = false
                 pauseFade.finishPause()
                 container.playerController.state.value = container.playerController.state.value.copy(playing = false, playRequested = false,
-                    loading = false, resolving = false, error = if (container.audioOutput.state.value.mode == io.github.currencortex.music.data.settings.AudioOutputMode.BIT_PERFECT)
+                    loading = false, resolving = false, error = if (container.audioOutput.state.value.mode.rawPcm)
                         container.audioOutput.status.value else if (container.playbackQueue.state.value.current?.video == true)
                         "MV 播放失败，请重试或降低清晰度" else "音频播放失败，请重试或降低音质")
                 container.logger.warn("Player", "Playback failed code=${error.errorCode}")
