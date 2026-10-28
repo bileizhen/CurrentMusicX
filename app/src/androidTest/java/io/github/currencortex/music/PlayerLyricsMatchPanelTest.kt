@@ -12,8 +12,10 @@ import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.lyrics.data.*
-import io.github.currencortex.music.feature.lyrics.domain.LyricsReferenceScore
 import io.github.currencortex.music.feature.lyrics.parser.LyricsParser
+import io.github.currencortex.music.feature.lyrics.model.LyricsTimingAlignment
+import io.github.currencortex.music.feature.lyrics.model.LyricsTimeAnchor
+import io.github.currencortex.music.feature.lyrics.domain.LyricsReferenceScore
 import io.github.currencortex.music.feature.player.PlayerLyricsMatchPanel
 import io.github.currencortex.music.ui.theme.LeiTheme
 import org.junit.Assert.*
@@ -25,17 +27,46 @@ class PlayerLyricsMatchPanelTest {
     @get:Rule val compose = createComposeRule()
     private val song = Song(708, "Panel fixture", "Fixture singer", "Fixture album", durationMs = 8_000)
     private val candidate = LyricsCandidate(LyricsMatchSource.NETEASE, "708", song.name,
-        song.artists, song.album, song.durationMs, "708")
+        song.artists, song.album, 0, "708")
     private val saved = SavedLyrics(LyricsParser.lrc("[00:01]Panel fixture first line\n[00:04]Second line"),
         LyricsOrigin("网易云音乐", "netease", "708"))
-    private val score = LyricsReferenceScore(true, .98, .91, .84, .93)
+    private val score = LyricsMatchAssessment(90, score = LyricsReferenceScore(true, 1.0, 1.0, .9, .96), metadataReliable = true)
+
+    @Test fun previewShowsCorrectedTimesAndAnAlignmentLabelWhileKeepingTheSavedSourceRaw() {
+        val state = PanelState().also {
+            it.preview = saved.copy(timingAlignment = LyricsTimingAlignment(listOf(LyricsTimeAnchor(1000, 0)), 6, 1.0))
+            it.assessment = score
+        }
+        show(state)
+        compose.onNodeWithTag("lyrics_match_alignment").assertTextContains("提前 1.00 秒")
+        compose.onNodeWithTag("lyrics_match_preview_line_0").performScrollTo()
+        compose.onNodeWithText("0:00").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(1000L, state.preview!!.document.lines.first().startTimeMs) }
+    }
+
+    @Test fun highInformationPercentageCannotOverrideFailedTimingAndEligibleAmllIsLabelled() {
+        val state = PanelState().also {
+            it.preview = saved
+            it.assessment = score.copy(hasWordTiming = true, score = score.score!!.copy(accepted = false, timingSimilarity = 0.0))
+        }
+        show(state)
+        compose.onNodeWithTag("lyrics_match_content_score").assertTextContains("90%")
+        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("内容或时间轴未通过")
+        compose.onNodeWithTag("lyrics_match_timing_score").assertTextContains("未通过校验")
+        compose.runOnIdle {
+            state.preview = saved.copy(origin = LyricsOrigin("AMLL 逐字歌词", "amll", "ncm:708"))
+            state.assessment = score.copy(hasWordTiming = true, score = score.score!!.copy(similarity = .75, hasWordTiming = true))
+        }
+        compose.onNodeWithTag("lyrics_match_reference_score").assertTextContains("75%")
+        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("AMLL 逐字优先")
+    }
 
     private class PanelState {
         var source by mutableStateOf(LyricsMatchSource.NETEASE)
         var query by mutableStateOf("Panel fixture - Fixture singer - Fixture album")
         var selected by mutableStateOf<LyricsCandidate?>(null)
         var preview by mutableStateOf<SavedLyrics?>(null)
-        var assessment by mutableStateOf<LyricsReferenceScore?>(null)
+        var assessment by mutableStateOf<LyricsMatchAssessment?>(null)
         var assessmentNote by mutableStateOf<String?>(null)
         var searches = 0
         var automaticMatches = 0
@@ -113,15 +144,15 @@ class PlayerLyricsMatchPanelTest {
         }
     }
 
-    @Test fun informationAndLyricPercentagesHaveSeparateLabelsAndOnlySaveApplies() {
+    @Test fun listAndPreviewShowTheSamePercentageAndOnlySaveApplies() {
         val state = PanelState()
         show(state)
         compose.onNodeWithTag("lyrics_match_metadata_0", useUnmergedTree = true).assertTextContains("信息匹配")
-            .assertTextContains("100%")
+            .assertTextContains("90%")
         compose.onNodeWithTag("lyrics_match_candidate_0").performClick()
-        compose.onNodeWithTag("lyrics_match_content_score").assertTextContains("歌词内容").assertTextContains("98%")
-        compose.onNodeWithTag("lyrics_match_timing_score").assertTextContains("时间轴").assertTextContains("91%")
-        compose.onNodeWithTag("lyrics_match_quality_score").assertTextContains("歌词质量").assertTextContains("84%")
+        compose.onNodeWithTag("lyrics_match_content_score").assertTextContains("歌曲信息").assertTextContains("90%")
+        compose.onNodeWithTag("lyrics_match_timing_score").assertTextContains("通过")
+        compose.onNodeWithTag("lyrics_match_quality_score").assertDoesNotExist()
         compose.onNodeWithTag("lyrics_match_policy").assertTextContains("符合自动条件")
         compose.runOnIdle { assertEquals(0, state.applications) }
         compose.onNodeWithTag("lyrics_match_apply").assertIsEnabled().assertTextContains("保存歌词")
@@ -138,14 +169,14 @@ class PlayerLyricsMatchPanelTest {
         val state = PanelState().apply {
             selected = candidate
             preview = saved
-            assessmentNote = "网易云基准暂不可用"
+            assessmentNote = "候选信息尚未读取"
         }
         show(state)
         compose.onNodeWithTag("lyrics_match_content_score").assertTextContains("未校验")
         compose.onNodeWithTag("lyrics_match_timing_score").assertDoesNotExist()
         compose.onNodeWithTag("lyrics_match_quality_score").assertDoesNotExist()
         compose.onNodeWithTag("lyrics_match_policy").assertTextContains("未校验 · 可手动保存")
-        compose.onNodeWithTag("lyrics_match_assessment_note").assertTextContains("网易云基准暂不可用")
+        compose.onNodeWithTag("lyrics_match_assessment_note").assertTextContains("候选信息尚未读取")
         compose.onNodeWithTag("lyrics_match_apply").assertIsEnabled()
         compose.runOnIdle {
             assertEquals(0, state.applications)

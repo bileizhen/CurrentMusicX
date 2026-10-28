@@ -103,7 +103,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     canExport: Boolean, onOffsetInput: (String) -> Unit, onOffsetStep: (Long) -> Unit,
     onOffsetApply: () -> Unit, onOffsetReset: () -> Unit, onDefault: () -> Unit, onMatched: () -> Unit,
     onImported: () -> Unit, onReset: () -> Unit, onMatch: () -> Unit, onImport: () -> Unit,
-    onExportFia: () -> Unit, onExportLrc: () -> Unit, onClose: () -> Unit) {
+    onExportFia: () -> Unit, onExportLrc: () -> Unit, onClose: () -> Unit, alignmentLabel: String? = null) {
     val colors = MiuixTheme.colorScheme
     val hint = colors.onSurfaceVariantSummary
     var fileHelp by remember { mutableStateOf(false) }
@@ -122,7 +122,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             loadError?.let { Text(it, Modifier.testTag("lyrics_management_load_error"), fontSize = 12.sp, color = colors.error) }
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.onBackground.copy(alpha = .035f))) {
                 LyricsSourceChoice(if (automatic) "自动择优" else "默认来源 · $defaultSource",
-                    if (automatic) "以网易云歌词为基准匹配" else "使用默认歌词服务", options.matchedOrigin == null && !options.useImported,
+                    if (automatic) "内容与时间轴校验 · 合格逐字优先 · AMLL 优先" else "使用默认歌词服务", options.matchedOrigin == null && !options.useImported,
                     !blocked, onDefault, Modifier.testTag("lyrics_source_default"))
                 options.matchedOrigin?.let { LyricsSourceChoice("匹配歌词", it.label, !options.useImported, !blocked,
                     onMatched, Modifier.testTag("lyrics_source_matched")) }
@@ -155,6 +155,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     enabled = !blocked && options.offsetMs != 0L)
                 LyricsActionButton("保存", onOffsetApply, Modifier.testTag("lyrics_offset_apply"),
                     enabled = !blocked && validOffset && parsedOffset != options.offsetMs, primary = true)
+            }
+            alignmentLabel?.let {
+                Text("$it · 手动偏移额外叠加", Modifier.testTag("lyrics_adaptive_alignment"), fontSize = 11.sp, color = hint)
             }
             LyricsManagementDivider()
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(colors.primary.copy(alpha = .09f))

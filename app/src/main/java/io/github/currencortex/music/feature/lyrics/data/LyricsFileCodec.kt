@@ -23,7 +23,8 @@ import java.util.Locale
 import java.util.zip.InflaterInputStream
 import kotlin.math.roundToLong
 
-data class LyricsFileDocument(val document: LyricsDocument, val offsetMs: Long? = null)
+data class LyricsFileDocument(val document: LyricsDocument, val offsetMs: Long? = null,
+    val timingAlignment: LyricsTimingAlignment? = null)
 
 object LyricsFileCodec {
     const val MAX_BYTES = 2 * 1024 * 1024
@@ -61,7 +62,8 @@ object LyricsFileCodec {
     }
 
     /** Raw timestamps stay unchanged; Folia reads this correction only as song metadata. */
-    fun encodeFia(song: Song, document: LyricsDocument, origin: LyricsOrigin?, offsetMs: Long): String {
+    fun encodeFia(song: Song, document: LyricsDocument, origin: LyricsOrigin?, offsetMs: Long,
+        timingAlignment: LyricsTimingAlignment? = null): String {
         val clean = document.withoutEstimatedTiming()
         validate(clean)
         val value = buildJsonObject {
@@ -84,6 +86,7 @@ object LyricsFileCodec {
             put("currentMusic", buildJsonObject {
                 put("version", 1); put("document", json.encodeToJsonElement(clean))
                 origin?.let { put("origin", json.encodeToJsonElement(it)) }
+                timingAlignment?.let { put("timingAlignment", json.encodeToJsonElement(it)) }
             })
         }
         return (json.encodeToString(value) + "\n").also { require(it.toByteArray(Charsets.UTF_8).size <= MAX_BYTES) { "导出的歌词文件超过 2 MB" } }
@@ -165,7 +168,9 @@ object LyricsFileCodec {
         val offset = (root["offsetMs"] as? JsonPrimitive)?.doubleOrNull?.let {
             require(it.isFinite()) { "FIA 时间偏移无效" }; it.roundToLong().coerceIn(-60_000, 60_000)
         }
-        return LyricsFileDocument(document, offset)
+        val alignment = extension?.takeIf { it["version"]?.jsonPrimitive?.intOrNull == 1 }
+            ?.get("timingAlignment")?.let { json.decodeFromJsonElement<LyricsTimingAlignment>(it) }
+        return LyricsFileDocument(document, offset, alignment)
     }
 
     private fun decodeFoliaLine(row: JsonObject, timed: Boolean, background: Boolean, depth: Int = 0): LyricLine {

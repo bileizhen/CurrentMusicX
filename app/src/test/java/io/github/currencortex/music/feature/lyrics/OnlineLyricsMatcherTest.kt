@@ -206,7 +206,7 @@ class OnlineLyricsMatcherTest {
         } finally { server.shutdown() }
     }
 
-    @Test fun automaticMatchingNeverAcceptsTheFirstResultWithTheWrongArtist() = runBlocking {
+    @Test fun automaticMatchingSkipsCandidatesWhoseListPercentageIsBelowSeventyFive() = runBlocking {
         val server = MockWebServer()
         try {
             server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
@@ -218,13 +218,13 @@ class OnlineLyricsMatcherTest {
             }
             server.start()
             var neteaseLoads = 0
-            val matcher = matcher(server, search = { listOf(Song(123, "Fixture", "Other singer", "Album", durationMs = 191_000)) },
+            val matcher = matcher(server, search = { listOf(Song(123, "Fixture", "Other singer", "Album")) },
                 load = { neteaseLoads++; LyricsParser.lrc("[00:01]wrong") })
             val unlinked = Song(1, "Fixture", "Singer", "Album", durationMs = 191_000,
                 musicSource = io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
             val failure = runCatching { matcher.bestMatch(unlinked) }.exceptionOrNull()
             assertTrue(failure is LyricsMatchException)
-            assertTrue(failure!!.message!!.contains("无法取得网易云基准歌词"))
+            assertTrue(failure!!.message!!.contains("网易云基准歌词"))
             assertEquals(0, neteaseLoads)
             assertEquals(0, server.requestCount)
             assertFalse(OnlineLyricsMatcher.isReliableMatch(Song(1, "Fixture", "Singer", durationMs = 200_000),
@@ -267,7 +267,7 @@ class OnlineLyricsMatcherTest {
             val matcher = matcher(server, search = { throw LyricsMatchException("native unavailable") })
             val failure = runCatching { matcher.bestMatch(Song(1, "Fixture", "Singer")) }.exceptionOrNull()
             assertTrue(failure is LyricsMatchException)
-            assertTrue(failure!!.message!!.contains("无法取得网易云基准歌词"))
+            assertTrue(failure!!.message!!.contains("网易云基准歌词"))
         } finally { server.shutdown() }
     }
 

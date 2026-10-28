@@ -12,7 +12,8 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 data class LyricsReferenceScore(val accepted: Boolean, val similarity: Double,
-    val timingSimilarity: Double, val quality: Double, val total: Double)
+    val timingSimilarity: Double, val quality: Double, val total: Double,
+    val hasWordTiming: Boolean = false)
 
 /**
  * Compare primary lyric content and its recording against an authoritative reference. Source labels
@@ -20,41 +21,48 @@ data class LyricsReferenceScore(val accepted: Boolean, val similarity: Double,
  * Normalization and temporary rendering/quality calculations never modify either document.
  */
 object LyricsReferenceMatcher {
-    private const val MIN_SIMILARITY = .97
-    private const val MIN_LENGTH_RATIO = .97
+    private const val MIN_LINE_SIMILARITY = .97
+    const val MIN_WORD_SIMILARITY = .75
     private const val MAX_POINTS = 24_000
     private const val MAX_RAW_CHARS = 256_000
     private const val MAX_LINES = 4096
     private const val MAX_WORDS = 16_384
     private const val MAX_EDIT_CELLS = 4_000_000L
-    private const val MAX_EDIT_DISTANCE = 512
     private const val MAX_ANCHORS = 96
     private const val MAX_TIME_MS = 86_400_000L
     private const val MAX_FIXED_OFFSET_MS = 1000.0
+    private const val MAX_COARSE_ENDPOINT_ERROR_MS = 3000.0
     private const val MAX_CONSECUTIVE_GAP = 3
     private val credit = Regex("^(?:作词|作曲|编曲|制作)(?:人)?\\s*[:：]\\s*\\S.*$")
+    private val trailingCredit = Regex("^(?:作词|作曲|编曲|制作|制作人|吉他|贝斯|和声编写|和声|录音工程师|录音工程室|混音工程师|混音工程室|制作助理|OP|SP)\\s*[:：]\\s*\\S.*$")
 
     fun compare(reference: LyricsDocument, candidate: LyricsDocument): LyricsReferenceScore {
         val baseline = index(reference) ?: return rejected()
         val other = index(candidate) ?: return rejected()
-        if (baseline.points.isEmpty() || other.points.isEmpty()) return rejected(quality = other.quality)
+        val hasWords = other.hasWordTiming
+        fun failure(similarity: Double = 0.0) = rejected(similarity, quality = other.quality, hasWordTiming = hasWords)
+        if (baseline.points.isEmpty() || other.points.isEmpty()) return failure()
+        val threshold = if (hasWords) MIN_WORD_SIMILARITY else MIN_LINE_SIMILARITY
         val maximum = max(baseline.points.size, other.points.size)
         val lengthRatio = min(baseline.points.size, other.points.size).toDouble() / maximum
-        if (lengthRatio < MIN_LENGTH_RATIO) return rejected(quality = other.quality)
+        if (lengthRatio < threshold) return failure()
         val sameText = baseline.text == other.text
-        val edit = if (sameText) Edit(0, 0) else editDistance(baseline.points, other.points)
-            ?: return rejected(quality = other.quality)
+        val edit = if (sameText) Edit(0, 0, IntArray(other.points.size) { it })
+            else editDistance(baseline.points, other.points, threshold) ?: return failure()
         val similarity = 1.0 - edit.distance.toDouble() / maximum
-        // A typo in a very short chorus can be most of its identity. Do not guess in that case.
-        if (similarity < MIN_SIMILARITY || (maximum <= 12 && !sameText) ||
-            edit.maximumGap > MAX_CONSECUTIVE_GAP || !sameBoundaries(baseline.points, other.points))
-            return rejected(similarity, quality = other.quality)
-        val intervals = compareCueIntervals(baseline, other, sameText)
+        // Real word cues use the user's inclusive 75% content policy. A plain short chorus
+        // still needs exact content. Completeness and order are checked separately from this
+        // threshold, so a removed verse cannot win by adding word cues to the remainder.
+        if (similarity < threshold || (!hasWords && maximum <= 12 && !sameText) ||
+            edit.maximumGap > MAX_CONSECUTIVE_GAP || !orderedContent(baseline, other) ||
+            !preservesSections(baseline, other, edit.candidateToReference)) return failure(similarity)
+        val mapping = characterMapping(baseline, other, edit.candidateToReference)
+        val intervals = compareCueIntervals(baseline, other, mapping)
         val quality = (other.quality - other.wordQuality * (1 - intervals.mappedWordRatio)).coerceIn(0.0, 1.0)
-        val timing = if (intervals.accepted) compareTiming(baseline, other, sameText) else Timing(false, 0.0)
+        val timing = if (intervals.accepted) compareTiming(baseline, other, mapping) else Timing(false, 0.0)
         val accepted = timing.accepted && baseline.validLineRatio >= .95 && other.validLineRatio >= .95
         val total = if (accepted) similarity * .45 + timing.score * .15 + quality * .40 else 0.0
-        return LyricsReferenceScore(accepted, similarity, timing.score, quality, total.coerceIn(0.0, 1.0))
+        return LyricsReferenceScore(accepted, similarity, timing.score, quality, total.coerceIn(0.0, 1.0), hasWords)
     }
 
     private data class WordCue(val offset: Int, val word: LyricWord, val text: String)
@@ -62,14 +70,14 @@ object LyricsReferenceMatcher {
         val words: List<WordCue>, val valid: Boolean)
     private data class Indexed(val text: String, val points: IntArray, val rows: List<TextRow>,
         val cues: Map<Int, Double>, val validLineRatio: Double, val quality: Double,
-        val wordQuality: Double, val durationMs: Long?)
+        val wordQuality: Double, val durationMs: Long?, val hasWordTiming: Boolean)
     private data class Anchor(val reference: Double, val candidate: Double)
     private data class Timing(val accepted: Boolean, val score: Double)
-    private data class Edit(val distance: Int, val maximumGap: Int)
+    private data class Edit(val distance: Int, val maximumGap: Int, val candidateToReference: IntArray)
     private data class CueIntervals(val accepted: Boolean, val mappedWordRatio: Double)
 
-    private fun rejected(similarity: Double = 0.0, timing: Double = 0.0, quality: Double = 0.0) =
-        LyricsReferenceScore(false, similarity, timing, quality, 0.0)
+    private fun rejected(similarity: Double = 0.0, timing: Double = 0.0, quality: Double = 0.0,
+        hasWordTiming: Boolean = false) = LyricsReferenceScore(false, similarity, timing, quality, 0.0, hasWordTiming)
 
     private fun index(document: LyricsDocument): Indexed? {
         if (document.lines.size > MAX_LINES) return null
@@ -91,7 +99,14 @@ object LyricsReferenceMatcher {
         var timedPoints = 0
         var translated = 0
         var romanized = 0
-        for (line in document.lines) {
+        // A bounded, contiguous block of explicitly labelled production credits after
+        // the vocals is metadata too. A single line or anything inside the song stays.
+        val trailing = document.lines.asReversed().dropWhile { it.text.isBlank() }
+            .takeWhile { trailingCredit.matches(it.text.trim()) }.size
+        val trailingStart = if (trailing in 2..32) document.lines.indexOfLast { it.text.isNotBlank() } - trailing + 1
+            else document.lines.size
+        for ((lineIndex, line) in document.lines.withIndex()) {
+            if (lineIndex >= trailingStart) continue
             val visible = line.text.trim()
             // Only a clearly labelled leading credit block is metadata. Keep all later/main
             // text, including bilingual singing; language alone never marks a translation.
@@ -127,7 +142,8 @@ object LyricsReferenceMatcher {
             translated.toDouble() / rows.size * .07 + romanized.toDouble() / rows.size * .03
         val normalized = text.toString()
         return Indexed(normalized, normalized.codePoints().toArray(), rows, cues.toSortedMap(),
-            lineRatio, quality.coerceIn(0.0, 1.0), wordQuality, document.metadata.durationMs?.takeIf { it in 1..MAX_TIME_MS })
+            lineRatio, quality.coerceIn(0.0, 1.0), wordQuality,
+            document.metadata.durationMs?.takeIf { it in 1..MAX_TIME_MS }, validWords > 0)
     }
 
     private fun wordCues(line: LyricLine, normalized: String): List<WordCue> {
@@ -171,29 +187,37 @@ object LyricsReferenceMatcher {
         return result.toString()
     }
 
-    /** Two bounded rows and a bounded edit band, never an N-by-M text matrix. */
-    private fun editDistance(first: IntArray, second: IntArray): Edit? {
-        val a = if (first.size >= second.size) first else second
-        val b = if (first.size >= second.size) second else first
+    /** Two edit rows plus at most four million one-byte traceback cells; no full text matrix. */
+    private fun editDistance(a: IntArray, b: IntArray, threshold: Double): Edit? {
+        val allowed = floor(max(a.size, b.size) * (1 - threshold) + .00001).toInt()
+        if (abs(a.size - b.size) > allowed || allowed == 0) return null
+        // Dispersed replacements need no wide edit band, even for a long song with more than
+        // 512 differences. Preserve their positions instead of globally searching repeated
+        // single characters when checking the recording's genuine cue intervals.
+        if (a.size == b.size) {
+            val replacements = a.indices.count { a[it] != b[it] }
+            if (replacements <= allowed) return Edit(replacements, 0, IntArray(b.size) { it })
+        }
         val cellBand = ((MAX_EDIT_CELLS / a.size.coerceAtLeast(1) - 1) / 2).coerceAtLeast(0).toInt()
-        val limit = minOf(floor(a.size * (1 - MIN_SIMILARITY) + .00001).toInt(), MAX_EDIT_DISTANCE, cellBand)
-        if (a.size - b.size > limit || limit == 0) return null
+        val limit = min(allowed, cellBand)
+        if (abs(a.size - b.size) > limit || limit == 0) return null
         val infinity = limit + 1
         var previous = IntArray(b.size + 1) { if (it <= limit) it else infinity }
         var current = IntArray(b.size + 1) { infinity }
-        var previousDeletion = IntArray(b.size + 1)
-        var currentDeletion = IntArray(b.size + 1)
-        var previousInsertion = IntArray(b.size + 1) { it }
-        var currentInsertion = IntArray(b.size + 1)
-        var previousGap = IntArray(b.size + 1) { it }
-        var currentGap = IntArray(b.size + 1)
+        val starts = IntArray(a.size + 1)
+        val trace = arrayOfNulls<ByteArray>(a.size + 1)
+        trace[0] = ByteArray(min(b.size, limit) + 1) { 3 }
+        var cells = trace[0]!!.size.toLong()
         for (i in 1..a.size) {
             val from = max(1, i - limit)
             val until = min(b.size, i + limit)
+            starts[i] = max(0, i - limit)
+            cells += until - starts[i] + 1
+            if (cells > MAX_EDIT_CELLS) return null
+            val directions = ByteArray(until - starts[i] + 1)
+            trace[i] = directions
             current[0] = if (i <= limit) i else infinity
-            currentDeletion[0] = i
-            currentInsertion[0] = 0
-            currentGap[0] = i
+            if (starts[i] == 0) directions[0] = 2
             if (from > 1) current[from - 1] = infinity
             var minimum = infinity
             for (j in from..until) {
@@ -203,18 +227,15 @@ object LyricsReferenceMatcher {
                 when {
                     diagonal <= deletion && diagonal <= insertion -> {
                         current[j] = diagonal
-                        currentDeletion[j] = 0; currentInsertion[j] = 0
-                        currentGap[j] = previousGap[j - 1]
+                        directions[j - starts[i]] = 1
                     }
                     deletion <= insertion -> {
                         current[j] = deletion
-                        currentDeletion[j] = previousDeletion[j] + 1; currentInsertion[j] = 0
-                        currentGap[j] = max(previousGap[j], currentDeletion[j])
+                        directions[j - starts[i]] = 2
                     }
                     else -> {
                         current[j] = insertion
-                        currentDeletion[j] = 0; currentInsertion[j] = currentInsertion[j - 1] + 1
-                        currentGap[j] = max(currentGap[j - 1], currentInsertion[j])
+                        directions[j - starts[i]] = 3
                     }
                 }
                 minimum = min(minimum, current[j])
@@ -222,100 +243,191 @@ object LyricsReferenceMatcher {
             if (until < b.size) current[until + 1] = infinity
             if (minimum > limit) return null
             val swap = previous; previous = current; current = swap
-            val deletionSwap = previousDeletion; previousDeletion = currentDeletion; currentDeletion = deletionSwap
-            val insertionSwap = previousInsertion; previousInsertion = currentInsertion; currentInsertion = insertionSwap
-            val gapSwap = previousGap; previousGap = currentGap; currentGap = gapSwap
         }
-        return if (previous[b.size] <= limit) Edit(previous[b.size], previousGap[b.size]) else null
+        if (previous[b.size] > limit) return null
+        val mapping = IntArray(b.size) { -1 }
+        var i = a.size
+        var j = b.size
+        var gap = 0
+        var largestGap = 0
+        var lastDirection = 0
+        while (i > 0 || j > 0) {
+            val direction = trace[i]?.getOrNull(j - starts[i])?.toInt() ?: return null
+            when (direction) {
+                1 -> { mapping[j - 1] = i - 1; i--; j--; gap = 0 }
+                2 -> { i--; gap = if (lastDirection == 2) gap + 1 else 1 }
+                3 -> { j--; gap = if (lastDirection == 3) gap + 1 else 1 }
+                else -> return null
+            }
+            largestGap = max(largestGap, gap)
+            lastDirection = direction
+        }
+        return Edit(previous[b.size], largestGap, mapping)
     }
 
-    private fun sameBoundaries(reference: IntArray, candidate: IntArray): Boolean {
-        val count = minOf(12, reference.size, candidate.size)
-        return (0 until count).all { reference[it] == candidate[it] &&
-            reference[reference.lastIndex - it] == candidate[candidate.lastIndex - it] }
+    /** Distinct surviving rows/characters cannot reverse order merely to gain a timing bonus. */
+    private fun orderedContent(reference: Indexed, candidate: Indexed): Boolean {
+        fun uniquePositions(values: List<String>) = values.withIndex().groupBy { it.value }
+            .filterValues { it.size == 1 }.mapValues { it.value.single().index }
+        val referenceRows = uniquePositions(reference.rows.map { it.text })
+        val candidateRows = uniquePositions(candidate.rows.map { it.text })
+        var lastRow = -1
+        for (row in reference.rows) {
+            if (row.text !in referenceRows) continue
+            val position = candidateRows[row.text] ?: continue
+            if (position < lastRow) return false
+            lastRow = position
+        }
+        fun uniquePoints(values: IntArray): Map<Int, Int> {
+            val positions = mutableMapOf<Int, Int>()
+            values.forEachIndexed { index, point -> positions[point] = if (point in positions) -1 else index }
+            return positions.filterValues { it >= 0 }
+        }
+        val referencePoints = uniquePoints(reference.points)
+        val candidatePoints = uniquePoints(candidate.points)
+        var lastPoint = -1
+        for (point in reference.points) {
+            if (point !in referencePoints) continue
+            val position = candidatePoints[point] ?: continue
+            if (position < lastPoint) return false
+            lastPoint = position
+        }
+        return true
+    }
+
+    private fun pointCharacters(text: String): IntArray {
+        val offsets = IntArray(text.codePointCount(0, text.length))
+        var character = 0
+        offsets.indices.forEach { point ->
+            offsets[point] = character
+            character += Character.charCount(text.codePointAt(character))
+        }
+        return offsets
+    }
+
+    /** Entire reference verses must survive, even when a short verse is only 1% of the song. */
+    private fun preservesSections(reference: Indexed, candidate: Indexed, mapping: IntArray): Boolean {
+        val covered = BooleanArray(reference.points.size)
+        mapping.forEach { if (it >= 0) covered[it] = true }
+        val referenceOffsets = pointCharacters(reference.text)
+        val candidateOffsets = pointCharacters(candidate.text)
+        fun hasPoint(row: TextRow, offsets: IntArray, available: (Int) -> Boolean): Boolean {
+            val first = offsets.binarySearch(row.offset)
+            if (first < 0) return false
+            var point = first
+            while (point < offsets.size && offsets[point] < row.offset + row.text.length) {
+                if (available(point)) return true
+                point++
+            }
+            return false
+        }
+        return reference.rows.all { hasPoint(it, referenceOffsets) { point -> covered[point] } } &&
+            candidate.rows.all { hasPoint(it, candidateOffsets) { point -> mapping[point] >= 0 } }
+    }
+
+    private fun characterMapping(reference: Indexed, candidate: Indexed, points: IntArray): IntArray {
+        val referenceOffsets = pointCharacters(reference.text)
+        val candidateOffsets = pointCharacters(candidate.text)
+        val mapping = IntArray(candidate.text.length) { -1 }
+        candidateOffsets.forEachIndexed { point, character ->
+            if (points[point] >= 0) {
+                val referenceCharacter = referenceOffsets[points[point]]
+                repeat(Character.charCount(candidate.points[point])) { mapping[character + it] = referenceCharacter }
+            }
+        }
+        return mapping
+    }
+
+    private fun mappedInterval(mapping: IntArray, start: Int, end: Int): IntRange? {
+        var first = start
+        var last = end - 1
+        while (first < end && mapping[first] < 0) first++
+        while (last >= first && mapping[last] < 0) last--
+        return if (first <= last) mapping[first]..mapping[last] else null
     }
 
     /**
      * A word boundary inside a differently split reference line has no exact reference timestamp,
      * but it does have a genuine containing [line start, line end] interval. Require its actual
      * cue to stay inside that interval; never manufacture line-internal proportional timestamps.
+     * Untimed LRC line ends come from the next line's onset. A small number of coarse boundaries
+     * may be early/late even when every word and the overall recording agree. Permit at most 5%
+     * of mapped endpoints to exceed the normal 1s window, and none by more than 3s from the actual
+     * reference interval. Word-timed references retain the strict window; global timing is also
+     * checked independently after this local test.
      */
-    private fun compareCueIntervals(reference: Indexed, candidate: Indexed, sameText: Boolean): CueIntervals {
-        var lineCursor = 0
-        var wordCursor = 0
+    private fun compareCueIntervals(reference: Indexed, candidate: Indexed, mapping: IntArray): CueIntervals {
         var words = 0
         var mapped = 0
+        var endpoints = 0
+        var outside = 0
+        val coarseReference = !reference.hasWordTiming && candidate.hasWordTiming
+        fun accepts(character: Int, time: Long, release: Boolean = false): Boolean {
+            val error = referenceIntervalError(reference, character, time, release) ?: return false
+            endpoints++
+            if (error > MAX_FIXED_OFFSET_MS) {
+                outside++
+                if (!coarseReference || error > MAX_COARSE_ENDPOINT_ERROR_MS) return false
+            }
+            return true
+        }
         for (row in candidate.rows) {
             if (!row.valid) continue
-            val lineOffset = if (sameText) row.offset else reference.text.indexOf(row.text, lineCursor)
-            if (lineOffset >= 0) {
-                if (!withinReferenceInterval(reference, lineOffset, row.source.startTimeMs) ||
-                    !withinReferenceInterval(reference, lineOffset + row.text.length - 1, row.source.endTimeMs))
+            val line = mappedInterval(mapping, row.offset, row.offset + row.text.length)
+            if (line != null) {
+                if (!accepts(line.first, row.source.startTimeMs) ||
+                    !accepts(line.last, row.source.endTimeMs, release = true))
                     return CueIntervals(false, 0.0)
-                lineCursor = lineOffset + row.text.length
             }
             for (cue in row.words) {
                 val points = cue.text.codePointCount(0, cue.text.length)
                 words += points
-                val offset = if (sameText) row.offset + cue.offset else reference.text.indexOf(cue.text, wordCursor)
-                if (offset < 0) continue
-                if (!withinReferenceInterval(reference, offset, cue.word.startTimeMs) ||
-                    !withinReferenceInterval(reference, offset + cue.text.length - 1, cue.word.endTimeMs))
+                val offset = row.offset + cue.offset
+                val interval = mappedInterval(mapping, offset, offset + cue.text.length) ?: continue
+                if (!accepts(interval.first, cue.word.startTimeMs) ||
+                    !accepts(interval.last, cue.word.endTimeMs, release = true))
                     return CueIntervals(false, 0.0)
-                wordCursor = offset + cue.text.length
-                mapped += points
+                var character = offset
+                while (character < offset + cue.text.length) {
+                    if (mapping[character] >= 0) mapped++
+                    character += Character.charCount(candidate.text.codePointAt(character))
+                }
             }
         }
-        return CueIntervals(true, if (words == 0) 0.0 else mapped.toDouble() / words)
+        return CueIntervals(outside * 20 <= endpoints, if (words == 0) 0.0 else mapped.toDouble() / words)
     }
 
-    private fun withinReferenceInterval(reference: Indexed, character: Int, time: Long): Boolean {
+    private fun referenceIntervalError(reference: Indexed, character: Int, time: Long, release: Boolean): Double? {
         var low = 0
         var high = reference.rows.lastIndex
         while (low <= high) {
             val mid = (low + high) ushr 1
             if (reference.rows[mid].offset <= character) low = mid + 1 else high = mid - 1
         }
-        val row = reference.rows.getOrNull(high) ?: return false
-        return row.valid && character < row.offset + row.text.length &&
-            time.toDouble() >= row.source.startTimeMs - MAX_FIXED_OFFSET_MS &&
-            time.toDouble() <= row.source.endTimeMs + MAX_FIXED_OFFSET_MS
+        val row = reference.rows.getOrNull(high) ?: return null
+        if (!row.valid || character >= row.offset + row.text.length) return null
+        // Different editors end a sustained final syllable at different points in
+        // the following gap. Only its release may extend, by at most 3s and never
+        // beyond the next real onset. Starts/interior words retain the strict check.
+        if (release && character == row.offset + row.text.lastIndex && time > row.source.endTimeMs &&
+            time - row.source.endTimeMs <= MAX_COARSE_ENDPOINT_ERROR_MS &&
+            reference.rows.getOrNull(high + 1)?.let { time <= it.source.startTimeMs } != false) return 0.0
+        return maxOf(0.0, row.source.startTimeMs - time.toDouble(), time.toDouble() - row.source.endTimeMs)
     }
 
-    private fun compareTiming(reference: Indexed, candidate: Indexed, sameText: Boolean): Timing {
+    private fun compareTiming(reference: Indexed, candidate: Indexed, mapping: IntArray): Timing {
         if (reference.cues.isEmpty() || candidate.cues.isEmpty()) return Timing(false, 0.0)
-        val positions = reference.cues.keys.toList()
+        val positions = candidate.cues.keys.toList()
         val selected = if (positions.size <= MAX_ANCHORS) positions else
             (0 until MAX_ANCHORS).map { positions[(it.toDouble() * positions.lastIndex / (MAX_ANCHORS - 1)).roundToInt()] }.distinct()
         val anchors = mutableListOf<Anchor>()
-        var cursor = 0
-        var contentAnchors = 0
-        var foundContentAnchors = 0
         for (position in selected) {
-            val found = if (sameText) position else {
-                val row = reference.rows.lastOrNull { it.offset <= position && position < it.offset + it.text.length } ?: continue
-                val local = position - row.offset
-                val remaining = row.text.codePointCount(local, row.text.length)
-                if (remaining < 1) continue
-                val end = row.text.offsetByCodePoints(local, min(16, remaining))
-                val token = row.text.substring(local, end)
-                contentAnchors++
-                val occurrence = candidate.text.indexOf(token, cursor)
-                // A known fragment that only occurs earlier cannot be silently skipped: that
-                // would let shuffled paragraphs or a missing repeated verse pass on other cues.
-                if (occurrence < 0 && candidate.text.indexOf(token) >= 0) return Timing(false, 0.0)
-                if (occurrence >= 0) foundContentAnchors++
-                occurrence
-            }
-            if (found < 0) continue
-            cursor = found + Character.charCount(candidate.text.codePointAt(found))
+            val found = mapping.getOrNull(position)?.takeIf { it >= 0 } ?: continue
             // A genuine line/word start on both sides is required. Never treat a line-internal
             // proportional estimate as evidence that a recording has a different tempo.
-            val time = candidate.cues[found] ?: continue
-            anchors += Anchor(reference.cues.getValue(position), time)
+            val time = reference.cues[found] ?: continue
+            anchors += Anchor(time, candidate.cues.getValue(position))
         }
-        if (!sameText && contentAnchors > 0 && foundContentAnchors.toDouble() / contentAnchors < .95)
-            return Timing(false, 0.0)
         if (anchors.isEmpty()) {
             // With no shared token boundary, only the first actual cue and broad media bounds
             // are comparable. Do not invent syllable/word timestamps to manufacture anchors.

@@ -7,8 +7,8 @@ package io.github.currencortex.music.feature.lyrics.data
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.feature.lyrics.domain.LyricsMatcher
+import io.github.currencortex.music.feature.lyrics.domain.LyricsTimingAligner
 import io.github.currencortex.music.feature.lyrics.domain.LyricsReferenceMatcher
-import io.github.currencortex.music.feature.lyrics.domain.LyricsReferenceScore
 import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
@@ -121,23 +121,18 @@ class OnlineLyricsMatcher(
     suspend fun bestMatch(song: Song, preferred: LyricsMatchSource = LyricsMatchSource.NETEASE): SavedLyrics? =
         bestMatchDetailed(song, preferred)?.saved
 
-    /** NetEase supplies the reference text, rather than winning because of source order. */
-    @Suppress("UNUSED_PARAMETER") // Kept for existing manual-dialog callers; quality determines the winner.
+    /** Compare original content and timing before any optional alignment or source preference. */
+    @Suppress("UNUSED_PARAMETER") // Kept for callers that pass the currently selected manual tab.
     suspend fun bestMatchDetailed(song: Song, preferred: LyricsMatchSource = LyricsMatchSource.NETEASE): LyricsMatchResult? {
         if (song.video || song.name.isBlank()) return null
         var best: ScoredLyrics? = null
-        return try {
+        var baseline: LyricsDocument? = null
+        val result = try {
             withTimeout(30_000) {
                 val query = query(song)
-                val reference = try {
-                    withTimeout(10_000) { reference(song, query) }
-                } catch (e: CancellationException) {
-                    currentCoroutineContext().ensureActive()
-                    throw missingReference(e)
-                } catch (e: Exception) { throw missingReference(e) }
-                val referenceScore = compare(reference.document, reference.document)
-                if (!referenceScore.accepted || !referenceScore.total.isFinite()) throw missingReference()
-                best = ScoredLyrics(reference, referenceScore, true)
+                val reference = reference(song, query)
+                baseline = reference.second.document
+                best = ScoredLyrics(reference.second, assess(song, reference.first, reference.second, baseline))
                 val lock = Mutex()
                 val permits = Semaphore(5)
                 // Every configured source starts now. A slow earlier source cannot consume
@@ -145,13 +140,15 @@ class OnlineLyricsMatcher(
                 supervisorScope { automaticSources().map { source -> async {
                     try {
                         val candidates = permits.withPermit { withTimeout(3_500) { search(source, query) } }
-                        for (candidate in rankCandidates(song, candidates).filter { isReliableMatch(song, it) }.take(3)) {
+                        val eligible = rankCandidates(song, candidates)
+                            .filter { isReliableMatch(song, it) }.take(3)
+                        for (candidate in eligible) {
                             try {
                                 val saved = permits.withPermit { withTimeout(5_000) { load(candidate) } }
-                                val score = compare(reference.document, saved.document)
+                                val assessment = assess(song, candidate, saved, baseline)
                                 currentCoroutineContext().ensureActive()
-                                if (score.accepted && score.total.isFinite()) lock.withLock {
-                                    val contender = ScoredLyrics(saved, score, false)
+                                if (assessment.accepted) lock.withLock {
+                                    val contender = ScoredLyrics(saved, assessment)
                                     if (best == null || SCORE_ORDER.compare(contender, best!!) > 0) best = contender
                                 }
                             } catch (e: TimeoutCancellationException) {
@@ -170,57 +167,98 @@ class OnlineLyricsMatcher(
             currentCoroutineContext().ensureActive()
             best?.result() ?: throw missingReference(e)
         }
+        return result?.copy(saved = alignSaved(result.saved, baseline))
     }
 
     /** Preview assessment never changes source selection or saves a manual override. */
-    suspend fun assess(song: Song, saved: SavedLyrics, reference: LyricsDocument? = null): LyricsMatchAssessment {
-        if (reference == null && (song.video || song.name.isBlank()))
-            return LyricsMatchAssessment(unavailableReason = "当前歌曲信息不足，无法取得网易云基准歌词")
+    suspend fun assess(song: Song, candidate: LyricsCandidate, saved: SavedLyrics,
+        reference: LyricsDocument? = null): LyricsMatchAssessment {
+        val metadata = metadataMatchPercent(song, candidate)
+        val reliable = isReferenceIdentity(song, candidate) || isReliableMatch(song, candidate)
+        fun unavailable(message: String) = LyricsMatchAssessment(metadata, hasRealWordTiming(saved.document), message,
+            metadataReliable = reliable)
+        if (song.video || song.name.isBlank()) return unavailable("当前歌曲信息不足，未通过自动校验")
         return try {
-            val baseline = reference ?: withTimeout(10_000) { this@OnlineLyricsMatcher.reference(song, query(song)).document }
-            val baselineScore = compare(baseline, baseline)
-            if (!baselineScore.accepted || !baselineScore.total.isFinite())
-                LyricsMatchAssessment(unavailableReason = "网易云基准歌词不足以进行可靠比较")
-            else LyricsMatchAssessment(score = compare(baseline, saved.document))
+            val baseline = reference ?: this@OnlineLyricsMatcher.reference(song, query(song)).second.document
+            val score = withContext(scoreDispatcher) {
+                ensureActive()
+                // Saved alignment is deliberately ignored: an adjusted clock cannot rescue a wrong recording.
+                LyricsReferenceMatcher.compare(baseline, saved.document).also { ensureActive() }
+            }
+            LyricsMatchAssessment(metadata, score.hasWordTiming, score = score, metadataReliable = reliable)
         } catch (e: TimeoutCancellationException) {
             currentCoroutineContext().ensureActive()
-            LyricsMatchAssessment(unavailableReason = "网易云基准歌词读取超时，暂无法计算内容匹配度")
+            unavailable("网易云基准歌词读取超时，未自动替换")
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) {
             currentCoroutineContext().ensureActive()
-            LyricsMatchAssessment(unavailableReason = "无法取得网易云基准歌词，暂无法计算内容匹配度")
+            unavailable("无法取得可靠的网易云基准歌词，未自动替换")
         }
     }
 
-    private data class ScoredLyrics(val saved: SavedLyrics, val score: LyricsReferenceScore, val reference: Boolean) {
-        fun result() = LyricsMatchResult(saved, LyricsMatchAssessment(score = score))
+    private fun isReferenceIdentity(song: Song, candidate: LyricsCandidate): Boolean =
+        candidate.source == LyricsMatchSource.NETEASE && LyricsMatcher.candidates(song).any {
+            it.source == MusicSource.NETEASE && it.songId == candidate.id
+        }
+
+    private suspend fun reference(song: Song, query: String): Pair<LyricsCandidate, SavedLyrics> = withTimeout(10_000) {
+        var failure: Exception? = null
+        val candidates = try { automaticCandidates(song, LyricsMatchSource.NETEASE, query) }
+        catch (e: CancellationException) { throw e }
+        catch (e: Exception) { throw missingReference(e) }
+        for (candidate in rankCandidates(song, candidates)
+            .filter { isReferenceIdentity(song, it) || isReliableMatch(song, it) }.take(3)) {
+            try {
+                val saved = withTimeout(5_000) { load(candidate) }
+                val valid = withContext(scoreDispatcher) { LyricsReferenceMatcher.compare(saved.document, saved.document) }
+                currentCoroutineContext().ensureActive()
+                if (valid.accepted) return@withTimeout candidate to saved
+            } catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); failure = e }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { currentCoroutineContext().ensureActive(); failure = e }
+        }
+        throw missingReference(failure)
+    }
+
+    private fun missingReference(cause: Throwable? = null) = LyricsMatchException(
+        "无法取得可靠的网易云基准歌词，未自动替换；可手动选择歌词", cause)
+
+    /** Optional manual-preview alignment. A missing baseline never blocks the selected lyrics. */
+    suspend fun align(song: Song, saved: SavedLyrics): SavedLyrics {
+        if (saved.timingAlignment != null || saved.origin.provider == "netease" || song.video) return saved
+        val baseline = try {
+            withTimeoutOrNull(4_000) {
+                automaticCandidates(song, LyricsMatchSource.NETEASE, query(song))
+                    .firstOrNull { isReliableMatch(song, it) }?.let { load(it).document }
+            }
+        } catch (e: CancellationException) { throw e }
+        catch (_: Exception) { currentCoroutineContext().ensureActive(); null }
+        return alignSaved(saved, baseline)
+    }
+
+    private suspend fun alignSaved(saved: SavedLyrics, baseline: LyricsDocument?): SavedLyrics {
+        if (baseline == null || saved.timingAlignment != null || saved.origin.provider == "netease") return saved
+        return withContext(Dispatchers.Default) {
+            ensureActive()
+            val timing = LyricsTimingAligner.align(baseline, saved.document)
+            ensureActive()
+            if (timing == null) saved else saved.copy(timingAlignment = timing)
+        }
+    }
+
+    private data class ScoredLyrics(val saved: SavedLyrics, val assessment: LyricsMatchAssessment) {
+        fun result() = LyricsMatchResult(saved, assessment)
     }
 
     private fun query(song: Song) = listOf(song.name, song.artists, song.album).filter(String::isNotBlank)
         .joinToString(" - ").take(MAX_QUERY_LENGTH)
 
-    private suspend fun compare(reference: LyricsDocument, candidate: LyricsDocument): LyricsReferenceScore =
-        withContext(scoreDispatcher) {
-            currentCoroutineContext().ensureActive()
-            LyricsReferenceMatcher.compare(reference, candidate).also { currentCoroutineContext().ensureActive() }
-        }
-
-    private suspend fun reference(song: Song, query: String): SavedLyrics {
+    private suspend fun automaticCandidates(song: Song, source: LyricsMatchSource, query: String): List<LyricsCandidate> {
+        if (source != LyricsMatchSource.NETEASE) return search(source, query)
         val id = LyricsMatcher.candidates(song).firstOrNull { it.source == MusicSource.NETEASE }
             ?.songId?.toLongOrNull()?.takeIf { it > 0 }
-        if (id != null) return withTimeout(5_000) {
-            load(LyricsCandidate(LyricsMatchSource.NETEASE, id.toString(), song.name, song.artists,
-                song.album, song.durationMs, id.toString()))
-        }
-        val candidates = withTimeout(3_500) { search(LyricsMatchSource.NETEASE, query) }
-        var failure: Exception? = null
-        for (candidate in rankCandidates(song, candidates).filter { isReliableMatch(song, it) }.take(3)) {
-            try { return withTimeout(5_000) { load(candidate) } }
-            catch (e: TimeoutCancellationException) { currentCoroutineContext().ensureActive(); failure = e }
-            catch (e: CancellationException) { throw e }
-            catch (e: Exception) { currentCoroutineContext().ensureActive(); failure = e }
-        }
-        throw missingReference(failure)
+        return if (id != null) listOf(LyricsCandidate(source, id.toString(), song.name, song.artists,
+            song.album, song.durationMs, id.toString())) else search(source, query)
     }
 
     private fun automaticSources() = LyricsMatchSource.entries.filter { source -> when (source) {
@@ -229,9 +267,6 @@ class OnlineLyricsMatcher(
         LyricsMatchSource.QQ_MUSIC, LyricsMatchSource.QISHUI -> source in additionalSources
         LyricsMatchSource.AMLL, LyricsMatchSource.KUGOU -> true
     } }
-
-    private fun missingReference(cause: Throwable? = null) = LyricsMatchException(
-        "无法取得网易云基准歌词，暂不能自动匹配；可手动选择来源", cause)
 
     private suspend fun searchAmll(query: String): List<LyricsCandidate> {
         // Structured queries avoid matching a short title against arbitrary lyric body text.
@@ -371,11 +406,21 @@ class OnlineLyricsMatcher(
     }
 
     companion object {
-        private val SCORE_ORDER = compareBy<ScoredLyrics> { it.score.total }
-            .thenBy { it.score.similarity }.thenBy { it.score.timingSimilarity }.thenBy { it.score.quality }
-            .thenBy { it.reference } // An exact tie keeps the known reference, without source preference.
+        private val SCORE_ORDER = compareBy<ScoredLyrics> { it.assessment.preferredWord }
+            .thenBy { it.assessment.preferredWord && it.saved.origin.provider == "amll" }
+            .thenBy { it.assessment.score?.total }
+            .thenBy { it.assessment.score?.similarity }
+            .thenBy { it.assessment.score?.timingSimilarity }
+            .thenBy { it.assessment.score?.quality }
+            .thenBy { it.saved.origin.provider == "netease" }
             .thenByDescending { it.saved.origin.reference }
             .thenByDescending { it.saved.origin.provider + ":" + it.saved.origin.reference }
+        private fun hasRealWordTiming(document: LyricsDocument): Boolean {
+            fun real(line: io.github.currencortex.music.feature.lyrics.model.LyricLine): Boolean =
+                (!line.wordsEstimated && line.words.any { it.text.isNotBlank() && it.endTimeMs > it.startTimeMs && it.endOffset > it.startOffset }) ||
+                    line.backgroundVocals.any(::real)
+            return document.lines.any(::real)
+        }
         const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
         const val MAX_RESULTS = 30
         const val MAX_QUERY_LENGTH = 240
@@ -422,7 +467,7 @@ class OnlineLyricsMatcher(
                 else song.album.isNotBlank() && normalized(song.album) == normalized(candidate.album)
             return identity && (song.durationMs <= 0 || candidate.durationMs <= 0 || abs(song.durationMs - candidate.durationMs) <= 3_000)
         }
-        /** Search metadata only: this percentage makes no claim about the fetched lyric content. */
+        /** Search metadata only. Lyric content and timing are checked after loading. */
         fun metadataMatchPercent(song: Song, candidate: LyricsCandidate): Int = (
             (if (normalized(song.name) == normalized(candidate.title)) 55 else 0) +
                 (if (artistMatch(song.artists, candidate.artists)) 25 else 0) +

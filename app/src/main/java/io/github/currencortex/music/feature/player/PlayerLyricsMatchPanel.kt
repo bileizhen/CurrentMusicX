@@ -45,13 +45,13 @@ import io.github.currencortex.music.feature.lyrics.data.LyricsMatchSource
 import io.github.currencortex.music.feature.lyrics.data.OnlineLyricsMatcher
 import io.github.currencortex.music.feature.lyrics.data.SavedLyrics
 import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
-import io.github.currencortex.music.feature.lyrics.domain.LyricsReferenceScore
+import io.github.currencortex.music.feature.lyrics.data.LyricsMatchAssessment
+import io.github.currencortex.music.feature.lyrics.model.LyricsTimingAlignment
 import io.github.currencortex.music.ui.component.MusicCover
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
-import kotlin.math.roundToInt
 
 /** A bounded, state-only matching workspace. Network requests and persistence belong to its owner. */
 @Composable internal fun PlayerLyricsMatchPanel(
@@ -61,7 +61,7 @@ import kotlin.math.roundToInt
     results: List<LyricsCandidate>,
     selectedCandidate: LyricsCandidate?,
     preview: SavedLyrics?,
-    assessment: LyricsReferenceScore?,
+    assessment: LyricsMatchAssessment?,
     assessmentNote: String?,
     searching: Boolean,
     previewing: Boolean,
@@ -131,8 +131,8 @@ import kotlin.math.roundToInt
                     enabled = !busy && !searching && query.isNotBlank(), primary = true)
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(if (searching) "正在搜索…" else if (previewing && preview != null) "正在核对网易云基准…" else if (previewing) "正在读取歌词…"
-                    else if (hasSearched) "${results.size} 个候选 · 信息匹配度" else "以网易云歌词为内容基准",
+                Text(if (searching) "正在搜索…" else if (previewing) "正在读取歌词…"
+                    else if (hasSearched) "${results.size} 个候选 · 信息匹配度" else "内容与时间轴校验 · 合格逐字优先",
                     Modifier.weight(1f), fontSize = 12.sp, color = colors.onSurfaceVariantSummary,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 LyricsActionButton("自动择优", {
@@ -143,7 +143,7 @@ import kotlin.math.roundToInt
             }
             } else if (loading) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
-                Text(if (preview != null) "正在核对网易云基准…" else "正在读取歌词…", Modifier.weight(1f),
+                Text("正在读取歌词…", Modifier.weight(1f),
                     fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
                 LyricsActionButton("停止", onCancelLoading, Modifier.testTag("lyrics_match_cancel_loading"), enabled = !busy)
             }
@@ -244,10 +244,13 @@ import kotlin.math.roundToInt
 }
 
 @Composable private fun LyricsMatchPreview(candidate: LyricsCandidate?, preview: SavedLyrics?,
-    assessment: LyricsReferenceScore?, assessmentNote: String?, previewing: Boolean,
+    assessment: LyricsMatchAssessment?, assessmentNote: String?, previewing: Boolean,
     onBackToResults: (() -> Unit)?, wide: Boolean, modifier: Modifier) {
     val colors = MiuixTheme.colorScheme
     val scroll = rememberLazyListState()
+    val previewDocument = remember(preview) {
+        preview?.timingAlignment?.applyTo(preview.document) ?: preview?.document
+    }
     LaunchedEffect(candidate, preview) { scroll.scrollToItem(0) }
     Column(modifier.testTag("lyrics_match_preview"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (onBackToResults != null) LyricsActionButton("‹ 返回结果", onBackToResults,
@@ -267,7 +270,7 @@ import kotlin.math.roundToInt
                 Spacer(Modifier.height(16.dp))
             }
             if (previewing) item {
-                Text(if (preview != null) "正在核对网易云基准…" else "正在读取歌词…", Modifier.testTag("lyrics_match_preview_loading").semantics { liveRegion = LiveRegionMode.Polite },
+                Text("正在读取歌词…", Modifier.testTag("lyrics_match_preview_loading").semantics { liveRegion = LiveRegionMode.Polite },
                     fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
                 Spacer(Modifier.height(12.dp))
             }
@@ -283,20 +286,31 @@ import kotlin.math.roundToInt
                             Text(if (realWords) "逐字歌词" else "逐行歌词", Modifier.testTag("lyrics_match_timing_kind"),
                                 fontSize = 11.sp, color = colors.primary)
                         }
-                        // The bounded matcher can reject before measuring edit similarity. Its
-                        // zero sentinel is a failed eligibility check, not a measured 0% agreement.
-                        Text("歌词内容 ${if (previewing) "校验中…" else if (assessment?.accepted == false && assessment.similarity == 0.0) "未通过" else assessment?.similarity?.let(::lyricsMatchPercent) ?: "未校验"}",
+                        Text("歌曲信息 ${assessment?.matchPercent?.let { "$it%" } ?: "未校验"}",
                             Modifier.testTag("lyrics_match_content_score"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                        if (assessment != null && !previewing) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Text("时间轴 ${if (!assessment.accepted && assessment.timingSimilarity == 0.0) "未通过" else lyricsMatchPercent(assessment.timingSimilarity)}", Modifier.testTag("lyrics_match_timing_score"),
+                        Text("自动应用需通过歌词内容与原始时间轴校验", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                        assessment?.score?.takeIf { !previewing }?.let { score ->
+                            val content = if (!score.accepted && score.similarity == 0.0) "未通过" else
+                                java.math.BigDecimal.valueOf(score.similarity).multiply(java.math.BigDecimal.valueOf(100))
+                                    .setScale(2, java.math.RoundingMode.DOWN).stripTrailingZeros().toPlainString() + "%"
+                            Text("歌词内容 $content", Modifier.testTag("lyrics_match_reference_score"),
                                 fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-                            Text("歌词质量 ${lyricsMatchPercent(assessment.quality)}", Modifier.testTag("lyrics_match_quality_score"),
+                            Text("时间轴 ${if (score.accepted) "通过" else "未通过校验"}", Modifier.testTag("lyrics_match_timing_score"),
                                 fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
                         }
-                        Text(if (previewing) "正在校验自动条件…" else when (assessment?.accepted) {
-                            true -> "符合自动条件"
-                            false -> "不符合自动条件 · 可手动保存"
-                            null -> "未校验 · 可手动保存"
+                        preview.timingAlignment?.let {
+                            Text(lyricsAlignmentLabel(it), Modifier.testTag("lyrics_match_alignment"),
+                                fontSize = 12.sp, color = colors.primary)
+                        }
+                        Text(if (previewing) "正在校验自动条件…" else when {
+                            assessment?.score == null -> "未校验 · 可手动保存"
+                            !assessment.metadataReliable -> "歌曲信息不一致 · 可手动保存"
+                            !assessment.accepted -> "内容或时间轴未通过 · 可手动保存"
+                            assessment.preferredWord -> {
+                                if (preview.origin.provider == "amll") "符合自动条件 · AMLL 逐字优先"
+                                else "符合自动条件 · 逐字优先（≥75%）"
+                            }
+                            else -> "符合自动条件"
                         }, Modifier.testTag("lyrics_match_policy"), fontSize = 12.sp,
                             color = if (!previewing && assessment?.accepted == false) colors.error else colors.onSurfaceVariantSummary)
                         assessmentNote?.takeIf { !previewing && it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, lineHeight = 17.sp,
@@ -305,14 +319,14 @@ import kotlin.math.roundToInt
                     Text("歌词预览", Modifier.padding(top = 16.dp, bottom = 12.dp), fontSize = 13.sp,
                         color = colors.onSurfaceVariantSummary, fontWeight = FontWeight.Medium)
                 }
-                if (preview.document.lines.isEmpty()) item {
+                if (previewDocument!!.lines.isEmpty()) item {
                     Text("这份歌词为空", fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
                 }
-                itemsIndexed(preview.document.lines, key = { index, _ -> index }) { index, line ->
+                itemsIndexed(previewDocument!!.lines, key = { index, _ -> index }) { index, line ->
                     val shape = RoundedCornerShape(topStart = if (index == 0) 12.dp else 0.dp,
                         topEnd = if (index == 0) 12.dp else 0.dp,
-                        bottomStart = if (index == preview.document.lines.lastIndex) 12.dp else 0.dp,
-                        bottomEnd = if (index == preview.document.lines.lastIndex) 12.dp else 0.dp)
+                        bottomStart = if (index == previewDocument.lines.lastIndex) 12.dp else 0.dp,
+                        bottomEnd = if (index == previewDocument.lines.lastIndex) 12.dp else 0.dp)
                     Column(Modifier.fillMaxWidth().clip(shape).background(colors.surfaceContainer.copy(alpha = .65f))
                         .padding(horizontal = 16.dp, vertical = 12.dp).testTag("lyrics_match_preview_line_$index"),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -356,10 +370,14 @@ import kotlin.math.roundToInt
     }
 }
 
-private fun lyricsMatchPercent(value: Double): String =
-    if (value.isFinite()) "${(value.coerceIn(0.0, 1.0) * 100).roundToInt()}%" else "未校验"
-
 private fun lyricsMatchTime(value: Long): String {
     val seconds = value.coerceAtLeast(0) / 1000
     return "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
+}
+
+internal fun lyricsAlignmentLabel(alignment: LyricsTimingAlignment): String {
+    val amount = String.format(Locale.ROOT, "%.2f", kotlin.math.abs(alignment.initialOffsetMs) / 1000.0)
+    val direction = if (alignment.initialOffsetMs < 0) "提前" else "延后"
+    return if (alignment.varying) "自适应对齐 · $direction $amount 秒起 · 渐变校正"
+    else "自动偏移 · $direction $amount 秒"
 }

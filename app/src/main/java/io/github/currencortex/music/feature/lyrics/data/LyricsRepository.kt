@@ -10,7 +10,8 @@ import kotlinx.coroutines.sync.withLock
 
 data class LyricsIssue(val code: LyricsErrorCode, val detail: String)
 data class LyricsResult(val document: LyricsDocument = LyricsDocument(), val error: String? = null,
-    val issues: List<LyricsIssue> = emptyList(), val origin: LyricsOrigin? = null)
+    val issues: List<LyricsIssue> = emptyList(), val origin: LyricsOrigin? = null,
+    val sourceDocument: LyricsDocument? = null, val timingAlignment: LyricsTimingAlignment? = null)
 data class LyricsSelection(val identity: List<Any?>, val provider: LyricsProvider, val origin: LyricsOrigin? = null,
     val automatic: Boolean = false)
 
@@ -18,12 +19,18 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
     private val cache: LyricsCache, private val log: (String) -> Unit = {},
     private val selection: (() -> LyricsSelection)? = null,
     private val overrides: SongLyricsStore? = null,
-    private val autoMatch: (suspend (Song) -> SavedLyrics?)? = null) {
+    private val autoMatch: (suspend (Song) -> SavedLyrics?)? = null,
+    private val alignMatch: (suspend (Song, SavedLyrics) -> SavedLyrics)? = null) {
     private val lock = Mutex()
     private val memory = linkedMapOf<Pair<List<Any?>, List<LyricsKey>>, LyricsResult>()
     suspend fun load(song: Song): LyricsResult = withContext(Dispatchers.IO) { lock.withLock {
         // User-selected files/matches are authoritative, including explicit instrumental results.
-        overrides?.active(song)?.let { return@withLock LyricsResult(it.document, origin = it.origin) }
+        overrides?.active(song)?.let { saved ->
+            val aligned = if (saved.timingAlignment == null && saved.origin.provider in
+                setOf("amll", "qq_music", "qishui", "current_music", "kugou")) alignMatch?.invoke(song, saved) ?: saved else saved
+            return@withLock LyricsResult(aligned.timingAlignment?.applyTo(aligned.document) ?: aligned.document,
+                origin = aligned.origin, sourceDocument = aligned.document, timingAlignment = aligned.timingAlignment)
+        }
         val keys = LyricsMatcher.candidates(song)
         val selected = selection?.invoke()
         val selectedOrigin = if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
@@ -31,15 +38,17 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
         val memoryKey = (selected?.identity.orEmpty() + listOf(selected?.automatic == true, SongLyricsStore.identity(song))) to keys
         val issues = mutableListOf<LyricsIssue>()
         fun issue(code: LyricsErrorCode, detail: String) { issues.add(LyricsIssue(code, detail)); log("$code: $detail") }
-        fun remember(document: LyricsDocument, origin: LyricsOrigin? = selectedOrigin): LyricsResult {
-            val result = LyricsResult(document, issues = issues.toList(), origin = origin)
+        fun remember(document: LyricsDocument, origin: LyricsOrigin? = selectedOrigin,
+            source: LyricsDocument? = null, alignment: LyricsTimingAlignment? = null): LyricsResult {
+            val result = LyricsResult(document, issues = issues.toList(), origin = origin,
+                sourceDocument = source, timingAlignment = alignment)
             if (keys.isNotEmpty()) { memory[memoryKey] = result; if (memory.size > 16) memory.remove(memory.keys.first()) }
             return result
         }
         var automaticFailed = false
         suspend fun matchAutomatically(): LyricsResult? = try {
             autoMatch?.invoke(song)?.takeIf { it.document.lines.isNotEmpty() }?.let {
-                remember(it.document, it.origin)
+                remember(it.timingAlignment?.applyTo(it.document) ?: it.document, it.origin, it.document, it.timingAlignment)
             }
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) {

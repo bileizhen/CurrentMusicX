@@ -25,7 +25,8 @@ import java.util.Locale
 import java.util.UUID
 
 @Serializable data class LyricsOrigin(val label: String, val provider: String = "", val reference: String = "")
-@Serializable data class SavedLyrics(val document: LyricsDocument, val origin: LyricsOrigin)
+@Serializable data class SavedLyrics(val document: LyricsDocument, val origin: LyricsOrigin,
+    val timingAlignment: io.github.currencortex.music.feature.lyrics.model.LyricsTimingAlignment? = null)
 @Serializable data class LyricsSongSettings(val offsetMs: Long = 0,
     val importedOrigin: LyricsOrigin? = null, val matchedOrigin: LyricsOrigin? = null,
     val useImported: Boolean = false, val contentRevision: Long = 0) {

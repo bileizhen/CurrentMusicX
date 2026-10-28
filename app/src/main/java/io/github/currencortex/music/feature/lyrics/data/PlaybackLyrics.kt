@@ -2,12 +2,14 @@ package io.github.currencortex.music.feature.lyrics.data
 
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
+import io.github.currencortex.music.feature.lyrics.model.LyricsTimingAlignment
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 data class PlaybackLyricsState(val document: LyricsDocument = LyricsDocument(), val loading: Boolean = false,
     val error: String? = null, val issues: List<LyricsIssue> = emptyList(), val songId: Long? = null,
-    val songKey: String? = null, val origin: LyricsOrigin? = null, val songOffsetMs: Long = 0) {
+    val songKey: String? = null, val origin: LyricsOrigin? = null, val songOffsetMs: Long = 0,
+    val sourceDocument: LyricsDocument? = null, val timingAlignment: LyricsTimingAlignment? = null) {
     fun matches(song: Song?): Boolean = song != null &&
         if (songKey != null) songKey == SongLyricsStore.identity(song) else songId == song.id
 }
@@ -42,7 +44,8 @@ class PlaybackLyrics(requests: Flow<LyricsRequest>, private val load: suspend (S
                     val result = load(song)
                     ensureActive()
                     if (epoch == current) mutable.value = PlaybackLyricsState(result.document, error = result.error,
-                        issues = result.issues, songId = song.id, songKey = key, origin = result.origin)
+                        issues = result.issues, songId = song.id, songKey = key, origin = result.origin,
+                        sourceDocument = result.sourceDocument, timingAlignment = result.timingAlignment)
                 } catch (e: CancellationException) { throw e }
                 catch (_: Exception) { if (epoch == current) mutable.value = PlaybackLyricsState(error = "歌词暂时无法读取", songId = song.id, songKey = key) }
             }
