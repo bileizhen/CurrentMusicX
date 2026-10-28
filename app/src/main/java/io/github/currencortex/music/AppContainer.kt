@@ -290,7 +290,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                     else -> onlineLyrics.bestMatch(song)
                 }
             }
-        } else null)
+        } else null, alignMatch = if (storageNamespace.isEmpty() && ttmlProvider == null) onlineLyrics::align else null)
     val playbackQueue = PlaybackQueue()
     val dockAudioLevel = DockAudioLevel()
     val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)

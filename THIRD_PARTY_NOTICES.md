@@ -317,9 +317,11 @@ provided offline in `legal/QISHUI-MIT.txt`. Folia's Qishui lyric normalization r
 covered by the AGPL attribution above.
 
 Automatic matching obtains NetEase lyrics as a content and timing reference, then
-compares candidates from every configured source. Ordered text agreement, timeline
-compatibility, genuine word-cue coverage and completeness determine the winner;
-source order does not. CurrentMusic matching explicitly uses the configured project
+compares candidates from every configured source. Eligible genuine word-timed lyrics
+with at least 75% content agreement take precedence over line-timed fallback, and
+qualifying AMLL candidates are preferred within that word-timed group. Within each
+group, content agreement, timeline compatibility, word-cue coverage and completeness
+determine the winner. CurrentMusic matching explicitly uses the configured project
 server, while NetEase matching uses the native official gateway.
 The selected recording and audio metadata are never replaced by a lyric match.
 

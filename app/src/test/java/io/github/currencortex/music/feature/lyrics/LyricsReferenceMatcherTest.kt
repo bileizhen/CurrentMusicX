@@ -66,6 +66,122 @@ class LyricsReferenceMatcherTest {
         LyricLine(row * spacing, (row + 1) * spacing, value)
     })
 
+    private fun pointTimed(source: LyricsDocument) = source.copy(lines = source.lines.map { line ->
+        val count = line.text.codePointCount(0, line.text.length)
+        line.copy(words = (0 until count).map { point ->
+            val start = line.text.offsetByCodePoints(0, point)
+            val end = line.text.offsetByCodePoints(start, 1)
+            LyricWord(line.text.substring(start, end),
+                line.startTimeMs + (line.endTimeMs - line.startTimeMs) * point / count,
+                line.startTimeMs + (line.endTimeMs - line.startTimeMs) * (point + 1) / count, start, end)
+        })
+    })
+
+    private fun dispersedReplacements(source: LyricsDocument, count: Int): LyricsDocument {
+        val total = source.lines.sumOf { it.text.codePointCount(0, it.text.length) }
+        val changed = (0 until count).map { it * total / count }.toSet()
+        var point = 0
+        return source.copy(lines = source.lines.map { line ->
+            line.copy(text = buildString {
+                line.text.codePoints().forEach { original ->
+                    appendCodePoint(if (point in changed) 0x7000 + point else original)
+                    point++
+                }
+            })
+        })
+    }
+
+    @Test fun realWordContentAtExactlySeventyFivePercentIsInclusiveForOneHundredAndFourHundredPoints() {
+        for (size in listOf(100, 400)) {
+            val reference = uniqueRows(size / 10, 10)
+            val candidate = pointTimed(dispersedReplacements(reference, size / 4))
+            val compared = LyricsReferenceMatcher.compare(reference, candidate)
+            assertTrue("$size code points at exactly 75% must qualify", compared.accepted)
+            assertTrue(compared.hasWordTiming)
+            assertEquals(.75, compared.similarity, 0.0)
+            val below = pointTimed(dispersedReplacements(reference, size / 4 + 1))
+            assertFalse("74% / 74.75% must not be rounded up", LyricsReferenceMatcher.compare(reference, below).accepted)
+            assertFalse("The 75% exception is for real word timing", LyricsReferenceMatcher.compare(reference,
+                candidate.copy(lines = candidate.lines.map { it.copy(words = emptyList()) })).accepted)
+        }
+    }
+
+    @Test fun shortRealWordCandidatesAndPartialRealCueCoverageHaveTheSameInclusiveContentThreshold() {
+        val reference = document(listOf("ABCDEFGH"))
+        val candidate = document(listOf("ABXDEYGH")).let { source -> source.copy(lines = source.lines.map {
+            it.copy(words = listOf(LyricWord("A", it.startTimeMs, it.startTimeMs + 100, 0, 1)))
+        }) }
+        val compared = LyricsReferenceMatcher.compare(reference, candidate)
+        assertTrue(compared.accepted)
+        assertTrue(compared.hasWordTiming)
+        assertEquals(.75, compared.similarity, 0.0)
+        assertTrue(compared.total < LyricsReferenceMatcher.compare(reference,
+            reference.copy(lines = reference.lines.map { it.copy(translation = "翻译", romanization = "romanization") })).total)
+    }
+
+    @Test fun realCuesUseAlignedPositionsInsteadOfGloballyFindingRepeatedSingleCharacters() {
+        val reference = document(List(4) { "a".repeat(25) })
+        val candidate = pointTimed(dispersedReplacements(reference, 25))
+        val compared = LyricsReferenceMatcher.compare(reference, candidate)
+        assertTrue(compared.accepted)
+        assertEquals(.75, compared.similarity, 0.0)
+        assertEquals(1.0, compared.timingSimilarity, .00001)
+    }
+
+    @Test fun dispersedShortInsertionsAndDeletionsDoNotTriggerTheOldNinetySevenPercentLengthGate() {
+        val reference = uniqueRows(10, 20)
+        for (size in 1..3) {
+            val removed = reference.copy(lines = reference.lines.map {
+                it.copy(text = it.text.removeRange(5, 5 + size))
+            })
+            val inserted = reference.copy(lines = reference.lines.mapIndexed { index, line ->
+                line.copy(text = line.text.substring(0, 5) + (0 until size).joinToString("") {
+                    (0x7000 + index * 3 + it).toChar().toString()
+                } + line.text.substring(5))
+            })
+            for (candidate in listOf(removed, inserted)) {
+                val timed = pointTimed(candidate)
+                assertTrue(timed.lines.all { it.words.isNotEmpty() })
+                val compared = LyricsReferenceMatcher.compare(reference, timed)
+                assertTrue("Dispersed $size-point corrections preserve every verse and real cue interval", compared.accepted)
+                assertTrue(compared.hasWordTiming)
+                assertTrue(compared.similarity >= .75)
+                assertTrue(compared.similarity < .97)
+            }
+        }
+        val shortRows = uniqueRows(100, 2, 1000)
+        val wholeShortVerseRemoved = pointTimed(shortRows.copy(lines = shortRows.lines.filterIndexed { index, _ -> index != 50 }))
+        assertFalse("A complete two-point verse is not an incidental word correction",
+            LyricsReferenceMatcher.compare(shortRows, wholeShortVerseRemoved).accepted)
+    }
+
+    @Test fun onlyValidatedNonEstimatedWordCuesUnlockTheLowerContentThreshold() {
+        val reference = uniqueRows(10, 10)
+        val changed = pointTimed(dispersedReplacements(reference, 25))
+        for (candidate in listOf(
+            changed.copy(lines = changed.lines.map { it.copy(wordsEstimated = true) }),
+            changed.copy(lines = changed.lines.map { line -> line.copy(words = line.words.map {
+                it.copy(endTimeMs = it.startTimeMs)
+            }) }),
+            changed.copy(lines = changed.lines.map { line -> line.copy(words = line.words.map {
+                it.copy(endTimeMs = line.endTimeMs + 1)
+            }) }))) {
+            val compared = LyricsReferenceMatcher.compare(reference, candidate)
+            assertFalse(compared.hasWordTiming)
+            assertFalse(compared.accepted)
+        }
+        val plainNearExact = dispersedReplacements(reference, 3)
+        assertTrue(LyricsReferenceMatcher.compare(reference, plainNearExact).accepted)
+        assertFalse(LyricsReferenceMatcher.compare(reference, dispersedReplacements(reference, 4)).accepted)
+    }
+
+    @Test(timeout = 5000) fun moreThanFiveHundredTwelveDispersedWordDifferencesUseTheBoundedLinearPath() {
+        val reference = uniqueRows(100, 24)
+        val compared = LyricsReferenceMatcher.compare(reference, pointTimed(dispersedReplacements(reference, 600)))
+        assertTrue(compared.accepted)
+        assertEquals(.75, compared.similarity, 0.0)
+    }
+
     @Test fun genuineWordCuesCannotCompensateForMissingHeadTailOrMiddleVerses() {
         val reference = uniqueRows(10, 10)
         val missing = listOf(reference.lines.drop(1), reference.lines.dropLast(1),
@@ -124,6 +240,55 @@ class LyricsReferenceMatcherTest {
         assertEquals(0.0, compressed.total, 0.0)
     }
 
+    @Test fun aFewCoarseLrcBoundariesDoNotRejectTheSameCompleteWordTimedRecording() {
+        val original = uniqueRows(50, 10)
+        val earlyRows = setOf(8, 23, 37)
+        val starts = original.lines.mapIndexed { index, line ->
+            line.startTimeMs - if (index in earlyRows) 2000 else 0
+        }
+        val coarseReference = original.copy(lines = original.lines.mapIndexed { index, line ->
+            line.copy(startTimeMs = starts[index], endTimeMs = starts.getOrNull(index + 1) ?: line.endTimeMs)
+        })
+        val compared = LyricsReferenceMatcher.compare(coarseReference, pointTimed(original))
+        assertTrue("A few inaccurate next-line stamps are not authoritative word endings", compared.accepted)
+        assertTrue(compared.hasWordTiming)
+        assertEquals(1.0, compared.similarity, 0.0)
+        assertTrue(compared.timingSimilarity > .8)
+        assertEquals(0L, original.lines.first().startTimeMs)
+    }
+
+    private fun mergedWordRows(source: LyricsDocument) = pointTimed(source.copy(lines = source.lines.chunked(2).map { pair ->
+        LyricLine(pair.first().startTimeMs, pair.last().endTimeMs, pair.joinToString("") { it.text })
+    }))
+
+    @Test fun evenOneSeverelyIncorrectWordEndpointCannotUseTheCoarseBoundaryAllowance() {
+        val reference = uniqueRows(50, 10)
+        val candidate = mergedWordRows(reference).let { document -> document.copy(lines = document.lines.mapIndexed { index, line ->
+            if (index != 0) line else line.copy(words = line.words.mapIndexed { word, cue ->
+                if (word != 0) cue else cue.copy(endTimeMs = 9001)
+            })
+        }) }
+        // The source line contains this cue and all cue starts remain ordered. Its actual end
+        // is nevertheless 4001ms beyond the containing reference line, so it must be rejected.
+        assertTrue(candidate.lines.first().words.first().endTimeMs < candidate.lines.first().endTimeMs)
+        assertFalse(LyricsReferenceMatcher.compare(reference, candidate).accepted)
+    }
+
+    @Test fun numerousModerateEndpointErrorsStillRejectAnOtherwiseAlignedWordTimeline() {
+        val reference = uniqueRows(50, 10)
+        val candidate = mergedWordRows(reference).let { document -> document.copy(lines = document.lines.map { line ->
+            line.copy(words = line.words.mapIndexed { index, cue ->
+                if (index >= 3) cue else cue.copy(endTimeMs = line.startTimeMs + 7000)
+            })
+        }) }
+        // All real starts and overall duration agree. 75 of 1050 endpoints exceed the ordinary
+        // window by 2s, so the local exception cannot hide a broadly inaccurate word timeline.
+        val compared = LyricsReferenceMatcher.compare(reference, candidate)
+        assertEquals(1.0, compared.similarity, 0.0)
+        assertTrue(compared.hasWordTiming)
+        assertFalse(compared.accepted)
+    }
+
     @Test fun unicodeNormalizationKeepsChineseJapaneseKoreanAndEmojiInOrder() {
         val reference = document(listOf("Ｈｅｌｌｏ， 世界！", "また会う日まで", "노래는 계속되고 🎵", "e\u0301toile shines"))
         val candidate = document(listOf("hello 世界", "また会う日まで。", "노래는계속되고🎵", "ÉTOILE SHINES"))
@@ -177,6 +342,51 @@ class LyricsReferenceMatcherTest {
         // Without an explicit metadata delimiter the text remains primary content.
         val sungCreditWord = LyricLine(0, 5000, "作词的人也在歌唱属于自己的漫长故事".repeat(5))
         assertFalse(LyricsReferenceMatcher.compare(vocals.copy(lines = listOf(sungCreditWord) + vocals.lines), vocals).accepted)
+    }
+
+    @Test fun contiguousTrailingProductionCreditsAreNotMissingSungVerses() {
+        val vocals = document()
+        val labels = listOf("吉他", "贝斯", "和声编写", "和声", "录音工程师", "录音工程室",
+            "混音工程师", "混音工程室", "制作助理", "OP", "SP")
+        val credits = labels.mapIndexed { index, label ->
+            LyricLine(40_000L + index * 1000, 41_000L + index * 1000, "$label：Studio Contributor")
+        }
+        val reference = rich(vocals).copy(lines = rich(vocals).lines + credits)
+        val score = LyricsReferenceMatcher.compare(reference, rich(vocals))
+        assertTrue(score.accepted)
+        assertEquals(1.0, score.similarity, 0.0)
+        assertEquals(15, reference.lines.size)
+        assertTrue(LyricsReferenceMatcher.compare(rich(vocals), reference).accepted)
+    }
+
+    @Test fun isolatedInteriorUnlabelledAndOversizedCreditLikeBlocksRemainContent() {
+        val vocals = document()
+        val credit = LyricLine(40_000, 41_000, "吉他：A long sung phrase that must remain part of the recording")
+        for (lines in listOf(
+            vocals.lines + credit,
+            vocals.lines.take(2) + credit + credit.copy(startTimeMs = 42_000, endTimeMs = 43_000) + vocals.lines.drop(2),
+            vocals.lines + credit + credit.copy(text = "An unlabelled final verse"),
+            vocals.lines + List(33) { credit.copy(startTimeMs = 40_000L + it * 1000, endTimeMs = 41_000L + it * 1000) }
+        )) assertFalse(LyricsReferenceMatcher.compare(LyricsDocument(lines), rich(vocals)).accepted)
+    }
+
+    @Test fun sustainedFinalWordMayReleaseLaterWithinTheFollowingGap() {
+        val reference = rich(document())
+        val extended = reference.copy(lines = reference.lines.map { line ->
+            line.copy(endTimeMs = line.endTimeMs + 2800,
+                words = line.words.dropLast(1) + line.words.last().copy(endTimeMs = line.endTimeMs + 2800))
+        })
+        assertTrue(LyricsReferenceMatcher.compare(reference, extended).accepted)
+        assertEquals(reference.lines.first().startTimeMs, extended.lines.first().startTimeMs)
+        // This tolerance cannot rescue shifted starts, earlier endings, or excessive tails.
+        assertFalse(LyricsReferenceMatcher.compare(reference, shifted(extended, 3000)).accepted)
+        val excessive = extended.copy(lines = extended.lines.map { line -> line.copy(endTimeMs = line.endTimeMs + 500,
+            words = line.words.dropLast(1) + line.words.last().copy(endTimeMs = line.endTimeMs + 500)) })
+        assertFalse(LyricsReferenceMatcher.compare(reference, excessive).accepted)
+        val crossing = rich(document()).let { doc -> doc.copy(lines = doc.lines.mapIndexed { i, line ->
+            if (i == 1) line.copy(startTimeMs = doc.lines.first().endTimeMs + 2000) else line
+        }) }
+        assertFalse(LyricsReferenceMatcher.compare(crossing, extended).accepted)
     }
 
     @Test fun smallCueOffsetIsToleratedButUnappliedThreeSecondOffsetsAreRejected() {

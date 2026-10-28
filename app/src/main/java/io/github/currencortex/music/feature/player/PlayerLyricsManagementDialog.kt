@@ -114,10 +114,10 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
         previewing = true; message = null
         previewJob = scope.launch {
             try {
-                val loaded = container.onlineLyrics.load(candidate)
+                val loaded = container.onlineLyrics.align(song, container.onlineLyrics.load(candidate))
                 ensureActive()
                 if (epoch == requested) preview = loaded
-                val checked = container.onlineLyrics.assess(song, loaded)
+                val checked = container.onlineLyrics.assess(song, candidate, loaded)
                 ensureActive()
                 if (epoch == requested) assessment = checked
             } catch (cancelled: CancellationException) { throw cancelled }
@@ -158,7 +158,8 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
             val (name, bytes) = withContext(Dispatchers.IO) { readLyricImport(resolver, uri) }
             val decoded = withContext(Dispatchers.Default) { LyricsFileCodec.decode(bytes, name) }
             currentCoroutineContext().ensureActive()
-            container.songLyrics.saveImported(request.song, SavedLyrics(decoded.document, LyricsOrigin(name.take(256), "imported", name)), decoded.offsetMs)
+            container.songLyrics.saveImported(request.song, SavedLyrics(decoded.document,
+                LyricsOrigin(name.take(256), "imported", name), decoded.timingAlignment), decoded.offsetMs)
         }
     }
     fun finishExport(uri: Uri?, format: LyricExportFormat) {
@@ -193,15 +194,16 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
             var preparing = true
             try {
                 val saved = container.songLyrics.active(song) ?: capturedPlayback?.let {
-                    SavedLyrics(it.document, it.origin ?: LyricsOrigin("默认歌词"))
+                    SavedLyrics(it.sourceDocument ?: it.document, it.origin ?: LyricsOrigin("默认歌词"), it.timingAlignment)
                 } ?: container.lyricsRepository.load(song).let {
-                    SavedLyrics(it.document, it.origin ?: LyricsOrigin("默认歌词"))
+                    SavedLyrics(it.sourceDocument ?: it.document, it.origin ?: LyricsOrigin("默认歌词"), it.timingAlignment)
                 }
                 require(format == LyricExportFormat.FIA || saved.document.lines.any { it.text.isNotBlank() || it.backgroundVocals.isNotEmpty() }) {
                     "这首歌没有可导出的 LRC 歌词；FIA 可以保留纯音乐的空歌词选择"
                 }
                 val bytes = withContext(Dispatchers.Default) {
-                    (if (format == LyricExportFormat.FIA) LyricsFileCodec.encodeFia(song, saved.document, saved.origin, capturedOffset)
+                    (if (format == LyricExportFormat.FIA) LyricsFileCodec.encodeFia(song, saved.document, saved.origin,
+                        capturedOffset, saved.timingAlignment)
                         else LyricsFileCodec.encodeLrc(saved.document)).toByteArray(Charsets.UTF_8)
                 }
                 currentCoroutineContext().ensureActive()
@@ -223,14 +225,14 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
 
     val automatic = musicSettings.lyricsSource == LyricsSource.AUTO
     val defaultLabel = if (!automatic && song.musicSource == MusicSource.NAVIDROME) "Navidrome" else musicSettings.lyricsSource.label
-    val restoredMessage = if (automatic) "已恢复自动择优，按网易云歌词匹配；单曲偏移保留" else "已恢复默认歌词来源，单曲偏移保留"
+    val restoredMessage = if (automatic) "已恢复自动择优，通过内容和时间轴校验后才替换；单曲偏移保留" else "已恢复默认歌词来源，单曲偏移保留"
     val chosenLabel = options.activeOrigin?.label ?: defaultLabel
     val displayedLabel = if (playback.matches(song) && !playback.loading) playback.origin?.label ?: chosenLabel else chosenLabel
     val canExport = options.activeOrigin != null || (playback.matches(song) && !playback.loading && playback.error == null)
     PlayerLyricsDialogFrame(song, matching, onBack = ::leaveMatching, onClose = ::close) {
         if (matching) {
             PlayerLyricsMatchPanel(song, source, query, results, selectedCandidate, preview,
-                assessment?.score, assessment?.unavailableReason, searching, previewing, blocked,
+                assessment, assessment?.unavailableReason, searching, previewing, blocked,
                 message, messageError, hasSearched,
                 onSource = { value -> if (source != value) { cancelMatching(); source = value; message = null } },
                 onQuery = { value -> if (!blocked && value.length <= OnlineLyricsMatcher.MAX_QUERY_LENGTH) {
@@ -277,7 +279,8 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
                         catch (failure: Exception) { pendingImport = null; notify("无法打开文件选择器", true) }
                     }
                 }, onExportFia = { startExport(LyricExportFormat.FIA) },
-                onExportLrc = { startExport(LyricExportFormat.LRC) }, onClose = ::close)
+                onExportLrc = { startExport(LyricExportFormat.LRC) }, onClose = ::close,
+                alignmentLabel = playback.takeIf { it.matches(song) }?.timingAlignment?.let(::lyricsAlignmentLabel))
         }
     }
 }
