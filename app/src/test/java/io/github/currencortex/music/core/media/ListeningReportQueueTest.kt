@@ -70,6 +70,8 @@ class ListeningReportQueueTest {
         queue.report(song.copy(video = true), owner, 15_000)
         queue.report(song.copy(musicSource = MusicSource.NAVIDROME), owner)
         queue.report(song.copy(musicSource = MusicSource.NAVIDROME), owner, 15_000)
+        queue.report(song.copy(musicSource = MusicSource.LOCAL, localUri = "content://media/external/audio/media/1"), owner)
+        queue.report(song.copy(musicSource = MusicSource.LOCAL, localUri = "content://media/external/audio/media/1"), owner, 15_000)
         queue.report(song, owner, 0)
         runCurrent()
         assertEquals(listOf(null, 15_000L), privateReports)

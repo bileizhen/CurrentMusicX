@@ -233,7 +233,7 @@ class MusicService : MediaSessionService() {
                 val next = if (settings.preloadAudio && state.song?.video != true && (account != null || container.nativeNetease != null || container.navidrome.state.value.configured) && state.mode == PlayerMode.LOCAL && state.playing &&
                     !state.loading && !state.resolving &&
                     player.currentMediaItem?.mediaId == container.playbackQueue.state.value.current?.id?.toString()) container.playbackQueue.previewNext() else null
-                if (next == null) { preloadBudget.reset(); null } else {
+                if (next == null || next.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL) { preloadBudget.reset(); null } else {
                     val request = audioRequest(next, settings.quality)
                     if (preloadBudget.allow("${state.song?.id}:${request.key}", state.positionMs, state.bufferedPositionMs, state.durationMs))
                         PreloadPlan(request, settings.preloadMetered) else null

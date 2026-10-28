@@ -42,6 +42,11 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
         return ResolvedAudio(entry.source, entry.request.key, (remainingMs - advanceMs).coerceAtLeast(250))
     }
     suspend fun resolve(request: AudioRequest, refresh: Boolean = false): ResolvedAudio = withContext(Dispatchers.IO) {
+        request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL }?.let { song ->
+            val uri = android.net.Uri.parse(song.localUri)
+            require(uri.scheme == "content" && uri.authority == "media") { "本地音频地址无效" }
+            return@withContext ResolvedAudio(AudioSource(uri.toString(), "local", 0, 0), "", Long.MAX_VALUE)
+        }
         checkRequest(request)
         val key = request.key
         if (!refresh) {

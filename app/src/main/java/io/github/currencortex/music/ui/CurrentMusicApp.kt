@@ -115,7 +115,7 @@ import io.github.currencortex.music.feature.profile.*
 import io.github.currencortex.music.feature.binding.*
 import io.github.currencortex.music.feature.room.*
 
-private fun isPlaylistRoute(route: String) = route.startsWith("lib/playlist/") || route.startsWith("lib/ncmplaylist/") ||
+private fun isPlaylistRoute(route: String) = route == "lib/local" || route.startsWith("lib/playlist/") || route.startsWith("lib/ncmplaylist/") ||
     route in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent")
 
 private val UnifiedMiniScrollClearance = 36.dp
@@ -347,8 +347,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             else action()
         }
         fun requestSong(song: Song) {
+            if (song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME, io.github.currencortex.music.data.song.MusicSource.LOCAL)) { libraryVm.message.value = "本地或私有曲库歌曲不能提交到一起听房间"; return }
             if (nativeTogether.active) { container.listenTogether.request(song); return }
-            if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) { libraryVm.message.value = "私有曲库歌曲不能提交到一起听房间"; return }
             if (!container.roomSession.active || song.id in roomPending) return
             val revision = container.accountRepository.sessionRevision.value
             val roomId = roomLive.detail?.room?.id
@@ -480,7 +480,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
                                     onStorage = { navigateTo(STORAGE) },
                                     onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
-                                    onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") }, updateTransfer = updateTransferState)
+                                    onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") },
+                                    onLocalMusic = { navigateLibrary("lib/local") }, updateTransfer = updateTransferState)
                             }
                         }
                         }
@@ -510,7 +511,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
                             onStorage = { navigateTo(STORAGE) },
                             onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
-                            onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") }, updateTransfer = updateTransferState) }
+                            onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") },
+                            onLocalMusic = { navigateLibrary("lib/local") }, updateTransfer = updateTransferState) }
                     }
                 }
                 entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onEqualizer = { navigateTo(EQUALIZER) }, onNavidrome = { navigateLibrary("navidrome") }, onDesktopLyrics = { navigateLibrary("desktop-lyrics") }) { navigateTo(STORAGE) } }
@@ -622,6 +624,12 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     entry(route) {
                         when {
                             route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateLibrary)
+                            route == "lib/local" -> {
+                                val detailVm: LibraryDetailViewModel = viewModel(key = route, factory = viewModelFactory { LibraryDetailViewModel(container, route) })
+                                LocalMusicScreen(detailVm, libraryVm, ::navigateBack, ::navigateLibrary) { songs, index ->
+                                    playWithPermission { container.playerController.playList(songs, index) }
+                                }
+                            }
                             route.startsWith("lib/artist/") -> {
                                 val artistVm: io.github.currencortex.music.feature.artist.ArtistViewModel = viewModel(key = route,
                                     factory = viewModelFactory { io.github.currencortex.music.feature.artist.ArtistViewModel(container,

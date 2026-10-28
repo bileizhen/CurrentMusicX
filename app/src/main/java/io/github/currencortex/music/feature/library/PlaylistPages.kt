@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.*
@@ -126,9 +127,17 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
 }
 
+internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: () -> Unit,
+    val requestPermission: () -> Unit, val openSettings: () -> Unit, val permissionMessage: String? = null)
+
 @Composable internal fun PlaylistDetailBody(state: LibraryDetailState, vm: LibraryDetailViewModel,
     library: LibraryViewModel, onBack: () -> Unit, navigate: (String) -> Unit,
-    play: (List<Song>, Int) -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+    play: (List<Song>, Int) -> Unit, onRename: () -> Unit, onDelete: () -> Unit,
+    localMusic: LocalMusicPlaylistActions? = null) {
+    fun refresh() {
+        if (localMusic == null) vm.reload(force = true)
+        else if (localMusic.allowed) localMusic.rescan() else localMusic.requestPermission()
+    }
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val statuses by library.statuses.collectAsStateWithLifecycle()
     val likesUseNetease by vm.container.primaryLibrary.likesUseNetease.collectAsStateWithLifecycle()
@@ -151,7 +160,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val headerBottom = lerp(backdrop, Color.White, .04f)
     val list = rememberLazyListState()
     val panelDensity = LocalDensity.current
-    val pullMotion = rememberPlaylistPullMotion(state.loading || state.refreshing) { vm.reload(force = true) }
+    val pullMotion = rememberPlaylistPullMotion(state.loading || state.refreshing, ::refresh)
     val scope = rememberCoroutineScope()
     var searching by rememberSaveable(vm.route) { mutableStateOf(false) }
     var query by rememberSaveable(vm.route) { mutableStateOf("") }
@@ -206,7 +215,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 likesUseNetease -> io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) in neteaseLikes
                 else -> statuses[song.id]?.liked == true
             } },
-            onSave = { library.togglePrimaryLike(it, undoable = true) }, saveEnabled = !likeBusy,
+            onSave = if (localMusic != null) null else { song -> library.togglePrimaryLike(song, undoable = true) }, saveEnabled = !likeBusy,
             onClose = { scope.launch { vm.container.settings.edit { it.copy(playlistRecordShelf = false) } } })
         return
     }
@@ -218,6 +227,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     val title = state.title.ifBlank { if (state.loading) "正在加载歌单" else "歌单" }
     val origin = when {
+        localMusic != null -> "本地曲库 · ${state.songs.size} 首歌曲"
         state.playlist?.source == "ncm" -> "网易云音乐 · 同步歌单只读"
         state.playlist?.source == "netease" -> "网易云音乐"
         editable -> account.account?.nickname.orEmpty().ifBlank { "我的歌单" }
@@ -249,11 +259,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         runCatching { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
             .putExtra(Intent.EXTRA_TEXT, text), "分享歌单")) }.onFailure { library.container.errorNotices.show("暂时无法打开分享") }
     }
-    Column(Modifier.fillMaxSize().background(backdrop).statusBarsPadding().navigationBarsPadding().testTag("library_detail")) {
+    Column(Modifier.fillMaxSize().background(backdrop).statusBarsPadding().navigationBarsPadding()
+        .testTag(if (localMusic != null) "local_music_screen" else "library_detail")) {
         Row(Modifier.fillMaxWidth().background(backdrop).height(52.dp).padding(horizontal = 12.dp).testTag("playlist_top_bar"), verticalAlignment = Alignment.CenterVertically) {
             PlaylistIconAction(Icons.AutoMirrored.Filled.ArrowBack, "返回", onBack, Modifier.testTag("navigate_back"), background = Color.Transparent)
             val compact by remember { derivedStateOf { list.firstVisibleItemIndex > 0 } }
-            Text(if (compact) title else "歌单", Modifier.weight(1f).padding(horizontal = 12.dp), fontSize = 17.sp,
+            Text(if (compact || localMusic != null) title else "歌单", Modifier.weight(1f).padding(horizontal = 12.dp), fontSize = 17.sp,
                 fontWeight = FontWeight.Medium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
             PlaylistIconAction(Icons.Default.Search, "搜索歌单内歌曲", {
                 if (searching) closeSearch() else searching = true
@@ -301,7 +312,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             PlaylistPill("分享", Icons.Default.Share, ::share, Modifier.weight(1f).testTag("playlist_share"), enabled = state.title.isNotBlank())
                             PlaylistPill("随机播放", Icons.Default.PlayArrow, { start(true) }, Modifier.weight(1f).testTag("playlist_shuffle"), enabled = canPlay && songs.isNotEmpty(), emphasized = true)
-                            PlaylistPill("歌单信息", Icons.Default.Info, { infoOpen = true }, Modifier.weight(1f).testTag("playlist_info"))
+                            if (localMusic != null) PlaylistPill(if (localMusic.allowed) "扫描音乐" else "授权扫描", Icons.Default.Refresh,
+                                ::refresh, Modifier.weight(1f).testTag(if (localMusic.allowed) "local_music_refresh" else "local_music_permission"),
+                                enabled = !state.loading && !state.refreshing)
+                            else PlaylistPill("歌单信息", Icons.Default.Info, { infoOpen = true }, Modifier.weight(1f).testTag("playlist_info"))
                         }
                     }
                 }
@@ -346,17 +360,26 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     }
                 }
                 if (state.loading && state.songs.isEmpty()) item { Box(Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(20.dp)) { LoadingSongList(4) } }
-                state.error?.let { error -> item { Column(Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(20.dp)) { Text(error); TextButton("重试", onClick = { vm.reload(force = true) }) } } }
-                if (room != null) item { Text("点击歌曲，为当前房间点歌", Modifier.playlistPullSurface(pullMotion).padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 13.sp) }
-                if (!state.loading && songs.isEmpty() && state.error == null) item {
-                    Text(if (query.isNotBlank()) "没有找到匹配的歌曲" else "这里还没有歌曲，可在搜索结果中加入歌单",
+                if (localMusic != null && !localMusic.allowed) item {
+                    Column(Modifier.fillMaxWidth().playlistPullSurface(pullMotion).background(surface).padding(24.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(localMusic.permissionMessage ?: "允许读取音频后扫描手机里的音乐", fontSize = 14.sp)
+                        TextButton("允许读取音乐", onClick = localMusic.requestPermission, modifier = Modifier.testTag("local_music_grant"))
+                        if (localMusic.permissionMessage != null) TextButton("打开系统设置", onClick = localMusic.openSettings,
+                            modifier = Modifier.testTag("local_music_open_app_settings"))
+                    }
+                }
+                state.error?.let { error -> item { Column(Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(20.dp)) { Text(error); TextButton("重试", onClick = ::refresh) } } }
+                if (room != null && localMusic == null) item { Text("点击歌曲，为当前房间点歌", Modifier.playlistPullSurface(pullMotion).padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 13.sp) }
+                if (!state.loading && songs.isEmpty() && state.error == null && localMusic?.allowed != false) item {
+                    Text(if (query.isNotBlank()) "没有找到匹配的歌曲" else if (localMusic != null) "未找到音乐文件，下拉重新扫描" else "这里还没有歌曲，可在搜索结果中加入歌单",
                         Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(24.dp), fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
                 }
                 itemsIndexed(songs, key = { index, _ -> songKeys[index] }) { index, song ->
                     Box(Modifier.fillMaxWidth().animateItem(fadeInSpec = tween(280), placementSpec = tween(300), fadeOutSpec = tween(160))
                         .playlistPullSurface(pullMotion).background(surface).padding(horizontal = 16.dp)) {
                         PlaylistTrack(song, selected = queue.current?.id == song.id && queue.current?.musicSource == song.musicSource,
-                            liked = if (neteaseMain) song.id in neteaseLikes else statuses[song.id]?.liked == true, play = { play(songs, index) },
+                            liked = localMusic == null && (if (neteaseMain) song.id in neteaseLikes else statuses[song.id]?.liked == true), play = { play(songs, index) },
                             next = { vm.container.playerController.add(song, true) }, enqueue = { vm.container.playerController.add(song) }) {
                             LibrarySongActions(library, song, navigate)
                             val dismiss = LocalDismissSongMenu.current
@@ -385,7 +408,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             scope.launch { vm.container.settings.edit { it.copy(playlistDepthRibbon = true, playlistRecordShelf = false) } }
         }, modifier = Modifier.testTag("playlist_depth_ribbon_toggle"), chevron = false)
         MusicDestinationRow("歌单信息", { menuOpen = false; infoOpen = true }, modifier = Modifier.testTag("playlist_menu_info"), chevron = false)
-        MusicDestinationRow("刷新歌单", { menuOpen = false; vm.reload(force = true) }, chevron = false)
+        MusicDestinationRow(if (localMusic != null) "重新扫描本地音乐" else "刷新歌单", { menuOpen = false; refresh() }, chevron = false)
         if (state.playlist?.editable(account.account?.id ?: 0) == true) {
             MusicDestinationRow(if (importState.running) "查看网易云导入进度" else "一键导入网易云我喜欢", {
                 menuOpen = false
@@ -422,7 +445,7 @@ internal fun playlistDurationLabel(songs: List<Song>): String {
     next: () -> Unit, enqueue: () -> Unit, extra: @Composable () -> Unit) {
     val host = LocalSongMenu.current
     var menu by remember(song.id) { mutableStateOf<SongMenu?>(null) }
-    val room = LocalRoomSongRequest.current.takeUnless { song.navidrome != null }
+    val room = LocalRoomSongRequest.current.takeUnless { song.navidrome != null || song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL }
     val pending = room?.pending?.invoke(song.id) == true
     val primary = { if (room != null) room.request(song) else play() }
     Row(Modifier.fillMaxWidth().testTag("playlist_song_${song.id}").clickable(enabled = !pending, role = Role.Button, onClick = primary)

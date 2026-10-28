@@ -38,7 +38,7 @@ class ListeningReportQueue(
     private val privateLibrary = worker("Navidrome", { it.owner == currentSession(it.song) }, navidrome)
 
     fun report(song: Song, owner: RequestSession, milliseconds: Long? = null) {
-        if (song.video || milliseconds != null && milliseconds <= 0) return
+        if (song.video || song.musicSource == MusicSource.LOCAL || milliseconds != null && milliseconds <= 0) return
         val report = Report(song, milliseconds, owner)
         if (song.musicSource == MusicSource.NAVIDROME) privateLibrary.trySend(report)
         else {

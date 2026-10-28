@@ -18,7 +18,7 @@ object LyricsMatcher {
         }
     }
     fun matches(documentIds: Map<String, List<String>>, key: LyricsKey): Boolean {
-        val field = when (key.source) { MusicSource.NETEASE -> "ncmMusicId"; MusicSource.QQ_MUSIC -> "qqMusicId"; MusicSource.APPLE_MUSIC -> "appleMusicId"; MusicSource.SPOTIFY -> "spotifyId"; MusicSource.NAVIDROME -> "navidromeId" }
+        val field = when (key.source) { MusicSource.NETEASE -> "ncmMusicId"; MusicSource.QQ_MUSIC -> "qqMusicId"; MusicSource.APPLE_MUSIC -> "appleMusicId"; MusicSource.SPOTIFY -> "spotifyId"; MusicSource.NAVIDROME -> "navidromeId"; MusicSource.LOCAL -> return false }
         // Older files omit metadata. When present, the id must agree with the indexed path.
         return documentIds[field].let { it.isNullOrEmpty() || key.songId in it }
     }

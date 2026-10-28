@@ -34,10 +34,10 @@ val LocalRoomSongRequest = staticCompositionLocalOf<RoomSongRequest?> { null }
                 MusicDestinationRow("下一首播放", { onDismiss(); menu.next() }, chevron = false)
                 MusicDestinationRow("加入队列", { onDismiss(); menu.queue() }, chevron = false)
             }
-            if (!menu.song.video && onDownload != null) MusicDestinationRow("下载歌曲", {
+            if (!menu.song.video && menu.song.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL && onDownload != null) MusicDestinationRow("下载歌曲", {
                 onDismiss(); onDownload(menu.song)
             }, modifier = Modifier.testTag("song_download"), summary = "保存歌曲信息、封面与歌词", chevron = false)
-            if (!menu.song.video) MusicDestinationRow("分享歌曲", { sharing = true },
+            if (!menu.song.video && menu.song.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL) MusicDestinationRow("分享歌曲", { sharing = true },
                 modifier = Modifier.testTag("song_share"), summary = "生成海报、保存图片或复制链接", chevron = false)
             CompositionLocalProvider(LocalDismissSongMenu provides onDismiss) { menu.extra?.invoke() }
         }

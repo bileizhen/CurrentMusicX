@@ -31,6 +31,7 @@ class AudioCache(context: Context, directory: File,
     private val cacheDelegate = lazy { SimpleCache(directory, NoOpCacheEvictor(), StandaloneDatabaseProvider(context.applicationContext)) }
     private val cache get() = cacheDelegate.value
     private val upstream = OkHttpDataSource.Factory(client)
+    private val localAware = DefaultDataSource.Factory(context.applicationContext, upstream)
     private val writers = ConcurrentHashMap.newKeySet<CacheWriter>()
     private val writeLock = Mutex()
     private val usageLock = Any()
@@ -53,7 +54,7 @@ class AudioCache(context: Context, directory: File,
             activeKey = dataSpec.key?.takeIf { it.startsWith(PREFIX) }
             val source = if (dataSpec.key?.startsWith(PREFIX) == true)
                 runCatching { cachedFactory().createDataSource() }.getOrElse { upstream.createDataSource() }
-                else upstream.createDataSource()
+                else localAware.createDataSource()
             delegate = source; listeners.forEach(source::addTransferListener)
             return try { source.open(dataSpec) } catch (e: Cache.CacheException) {
                 runCatching { source.close() }
