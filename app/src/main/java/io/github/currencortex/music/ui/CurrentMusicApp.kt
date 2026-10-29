@@ -618,6 +618,17 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     io.github.currencortex.music.feature.tasks.NeteaseTasksScreen(vm, ::navigateBack,
                                         onLogin = { navigateLibrary("user/binding") }, onNavigate = ::navigateLibrary)
                                 }
+                                route == "user/playlist-import" -> {
+                                    val vm: io.github.currencortex.music.feature.playlistimport.PlaylistImportViewModel = viewModel(key = route,
+                                        factory = viewModelFactory {
+                                            io.github.currencortex.music.feature.playlistimport.PlaylistImportViewModel(container.playlistImporter) {
+                                                container.neteaseLibrary.invalidate()
+                                            }
+                                        })
+                                    io.github.currencortex.music.feature.playlistimport.PlaylistImportScreen(vm, ::navigateBack,
+                                        onLogin = { navigateLibrary("user/binding") },
+                                        onPlaylist = { id -> container.neteaseLibrary.invalidate(); navigateLibrary("lib/ncmplaylist/$id") })
+                                }
                                 route.startsWith("user/profile/") -> {
                                     val id = route.substringAfterLast('/').toLongOrNull() ?: 0L
                                     val vm: ProfileViewModel = if (id == account.account?.id) profileVm else viewModel(key = route,
