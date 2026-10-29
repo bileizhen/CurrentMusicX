@@ -27,7 +27,7 @@ import kotlin.math.roundToInt
     onKaraokeScope: () -> Unit,
     font: io.github.currencortex.music.data.settings.LyricsFont = io.github.currencortex.music.data.settings.LyricsFont.SYSTEM,
     fontFile: String = "", onFont: (io.github.currencortex.music.data.settings.LyricsFont) -> Unit = {},
-    onFontFile: suspend (String) -> Unit = {}) {
+    onFontFile: suspend (String) -> Unit = {}, previewText: String = "暂无歌词") {
     val ink = MiuixTheme.colorScheme.onSurface
     val staged = display.smoke || display.particles
     val effectName = if (display.particles) "星尘歌词" else "流烟歌词"
@@ -36,7 +36,7 @@ import kotlin.math.roundToInt
     Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
         .testTag("lyrics_display_settings")) {
         Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-            Text("让音乐说话", fontFamily = currentLyricsFontFamily(), fontSize = preview.sp, fontWeight = lyricsFontWeight(weightMode, true, strength),
+            Text(previewText, fontFamily = currentLyricsFontFamily(), fontSize = preview.sp, fontWeight = lyricsFontWeight(weightMode, true, strength),
                 maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 color = ink, modifier = Modifier.fillMaxWidth().testTag("lyrics_font_preview"))
             LyricsFontSelector(font, fontFile, onFont, onFontFile)
