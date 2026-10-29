@@ -26,7 +26,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             .padding(horizontal = 4.dp, vertical = 8.dp)) {
             HomeShortcut("我喜欢", MusicIcons.Heart, "open_likes", { navigate("lib/likes") }, Modifier.weight(1f))
             HomeShortcut("歌单", MusicIcons.List, "open_playlists", { navigate("lib/playlists") }, Modifier.weight(1f))
-            HomeShortcut("最近播放", MusicIcons.Update, "open_recent", { navigate("lib/recent") }, Modifier.weight(1f))
+            HomeShortcut("听歌识曲", MusicIcons.Microphone, "open_recognition", { navigate("lib/recognition") }, Modifier.weight(1f))
             HomeShortcut(if (inRoom) "回到房间" else "一起听", MusicIcons.Headphones, "open_rooms",
                 { navigate("room/list") }, Modifier.weight(1f))
         }

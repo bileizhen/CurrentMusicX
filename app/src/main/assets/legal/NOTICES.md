@@ -339,6 +339,20 @@ ES5 with Babel 7 for the existing Rhino runtime. They run locally without Java
 bindings or downloaded scripts. Full MIT notices are bundled offline as
 `legal/WANAKANA-MIT.txt` and `legal/OPENCC-JS-MIT.txt`.
 
+## NetEase song recognition
+
+The public `/api/music/audio/match` integration and local fingerprint runtime use
+the audio_match demonstration from NeteaseCloudMusicApiEnhanced/api-enhanced,
+commit `19c7dad6db7d660954c7a615a686ff0acb030f91`:
+https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced/tree/19c7dad6db7d660954c7a615a686ff0acb030f91/public/audio_match_demo
+The demonstration wrapper is MIT, Copyright (c) 2013-2022 Binaryify; its complete
+notice is available offline as `legal/NCM-AUDIO-MATCH-MIT.txt`. The fingerprint
+algorithm/WebAssembly originates from NetEase's official browser extension;
+NetEase retains the rights to that component. This integration does not imply endorsement.
+The wrapper is executed locally in a network-blocked WebView and receives only
+the current foreground recording. Only the resulting fingerprint is sent to the
+official NetEase endpoint. Recognition history contains song metadata only.
+
 ## CurrentMusic halo startup wordmark
 
 The fixed CurrentMusic vector lettering in `current_music_wordmark.json` was
