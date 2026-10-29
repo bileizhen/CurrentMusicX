@@ -316,14 +316,28 @@ component is bundled. The original MIT notice and source archive checksum are
 provided offline in `legal/QISHUI-MIT.txt`. Folia's Qishui lyric normalization remains
 covered by the AGPL attribution above.
 
-Automatic matching obtains NetEase lyrics as a content and timing reference, then
-compares candidates from every configured source. Eligible genuine word-timed lyrics
-with at least 75% content agreement take precedence over line-timed fallback, and
-qualifying AMLL candidates are preferred within that word-timed group. Within each
-group, content agreement, timeline compatibility, word-cue coverage and completeness
-determine the winner. CurrentMusic matching explicitly uses the configured project
-server, while NetEase matching uses the native official gateway.
+Automatic lyric selection and metadata scoring now adapt Folia Major commit
+`f96c65b27f7ca351e8db781301cedfa0a52252e2`, specifically
+`src/utils/lyrics/{autoMatchBestLyric,matchScore,sourcePriority,searchQuery,duration,pureMusic}.ts`.
+Source: https://github.com/chthollyphile/folia-major/tree/f96c65b27f7ca351e8db781301cedfa0a52252e2/src/utils/lyrics
+Original Folia contributors retain copyright; these adaptations are AGPL-3.0-only.
+The default order is QQ, NetEase, AMLL, Kugou, Qishui, followed by CurrentMusic as
+an app-specific fallback. Each platform contributes its best reliable candidate among
+the first ten results, subject to Folia's 75-point metadata gate. The first renderable
+line-timed document is kept as fallback; genuine word timing ends the search. AMLL
+automatic lookup uses the matched NetEase song id, independently of NetEase lyric
+availability. No comparison against NetEase lyric content or original timing is required.
+CurrentMusic matching explicitly uses the configured project server, while NetEase
+matching uses the native official gateway.
 The selected recording and audio metadata are never replaced by a lyric match.
+
+Metadata normalization bundles WanaKana 5.3.1 (Copyright 2013 WaniKani Community
+Github, MIT, https://github.com/WaniKani/WanaKana) and the traditional-to-simplified
+bundle of opencc-js 1.4.2 (Copyright 2020-2021 The nk2028 Project, MIT,
+https://github.com/nk2028/opencc-js). Their distributed UMD files are transpiled to
+ES5 with Babel 7 for the existing Rhino runtime. They run locally without Java
+bindings or downloaded scripts. Full MIT notices are bundled offline as
+`legal/WANAKANA-MIT.txt` and `legal/OPENCC-JS-MIT.txt`.
 
 ## CurrentMusic halo startup wordmark
 

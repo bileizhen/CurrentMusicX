@@ -25,168 +25,125 @@ class LyricsSourcePriorityTest {
     private fun adapter(source: LyricsMatchSource, document: LyricsDocument,
         metadata: LyricsCandidate = candidate(source)) = LyricsMatchAdapter({ listOf(metadata) }, { document })
 
-    @Test fun displayedNinetyPercentAmllCannotOverrideAnElevenSecondAxisMismatch() = runBlocking {
-        val metadata = candidate(LyricsMatchSource.AMLL).copy(durationMs = 0) // 55 + 25 + 10 = 90
-        val document = rich(11_000)
-        val matcher = OnlineLyricsMatcher({ error("An exact native id must not search") }, { reference },
-            additionalSources = adapters() + (LyricsMatchSource.AMLL to adapter(LyricsMatchSource.AMLL, document, metadata)))
+    @Test fun defaultQqWordsWinImmediatelyWithoutNeteaseOrAmllRequests() = runBlocking {
+        val matcher = OnlineLyricsMatcher({ error("Must stop at QQ") }, { error("Must stop at QQ") }, additionalSources = adapters() +
+            (LyricsMatchSource.QQ_MUSIC to adapter(LyricsMatchSource.QQ_MUSIC, rich(11_000))))
         val result = matcher.bestMatchDetailed(song)!!
-        assertEquals("netease", result.saved.origin.provider)
-        assertTrue(result.assessment.accepted)
-        assertFalse(result.assessment.preferredWord)
-        val checked = matcher.assess(song, metadata, SavedLyrics(document, LyricsOrigin("AMLL", "amll")), reference)
-        assertEquals(90, checked.matchPercent)
-        assertEquals(1.0, checked.score!!.similarity, 0.0)
-        assertFalse(checked.accepted)
+        assertEquals("qq_music", result.saved.origin.provider)
+        assertTrue(result.assessment.preferredWord)
+        assertEquals(12_000L, result.saved.document.lines.single().startTimeMs)
         assertNull(result.saved.timingAlignment)
     }
 
-    @Test fun wrongArtistCannotBypassReliableIdentityWithAHighMetadataPercentage() = runBlocking {
-        val metadata = candidate(LyricsMatchSource.AMLL).copy(artists = "Different") // 55 + 10 + 10
-        assertEquals(75, OnlineLyricsMatcher.metadataMatchPercent(song, metadata))
-        assertFalse(OnlineLyricsMatcher.isReliableMatch(song, metadata))
-        val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = adapters() + mapOf(
-            LyricsMatchSource.AMLL to adapter(LyricsMatchSource.AMLL, rich(), metadata),
-            LyricsMatchSource.QQ_MUSIC to adapter(LyricsMatchSource.QQ_MUSIC, rich())))
-        val result = matcher.bestMatchDetailed(song)!!
-        assertEquals("qq_music", result.saved.origin.provider)
-        assertEquals(100, result.assessment.matchPercent)
+    @Test fun firstLinesAreKeptWhileLaterWordSourcesAreCheckedInFoliaOrder() = runBlocking {
+        val calls = mutableListOf<String>()
+        val supplied = adapters().mapValues { (source, _) -> LyricsMatchAdapter({ calls += "search:$source"; listOf(candidate(source)) }, {
+            calls += "load:$source"; if (source == LyricsMatchSource.KUGOU) rich() else lyrics(source.name)
+        }) }
+        val matcher = OnlineLyricsMatcher({ emptyList() }, { calls += "load:NETEASE"; reference }, additionalSources = supplied)
+        assertEquals("kugou", matcher.bestMatch(song)!!.origin.provider)
+        assertEquals(listOf("search:QQ_MUSIC", "load:QQ_MUSIC", "load:NETEASE", "load:AMLL", "search:KUGOU", "load:KUGOU"), calls)
     }
 
-    @Test fun belowSeventyFiveIsSkippedBeforeItsLyricsAreLoaded() = runBlocking {
-        var loads = 0
-        val metadata = candidate(LyricsMatchSource.AMLL).copy(artists = "Different", durationMs = 0)
-        assertEquals(65, OnlineLyricsMatcher.metadataMatchPercent(song, metadata))
-        val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = adapters() +
-            (LyricsMatchSource.AMLL to LyricsMatchAdapter({ listOf(metadata) }, { loads++; rich() })))
+    @Test fun allLineSourcesKeepTheFirstQqFallbackRatherThanReRankingQuality() = runBlocking {
+        val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = adapters() + mapOf(
+            LyricsMatchSource.QQ_MUSIC to adapter(LyricsMatchSource.QQ_MUSIC, lyrics("QQ")),
+            LyricsMatchSource.AMLL to adapter(LyricsMatchSource.AMLL, reference.copy(lines = reference.lines.map { it.copy(translation = "More auxiliary tracks") }))))
+        assertEquals("qq_music", matcher.bestMatch(song)!!.origin.provider)
+    }
+
+    @Test fun explicitPreferenceChangesSourceOrderAndWordsStillBeatEarlierLines() = runBlocking {
+        val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = adapters() + mapOf(
+            LyricsMatchSource.QQ_MUSIC to adapter(LyricsMatchSource.QQ_MUSIC, rich()),
+            LyricsMatchSource.QISHUI to adapter(LyricsMatchSource.QISHUI, rich())))
+        assertEquals("qishui", matcher.bestMatch(song, LyricsMatchSource.QISHUI)!!.origin.provider)
+    }
+
+    @Test fun nativeWordsEndTheSearchBeforeAmllEvenIfAmllMightBeBetter() = runBlocking {
+        val matcher = OnlineLyricsMatcher({ emptyList() }, { rich() }, additionalSources = adapters() +
+            (LyricsMatchSource.AMLL to LyricsMatchAdapter({ error("No AMLL search") }, { error("Must stop at native words") })))
         assertEquals("netease", matcher.bestMatch(song)!!.origin.provider)
-        assertEquals(0, loads)
     }
 
-    @Test fun qualifyingAmllAtExactlySeventyFivePercentContentKeepsPriorityOverOtherValidatedWords() = runBlocking {
-        val baseline = LyricsDocument(listOf(LyricLine(1000, 3000, "ABCDEFGH")))
-        fun words(text: String) = LyricsDocument(listOf(LyricLine(1000, 3000, text,
-            listOf(LyricWord(text, 1000, 3000, 0, text.length)))))
-        val matcher = OnlineLyricsMatcher({ emptyList() }, { baseline }, additionalSources = adapters() + mapOf(
-            LyricsMatchSource.AMLL to adapter(LyricsMatchSource.AMLL, words("ABXDEYGH")),
-            LyricsMatchSource.QQ_MUSIC to adapter(LyricsMatchSource.QQ_MUSIC, words("ABCDEFGH"))))
-        val result = matcher.bestMatchDetailed(song)!!
-        assertEquals("amll", result.saved.origin.provider)
-        assertEquals(.75, result.assessment.score!!.similarity, 0.0)
-        assertTrue(result.assessment.preferredWord)
-    }
-
-    @Test fun amllWinsAgainstNativeWordsWithTrailingCreditsAndShorterFinalReleases() = runBlocking {
-        val vocals = LyricsDocument((0 until 6).map { i ->
-            val text = "Complete sung line $i"
-            val start = 10_000L + i * 10_000
-            LyricLine(start, start + 5000, text, listOf(LyricWord(text, start, start + 5000, 0, text.length)))
-        })
-        val native = vocals.copy(lines = vocals.lines + listOf(
-            LyricLine(70_000, 71_000, "吉他：Studio Contributor"),
-            LyricLine(71_000, 72_000, "OP：Publisher"),
-            LyricLine(72_000, 73_000, "SP：Another Publisher")))
-        val amll = vocals.copy(lines = vocals.lines.map { line -> line.copy(
-            startTimeMs = line.startTimeMs + 200, endTimeMs = line.endTimeMs + 2800,
-            words = line.words.map { it.copy(startTimeMs = it.startTimeMs + 200, endTimeMs = it.endTimeMs + 2800) }) })
-        val matcher = OnlineLyricsMatcher({ emptyList() }, { native }, additionalSources = adapters() +
-            (LyricsMatchSource.AMLL to adapter(LyricsMatchSource.AMLL, amll)))
-        val result = matcher.bestMatchDetailed(song)!!
-        assertEquals("amll", result.saved.origin.provider)
-        assertEquals(1.0, result.assessment.score!!.similarity, 0.0)
-        assertTrue(result.assessment.preferredWord)
-    }
-
-    @Test fun aMissingReferenceCannotSilentlyApplyUnvalidatedExternalLyrics() = runBlocking {
-        val matcher = OnlineLyricsMatcher({ throw LyricsMatchException("Offline") }, { throw LyricsMatchException("Offline") },
-            additionalSources = adapters() + (LyricsMatchSource.AMLL to adapter(LyricsMatchSource.AMLL, rich())))
-        for (input in listOf(song, song.copy(musicSource = MusicSource.QQ_MUSIC))) {
-            val failure = runCatching { matcher.bestMatch(input) }.exceptionOrNull()
-            assertTrue(failure is LyricsMatchException)
-            assertTrue(failure!!.message!!.contains("未自动替换"))
-        }
-    }
-
-    @Test fun lowerMetadataCandidateWithValidTimingBeatsPerfectMetadataWithWrongTiming() = runBlocking {
-        val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = adapters() + mapOf(
-            LyricsMatchSource.QQ_MUSIC to adapter(LyricsMatchSource.QQ_MUSIC, rich(),
-                candidate(LyricsMatchSource.QQ_MUSIC).copy(durationMs = 0)),
-            LyricsMatchSource.QISHUI to adapter(LyricsMatchSource.QISHUI, rich(20_000))))
-        assertEquals("qq_music", matcher.bestMatch(song)!!.origin.provider)
-    }
-
-    @Test fun completeValidatedLyricsBeatDifferentContentDespiteTheOtherCandidatesHigherMetadata() = runBlocking {
-        val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = adapters() + mapOf(
-            LyricsMatchSource.QQ_MUSIC to adapter(LyricsMatchSource.QQ_MUSIC, reference.copy(lines = reference.lines.map {
-                it.copy(translation = "Translation", romanization = "Romanization") }), candidate(LyricsMatchSource.QQ_MUSIC).copy(durationMs = 0)),
-            LyricsMatchSource.QISHUI to adapter(LyricsMatchSource.QISHUI, lyrics("Different content"))))
-        assertEquals("qq_music", matcher.bestMatch(song)!!.origin.provider)
-    }
-
-    @Test fun estimatedOrZeroLengthWordsDoNotAcquireTheRealWordPriority() = runBlocking {
-        val estimated = rich().copy(lines = rich().lines.map { it.copy(wordsEstimated = true) })
-        val zero = rich().copy(lines = rich().lines.map { line -> line.copy(words = line.words.map { it.copy(endTimeMs = it.startTimeMs) }) })
-        for (document in listOf(estimated, zero)) {
-            val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = adapters() +
-                (LyricsMatchSource.AMLL to adapter(LyricsMatchSource.AMLL, document)))
-            assertEquals("netease", matcher.bestMatch(song)!!.origin.provider)
-        }
-    }
-
-    @Test fun laterCandidatesOnTheSamePlatformAreStillConsidered() = runBlocking {
-        val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = adapters() +
-            (LyricsMatchSource.QQ_MUSIC to LyricsMatchAdapter({ listOf(candidate(LyricsMatchSource.QQ_MUSIC, "first"),
-                candidate(LyricsMatchSource.QQ_MUSIC, "word")) }, { if (it.id == "first") reference else rich() })))
-        assertEquals("word", matcher.bestMatch(song)!!.origin.reference)
-    }
-
-    @Test fun allSourcesStartEvenWhenAnEarlierSourceHangsAndTheNativeAlreadyHasWords() = runTest {
-        val searched = mutableSetOf<LyricsMatchSource>()
-        val supplied = adapters().mapValues { (source, _) -> LyricsMatchAdapter({
-            searched += source
-            if (source == LyricsMatchSource.CURRENT_MUSIC) awaitCancellation()
-            if (source == LyricsMatchSource.AMLL) listOf(candidate(source)) else emptyList()
-        }, { rich() }) }
-        val matcher = OnlineLyricsMatcher({ emptyList() }, { rich() }, additionalSources = supplied,
-            scoreDispatcher = StandardTestDispatcher(testScheduler))
+    @Test fun amllIsLookedUpByNeteaseIdentityWithoutLoadingNativeReferenceOrSearchingAmll() = runBlocking {
+        val matcher = OnlineLyricsMatcher({ error("Known NCM id must not search") }, { throw LyricsMatchException("No native lyrics") }, additionalSources = adapters() +
+            (LyricsMatchSource.AMLL to LyricsMatchAdapter({ error("AMLL automatic lookup must not search") }, {
+                assertEquals("ncm:7", it.reference); rich()
+            })))
         assertEquals("amll", matcher.bestMatch(song)!!.origin.provider)
-        assertEquals(adapters().keys, searched)
     }
 
-    @Test fun callerCancellationCancelsInFlightSourcesRatherThanReturningAPartialWinner() = runTest {
-        val started = CompletableDeferred<Unit>()
-        var cancelled = false
-        var returned = false
-        val supplied = adapters() + (LyricsMatchSource.AMLL to LyricsMatchAdapter({
-            started.complete(Unit)
-            try { awaitCancellation() } finally { cancelled = true }
-        }, { rich() }))
-        val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = supplied,
-            scoreDispatcher = StandardTestDispatcher(testScheduler))
-        val job = launch { matcher.bestMatch(song); returned = true }
-        runCurrent()
-        assertTrue(started.isCompleted)
-        job.cancelAndJoin()
-        assertTrue(cancelled)
-        assertFalse(returned)
+    @Test fun failedNeteaseDoesNotBlockIndependentLaterProviders() = runBlocking {
+        val matcher = OnlineLyricsMatcher({ throw LyricsMatchException("Offline") }, { throw LyricsMatchException("Offline") }, additionalSources = adapters() +
+            (LyricsMatchSource.QISHUI to adapter(LyricsMatchSource.QISHUI, rich())))
+        assertEquals("qishui", matcher.bestMatch(song.copy(musicSource = MusicSource.LOCAL))!!.origin.provider)
     }
 
-    @Test fun equalPercentagesAreStableRegardlessOfNetworkCompletionOrder() = runTest {
-        for (slowQq in listOf(true, false)) {
-            fun delayed(source: LyricsMatchSource, delayMs: Long) = LyricsMatchAdapter(
-                { delay(delayMs); listOf(candidate(source, "same-id")) }, { rich() })
+    @Test fun onlyTheBestReliableSongOfEachSourcesFirstTenResultsIsLoaded() = runBlocking {
+        val loads = mutableListOf<String>()
+        val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = adapters() +
+            (LyricsMatchSource.QQ_MUSIC to LyricsMatchAdapter({ listOf(candidate(LyricsMatchSource.QQ_MUSIC, "best"),
+                candidate(LyricsMatchSource.QQ_MUSIC, "second")) }, { loads += it.id; if (it.id == "best") reference else rich() })))
+        assertEquals("qq_music", matcher.bestMatch(song)!!.origin.provider)
+        assertEquals(listOf("best"), loads)
+    }
+
+    @Test fun candidatesOutsideTheFirstTenAreNotUsedAutomatically() = runBlocking {
+        val rows = (1..10).map { candidate(LyricsMatchSource.QQ_MUSIC, "$it").copy(title = "Wrong", artists = "Nobody", album = "Other") } + candidate(LyricsMatchSource.QQ_MUSIC, "eleventh")
+        val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = adapters() +
+            (LyricsMatchSource.QQ_MUSIC to LyricsMatchAdapter({ rows }, { error("Outside top ten") })))
+        assertEquals("netease", matcher.bestMatch(song)!!.origin.provider)
+    }
+
+    @Test fun estimatedAndInvalidWordsStayLineFallbacks() = runBlocking {
+        for (document in listOf(rich().copy(lines = rich().lines.map { it.copy(wordsEstimated = true) }),
+            rich().copy(lines = rich().lines.map { line -> line.copy(words = line.words.map { it.copy(endTimeMs = it.startTimeMs) }) }))) {
             val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = adapters() + mapOf(
-                LyricsMatchSource.QQ_MUSIC to delayed(LyricsMatchSource.QQ_MUSIC, if (slowQq) 200 else 100),
-                LyricsMatchSource.QISHUI to delayed(LyricsMatchSource.QISHUI, if (slowQq) 100 else 200)),
-                scoreDispatcher = StandardTestDispatcher(testScheduler))
+                LyricsMatchSource.QQ_MUSIC to adapter(LyricsMatchSource.QQ_MUSIC, document),
+                LyricsMatchSource.QISHUI to adapter(LyricsMatchSource.QISHUI, rich())))
             assertEquals("qishui", matcher.bestMatch(song)!!.origin.provider)
         }
     }
 
-    @Test fun manualSourceTabDoesNotOverrideAutomaticPriority() = runBlocking {
-        val matcher = OnlineLyricsMatcher({ emptyList() }, { reference }, additionalSources = adapters() +
+    @Test fun slowSourceTimesOutAndTheNextSourceCanWin() = runTest {
+        val matcher = OnlineLyricsMatcher({ emptyList() }, { rich() }, additionalSources = adapters() +
+            (LyricsMatchSource.QQ_MUSIC to LyricsMatchAdapter({ awaitCancellation() }, { error("No candidate") })),
+            scoreDispatcher = StandardTestDispatcher(testScheduler))
+        assertEquals("netease", matcher.bestMatch(song)!!.origin.provider)
+        assertEquals(3500L, testScheduler.currentTime)
+    }
+
+    @Test fun cancellationStopsSourceTraversal() = runTest {
+        var later = false
+        val matcher = OnlineLyricsMatcher({ emptyList() }, { later = true; reference }, additionalSources = adapters() +
+            (LyricsMatchSource.QQ_MUSIC to LyricsMatchAdapter({ awaitCancellation() }, { error("No candidate") })),
+            scoreDispatcher = StandardTestDispatcher(testScheduler))
+        val job = launch { matcher.bestMatch(song) }
+        runCurrent(); job.cancelAndJoin()
+        assertFalse(later)
+    }
+
+    @Test fun explicitProviderPureMusicStopsAlternativeSources() = runBlocking {
+        val pure = LyricsParser.parse(kotlinx.serialization.json.Json.parseToJsonElement("""{"pureMusic":true}"""))
+        val matcher = OnlineLyricsMatcher({ emptyList() }, { pure }, additionalSources = adapters() +
+            (LyricsMatchSource.AMLL to LyricsMatchAdapter({ error("Not reached") }, { error("Not reached") })))
+        assertEquals("netease", matcher.bestMatch(song)!!.origin.provider)
+        assertEquals(listOf("true"), pure.metadata.values["pureMusic"])
+        assertTrue(pure.lines.isNotEmpty())
+    }
+
+    @Test fun absentLyricsAreNotTreatedAsAnInstrumentalVerdict() = runBlocking {
+        val matcher = OnlineLyricsMatcher({ emptyList() }, { LyricsDocument() }, additionalSources = adapters() +
             (LyricsMatchSource.QISHUI to adapter(LyricsMatchSource.QISHUI, rich())))
-        assertEquals("qishui", matcher.bestMatch(song, LyricsMatchSource.NETEASE)!!.origin.provider)
+        assertEquals("qishui", matcher.bestMatch(song)!!.origin.provider)
+    }
+
+    @Test fun wholeLineInstrumentalNoticeStopsButAnOrdinaryLyricMentionDoesNot() = runBlocking {
+        for ((text, expected) in listOf("此歌曲为没有填词的纯音乐，请您欣赏" to "netease", "听着纯音乐，我想起了你" to "qishui")) {
+            val matcher = OnlineLyricsMatcher({ emptyList() }, { lyrics(text) }, additionalSources = adapters() +
+                (LyricsMatchSource.QISHUI to adapter(LyricsMatchSource.QISHUI, rich())))
+            assertEquals(expected, matcher.bestMatch(song)!!.origin.provider)
+        }
     }
 
     @Test fun qqAndQishuiAdaptersKeepPlatformIdsAsStringsAndRecordTheirOwnOrigins() = runBlocking {
@@ -216,15 +173,6 @@ class LyricsSourcePriorityTest {
         assertEquals("current_music", saved.origin.provider)
         assertEquals("project", saved.document.lines.single().text)
         assertEquals(listOf("project-search", "project-load"), calls)
-    }
-
-    @Test fun unconfiguredOptionalSourcesAreSkippedDuringAutomaticComparison() = runBlocking {
-        var partialProjectCalls = 0
-        val matcher = OnlineLyricsMatcher({ error("Unexpected metadata search") }, { reference },
-            searchCurrentMusic = { partialProjectCalls++; listOf(song) },
-            additionalSources = adapters().filterKeys { it == LyricsMatchSource.AMLL || it == LyricsMatchSource.KUGOU })
-        assertEquals("netease", matcher.bestMatch(song)!!.origin.provider)
-        assertEquals(0, partialProjectCalls)
     }
 
     @Test fun sourceMismatchAndMissingProjectConfigurationAreExplicitErrors() = runBlocking {

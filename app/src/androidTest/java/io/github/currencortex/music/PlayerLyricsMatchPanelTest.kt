@@ -15,7 +15,6 @@ import io.github.currencortex.music.feature.lyrics.data.*
 import io.github.currencortex.music.feature.lyrics.parser.LyricsParser
 import io.github.currencortex.music.feature.lyrics.model.LyricsTimingAlignment
 import io.github.currencortex.music.feature.lyrics.model.LyricsTimeAnchor
-import io.github.currencortex.music.feature.lyrics.domain.LyricsReferenceScore
 import io.github.currencortex.music.feature.player.PlayerLyricsMatchPanel
 import io.github.currencortex.music.ui.theme.LeiTheme
 import org.junit.Assert.*
@@ -30,7 +29,7 @@ class PlayerLyricsMatchPanelTest {
         song.artists, song.album, 0, "708")
     private val saved = SavedLyrics(LyricsParser.lrc("[00:01]Panel fixture first line\n[00:04]Second line"),
         LyricsOrigin("网易云音乐", "netease", "708"))
-    private val score = LyricsMatchAssessment(90, score = LyricsReferenceScore(true, 1.0, 1.0, .9, .96), metadataReliable = true)
+    private val score = LyricsMatchAssessment(90, metadataReliable = true, hasRenderableLyrics = true)
 
     @Test fun previewShowsCorrectedTimesAndAnAlignmentLabelWhileKeepingTheSavedSourceRaw() {
         val state = PanelState().also {
@@ -44,21 +43,21 @@ class PlayerLyricsMatchPanelTest {
         compose.runOnIdle { assertEquals(1000L, state.preview!!.document.lines.first().startTimeMs) }
     }
 
-    @Test fun highInformationPercentageCannotOverrideFailedTimingAndEligibleAmllIsLabelled() {
+    @Test fun unreliableMetadataCannotQualifyAndWordEligibilityIsClearlyLabelled() {
         val state = PanelState().also {
             it.preview = saved
-            it.assessment = score.copy(hasWordTiming = true, score = score.score!!.copy(accepted = false, timingSimilarity = 0.0))
+            it.assessment = score.copy(hasWordTiming = true, metadataReliable = false)
         }
         show(state)
         compose.onNodeWithTag("lyrics_match_content_score").assertTextContains("90%", substring = true)
-        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("内容或时间轴未通过", substring = true)
-        compose.onNodeWithTag("lyrics_match_timing_score").assertTextContains("未通过校验", substring = true)
+        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("未达到自动匹配条件", substring = true)
+        compose.onNodeWithTag("lyrics_match_timing_score").assertDoesNotExist()
         compose.runOnIdle {
             state.preview = saved.copy(origin = LyricsOrigin("AMLL 逐字歌词", "amll", "ncm:708"))
-            state.assessment = score.copy(hasWordTiming = true, score = score.score!!.copy(similarity = .75, hasWordTiming = true))
+            state.assessment = score.copy(hasWordTiming = true)
         }
-        compose.onNodeWithTag("lyrics_match_reference_score").assertTextContains("75%", substring = true)
-        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("AMLL 逐字优先", substring = true)
+        compose.onNodeWithTag("lyrics_match_reference_score").assertDoesNotExist()
+        compose.onNodeWithTag("lyrics_match_policy").assertTextContains("逐字歌词优先", substring = true)
     }
 
     private class PanelState {
@@ -151,7 +150,7 @@ class PlayerLyricsMatchPanelTest {
             .assertTextContains("90%", substring = true)
         compose.onNodeWithTag("lyrics_match_candidate_0").performClick()
         compose.onNodeWithTag("lyrics_match_content_score").assertTextContains("歌曲信息", substring = true).assertTextContains("90%", substring = true)
-        compose.onNodeWithTag("lyrics_match_timing_score").assertTextContains("通过", substring = true)
+        compose.onNodeWithTag("lyrics_match_timing_score").assertDoesNotExist()
         compose.onNodeWithTag("lyrics_match_quality_score").assertDoesNotExist()
         compose.onNodeWithTag("lyrics_match_policy").assertTextContains("符合自动条件", substring = true)
         compose.runOnIdle { assertEquals(0, state.applications) }

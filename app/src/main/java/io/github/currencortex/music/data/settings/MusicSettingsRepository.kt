@@ -29,7 +29,7 @@ enum class LyricsFont(val label: String) {
 }
 
 enum class LyricsSource(val label: String) {
-    AUTO("自动择优 · 内容与时间轴校验"), CURRENT_MUSIC("CurrentMusic 歌词"), NETEASE("网易云歌词"), LOCAL("本地内嵌歌词");
+    AUTO("自动择优 · 逐字优先"), CURRENT_MUSIC("CurrentMusic 歌词"), NETEASE("网易云歌词"), LOCAL("本地内嵌歌词");
     companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: AUTO }
 }
 

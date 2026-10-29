@@ -132,7 +132,7 @@ import java.util.Locale
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (searching) "正在搜索…" else if (previewing) "正在读取歌词…"
-                    else if (hasSearched) "${results.size} 个候选 · 信息匹配度" else "内容与时间轴校验 · 合格逐字优先",
+                    else if (hasSearched) "${results.size} 个候选 · 信息匹配度" else "信息匹配 ≥75% · 逐字优先 · 逐行兜底",
                     Modifier.weight(1f), fontSize = 12.sp, color = colors.onSurfaceVariantSummary,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 LyricsActionButton("自动择优", {
@@ -288,29 +288,16 @@ import java.util.Locale
                         }
                         Text("歌曲信息 ${assessment?.matchPercent?.let { "$it%" } ?: "未校验"}",
                             Modifier.testTag("lyrics_match_content_score"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                        Text("自动应用需通过歌词内容与原始时间轴校验", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-                        assessment?.score?.takeIf { !previewing }?.let { score ->
-                            val content = if (!score.accepted && score.similarity == 0.0) "未通过" else
-                                java.math.BigDecimal.valueOf(score.similarity).multiply(java.math.BigDecimal.valueOf(100))
-                                    .setScale(2, java.math.RoundingMode.DOWN).stripTrailingZeros().toPlainString() + "%"
-                            Text("歌词内容 $content", Modifier.testTag("lyrics_match_reference_score"),
-                                fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-                            Text("时间轴 ${if (score.accepted) "通过" else "未通过校验"}", Modifier.testTag("lyrics_match_timing_score"),
-                                fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-                        }
+                        Text("信息匹配 ≥75% · 按来源顺序选择 · 逐字优先", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
                         preview.timingAlignment?.let {
                             Text(lyricsAlignmentLabel(it), Modifier.testTag("lyrics_match_alignment"),
                                 fontSize = 12.sp, color = colors.primary)
                         }
-                        Text(if (previewing) "正在校验自动条件…" else when {
-                            assessment?.score == null -> "未校验 · 可手动保存"
-                            !assessment.metadataReliable -> "歌曲信息不一致 · 可手动保存"
-                            !assessment.accepted -> "内容或时间轴未通过 · 可手动保存"
-                            assessment.preferredWord -> {
-                                if (preview.origin.provider == "amll") "符合自动条件 · AMLL 逐字优先"
-                                else "符合自动条件 · 逐字优先（≥75%）"
-                            }
-                            else -> "符合自动条件"
+                        Text(if (previewing) "正在读取候选…" else when {
+                            assessment == null -> "未校验 · 可手动保存"
+                            !assessment.accepted -> "未达到自动匹配条件 · 可手动保存"
+                            assessment.preferredWord -> "符合自动条件 · 逐字歌词优先"
+                            else -> "符合自动条件 · 逐行歌词兜底"
                         }, Modifier.testTag("lyrics_match_policy"), fontSize = 12.sp,
                             color = if (!previewing && assessment?.accepted == false) colors.error else colors.onSurfaceVariantSummary)
                         assessmentNote?.takeIf { !previewing && it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, lineHeight = 17.sp,
