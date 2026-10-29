@@ -157,6 +157,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     }
     LaunchedEffect(animateLaunch) { if (!animateLaunch) launchFinished = true }
     val settings by container.settings.state.collectAsStateWithLifecycle()
+    val lyricsFontSettings by container.musicSettings.state.collectAsStateWithLifecycle()
+    val lyricsFont = io.github.currencortex.music.feature.lyrics.ui.rememberLyricsFont(lyricsFontSettings)
     AppRefreshRateRequest(settings.refreshRate)
     val settingsVm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container.settings) })
     val announcementVm: io.github.currencortex.music.feature.announcement.AnnouncementViewModel =
@@ -224,7 +226,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         launchPreview == io.github.currencortex.music.data.settings.LaunchStyle.HALO
     LeiTheme(settings, darkSystemBars = if (haloVisible || updateDialogVisible || miniQueueOpen || (playlistPage && (settings.playlistDepthRibbon || settings.playlistRecordShelf)) || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
         darkStatusBars = if (haloVisible || updateDialogVisible || playlistPage) true else null) {
-        CompositionLocalProvider(LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight,
+        CompositionLocalProvider(io.github.currencortex.music.feature.lyrics.ui.LocalLyricsFont provides lyricsFont,
+            LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight,
             LocalRefreshRatePreference provides settings.refreshRate) {
         Box(Modifier.fillMaxSize().musicRefreshRate(settings.refreshRate)) {
         var selected by rememberSaveable { mutableIntStateOf(HOME_TAB) }

@@ -24,7 +24,10 @@ import kotlin.math.roundToInt
 
 @Composable internal fun LyricsDisplaySettings(fontSize: Float, onFontSize: (Float) -> Unit, weightMode: LyricsWeight, onWeight: () -> Unit,
     display: LyricsDisplayOptions, onDisplay: ((LyricsDisplayOptions) -> LyricsDisplayOptions) -> Unit,
-    onKaraokeScope: () -> Unit) {
+    onKaraokeScope: () -> Unit,
+    font: io.github.currencortex.music.data.settings.LyricsFont = io.github.currencortex.music.data.settings.LyricsFont.SYSTEM,
+    fontFile: String = "", onFont: (io.github.currencortex.music.data.settings.LyricsFont) -> Unit = {},
+    onFontFile: suspend (String) -> Unit = {}) {
     val ink = MiuixTheme.colorScheme.onSurface
     val staged = display.smoke || display.particles
     val effectName = if (display.particles) "星尘歌词" else "流烟歌词"
@@ -32,16 +35,17 @@ import kotlin.math.roundToInt
     var strength by remember(display.fontWeight) { mutableIntStateOf(display.fontWeight) }
     Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
         .testTag("lyrics_display_settings")) {
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
             Text("让音乐说话", fontFamily = currentLyricsFontFamily(), fontSize = preview.sp, fontWeight = lyricsFontWeight(weightMode, true, strength),
-                color = ink, modifier = Modifier.testTag("lyrics_font_preview"))
-            Text("霞鹜文楷", fontSize = 12.sp, color = ink.copy(alpha = .5f), modifier = Modifier.padding(top = 6.dp))
+                maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                color = ink, modifier = Modifier.fillMaxWidth().testTag("lyrics_font_preview"))
+            LyricsFontSelector(font, fontFile, onFont, onFontFile)
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("字号 ${preview.roundToInt()}", fontSize = 14.sp, color = ink, modifier = Modifier.weight(1f))
+                Text("字号 ${preview.roundToInt()}", fontSize = 16.sp, color = ink, modifier = Modifier.weight(1f))
                 Text("恢复默认", fontSize = 13.sp, color = ink.copy(alpha = .65f),
                     modifier = Modifier.testTag("lyrics_font_reset").clickable(role = Role.Button) {
                         preview = LyricsTypography.DEFAULT_SIZE; onFontSize(preview)
-                    }.padding(horizontal = 8.dp, vertical = 12.dp))
+                    }.padding(start = 12.dp, top = 12.dp, bottom = 12.dp))
             }
             Slider(value = preview, onValueChange = { preview = it.roundToInt().toFloat() },
                 onValueChangeFinished = { onFontSize(preview) },
@@ -57,8 +61,8 @@ import kotlin.math.roundToInt
         }
         LyricsToggle("歌词居中对齐", display.centered, { value -> onDisplay { it.copy(centered = value) } }, "lyrics_centered",
             if (staged) "${effectName}固定居中" else null, !staged)
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)) {
-            Text("字体粗细 $strength", fontSize = 14.sp, color = ink)
+        Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
+            Text("字体粗细 $strength", fontSize = 16.sp, color = ink)
             Slider(value = strength.toFloat(), onValueChange = { strength = ((it / 100).roundToInt() * 100).coerceIn(400, 900) },
                 onValueChangeFinished = { onDisplay { it.copy(fontWeight = strength) } }, valueRange = 400f..900f,
                 modifier = Modifier.testTag("lyrics_font_strength").semantics {
@@ -70,7 +74,8 @@ import kotlin.math.roundToInt
                         }
                     }
                 })
-            Text("400 常规 · 500 中等 · 600–900 合成加粗", fontSize = 11.sp, color = ink.copy(alpha = .5f))
+            Text("400 常规 · 500 中等 · 600–900 合成加粗", fontSize = 12.sp, lineHeight = 18.sp,
+                color = ink.copy(alpha = .6f), modifier = Modifier.padding(top = 4.dp))
         }
         MusicDestinationRow("歌词字重", summary = weightMode.label, onClick = onWeight, modifier = Modifier.testTag("open_lyrics_weight"))
         LyricsToggle("歌词视图模糊", display.blur, { value -> onDisplay { it.copy(blur = value) } }, "lyrics_blur",
@@ -103,10 +108,11 @@ import kotlin.math.roundToInt
     val ink = MiuixTheme.colorScheme.onSurface
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(tag).clickable(enabled = enabled, role = Role.Switch) { onChange(!checked) }
         .semantics { toggleableState = if (checked) ToggleableState.On else ToggleableState.Off; if (!enabled) disabled() }
-        .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f).padding(end = 10.dp)) {
             Text(title, fontSize = 16.sp, color = ink)
-            if (summary != null) Text(summary, fontSize = 11.sp, color = ink.copy(alpha = .5f))
+            if (summary != null) Text(summary, fontSize = 12.sp, lineHeight = 18.sp,
+                color = ink.copy(alpha = .6f), modifier = Modifier.padding(top = 3.dp))
         }
         Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
     }
