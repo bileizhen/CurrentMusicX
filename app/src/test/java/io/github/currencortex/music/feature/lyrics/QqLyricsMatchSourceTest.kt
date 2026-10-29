@@ -104,6 +104,41 @@ class QqLyricsMatchSourceTest {
         } finally { server.shutdown() }
     }
 
+    @Test fun qqInstrumentalNoticeWithColonTimestampIsPlainLrcRatherThanUnsupportedEncoding() = runBlocking {
+        val server = MockWebServer()
+        try {
+            // Same public response shape as SUBARU AWA 486 (4), QQ mid 001bIzp24ISxYM.
+            server.enqueue(MockResponse().setBody(lyrics("[00:00:00]此歌曲为没有填词的纯音乐，请您欣赏")))
+            server.start()
+            val document = source(server).load(candidate())
+            assertEquals("此歌曲为没有填词的纯音乐，请您欣赏", document.lines.single().text)
+            assertEquals(0L, document.lines.single().startTimeMs)
+            assertFalse(document.hasWordTiming)
+        } finally { server.shutdown() }
+    }
+
+    @Test fun colonFractionsInPlainBase64AndHtmlTracksRetainPrecisionAndAuxiliaryAlignment() = runBlocking {
+        val server = MockWebServer()
+        try {
+            val main = "[00:01:2]First\r\n[00:02:34]Second\r[01:03:456]Third\n[01:05.67]Dot"
+            val translation = "&#91;00:01:2&#93;译文\n[00:02:34]第二句"
+            val roma = Base64.getEncoder().encodeToString("[00:01:2]roma\n[00:02:34]second".toByteArray())
+            server.enqueue(MockResponse().setBody(lyrics(main, translation, roma)))
+            server.enqueue(MockResponse().setBody(lyrics(Base64.getEncoder().encodeToString(main.toByteArray()), translation, roma)))
+            server.start()
+            repeat(2) {
+                val document = source(server).load(candidate())
+                assertEquals(listOf(1200L, 2340L, 63456L, 65670L), document.lines.map { it.startTimeMs })
+                assertEquals(listOf("First", "Second", "Third", "Dot"), document.lines.map { it.text })
+                assertEquals("译文", document.lines[0].translation)
+                assertEquals("roma", document.lines[0].romanization)
+                assertEquals("第二句", document.lines[1].translation)
+                assertEquals("second", document.lines[1].romanization)
+                assertFalse(document.hasWordTiming)
+            }
+        } finally { server.shutdown() }
+    }
+
     @Test fun malformedPayloadsOversizedResponsesAndUnsupportedQrcAreRejected() = runBlocking {
         val server = MockWebServer()
         try {
