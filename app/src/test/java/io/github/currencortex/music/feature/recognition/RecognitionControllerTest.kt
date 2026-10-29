@@ -69,6 +69,15 @@ class RecognitionControllerTest {
         assertEquals(2L, controller.state.value.songs.single().id)
     }
 
+    @Test fun resettingForDesktopHandoffClearsThePreviousLocalResult() = runTest {
+        val controller = RecognitionController(this, RecognitionRecorder { _, _ -> ShortArray(24_000) },
+            { "fp" }, { _, _ -> listOf(Song(1, "Old local result")) })
+        controller.start(); advanceUntilIdle()
+        assertEquals(RecognitionPhase.MATCHED, controller.state.value.phase)
+        controller.reset()
+        assertEquals(RecognitionState(), controller.state.value)
+    }
+
     @Test fun fingerprintTimeoutReleasesSamplesAndAllowsRetry() = runTest {
         val pcm = ShortArray(24_000) { 8 }
         val controller = RecognitionController(this, RecognitionRecorder { _, _ -> pcm }, { awaitCancellation() }, { _, _ -> emptyList() })

@@ -101,6 +101,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         scope.launch { appearance.map { it.refreshRate }.distinctUntilChanged().collect { refreshRate = it; updateWindow() } }
         scope.launch { combine(appForeground, pageHidden) { foreground, hidden -> foreground to hidden }
             .distinctUntilChanged().collect { visibility() } }
+        scope.launch { io.github.currencortex.music.feature.recognition.RecognitionDesktopSession.attached.collect { visibility() } }
         scope.launch { effectNotices.collectLatest { notice ->
             // A notice may become install-ready without changing its presence. Recheck first,
             // before the input-window delay, so every temporary phase can appear on any page.
@@ -337,7 +338,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     }
     private fun visibility() {
         val root = view ?: return
-        val hardHidden = !power.isInteractive || keyguard.isKeyguardLocked || settingsVisible.value
+        val hardHidden = !power.isInteractive || keyguard.isKeyguardLocked || settingsVisible.value ||
+            io.github.currencortex.music.feature.recognition.RecognitionDesktopSession.attached.value
         val pageConcealed = !desktopIslandContentAllowed(appForeground.value, effectNotices.value)
         val visible = systemVisible && !hardHidden && !pageConcealed
         if (!visible) removeIslandTouchWindow()
@@ -381,6 +383,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
             }.start()
     }
     private fun screenHidden() = !power.isInteractive || keyguard.isKeyguardLocked || settingsVisible.value ||
+        io.github.currencortex.music.feature.recognition.RecognitionDesktopSession.attached.value ||
         !desktopIslandContentAllowed(appForeground.value, effectNotices.value)
     private fun notification() {
         val key = current.locked to editing

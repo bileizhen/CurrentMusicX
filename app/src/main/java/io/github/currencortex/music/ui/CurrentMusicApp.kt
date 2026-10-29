@@ -136,7 +136,7 @@ private const val SETTINGS_TAB = 3
 private fun LegalDocument.route() = 3 + ordinal
 
 @Composable
-fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, launchWindowReady: Boolean = true, openDesktopRequest: Int = 0) {
+fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, launchWindowReady: Boolean = true, openDesktopRequest: Int = 0, openRecognitionRequest: Int = 0) {
     var launchFinished by rememberSaveable { mutableStateOf(!animateLaunch) }
     val launchBrand = remember { LaunchBrandState() }
     val avatarFlight = remember { AvatarFlightState() }
@@ -317,6 +317,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             }
         }
         LaunchedEffect(openDesktopRequest) { if (openDesktopRequest > 0) navigateLibrary("desktop-lyrics") }
+        LaunchedEffect(openRecognitionRequest) { if (openRecognitionRequest > 0) navigateLibrary("lib/recognition") }
         var showLogs by rememberSaveable { mutableStateOf(false) }
         var showScale by rememberSaveable { mutableStateOf(false) }
         var showLaunchStyle by rememberSaveable { mutableStateOf(false) }
