@@ -419,10 +419,15 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 }
             }
             PlayerOverlay.SLEEP -> SleepTimerSheet(vm.sleepTimer, dismiss)
-            PlayerOverlay.LYRICS -> MusicDialog("歌词显示", dismiss) {
-                LyricsDisplaySettings(settings.lyricsFontSize, vm::lyricsFontSize, settings.lyricsWeight, { overlay = PlayerOverlay.WEIGHT },
-                    settings.lyricsDisplay, vm::lyricsDisplay, { overlay = PlayerOverlay.KARAOKE },
-                    settings.lyricsFont, settings.lyricsFontFile, vm::lyricsFont, vm::lyricsFontFile)
+            PlayerOverlay.LYRICS -> {
+                val lyrics by vm.lyrics.collectAsStateWithLifecycle()
+                val song by vm.currentSong.collectAsStateWithLifecycle()
+                val currentLyric = currentSettingsLyric(lyrics, state, song, settings.lyricsOffsetMs)
+                MusicDialog("歌词显示", dismiss) {
+                    LyricsDisplaySettings(settings.lyricsFontSize, vm::lyricsFontSize, settings.lyricsWeight, { overlay = PlayerOverlay.WEIGHT },
+                        settings.lyricsDisplay, vm::lyricsDisplay, { overlay = PlayerOverlay.KARAOKE },
+                        settings.lyricsFont, settings.lyricsFontFile, vm::lyricsFont, vm::lyricsFontFile, currentLyric)
+                }
             }
         }
     }
