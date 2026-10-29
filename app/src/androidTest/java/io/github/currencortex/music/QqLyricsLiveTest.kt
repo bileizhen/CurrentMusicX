@@ -27,6 +27,28 @@ import java.io.File
 class QqLyricsLiveTest {
     @get:Rule val compose = createComposeRule()
 
+    @Test fun foliaAutomaticSelectionKeepsRealQqLinesWhenNeteaseIsUnavailable(): Unit = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("qqLyricsLive") == "true")
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        check(context.packageName.endsWith(".verification"))
+        val qq = QqLyricsMatchSource()
+        val original = qq.search("SUBARU AWA 486 (4) - MKMS").first { it.id == "001bIzp24ISxYM" }
+        val song = Song(1, original.title, original.artists, original.album, durationMs = original.durationMs,
+            musicSource = io.github.currencortex.music.data.song.MusicSource.LOCAL)
+        val emptySources = LyricsMatchSource.entries.filter { it != LyricsMatchSource.NETEASE }.associateWith {
+            LyricsMatchAdapter({ emptyList() }, { error("Empty source must not load") })
+        }
+        val matcher = OnlineLyricsMatcher({ throw LyricsMatchException("Controlled offline NetEase catalogue") },
+            { error("A NetEase baseline must not be loaded") }, additionalSources = emptySources +
+                (LyricsMatchSource.QQ_MUSIC to LyricsMatchAdapter(qq::search, qq::load)))
+        val match = checkNotNull(matcher.bestMatchDetailed(song))
+        assertEquals("qq_music", match.saved.origin.provider)
+        assertEquals(original.id, match.candidate!!.id)
+        assertTrue(match.assessment.accepted)
+        assertFalse(match.assessment.preferredWord)
+        assertEquals("此歌曲为没有填词的纯音乐，请您欣赏", match.saved.document.lines.single().text)
+    }
+
     @Test fun publicQqCoverAndColonTimestampNoticeCanBePreviewedOnDevice(): Unit = runBlocking {
         assumeTrue(InstrumentationRegistry.getArguments().getString("qqLyricsLive") == "true")
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()

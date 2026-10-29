@@ -1,0 +1,787 @@
+{
+  "revision": "f96c65b27f7ca351e8db781301cedfa0a52252e2",
+  "rows": [
+    {
+      "label": "duration 0",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 100,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "duration 1000",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 192000
+      },
+      "expected": {
+        "score": 100,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "duration 1001",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 192001
+      },
+      "expected": {
+        "score": 95,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "duration 3000",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 194000
+      },
+      "expected": {
+        "score": 95,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "duration 3001",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 194001
+      },
+      "expected": {
+        "score": 75,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": false
+      }
+    },
+    {
+      "label": "duration 5000",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 196000
+      },
+      "expected": {
+        "score": 75,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": false
+      }
+    },
+    {
+      "label": "duration 5001",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 196001
+      },
+      "expected": {
+        "score": 35,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": false
+      }
+    },
+    {
+      "label": "duration 10000",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 201000
+      },
+      "expected": {
+        "score": 35,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": false
+      }
+    },
+    {
+      "label": "duration 10001",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 201001
+      },
+      "expected": {
+        "score": 10,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": false
+      }
+    },
+    {
+      "label": "missing duration",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 0
+      },
+      "expected": {
+        "score": 90,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": null
+      }
+    },
+    {
+      "label": "duration accidentally multiplied",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 100,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "missing target album",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Other"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 100,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": null,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "missing search album",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Unknown Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 70,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": null,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "missing target artist",
+      "target": {
+        "title": "Fixture",
+        "artist": "",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 100,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "title Fixture (译名)",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture (译名)",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 100,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "title Fixture (Live)",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture (Live)",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 74,
+        "titleMatched": false,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "title Fixture (Instrumental)",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture (Instrumental)",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 71,
+        "titleMatched": false,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "title Fixture (feat. Guest)",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture (feat. Guest)",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 100,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "title Fixture ft. Guest",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture ft. Guest",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 100,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "title Fxture",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fxture",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 94,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "title Entirely other title",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Entirely other title",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 69,
+        "titleMatched": false,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "artist and album miss",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Different"
+          }
+        ],
+        "album": {
+          "name": "Another"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 59,
+        "titleMatched": true,
+        "artistMatched": false,
+        "albumMatched": false,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "album identifies wrong artist",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Different"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 86,
+        "titleMatched": true,
+        "artistMatched": false,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "extra guest",
+      "target": {
+        "title": "Fixture",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Fixture",
+        "artists": [
+          {
+            "name": "Singer"
+          },
+          {
+            "name": "Guest"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 93,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "traditional",
+      "target": {
+        "title": "無盡的愛",
+        "artist": "陳學友",
+        "album": "樂園",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "无尽的爱",
+        "artists": [
+          {
+            "name": "陈学友"
+          }
+        ],
+        "album": {
+          "name": "乐园"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 100,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "kana and romaji",
+      "target": {
+        "title": "さよならの夏",
+        "artist": "シンガー",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "sayonarano夏",
+        "artists": [
+          {
+            "name": "shingaa"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 100,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    },
+    {
+      "label": "international accents",
+      "target": {
+        "title": "Café 안녕 мир?",
+        "artist": "Singer",
+        "album": "Album",
+        "durationMs": 191000
+      },
+      "candidate": {
+        "id": 1,
+        "name": "Café 안녕 мир!",
+        "artists": [
+          {
+            "name": "Singer"
+          }
+        ],
+        "album": {
+          "name": "Album"
+        },
+        "durationMs": 191000
+      },
+      "expected": {
+        "score": 100,
+        "titleMatched": true,
+        "artistMatched": true,
+        "albumMatched": true,
+        "durationMatched": true
+      }
+    }
+  ]
+}

@@ -181,7 +181,7 @@ class OnlineLyricsMatcherTest {
         } finally { server.shutdown() }
     }
 
-    @Test fun realAmllWordTimingWinsWhenItsTextMatchesTheNeteaseReference() = runBlocking {
+    @Test fun amllProbesTheKnownNeteaseIdWithoutAnAmllSearch() = runBlocking {
         val server = MockWebServer()
         try {
             server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
@@ -202,7 +202,7 @@ class OnlineLyricsMatcherTest {
             assertEquals(1, neteaseLoads)
             assertTrue(result.document.hasWordTiming)
             assertEquals("amll", result.origin.provider)
-            assertTrue(server.requestCount >= 3)
+            assertEquals(1, server.requestCount)
         } finally { server.shutdown() }
     }
 
@@ -218,15 +218,13 @@ class OnlineLyricsMatcherTest {
             }
             server.start()
             var neteaseLoads = 0
-            val matcher = matcher(server, search = { listOf(Song(123, "Fixture", "Other singer", "Album")) },
+            val matcher = matcher(server, search = { listOf(Song(123, "Fixture", "Unrelated performer", "Different album")) },
                 load = { neteaseLoads++; LyricsParser.lrc("[00:01]wrong") })
             val unlinked = Song(1, "Fixture", "Singer", "Album", durationMs = 191_000,
                 musicSource = io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
-            val failure = runCatching { matcher.bestMatch(unlinked) }.exceptionOrNull()
-            assertTrue(failure is LyricsMatchException)
-            assertTrue(failure!!.message!!.contains("网易云基准歌词"))
+            assertNull(matcher.bestMatch(unlinked))
             assertEquals(0, neteaseLoads)
-            assertEquals(0, server.requestCount)
+            assertEquals(1, server.requestCount)
             assertFalse(OnlineLyricsMatcher.isReliableMatch(Song(1, "Fixture", "Singer", durationMs = 200_000),
                 LyricsCandidate(LyricsMatchSource.NETEASE, "2", "Fixture", "Singer", durationMs = 191_000)))
             assertFalse(OnlineLyricsMatcher.isReliableMatch(Song(1, "Fixture", "Singer"),
@@ -257,7 +255,7 @@ class OnlineLyricsMatcherTest {
         } finally { server.shutdown() }
     }
 
-    @Test fun allSourceFailuresAreNotPresentedAsAnOrdinaryNoMatch() = runBlocking {
+    @Test fun allSourceFailuresReturnNoMatchLikeFolia() = runBlocking {
         val server = MockWebServer()
         try {
             server.dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
@@ -265,9 +263,7 @@ class OnlineLyricsMatcherTest {
             }
             server.start()
             val matcher = matcher(server, search = { throw LyricsMatchException("native unavailable") })
-            val failure = runCatching { matcher.bestMatch(Song(1, "Fixture", "Singer")) }.exceptionOrNull()
-            assertTrue(failure is LyricsMatchException)
-            assertTrue(failure!!.message!!.contains("网易云基准歌词"))
+            assertNull(matcher.bestMatch(Song(1, "Fixture", "Singer")))
         } finally { server.shutdown() }
     }
 

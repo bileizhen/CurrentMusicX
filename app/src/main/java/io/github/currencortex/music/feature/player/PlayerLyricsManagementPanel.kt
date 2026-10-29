@@ -122,7 +122,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             loadError?.let { Text(it, Modifier.testTag("lyrics_management_load_error"), fontSize = 12.sp, color = colors.error) }
             Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.onBackground.copy(alpha = .035f))) {
                 LyricsSourceChoice(if (automatic) "自动择优" else "默认来源 · $defaultSource",
-                    if (automatic) "内容与时间轴校验 · 合格逐字优先 · AMLL 优先" else "使用默认歌词服务", options.matchedOrigin == null && !options.useImported,
+                    if (automatic) "按来源顺序 · 逐字优先 · 逐行兜底" else "使用默认歌词服务", options.matchedOrigin == null && !options.useImported,
                     !blocked, onDefault, Modifier.testTag("lyrics_source_default"))
                 options.matchedOrigin?.let { LyricsSourceChoice("匹配歌词", it.label, !options.useImported, !blocked,
                     onMatched, Modifier.testTag("lyrics_source_matched")) }

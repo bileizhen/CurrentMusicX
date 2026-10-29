@@ -96,7 +96,7 @@ class PlayerLyricsManagementTest {
             compose.waitUntil(5_000) { container.playbackLyrics.state.value.origin == matched.origin }
             compose.onNodeWithTag("lyrics_source_current").assertTextContains(matched.origin.label, substring = true)
             compose.onNodeWithTag("lyrics_source_default").assertTextContains("自动择优", substring = true)
-                .assertTextContains("内容与时间轴校验 · 合格逐字优先 · AMLL 优先", substring = true)
+                .assertTextContains("按来源顺序 · 逐字优先 · 逐行兜底", substring = true)
             click("lyrics_source_imported")
             compose.waitUntil(5_000) { container.playbackLyrics.state.value.origin == imported.origin }
             assertNotNull(container.songLyrics.settings(song).matchedOrigin)
@@ -106,7 +106,7 @@ class PlayerLyricsManagementTest {
             click("lyrics_source_default")
             compose.waitUntil(5_000) { container.playbackLyrics.state.value.document == original }
             compose.onNodeWithTag("lyrics_source_default").assertIsSelected().assertTextContains("自动择优", substring = true)
-                .assertTextContains("内容与时间轴校验 · 合格逐字优先 · AMLL 优先", substring = true)
+                .assertTextContains("按来源顺序 · 逐字优先 · 逐行兜底", substring = true)
             assertNull(container.songLyrics.settings(song).matchedOrigin)
             assertNull(container.songLyrics.settings(song).importedOrigin)
             assertEquals(500L, container.songLyrics.settings(song).offsetMs)
@@ -125,7 +125,7 @@ class PlayerLyricsManagementTest {
                 PlayerLyricsManagementDialog(container, navidromeSong) {}
             } }
             compose.onNodeWithTag("lyrics_source_default").assertTextContains("自动择优", substring = true)
-                .assertTextContains("内容与时间轴校验 · 合格逐字优先 · AMLL 优先", substring = true)
+                .assertTextContains("按来源顺序 · 逐字优先 · 逐行兜底", substring = true)
             compose.onNodeWithTag("lyrics_source_current").assertTextContains("自动择优", substring = true)
             container.musicSettings.setLyricsSource(LyricsSource.NETEASE)
             compose.waitUntil(5000) { container.musicSettings.state.value.lyricsSource == LyricsSource.NETEASE }
@@ -133,7 +133,7 @@ class PlayerLyricsManagementTest {
             container.musicSettings.setLyricsSource(LyricsSource.AUTO)
             compose.waitUntil(5000) { container.musicSettings.state.value.lyricsSource == LyricsSource.AUTO }
             compose.onNodeWithTag("lyrics_source_default").assertTextContains("自动择优", substring = true)
-                .assertTextContains("内容与时间轴校验 · 合格逐字优先 · AMLL 优先", substring = true)
+                .assertTextContains("按来源顺序 · 逐字优先 · 逐行兜底", substring = true)
             assertEquals(0, calls.get())
             assertTrue(container.playbackQueue.state.value.songs.isEmpty())
         } finally { container.close() }

@@ -136,6 +136,7 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
                 ensureActive()
                 if (epoch == requested) {
                     preview = found?.saved
+                    selectedCandidate = found?.candidate
                     assessment = found?.assessment
                     notify(if (found == null) "没有找到身份信息足够吻合的歌词，请手动搜索选择"
                         else "已找到候选，请预览并确认应用")
@@ -225,7 +226,7 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
 
     val automatic = musicSettings.lyricsSource == LyricsSource.AUTO
     val defaultLabel = if (!automatic && song.musicSource == MusicSource.NAVIDROME) "Navidrome" else musicSettings.lyricsSource.label
-    val restoredMessage = if (automatic) "已恢复自动择优，通过内容和时间轴校验后才替换；单曲偏移保留" else "已恢复默认歌词来源，单曲偏移保留"
+    val restoredMessage = if (automatic) "已恢复自动择优，按来源顺序查找，逐字优先、逐行兜底；单曲偏移保留" else "已恢复默认歌词来源，单曲偏移保留"
     val chosenLabel = options.activeOrigin?.label ?: defaultLabel
     val displayedLabel = if (playback.matches(song) && !playback.loading) playback.origin?.label ?: chosenLabel else chosenLabel
     val canExport = options.activeOrigin != null || (playback.matches(song) && !playback.loading && playback.error == null)
