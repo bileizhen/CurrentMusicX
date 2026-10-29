@@ -76,7 +76,7 @@ class MusicService : MediaSessionService() {
         val device = outputManager.preferredOutput(container.audioOutput.state.value.deviceKey)
         playerSlots.keys.toList().forEach { it.setPreferredAudioDevice(device) }
     }
-    private var desktopLyrics: io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost? = null
+    private var desktopLyrics: AutoCloseable? = null
     private var session: MediaSession? = null
     private var loading: Job? = null
     private val listening = ListeningTracker()
@@ -123,15 +123,7 @@ class MusicService : MediaSessionService() {
     override fun onBind(intent: Intent?): IBinder? = if (intent?.action == VIDEO_SURFACE) VideoBinder() else super.onBind(intent)
     override fun onCreate() {
         super.onCreate()
-        desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost(this, container.playbackLyrics.state,
-            container.playerController.state, container.desktopLyrics, container.desktopLyricsStatus, container.desktopLyricsSettingsVisible,
-            changeSong = { direction ->
-                val controller = container.playerController
-                if (direction > 0) controller.next(controller.state.value.showPause) else controller.previous(controller.state.value.showPause)
-            }, togglePlayback = { container.playerController.toggle() }, appearance = container.settings.state,
-            appForeground = container.appForeground, effectNotices = container.islandNotices,
-            installUpdate = { io.github.currencortex.music.core.update.UpdateInstallAction.open(this) },
-            pageHidden = container.desktopIslandPageHidden, musicSettings = container.musicSettings.state)
+        desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHosts.acquire(this, container)
         val probe = TrackEnergyProbe()
         transitions = PlaybackTransitions(createPlaybackPlayer(probe), probe, scope, ::createPlaybackPlayer,
             ::transitionOffer, resolve = { offer ->

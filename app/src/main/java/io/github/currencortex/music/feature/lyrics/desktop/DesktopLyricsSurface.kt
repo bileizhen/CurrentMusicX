@@ -48,6 +48,17 @@ import kotlinx.coroutines.flow.StateFlow
     defaultFpsMode: Boolean = false, noticeOnly: Boolean = false,
     effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = remember { kotlinx.coroutines.flow.MutableStateFlow(null) },
     installUpdate: () -> Unit = {}) {
+    val recognitionActive by io.github.currencortex.music.feature.recognition.RecognitionDesktopSession.attached.collectAsStateWithLifecycle()
+    val recognition by io.github.currencortex.music.feature.recognition.RecognitionDesktopSession.state.collectAsStateWithLifecycle()
+    val recognitionOptions by preferences.collectAsStateWithLifecycle()
+    val recognitionContext = androidx.compose.ui.platform.LocalContext.current
+    if (recognitionActive) {
+        SideEffect { onEditingChanged(false); onCoverBounds(androidx.compose.ui.geometry.Rect.Zero) }
+        RecognitionIslandContent(recognition, recognitionOptions, maxIslandWidth(), onIslandSize, onIslandTop,
+            { io.github.currencortex.music.feature.recognition.RecognitionDesktopService.islandAction(recognitionContext) },
+            { io.github.currencortex.music.feature.recognition.RecognitionDesktopService.stop(recognitionContext) })
+        return
+    }
     val effectNotice by effectNotices.collectAsStateWithLifecycle()
     val content by lyrics.collectAsStateWithLifecycle()
     val player by playback.collectAsStateWithLifecycle()
