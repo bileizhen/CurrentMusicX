@@ -45,6 +45,7 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
     onCoverTap: (() -> Unit)? = null, coverPlaying: Boolean = false,
     onCoverBounds: (Rect) -> Unit = {}, material: Boolean = true,
     listenTogether: ListenTogetherPair? = null,
+    leading: (@Composable (Modifier) -> Unit)? = null,
     content: @Composable () -> Unit) {
     val shape = RoundedCornerShape(50)
     val reveal = presentation.coerceIn(0f, 1f)
@@ -64,7 +65,8 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
             // Cover radius + 5 dp inset equals the pill end radius: concentric.
             .padding(start = 5.dp, end = 5.dp, top = 1.dp, bottom = 1.dp),
             content = {
-                DesktopIslandCover(song, coverPosition, motion, coverTransition,
+                if (leading != null) leading(Modifier.onGloballyPositioned { onCoverBounds(it.boundsInRoot()) })
+                else DesktopIslandCover(song, coverPosition, motion, coverTransition,
                     Modifier.onGloballyPositioned { onCoverBounds(it.boundsInRoot()) }.then(
                         if (onCoverTap != null) Modifier.clickable(
                             interactionSource = remember { MutableInteractionSource() }, indication = null,

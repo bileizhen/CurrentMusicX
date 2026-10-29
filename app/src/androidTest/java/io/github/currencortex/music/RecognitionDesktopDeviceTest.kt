@@ -23,6 +23,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.recognition.*
+import io.github.currencortex.music.feature.lyrics.desktop.*
 import io.github.currencortex.music.ui.theme.LeiTheme
 import io.github.currencortex.music.data.settings.AppearanceSettings
 import kotlinx.coroutines.*
@@ -54,61 +55,54 @@ class RecognitionDesktopDeviceTest {
         var opened = 0; var closed = 0
         val state = mutableStateOf(RecognitionState(RecognitionPhase.RECORDING, seconds = 5))
         compose.setContent { LeiTheme(AppearanceSettings()) {
-            Box(Modifier.width(320.dp)) { RecognitionIslandPill(state.value, { opened++ }, { closed++ }) }
+            Box(Modifier.width(320.dp)) { RecognitionIslandContent(state.value, DesktopLyricsSettings(), 320f, {}, {}, { opened++ }, { closed++ }) }
         } }
-        compose.onNodeWithText("正在聆听 · 5 秒").assertIsDisplayed()
+        compose.onNodeWithText("正在聆听").assertIsDisplayed()
         compose.onNodeWithTag("recognition_island_action").performClick()
         assertEquals(1, opened)
         compose.runOnIdle { state.value = RecognitionState(RecognitionPhase.RECOGNIZING) }
         compose.onNodeWithText("正在识别音乐…").assertIsDisplayed()
         compose.runOnIdle { state.value = RecognitionState(RecognitionPhase.MATCHED, songs = listOf(Song(29755418, "Rise to the Dark", "Russell Brower"))) }
         compose.onNodeWithText("Rise to the Dark").assertIsDisplayed()
-        compose.onNodeWithText("Russell Brower").assertIsDisplayed()
+        compose.onNodeWithTag("desktop_island_progress").assertExists()
         compose.onNodeWithTag("recognition_island_close").performClick()
         assertEquals(1, closed); assertEquals(1, opened)
     }
 
-    @Test fun realOverlayShowsResultOnDesktopAndClosesWithoutTakingOverTheScreen(): Unit = runBlocking {
+    @Test fun recognitionReusesTheLyricWindowAndPlaybackLeaseSurvivesRecognition(): Unit = runBlocking {
         assumeTrue(Settings.canDrawOverlays(context))
         lateinit var activity: Activity
         compose.setContent { activity = LocalActivity.current!! }
-        var island: RecognitionIslandWindow? = null
-        val container = AppContainer(context, "recognition-desktop-${java.util.UUID.randomUUID()}", useNativeNetease = false)
-        var lyricsHost: io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost? = null
-        var opened = false; var closed = false
-        val state = MutableStateFlow(RecognitionState(RecognitionPhase.MATCHED,
-            songs = listOf(Song(29755418, "Rise to the Dark", "Russell Brower"))))
+        val container = AppContainer(context, "shared-island-${java.util.UUID.randomUUID()}", useNativeNetease = false)
+        var playback: AutoCloseable? = null
+        var recognition: AutoCloseable? = null
         try {
             container.desktopLyrics.ready.await()
             container.desktopLyrics.edit { it.copy(enabled = true, locked = true) }
+            withContext(Dispatchers.Main) { playback = DesktopLyricsHosts.acquire(context, container) }
+            compose.mainClock.advanceTimeBy(1000)
+            withTimeout(3000) { while (!container.desktopLyricsStatus.value.attached || container.desktopLyricsStatus.value.height == 0) delay(10) }
+            val original = container.desktopLyricsStatus.value
             withContext(Dispatchers.Main) {
-                lyricsHost = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost(context,
-                    MutableStateFlow(io.github.currencortex.music.feature.lyrics.data.PlaybackLyricsState()),
-                    MutableStateFlow(io.github.currencortex.music.core.media.PlayerState(song = Song(2, "Paused music"))),
-                    container.desktopLyrics, container.desktopLyricsStatus)
-            }
-            withTimeout(3000) { while (!container.desktopLyricsStatus.value.visible) delay(10) }
-            withContext(Dispatchers.Main) {
-                island = RecognitionIslandWindow(context, state,
-                    { io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsSettings() },
-                    { opened = true }, { closed = true; island?.close(); RecognitionDesktopSession.detach() })
-                island!!.show()
+                RecognitionDesktopSession.publish(RecognitionState(RecognitionPhase.MATCHED,
+                    songs = listOf(Song(29755418, "Rise to the Dark", "Russell Brower"))))
                 RecognitionDesktopSession.attach()
+                recognition = DesktopLyricsHosts.acquire(context, container)
                 activity.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
             }
-            withTimeout(3000) { while (container.desktopLyricsStatus.value.visible) delay(10) }
-            assertFalse("Lyric island cannot steal recognition input", container.desktopLyricsStatus.value.islandTouchable)
-            waitUntil { findNode("Rise to the Dark，Russell Brower") != null }
-            delay(650) // Wait for the launcher's return animation before inspecting native input.
+            compose.mainClock.advanceTimeBy(1000)
+            withTimeout(3000) { while (!container.desktopLyricsStatus.value.islandTouchable) delay(10) }
+            delay(650)
+            val current = container.desktopLyricsStatus.value
+            assertEquals(original.width, current.width)
+            assertEquals(original.height, current.height)
+            assertTrue("Same compact single-line frame", current.contentHeight / context.resources.displayMetrics.density < 48f)
             screenshot("recognition-island-result.png")
-            assertFalse(opened)
-            assertTrue(findNode("关闭听歌识曲")!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
-            waitUntil { closed }
-            waitUntil { findNode("Rise to the Dark，Russell Brower") == null }
-            withTimeout(3000) { while (!container.desktopLyricsStatus.value.visible) delay(10) }
-            assertTrue("Recognition cannot disable the saved lyric preference", container.desktopLyrics.state.value.enabled)
+            withContext(Dispatchers.Main) { recognition!!.close(); recognition = null; RecognitionDesktopSession.detach() }
+            assertTrue("Playback keeps its existing native window", container.desktopLyricsStatus.value.attached)
+            assertTrue(container.desktopLyrics.state.value.enabled)
         } finally {
-            withContext(Dispatchers.Main) { island?.close(); RecognitionDesktopSession.detach(); RecognitionDesktopSession.clearResult(); lyricsHost?.close() }
+            withContext(Dispatchers.Main) { RecognitionDesktopSession.detach(); RecognitionDesktopSession.clearResult(); recognition?.close(); playback?.close() }
             container.close()
         }
     }
@@ -130,10 +124,10 @@ class RecognitionDesktopDeviceTest {
             assertFalse("Recording must survive the activity leaving the foreground", activity.hasWindowFocus())
             compose.mainClock.advanceTimeBy(64)
             instrumentation.waitForIdleSync()
-            assertNotNull("The background capsule must render elapsed capture time", findNode("正在聆听 · 1 秒，靠近音源 · 最长 10 秒"))
+            assertNotNull("The original native touch window must own recognition", findNode("正在聆听 · 1 秒，听歌识曲，点击识别或查看结果，长按关闭"))
             screenshot("recognition-island-recording.png")
-            val close = findNode("关闭听歌识曲") ?: error("Real overlay must expose a close action")
-            assertTrue(close.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            val close = findNode("正在聆听 ·") ?: error("Original island must expose its close action")
+            assertTrue(close.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK))
             withTimeout(2000) { while (RecognitionDesktopSession.attached.value) delay(10) }
             assertEquals(RecognitionPhase.IDLE, RecognitionDesktopSession.state.value.phase)
             assertNull(findNode("关闭听歌识曲"))
@@ -147,7 +141,7 @@ class RecognitionDesktopDeviceTest {
     private fun findNode(description: String): AccessibilityNodeInfo? {
         fun find(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
             if (node == null) return null
-            if (node.contentDescription?.toString() == description) return node
+            if (node.contentDescription?.toString()?.startsWith(description) == true) return node
             for (i in 0 until node.childCount) find(node.getChild(i))?.let { return it }
             return null
         }

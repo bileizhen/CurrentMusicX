@@ -22,7 +22,7 @@ import kotlinx.coroutines.flow.map
 class RecognitionDesktopService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var controller: RecognitionController? = null
-    private var island: RecognitionIslandWindow? = null
+    private var island: AutoCloseable? = null
     private var watcher: Job? = null
     private var deadline: Job? = null
     private var registered = false
@@ -62,13 +62,6 @@ class RecognitionDesktopService : Service() {
             val repository = NeteaseRecognitionRepository()
             val next = RecognitionController(scope, MicrophoneRecorder(), encoder::encode, repository::recognize)
             controller = next
-            island = RecognitionIslandWindow(this, next.state, { options.state.value }, onAction = {
-                when (next.state.value.phase) {
-                    RecognitionPhase.RECORDING -> next.finishRecording()
-                    RecognitionPhase.RECOGNIZING -> Unit
-                    else -> { startActivity(openIntent(this)); stopSelf() }
-                }
-            }, onClose = { stopSelf() }).also { it.show() }
             ContextCompat.registerReceiver(this, screen, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED)
             registered = true
             appOps.startWatchingMode(AppOpsManager.OPSTR_SYSTEM_ALERT_WINDOW, packageName, permission)
@@ -76,6 +69,7 @@ class RecognitionDesktopService : Service() {
             next.start()
             RecognitionDesktopSession.publish(next.state.value)
             RecognitionDesktopSession.attach()
+            island = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHosts.acquire(this, (application as CurrentMusicApplication).container)
             watcher = scope.launch {
                 next.state.map { it.copy(level = 0f) }.distinctUntilChanged().collectLatest { state ->
                     RecognitionDesktopSession.publish(state)
@@ -107,16 +101,15 @@ class RecognitionDesktopService : Service() {
     }
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        runCatching { island?.updatePlacement() }.onFailure { stopSelf() }
     }
     override fun onTaskRemoved(rootIntent: Intent?) { stopSelf() }
     override fun onDestroy() {
         controller?.cancel()
         watcher?.cancel(); deadline?.cancel()
-        island?.close(); island = null
         if (registered) { unregisterReceiver(screen); appOps.stopWatchingMode(permission) }
         if (RecognitionDesktopSession.state.value.busy) RecognitionDesktopSession.publish(RecognitionState())
         RecognitionDesktopSession.detach()
+        island?.close(); island = null
         scope.cancel()
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         super.onDestroy()
@@ -131,6 +124,13 @@ class RecognitionDesktopService : Service() {
         fun start(context: Context) = ContextCompat.startForegroundService(context, Intent(context, RecognitionDesktopService::class.java).setAction(START))
         fun stop(context: Context) = context.stopService(Intent(context, RecognitionDesktopService::class.java))
         fun finish(context: Context) { if (RecognitionDesktopSession.attached.value) context.startService(Intent(context, RecognitionDesktopService::class.java).setAction(FINISH)) }
+        internal fun islandAction(context: Context) {
+            when (RecognitionDesktopSession.state.value.phase) {
+                RecognitionPhase.RECORDING -> finish(context)
+                RecognitionPhase.RECOGNIZING -> stop(context)
+                else -> { context.startActivity(openIntent(context)); stop(context) }
+            }
+        }
         fun openIntent(context: Context) = Intent(context, MainActivity::class.java).putExtra(OPEN, true)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
     }
