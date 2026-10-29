@@ -1,10 +1,15 @@
 package io.github.currencortex.music.feature.recognition
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings
+import android.os.Build
+import android.media.projection.MediaProjectionManager
+import android.media.projection.MediaProjectionConfig
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.BackHandler
 import androidx.activity.result.contract.ActivityResultContracts
@@ -40,6 +45,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -59,7 +66,8 @@ import java.time.format.DateTimeFormatter
     val localState by controller.state.collectAsStateWithLifecycle()
     val desktopState by RecognitionDesktopSession.state.collectAsStateWithLifecycle()
     val desktopAttached by RecognitionDesktopSession.attached.collectAsStateWithLifecycle()
-    val state = if (desktopAttached || (localState.phase == RecognitionPhase.IDLE && desktopState.phase != RecognitionPhase.IDLE)) desktopState else localState
+    val serviceRunning by RecognitionDesktopSession.running.collectAsStateWithLifecycle()
+    val state = if (serviceRunning || (localState.phase == RecognitionPhase.IDLE && desktopState.phase != RecognitionPhase.IDLE)) desktopState else localState
     val historyStore = remember { RecognitionHistory(context) }
     var history by remember { mutableStateOf(historyStore.read()) }
     var showingHistory by remember { mutableStateOf(false) }
@@ -67,31 +75,68 @@ import java.time.format.DateTimeFormatter
     var pendingRecord by remember { mutableStateOf(false) }
     var pendingDesktop by remember { mutableStateOf(false) }
     var desktopStarting by remember { mutableStateOf(false) }
+    var source by rememberSaveable { mutableStateOf(if (Build.VERSION.SDK_INT >= 29) RecognitionAudioSource.SYSTEM else RecognitionAudioSource.MICROPHONE) }
+    var pendingProjection by remember { mutableStateOf<Intent?>(null) }
+    fun launchService(consent: Intent?, desktop: Boolean) {
+        desktopStarting = desktop
+        scope.launch {
+            try {
+                // Finish the previous source before starting a new foreground-service type.
+                RecognitionDesktopService.stop(context)
+                check(withTimeoutOrNull(2_000) { RecognitionDesktopSession.running.first { !it } } != null)
+                if (!lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@launch
+                controller.reset()
+                RecognitionDesktopSession.clearResult()
+                if (consent != null) RecognitionDesktopService.startSystem(context, consent, desktop)
+                else RecognitionDesktopService.start(context)
+                if (desktop) {
+                    val ready = withTimeoutOrNull(4_000) { RecognitionDesktopSession.attached.first { it } } == true
+                    if (ready && lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+                        context.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    else if (!ready) permissionMessage = "桌面识曲启动失败，请检查权限后重试"
+                }
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { permissionMessage = "暂时无法开始识曲，请重新授权后重试" }
+            finally { desktopStarting = false }
+        }
+    }
+    fun startSystem() {
+        if (!lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        val consent = pendingProjection ?: return
+        pendingProjection = null
+        pendingRecord = false
+        val desktop = pendingDesktop
+        pendingDesktop = false
+        launchService(consent, desktop)
+    }
+    val projectionConsent = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            pendingProjection = result.data
+            startSystem()
+        } else {
+            pendingDesktop = false
+            permissionMessage = "已取消系统音频授权，可重新开始或切换麦克风"
+        }
+    }
     fun startChosen() {
         pendingRecord = false
         permissionMessage = null
+        if (source == RecognitionAudioSource.SYSTEM) {
+            RecognitionDesktopService.stop(context)
+            val manager = context.getSystemService(MediaProjectionManager::class.java)
+            val consent = if (Build.VERSION.SDK_INT >= 34) manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
+                else manager.createScreenCaptureIntent()
+            projectionConsent.launch(consent)
+            return
+        }
         if (pendingDesktop) {
             pendingDesktop = false
             if (!lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
-            try {
-                controller.reset()
-                RecognitionDesktopSession.clearResult()
-                RecognitionDesktopService.start(context)
-                desktopStarting = true
-            } catch (_: Exception) { permissionMessage = "暂时无法开启桌面识曲，请重试" }
+            launchService(null, desktop = true)
         } else {
             RecognitionDesktopService.stop(context)
             RecognitionDesktopSession.clearResult()
             controller.start()
-        }
-    }
-    LaunchedEffect(desktopStarting) {
-        if (desktopStarting) {
-            val ready = withTimeoutOrNull(4_000) { RecognitionDesktopSession.attached.first { it } } == true
-            desktopStarting = false
-            if (ready && lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                context.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            } else if (!ready) permissionMessage = "桌面识曲启动失败，请检查权限后重试"
         }
     }
     BackHandler(showingHistory) { showingHistory = false }
@@ -99,18 +144,25 @@ import java.time.format.DateTimeFormatter
         pendingRecord = granted && lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
         if (granted && lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
             startChosen()
-        } else if (!granted) permissionMessage = "需要麦克风权限才能识曲，可在系统设置中开启"
+        } else if (!granted) permissionMessage = "需要录音权限才能识曲，可在系统设置中开启"
     }
     DisposableEffect(controller, lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_PAUSE) controller.cancel()
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                controller.cancel()
+                if (RecognitionDesktopSession.running.value && !RecognitionDesktopSession.attached.value) RecognitionDesktopService.stop(context)
+            }
             if (event == Lifecycle.Event.ON_RESUME && pendingRecord) {
                 if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startChosen()
             }
             if (event == Lifecycle.Event.ON_RESUME) history = historyStore.read()
+            if (event == Lifecycle.Event.ON_RESUME && pendingProjection != null) startSystem()
         }
         lifecycle.lifecycle.addObserver(observer)
-        onDispose { lifecycle.lifecycle.removeObserver(observer); pendingRecord = false; controller.cancel() }
+        onDispose {
+            lifecycle.lifecycle.removeObserver(observer); pendingRecord = false; pendingProjection = null; controller.cancel()
+            if (RecognitionDesktopSession.running.value && !RecognitionDesktopSession.attached.value) RecognitionDesktopService.stop(context)
+        }
     }
     LaunchedEffect(state.phase, state.songs) {
         if (localState.phase == RecognitionPhase.MATCHED && localState.songs.isNotEmpty())
@@ -161,19 +213,21 @@ import java.time.format.DateTimeFormatter
         } else {
             MusicRecognitionContent(state, permissionMessage, bottom,
                 onAction = { when (state.phase) {
-                    RecognitionPhase.RECORDING -> if (desktopAttached) RecognitionDesktopService.finish(context) else controller.finishRecording()
-                    RecognitionPhase.RECOGNIZING -> if (desktopAttached) RecognitionDesktopService.stop(context) else controller.cancel()
+                    RecognitionPhase.RECORDING -> if (serviceRunning) RecognitionDesktopService.finish(context) else controller.finishRecording()
+                    RecognitionPhase.RECOGNIZING -> if (serviceRunning) RecognitionDesktopService.stop(context) else controller.cancel()
                     else -> begin()
                 } }, onSettings = {
                     context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
-                }, onPlay = play, onDesktop = { begin(desktop = true) }, desktopStarting = desktopStarting)
+                }, onPlay = play, onDesktop = { begin(desktop = true) }, desktopStarting = desktopStarting,
+                source = source, onSource = { if (!state.busy) source = it })
         }
     }
 }
 
 @Composable internal fun MusicRecognitionContent(state: RecognitionState, permissionMessage: String?, bottom: androidx.compose.ui.unit.Dp,
     onAction: () -> Unit, onSettings: () -> Unit, onPlay: (List<Song>, Int) -> Unit,
-    onDesktop: (() -> Unit)? = null, desktopStarting: Boolean = false) {
+    onDesktop: (() -> Unit)? = null, desktopStarting: Boolean = false,
+    source: RecognitionAudioSource = RecognitionAudioSource.MICROPHONE, onSource: ((RecognitionAudioSource) -> Unit)? = null) {
     val colors = MiuixTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Center the listening group in the usable area above the floating player, rather than
@@ -184,14 +238,24 @@ import java.time.format.DateTimeFormatter
             else (usableHeight * .34f).coerceIn(160.dp, 220.dp))
         val topSpace = if (state.songs.isEmpty() && permissionMessage == null)
             ((usableHeight - orbSize - 238.dp) / 2).coerceIn(12.dp, 64.dp) else 12.dp
-        LazyColumn(Modifier.fillMaxSize().testTag("recognition_content"), horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = topSpace, bottom = bottom + 24.dp),
+        LazyColumn(Modifier.fillMaxSize().padding(bottom = bottom + 12.dp).testTag("recognition_content"), horizontalAlignment = Alignment.CenterHorizontally,
+            contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = topSpace, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)) {
             item {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("让好音乐，有名有姓", fontSize = 25.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
-                    Text("靠近音源，听一小段就好", fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+                    Text(if (source == RecognitionAudioSource.SYSTEM) "识别手机里正在播放的音乐" else "靠近音源，听一小段就好", fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+                    if (onSource != null) Row(Modifier.clip(RoundedCornerShape(20.dp)).background(colors.surfaceContainer).padding(4.dp),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        (if (Build.VERSION.SDK_INT >= 29) RecognitionAudioSource.entries else listOf(RecognitionAudioSource.MICROPHONE)).forEach { option ->
+                            Text(if (option == RecognitionAudioSource.SYSTEM) "系统音频" else "麦克风",
+                                Modifier.clip(RoundedCornerShape(16.dp)).background(if (source == option) colors.primary.copy(alpha = .12f) else androidx.compose.ui.graphics.Color.Transparent)
+                                    .clickable(enabled = !state.busy, role = Role.Button) { onSource(option) }
+                                    .padding(horizontal = 16.dp, vertical = 8.dp).testTag("recognition_source_${option.name}"),
+                                color = if (source == option) colors.primary else colors.onSurfaceVariantSummary, fontSize = 13.sp)
+                        }
+                    }
                 }
             }
             item {
@@ -227,7 +291,8 @@ import java.time.format.DateTimeFormatter
                         .clickable(enabled = !state.busy && !desktopStarting, role = Role.Button, onClick = onDesktop)
                         .padding(horizontal = 18.dp, vertical = 12.dp).testTag("recognition_desktop"),
                     color = colors.primary.copy(alpha = if (state.busy) .45f else 1f), fontSize = 14.sp)
-                Text("识别时使用麦克风，并将音频指纹发送至网易云\n桌面模式会继续识别，关闭灵动岛或锁屏即停止\n仅保存识别到的歌曲记录，普通模式离页即停",
+                Text((if (source == RecognitionAudioSource.SYSTEM) "需系统录制/投射授权，仅采集声音，不录制画面\n部分应用不允许采集，可切换麦克风\n" else "识别时使用麦克风\n") +
+                    "音频指纹发送至网易云，仅保存歌曲记录\n桌面模式关闭灵动岛或锁屏即停，普通模式离页即停",
                     Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp).testTag("recognition_disclosure"), fontSize = 11.sp,
                     lineHeight = 18.sp, color = colors.onSurfaceVariantSummary.copy(alpha = .75f), textAlign = TextAlign.Center)
                 }

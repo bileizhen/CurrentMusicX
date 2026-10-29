@@ -171,6 +171,7 @@ class MusicRecognitionDeviceTest {
         compose.setContent { LeiTheme(AppearanceSettings(blur = false)) {
             if (opened) MusicRecognitionScreen({ opened = false }, { _, _ -> error("No ambient clip should be uploaded") })
         } }
+        compose.onNodeWithTag("recognition_source_MICROPHONE").performClick()
         compose.onNodeWithTag("recognition_action").performClick()
         val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
         val deadline = SystemClock.uptimeMillis() + 5000

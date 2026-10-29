@@ -115,6 +115,7 @@ class RecognitionDesktopDeviceTest {
         lateinit var activity: Activity
         compose.setContent { activity = LocalActivity.current!!; LeiTheme(AppearanceSettings()) { MusicRecognitionScreen({}, { _, _ -> }) } }
         try {
+            compose.onNodeWithTag("recognition_source_MICROPHONE").performClick()
             compose.onNodeWithTag("recognition_desktop").performScrollTo().performClick()
             compose.waitForIdle() // Drive the handoff LaunchedEffect before leaving the Compose frame clock.
             withTimeout(3000) { while (!RecognitionDesktopSession.attached.value) delay(10) }
@@ -137,6 +138,90 @@ class RecognitionDesktopDeviceTest {
     private fun waitUntil(condition: () -> Boolean) {
         val end = SystemClock.elapsedRealtime() + 5000
         while (!condition()) { check(SystemClock.elapsedRealtime() < end) { "Timed out waiting for native overlay" }; SystemClock.sleep(50) }
+    }
+    /** Real system consent and real AudioPlaybackCapture. Cancel before any fingerprint/upload. */
+    @Test fun systemAudioUsesProjectionAndTheOriginalIslandWithoutOpeningTheMicrophone(): Unit = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("recognitionSystemAudio") == "true")
+        assumeTrue(android.os.Build.VERSION.SDK_INT >= 29 && Settings.canDrawOverlays(context))
+        assumeTrue(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED)
+        lateinit var activity: Activity
+        compose.setContent { activity = LocalActivity.current!!; LeiTheme(AppearanceSettings()) { MusicRecognitionScreen({}, { _, _ -> }) } }
+        try {
+            compose.onNodeWithTag("recognition_source_SYSTEM").assertIsDisplayed()
+            compose.onNodeWithTag("recognition_desktop").performScrollTo().performClick()
+            compose.waitForIdle()
+            waitUntil { projectionButton(true) != null }
+            assertFalse("No capture is allowed before system consent", RecognitionDesktopSession.running.value)
+            assertTrue(projectionButton(true)!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            compose.waitForIdle()
+            withTimeout(5000) { while (!RecognitionDesktopSession.running.value) { compose.mainClock.advanceTimeBy(16); delay(10) } }
+            withTimeout(2500) { while (RecognitionDesktopSession.state.value.seconds < 1) delay(10) }
+            assertEquals(RecognitionAudioSource.SYSTEM, RecognitionDesktopSession.state.value.source)
+            assertEquals(RecognitionPhase.RECORDING, RecognitionDesktopSession.state.value.phase)
+            val sources = context.getSystemService(android.media.AudioManager::class.java).activeRecordingConfigurations.map { it.clientAudioSource }
+            // Playback mixes are omitted from this public list on some ROMs. Verify the
+            // real projection token as well as the completed AudioRecord reads above.
+            assertFalse("System capture cannot open a microphone input", android.media.MediaRecorder.AudioSource.MIC in sources)
+            val projection = instrumentation.uiAutomation.executeShellCommand("dumpsys media_projection").use {
+                java.io.FileInputStream(it.fileDescriptor).bufferedReader().use { input -> input.readText() }
+            }
+            assertTrue("System must own a live projection grant for this package", projection.contains(context.packageName))
+            compose.mainClock.advanceTimeBy(64)
+            assertFalse(activity.hasWindowFocus())
+            screenshot("recognition-island-system-audio.png")
+            val close = findNode("系统音频 ·") ?: error("System audio must render in the existing island")
+            assertTrue(close.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK))
+            withTimeout(2000) { while (RecognitionDesktopSession.running.value) delay(10) }
+        } finally { withContext(Dispatchers.Main) { RecognitionDesktopService.stop(context) } }
+    }
+
+    @Test fun decliningSystemConsentNeverStartsCapture(): Unit = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("recognitionSystemAudio") == "true")
+        assumeTrue(android.os.Build.VERSION.SDK_INT >= 29)
+        compose.setContent { LeiTheme(AppearanceSettings()) { MusicRecognitionScreen({}, { _, _ -> }) } }
+        try {
+            compose.onNodeWithTag("recognition_action").performClick()
+            compose.waitForIdle()
+            waitUntil { projectionButton(false) != null }
+            assertTrue(projectionButton(false)!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            compose.waitForIdle()
+            compose.onNodeWithTag("recognition_permission_message").assertIsDisplayed()
+            assertFalse(RecognitionDesktopSession.running.value)
+        } finally { withContext(Dispatchers.Main) { RecognitionDesktopService.stop(context) } }
+    }
+
+    @Test fun inPageSystemCaptureStopsWhenLeavingInsteadOfStartingADesktopWindow(): Unit = runBlocking {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("recognitionSystemAudio") == "true")
+        assumeTrue(android.os.Build.VERSION.SDK_INT >= 29)
+        lateinit var activity: Activity
+        compose.setContent { activity = LocalActivity.current!!; LeiTheme(AppearanceSettings()) { MusicRecognitionScreen({}, { _, _ -> }) } }
+        try {
+            compose.onNodeWithTag("recognition_action").performClick()
+            compose.waitForIdle()
+            waitUntil { projectionButton(true) != null }
+            assertTrue(projectionButton(true)!!.performAction(AccessibilityNodeInfo.ACTION_CLICK))
+            compose.waitForIdle()
+            withTimeout(5000) { while (!RecognitionDesktopSession.running.value) { compose.mainClock.advanceTimeBy(16); delay(10) } }
+            withTimeout(2500) { while (RecognitionDesktopSession.state.value.seconds < 1) delay(10) }
+            assertEquals(RecognitionAudioSource.SYSTEM, RecognitionDesktopSession.state.value.source)
+            assertFalse("Ordinary recognition never enables desktop mode", RecognitionDesktopSession.attached.value)
+            withContext(Dispatchers.Main) {
+                activity.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            withTimeout(2000) { while (RecognitionDesktopSession.running.value) delay(10) }
+        } finally { withContext(Dispatchers.Main) { RecognitionDesktopService.stop(context) } }
+    }
+
+    private fun projectionButton(accept: Boolean): AccessibilityNodeInfo? {
+        fun find(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+            if (node == null) return null
+            val text = node.text?.toString().orEmpty()
+            if (node.isClickable && node.packageName?.toString() == "com.android.systemui" &&
+                (if (accept) text in setOf("立即开始", "开始", "Start now", "Start") else text in setOf("取消", "Cancel"))) return node
+            for (i in 0 until node.childCount) find(node.getChild(i))?.let { return it }
+            return null
+        }
+        return find(instrumentation.uiAutomation.rootInActiveWindow)
     }
     private fun findNode(description: String): AccessibilityNodeInfo? {
         fun find(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {

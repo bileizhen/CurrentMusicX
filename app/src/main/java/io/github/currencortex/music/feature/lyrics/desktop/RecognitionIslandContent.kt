@@ -31,7 +31,7 @@ import top.yukonga.miuix.kmp.basic.Icon
     maximum: Float, onSize: (IntSize) -> Unit, onTop: (Int) -> Unit, onAction: () -> Unit, onClose: () -> Unit) {
     val song = state.songs.firstOrNull() ?: remember { Song(0, "听歌识曲") }
     val title = when (state.phase) {
-        RecognitionPhase.RECORDING -> "正在聆听"
+        RecognitionPhase.RECORDING -> if (state.source == RecognitionAudioSource.SYSTEM) "识别系统音频" else "正在聆听"
         else -> recognitionIslandTitle(state)
     }
     val size = rememberIslandSize(song, title, options.displayFontSize, compact = true, editing = false)
@@ -43,7 +43,8 @@ import top.yukonga.miuix.kmp.basic.Icon
             .testTag("recognition_island"), coverPosition = position, durationMs = 10_000,
             leading = if (state.phase == RecognitionPhase.MATCHED && !song.cover.isNullOrBlank()) null else { modifier ->
                 Box(modifier.fillMaxSize().clip(CircleShape).background(Color(0xFF203049)), contentAlignment = Alignment.Center) {
-                    Icon(MusicIcons.Microphone, null, Modifier.size(16.dp), tint = Color(0xFF79AAFF))
+                    Icon(if (state.source == RecognitionAudioSource.SYSTEM) MusicIcons.Headphones else MusicIcons.Microphone,
+                        null, Modifier.size(16.dp), tint = Color(0xFF79AAFF))
                 }
             }) {
             Row(Modifier.heightIn(min = 30.dp).padding(start = 2.dp), verticalAlignment = Alignment.CenterVertically) {
