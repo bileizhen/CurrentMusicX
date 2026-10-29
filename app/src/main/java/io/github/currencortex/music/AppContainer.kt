@@ -277,8 +277,15 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 io.github.currencortex.music.feature.lyrics.data.LyricsSelection(
                     listOf(source, accountRepository.server, accountRepository.sessionRevision.value,
                         neteaseSessions.state.value.revision, navidrome.state.value.revision),
-                    if (source == io.github.currencortex.music.data.settings.LyricsSource.CURRENT_MUSIC)
-                        projectLyricsProvider else nativeLyricsProvider,
+                    when (source) {
+                        io.github.currencortex.music.data.settings.LyricsSource.LOCAL ->
+                            io.github.currencortex.music.feature.lyrics.data.LyricsProvider {
+                                io.github.currencortex.music.feature.lyrics.data.LyricsProviderResult.Failure(
+                                    io.github.currencortex.music.feature.lyrics.model.LyricsErrorCode.NO_LYRICS, "没有本地内嵌歌词，可在歌词管理中导入歌词文件")
+                            }
+                        io.github.currencortex.music.data.settings.LyricsSource.CURRENT_MUSIC -> projectLyricsProvider
+                        else -> nativeLyricsProvider
+                    },
                     io.github.currencortex.music.feature.lyrics.data.LyricsOrigin(source.label, source.name.lowercase()),
                     automatic = source == io.github.currencortex.music.data.settings.LyricsSource.AUTO)
             }
@@ -290,7 +297,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                     else -> onlineLyrics.bestMatch(song)
                 }
             }
-        } else null, alignMatch = if (storageNamespace.isEmpty() && ttmlProvider == null) onlineLyrics::align else null)
+        } else null, alignMatch = if (storageNamespace.isEmpty() && ttmlProvider == null) onlineLyrics::align else null,
+        localLyrics = io.github.currencortex.music.feature.lyrics.data.LocalLyricsProvider(context)::load)
     val playbackQueue = PlaybackQueue()
     val dockAudioLevel = DockAudioLevel()
     val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)

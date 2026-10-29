@@ -20,7 +20,8 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
     private val selection: (() -> LyricsSelection)? = null,
     private val overrides: SongLyricsStore? = null,
     private val autoMatch: (suspend (Song) -> SavedLyrics?)? = null,
-    private val alignMatch: (suspend (Song, SavedLyrics) -> SavedLyrics)? = null) {
+    private val alignMatch: (suspend (Song, SavedLyrics) -> SavedLyrics)? = null,
+    private val localLyrics: (suspend (Song) -> SavedLyrics?)? = null) {
     private val lock = Mutex()
     private val memory = linkedMapOf<Pair<List<Any?>, List<LyricsKey>>, LyricsResult>()
     suspend fun load(song: Song): LyricsResult = withContext(Dispatchers.IO) { lock.withLock {
@@ -30,6 +31,16 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
                 setOf("amll", "qq_music", "qishui", "current_music", "kugou")) alignMatch?.invoke(song, saved) ?: saved else saved
             return@withLock LyricsResult(aligned.timingAlignment?.applyTo(aligned.document) ?: aligned.document,
                 origin = aligned.origin, sourceDocument = aligned.document, timingAlignment = aligned.timingAlignment)
+        }
+        // Local metadata belongs to this exact recording and works without an online reference.
+        // Manual imports above remain authoritative. Read afresh so edited file tags are visible.
+        if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL) {
+            val local = try { localLyrics?.invoke(song) }
+            catch (e: CancellationException) { throw e }
+            catch (e: Exception) { log("Local lyrics: ${e.javaClass.simpleName}"); null }
+            local?.takeIf { it.document.lines.isNotEmpty() }?.let {
+                return@withLock LyricsResult(it.document, origin = it.origin, sourceDocument = it.document)
+            }
         }
         val keys = LyricsMatcher.candidates(song)
         val selected = selection?.invoke()

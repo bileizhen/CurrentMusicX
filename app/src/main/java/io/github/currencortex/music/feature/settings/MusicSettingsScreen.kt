@@ -177,8 +177,9 @@ import kotlin.math.roundToInt
                     LyricsSource.AUTO -> "通过内容与原始时间轴校验后才自动替换；合格逐字优先，AMLL 优先"
                     LyricsSource.CURRENT_MUSIC -> "由 CurrentMusic 服务提供，支持 LDDC 真实逐字；过滤估算时间轴"
                     LyricsSource.NETEASE -> "手机直连网易云，使用原生逐字或逐行歌词"
+                    LyricsSource.LOCAL -> "离线读取本地音频文件内的歌词；独立 LRC / TTML 文件可在歌词管理中导入"
                 })
         }
-        Text("独立于音乐音源。切换默认策略后重新获取歌词；单曲手动导入或匹配仍优先。", Modifier.padding(horizontal = 24.dp, vertical = 12.dp), fontSize = 12.sp, color = hint)
+        Text("独立于音乐音源。单曲手动导入或匹配优先，本地歌曲优先读取内嵌歌词。切换默认策略后重新获取歌词。", Modifier.padding(horizontal = 24.dp, vertical = 12.dp), fontSize = 12.sp, color = hint)
     }
 }
