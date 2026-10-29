@@ -64,6 +64,7 @@ class RecognitionDesktopService : Service() {
     private fun startAttempt(request: Intent) {
         try {
             val system = request.getBooleanExtra(SYSTEM, false)
+            val systemMix = system && request.getBooleanExtra(SYSTEM_MIX, false)
             val desktop = request.getBooleanExtra(DESKTOP, true)
             desktopMode = desktop
             if (desktop) check(Settings.canDrawOverlays(this)) { "请先开启悬浮窗权限" }
@@ -71,10 +72,10 @@ class RecognitionDesktopService : Service() {
             val source = if (system) RecognitionAudioSource.SYSTEM else RecognitionAudioSource.MICROPHONE
             val notifications = getSystemService(NotificationManager::class.java)
             notifications.createNotificationChannel(NotificationChannel(CHANNEL, "桌面听歌识曲", NotificationManager.IMPORTANCE_LOW).apply { setShowBadge(false) })
-            val type = if (system && Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            val type = if (system && !systemMix && Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
                 else if (Build.VERSION.SDK_INT >= 30) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0
             ServiceCompat.startForeground(this, NOTICE, notification(RecognitionState(RecognitionPhase.RECORDING, source = source)), type)
-            val recorder = if (system && Build.VERSION.SDK_INT >= 29) {
+            val recorder = if (systemMix) SystemMixRecorder() else if (system && Build.VERSION.SDK_INT >= 29) {
                 val consent = if (Build.VERSION.SDK_INT >= 33) request.getParcelableExtra(CONSENT, Intent::class.java)
                     else @Suppress("DEPRECATION") (request.getParcelableExtra(CONSENT) as? Intent)
                 requireNotNull(consent) { "请重新授予系统音频权限" }
@@ -99,11 +100,19 @@ class RecognitionDesktopService : Service() {
             RecognitionDesktopSession.attach(desktop)
             if (desktop) island = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHosts.acquire(this, (application as CurrentMusicApplication).container)
             watcher = scope.launch {
-                var notified: Triple<RecognitionPhase, Int, Long?>? = null
+                var notified: RecognitionState? = null
+                var lastStep: Pair<RecognitionPhase, RecognitionStep>? = null
                 next.state.collectLatest { state ->
                     RecognitionDesktopSession.publish(state)
-                    val key = Triple(state.phase, state.seconds, state.songs.firstOrNull()?.id)
+                    val key = state.copy(level = 0f)
                     if (notified != key) { notified = key; runCatching { notifications.notify(NOTICE, notification(state)) } }
+                    val step = state.phase to state.step
+                    if (lastStep != step) {
+                        lastStep = step
+                        val logger = (application as CurrentMusicApplication).container.logger
+                        logger.info("Recognition", "source=$source phase=${state.phase} step=${state.step} seconds=${state.seconds}")
+                        if (state.phase == RecognitionPhase.ERROR) logger.warn("Recognition", state.message.orEmpty())
+                    }
                     if (state.phase != RecognitionPhase.RECORDING) releaseProjection()
                     if (!state.busy && state.phase != RecognitionPhase.IDLE) {
                         if (state.phase == RecognitionPhase.MATCHED && state.songs.isNotEmpty())
@@ -156,6 +165,7 @@ class RecognitionDesktopService : Service() {
         private const val STOP = "recognition.desktop.stop"
         private const val FINISH = "recognition.desktop.finish"
         private const val SYSTEM = "recognition.system"
+        private const val SYSTEM_MIX = "recognition.system.mix"
         private const val DESKTOP = "recognition.desktop"
         private const val CONSENT = "recognition.consent"
         const val OPEN = "recognition.desktop.open"
@@ -164,6 +174,8 @@ class RecognitionDesktopService : Service() {
         fun start(context: Context) = ContextCompat.startForegroundService(context, Intent(context, RecognitionDesktopService::class.java).setAction(START))
         fun startSystem(context: Context, consent: Intent, desktop: Boolean) = ContextCompat.startForegroundService(context,
             Intent(context, RecognitionDesktopService::class.java).setAction(START).putExtra(SYSTEM, true).putExtra(DESKTOP, desktop).putExtra(CONSENT, consent))
+        fun startSystemMix(context: Context, desktop: Boolean) = ContextCompat.startForegroundService(context,
+            Intent(context, RecognitionDesktopService::class.java).setAction(START).putExtra(SYSTEM, true).putExtra(SYSTEM_MIX, true).putExtra(DESKTOP, desktop))
         fun stop(context: Context) = context.stopService(Intent(context, RecognitionDesktopService::class.java))
         fun finish(context: Context) { if (RecognitionDesktopSession.running.value) context.startService(Intent(context, RecognitionDesktopService::class.java).setAction(FINISH)) }
         internal fun islandAction(context: Context) {

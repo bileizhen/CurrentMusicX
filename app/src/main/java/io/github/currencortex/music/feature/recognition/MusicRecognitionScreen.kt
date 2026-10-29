@@ -77,7 +77,8 @@ import java.time.format.DateTimeFormatter
     var desktopStarting by remember { mutableStateOf(false) }
     var source by rememberSaveable { mutableStateOf(if (Build.VERSION.SDK_INT >= 29) RecognitionAudioSource.SYSTEM else RecognitionAudioSource.MICROPHONE) }
     var pendingProjection by remember { mutableStateOf<Intent?>(null) }
-    fun launchService(consent: Intent?, desktop: Boolean) {
+    var useProjection by rememberSaveable { mutableStateOf(false) }
+    fun launchService(consent: Intent?, desktop: Boolean, systemMix: Boolean = false) {
         desktopStarting = desktop
         scope.launch {
             try {
@@ -88,6 +89,7 @@ import java.time.format.DateTimeFormatter
                 controller.reset()
                 RecognitionDesktopSession.clearResult()
                 if (consent != null) RecognitionDesktopService.startSystem(context, consent, desktop)
+                else if (systemMix) RecognitionDesktopService.startSystemMix(context, desktop)
                 else RecognitionDesktopService.start(context)
                 if (desktop) {
                     val ready = withTimeoutOrNull(4_000) { RecognitionDesktopSession.attached.first { it } } == true
@@ -122,6 +124,12 @@ import java.time.format.DateTimeFormatter
         pendingRecord = false
         permissionMessage = null
         if (source == RecognitionAudioSource.SYSTEM) {
+            if (!useProjection) {
+                val desktop = pendingDesktop
+                pendingDesktop = false
+                launchService(null, desktop, systemMix = true)
+                return
+            }
             RecognitionDesktopService.stop(context)
             val manager = context.getSystemService(MediaProjectionManager::class.java)
             val consent = if (Build.VERSION.SDK_INT >= 34) manager.createScreenCaptureIntent(MediaProjectionConfig.createConfigForDefaultDisplay())
@@ -219,7 +227,8 @@ import java.time.format.DateTimeFormatter
                 } }, onSettings = {
                     context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
                 }, onPlay = play, onDesktop = { begin(desktop = true) }, desktopStarting = desktopStarting,
-                source = source, onSource = { if (!state.busy) source = it })
+                source = source, onSource = { if (!state.busy) source = it }, useProjection = useProjection,
+                onProjectionMode = { if (!state.busy) useProjection = !useProjection })
         }
     }
 }
@@ -227,7 +236,8 @@ import java.time.format.DateTimeFormatter
 @Composable internal fun MusicRecognitionContent(state: RecognitionState, permissionMessage: String?, bottom: androidx.compose.ui.unit.Dp,
     onAction: () -> Unit, onSettings: () -> Unit, onPlay: (List<Song>, Int) -> Unit,
     onDesktop: (() -> Unit)? = null, desktopStarting: Boolean = false,
-    source: RecognitionAudioSource = RecognitionAudioSource.MICROPHONE, onSource: ((RecognitionAudioSource) -> Unit)? = null) {
+    source: RecognitionAudioSource = RecognitionAudioSource.MICROPHONE, onSource: ((RecognitionAudioSource) -> Unit)? = null,
+    useProjection: Boolean = false, onProjectionMode: (() -> Unit)? = null) {
     val colors = MiuixTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Center the listening group in the usable area above the floating player, rather than
@@ -256,6 +266,11 @@ import java.time.format.DateTimeFormatter
                                 color = if (source == option) colors.primary else colors.onSurfaceVariantSummary, fontSize = 13.sp)
                         }
                     }
+                    if (source == RecognitionAudioSource.SYSTEM && onProjectionMode != null) Text(
+                        if (useProjection) "录制授权方式 · 切换为系统混音" else "系统混音不可用？切换录制授权方式",
+                        Modifier.clickable(enabled = !state.busy, role = Role.Button, onClick = onProjectionMode)
+                            .padding(horizontal = 10.dp, vertical = 6.dp).testTag("recognition_capture_mode"),
+                        fontSize = 12.sp, color = colors.primary)
                 }
             }
             item {
@@ -273,7 +288,7 @@ import java.time.format.DateTimeFormatter
                     }, Modifier.testTag("recognition_status"), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text(when (state.phase) {
                         RecognitionPhase.RECORDING -> if (state.seconds < 3) "至少聆听 3 秒，最长 10 秒" else "点击中央按钮，立即开始识别"
-                        RecognitionPhase.RECOGNIZING -> "点击中央按钮可取消"
+                        RecognitionPhase.RECOGNIZING -> (if (state.step == RecognitionStep.MATCH) "正在匹配歌曲" else "正在分析声音") + " · 点击可取消"
                         RecognitionPhase.MATCHED -> "点击歌曲即可播放，也可继续识别"
                         else -> state.message ?: "支持识别正在播放的歌曲原声"
                     }, fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
@@ -291,7 +306,10 @@ import java.time.format.DateTimeFormatter
                         .clickable(enabled = !state.busy && !desktopStarting, role = Role.Button, onClick = onDesktop)
                         .padding(horizontal = 18.dp, vertical = 12.dp).testTag("recognition_desktop"),
                     color = colors.primary.copy(alpha = if (state.busy) .45f else 1f), fontSize = 14.sp)
-                Text((if (source == RecognitionAudioSource.SYSTEM) "需系统录制/投射授权，仅采集声音，不录制画面\n部分应用不允许采集，可切换麦克风\n" else "识别时使用麦克风\n") +
+                Text((if (source == RecognitionAudioSource.SYSTEM) {
+                    if (useProjection) "需系统录制/投射授权，仅采集声音，不录制画面\n部分应用不允许采集，可切换麦克风\n"
+                    else "读取系统正在播放的音乐，不使用麦克风\n设备不支持时可切换录制授权方式\n"
+                } else "识别时使用麦克风\n") +
                     "音频指纹发送至网易云，仅保存歌曲记录\n桌面模式关闭灵动岛或锁屏即停，普通模式离页即停",
                     Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp).testTag("recognition_disclosure"), fontSize = 11.sp,
                     lineHeight = 18.sp, color = colors.onSurfaceVariantSummary.copy(alpha = .75f), textAlign = TextAlign.Center)

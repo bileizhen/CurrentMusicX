@@ -147,6 +147,7 @@ class RecognitionDesktopDeviceTest {
         lateinit var activity: Activity
         compose.setContent { activity = LocalActivity.current!!; LeiTheme(AppearanceSettings()) { MusicRecognitionScreen({}, { _, _ -> }) } }
         try {
+            compose.onNodeWithTag("recognition_capture_mode").performScrollTo().performClick()
             compose.onNodeWithTag("recognition_source_SYSTEM").assertIsDisplayed()
             compose.onNodeWithTag("recognition_desktop").performScrollTo().performClick()
             compose.waitForIdle()
@@ -180,6 +181,7 @@ class RecognitionDesktopDeviceTest {
         assumeTrue(android.os.Build.VERSION.SDK_INT >= 29)
         compose.setContent { LeiTheme(AppearanceSettings()) { MusicRecognitionScreen({}, { _, _ -> }) } }
         try {
+            compose.onNodeWithTag("recognition_capture_mode").performScrollTo().performClick()
             compose.onNodeWithTag("recognition_action").performClick()
             compose.waitForIdle()
             waitUntil { projectionButton(false) != null }
@@ -196,6 +198,7 @@ class RecognitionDesktopDeviceTest {
         lateinit var activity: Activity
         compose.setContent { activity = LocalActivity.current!!; LeiTheme(AppearanceSettings()) { MusicRecognitionScreen({}, { _, _ -> }) } }
         try {
+            compose.onNodeWithTag("recognition_capture_mode").performScrollTo().performClick()
             compose.onNodeWithTag("recognition_action").performClick()
             compose.waitForIdle()
             waitUntil { projectionButton(true) != null }

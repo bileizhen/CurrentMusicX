@@ -33,7 +33,8 @@ class NeteaseRecognitionRepository(client: OkHttpClient = OkHttpClient(),
             continuation.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
-                    if (continuation.isActive) continuation.resumeWithException(IOException("网易云识曲请求失败，请检查网络后重试", e))
+                    if (continuation.isActive) continuation.resumeWithException(IOException(
+                        if (e is java.io.InterruptedIOException) "网易云识曲请求超时，请检查网络后重试" else "网易云识曲请求失败，请检查网络后重试", e))
                 }
                 override fun onResponse(call: Call, response: Response) {
                     try {
