@@ -7,16 +7,18 @@ import kotlinx.coroutines.flow.asStateFlow
 object RecognitionDesktopSession {
     private val mutableState = MutableStateFlow(RecognitionState())
     private val mutableAttached = MutableStateFlow(false)
+    private val mutableRunning = MutableStateFlow(false)
     val state = mutableState.asStateFlow()
     val attached = mutableAttached.asStateFlow()
+    val running = mutableRunning.asStateFlow()
     internal fun publish(state: RecognitionState) { mutableState.value = state }
-    internal fun attach() { mutableAttached.value = true }
-    internal fun detach() { mutableAttached.value = false }
-    fun clearResult() { if (!attached.value) mutableState.value = RecognitionState() }
+    internal fun attach(desktop: Boolean = true) { mutableRunning.value = true; mutableAttached.value = desktop }
+    internal fun detach() { mutableAttached.value = false; mutableRunning.value = false }
+    fun clearResult() { if (!running.value) mutableState.value = RecognitionState() }
 }
 
 internal fun recognitionIslandTitle(state: RecognitionState): String = when (state.phase) {
-    RecognitionPhase.RECORDING -> "正在聆听 · ${state.seconds} 秒"
+    RecognitionPhase.RECORDING -> "${if (state.source == RecognitionAudioSource.SYSTEM) "系统音频" else "正在聆听"} · ${state.seconds} 秒"
     RecognitionPhase.RECOGNIZING -> "正在识别音乐…"
     RecognitionPhase.MATCHED -> state.songs.firstOrNull()?.name ?: "找到这首歌了"
     RecognitionPhase.NO_MATCH -> "暂未识别到歌曲"
@@ -25,7 +27,7 @@ internal fun recognitionIslandTitle(state: RecognitionState): String = when (sta
 }
 
 internal fun recognitionIslandSubtitle(state: RecognitionState): String = when (state.phase) {
-    RecognitionPhase.RECORDING -> if (state.seconds < 3) "靠近音源 · 最长 10 秒" else "点击胶囊，立即识别"
+    RecognitionPhase.RECORDING -> if (state.seconds < 3) "${if (state.source == RecognitionAudioSource.SYSTEM) "播放音乐" else "靠近音源"} · 最长 10 秒" else "点击胶囊，立即识别"
     RecognitionPhase.RECOGNIZING -> "正在比对音频指纹"
     RecognitionPhase.MATCHED -> state.songs.firstOrNull()?.artists.orEmpty().ifBlank { "点击查看识别结果" }
     else -> state.message ?: "点击返回听歌识曲"

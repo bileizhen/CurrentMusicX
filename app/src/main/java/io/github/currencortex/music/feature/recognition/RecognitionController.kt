@@ -8,8 +8,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
 enum class RecognitionPhase { IDLE, RECORDING, RECOGNIZING, MATCHED, NO_MATCH, ERROR }
+enum class RecognitionAudioSource { SYSTEM, MICROPHONE }
 data class RecognitionState(val phase: RecognitionPhase = RecognitionPhase.IDLE, val seconds: Int = 0,
-    val level: Float = 0f, val songs: List<Song> = emptyList(), val message: String? = null) {
+    val level: Float = 0f, val songs: List<Song> = emptyList(), val message: String? = null,
+    val source: RecognitionAudioSource = RecognitionAudioSource.MICROPHONE) {
     val busy get() = phase == RecognitionPhase.RECORDING || phase == RecognitionPhase.RECOGNIZING
 }
 
@@ -20,7 +22,8 @@ fun interface RecognitionRecorder {
 /** A new attempt owns its recording and result. Cancellation can never publish a stale match. */
 class RecognitionController(private val scope: CoroutineScope, private val recorder: RecognitionRecorder,
     private val fingerprint: suspend (ShortArray) -> String,
-    private val recognize: suspend (String, Double) -> List<Song>) {
+    private val recognize: suspend (String, Double) -> List<Song>,
+    private val source: RecognitionAudioSource = RecognitionAudioSource.MICROPHONE) {
     private val mutable = MutableStateFlow(RecognitionState())
     val state = mutable.asStateFlow()
     private var work: Job? = null
@@ -33,7 +36,7 @@ class RecognitionController(private val scope: CoroutineScope, private val recor
         val attempt = epoch.incrementAndGet()
         stop = AtomicBoolean(false)
         val requestStop = stop
-        mutable.value = RecognitionState(RecognitionPhase.RECORDING)
+        mutable.value = RecognitionState(RecognitionPhase.RECORDING, source = source)
         work = scope.launch {
             var samples: ShortArray? = null
             try {

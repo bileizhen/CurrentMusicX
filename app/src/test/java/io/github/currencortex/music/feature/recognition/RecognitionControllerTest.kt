@@ -77,6 +77,17 @@ class RecognitionControllerTest {
         controller.reset()
         assertEquals(RecognitionState(), controller.state.value)
     }
+    @Test fun systemAudioSourceRemainsExplicitThroughoutCaptureAndMatching() = runTest {
+        val controller = RecognitionController(this, RecognitionRecorder { _, progress ->
+            progress(3, .4f); ShortArray(24_000) { 12 }
+        }, { "fp" }, { _, _ -> listOf(Song(7, "System result")) }, RecognitionAudioSource.SYSTEM)
+        controller.start()
+        assertEquals(RecognitionAudioSource.SYSTEM, controller.state.value.source)
+        advanceUntilIdle()
+        assertEquals(RecognitionPhase.MATCHED, controller.state.value.phase)
+        assertEquals(RecognitionAudioSource.SYSTEM, controller.state.value.source)
+        assertEquals("System result", controller.state.value.songs.single().name)
+    }
 
     @Test fun fingerprintTimeoutReleasesSamplesAndAllowsRetry() = runTest {
         val pcm = ShortArray(24_000) { 8 }
