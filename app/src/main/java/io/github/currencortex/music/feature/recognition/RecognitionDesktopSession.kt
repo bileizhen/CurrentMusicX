@@ -28,7 +28,7 @@ internal fun recognitionIslandTitle(state: RecognitionState): String = when (sta
 
 internal fun recognitionIslandSubtitle(state: RecognitionState): String = when (state.phase) {
     RecognitionPhase.RECORDING -> if (state.seconds < 3) "${if (state.source == RecognitionAudioSource.SYSTEM) "播放音乐" else "靠近音源"} · 最长 10 秒" else "点击胶囊，立即识别"
-    RecognitionPhase.RECOGNIZING -> "正在比对音频指纹"
+    RecognitionPhase.RECOGNIZING -> if (state.step == RecognitionStep.MATCH) "正在匹配歌曲" else "正在分析声音"
     RecognitionPhase.MATCHED -> state.songs.firstOrNull()?.artists.orEmpty().ifBlank { "点击查看识别结果" }
     else -> state.message ?: "点击返回听歌识曲"
 }

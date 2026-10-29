@@ -9,9 +9,11 @@ import java.util.concurrent.atomic.AtomicLong
 
 enum class RecognitionPhase { IDLE, RECORDING, RECOGNIZING, MATCHED, NO_MATCH, ERROR }
 enum class RecognitionAudioSource { SYSTEM, MICROPHONE }
+enum class RecognitionStep { CAPTURE, ANALYZE, MATCH }
 data class RecognitionState(val phase: RecognitionPhase = RecognitionPhase.IDLE, val seconds: Int = 0,
     val level: Float = 0f, val songs: List<Song> = emptyList(), val message: String? = null,
-    val source: RecognitionAudioSource = RecognitionAudioSource.MICROPHONE) {
+    val source: RecognitionAudioSource = RecognitionAudioSource.MICROPHONE,
+    val step: RecognitionStep = RecognitionStep.CAPTURE) {
     val busy get() = phase == RecognitionPhase.RECORDING || phase == RecognitionPhase.RECOGNIZING
 }
 
@@ -40,26 +42,33 @@ class RecognitionController(private val scope: CoroutineScope, private val recor
         work = scope.launch {
             var samples: ShortArray? = null
             try {
-                samples = recorder.record(requestStop) { seconds, level ->
+                samples = withTimeout(13_000) { recorder.record(requestStop) { seconds, level ->
                     if (epoch.get() == attempt) mutable.value = mutable.value.copy(seconds = seconds, level = level)
-                }
+                } }
                 ensureActive()
                 if (samples.size < 3 * 8000) throw IllegalStateException("片段太短，请至少听满 3 秒后再识别")
                 if (samples.size > 10 * 8000) throw IllegalStateException("识别片段过长，请重新录音")
-                if (epoch.get() == attempt) mutable.value = mutable.value.copy(phase = RecognitionPhase.RECOGNIZING, level = 0f)
+                if (epoch.get() == attempt) mutable.value = mutable.value.copy(phase = RecognitionPhase.RECOGNIZING, step = RecognitionStep.ANALYZE, level = 0f)
                 val encoded = withTimeout(10_000) { fingerprint(samples) }
-                val songs = recognize(encoded, samples.size / 8000.0)
+                if (epoch.get() == attempt) mutable.value = mutable.value.copy(step = RecognitionStep.MATCH)
+                val songs = withTimeout(15_000) { recognize(encoded, samples.size / 8000.0) }
                 ensureActive()
                 if (epoch.get() == attempt) mutable.value = mutable.value.copy(
                     phase = if (songs.isEmpty()) RecognitionPhase.NO_MATCH else RecognitionPhase.MATCHED, songs = songs,
-                    message = if (songs.isEmpty()) "暂时没有识别到，靠近音源再试一次" else null)
+                    message = if (songs.isEmpty()) {
+                        if (source == RecognitionAudioSource.SYSTEM) "暂时没有识别到，请播放歌曲原声，或切换采集方式" else "暂时没有识别到，靠近音源再试一次"
+                    } else null)
             } catch (e: TimeoutCancellationException) {
                 currentCoroutineContext().ensureActive()
-                if (epoch.get() == attempt) mutable.value = mutable.value.copy(phase = RecognitionPhase.ERROR, message = "识曲超时，请重试", level = 0f)
+                if (epoch.get() == attempt) mutable.value = mutable.value.copy(phase = RecognitionPhase.ERROR, message = when (state.value.step) {
+                    RecognitionStep.CAPTURE -> "采集声音超时，请切换采集方式"
+                    RecognitionStep.ANALYZE -> "声音处理超时，请重试"
+                    RecognitionStep.MATCH -> "网易云匹配超时，请检查网络后重试"
+                }, level = 0f)
             } catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 if (epoch.get() == attempt) mutable.value = mutable.value.copy(phase = RecognitionPhase.ERROR, level = 0f,
-                    message = if (e is SecurityException) "麦克风权限已关闭，请重新授权" else e.message?.take(180) ?: "识曲失败，请重试")
+                    message = if (e is SecurityException) "录音权限已关闭，请重新授权" else e.message?.take(180) ?: "识曲失败，请重试")
             } finally { samples?.fill(0) }
         }
     }
