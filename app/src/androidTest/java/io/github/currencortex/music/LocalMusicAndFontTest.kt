@@ -30,6 +30,34 @@ import java.util.UUID
 class LocalMusicAndFontTest {
     private val context get() = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
 
+    @Test fun embeddedLyricsReadThroughMediaStoreDescriptor() = runBlocking {
+        for ((extension, mime) in listOf("mp3" to "audio/mpeg", "flac" to "audio/flac",
+            "m4a" to "audio/mp4", "wav" to "audio/wav")) {
+        val file = File(context.cacheDir, "embedded-lyrics-${UUID.randomUUID()}.$extension")
+        val title = file.nameWithoutExtension
+        val values = ContentValues().apply {
+            put(MediaStore.Audio.Media.DISPLAY_NAME, file.name)
+            put(MediaStore.Audio.Media.MIME_TYPE, mime)
+            put(MediaStore.Audio.Media.IS_MUSIC, 1)
+            put(MediaStore.Audio.Media.IS_PENDING, 1)
+        }
+        val uri = requireNotNull(context.contentResolver.insert(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, values))
+        try {
+            androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.assets
+                .open("download/fixture.$extension").use { input -> file.outputStream().use { input.copyTo(it) } }
+            val song = Song(-1, title, durationMs = 1000, musicSource = MusicSource.LOCAL, localUri = uri.toString())
+            val text = "[00:00.10]本地歌词\n[00:00.50]离线读取"
+            io.github.currencortex.music.core.download.SongTagWriter.write(file, song, text, null)
+            context.contentResolver.openOutputStream(uri)!!.use { output -> file.inputStream().use { it.copyTo(output) } }
+            context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }, null, null)
+            val result = io.github.currencortex.music.feature.lyrics.data.LocalLyricsProvider(context).load(song)
+            assertEquals("local", result?.origin?.provider)
+            assertEquals(listOf("本地歌词", "离线读取"), result?.document?.lines?.map { it.text })
+            assertEquals(100L, result?.document?.lines?.first()?.startTimeMs)
+        } finally { context.contentResolver.delete(uri, null, null); file.delete() }
+        }
+    }
+
     @Test fun importFontMakesPrivateCopyAndInvalidFileDoesNotReplaceIt() {
         val uri = Uri.parse("android.resource://${context.packageName}/${R.font.lxgw_wenkai_regular}")
         val name = importCustomFont(context, uri)

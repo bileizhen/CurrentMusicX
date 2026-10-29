@@ -34,6 +34,7 @@ class LyricsAutomaticSourceSettingsTest {
         assertEquals(LyricsSource.AUTO, LyricsSource.from("AUTO"))
         assertEquals(LyricsSource.NETEASE, LyricsSource.from("NETEASE"))
         assertEquals(LyricsSource.CURRENT_MUSIC, LyricsSource.from("CURRENT_MUSIC"))
+        assertEquals(LyricsSource.LOCAL, LyricsSource.from("LOCAL"))
     }
 
     @Test fun allUnmigratedSourcesReadAsAutomaticBeforeTheStartupWriteRuns() = runTest {
@@ -62,7 +63,7 @@ class LyricsAutomaticSourceSettingsTest {
         assertEquals(LyricsSource.AUTO, repository.snapshot().lyricsSource)
         assertEquals(39f, repository.snapshot().lyricsFontSize, .001f)
         assertEquals(350L, repository.snapshot().lyricsOffsetMs)
-        for (chosen in listOf(LyricsSource.NETEASE, LyricsSource.CURRENT_MUSIC, LyricsSource.AUTO)) {
+        for (chosen in LyricsSource.entries) {
             repository.setLyricsSource(chosen)
             val recreated = MusicSettingsRepository(store, backgroundScope)
             assertEquals(chosen, recreated.snapshot().lyricsSource)
