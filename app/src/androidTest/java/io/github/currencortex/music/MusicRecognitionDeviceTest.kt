@@ -69,10 +69,11 @@ class MusicRecognitionDeviceTest {
             container.playerController.queue.replace(listOf(paused), 0)
             container.playerController.state.value = PlayerState(song = paused)
             lateinit var activity: ComponentActivity
+            var openRecognition by mutableIntStateOf(0)
             compose.setContent {
                 activity = LocalActivity.current as ComponentActivity
                 LaunchedEffect(activity) { activity.enableEdgeToEdge() }
-                CurrentMusicApp(container)
+                CurrentMusicApp(container, openRecognitionRequest = openRecognition)
             }
             compose.waitUntil(15000) { compose.onAllNodesWithTag("open_recognition").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("open_recognition").performScrollTo().performClick()
@@ -95,6 +96,11 @@ class MusicRecognitionDeviceTest {
             }
             compose.onNodeWithTag("recognition_history").performClick()
             assertTrue(compose.onNodeWithTag("recognition_header").fetchSemanticsNode().boundsInRoot.top >= safeTop - 1)
+            compose.onNodeWithTag("recognition_back").performClick()
+            compose.onNodeWithTag("recognition_back").performClick()
+            compose.waitUntil(5000) { compose.onNodeWithTag("open_recognition").isDisplayed() }
+            compose.runOnIdle { openRecognition++ }
+            compose.waitUntil(5000) { compose.onNodeWithTag("recognition_header").isDisplayed() }
         } finally {
             InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot().let { bitmap ->
                 File(context.getExternalFilesDir(null), "recognition-layout-diagnostic.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }

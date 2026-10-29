@@ -67,4 +67,5 @@ class RecognitionController(private val scope: CoroutineScope, private val recor
         epoch.incrementAndGet(); stop.set(true); work?.cancel(); work = null
         if (state.value.busy) mutable.value = RecognitionState()
     }
+    fun reset() { cancel(); mutable.value = RecognitionState() }
 }

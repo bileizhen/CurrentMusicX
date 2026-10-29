@@ -38,6 +38,8 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -54,37 +56,77 @@ import java.time.format.DateTimeFormatter
         val repository = NeteaseRecognitionRepository()
         RecognitionController(scope, MicrophoneRecorder(), encoder::encode, repository::recognize)
     }
-    val state by controller.state.collectAsStateWithLifecycle()
+    val localState by controller.state.collectAsStateWithLifecycle()
+    val desktopState by RecognitionDesktopSession.state.collectAsStateWithLifecycle()
+    val desktopAttached by RecognitionDesktopSession.attached.collectAsStateWithLifecycle()
+    val state = if (desktopAttached || (localState.phase == RecognitionPhase.IDLE && desktopState.phase != RecognitionPhase.IDLE)) desktopState else localState
     val historyStore = remember { RecognitionHistory(context) }
     var history by remember { mutableStateOf(historyStore.read()) }
     var showingHistory by remember { mutableStateOf(false) }
     var permissionMessage by remember { mutableStateOf<String?>(null) }
     var pendingRecord by remember { mutableStateOf(false) }
+    var pendingDesktop by remember { mutableStateOf(false) }
+    var desktopStarting by remember { mutableStateOf(false) }
+    fun startChosen() {
+        pendingRecord = false
+        permissionMessage = null
+        if (pendingDesktop) {
+            pendingDesktop = false
+            if (!lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+            try {
+                controller.reset()
+                RecognitionDesktopSession.clearResult()
+                RecognitionDesktopService.start(context)
+                desktopStarting = true
+            } catch (_: Exception) { permissionMessage = "暂时无法开启桌面识曲，请重试" }
+        } else {
+            RecognitionDesktopService.stop(context)
+            RecognitionDesktopSession.clearResult()
+            controller.start()
+        }
+    }
+    LaunchedEffect(desktopStarting) {
+        if (desktopStarting) {
+            val ready = withTimeoutOrNull(4_000) { RecognitionDesktopSession.attached.first { it } } == true
+            desktopStarting = false
+            if (ready && lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                context.startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            } else if (!ready) permissionMessage = "桌面识曲启动失败，请检查权限后重试"
+        }
+    }
     BackHandler(showingHistory) { showingHistory = false }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         pendingRecord = granted && lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
         if (granted && lifecycle.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-            pendingRecord = false; permissionMessage = null; controller.start()
+            startChosen()
         } else if (!granted) permissionMessage = "需要麦克风权限才能识曲，可在系统设置中开启"
     }
     DisposableEffect(controller, lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE) controller.cancel()
             if (event == Lifecycle.Event.ON_RESUME && pendingRecord) {
-                pendingRecord = false; permissionMessage = null
-                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) controller.start()
+                if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startChosen()
             }
+            if (event == Lifecycle.Event.ON_RESUME) history = historyStore.read()
         }
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer); pendingRecord = false; controller.cancel() }
     }
     LaunchedEffect(state.phase, state.songs) {
-        if (state.phase == RecognitionPhase.MATCHED && state.songs.isNotEmpty())
-            history = withContext(Dispatchers.IO) { historyStore.add(state.songs.first()) }
+        if (localState.phase == RecognitionPhase.MATCHED && localState.songs.isNotEmpty())
+            history = withContext(Dispatchers.IO) { historyStore.add(localState.songs.first()) }
     }
-    fun begin() {
+    fun begin(desktop: Boolean = false) {
+        if (desktopStarting || state.busy) return
         permissionMessage = null
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) controller.start()
+        pendingDesktop = desktop
+        if (desktop && !Settings.canDrawOverlays(context)) {
+            pendingDesktop = false
+            permissionMessage = "开启悬浮窗权限后，点击桌面灵动岛识曲"
+            context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:${context.packageName}")))
+            return
+        }
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) startChosen()
         else permission.launch(Manifest.permission.RECORD_AUDIO)
     }
     val colors = MiuixTheme.colorScheme
@@ -119,18 +161,19 @@ import java.time.format.DateTimeFormatter
         } else {
             MusicRecognitionContent(state, permissionMessage, bottom,
                 onAction = { when (state.phase) {
-                    RecognitionPhase.RECORDING -> controller.finishRecording()
-                    RecognitionPhase.RECOGNIZING -> controller.cancel()
+                    RecognitionPhase.RECORDING -> if (desktopAttached) RecognitionDesktopService.finish(context) else controller.finishRecording()
+                    RecognitionPhase.RECOGNIZING -> if (desktopAttached) RecognitionDesktopService.stop(context) else controller.cancel()
                     else -> begin()
                 } }, onSettings = {
                     context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
-                }, onPlay = play)
+                }, onPlay = play, onDesktop = { begin(desktop = true) }, desktopStarting = desktopStarting)
         }
     }
 }
 
 @Composable internal fun MusicRecognitionContent(state: RecognitionState, permissionMessage: String?, bottom: androidx.compose.ui.unit.Dp,
-    onAction: () -> Unit, onSettings: () -> Unit, onPlay: (List<Song>, Int) -> Unit) {
+    onAction: () -> Unit, onSettings: () -> Unit, onPlay: (List<Song>, Int) -> Unit,
+    onDesktop: (() -> Unit)? = null, desktopStarting: Boolean = false) {
     val colors = MiuixTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Center the listening group in the usable area above the floating player, rather than
@@ -178,9 +221,16 @@ import java.time.format.DateTimeFormatter
                 RecognitionSongCard(song, if (index == 0) "网易云识别结果" else "你也许在听", "recognition_result_$index") { onPlay(state.songs, index) }
             }
             item {
-                Text("识别时使用麦克风，并将音频指纹发送至网易云\n离开页面即停止录音，仅保存识别到的歌曲记录",
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+                if (onDesktop != null) Text(if (desktopStarting) "正在开启桌面识曲…" else "桌面灵动岛识曲  ↗",
+                    Modifier.clip(RoundedCornerShape(20.dp)).background(colors.primary.copy(alpha = .08f))
+                        .clickable(enabled = !state.busy && !desktopStarting, role = Role.Button, onClick = onDesktop)
+                        .padding(horizontal = 18.dp, vertical = 12.dp).testTag("recognition_desktop"),
+                    color = colors.primary.copy(alpha = if (state.busy) .45f else 1f), fontSize = 14.sp)
+                Text("识别时使用麦克风，并将音频指纹发送至网易云\n桌面模式会继续识别，关闭灵动岛或锁屏即停止\n仅保存识别到的歌曲记录，普通模式离页即停",
                     Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp).testTag("recognition_disclosure"), fontSize = 11.sp,
                     lineHeight = 18.sp, color = colors.onSurfaceVariantSummary.copy(alpha = .75f), textAlign = TextAlign.Center)
+                }
             }
         }
     }

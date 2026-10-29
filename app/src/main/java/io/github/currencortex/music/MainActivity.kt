@@ -17,8 +17,16 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
     private val desktopRequest = androidx.compose.runtime.mutableIntStateOf(0)
+    private val recognitionRequest = androidx.compose.runtime.mutableIntStateOf(0)
+    private fun handleRecognition(request: android.content.Intent) {
+        if (request.getBooleanExtra(io.github.currencortex.music.feature.recognition.RecognitionDesktopService.OPEN, false)) {
+            request.removeExtra(io.github.currencortex.music.feature.recognition.RecognitionDesktopService.OPEN)
+            recognitionRequest.intValue++
+        }
+    }
     override fun onNewIntent(intent: android.content.Intent) {
         super.onNewIntent(intent)
+        handleRecognition(intent)
         handleUpdateView(intent)
         if (intent.getBooleanExtra(io.github.currencortex.music.core.update.WorkManagerUpdateBackground.OPEN, false)) {
             (application as CurrentMusicApplication).container.updates.reopenDownload()
@@ -28,6 +36,7 @@ class MainActivity : ComponentActivity() {
     }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        handleRecognition(intent)
         if (intent.getBooleanExtra(io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsHost.OPEN, false)) desktopRequest.intValue++
         val launchWindowReady = androidx.compose.runtime.mutableStateOf(android.os.Build.VERSION.SDK_INT < 31)
         if (android.os.Build.VERSION.SDK_INT >= 31) splashScreen.setOnExitAnimationListener {
@@ -42,7 +51,7 @@ class MainActivity : ComponentActivity() {
             intent.removeExtra(io.github.currencortex.music.core.update.WorkManagerUpdateBackground.OPEN)
         }
         val animateLaunch = app.consumeLaunchAnimation() && savedInstanceState == null
-        setContent { CurrentMusicApp(app.container, animateLaunch = animateLaunch, launchWindowReady = launchWindowReady.value, openDesktopRequest = desktopRequest.intValue) }
+        setContent { CurrentMusicApp(app.container, animateLaunch = animateLaunch, launchWindowReady = launchWindowReady.value, openDesktopRequest = desktopRequest.intValue, openRecognitionRequest = recognitionRequest.intValue) }
         handleUpdateView(intent)
     }
     private fun handleUpdateView(request: android.content.Intent) {

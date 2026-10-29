@@ -229,10 +229,11 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
     val context = LocalContext.current
     val notice by container.islandNotices.collectAsStateWithLifecycle()
     val desktop by container.desktopLyricsStatus.collectAsStateWithLifecycle()
+    val recognition by io.github.currencortex.music.feature.recognition.RecognitionDesktopSession.attached.collectAsStateWithLifecycle()
     val options by container.desktopLyrics.state.collectAsStateWithLifecycle()
     Box(Modifier.fillMaxSize().statusBarsPadding().padding(top = 8.dp, start = 20.dp, end = 20.dp),
         contentAlignment = Alignment.TopCenter) {
-        AnimatedVisibility(fallbackIslandNoticeVisible(notice, desktop.attached),
+        AnimatedVisibility(!recognition && fallbackIslandNoticeVisible(notice, desktop.attached),
             enter = fadeIn(tween(160)) + scaleIn(tween(260), initialScale = .88f),
             exit = fadeOut(tween(140, 380)) + scaleOut(tween(180, 300), targetScale = .88f)) {
             DesktopIslandEffectTransition(notice.takeUnless { desktop.attached },
