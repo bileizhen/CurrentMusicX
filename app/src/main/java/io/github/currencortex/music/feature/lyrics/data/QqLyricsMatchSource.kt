@@ -115,6 +115,7 @@ class QqLyricsMatchSource(client: OkHttpClient = OkHttpClient(), baseUrl: String
         private const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
         private val SONG_MID = Regex("[A-Za-z0-9_-]{1,128}")
         private val TIMESTAMP = Regex("\\[\\d{1,4}:\\d{1,2}(?:\\.\\d{1,3})?]")
+        private val COLON_FRACTION_TIMESTAMP = Regex("\\[(\\d{1,4}:[0-5]?\\d):(\\d{1,3})]")
         private val ENTITY = Regex("&(#(?:x[0-9a-fA-F]{1,6}|[0-9]{1,7})|amp|lt|gt|quot|apos|nbsp);")
         private fun JsonObject.string(key: String) = (get(key) as? JsonPrimitive)?.contentOrNull.orEmpty()
         private fun JsonObject.number(key: String) = (get(key) as? JsonPrimitive)?.longOrNull
@@ -137,18 +138,25 @@ class QqLyricsMatchSource(client: OkHttpClient = OkHttpClient(), baseUrl: String
         }
         private fun decodeTrack(value: String): String {
             if (value.isBlank()) return ""
-            val plain = entities(value).replace("\r\n", "\n").replace('\r', '\n')
+            val plain = normalizeTrack(value)
             if (plain.toByteArray(Charsets.UTF_8).size > LyricsFileCodec.MAX_BYTES) throw LyricsMatchException("QQ 音乐歌词文件过大")
             if (TIMESTAMP.containsMatchIn(plain)) return plain
-            val bytes = try { Base64.getDecoder().decode(value.replace(Regex("\\s+"), "")) }
+            val bytes = try { Base64.getDecoder().decode(plain.replace(Regex("\\s+"), "")) }
             catch (e: IllegalArgumentException) { throw LyricsMatchException("QQ 音乐返回了不支持的歌词编码", e) }
             if (bytes.size > LyricsFileCodec.MAX_BYTES) throw LyricsMatchException("QQ 音乐歌词文件过大")
             val decoded = try { Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString() }
             catch (e: Exception) { throw LyricsMatchException("QQ 音乐歌词文字编码无效", e) }
-            val text = entities(decoded).replace("\r\n", "\n").replace('\r', '\n')
+            val text = normalizeTrack(decoded)
             if (!TIMESTAMP.containsMatchIn(text)) throw LyricsMatchException("QQ 音乐返回了不支持的歌词格式")
             return text
+        }
+
+        private fun normalizeTrack(value: String): String {
+            // QQ also emits [mm:ss:ff], including [00:00:00] for its instrumental notice.
+            // Preserve the fraction's precision and the source timing; this is plain LRC, not Base64/QRC.
+            val text = entities(value).replace("\r\n", "\n").replace('\r', '\n')
+            return COLON_FRACTION_TIMESTAMP.replace(text) { "[${it.groupValues[1]}.${it.groupValues[2]}]" }
         }
     }
 }
