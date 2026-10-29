@@ -51,8 +51,10 @@ class QqLyricsMatchSource(client: OkHttpClient = OkHttpClient(), baseUrl: String
             }.joinToString(", ").take(1024)
             val seconds = row.number("interval")?.takeIf { it in 0..604_800 } ?: 0
             val id = row.number("songid")?.takeIf { it > 0 }?.toString().orEmpty()
+            val albumMid = row.string("albummid").takeIf { it.matches(SONG_MID) }.orEmpty()
             LyricsCandidate(LyricsMatchSource.QQ_MUSIC, mid, title, artists, cleanLabel(row.string("albumname")),
-                seconds * 1000, id.ifEmpty { mid })
+                seconds * 1000, id.ifEmpty { mid },
+                cover = if (albumMid.isNotEmpty()) "https://y.gtimg.cn/music/photo_new/T002R300x300M000$albumMid.jpg" else "")
         }.distinctBy { it.id }.take(OnlineLyricsMatcher.MAX_RESULTS).toList()
     }
 

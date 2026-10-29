@@ -60,6 +60,22 @@ class QqLyricsMatchSourceTest {
         } finally { server.shutdown() }
     }
 
+    @Test fun catalogueAlbumMidsProvideCoversWhileMissingOrInvalidMidsKeepThePlaceholder() = runBlocking {
+        val server = MockWebServer()
+        try {
+            server.enqueue(MockResponse().setBody("""{"code":0,"data":{"song":{"list":[
+                {"songmid":"001bIzp24ISxYM","songname":"Fixture","albummid":"00017J8H3zbzxe"},
+                {"songmid":"missing","songname":"Missing album"},
+                {"songmid":"invalid","songname":"Invalid album","albummid":"../../private?x=1"}
+            ]}}}"""))
+            server.start()
+            val results = source(server).search("Fixture")
+            assertEquals("https://y.gtimg.cn/music/photo_new/T002R300x300M00000017J8H3zbzxe.jpg", results[0].cover)
+            assertEquals("", results[1].cover)
+            assertEquals("", results[2].cover)
+        } finally { server.shutdown() }
+    }
+
     @Test fun base64AndHtmlEncodedPublicTracksDecodeBeforeTheLrcParser() = runBlocking {
         val server = MockWebServer()
         try {
