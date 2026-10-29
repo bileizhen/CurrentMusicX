@@ -40,7 +40,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private val appForeground: StateFlow<Boolean> = MutableStateFlow(false),
     private val effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = MutableStateFlow(null),
     private val installUpdate: () -> Unit = {},
-    private val pageHidden: StateFlow<Boolean> = MutableStateFlow(false)) : AutoCloseable {
+    private val pageHidden: StateFlow<Boolean> = MutableStateFlow(false),
+    private val musicSettings: StateFlow<io.github.currencortex.music.data.settings.MusicSettings> = MutableStateFlow(io.github.currencortex.music.data.settings.MusicSettings())) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val visual = if (Build.VERSION.SDK_INT >= 30) context.createDisplayContext(context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
         .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null) else context
@@ -145,7 +146,10 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
             setContent {
                 val config by appearance.collectAsState()
                 val customFont = io.github.currencortex.music.ui.theme.rememberCustomFont(config.customFont)
-                androidx.compose.runtime.CompositionLocalProvider(io.github.currencortex.music.ui.theme.LocalCustomFont provides customFont) {
+                val lyricSettings by musicSettings.collectAsState()
+                val lyricFont = io.github.currencortex.music.feature.lyrics.ui.rememberLyricsFont(lyricSettings)
+                androidx.compose.runtime.CompositionLocalProvider(io.github.currencortex.music.ui.theme.LocalCustomFont provides customFont,
+                    io.github.currencortex.music.feature.lyrics.ui.LocalLyricsFont provides lyricFont) {
                 Box(Modifier.musicRefreshRate(config.refreshRate), propagateMinConstraints = true) {
                 val inApp by appForeground.collectAsState()
                 DesktopLyricsSurface(lyrics, playback, preferences.state, effectNotices = effectNotices, installUpdate = installUpdate, noticeOnly = inApp,

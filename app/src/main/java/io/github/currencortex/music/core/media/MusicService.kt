@@ -131,7 +131,7 @@ class MusicService : MediaSessionService() {
             }, togglePlayback = { container.playerController.toggle() }, appearance = container.settings.state,
             appForeground = container.appForeground, effectNotices = container.islandNotices,
             installUpdate = { io.github.currencortex.music.core.update.UpdateInstallAction.open(this) },
-            pageHidden = container.desktopIslandPageHidden)
+            pageHidden = container.desktopIslandPageHidden, musicSettings = container.musicSettings.state)
         val probe = TrackEnergyProbe()
         transitions = PlaybackTransitions(createPlaybackPlayer(probe), probe, scope, ::createPlaybackPlayer,
             ::transitionOffer, resolve = { offer ->

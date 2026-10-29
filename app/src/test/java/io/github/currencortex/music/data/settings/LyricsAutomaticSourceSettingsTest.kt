@@ -14,6 +14,22 @@ import java.io.IOException
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LyricsAutomaticSourceSettingsTest {
+    @Test fun lyricFontIsIndependentAndSurvivesRepositoryRestart() = runTest {
+        val store = MemoryPreferences()
+        val repository = MusicSettingsRepository(store, backgroundScope)
+        runCurrent()
+        assertEquals(LyricsFont.SYSTEM, repository.snapshot().lyricsFont)
+        repository.setLyricsFontFile("independent.font")
+        assertEquals(LyricsFont.IMPORTED, repository.snapshot().lyricsFont)
+        repository.setLyricsFont(LyricsFont.WENKAI)
+        val restarted = MusicSettingsRepository(store, backgroundScope)
+        assertEquals(LyricsFont.WENKAI, restarted.snapshot().lyricsFont)
+        assertEquals("independent.font", restarted.snapshot().lyricsFontFile)
+        restarted.setLyricsFont(LyricsFont.SYSTEM)
+        assertEquals("independent.font", restarted.snapshot().lyricsFontFile)
+        assertEquals(LyricsSource.AUTO, restarted.snapshot().lyricsSource)
+        assertEquals(LyricsFont.SYSTEM, LyricsFont.from("invalid"))
+    }
     private val source = stringPreferencesKey("lyrics.source")
     private val migration = intPreferencesKey("lyrics.source.automaticMigrationVersion")
 

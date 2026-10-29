@@ -294,6 +294,8 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
         player.qualityChanged()
     }
     fun lyricsFontSize(value: Float) = viewModelScope.launch { container.musicSettings.setLyricsFontSize(value) }
+    fun lyricsFont(value: io.github.currencortex.music.data.settings.LyricsFont) = viewModelScope.launch { container.musicSettings.setLyricsFont(value) }
+    suspend fun lyricsFontFile(value: String) = container.musicSettings.setLyricsFontFile(value)
     fun lyricsWeight(value: io.github.currencortex.music.data.settings.LyricsWeight) = viewModelScope.launch { container.musicSettings.setLyricsWeight(value) }
     fun lyricsDisplay(transform: (io.github.currencortex.music.data.settings.LyricsDisplayOptions) -> io.github.currencortex.music.data.settings.LyricsDisplayOptions) =
         viewModelScope.launch { container.musicSettings.editLyricsDisplay(transform) }

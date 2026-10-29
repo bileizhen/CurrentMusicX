@@ -58,6 +58,11 @@ class LocalMusicAndFontTest {
         }
     }
 
+    @Test fun lyricsUseSystemFontByDefault() {
+        assertEquals(androidx.compose.ui.text.font.FontFamily.Default,
+            io.github.currencortex.music.feature.lyrics.ui.LyricsFontFamily)
+    }
+
     @Test fun importFontMakesPrivateCopyAndInvalidFileDoesNotReplaceIt() {
         val uri = Uri.parse("android.resource://${context.packageName}/${R.font.lxgw_wenkai_regular}")
         val name = importCustomFont(context, uri)
