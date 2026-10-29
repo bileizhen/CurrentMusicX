@@ -26,6 +26,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -88,16 +89,22 @@ import java.time.format.DateTimeFormatter
     }
     val colors = MiuixTheme.colorScheme
     val bottom = LocalMusicBottomInset.current
-    Column(Modifier.fillMaxSize().background(colors.background).testTag("music_recognition")) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            RecognitionIconButton("返回", MusicIcons.Back, "recognition_back", { if (showingHistory) showingHistory = false else { controller.cancel(); onBack() } })
-            Text(if (showingHistory) "识别记录" else "听歌识曲", Modifier.weight(1f), fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
-            if (showingHistory) {
-                Text("清空", Modifier.clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button) {
-                    historyStore.clear(); history = emptyList()
-                }.padding(10.dp).testTag("recognition_clear_history"), color = colors.primary, fontSize = 14.sp)
-            } else RecognitionIconButton("识别记录", MusicIcons.Update, "recognition_history", { controller.cancel(); showingHistory = true })
+    Column(Modifier.fillMaxSize().background(colors.background)
+        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+        .testTag("music_recognition")) {
+        Box(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 20.dp).testTag("recognition_header")) {
+            Box(Modifier.align(Alignment.CenterStart)) {
+                RecognitionIconButton("返回", MusicIcons.Back, "recognition_back", { if (showingHistory) showingHistory = false else { controller.cancel(); onBack() } })
+            }
+            Text(if (showingHistory) "识别记录" else "听歌识曲", Modifier.align(Alignment.Center).padding(horizontal = 52.dp),
+                fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Box(Modifier.align(Alignment.CenterEnd)) {
+                if (showingHistory) {
+                    Text("清空", Modifier.clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button) {
+                        historyStore.clear(); history = emptyList()
+                    }.padding(10.dp).testTag("recognition_clear_history"), color = colors.primary, fontSize = 14.sp)
+                } else RecognitionIconButton("识别记录", MusicIcons.Update, "recognition_history", { controller.cancel(); showingHistory = true })
+            }
         }
         if (showingHistory) {
             LazyColumn(Modifier.fillMaxSize().testTag("recognition_history_list"),
@@ -125,70 +132,80 @@ import java.time.format.DateTimeFormatter
 @Composable internal fun MusicRecognitionContent(state: RecognitionState, permissionMessage: String?, bottom: androidx.compose.ui.unit.Dp,
     onAction: () -> Unit, onSettings: () -> Unit, onPlay: (List<Song>, Int) -> Unit) {
     val colors = MiuixTheme.colorScheme
-    LazyColumn(Modifier.fillMaxSize().testTag("recognition_content"), horizontalAlignment = Alignment.CenterHorizontally,
-        contentPadding = PaddingValues(start = 22.dp, end = 22.dp, bottom = bottom + 24.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        item {
-            Column(Modifier.fillMaxWidth().padding(top = 22.dp), horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("让好音乐，有名有姓", fontSize = 25.sp, fontWeight = FontWeight.Medium)
-                Text("靠近音源，听一小段就好", fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Center the listening group in the usable area above the floating player, rather than
+        // anchoring a fixed-height stack to the top of a full-screen scene.
+        val usableHeight = (maxHeight - bottom - 24.dp).coerceAtLeast(0.dp)
+        val orbSize = minOf(maxWidth - 44.dp,
+            if (state.songs.isEmpty()) (usableHeight * .48f).coerceIn(190.dp, 300.dp)
+            else (usableHeight * .34f).coerceIn(160.dp, 220.dp))
+        val topSpace = if (state.songs.isEmpty() && permissionMessage == null)
+            ((usableHeight - orbSize - 238.dp) / 2).coerceIn(12.dp, 64.dp) else 12.dp
+        LazyColumn(Modifier.fillMaxSize().testTag("recognition_content"), horizontalAlignment = Alignment.CenterHorizontally,
+            contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = topSpace, bottom = bottom + 24.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            item {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("让好音乐，有名有姓", fontSize = 25.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Center)
+                    Text("靠近音源，听一小段就好", fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+                }
             }
-        }
-        item {
-            RecognitionOrb(state, onAction)
-        }
-        item {
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(when (state.phase) {
-                    RecognitionPhase.RECORDING -> "正在聆听 · ${state.seconds} 秒"
-                    RecognitionPhase.RECOGNIZING -> "正在识别音乐…"
-                    RecognitionPhase.MATCHED -> "找到这首歌了"
-                    RecognitionPhase.NO_MATCH -> "再听一次试试"
-                    RecognitionPhase.ERROR -> "这次没能完成识别"
-                    else -> "点击开始听歌识曲"
-                }, Modifier.testTag("recognition_status"), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                Text(when (state.phase) {
-                    RecognitionPhase.RECORDING -> if (state.seconds < 3) "至少聆听 3 秒，最长 10 秒" else "点击中央按钮，立即开始识别"
-                    RecognitionPhase.RECOGNIZING -> "点击中央按钮可取消"
-                    RecognitionPhase.MATCHED -> "点击歌曲即可播放，也可继续识别"
-                    else -> state.message ?: "支持识别正在播放的歌曲原声"
-                }, fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
-                permissionMessage?.let { Text(it, Modifier.testTag("recognition_permission_message"), color = colors.error, fontSize = 13.sp)
-                    Text("去设置", Modifier.clickable(role = Role.Button, onClick = onSettings).padding(10.dp), color = colors.primary, fontSize = 14.sp) }
+            item {
+                RecognitionOrb(state, orbSize, onAction)
             }
-        }
-        itemsIndexed(state.songs, key = { _, song -> song.id }) { index, song ->
-            RecognitionSongCard(song, if (index == 0) "网易云识别结果" else "你也许在听", "recognition_result_$index") { onPlay(state.songs, index) }
-        }
-        item {
-            Text("识别时使用麦克风，并将音频指纹发送至网易云\n离开页面即停止录音，仅保存识别到的歌曲记录",
-                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp), fontSize = 11.sp,
-                lineHeight = 18.sp, color = colors.onSurfaceVariantSummary.copy(alpha = .75f))
+            item {
+                Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(when (state.phase) {
+                        RecognitionPhase.RECORDING -> "正在聆听 · ${state.seconds} 秒"
+                        RecognitionPhase.RECOGNIZING -> "正在识别音乐…"
+                        RecognitionPhase.MATCHED -> "找到这首歌了"
+                        RecognitionPhase.NO_MATCH -> "再听一次试试"
+                        RecognitionPhase.ERROR -> "这次没能完成识别"
+                        else -> "点击开始听歌识曲"
+                    }, Modifier.testTag("recognition_status"), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                    Text(when (state.phase) {
+                        RecognitionPhase.RECORDING -> if (state.seconds < 3) "至少聆听 3 秒，最长 10 秒" else "点击中央按钮，立即开始识别"
+                        RecognitionPhase.RECOGNIZING -> "点击中央按钮可取消"
+                        RecognitionPhase.MATCHED -> "点击歌曲即可播放，也可继续识别"
+                        else -> state.message ?: "支持识别正在播放的歌曲原声"
+                    }, fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                    permissionMessage?.let { Text(it, Modifier.testTag("recognition_permission_message"), color = colors.error, fontSize = 13.sp)
+                        Text("去设置", Modifier.clickable(role = Role.Button, onClick = onSettings).padding(10.dp), color = colors.primary, fontSize = 14.sp) }
+                }
+            }
+            itemsIndexed(state.songs, key = { _, song -> song.id }) { index, song ->
+                RecognitionSongCard(song, if (index == 0) "网易云识别结果" else "你也许在听", "recognition_result_$index") { onPlay(state.songs, index) }
+            }
+            item {
+                Text("识别时使用麦克风，并将音频指纹发送至网易云\n离开页面即停止录音，仅保存识别到的歌曲记录",
+                    Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp).testTag("recognition_disclosure"), fontSize = 11.sp,
+                    lineHeight = 18.sp, color = colors.onSurfaceVariantSummary.copy(alpha = .75f), textAlign = TextAlign.Center)
+            }
         }
     }
 }
 
-@Composable private fun RecognitionOrb(state: RecognitionState, onAction: () -> Unit) {
+@Composable private fun RecognitionOrb(state: RecognitionState, diameter: androidx.compose.ui.unit.Dp, onAction: () -> Unit) {
     val colors = MiuixTheme.colorScheme
     val active = state.busy
     val pulse = if (active) {
         val transition = rememberInfiniteTransition(label = "recognition")
         transition.animateFloat(0f, 1f, infiniteRepeatable(tween(1800, easing = LinearEasing)), label = "ripple").value
     } else 0f
-    Box(Modifier.fillMaxWidth().height(280.dp), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(280.dp)) {
+    Box(Modifier.fillMaxWidth().height(diameter), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.size(diameter)) {
             val radius = size.minDimension / 2
             drawCircle(colors.primary.copy(alpha = .035f), radius)
             drawCircle(colors.primary.copy(alpha = .055f), radius * .79f)
             drawCircle(colors.primary.copy(alpha = .09f), radius * (.57f + state.level * .05f))
             if (active) drawCircle(colors.primary.copy(alpha = (1 - pulse) * .12f), radius * (.54f + pulse * .46f))
         }
-        Box(Modifier.size(136.dp).clip(CircleShape).background(colors.primary)
+        Box(Modifier.size(diameter * .486f).clip(CircleShape).background(colors.primary)
             .clickable(role = Role.Button, onClick = onAction).testTag("recognition_action"), contentAlignment = Alignment.Center) {
             Icon(if (state.phase == RecognitionPhase.RECORDING) MusicIcons.Stop else if (state.phase == RecognitionPhase.RECOGNIZING) MusicIcons.Close else MusicIcons.Microphone,
                 when (state.phase) { RecognitionPhase.RECORDING -> "停止录音并识别"; RecognitionPhase.RECOGNIZING -> "取消识别"; else -> "开始听歌识曲" },
-                Modifier.size(56.dp), tint = colors.onPrimary)
+                Modifier.size(diameter * .2f), tint = colors.onPrimary)
         }
     }
 }
