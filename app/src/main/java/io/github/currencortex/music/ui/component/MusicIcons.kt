@@ -12,6 +12,13 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
 object MusicIcons {
+    val Stop = icon("Stop") { moveTo(6f, 6f); lineTo(18f, 6f); lineTo(18f, 18f); lineTo(6f, 18f); close() }
+    val Microphone = icon("Microphone") {
+        moveTo(9f, 5f); curveTo(9f, 1f, 15f, 1f, 15f, 5f)
+        lineTo(15f, 11f); curveTo(15f, 15f, 9f, 15f, 9f, 11f); close()
+        moveTo(5f, 10f); lineTo(5f, 11f); curveTo(5f, 20f, 19f, 20f, 19f, 11f); lineTo(19f, 10f)
+        moveTo(12f, 18f); lineTo(12f, 22f); moveTo(8f, 22f); lineTo(16f, 22f)
+    }
     val Heart = icon("Heart") {
         moveTo(12f, 21f); lineTo(3.8f, 12.8f)
         curveTo(-1f, 7.8f, 6f, 1f, 12f, 7f)
