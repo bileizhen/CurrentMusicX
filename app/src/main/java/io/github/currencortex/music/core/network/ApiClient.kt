@@ -33,7 +33,7 @@ class ApiClient(
     private fun useNative(path: String, authenticated: Boolean, projectToken: String?): Boolean {
         if (netease?.handles(path, nativeMedia()) != true) return false
         // Imported snapshots belong to the project account, even with a local NetEase login.
-        if (path == "ncmbind/sync") return false
+        if (path == "ncmbind/sync" || path == "ncmbind/import") return false
         // Explicit native mode never falls back to the project server for NetEase routes.
         if (nativeMedia()) return true
         // New logins remain device-local; membership/medal adapters are local-only routes.
@@ -47,7 +47,7 @@ class ApiClient(
                         retryConnection: Boolean = true, callTimeoutMillis: Long? = null,
                         projectOnly: Boolean = false): JsonElement = withContext(Dispatchers.IO) {
         val session = RequestSession(server(), if (authenticated) token() else null)
-        val requiresAccount = path.startsWith("ncmbind/qr/") || path.startsWith("ncmbind/phone/") || path == "ncm/captcha/sent/v1"
+        val requiresAccount = path == "ncmbind/import" || path.startsWith("ncmbind/qr/") || path.startsWith("ncmbind/phone/") || path == "ncm/captcha/sent/v1"
         val loginOwner = RequestSession(server(), token())
         val loginRevision = currentMusicSessionRevision()
         fun checkLoginOwner() {

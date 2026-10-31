@@ -21,6 +21,25 @@ import kotlinx.coroutines.sync.withLock
         (if (pending > 0) "，$pending 个待续传" else "") + (if (failed > 0) "，$failed 个失败" else "")
 }
 class BindingRepository(private val api: ApiClient, private val session: () -> RequestSession, private val invalidate: () -> Unit) {
+    private val projectSync = ProjectBindingSync(session, { owner ->
+        val local = requireNotNull(api.netease).sessions.snapshot()
+        check(owner.neteaseRevision == null || owner.neteaseRevision == local.revision)
+        val cookie = local.credential.cookies.filterKeys { it in setOf("MUSIC_U", "__csrf", "NMTID", "MUSIC_A") }
+            .entries.joinToString("; ") { (key, value) -> "$key=$value" }
+        BindingCredential(local.credential.profile?.uid ?: 0, cookie)
+    }, { login, owner ->
+        val result = api.request("POST", "ncmbind/import", body = buildJsonObject {
+            put("cookie", login.cookie); put("expectedNcmUid", login.uid)
+        }, authenticated = true, expectedSession = owner, projectOnly = true,
+            retryConnection = false, callTimeoutMillis = 15_000)
+        check(result.jsonObject["ok"]?.jsonPrimitive?.booleanOrNull == true &&
+            result.jsonObject["profile"]?.jsonObject?.get("uid")?.jsonPrimitive?.longOrNull == login.uid)
+    })
+    val projectBindingSync = projectSync.state
+    suspend fun syncProjectBinding() { if (api.hasLocalNeteaseLogin) projectSync.sync() }
+    private suspend fun shareNewBinding(original: RequestSession) {
+        if (api.netease != null && sameOwner(original, loginChanged = true)) projectSync.sync(session())
+    }
     val state = MutableStateFlow<BindingState?>(null)
     private val statusMutex = Mutex()
     private var stateOwner: RequestSession? = null
@@ -29,7 +48,7 @@ class BindingRepository(private val api: ApiClient, private val session: () -> R
         return expected.server == now.server && expected.token == now.token &&
             (loginChanged || expected.neteaseRevision == null || expected.neteaseRevision == now.neteaseRevision)
     }
-    fun clearSession() { stateOwner = null; state.value = null }
+    fun clearSession() { stateOwner = null; state.value = null; projectSync.reset() }
     private suspend fun readStatus(): BindingState {
         val expected = session()
         val value = api.decode<BindingState>(api.request("GET", "ncmbind", authenticated = true, expectedSession = expected))
@@ -89,13 +108,14 @@ class BindingRepository(private val api: ApiClient, private val session: () -> R
         }, expected))
         if (!sameOwner(expected, loginChanged = api.netease != null)) throw ApiException(ErrorKind.Unauthorized)
         clearSession(); invalidate()
+        shareNewBinding(expected)
     }
     suspend fun qrKey(expected: RequestSession) = ApiJson.decodeFromJsonElement<QrKey>(
         api.request("POST", "ncmbind/qr/key", authenticated = true, expectedSession = expected)).key
     suspend fun qrStatus(key: String, expected: RequestSession) = ApiJson.decodeFromJsonElement<QrStatus>(
         api.request("GET", "ncmbind/qr/check", mapOf("key" to key), authenticated = true, expectedSession = expected)).also {
             if (!sameOwner(expected, loginChanged = api.netease != null && it.code == 803)) throw ApiException(ErrorKind.Unauthorized)
-            if (it.code == 803) { clearSession(); invalidate() }
+            if (it.code == 803) { clearSession(); invalidate(); shareNewBinding(expected) }
         }
     fun qrUrl(key: String) = "https://music.163.com/login?codekey=${URLEncoder.encode(key, "UTF-8")}"
 }

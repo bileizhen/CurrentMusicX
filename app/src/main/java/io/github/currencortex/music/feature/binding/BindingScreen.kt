@@ -57,6 +57,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
     val membership by vm.membership.collectAsPageState()
     val medals by vm.medals.collectAsPageState()
     val busy by vm.busy.collectAsStateWithLifecycle()
+    val projectSync by vm.container.bindingRepository.projectBindingSync.collectAsStateWithLifecycle()
     val musicSettings by vm.container.musicSettings.state.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
@@ -142,6 +143,20 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                 BindingAction("重试", vm::reload, enabled = !busy)
             }
         } }
+        if (canLoginNetease) item {
+            BindingNotice("绑定后会将网易云登录态同步至当前 CurrentMusic 服务器，供同一账号的网页端和 App 使用。")
+        }
+        if (canLoginNetease && vm.container.apiClient.hasLocalNeteaseLogin) item {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                BindingNotice(when {
+                    projectSync.syncing -> "正在同步绑定至 CurrentMusic…"
+                    projectSync.synced -> "绑定已同步至 CurrentMusic"
+                    else -> projectSync.error ?: "可将本机网易云绑定同步至 CurrentMusic。"
+                })
+                if (!projectSync.synced) BindingAction("同步绑定", vm::syncProjectBinding,
+                    enabled = !busy && !projectSync.syncing)
+            }
+        }
         state.binding?.let { binding ->
             if (binding.bound) item {
                 BindingAccountCard(binding, busy, { if (musicSettings.neteaseMainLibrary || vm.container.apiClient.hasLocalNeteaseLogin) vm.reloadMusic() else vm.sync() }, vm::live, vm::refresh,
