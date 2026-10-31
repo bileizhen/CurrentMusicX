@@ -58,8 +58,8 @@ class ApiClient(
         // Native routes bypass project HTTP authentication, so login needs its own prerequisite.
         checkLoginOwner()
         if (expectedSession != null && (expectedSession.server != session.server || expectedSession.token != session.token)) throw ApiException(ErrorKind.Unauthorized)
-        if (netease?.handles(path) == true && expectedSession?.neteaseRevision != null &&
-            expectedSession.neteaseRevision != netease.sessions.state.value.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
+        if ((netease?.handles(path) == true || path == "ncmbind/import") && expectedSession?.neteaseRevision != null &&
+            expectedSession.neteaseRevision != netease?.sessions?.state?.value?.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
         if (!projectOnly && useNative(path, authenticated, session.token)) {
             val netease = requireNotNull(netease)
             if (expectedSession?.neteaseRevision != null && expectedSession.neteaseRevision != netease.sessions.state.value.revision)
@@ -93,8 +93,8 @@ class ApiClient(
             checkLoginOwner()
             if (expectedSession != null && (expectedSession.server != server() || expectedSession.token != if (authenticated) token() else null))
                 throw ApiException(ErrorKind.Unauthorized)
-            if (netease?.handles(path) == true && expectedSession?.neteaseRevision != null &&
-                expectedSession.neteaseRevision != netease.sessions.state.value.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
+            if ((netease?.handles(path) == true || path == "ncmbind/import") && expectedSession?.neteaseRevision != null &&
+                expectedSession.neteaseRevision != netease?.sessions?.state?.value?.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
             log("$method $path HTTP ${it.code}")
             if (!it.isSuccessful) {
                 // Older NCM gateway also uses 401 for missing NCM binding. Only a project-session

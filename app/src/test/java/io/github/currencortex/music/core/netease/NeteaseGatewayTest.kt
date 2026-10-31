@@ -48,6 +48,18 @@ class NeteaseGatewayTest {
         binding = BindingRepository(api, ::owner) {}
     }
     @After fun cleanup() { scope.cancel(); upstream.shutdown(); current.shutdown() }
+    @Test fun bindingImportRejectsAStaleLocalLoginBeforeHttp() = runBlocking {
+        login()
+        val previous = owner()
+        login(43)
+        val result = appResult {
+            api.request("POST", "ncmbind/import", body = buildJsonObject {
+                put("cookie", "MUSIC_U=old-device-login"); put("expectedNcmUid", 42)
+            }, authenticated = true, expectedSession = previous, projectOnly = true)
+        }
+        assertTrue(result is AppResult.Failure)
+        assertEquals(0, current.requestCount)
+    }
     @Test fun bindingImportAlwaysUsesAuthenticatedProjectServer() = runBlocking {
         login()
         current.enqueue(response("""{"ok":true,"profile":{"uid":42}}"""))
