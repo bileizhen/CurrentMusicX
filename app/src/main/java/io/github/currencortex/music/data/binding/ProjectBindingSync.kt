@@ -2,6 +2,7 @@ package io.github.currencortex.music.data.binding
 
 import io.github.currencortex.music.core.network.RequestSession
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -13,7 +14,7 @@ class BindingCredential(val uid: Long, val cookie: String) {
 }
 data class ProjectBindingSyncState(val syncing: Boolean = false, val synced: Boolean = false, val error: String? = null)
 
-/** Shares only an explicitly bound local login with its original project-account owner. */
+/** Shares the local login only with the captured project-account owner. */
 class ProjectBindingSync(
     private val session: () -> RequestSession,
     private val credential: suspend (RequestSession) -> BindingCredential,
@@ -28,8 +29,16 @@ class ProjectBindingSync(
             generation.incrementAndGet(); owner = null; state.value = ProjectBindingSyncState()
         }
     }
+    suspend fun syncAutomatically(expected: RequestSession, retryDelays: List<Long> = listOf(0L, 5_000L, 30_000L, 120_000L)) {
+        for (wait in retryDelays) {
+            if (expected != session()) return
+            if (wait > 0) delay(wait)
+            sync(expected)
+            if (expected != session() || state.value.synced) return
+        }
+    }
     suspend fun sync(expected: RequestSession = session()) = mutex.withLock {
-        if (expected != session()) return@withLock
+        if (expected != session() || (owner == expected && state.value.synced)) return@withLock
         val version = generation.incrementAndGet()
         owner = expected
         fun current() = version == generation.get() && expected == session()

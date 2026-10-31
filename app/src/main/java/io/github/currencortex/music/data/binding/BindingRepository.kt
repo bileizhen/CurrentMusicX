@@ -37,6 +37,9 @@ class BindingRepository(private val api: ApiClient, private val session: () -> R
     })
     val projectBindingSync = projectSync.state
     suspend fun syncProjectBinding() { if (api.hasLocalNeteaseLogin) projectSync.sync() }
+    suspend fun autoSyncProjectBinding(expected: RequestSession) {
+        if (api.hasLocalNeteaseLogin) projectSync.syncAutomatically(expected)
+    }
     private suspend fun shareNewBinding(original: RequestSession) {
         if (api.netease != null && sameOwner(original, loginChanged = true)) projectSync.sync(session())
     }

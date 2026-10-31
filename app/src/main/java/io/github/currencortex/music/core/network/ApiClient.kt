@@ -36,7 +36,7 @@ class ApiClient(
         if (path == "ncmbind/sync" || path == "ncmbind/import") return false
         // Explicit native mode never falls back to the project server for NetEase routes.
         if (nativeMedia()) return true
-        // New logins remain device-local; membership/medal adapters are local-only routes.
+        // Login runs on-device; project binding is synchronized separately over HTTPS.
         if (path.startsWith("ncmbind/phone/") || path.startsWith("ncmbind/qr/") ||
             path in setOf("ncmbind/membership", "ncmbind/medals", "ncm/captcha/sent/v1")) return true
         // Without a local credential, the project server can use its own saved binding.

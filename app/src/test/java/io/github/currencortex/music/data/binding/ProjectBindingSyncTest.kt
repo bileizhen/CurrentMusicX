@@ -80,6 +80,46 @@ class ProjectBindingSyncTest {
         assertTrue(sync.state.value.synced)
     }
 
+    @Test fun restoredLoginRetriesAutomaticallyUntilSuccessful() = runBlocking {
+        var attempts = 0
+        val sync = ProjectBindingSync({ owner() }, { BindingCredential(42, "MUSIC_U=restored-login") }, { _, _ ->
+            attempts++; if (attempts < 3) error("temporarily offline")
+        })
+        sync.syncAutomatically(owner(), listOf(0L, 0L, 0L, 0L))
+        assertEquals(3, attempts)
+        assertTrue(sync.state.value.synced)
+    }
+
+    @Test fun automaticRetriesAreBoundedAndKeepLocalCredential() = runBlocking {
+        var attempts = 0
+        val login = BindingCredential(42, "MUSIC_U=restored-login")
+        val sync = ProjectBindingSync({ owner() }, { login }, { _, _ -> attempts++; error("offline") })
+        sync.syncAutomatically(owner(), listOf(0L, 0L, 0L, 0L))
+        assertEquals(4, attempts)
+        assertNotNull(sync.state.value.error)
+        assertEquals("MUSIC_U=restored-login", login.cookie)
+    }
+
+    @Test fun automaticAndLoginTriggeredSyncDoNotDoubleUpload() = runBlocking {
+        var uploads = 0
+        val sync = ProjectBindingSync({ owner() }, { BindingCredential(42, "MUSIC_U=restored-login") }, { _, _ -> uploads++; yield() })
+        listOf(async { sync.syncAutomatically(owner(), listOf(0L)) }, async { sync.sync() }).awaitAll()
+        sync.syncAutomatically(owner(), listOf(0L))
+        assertEquals(1, uploads)
+    }
+
+    @Test fun ownerChangeStopsAutomaticRetry() = runBlocking {
+        var current = owner()
+        var uploads = 0
+        lateinit var sync: ProjectBindingSync
+        sync = ProjectBindingSync({ current }, { BindingCredential(42, "MUSIC_U=restored-login") }, { _, _ ->
+            uploads++; current = owner(token = "another-user"); sync.reset(); error("offline")
+        })
+        sync.syncAutomatically(owner(), listOf(0L, 0L, 0L))
+        assertEquals(1, uploads)
+        assertEquals(ProjectBindingSyncState(), sync.state.value)
+    }
+
     @Test fun cancellationClearsProgressAndPropagates() = runBlocking {
         val sync = ProjectBindingSync({ owner() }, { throw CancellationException() }, { _, _ -> fail() })
         try { sync.sync(); fail("Cancellation must propagate") } catch (_: CancellationException) { }

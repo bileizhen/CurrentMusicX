@@ -27,6 +27,7 @@ import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import io.github.currencortex.music.core.netease.*
@@ -441,6 +442,16 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                     if (playbackQueue.state.value.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) playerController.pause()
                     previous = account.revision
                 }
+            }
+        }
+        if (nativeNetease != null) appScope.launch {
+            neteaseSessions.ready.await()
+            combine(accountRepository.state, accountRepository.sessionRevision, musicSettings.state, neteaseSessions.state) {
+                account, _, _, local ->
+                if (account.account != null && !accountRepository.token.isNullOrBlank() && local.loggedIn && !local.stale)
+                    musicSession() else null
+            }.distinctUntilChanged().collectLatest { owner ->
+                if (owner != null) bindingRepository.autoSyncProjectBinding(owner)
             }
         }
         if (nativeNetease != null) appScope.launch {
