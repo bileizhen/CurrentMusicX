@@ -54,7 +54,9 @@ import top.yukonga.miuix.kmp.blur.textureBlur
 import kotlin.coroutines.coroutineContext
 
 private const val BRAND = "Current Music"
-private val brandStyle = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
+private const val CLASSIC_MAX_DURATION_MS = 5_000L
+private const val CLASSIC_FLIGHT_DURATION_MS = 1_350L
+private val brandStyle = TextStyle(fontFamily = FontFamily.SansSerif, fontSize = 24.sp, lineHeight = 30.sp, fontWeight = FontWeight.SemiBold)
 private val flightEasing = CubicBezierEasing(.25f, .1f, .25f, 1f)
 
 @Stable class LaunchBrandState {
@@ -97,21 +99,24 @@ private fun curve(start: Offset, control: Offset, end: Offset, progress: Float):
     var origin by remember { mutableStateOf(Offset.Zero) }
     var reducedMotion by remember { mutableStateOf(false) }
     LaunchedEffect(state) {
-        // Android's system splash can still cover the first Compose frames. Begin after its exit.
-        // Some non-launcher starts have no system splash, so this gate is bounded too.
-        withTimeoutOrNull(600) { snapshotFlow { latestWindowReady }.first { it } }
         val reduced = (coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) == 0f
         reducedMotion = reduced
-        if (reduced) state.reveal.snapTo(1f) else state.reveal.animateTo(1f, tween(520))
-        // Wait for the actual first home load, including settled errors. Background prefetch is separate.
-        snapshotFlow { latestReady }.first { it }
-        // Give an in-flight photo request a brief chance to finish, without blocking startup
-        // indefinitely on a missing image. Home preloads the very same Coil request.
-        if (latestCanLand) withTimeoutOrNull(800) { snapshotFlow { state.avatarPending }.first { !it } }
-        destination = state.anchor?.takeIf { latestCanLand }
-        departureAvatar = state.avatar
-        departing = true
-        if (!reduced) state.flight.animateTo(1f, tween(1100, delayMillis = 250, easing = flightEasing))
+        // Reserve the landing animation inside the five-second budget. Slow home requests
+        // keep loading underneath; neither them nor an avatar may hold the launch open.
+        withTimeoutOrNull(CLASSIC_MAX_DURATION_MS) {
+            withTimeoutOrNull(CLASSIC_MAX_DURATION_MS - if (reduced) 0L else CLASSIC_FLIGHT_DURATION_MS) {
+                // Avoid animating underneath Android's system splash.
+                withTimeoutOrNull(600) { snapshotFlow { latestWindowReady }.first { it } }
+                if (reduced) state.reveal.snapTo(1f) else state.reveal.animateTo(1f, tween(520))
+                snapshotFlow { latestReady }.first { it }
+                if (latestCanLand) withTimeoutOrNull(800) { snapshotFlow { state.avatarPending }.first { !it } }
+            }
+            state.reveal.snapTo(1f)
+            destination = state.anchor?.takeIf { latestCanLand }
+            departureAvatar = state.avatar
+            departing = true
+            if (!reduced) state.flight.animateTo(1f, tween(1100, delayMillis = 250, easing = flightEasing))
+        }
         state.landedAvatarUrl = departureAvatar?.url?.takeIf { latestCanLand }
         finish()
     }

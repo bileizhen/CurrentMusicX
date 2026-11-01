@@ -62,6 +62,7 @@ class LaunchHomeReadinessTest {
         container.musicSettings.setServer(base); container.accountRepository.server = base
         container.accountRepository.save("isolated-test-token", UserDto(7, nickname = "Fixture user"))
         container.updateSettings.setAutoCheck(false)
+        container.desktopLyrics.markRecommendationSeen()
         container.settings.edit { AppearanceSettings(blur = false) }
     }
     @After fun finish() = runBlocking {
@@ -111,10 +112,10 @@ class LaunchHomeReadinessTest {
         compose.onNodeWithTag("settings_screen").assertIsDisplayed()
         compose.onNodeWithText("外观").performScrollTo().performClick()
         compose.mainClock.advanceTimeBy(1000)
-        compose.onNodeWithTag("setting_launch_preview").assertDoesNotExist()
-        compose.onNodeWithTag("setting_launch_style").performScrollTo().performClick()
-        compose.onNodeWithTag("launch_style_none").assertIsSelected()
-        compose.onNodeWithTag("launch_style_classic").performClick()
+        compose.onNodeWithTag("appearance_screen").performScrollToNode(hasTestTag("setting_launch_preview"))
+        compose.onNodeWithTag("setting_launch_preview").assertIsNotEnabled()
+        compose.onNodeWithTag("setting_launch_style_2").performScrollTo().assertIsSelected()
+        compose.onNodeWithTag("setting_launch_style_0").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         compose.waitUntil(5000) { container.settings.state.value.launchStyle == io.github.currencortex.music.data.settings.LaunchStyle.CLASSIC }
         compose.onNodeWithTag("setting_launch_preview").assertExists()
         compose.onNodeWithTag("launch_animation").assertDoesNotExist()
@@ -123,16 +124,16 @@ class LaunchHomeReadinessTest {
         compose.onNodeWithTag("launch_animation").assertDoesNotExist()
     }
 
-    @Test fun launchWaitsForEveryHomeSectionAndFailureOffersRetryWithoutReplaying() {
+    @Test fun homeSectionsThatSettleBeforeTheDeadlineFinishLaunchAndFailureStillOffersRetry() {
         compose.mainClock.autoAdvance = false
         compose.setContent { CurrentMusicApp(container, animateLaunch = true) }
         pumpUntil { paths.containsAll(listOf("/cm/daily", "/cm/plays/recent", "/cm/playlists")) }
-        compose.mainClock.advanceTimeBy(4000)
+        compose.mainClock.advanceTimeBy(1200)
         compose.onNodeWithTag("launch_animation").assertExists()
         daily.countDown(); recent.countDown()
         pumpUntil { compose.onAllNodesWithText("Ready fixture song").fetchSemanticsNodes().isNotEmpty() }
         // Recommendations already exist, but the last home section is still pending.
-        compose.mainClock.advanceTimeBy(2000)
+        compose.mainClock.advanceTimeBy(300)
         compose.onNodeWithTag("launch_animation").assertExists()
         playlists.countDown()
         pumpUntil { compose.onAllNodesWithTag("launch_animation").fetchSemanticsNodes().isEmpty() }
@@ -144,6 +145,29 @@ class LaunchHomeReadinessTest {
         failPlaylist = false
         compose.onNodeWithTag("home_retry").performClick()
         pumpUntil { paths.count { it == "/cm/playlists" } >= 2 && compose.onAllNodesWithTag("home_retry").fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("launch_animation").assertDoesNotExist()
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun classicShowsHomeWithinFiveSecondsWhileRequestsAreStillPendingAndDoesNotReplay() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { CurrentMusicApp(container, animateLaunch = true) }
+        pumpUntil { compose.onAllNodesWithTag("launch_animation").fetchSemanticsNodes().isNotEmpty() }
+        val started = android.os.SystemClock.elapsedRealtime()
+        compose.waitUntil(6_000) {
+            compose.mainClock.advanceTimeBy(100)
+            compose.onAllNodesWithTag("launch_animation").fetchSemanticsNodes().isEmpty()
+        }
+        assertTrue("Classic launch must release the home within five seconds plus a frame margin",
+            android.os.SystemClock.elapsedRealtime() - started < 5_500)
+        assertEquals(1L, daily.count); assertEquals(1L, recent.count); assertEquals(1L, playlists.count)
+        compose.onNodeWithTag("home_brand_title").assertIsDisplayed()
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithTag("tab_3").performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("settings_screen").assertIsDisplayed()
+        daily.countDown(); recent.countDown(); playlists.countDown()
+        compose.mainClock.advanceTimeBy(2000)
         compose.onNodeWithTag("launch_animation").assertDoesNotExist()
         assertFalse(container.playerController.state.value.playing)
     }

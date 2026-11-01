@@ -15,7 +15,6 @@ import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.data.auth.Account
 import io.github.currencortex.music.data.settings.*
-import io.github.currencortex.music.feature.settings.LaunchStyleDialog
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.theme.LeiTheme
 import org.junit.Assert.*
@@ -132,20 +131,4 @@ class HaloLaunchAnimationTest {
         }
     }
 
-    @Test fun choosingStyleClosesDialogAndKeepsClassicAvailable() {
-        var selected by mutableStateOf(LaunchStyle.CLASSIC)
-        var show by mutableStateOf(true)
-        compose.setContent { LeiTheme(AppearanceSettings()) { top.yukonga.miuix.kmp.basic.Scaffold {
-            if (show) LaunchStyleDialog(selected, { selected = it }, { show = false })
-        } } }
-        compose.onNodeWithTag("launch_style_classic").assertIsSelected()
-        compose.onNodeWithTag("launch_style_halo").performClick()
-        compose.waitForIdle()
-        assertEquals(LaunchStyle.HALO, selected)
-        compose.onNodeWithTag("launch_style_halo").assertDoesNotExist()
-        show = true
-        compose.onNodeWithTag("launch_style_classic").performClick()
-        compose.waitForIdle()
-        assertEquals(LaunchStyle.CLASSIC, selected)
-    }
 }
