@@ -1,5 +1,12 @@
 package io.github.currencortex.music.feature.about
 
+import io.github.currencortex.music.ui.component.nativeui.SettingsSection
+import io.github.currencortex.music.ui.component.nativeui.SettingsDivider
+import io.github.currencortex.music.ui.component.MusicIcons
+
+import io.github.currencortex.music.ui.component.nativeui.SettingsTopBar
+import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
+
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -39,6 +46,7 @@ enum class LegalDocument(val title: String, val asset: String) {
 
 @Composable
 fun LegalDocumentScreen(document: LegalDocument, onBack: () -> Unit, onOpenDocument: (LegalDocument) -> Unit) {
+    SettingsUiScope {
     val context = LocalContext.current
     var text by remember(document) { mutableStateOf<String?>(null) }
     var error by remember(document) { mutableStateOf<String?>(null) }
@@ -56,23 +64,20 @@ fun LegalDocumentScreen(document: LegalDocument, onBack: () -> Unit, onOpenDocum
         } catch (_: Exception) { error = "文档暂时无法读取，请重试。" }
     }
     val paragraphs = remember(text) { text?.split(Regex("\\n\\s*\\n")) ?: emptyList() }
-    top.yukonga.miuix.kmp.basic.Scaffold(topBar = {
-        top.yukonga.miuix.kmp.basic.SmallTopAppBar(title = document.title, navigationIcon = {
-            top.yukonga.miuix.kmp.basic.IconButton(onClick = onBack, modifier = Modifier.size(48.dp).testTag("navigate_back")) {
-                top.yukonga.miuix.kmp.basic.Icon(io.github.currencortex.music.ui.component.MusicIcons.Back, "返回")
-            }
-        })
-    }, popupHost = {}) { padding ->
-    LazyColumn(Modifier.fillMaxSize().padding(top = padding.calculateTopPadding()).testTag("legal_document"), contentPadding = musicScrollPadding(PaddingValues(16.dp, 24.dp, 16.dp, 48.dp))) {
+    io.github.currencortex.music.ui.component.nativeui.SettingsScrollLayout(Modifier.fillMaxSize(),topBar = {
+        SettingsTopBar(document.title,onBack)
+    }) { topInset ->
+    LazyColumn(Modifier.fillMaxSize().testTag("legal_document"), contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset+24.dp, 16.dp, 48.dp))) {
         if (document == LegalDocument.LICENSE) item {
-            top.yukonga.miuix.kmp.preference.ArrowPreference(title = "Apache License 2.0",
+            SettingsSection("组件许可", MusicIcons.File) {
+            io.github.currencortex.music.ui.component.PageNavigationPreference(title = "Apache License 2.0",
                 summary = "MIUIX、AndroidX 等组件的许可", onClick = { onOpenDocument(LegalDocument.APACHE) })
-            top.yukonga.miuix.kmp.preference.ArrowPreference(title = "GNU LGPL 3.0",
+            io.github.currencortex.music.ui.component.PageNavigationPreference(title = "GNU LGPL 3.0",
                 summary = "歌曲标签组件 Jaudiotagger 的许可", onClick = { onOpenDocument(LegalDocument.LGPL) })
-        }
-        if (document == LegalDocument.LICENSE) item {
-            top.yukonga.miuix.kmp.preference.ArrowPreference(title = "GNU AGPL 3.0",
+            SettingsDivider()
+            io.github.currencortex.music.ui.component.PageNavigationPreference(title = "GNU AGPL 3.0",
                 summary = "Folia 莫奈歌词动画移植组件的许可", onClick = { onOpenDocument(LegalDocument.AGPL) })
+            }
         }
         if (error != null) item { BasicComponent(title = error, summary = "点击重试", onClick = { attempt++ }) }
         else if (text == null) item { Text("正在读取…") }
@@ -89,4 +94,5 @@ fun LegalDocumentScreen(document: LegalDocument, onBack: () -> Unit, onOpenDocum
     }
 }
 
+    }
 }
