@@ -279,9 +279,74 @@ class NeteaseGatewayTest {
     @Test fun boundRecommendationsAndRecentTracksUseNativeResponses() = runBlocking {
         login(); enqueue("""{"code":200,"data":{"dailySongs":[${rawSong(11)}]}}""")
         enqueue("""{"code":200,"data":[${rawSong(12)}]}""")
+        enqueue("""{"code":200,"data":[]}""")
         val daily = api.decode<DailyDto>(gateway.daily()); assertEquals(11L, daily.daily.single().id); assertEquals(12L, daily.forYou.single().id)
         enqueue("""{"code":200,"data":{"list":[{"data":${rawSong(13)}}]}}""")
         assertEquals(13L, api.decode<SongListDto>(gateway.recent()).songs.single().id)
+        assertEquals(0, current.requestCount)
+    }
+    @Test fun homeRecommendationsCollectFourBatchesWithExclusionsAndKeepServerOrder() = runBlocking {
+        login()
+        enqueue("""{"code":200,"data":{"dailySongs":[${rawSong(99)}]}}""")
+        for (batch in 0 until 4) enqueue("""{"code":200,"data":[${(1L + batch * 3..3L + batch * 3).joinToString(",") { rawSong(it) }}]}""")
+        val daily = api.decode<DailyDto>(gateway.daily())
+        assertEquals((1L..12L).toList(), daily.forYou.map { it.id })
+        assertEquals(listOf(99L), daily.daily.map { it.id })
+        assertEquals("/weapi/v3/discovery/recommend/songs", upstream.takeRequest().path)
+        for (batch in 0 until 4) {
+            val request = upstream.takeRequest()
+            assertEquals("/eapi/v1/radio/get", request.path)
+            assertNull(request.getHeader("Authorization"))
+            val sent = payload(request)
+            assertEquals("DEFAULT", sent["mode"]!!.jsonPrimitive.content)
+            assertEquals(3, sent["limit"]!!.jsonPrimitive.int)
+            assertEquals((1L until 1L + batch * 3).joinToString(","), sent["unplaySongIds"]!!.jsonPrimitive.content)
+            assertEquals("android", sent["header"]!!.jsonObject["os"]!!.jsonPrimitive.content)
+        }
+        assertEquals(5, upstream.requestCount)
+        assertEquals(0, current.requestCount)
+    }
+    @Test fun homeRecommendationsStopWhenABatchAddsNoNewSongs() = runBlocking {
+        login()
+        enqueue("""{"code":200,"data":{"dailySongs":[${rawSong(99)}]}}""")
+        repeat(2) { enqueue("""{"code":200,"data":[${rawSong(1)},${rawSong(1)},${rawSong(2)}]}""") }
+        assertEquals(listOf(1L, 2L), api.decode<DailyDto>(gateway.daily()).forYou.map { it.id })
+        assertEquals(3, upstream.requestCount)
+    }
+    @Test fun homeRecommendationsKeepCompletedBatchesWhenTheNextRequestFails() = runBlocking {
+        login()
+        enqueue("""{"code":200,"data":{"dailySongs":[${rawSong(99)}]}}""")
+        enqueue("""{"code":200,"data":[${rawSong(1)},${rawSong(2)},${rawSong(3)}]}""")
+        enqueue("""{"code":429}""")
+        assertEquals(listOf(1L, 2L, 3L), api.decode<DailyDto>(gateway.daily()).forYou.map { it.id })
+        assertEquals(3, upstream.requestCount)
+    }
+    @Test fun homeRecommendationsBoundRequestsEvenWhenEachBatchIsShort() = runBlocking {
+        login()
+        enqueue("""{"code":200,"data":{"dailySongs":[${rawSong(99)}]}}""")
+        for (id in 1L..4L) enqueue("""{"code":200,"data":[${rawSong(id)}]}""")
+        assertEquals((1L..4L).toList(), api.decode<DailyDto>(gateway.daily()).forYou.map { it.id })
+        assertEquals(5, upstream.requestCount)
+    }
+    @Test fun homeRecommendationsKeepCompletedBatchesAfterTheSharedDeadline() = runBlocking {
+        login()
+        enqueue("""{"code":200,"data":{"dailySongs":[${rawSong(99)}]}}""")
+        enqueue("""{"code":200,"data":[${rawSong(1)}]}""")
+        upstream.enqueue(response("""{"code":200,"data":[${rawSong(2)}]}""").setBodyDelay(4, TimeUnit.SECONDS))
+        val started = System.nanoTime()
+        assertEquals(listOf(1L), api.decode<DailyDto>(gateway.daily()).forYou.map { it.id })
+        assertTrue("The whole FM refill shares one deadline", TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started) < 3_800)
+        assertEquals(3, upstream.requestCount)
+    }
+    @Test fun homeRecommendationsDiscardEarlierBatchesWhenTheAccountChanges() = runBlocking {
+        login()
+        enqueue("""{"code":200,"data":{"dailySongs":[${rawSong(99)}]}}""")
+        enqueue("""{"code":200,"data":[${rawSong(1)}]}""")
+        upstream.enqueue(response("""{"code":200,"data":[${rawSong(2)}]}""").setBodyDelay(300, TimeUnit.MILLISECONDS))
+        val pending = async { appResult { gateway.daily() } }
+        withContext(Dispatchers.IO) { repeat(3) { assertNotNull(upstream.takeRequest(2, TimeUnit.SECONDS)) } }
+        login(43)
+        assertEquals(ErrorKind.NeteaseSessionChanged, (pending.await() as AppResult.Failure).kind)
         assertEquals(0, current.requestCount)
     }
     @Test fun lyricsUseNativeWordTimingAndAuxiliaryTextEvenWithProjectAudio() = runBlocking {
