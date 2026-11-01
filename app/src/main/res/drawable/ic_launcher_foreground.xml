@@ -1,5 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp" android:height="108dp" android:viewportWidth="108" android:viewportHeight="108">
-    <path android:fillColor="#FFFFFF" android:pathData="M46,30L77,24L77,65C77,75 57,79 57,68C57,62 64,58 70,59L70,38L46,43L46,73C46,83 26,87 26,76C26,70 33,66 39,67L39,32Z"/>
+    <!-- The central 72dp is the launcher viewport; the blue layer fills every mask. -->
+    <group android:translateX="18" android:translateY="18"
+        android:scaleX="0.057416268" android:scaleY="0.057416268">
+        <path android:pathData="M682,299C682,269 704,249 732,249C759,249 780,272 806,296C842,330 877,356 914,381C949,404 951,443 930,467C905,497 873,485 846,471L812,449C800,440 791,447 791,463L791,778L682,778Z">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear" android:startX="682" android:startY="249"
+                    android:endX="790" android:endY="778"
+                    android:startColor="#FFFFFF" android:endColor="#CBE5FB" />
+            </aapt:attr>
+        </path>
+        <path android:pathData="M384,777a205,205 0,1 0,410 0a205,205 0,1 0,-410 0">
+            <aapt:attr name="android:fillColor">
+                <gradient android:type="linear" android:startX="500" android:startY="572"
+                    android:endX="650" android:endY="982"
+                    android:startColor="#FFFFFF" android:endColor="#CBE5FB" />
+            </aapt:attr>
+        </path>
+    </group>
 </vector>
