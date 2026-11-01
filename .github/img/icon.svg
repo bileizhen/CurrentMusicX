@@ -1,7 +1,22 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 108 108" role="img" aria-labelledby="title desc">
+<svg xmlns="http://www.w3.org/2000/svg" width="108" height="108" viewBox="0 0 1254 1254" role="img" aria-labelledby="title desc">
   <title id="title">CurrentMusicX</title>
-  <desc id="desc">蓝色圆角方形与白色音符，圆角外透明，沿用应用启动图标。</desc>
-  <!-- Matches res/drawable/ic_launcher_background.xml and ic_launcher_foreground.xml. -->
-  <rect width="108" height="108" rx="25" fill="#1677FF"/>
-  <path fill="#FFFFFF" d="M46,30L77,24L77,65C77,75 57,79 57,68C57,62 64,58 70,59L70,38L46,43L46,73C46,83 26,87 26,76C26,70 33,66 39,67L39,32Z"/>
+  <desc id="desc">蓝色渐变圆角方形与珍珠白圆润单音符，与应用启动图标使用相同轮廓和配色。</desc>
+  <!-- Foreground paths and gradients match the Android launcher drawables. -->
+  <defs>
+    <linearGradient id="background" x2="0" y2="1">
+      <stop stop-color="#35B4F6"/>
+      <stop offset="1" stop-color="#0058FB"/>
+    </linearGradient>
+    <linearGradient id="stem" x1="682" y1="249" x2="790" y2="778" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#CBE5FB"/>
+    </linearGradient>
+    <linearGradient id="head" x1="500" y1="572" x2="650" y2="982" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#CBE5FB"/>
+    </linearGradient>
+  </defs>
+  <rect width="1254" height="1254" rx="250" fill="url(#background)"/>
+  <path fill="url(#stem)" d="M682,299C682,269 704,249 732,249C759,249 780,272 806,296C842,330 877,356 914,381C949,404 951,443 930,467C905,497 873,485 846,471L812,449C800,440 791,447 791,463L791,778L682,778Z"/>
+  <circle cx="589" cy="777" r="205" fill="url(#head)"/>
 </svg>
