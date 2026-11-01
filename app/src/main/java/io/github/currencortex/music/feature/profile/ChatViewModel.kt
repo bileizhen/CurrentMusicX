@@ -23,7 +23,7 @@ class ChatViewModel(val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(ChatState())
     private fun session() = container.audioSession()
     val repository = ChatRepository(container.apiClient, ::session)
-    private val events = ChatEventClient()
+    private val events = ChatEventClient(routeServer = container.serverRouter::resolve)
     private var identity: RequestSession? = null
     private var action: Job? = null
     private var upload: Job? = null
