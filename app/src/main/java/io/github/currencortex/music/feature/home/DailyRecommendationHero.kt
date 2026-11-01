@@ -36,6 +36,7 @@ import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.player.LocalPlayerArtworkRotation
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -72,14 +73,15 @@ import kotlinx.coroutines.launch
         else -> "播放推荐歌曲"
     }
     Column(modifier.fillMaxWidth().testTag("home_daily_hero")) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        SettingsListHeader("每日推荐") {
+            GlassActionButton("全部", onOpen, Modifier.testTag("open_daily"), fillWidth = false, minHeight = 36.dp)
+        }
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("每日推荐", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                 Text(listOfNotNull(dateLabel.takeIf(String::isNotBlank),
                     if (loading) "更新中" else if (songs.isNotEmpty()) "${songs.size} 首${if (discovery) "新歌推荐" else "为你精选"}" else null).joinToString(" · "),
                     fontSize = 11.sp, color = colors.onSurface.copy(alpha = .48f))
             }
-            MusicTextAction("全部 ›", onOpen, Modifier.testTag("open_daily"))
         }
         when {
             songs.isNotEmpty() -> {
@@ -101,12 +103,7 @@ import kotlinx.coroutines.launch
                     Modifier.fillMaxWidth().padding(top = 8.dp), fontSize = 12.sp, textAlign = TextAlign.Center, color = colors.error)
                 if (error != null) MusicTextAction("推荐更新失败，点击重试", onRetry, Modifier.testTag("home_daily_retry"), !loading)
             }
-            loading -> Column(Modifier.fillMaxWidth().padding(vertical = 20.dp).testTag("home_loading"),
-                horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                MusicPlaceholder(Modifier.size(176.dp).clip(RoundedCornerShape(18.dp)))
-                MusicPlaceholder(Modifier.width(140.dp).height(18.dp))
-                MusicPlaceholder(Modifier.width(90.dp).height(12.dp))
-            }
+            loading -> LoadingRecommendationHero()
             else -> Column(Modifier.fillMaxWidth().padding(vertical = 28.dp),
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(MusicIcons.List, null, Modifier.size(34.dp), tint = colors.primary.copy(alpha = .55f))
@@ -120,6 +117,35 @@ import kotlinx.coroutines.launch
         }
         if (discovery && songs.isNotEmpty()) MusicTextAction("连接网易云，获取你的专属推荐 ›", onConnect,
             Modifier.align(Alignment.CenterHorizontally).testTag("home_connect_netease"))
+    }
+}
+
+@Composable private fun LoadingRecommendationHero() {
+    MusicPlaceholderScope {
+        Column(Modifier.fillMaxWidth().testTag("home_loading").clearAndSetSemantics {
+            contentDescription = "正在加载每日推荐"
+            progressBarRangeInfo = ProgressBarRangeInfo.Indeterminate
+        }, horizontalAlignment = Alignment.CenterHorizontally) {
+            BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                val coverSize = (maxWidth / 2.38f).coerceIn(128.dp, 184.dp)
+                Box(Modifier.fillMaxWidth().height(coverSize + 40.dp), contentAlignment = Alignment.Center) {
+                    for (slot in listOf(-2, 2, -1, 1, 0)) {
+                        MusicPlaceholder(Modifier.size(coverSize).graphicsLayer {
+                            val relative = slot.toFloat()
+                            val scale = exp(-abs(relative) * .20f)
+                            translationX = tanh(relative * .70f) * coverSize.toPx() * .98f
+                            translationY = (1f - scale) * coverSize.toPx() * .42f
+                            scaleX = scale; scaleY = scale
+                            rotationZ = tanh(relative * .55f) * 12f
+                        }, shape = RoundedCornerShape(18.dp))
+                    }
+                }
+            }
+            Column(Modifier.width(180.dp).heightIn(min = 52.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                LoadingTextLine(.9f, 26.sp)
+                LoadingTextLine(.6f, 18.sp)
+            }
+        }
     }
 }
 

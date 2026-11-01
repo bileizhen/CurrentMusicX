@@ -114,8 +114,8 @@ class LyricsSourceSettingsTest {
             compose.onNodeWithTag("lyrics_source").performClick()
             compose.onNodeWithTag("lyrics_source_auto").assertExists().assertIsNotSelected()
                 .assertTextContains(LyricsSource.AUTO.label)
-                .assertTextContains("以网易云歌词为参考")
-                .assertTextContains("内容和时间轴").performClick()
+                .assertTextContains("≥75%",substring=true)
+                .assertTextContains("QQ 优先",substring=true).performClick()
             compose.waitUntil(5000) { c.musicSettings.state.value.lyricsSource == LyricsSource.AUTO }
             compose.onNodeWithTag("lyrics_source").assertTextContains(LyricsSource.AUTO.label).performClick()
             compose.onNodeWithTag("lyrics_source_auto").assertIsSelected()

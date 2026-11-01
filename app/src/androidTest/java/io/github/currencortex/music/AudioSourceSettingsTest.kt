@@ -30,7 +30,8 @@ class AudioSourceSettingsTest {
     @Test fun nativeSourceIsSelectablePersistsAndScopesCacheToTheNeteaseAccount(): Unit = runBlocking {
         val vm = MusicSettingsViewModel(container)
         compose.setContent { LeiTheme(AppearanceSettings()) { MusicSettingsScreen(vm) {} } }
-        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("audio_provider_netease"))
+        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("audio_provider"))
+        compose.onNodeWithTag("audio_provider").performClick()
         compose.onNodeWithTag("audio_provider_netease").performClick()
         compose.waitUntil(5000) { vm.audioProvider.value.provider == AudioProvider.NETEASE && !vm.audioState.value.busy }
         assertEquals("netease", container.audioSettings.access().identity)
@@ -60,7 +61,8 @@ class AudioSourceSettingsTest {
         compose.setContent { LeiTheme(AppearanceSettings()) { MusicSettingsScreen(vm) {} } }
         // The key card only exists once LeiZ is the selected source.
         compose.onNodeWithTag("audio_key_input").assertDoesNotExist()
-        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("audio_provider_leiz"))
+        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("audio_provider"))
+        compose.onNodeWithTag("audio_provider").performClick()
         compose.onNodeWithTag("audio_provider_leiz").performClick()
         compose.waitUntil(5000) { vm.audioProvider.value.provider == AudioProvider.LEIZ && !vm.audioState.value.busy }
         compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("audio_key_input"))

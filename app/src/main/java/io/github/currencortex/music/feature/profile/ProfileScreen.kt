@@ -40,7 +40,7 @@ import io.github.currencortex.music.data.profile.*
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.auth.AuthViewModel
 import io.github.currencortex.music.feature.auth.LoginScreen
-import io.github.currencortex.music.feature.library.LibraryLinks
+import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -83,7 +83,9 @@ import kotlinx.coroutines.launch
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     // The bottom navigation already owns "设置"; a second entry above the login form was redundant.
     if (account.account == null && vm.container.nativeNetease != null) NativeMeScreen(vm.container, navigate, onSettings)
-    else if (account.account == null) LoginScreen(auth) else ProfileScreen(vm, navigate, play, onSettings = onSettings)
+    else if (account.account == null) ProfilePageLayout(navigate, onSettings) { topInset ->
+        LoginScreen(auth, showTitle = false, contentTopInset = topInset)
+    } else ProfileScreen(vm, navigate, play, onSettings = onSettings)
 }
 
 @Composable private fun NativeMeScreen(container: AppContainer, navigate: (String) -> Unit, onSettings: () -> Unit) {
@@ -100,16 +102,12 @@ import kotlinx.coroutines.launch
         snapshotFlow { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
             .collect { if (!it) avatarFlight?.profileLanding = null }
     }
+    ProfilePageLayout(navigate, onSettings) { topInset ->
     LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState,
-        contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
-        verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        item { Row(Modifier.fillMaxWidth().then(LocalRootTabSwipe.current), verticalAlignment = Alignment.CenterVertically) {
-            Text("我的", Modifier.weight(1f), fontSize = 28.sp, fontWeight = FontWeight.SemiBold)
-            MusicTextAction("公告", { navigate("user/announcements") }, Modifier.testTag("me_announcements"))
-            MusicTextAction("设置", onSettings, Modifier.testTag("me_settings"))
-        } }
-        account.profile?.let { native -> item {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        contentPadding = PaddingValues(start = 16.dp, top = topInset + 24.dp, end = 16.dp, bottom = 32.dp + bottomInset),
+        verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        account.profile?.let { native -> item("identity") { SettingsGroup {
+            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(Modifier.testTag("my_profile_avatar").clickable(role = Role.Button) { avatarPreview = true }
                     .semantics { contentDescription = "查看头像" }.onGloballyPositioned {
                     val center = (placement?.landingBounds(it) ?: it.boundsInRoot()).center
@@ -128,21 +126,15 @@ import kotlinx.coroutines.launch
                         color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
                 }
             }
+        } } }
+        if (account.profile == null) item("identity") { SettingsGroup {
+            ProfileDestination("登录 CurrentMusic", "登录后同步资料与音乐收藏", MusicIcons.Account,
+                "open_currentmusic_login") { navigate("user/login") }
         } }
-        item { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            MusicSectionHeader("我的音乐"); LibraryLinks(navigate)
-        } }
-        item { Card(Modifier.fillMaxWidth()) {
-            MusicDestinationRow(if (account.loggedIn) "网易云账号" else "登录网易云", { navigate("user/binding") },
-                Modifier.testTag("open_binding"), if (account.loggedIn) "我喜欢、歌单与最近播放" else "需先注册并登录 CurrentMusic")
-            if (tasksEnabled == true) MusicDestinationRow("网易云任务", { navigate("user/netease-tasks") },
-                Modifier.testTag("open_netease_tasks"), "签到、云贝与会员成长")
-            MusicDestinationRow("导入歌单", { navigate("user/playlist-import") },
-                Modifier.testTag("profile_playlist_import"), "链接、文字、图片与本地歌曲 · 导入到网易云")
-            MusicDestinationRow("Navidrome 曲库", { navigate("navidrome") }, Modifier.testTag("profile_navidrome"), "自己的音乐服务器")
-            MusicDestinationRow("CurrentMusic 账户", { navigate("user/login") }, Modifier.testTag("open_currentmusic_login"),
-                "注册与登录、头像装饰与一起听房间")
-        } }
+        item("library") { ProfileLibrarySection(navigate) }
+        item("services") { ProfileServicesSection(navigate, tasksEnabled == true, native = true, bound = account.loggedIn) }
+        if (account.profile != null) item("account") { ProfileAccountSection(navigate, native = true) }
+    }
     }
     if (avatarPreview) account.profile?.let { native ->
         AvatarPreviewDialog(ProfileUser(id = native.uid, nickname = native.nickname, avatar = native.avatar),
@@ -180,22 +172,19 @@ import kotlinx.coroutines.launch
         snapshotFlow { listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0 }
             .collect { if (!it) avatarFlight?.profileLanding = null }
     }
-    MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize()) {
-    LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState, contentPadding = PaddingValues(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 20.dp + bottomInset),
-        verticalArrangement = Arrangement.spacedBy(18.dp)) {
-        item { Row(Modifier.fillMaxWidth().then(LocalRootTabSwipe.current), verticalAlignment = Alignment.CenterVertically) {
-            // No back button here either: system/predictive back is handled by the navigation layer.
-            Text(if (onBack == null) "我的" else "用户主页", Modifier.weight(1f), fontSize = 28.sp,
-                fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold)
-            if (onBack == null) MusicTextAction("公告", { navigate("user/announcements") }, Modifier.testTag("me_announcements"))
-            else MusicTextAction("刷新", vm::reload, enabled = !state.loading)
-            onSettings?.let { MusicTextAction("设置", it, Modifier.testTag("me_settings")) }
-        } }
-        if ((state.loading || account.loading) && user == null) item { LoadingSongList(2) }
-        state.error?.let { item { Text(it); MusicTextAction("重试", vm::reload) } }
+    ProfilePageLayout(navigate, onSettings, public = onBack != null, loading = state.loading, reload = vm::reload, onBack = onBack) { topInset ->
+    MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize(), enabled = onBack != null) {
+    LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState, contentPadding = PaddingValues(start = 16.dp, top = topInset + 24.dp, end = 16.dp, bottom = 32.dp + bottomInset),
+        verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        if ((state.loading || account.loading) && user == null) item { LoadingProfileCard() }
+        state.error?.let { message -> item("error") { SettingsGroup {
+            SettingsHint(message, error = true)
+            MusicTextAction("重试", vm::reload, Modifier.padding(start = 16.dp, bottom = 12.dp))
+        } } }
         if (user != null) {
-            item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            item("identity") { SettingsGroup(Modifier.testTag("profile_identity")) {
+                Row(Modifier.fillMaxWidth().padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Box(Modifier.testTag("my_profile_avatar").clickable(role = Role.Button) { avatarPreview = true }
                         .semantics { contentDescription = "查看头像" }.onGloballyPositioned {
                         val center = (placement?.landingBounds(it) ?: it.boundsInRoot()).center
@@ -205,73 +194,58 @@ import kotlinx.coroutines.launch
                         if (avatarFlight?.returning != true && (avatarFlight?.active != true || (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0)))
                             avatarFlight?.destination = landing
                     }.graphicsLayer { alpha = if (avatarFlight?.active == true) 0f else 1f }) {
-                        UserAvatar(user, vm.container, 64.dp, flightState = avatarFlight)
+                        UserAvatar(user, vm.container, 64.dp, reserveOverlay = false, flightState = avatarFlight)
                     }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(user.nickname.ifBlank { user.username }, Modifier.align(Alignment.CenterVertically), fontSize = 23.sp,
-                                fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            UserRoleBadge(user.role, Modifier.align(Alignment.CenterVertically))
+                        Text(user.nickname.ifBlank { user.username }, fontSize = 22.sp, lineHeight = 28.sp,
+                            fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                            UserRoleBadge(user.role)
+                            UserTitleBadge(user.title)
                         }
-                        UserIdentityDetails(user.title, user.ipRegion)
-                        Text(if (state.loading && state.profile == null) "正在加载资料…" else user.bio.ifBlank { "还没有填写简介" },
-                            modifier = if (own) Modifier.testTag("edit_profile")
+                        UserIdentityDetails("", user.ipRegion)
+                    }
+                }
+                Text(if (state.loading && state.profile == null) "正在加载资料…" else user.bio.ifBlank { "还没有填写简介" },
+                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp).then(if (own) Modifier.testTag("edit_profile")
                                 .clickable(enabled = !busy && state.profile != null, role = Role.Button) { vm.dialog.value = "edit" }
-                                .semantics { contentDescription = "编辑资料" } else Modifier,
-                            fontSize = 13.sp, maxLines = 2,
-                            color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-                    }
-                }
-            }
-            if (state.loading && state.profile == null) item { LoadingSongList(2) }
-            if (state.profile != null) item { val stat = state.profile!!.stat
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-                    items(listOf("点赞" to "${stat.likes}", "收藏" to "${stat.favs}", "歌单" to "${stat.playlists}",
-                        "听歌天数" to "${stat.playDays}", "听歌时长" to listeningDuration(stat.listenMs))) { (label, value) ->
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(value, fontSize = 18.sp, fontWeight = androidx.compose.ui.text.font.FontWeight.Medium)
-                            Text(label, fontSize = 11.sp, color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-                        }
-                    }
-                }
-            }
+                                .semantics { contentDescription = "编辑资料" } else Modifier),
+                            fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                state.profile?.stat?.let { ProfileStatsBlock(it) }
+            } }
+            if (state.loading && state.profile == null) item { LoadingProfileCard() }
             if (own) {
-                item { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    MusicSectionHeader("我的音乐"); LibraryLinks(navigate)
-                } }
-                item { Card(Modifier.fillMaxWidth()) {
-                    MusicDestinationRow("网易云账号", { navigate("user/binding") }, Modifier.testTag("open_binding"), "绑定与同步歌单")
-                    if (tasksEnabled == true) MusicDestinationRow("网易云任务", { navigate("user/netease-tasks") },
-                        Modifier.testTag("open_netease_tasks"), "签到、云贝与会员成长")
-                    MusicDestinationRow("导入歌单", { navigate("user/playlist-import") },
-                        Modifier.testTag("profile_playlist_import"), "链接、文字、图片与本地歌曲 · 导入到网易云")
-                    MusicDestinationRow("头像挂件", { navigate("user/decorations") }, Modifier.testTag("open_decorations"))
-                    MusicDestinationRow("账号与安全", { navigate("user/security") }, Modifier.testTag("open_security"), "切换账号、修改密码、退出登录")
-                } }
+                item("library") { ProfileLibrarySection(navigate) }
+                item("services") { ProfileServicesSection(navigate, tasksEnabled == true) }
+                item("account") { ProfileAccountSection(navigate) }
             }
-            state.profile?.current?.let { song -> item { MusicSectionHeader("当前在听")
+            state.profile?.current?.let { song -> item { SettingsListHeader("当前在听")
                 SongRow(SongRowUi(song.toDomain()), { play(listOf(song.toDomain()), 0) },
                     { vm.container.playerController.add(song.toDomain(), true) }, { vm.container.playerController.add(song.toDomain()) })
             } }
             val recent = state.profile?.recent.orEmpty().map { it.toDomain() }
-            if (recent.isNotEmpty()) item { MusicSectionHeader("最近听过") }
+            if (recent.isNotEmpty()) item { SettingsListHeader("最近听过") }
             itemsIndexed(recent, key = { _, song -> "recent-${song.id}" }) { index, song ->
                 SongRow(SongRowUi(song), { play(recent, index) }, { vm.container.playerController.add(song, true) }, { vm.container.playerController.add(song) })
             }
             val lists = state.profile?.playlists.orEmpty()
-            if (lists.isNotEmpty()) item { MusicSectionHeader(if (own) "我的歌单" else "公开歌单") }
+            if (lists.isNotEmpty()) item { SettingsListHeader(if (own) "我的歌单" else "公开歌单") }
             items(lists, key = { "playlist-${it.id}" }) { list ->
-                Row(Modifier.fillMaxWidth().clickable { navigate("lib/${if (list.source == "netease") "ncmplaylist" else "playlist"}/${list.id}") }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    MusicCover(list.cover, Modifier.size(56.dp)); Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                        Text(list.name, fontSize = 16.sp, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        Text("${list.count} 首" + if (list.source in setOf("ncm", "netease")) " · 网易云" else "", fontSize = 12.sp,
-                            color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                SettingsGroup(Modifier.padding(bottom = 12.dp)) {
+                    SettingsUiScope {
+                        SettingsPreference(list.name, "${list.count} 首" + if (list.source in setOf("ncm", "netease")) " · 网易云" else "",
+                            Modifier.testTag("profile_playlist_${list.id}"),
+                            onClick = { navigate("lib/${if (list.source == "netease") "ncmplaylist" else "playlist"}/${list.id}") },
+                            leading = { MusicCover(list.cover, Modifier.size(48.dp)) },
+                            trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp)) })
                     }
                 }
             }
         }
-        state.sectionErrors.forEach { item { Text(it, fontSize = 13.sp) } }
+        state.sectionErrors.forEach { item { SettingsHint(it, error = true) } }
+    }
     }
     }
     if (avatarPreview && user != null) AvatarPreviewDialog(user, vm.container,
@@ -281,7 +255,7 @@ import kotlinx.coroutines.launch
 }
 
 /** Accounts and security are one page: switching accounts and changing credentials are the same job. */
-@Composable fun AccountSecurityScreen(vm: ProfileViewModel, auth: AuthViewModel, add: () -> Unit) {
+@Composable fun AccountSecurityScreen(vm: ProfileViewModel, auth: AuthViewModel, add: () -> Unit, onBack: (() -> Unit)? = null) {
     val container = vm.container
     val accounts by container.accountRepository.savedAccounts.collectAsStateWithLifecycle()
     val account by container.accountRepository.state.collectAsStateWithLifecycle()
@@ -289,57 +263,51 @@ import kotlinx.coroutines.launch
     val busy by vm.busy.collectAsStateWithLifecycle()
     val colors = MiuixTheme.colorScheme
     var removing by remember { mutableStateOf<io.github.currencortex.music.data.auth.SavedAccount?>(null) }
-    LazyColumn(Modifier.fillMaxSize().testTag("security_screen"), contentPadding = musicScrollPadding(),
-        verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item {
-            // No back button: the navigation layer already owns system/predictive back.
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("账号与安全", Modifier.weight(1f), fontSize = 28.sp)
-                MusicTextAction("添加账号", add, Modifier.testTag("add_account"), enabled = !state.loading)
-            }
-        }
-        item { MusicSectionHeader("已保存账号") }
-        item { Card(Modifier.fillMaxWidth()) {
-            accounts.forEach { saved ->
+    MusicSubpage("账号与安全", "security_page", onBack, actions = {
+        MusicTextAction("添加账号", add, Modifier.testTag("add_account"), enabled = !state.loading)
+    }) { topInset ->
+    LazyColumn(Modifier.fillMaxSize().testTag("security_screen"),
+        contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        item { SettingsListHeader("已保存账号") }
+        item { SettingsGroup {
+            accounts.forEachIndexed { index, saved ->
+                if (index > 0) SettingsDivider(68.dp)
                 val active = saved.id == account.account?.id && saved.server == container.accountRepository.server
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    UserAvatar(ProfileUser(id = saved.id, avatar = saved.avatar), container, 40.dp, reserveOverlay = false)
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(saved.nickname.ifBlank { saved.username }, fontSize = 16.sp, maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                        Text(saved.server, fontSize = 12.sp, color = colors.onSurfaceVariantSummary, maxLines = 1,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                    }
-                    // The active account needs no action; the others get switch + remove in place.
-                    if (active) Text("当前账号", fontSize = 13.sp, color = colors.primary,
-                        modifier = Modifier.testTag("current_account_${saved.id}"))
-                    else {
-                        MusicTextAction("切换", { auth.switch(saved.key) },
-                            Modifier.testTag("switch_account_${saved.id}"), enabled = !state.loading)
-                        MusicTextAction("移除", { removing = saved },
-                            Modifier.testTag("remove_account_${saved.id}"), enabled = !state.loading, destructive = true)
-                    }
-                }
+                SettingsPreference(saved.nickname.ifBlank { saved.username }, saved.server,
+                    leading = { UserAvatar(ProfileUser(id = saved.id, avatar = saved.avatar), container, 40.dp, reserveOverlay = false) },
+                    trailing = {
+                        if (active) SettingsSelectionCheck(true, Modifier.testTag("current_account_${saved.id}"))
+                    }, footer = if (active) null else ({
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            MusicTextAction("切换", { auth.switch(saved.key) },
+                                Modifier.testTag("switch_account_${saved.id}"), enabled = !state.loading)
+                            MusicTextAction("移除", { removing = saved },
+                                Modifier.testTag("remove_account_${saved.id}"), enabled = !state.loading, destructive = true)
+                        }
+                    }))
             }
-            if (accounts.isEmpty()) Text("本机还没有保存的账号", Modifier.padding(16.dp), fontSize = 13.sp,
-                color = colors.onSurfaceVariantSummary)
+            if (accounts.isEmpty()) SettingsHint("本机还没有保存的账号")
         } }
-        item { MusicSectionHeader("安全") }
-        item { Card(Modifier.fillMaxWidth()) {
+        item { SettingsListHeader("安全") }
+        item { SettingsGroup {
             MusicDestinationRow("修改密码", { vm.dialog.value = "password" }, Modifier.testTag("open_password"),
                 "登录密码至少 6 位", enabled = !busy)
+            SettingsDivider()
             MusicDestinationRow("退出登录", { vm.dialog.value = "logout" }, Modifier.testTag("open_logout"),
                 "仅移除本机凭据，其他已保存账号保留", enabled = !busy)
         } }
-        state.message?.let { item { Text(it, fontSize = 13.sp, color = colors.onSurfaceVariantSummary) } }
-        if (state.loading) item { Text("正在验证账号…", fontSize = 13.sp, color = colors.onSurfaceVariantSummary) }
+        state.message?.let { item { SettingsHint(it) } }
+        if (state.loading) item { SettingsHint("正在验证账号…") }
     }
+    }
+    SettingsUiScope {
     removing?.let { saved -> MusicDialog("移除已保存账号？", { removing = null }) {
         Text(saved.nickname.ifBlank { saved.username }); Text("仅移除本机凭据，账号本身不受影响。")
         MusicDialogButton("确认移除", onClick = { removing = null; auth.removeSaved(saved.key) },
             modifier = Modifier.testTag("confirm_remove_account"))
     } }
+    }
 }
 
 @Composable fun ProfileDialogs(vm: ProfileViewModel, auth: AuthViewModel) {
@@ -349,6 +317,7 @@ import kotlinx.coroutines.launch
     val avatar by vm.avatar.collectAsStateWithLifecycle()
     val context = LocalContext.current
     fun close() { if (!busy) { vm.dialog.value = null; vm.avatar.value = null } }
+    SettingsUiScope {
     when (dialog) {
         "edit" -> state.profile?.user?.let { user ->
             var nickname by rememberSaveable(user.id) { mutableStateOf(user.nickname) }
@@ -366,19 +335,16 @@ import kotlinx.coroutines.launch
             vm.upload(context.contentResolver, crop)
         } }
         "password" -> {
-            var old by remember { mutableStateOf("") }; var new by remember { mutableStateOf("") }; var confirm by remember { mutableStateOf("") }
-            MusicDialog("修改密码", ::close) {
-                Text("当前密码"); TextField(old, { old = it }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                Text("新密码（至少 6 位）"); TextField(new, { new = it }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                Text("再次输入新密码"); TextField(confirm, { confirm = it }, singleLine = true, visualTransformation = androidx.compose.ui.text.input.PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-                MusicDialogButton("更新密码", enabled = old.isNotEmpty() && new.length >= 6 && new == confirm && !busy, onClick = {
-                    vm.password(old, new); old = ""; new = ""; confirm = ""
+            val deadline by vm.passwordCodeUntil.collectAsStateWithLifecycle()
+            io.github.currencortex.music.feature.auth.PasswordDialog(false, busy, deadline, ::close,
+                onSendCode = { vm.passwordCode() }, onSubmit = { _, credential, new, usingCode ->
+                    if (usingCode) vm.passwordWithEmailCode(credential, new) else vm.password(credential, new)
                 })
-            }
         }
         "logout" -> MusicDialog("退出当前账号？", ::close) {
             Text("会移除本机保存的当前账号凭据，其他已保存账号保留。")
             MusicDialogButton("确认退出", onClick = { vm.container.playerController.pause(); vm.dialog.value = null; auth.logout() })
         }
     }
+}
 }

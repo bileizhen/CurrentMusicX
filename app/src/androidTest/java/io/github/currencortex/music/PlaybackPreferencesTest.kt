@@ -25,28 +25,32 @@ class PlaybackPreferencesTest {
             assertEquals(5, container.musicSettings.snapshot().crossfadeSeconds)
             assertEquals(MusicTransitionMode.OFF, container.musicSettings.snapshot().transitionMode)
             assertFalse(container.musicSettings.snapshot().allowConcurrentPlayback)
-            compose.setContent { LeiTheme(AppearanceSettings()) { MusicSettingsScreen(vm) {} } }
+            compose.setContent { LeiTheme(AppearanceSettings()) { PlaybackSettingsScreen(vm) } }
             fun click(tag: String) {
-                compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag(tag))
+                compose.onNodeWithTag("playback_settings").performScrollToNode(hasTestTag(tag))
                 compose.onNodeWithTag(tag).performClick()
             }
-            click("smart_transition")
+            click("playback_transition")
+            compose.onNodeWithTag("smart_transition").performClick()
             compose.waitUntil(5000) { vm.settings.value.transitionMode == MusicTransitionMode.SMART }
-            click("crossfade")
+            click("playback_transition")
+            compose.onNodeWithTag("crossfade").performClick()
             compose.waitUntil(5000) { vm.settings.value.transitionMode == MusicTransitionMode.CROSSFADE }
-            compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("crossfade_duration"))
-            compose.onNodeWithText("过渡时长 · 5 秒").assertExists()
+            compose.onNodeWithTag("playback_settings").performScrollToNode(hasTestTag("crossfade_duration"))
+            compose.onNodeWithText("5 秒").assertExists()
             compose.onNodeWithTag("crossfade_duration").performSemanticsAction(SemanticsActions.SetProgress) { it(8f) }
             compose.waitUntil(5000) { vm.settings.value.crossfadeSeconds == 8 }
             click("allow_concurrent_playback")
             compose.waitUntil(5000) { vm.settings.value.allowConcurrentPlayback }
-            click("smart_transition")
+            click("playback_transition")
+            compose.onNodeWithTag("smart_transition").performClick()
             compose.waitUntil(5000) { vm.settings.value.transitionMode == MusicTransitionMode.SMART }
             compose.onNodeWithTag("crossfade_duration").assertDoesNotExist()
-            click("crossfade")
+            click("playback_transition")
+            compose.onNodeWithTag("crossfade").performClick()
             compose.waitUntil(5000) { vm.settings.value.transitionMode == MusicTransitionMode.CROSSFADE }
-            compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("crossfade_duration"))
-            compose.onNodeWithText("过渡时长 · 8 秒").assertExists()
+            compose.onNodeWithTag("playback_settings").performScrollToNode(hasTestTag("crossfade_duration"))
+            compose.onNodeWithText("8 秒").assertExists()
             assertTrue(container.playbackQueue.state.value.songs.isEmpty())
         } finally { container.close() }
 

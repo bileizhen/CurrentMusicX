@@ -26,13 +26,15 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import android.os.SystemClock
 import kotlinx.coroutines.delay
 import io.github.currencortex.music.data.auth.RegistrationInput
 
-@Composable fun LoginScreen(vm: AuthViewModel, addingAccount: Boolean = false, onDone: () -> Unit = {}) {
+@Composable fun LoginScreen(vm: AuthViewModel, addingAccount: Boolean = false, onDone: () -> Unit = {},
+    showTitle: Boolean = true, contentTopInset: androidx.compose.ui.unit.Dp = 0.dp, onBack: (() -> Unit)? = null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val account by vm.account.collectAsStateWithLifecycle()
     var username by rememberSaveable { mutableStateOf("") }
@@ -44,6 +46,11 @@ import io.github.currencortex.music.data.auth.RegistrationInput
     var contact by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var revealPassword by remember { mutableStateOf(false) }
+    var recovering by remember { mutableStateOf(false) }
+    val resetDeadline by vm.resetCodeUntil.collectAsStateWithLifecycle()
+    LaunchedEffect(state.message) {
+        if (state.message == "密码已重置，请使用新密码登录") { recovering = false; password = ""; revealPassword = false }
+    }
     val deadline by vm.codeUntil.collectAsStateWithLifecycle()
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
     LaunchedEffect(deadline) { while (now < deadline) { delay(1000); now = SystemClock.elapsedRealtime() } }
@@ -57,29 +64,27 @@ import io.github.currencortex.music.data.auth.RegistrationInput
     fun edit(block: () -> Unit) { block(); if (state.message != null) vm.clearMessage() }
     val colors = MiuixTheme.colorScheme
     val secondary = colors.onSurfaceVariantSummary
-    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(musicScrollPadding()).testTag("login_screen"),
+    val form: @Composable (androidx.compose.ui.unit.Dp) -> Unit = { topInset ->
+    Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())
+        .padding(musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp))).testTag("login_screen"),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("我的", Modifier.fillMaxWidth().then(io.github.currencortex.music.ui.component.LocalRootTabSwipe.current), fontSize = 32.sp)
         account.account?.takeIf { !addingAccount }?.let {
             Text(it.nickname, fontSize = 24.sp)
-            TextButton("退出登录", onClick = { vm.logout() }, enabled = !state.loading)
+            GlassActionButton("退出登录", onClick = { vm.logout() }, enabled = !state.loading)
         } ?: run {
             val canLogin = username.isNotBlank() && password.isNotBlank() && !state.loading
             val canRegister = username.isNotBlank() && password.length >= 6 && contact.isNotBlank() &&
                 code.isNotBlank() && !state.loading
             fun submit() { vm.login(username, password); password = "" }
-            Card(Modifier.fillMaxWidth().testTag(if (register) "register_card" else "login_card"),
-                insideMargin = PaddingValues(horizontal = 16.dp, vertical = 18.dp)) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            SettingsGroup(Modifier.fillMaxWidth().testTag(if (register) "register_card" else "login_card")) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     // The mode switch lives in the header so it stays visible without scrolling.
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         Text(if (register) "注册 CurrentMusic" else "登录 CurrentMusic", Modifier.weight(1f),
                             fontSize = 20.sp, fontWeight = FontWeight.Medium)
-                        Text(if (register) "返回登录" else "注册新账号",
-                            Modifier.clickable(role = Role.Button, enabled = !state.loading) {
-                                register = !register; password = ""; code = ""; revealPassword = false
-                            }.padding(horizontal = 6.dp, vertical = 8.dp).testTag("login_switch_mode"),
-                            fontSize = 14.sp, color = colors.primary)
+                        GlassActionButton(if (register) "返回登录" else "注册", {
+                            register = !register; password = ""; code = ""; revealPassword = false
+                        }, Modifier.testTag("login_switch_mode"), enabled = !state.loading, fillWidth = false)
                     }
                     Text(if (register) "注册后可同步我喜欢与歌单。" else "用户名或手机号均可。", fontSize = 13.sp, color = secondary)
                     // One label per field, keyboard hints and a reveal toggle replace the bare rows.
@@ -99,6 +104,8 @@ import io.github.currencortex.music.data.auth.RegistrationInput
                                 colorFilter = ColorFilter.tint(secondary))
                         },
                         modifier = Modifier.fillMaxWidth().testTag("login_password"))
+                    if (!register) GlassActionButton("忘记密码？", onClick = { vm.clearMessage(); recovering = true }, fillWidth = false,
+                        enabled = !state.loading, modifier = Modifier.testTag("forgot_password"))
                     // Registration needs a 6-character password; say so instead of only greying the button.
                     if (register && password.isNotEmpty() && password.length < 6)
                         Text("密码至少 6 位（当前 ${password.length} 位）", fontSize = 12.sp,
@@ -106,13 +113,9 @@ import io.github.currencortex.music.data.auth.RegistrationInput
                     if (register) {
                         TextField(nickname, { edit { nickname = it } }, singleLine = true, label = "昵称（可选）",
                             modifier = Modifier.fillMaxWidth().testTag("register_nickname"))
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            listOf(false to "邮箱验证", true to "手机验证").forEach { (isPhone, label) ->
-                                TextButton((if (phone == isPhone) "✓ " else "") + label,
-                                    onClick = { phone = isPhone; contact = ""; code = "" },
-                                    enabled = !state.loading, modifier = Modifier.weight(1f))
-                            }
-                        }
+                        SettingsSegmentedControl(listOf("邮箱验证", "手机验证"), if (phone) 1 else 0, {
+                            phone = it == 1; contact = ""; code = ""
+                        }, enabled = !state.loading, tag = "register_verification")
                         TextField(contact, { edit { contact = it } }, singleLine = true,
                             label = if (phone) "手机号" else "邮箱",
                             keyboardOptions = KeyboardOptions(keyboardType = if (phone) KeyboardType.Phone else KeyboardType.Email),
@@ -124,22 +127,18 @@ import io.github.currencortex.music.data.auth.RegistrationInput
                                     vm.register(RegistrationInput(username, password, nickname, contact, code, phone)); password = ""; code = ""
                                 } }),
                                 modifier = Modifier.weight(1f).testTag("register_code"))
-                            TextButton(if (deadline > now) "${(deadline - now + 999) / 1000}s" else "获取验证码",
+                            GlassActionButton(if (deadline > now) "${(deadline - now + 999) / 1000}s" else "获取验证码",
                                 onClick = { vm.code(contact, phone) },
                                 enabled = contact.isNotBlank() && !state.loading && now >= deadline,
-                                modifier = Modifier.testTag("register_send_code"))
+                                modifier = Modifier.testTag("register_send_code"), fillWidth = false)
                         }
                     }
                     Spacer(Modifier.height(2.dp))
-                    Button(onClick = {
+                    GlassActionButton(if (state.loading) (if (register) "正在注册…" else "正在登录…") else (if (register) "注册" else "登录"), {
                         if (register) { vm.register(RegistrationInput(username, password, nickname, contact, code, phone)); password = ""; code = "" }
                         else submit()
-                    }, enabled = if (register) canRegister else canLogin,
-                        colors = ButtonDefaults.buttonColorsPrimary(),
-                        modifier = Modifier.fillMaxWidth().testTag("login_submit")) {
-                        Text(if (state.loading) (if (register) "正在注册…" else "正在登录…") else (if (register) "注册" else "登录"),
-                            fontSize = 16.sp)
-                    }
+                    }, enabled = if (register) canRegister else canLogin, primary = true,
+                        modifier = Modifier.fillMaxWidth().testTag("login_submit"))
                 }
             }
         }
@@ -149,7 +148,15 @@ import io.github.currencortex.music.data.auth.RegistrationInput
         }
         if (account.offline) {
             Text("当前离线，会话凭据已保留", fontSize = 13.sp, color = secondary)
-            TextButton("重新连接", onClick = { vm.retry() })
+            GlassActionButton("重新连接", onClick = { vm.retry() })
         }
     }
+    }
+    SettingsUiScope {
+        if (showTitle) MusicSubpage("CurrentMusic 账号", "login_page", onBack, content = form)
+        else form(contentTopInset + 16.dp)
+    }
+    if (recovering) PasswordDialog(true, state.loading, resetDeadline,
+        onDismiss = { recovering = false; vm.clearMessage() }, onSendCode = vm::passwordCode,
+        onSubmit = { email, code, newPassword, _ -> vm.resetPassword(email, code, newPassword) })
 }

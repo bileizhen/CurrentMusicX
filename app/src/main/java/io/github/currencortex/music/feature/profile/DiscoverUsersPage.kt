@@ -219,13 +219,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable private fun UserRowPlaceholder() {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MiuixTheme.colorScheme.surface).padding(14.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        MusicPlaceholder(Modifier.size(44.dp).clip(CircleShape))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            MusicPlaceholder(Modifier.fillMaxWidth(.45f).height(16.dp))
-            MusicPlaceholder(Modifier.fillMaxWidth(.8f).height(12.dp))
-            MusicPlaceholder(Modifier.fillMaxWidth(.55f).height(10.dp))
+    MusicPlaceholderScope {
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MiuixTheme.colorScheme.surface).padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            MusicPlaceholder(Modifier.size(44.dp), shape = CircleShape)
+            Column(Modifier.weight(1f)) {
+                LoadingTextLine(.45f, 22.sp)
+                LoadingTextLine(.8f, 18.sp)
+                LoadingTextLine(.55f, 16.sp)
+            }
         }
     }
 }

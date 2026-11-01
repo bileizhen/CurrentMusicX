@@ -2,7 +2,6 @@ package io.github.currencortex.music.feature.home
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
-import androidx.compose.foundation.clickable
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -11,10 +10,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -22,6 +17,7 @@ import io.github.currencortex.music.feature.library.*
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.data.profile.ProfileUser
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import io.github.currencortex.music.core.media.PlayerState
@@ -62,33 +58,23 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     }
     val dailyLoading = (!direct && account.loading) || (home.loading && "每日推荐" in home.pendingSections)
     val listState = rememberLazyListState()
-    val avatarFlight = LocalAvatarFlight.current
-    LaunchedEffect(listState, avatarFlight) {
-        snapshotFlow { listState.firstVisibleItemIndex }.collect { index ->
-            // A lazy header is disposed after scrolling away; invalidate its cached hero slot.
-            if (index > 0) avatarFlight?.homeLanding = null
-        }
-    }
     PreloadMusicCovers(home.forYou.take(8).map { it.cover }, 320)
     PreloadMusicCovers(home.playlists.take(4).map { it.cover }, 320)
-    MusicPullToRefresh(home.loading, vm::refresh, Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize().testTag("music_home"), state = listState, contentPadding = PaddingValues(start = 20.dp, top = 16.dp, end = 20.dp, bottom = 24.dp + bottomInset), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            item(key = "identity") {
-                Row(Modifier.fillMaxWidth().then(LocalRootTabSwipe.current), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        HomeBrandTitle()
-                        SplitText(account.account?.let { "欢迎，${it.nickname}" } ?: nativeAccount.profile?.let { "欢迎，${it.nickname}" } ?: "音乐，从这里开始",
-                            ready = (!account.loading || direct) && home.loaded && LocalLaunchBrand.current?.active != true,
-                            style = TextStyle(fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f)),
-                            modifier = Modifier.testTag("home_welcome"))
-                    }
-                    HomeProfileAvatar(avatarUrl, (!account.loading || direct) && home.loaded, onProfile,
-                        decorationUrl = decorationUrl, decorationScale = scales[decoration] ?: 1.0)
-                }
-            }
+    SettingsUiScope {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+    val artworkCardWidth = (maxWidth.coerceAtMost(840.dp) - 64.dp) / 2.5f
+    SettingsScrollLayout(Modifier.widthIn(max = 840.dp).fillMaxSize().align(Alignment.TopCenter), topBar = {
+        SettingsRootTopBar("Current Music", Modifier.testTag("home_root_toolbar"), titleContent = { HomeBrandTitle() }) {
+            HomeProfileAvatar(avatarUrl, (!account.loading || direct) && home.loaded, onProfile,
+                decorationUrl = decorationUrl, decorationScale = scales[decoration] ?: 1.0)
+        }
+    }) { topInset ->
+        LazyColumn(Modifier.fillMaxSize().testTag("music_home"), state = listState,
+            contentPadding = PaddingValues(start = 16.dp, top = topInset + 8.dp, end = 16.dp, bottom = 24.dp + bottomInset),
+            verticalArrangement = Arrangement.spacedBy(14.dp)) {
             item(key = "search") { MusicSearchBar(searchQuery, onSearchSubmit,
                 Modifier.testTag("open_home_search").onGloballyPositioned { onSearchBounds(it.boundsInRoot()) }
-                    .graphicsLayer { alpha = if (hideSearch) 0f else 1f }, onActivate = onSearch) }
+                    .graphicsLayer { alpha = if (hideSearch) 0f else 1f }, onActivate = onSearch, inputTag = "home_search_field") }
             if (!home.loading && home.errors.isNotEmpty()) item(key = "retry") {
                 MusicTextAction("部分内容加载失败，重新加载", vm::refresh, Modifier.testTag("home_retry"))
             }
@@ -110,25 +96,20 @@ import androidx.lifecycle.compose.LifecycleEventEffect
             if (!direct && !account.loading && account.account == null) item(key = "login") {
                 MusicTextAction("登录后查看推荐与音乐库 ›", { navigate("user/login") })
             }
-            item(key = "for-you-header") { MusicSectionHeader("猜你喜欢", "更多 ›") { navigate("lib/foryou") } }
-            if (dailyLoading && home.forYou.isEmpty()) item(key = "for-you-loading") { HomeCoverPlaceholders() }
-            if (home.forYou.isNotEmpty()) item(key = "for-you") { LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            item(key = "for-you-header") { HomeSectionHeader("猜你喜欢", "更多") { navigate("lib/foryou") } }
+            if (dailyLoading && home.forYou.isEmpty()) item(key = "for-you-loading") { LoadingArtworkCards(artworkCardWidth) }
+            if (home.forYou.isNotEmpty()) item(key = "for-you") { ElasticLazyRow {
                 itemsIndexed(home.forYou.take(8), key = { _, song -> song.id }) { index, song ->
-                        Column(Modifier.width(136.dp).clickable(enabled = request?.pending?.invoke(song.id) != true, role = Role.Button) {
+                        MusicArtworkCard(song.cover, song.name, song.artists, {
                             if (request != null) request.request(song) else play(home.forYou, index)
-                        }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            MusicCover(song.cover, Modifier.fillMaxWidth().aspectRatio(1f), pixels = 320, cornerRadius = 18.dp)
-                            Text(song.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(song.artists, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-                        }
+                        }, Modifier.width(artworkCardWidth).testTag("home_recommendation_${song.id}"), enabled = request?.pending?.invoke(song.id) != true)
                 }
             } }
             if (!dailyLoading && home.forYou.isEmpty()) item(key = "for-you-empty") {
                 Text(if (home.errors["每日推荐"] != null) "推荐暂时不可用，稍后重试" else "暂无推荐，先从每日精选开始听",
                     fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
             }
-            item(key = "recent-header") { MusicSectionHeader("最近播放", "全部 ›") { navigate("lib/recent") } }
+            item(key = "recent-header") { HomeSectionHeader("最近播放", "全部") { navigate("lib/recent") } }
             home.errors["最近播放"]?.let { item { Text(it, fontSize = 13.sp) } }
             itemsIndexed(home.recent.take(3), key = { _, song -> "recent-${song.id}" }) { index, song ->
                 SongRow(SongRowUi(song), { play(home.recent, index) }, { vm.container.playerController.add(song, true) }, { vm.container.playerController.add(song) }) {
@@ -138,18 +119,14 @@ import androidx.lifecycle.compose.LifecycleEventEffect
             if ("最近播放" in home.pendingSections && home.recent.isEmpty()) item { LoadingSongList(count = 2) }
             if ((!account.loading || direct) && "最近播放" !in home.pendingSections && home.recent.isEmpty() && home.errors["最近播放"] == null)
                 item { Text("听过的音乐，会留在这里", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f)) }
-            item(key = "playlists-header") { MusicSectionHeader("我的歌单", "管理 ›") { navigate("lib/playlists") } }
+            item(key = "playlists-header") { HomeSectionHeader("我的歌单", "管理") { navigate("lib/playlists") } }
             home.errors["我的歌单"]?.let { item { Text(it, fontSize = 13.sp) } }
-            if ("我的歌单" in home.pendingSections && home.playlists.isEmpty()) item { HomeCoverPlaceholders() }
-            if (home.playlists.isNotEmpty()) item(key = "playlists") { LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            if ("我的歌单" in home.pendingSections && home.playlists.isEmpty()) item { LoadingArtworkCards(artworkCardWidth) }
+            if (home.playlists.isNotEmpty()) item(key = "playlists") { ElasticLazyRow {
                 items(home.playlists.take(8), key = { "${it.source}-${it.id}" }) { playlist ->
-                        Column(Modifier.width(136.dp).clickable(role = Role.Button) {
+                        MusicArtworkCard(playlist.cover, playlist.name, "${playlist.count} 首", {
                             navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}")
-                        }, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            MusicCover(playlist.cover, Modifier.fillMaxWidth().aspectRatio(1f), pixels = 320, cornerRadius = 18.dp)
-                            Text(playlist.name, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text("${playlist.count} 首", fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-                        }
+                        }, Modifier.width(artworkCardWidth).testTag("home_playlist_${playlist.source}_${playlist.id}"))
                 }
             } }
             if ((!account.loading || direct) && "我的歌单" !in home.pendingSections && home.playlists.isEmpty() && home.errors["我的歌单"] == null)
@@ -159,28 +136,21 @@ import androidx.lifecycle.compose.LifecycleEventEffect
             account.error?.let { item { Text(it, fontSize = 13.sp) } }
         }
     }
-}
-
-@Composable private fun HomePersonalRoamingEntry(onOpen: () -> Unit) {
-    Card(Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onOpen)
-            .testTag("open_personal_roaming").padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("私人漫游", fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface)
-                Text("按你的喜好，连续听点好音乐", fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-            }
-            MusicTransportButton("打开私人漫游", onOpen)
-        }
+    }
     }
 }
 
-@Composable private fun HomeCoverPlaceholders() {
-    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        repeat(2) { Column(Modifier.width(136.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            MusicPlaceholder(Modifier.fillMaxWidth().aspectRatio(1f))
-            MusicPlaceholder(Modifier.fillMaxWidth(.75f).height(15.dp))
-        } }
+@Composable private fun HomeSectionHeader(title: String, action: String, onClick: () -> Unit) {
+    SettingsListHeader(title) {
+        GlassActionButton(action, onClick, fillWidth = false, minHeight = 36.dp)
+    }
+}
+
+@Composable private fun HomePersonalRoamingEntry(onOpen: () -> Unit) {
+    SettingsGroup {
+        SettingsPreference("私人漫游", "按你的喜好，连续听点好音乐",
+            Modifier.testTag("open_personal_roaming"), onClick = onOpen,
+            leading = { Icon(MusicIcons.Headphones, null, Modifier.size(24.dp), tint = MiuixTheme.colorScheme.primary) },
+            trailing = { MusicTransportButton("打开私人漫游", onOpen) })
     }
 }

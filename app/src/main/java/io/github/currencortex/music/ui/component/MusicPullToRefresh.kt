@@ -28,7 +28,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 fun MusicPullToRefresh(loading: Boolean, onRefresh: () -> Unit, modifier: Modifier = Modifier,
     indicatorColor: Color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f),
     showIndicator: Boolean = true,
+    enabled: Boolean = true,
     content: @Composable () -> Unit) {
+    if (!enabled) {
+        Box(modifier) { content() }
+        return
+    }
     if (!showIndicator) {
         val currentLoading = rememberUpdatedState(loading)
         val currentRefresh = rememberUpdatedState(onRefresh)
