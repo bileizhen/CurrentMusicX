@@ -78,6 +78,7 @@ class ServerPresetsTest {
         compose.onNodeWithTag("server_source_CDN").performClick()
         compose.waitUntil(5000) { runBlocking { container.musicSettings.snapshot().serverMode == CurrentMusicServer.CDN } &&
             container.serverRouter.resolve(ServerDefaults.URL) == ServerDefaults.CDN }
+        assertUpdateRoute(ServerDefaults.CDN)
         assertEquals("isolated-server-test", container.accountRepository.token)
         assertEquals(ServerDefaults.URL, container.accountRepository.server)
         assertEquals(ServerDefaults.CDN, container.serverRouter.resolve(ServerDefaults.URL))
@@ -85,21 +86,33 @@ class ServerPresetsTest {
         compose.onNodeWithTag("server_source_CDN_GEEKERTAO").performClick()
         compose.waitUntil(5000) { runBlocking { container.musicSettings.snapshot().serverMode == CurrentMusicServer.CDN_GEEKERTAO } &&
             container.serverRouter.resolve(ServerDefaults.URL) == ServerDefaults.CDN_GEEKERTAO }
+        assertUpdateRoute(ServerDefaults.CDN_GEEKERTAO)
         assertEquals("isolated-server-test", container.accountRepository.token)
         assertEquals(ServerDefaults.URL, container.accountRepository.server)
         openSources()
         compose.onNodeWithTag("server_source_CDN_CTCEHS").performClick()
         compose.waitUntil(5000) {runBlocking {container.musicSettings.snapshot().serverMode==CurrentMusicServer.CDN_CTCEHS}&&
             container.serverRouter.resolve(ServerDefaults.URL)==ServerDefaults.CDN_CTCEHS}
+        assertUpdateRoute(ServerDefaults.CDN_CTCEHS)
         assertEquals("isolated-server-test",container.accountRepository.token)
         assertEquals(ServerDefaults.URL,container.accountRepository.server)
         openSources()
         compose.onNodeWithTag("server_source_AUTO").performClick()
         compose.waitUntil(5000) { runBlocking { container.musicSettings.snapshot().serverMode == CurrentMusicServer.AUTO } &&
             container.serverRouter.resolve(ServerDefaults.URL) == ServerDefaults.CDN }
+        assertUpdateRoute(ServerDefaults.CDN)
         assertEquals("isolated-server-test", container.accountRepository.token)
         assertEquals(ServerDefaults.CDN, container.serverRouter.resolve(ServerDefaults.URL))
     }
+    private fun assertUpdateRoute(server: String) {
+        val release = io.github.currencortex.music.core.update.AppRelease("1.3.0", "", "",
+            "https://github.com/bileizhen/CurrentMusicX/releases/download/v1.3.0/app.apk", "app.apk", false)
+        assertEquals(server + "x/download/latest", container.updateAssetUrl(release,
+            io.github.currencortex.music.core.update.UpdateSource.CURRENTMUSIC))
+        assertEquals(release.apkUrl, container.updateAssetUrl(release,
+            io.github.currencortex.music.core.update.UpdateSource.GITHUB))
+    }
+
     private fun capture(name: String) {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         val bitmap = compose.onNodeWithTag("music_dialog_surface").captureToImage().asAndroidBitmap()
