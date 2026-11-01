@@ -28,7 +28,6 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -48,9 +47,7 @@ import io.github.currencortex.music.core.update.*
 import io.github.currencortex.music.data.update.UpdateSettings
 import io.github.currencortex.music.ui.component.ArtworkGlowPalette
 import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.theme.LocalContentColor
@@ -79,13 +76,7 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
     SideEffect { if (visible) exitCheckFinished = entryCheckFinished }
     val showResult = if (visible) entryCheckFinished else exitCheckFinished
     UpdateContainerTransform(visible, origin, onPresentedChanged) {
-        val context = LocalContext.current
-        val notes by produceState("正在读取更新说明…") {
-            value = withContext(Dispatchers.IO) {
-                runCatching { installedReleaseNotes(context.assets.open("release-history.md").bufferedReader().use { it.readText() },
-                    BuildConfig.VERSION_NAME) }.getOrDefault("此版本未附带更新说明，可查看完整发布记录。")
-            }
-        }
+        val notes = "此版本的更新说明请从右上角查看完整发布记录。"
         UpdatePageContent(if (showResult) state else UpdateState.Checking,
             if (showResult) transferState else UpdateTransferState(), notes, onDismiss, onRetry, onIgnore, onOpenRelease,
             onDownload, onInstall, onCancel, onChangeSource, downloadExperience, settings, onAutoCheck, onChannel,
