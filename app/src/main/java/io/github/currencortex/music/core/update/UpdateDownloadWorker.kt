@@ -67,9 +67,12 @@ open class UpdateDownloadWorker(context: Context, params: WorkerParameters) : Co
     override suspend fun getForegroundInfo() = foreground(release(), UpdateTransferState())
 
     protected open fun downloader(): UpdateDownload = UpdateDownloader(okhttp3.OkHttpClient(),
-        File(applicationContext.cacheDir, "updates/$id"))
+        File(applicationContext.cacheDir, "updates/$id"), urlFor = { release, source ->
+            (applicationContext as io.github.currencortex.music.CurrentMusicApplication).container.updateAssetUrl(release, source)
+        })
 
     override suspend fun doWork(): Result = coroutineScope {
+        (applicationContext as io.github.currencortex.music.CurrentMusicApplication).container.sessionRestored.await()
         val release = try { release() } catch (_: Exception) { return@coroutineScope Result.failure() }
         val source = inputData.getString("source")?.let { runCatching { UpdateSource.valueOf(it) }.getOrNull() } ?: UpdateSource.default
         var last = UpdateTransferState()

@@ -12,6 +12,15 @@ class UpdateProxyTest {
             "https://github.com/bileizhen/CurrentMusicX/releases/download/v1.1.10/CurrentMusic-Android-v1.1.10.apk".toHttpUrl()))
         assertEquals(UpdateSource.CURRENTMUSIC, UpdateSource.default)
     }
+    @Test fun dedicatedSourceFollowsEveryTrustedCdnAndSwitchesBackToMain() {
+        val official = "https://github.com/bileizhen/CurrentMusicX/releases/download/v1.3.0/app.apk".toHttpUrl()
+        for (preset in io.github.currencortex.music.core.network.CurrentMusicServer.presets) {
+            assertEquals(preset.url + "x/download/latest", UpdateProxy.forServer(preset.url!!).assetUrl(official))
+        }
+        assertEquals(UpdateProxy.ENDPOINT, UpdateProxy.forServer("https://custom.example/cm/").assetUrl(official))
+        assertEquals(UpdateProxy.ENDPOINT, UpdateProxy.forServer("https://music.20110208.xyz/cm/").assetUrl(official))
+    }
+
     @Test fun mirrorRejectsOtherRepositoriesAndUntrustedEndpointOverrides() {
         val proxy = UpdateProxy()
         for (url in listOf("https://github.com/other/repo/releases/download/v1/app.apk",

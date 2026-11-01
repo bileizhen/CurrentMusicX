@@ -861,7 +861,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             currentSong?.cover.orEmpty(), origin = updateLaunchOrigin, onPresentedChanged = { presented ->
                 if (updateTransitionVisible && !presented) updateLaunchOrigin = null
                 updateTransitionVisible = presented
-            }, versionPreview = updatePreviewVersion)
+            }, versionPreview = updatePreviewVersion, sourceCheck = container.updateSourceCheck)
         LibraryDialogs(libraryVm)
         ProfileDialogs(profileVm, authVm)
         if (profileMessage != null) MusicDialog("账号操作", onDismiss = { profileVm.message.value = null }) {
