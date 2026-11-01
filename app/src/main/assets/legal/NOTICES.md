@@ -1,11 +1,18 @@
 # Third-party notices
 
+## FlClash reusable glass controls
+
+The reusable Kotlin/Compose controls in `ui/component/nativeui/` adapt the button press/stretch, rubber-band tracking, popup morph/return, carried press, drag selection, submenu dwell/unfold and switch geometry from [chen08209/FlClash](https://github.com/chen08209/FlClash), GPL-3.0, commit `7fd417fb9a9a277c6a9339a8ac87f907df7c25f7`.
+
+Sources: `lib/ui/navigation_dock.dart` (`ElasticPress`), `lib/ui/popup.dart`, `lib/ui/button.dart`, `lib/ui/switch.dart`, `lib/ui/motion.dart`, `lib/ui/liquid_glass.dart`, `lib/ui/goo.dart`, `lib/ui/list.dart`, `lib/ui/list_selected.dart`, `lib/ui/card.dart`, `lib/ui/setting.dart`, `lib/ui/metrics.dart`, `lib/ui/typography.dart`, `lib/ui/scaffold.dart`, `lib/ui/sheet_header.dart`, `lib/views/theme.dart`, `lib/views/font_family.dart`, `lib/common/system_fonts.dart`, `lib/views/theme_preview.dart`, `lib/widgets/palette.dart`, `lib/ui/theme_cross_fade.dart`, `lib/ui/segmented_control.dart`, `lib/ui/icons/app_glyphs.dart`, `lib/ui/color.dart`, `lib/common/constant.dart`, and `shaders/liquid_glass.frag`. Copyright chen08209 and FlClash contributors. The port maps Flutter layout, pointer and paint APIs to Compose and translates the ultra optical profile to AGSL over the native backdrop capture. The Gaussian frost uses the native capture and Compose circular corners replace Flutter rounded superellipses. Update and settings adapters supply only application-specific labels and callbacks. The appearance preview keeps the upstream frame sizing and transitions; the interface scenes and demonstration artwork are drawn from CurrentMusic layouts, not FlClash screens. Settings pages share the upstream list metrics and typography hierarchy, grouped surfaces, value-anchored option menus and the same reusable glass controls. The font page and Android family discovery additionally follow `lib/views/font_family.dart` (blob `2271b7044ed7a8be8e83316587c3554d06c85683`) and `lib/common/system_fonts.dart` (blob `f19d148f6b44f22d2d3e2b43c901e5c0e003ed85`) from upstream main, retrieved 2026-10-31; native font-file loading and private font imports are CurrentMusic additions. The docked search additionally ports `lib/ui/search_field.dart` (blob `7c41d0ba9cd1670288a22995ce14840bf522db0e`), `_buildDockedSearch` in `lib/ui/scaffold.dart` (blob `9ae9c661fe9597dd5400aee8a0c8971416635321`), `lib/common/search.dart` (blob `d3066edca5b68968c8ab73e59101bc67a40568aa`), and the associated GooSurface, typography and inset metrics retrieved on the same date. The input field, clear/cancel behaviors, multi-term matching, 48 dp surface, 16 dp margins and 450 ms spring follow these sources; Flutter APIs are translated to Compose. The reusable toolbar search additionally adapts `AccessView` in `lib/views/access.dart` (blob `cb47fd70aaddcebbd23dd68b3b8eefec101cb2b8`) and the grouped `_BarSearch`, `_SearchMove`, `_SearchOrigin`, `_SearchLead` and `_SearchSwell` paths in the same scaffold blob, retrieved 2026-11-01. Its 44 dp panes, 12 dp gaps, staggered fades, spring growth and grouped return follow upstream; it shares the native search editor and glass material with docked search. Original GPL-3.0 terms continue to apply; the full license is included with this application and its corresponding source.
+
 ## Native NetEase task center references
 
 The native Kotlin task center uses the existing NetEase transport. Feature organization was informed by [ncmm](https://github.com/3899/ncmm) (MIT); task endpoint and response field documentation was checked against [NeteaseCloudMusicApiEnhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced) and [chaunsin/netease-cloud-music](https://github.com/chaunsin/netease-cloud-music) (MIT). No Go executable, WebUI, multi-account playback automation, or simulated playback implementation is embedded.
 
 This template uses the following libraries at runtime:
 
+- MaterialKolor color utilities by Jordond and Google contributors (`com.materialkolor:material-color-utilities`), Apache-2.0; used for the FlClash HCT theme-color adaptation.
 - MIUIX KMP by Yukonga and contributors (`top.yukonga.miuix.kmp`), Apache-2.0.
 - AndroidX / Jetpack Compose, under the Apache License 2.0.
 - AndroidX WorkManager provides persistent, cancellable song-download tasks (Apache-2.0).
@@ -350,8 +357,14 @@ notice is available offline as `legal/NCM-AUDIO-MATCH-MIT.txt`. The fingerprint
 algorithm/WebAssembly originates from NetEase's official browser extension;
 NetEase retains the rights to that component. This integration does not imply endorsement.
 The wrapper is executed locally in a network-blocked WebView and receives only
-the current foreground recording. Only the resulting fingerprint is sent to the
-official NetEase endpoint. Recognition history contains song metadata only.
+the current user-started recording, including an explicitly started recognition service.
+Recognition uses cumulative 2, 3, 6, 9, 12 and 15 second windows and stops on a match.
+Fingerprints are sent to the official NetEase endpoint. If recognition has not
+matched by ten seconds, the first ten seconds are also encoded as AAC in memory
+and sent to NetEase's lyric recognition endpoint. The recording screen discloses
+this transfer before capture starts. No recording is written to local storage;
+recognition history contains song metadata only. This compatible AAC integration
+does not redistribute the native recognition SDK from the Android APK.
 
 ## CurrentMusic halo startup wordmark
 
@@ -391,3 +404,7 @@ Identity, recovered ABI, integration restrictions and validation boundaries are
 recorded in `NETEASE_USB_OUTPUT.md` and the bundled
 `original-usb/engine-manifest.json`. The adapter uses no account data or player
 entitlement bypass. USB exclusive output is not advertised as Bit-perfect.
+
+## Flutter Material ink response
+
+The list/card and palette ink response adapts Flutter material_ui 1.5.0 `InkSparkle`, `InkHighlight`, and `FilledButton.styleFrom`, including `lib/shaders/ink_sparkle.frag`, from https://github.com/flutter/packages/tree/material_ui-v1.5.0/packages/material_ui. Copyright 2013 The Flutter Authors, BSD-3-Clause. The shader is translated from GLSL to AGSL; Android 8–12 and software canvases retain the wave without the sparkle fragment pass. The complete license is bundled in `assets/legal/Flutter-BSD-3-Clause.txt`.

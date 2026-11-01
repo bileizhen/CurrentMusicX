@@ -6,14 +6,20 @@ import unittest
 ROOT = Path(__file__).resolve().parents[2]
 
 class NativeContractTest(unittest.TestCase):
-    def test_native_sources_have_no_web_bridge_or_placeholder_implementation(self):
+    def test_native_ui_and_pinned_local_algorithm_boundaries(self):
         source = ROOT / "app/src/main"
-        # Local, hash-pinned audio parameter algorithms run in Rhino, never a UI/browser.
+        # Hash-pinned local algorithms: Rhino transforms and the network-blocked AFP runtime.
         codecs = {
             "assets/netease-ai-master-codec.js": "0d2cbcdf9646422c62dbb1eedc7e146d19e1a0312c4f24c83d1df6c96ccc2137",
+            "assets/recognition/afp.js": "efecfdff5fcbbb2440cd4f1f46f9b994b439338f099bb17cb28c95a01021271b",
+            "assets/recognition/afp.wasm.js": "489cf7cb90732c0e89bc44f43acd90e15fdd4f7dc0e34b6a3fdf28326e5be155",
+            "resources/lyrics-match/opencc-1.4.2-t2cn.js": "321fc24f32a4e250d70a874820de5fb2011400d7e265841782a0661f476c3765",
+            "resources/lyrics-match/wanakana-5.3.1.min.js": "8e4442ae09b6e1ec4e3ca4eb483ba5eb46ed9d5cbb0bf7aac987ad5466d3c62a",
             "assets/netease-original/mood-codec.js": "bb756e69dffae120e355b00e3242d656922a0f2c82c7555e7abeb3a975a8059a",
         }
-        forbidden = ("WebView", "JavascriptInterface", "evaluateJavascript", "HTMLAudioElement", "TODO()", "NotImplementedError", "fakeData", "LeiTemplateApplication", "LeiTemplateApp", "io.github.bileizhen.leitemplate")
+        web_terms = ("WebView", "JavascriptInterface", "evaluateJavascript", "HTMLAudioElement")
+        fingerprint = "java/io/github/currencortex/music/feature/recognition/NeteaseFingerprint.kt"
+        forbidden = ( "TODO()", "NotImplementedError", "fakeData", "LeiTemplateApplication", "LeiTemplateApp", "io.github.bileizhen.leitemplate")
         for p in source.rglob("*"):
             if p.is_file() and p.suffix in (".kt", ".xml", ".js", ".html", ".css"):
                 if p.suffix == ".js":
@@ -22,7 +28,14 @@ class NativeContractTest(unittest.TestCase):
                 else:
                     self.assertNotIn(p.suffix, (".html", ".css"))
                 text = p.read_text("utf-8")
+                if p.suffix != ".js" and p.relative_to(source).as_posix() != fingerprint:
+                    for term in web_terms:
+                        self.assertNotIn(term, text, str(p))
                 for term in forbidden:
                     self.assertNotIn(term, text, str(p))
+        runtime = (source / fingerprint).read_text("utf-8")
+        for guard in ("blockNetworkLoads = true", "allowFileAccess = false", "allowContentAccess = false",
+                      "shouldOverrideUrlLoading", "shouldInterceptRequest", "https://currentmusic.invalid/"):
+            self.assertIn(guard, runtime)
         self.assertTrue((source / "java/io/github/currencortex/music/CurrentMusicApplication.kt").exists())
         self.assertIn('rootProject.name = "CurrentMusic"', (ROOT / "settings.gradle.kts").read_text("utf-8"))
