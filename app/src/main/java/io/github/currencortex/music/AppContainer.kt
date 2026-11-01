@@ -449,6 +449,17 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             }
         }
         if (nativeNetease != null) appScope.launch {
+            sessionRestored.await()
+            neteaseSessions.ready.await()
+            combine(accountRepository.state, accountRepository.sessionRevision, musicSettings.state, neteaseSessions.state) {
+                account, _, _, local ->
+                if (account.account != null && !accountRepository.token.isNullOrBlank() && local.loggedIn && !local.stale)
+                    musicSession() else null
+            }.distinctUntilChanged().collectLatest { owner ->
+                if (owner != null) bindingRepository.autoSyncProjectBinding(owner)
+            }
+        }
+        if (nativeNetease != null) appScope.launch {
             neteaseSessions.ready.await()
             neteaseSessions.state.collect {
                 bindingRepository.clearSession()

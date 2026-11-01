@@ -136,6 +136,7 @@ class BindingViewModel(val container: AppContainer) : ViewModel() {
         if (status.ok) "网易云登录态正常" else if (!status.bound) "尚未绑定网易云" else "网易云登录态已失效，请重新登录"
     }
     fun refresh() = action { expected -> container.bindingRepository.refresh(expected); "网易云登录态已刷新" }
+    fun syncProjectBinding() { viewModelScope.launch { container.bindingRepository.syncProjectBinding() } }
     fun sync(expected: RequestSession = session()) = action { container.bindingRepository.sync(expected).message() }
     fun mainLibrary(value: Boolean) = viewModelScope.launch { container.musicSettings.setNeteaseMainLibrary(value) }
     fun reloadMusic() = action {
