@@ -23,12 +23,20 @@ private const val MAX_FONT_BYTES = 64L * 1024 * 1024
 private fun fontFile(context: Context, name: String): File? =
     name.takeIf { validName.matches(it) }?.let { File(context.filesDir, "custom-fonts/$it") }
 
+internal fun loadCustomTypeface(context: Context, name: String): Typeface? = when {
+    name.startsWith(SYSTEM_FONT_PREFIX) -> name.removePrefix(SYSTEM_FONT_PREFIX)
+        .takeIf { it.isNotBlank() }?.let(::loadSystemTypeface)
+    else -> fontFile(context, name)?.takeIf { it.isFile }
+        ?.let { runCatching { Typeface.Builder(it).build() }.getOrNull() }
+}
+
 @Composable fun rememberCustomTypeface(name: String): Typeface? {
     val context = LocalContext.current
     val face by produceState<Typeface?>(null, context, name) {
-        value = null
+        // Keep the previous face until its replacement is ready, avoiding a default-font flash.
+        if (name.isBlank()) { value = null; return@produceState }
         value = withContext(Dispatchers.IO) {
-            fontFile(context, name)?.let { file -> runCatching { Typeface.Builder(file).build() }.getOrNull() }
+            loadCustomTypeface(context, name)
         }
     }
     return face
@@ -61,4 +69,6 @@ fun importCustomFont(context: Context, uri: Uri): String {
     } catch (e: Exception) { file.delete(); throw e }
 }
 
-fun deleteCustomFont(context: Context, name: String) { fontFile(context, name)?.delete() }
+fun deleteCustomFont(context: Context, name: String) {
+    fontFile(context, name)?.let { it.delete(); File(it.parentFile, "$name.name").delete() }
+}

@@ -75,6 +75,7 @@ import io.github.currencortex.music.feature.update.UpdatePage
 import io.github.currencortex.music.feature.home.HomeScreen
 import io.github.currencortex.music.feature.home.MusicHomeScreen
 import io.github.currencortex.music.feature.logs.LogExportDialog
+import io.github.currencortex.music.feature.settings.FontSettingsScreen
 import io.github.currencortex.music.feature.settings.AppearanceScreen
 import io.github.currencortex.music.feature.settings.ScaleDialog
 import io.github.currencortex.music.feature.settings.SettingsScreen
@@ -272,7 +273,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
         val miniRetainedAvailable = currentSong != null || playerState.mode == PlayerMode.ROOM
         val miniAvailable = !keyboardOpen && miniRetainedAvailable
-        val showMini = miniAvailable && !playerPresented && sceneStack.last() != "lib/video" &&
+        val showMini = miniAvailable && !playerPresented && sceneStack.last() !in setOf("lib/video", "appearance-font") &&
             !(settings.playlistRecordShelf && isPlaylistRoute(sceneStack.last()))
         PreloadMusicCovers(listOf(currentSong?.cover.orEmpty()), 800)
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
@@ -320,7 +321,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         LaunchedEffect(openRecognitionRequest) { if (openRecognitionRequest > 0) navigateLibrary("lib/recognition") }
         var showLogs by rememberSaveable { mutableStateOf(false) }
         var showScale by rememberSaveable { mutableStateOf(false) }
-        var showLaunchStyle by rememberSaveable { mutableStateOf(false) }
         var memberFocus by remember { mutableStateOf<MemberFocus?>(null) }
         var shownMember by remember { mutableStateOf<MemberFocus?>(null) }
         LaunchedEffect(memberFocus) { memberFocus?.let { shownMember = it } }
@@ -434,7 +434,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val sceneInsets = remember {
             NavEntryDecorator<String> { entry ->
                 val ribbonScene = ribbonEnabled.value && isPlaylistRoute(entry.contentKey.toString())
-                val miniSpace = if (availableMini.value && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video")) miniInset.value else 0.dp
+                val miniSpace = if (availableMini.value && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video", "appearance-font")) miniInset.value else 0.dp
                 // Each moving scene must cover the outgoing page and its dim scrim, including
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
                 Box(Modifier.fillMaxSize().background(if (ribbonScene) androidx.compose.ui.graphics.Color(0xFF0A0A0A) else MiuixTheme.colorScheme.background)
@@ -567,10 +567,16 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 entry(APPEARANCE.toString()) {
                     Box(Modifier.fillMaxSize().navigationBarsPadding()) {
                         AppearanceScreen(settingsVm, onBack = ::navigateBack, onOpenScale = { showScale = true },
-                            onOpenLaunchStyle = { showLaunchStyle = true }, onPreviewLaunch = {
+                            onOpenFont = { navigateLibrary("appearance-font") },
+                            onPreviewLaunch = {
                                 if (settings.launchStyle != io.github.currencortex.music.data.settings.LaunchStyle.NONE)
                                     launchPreview = settings.launchStyle
                             })
+                    }
+                }
+                entry("appearance-font") {
+                    Box(Modifier.fillMaxSize().navigationBarsPadding()) {
+                        FontSettingsScreen(settingsVm, onBack = ::navigateBack)
                     }
                 }
                 entry(ABOUT.toString()) {
@@ -699,7 +705,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         }
         val dockVisible by remember(keyboardOpen, sceneStack, settings.playlistRecordShelf) { derivedStateOf {
-            sceneStack.last() != "lib/video" && playerExpansion.value < .9999f &&
+            sceneStack.last() !in setOf("lib/video", "appearance-font") && playerExpansion.value < .9999f &&
                 !(settings.playlistRecordShelf && isPlaylistRoute(sceneStack.last()))
         } }
         val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
@@ -767,7 +773,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             origin = playerOrigin, viewport = navigationBounds, artwork = artworkTransition,
             artworkUrl = currentSong?.cover.orEmpty(), predictiveBack = predictiveBack,
             backEnabled = !showLogs && pendingPlay == null && !updateDialogVisible && !announcementVisible &&
-                !showScale && !showLaunchStyle && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null &&
+                !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null &&
                 !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
             miniOpenBounds = miniOpenBounds.takeIf { miniAvailable },
             onReopen = { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
@@ -799,12 +805,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !playerPresented && !searchPresented && !predictiveBack && !showLogs &&
-                pendingPlay == null && !updateDialogVisible && updatePrompt == null && !announcementVisible && !showScale && !showLaunchStyle && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
+                pendingPlay == null && !updateDialogVisible && updatePrompt == null && !announcementVisible && !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }
-        if (showLaunchStyle) io.github.currencortex.music.feature.settings.LaunchStyleDialog(settings.launchStyle,
-            onSelect = { style -> settingsVm.edit { it.copy(launchStyle = style) } }, onDismiss = { showLaunchStyle = false })
         MemberDetailDialog(show = memberFocus != null, focus = shownMember, onDismiss = { memberFocus = null })
         LogExportDialog(showLogs, container.logger) { showLogs = false }
         if (announcementVisible) io.github.currencortex.music.feature.announcement.AnnouncementDialog(announcements,
