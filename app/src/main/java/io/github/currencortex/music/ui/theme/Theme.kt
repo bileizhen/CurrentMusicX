@@ -16,11 +16,10 @@ import androidx.compose.ui.unit.Density
 import androidx.core.view.WindowCompat
 import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.data.settings.ThemeMode
-import top.yukonga.miuix.kmp.theme.ColorSchemeMode
+import io.github.currencortex.music.ui.component.nativeui.LocalLiquidGlassEnabled
+import io.github.currencortex.music.ui.component.nativeui.LocalGlassBlurEnabled
+import io.github.currencortex.music.ui.component.nativeui.ThemeCrossFade
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.ThemeController
-import top.yukonga.miuix.kmp.theme.darkColorScheme
-import top.yukonga.miuix.kmp.theme.lightColorScheme
 import top.yukonga.miuix.kmp.utils.MiuixIndication
 
 val LocalDarkTheme = staticCompositionLocalOf { false }
@@ -34,28 +33,7 @@ fun LeiTheme(settings: AppearanceSettings, darkSystemBars: Boolean? = null, dark
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
-    val monet = settings.monet && Build.VERSION.SDK_INT >= 31
-    val mode = when (settings.themeMode) {
-        ThemeMode.SYSTEM -> if (monet) ColorSchemeMode.MonetSystem else ColorSchemeMode.System
-        ThemeMode.LIGHT -> if (monet) ColorSchemeMode.MonetLight else ColorSchemeMode.Light
-        ThemeMode.DARK -> if (monet) ColorSchemeMode.MonetDark else ColorSchemeMode.Dark
-    }
-    val controller = remember(mode, dark) {
-        ThemeController(
-            colorSchemeMode = mode,
-            isDark = dark,
-            lightColors = lightColorScheme(
-                background = Color(0xFFF5F6F8),
-                surface = Color(0xFFF5F6F8),
-                surfaceContainer = Color.White,
-            ),
-            darkColors = darkColorScheme(
-                background = Color(0xFF111214),
-                surface = Color(0xFF111214),
-                surfaceContainer = Color(0xFF1D1F22),
-            ),
-        )
-    }
+    val colors = rememberAppearanceColors(settings, dark)
     val context = LocalContext.current
     val darkBars = darkSystemBars ?: dark
     LaunchedEffect(darkBars, darkStatusBars) {
@@ -80,13 +58,17 @@ fun LeiTheme(settings: AppearanceSettings, darkSystemBars: Boolean? = null, dark
             title1 = baseStyles.title1.copy(fontFamily = font), title2 = baseStyles.title2.copy(fontFamily = font),
             title3 = baseStyles.title3.copy(fontFamily = font), title4 = baseStyles.title4.copy(fontFamily = font))
     }
-    val scaled = remember(density.density, density.fontScale, settings.uiScale) {
-        Density(density.density * settings.uiScale, density.fontScale)
+    val scaled = remember(density.density, density.fontScale, settings.uiScale, settings.customTextScale, settings.textScale) {
+        Density(density.density * settings.uiScale, if (settings.customTextScale) settings.textScale else density.fontScale)
     }
-    CompositionLocalProvider(LocalDarkTheme provides dark, LocalDensity provides scaled, LocalCustomFont provides font, LocalCustomTypeface provides typeface) {
-        MiuixTheme(controller = controller, textStyles = fontStyles) {
+    CompositionLocalProvider(LocalDarkTheme provides dark, LocalDensity provides scaled, LocalCustomFont provides font, LocalCustomTypeface provides typeface,
+        LocalLiquidGlassEnabled provides (settings.liquidGlass && Build.VERSION.SDK_INT >= 33),
+        LocalGlassBlurEnabled provides settings.blur) {
+        MiuixTheme(colors = colors, textStyles = fontStyles) {
             // Override here because MiuixTheme installs its own default press overlay.
-            CompositionLocalProvider(LocalIndication provides clearClickIndication, content = content)
+            ThemeCrossFade(listOf(dark, settings.monet, settings.primaryColor, settings.colorStyle, settings.pureBlack)) {
+                CompositionLocalProvider(LocalIndication provides clearClickIndication, content = content)
+            }
         }
     }
 }

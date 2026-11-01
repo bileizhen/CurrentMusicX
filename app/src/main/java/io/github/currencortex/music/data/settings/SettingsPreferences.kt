@@ -5,9 +5,17 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.preferences.core.longPreferencesKey
 
 internal object SettingsPreferences {
     private val THEME = stringPreferencesKey("theme_mode")
+    private val PURE_BLACK = booleanPreferencesKey("pure_black")
+    private val PRIMARY_COLOR = longPreferencesKey("primary_color")
+    private val PRIMARY_COLORS = stringPreferencesKey("primary_colors")
+    private val COLOR_STYLE = stringPreferencesKey("theme_color_style")
+    private val CUSTOM_TEXT_SCALE = booleanPreferencesKey("custom_text_scale")
+    private val TEXT_SCALE = floatPreferencesKey("text_scale")
+    private val TAB_ANIMATION = stringPreferencesKey("tab_animation")
     private val CUSTOM_FONT = stringPreferencesKey("custom_font")
     private val LAUNCH_STYLE = stringPreferencesKey("launch_style")
     private val MONET = booleanPreferencesKey("monet")
@@ -27,6 +35,13 @@ internal object SettingsPreferences {
 
     fun read(p: Preferences) = AppearanceSettings(
         customFont = p[CUSTOM_FONT].orEmpty(),
+        pureBlack = p[PURE_BLACK] ?: false,
+        primaryColor = p[PRIMARY_COLOR] ?: DefaultThemeColors.first(),
+        primaryColors = p[PRIMARY_COLORS]?.split(',')?.mapNotNull(String::toLongOrNull) ?: DefaultThemeColors,
+        colorStyle = runCatching { ThemeColorStyle.valueOf(p[COLOR_STYLE].orEmpty()) }.getOrDefault(ThemeColorStyle.VIVID),
+        customTextScale = p[CUSTOM_TEXT_SCALE] ?: false,
+        textScale = p[TEXT_SCALE] ?: 1f,
+        tabAnimation = runCatching { RootTabAnimation.valueOf(p[TAB_ANIMATION].orEmpty()) }.getOrDefault(RootTabAnimation.SLIDE),
         launchStyle = runCatching { LaunchStyle.valueOf(p[LAUNCH_STYLE].orEmpty()) }.getOrDefault(LaunchStyle.CLASSIC),
         themeMode = runCatching { ThemeMode.valueOf(p[THEME] ?: ThemeMode.SYSTEM.name) }.getOrDefault(ThemeMode.SYSTEM),
         monet = p[MONET] ?: false,
@@ -48,6 +63,13 @@ internal object SettingsPreferences {
     fun write(p: MutablePreferences, s: AppearanceSettings) {
         val v = s.normalized()
         p[CUSTOM_FONT] = v.customFont
+        p[PURE_BLACK] = v.pureBlack
+        p[PRIMARY_COLOR] = v.primaryColor
+        p[PRIMARY_COLORS] = v.primaryColors.joinToString(",")
+        p[COLOR_STYLE] = v.colorStyle.name
+        p[CUSTOM_TEXT_SCALE] = v.customTextScale
+        p[TEXT_SCALE] = v.textScale
+        p[TAB_ANIMATION] = v.tabAnimation.name
         p[LAUNCH_STYLE] = v.launchStyle.name
         p[THEME] = v.themeMode.name
         p[MONET] = v.monet

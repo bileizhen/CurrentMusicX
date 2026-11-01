@@ -1,6 +1,9 @@
 package io.github.currencortex.music.data.settings
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
+enum class RootTabAnimation { SLIDE, FADE }
+enum class ThemeColorStyle(val label: String) { VIVID("鲜明"), TINTED("染色"), SOFT("柔和"), MONOCHROME("单色") }
+val DefaultThemeColors = listOf(0xFF007AFF, 0xFFCB30E0, 0xFFFF2D55, 0xFFFF383C, 0xFFFF8D28, 0xFFFFCC00, 0xFF34C759, 0xFF8E8E93)
 enum class RecordShelfPreviewMode { ONCE, LOOP, NEXT, RANDOM }
 enum class LaunchStyle(val label: String, val description: String) {
     CLASSIC("经典", "原有文字与头像开屏动画"),
@@ -46,8 +49,19 @@ data class AppearanceSettings(
     val playerBackgroundBlur: Float = 35f,
     val launchStyle: LaunchStyle = LaunchStyle.CLASSIC,
     val customFont: String = "",
+    val pureBlack: Boolean = false,
+    val primaryColor: Long = DefaultThemeColors.first(),
+    val primaryColors: List<Long> = DefaultThemeColors,
+    val colorStyle: ThemeColorStyle = ThemeColorStyle.VIVID,
+    val customTextScale: Boolean = false,
+    val textScale: Float = 1f,
+    val tabAnimation: RootTabAnimation = RootTabAnimation.SLIDE,
 ) {
-    fun normalized() = copy(uiScale = if (uiScale.isFinite()) uiScale.coerceIn(MIN_SCALE, MAX_SCALE) else 1f,
-        playerBackgroundBlur = if (playerBackgroundBlur.isFinite()) playerBackgroundBlur.coerceIn(0f, 100f) else 35f)
+    fun normalized() = copy(floatingBar = true,
+        uiScale = if (uiScale.isFinite()) uiScale.coerceIn(MIN_SCALE, MAX_SCALE) else 1f,
+        playerBackgroundBlur = if (playerBackgroundBlur.isFinite()) playerBackgroundBlur.coerceIn(0f, 100f) else 35f,
+        textScale = if (textScale.isFinite()) textScale.coerceIn(.8f, 1.4f) else 1f,
+        primaryColor = (primaryColor and 0xFFFFFF) or 0xFF000000,
+        primaryColors = primaryColors.map { (it and 0xFFFFFF) or 0xFF000000 }.distinct().take(32).ifEmpty { DefaultThemeColors })
     companion object { const val MIN_SCALE = 0.8f; const val MAX_SCALE = 1.2f }
 }

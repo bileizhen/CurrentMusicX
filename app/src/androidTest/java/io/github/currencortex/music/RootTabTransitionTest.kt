@@ -30,6 +30,7 @@ import org.junit.Test
 /** Continuous page movement, drag, rapid changes and saved state, without accounts or network. */
 class RootTabTransitionTest {
     private var reduced = false
+    private var fade by mutableStateOf(false)
     @get:Rule val compose = createComposeRule(effectContext = object : MotionDurationScale {
         override val scaleFactor: Float get() = if (reduced) 0f else 1f
     })
@@ -39,7 +40,7 @@ class RootTabTransitionTest {
         select = { selected = it }
         Column(Modifier.fillMaxSize().background(ComposeColor.White)) {
             Box(Modifier.weight(1f)) {
-                RootTabTransition(selected, rememberSaveableStateHolder(), onSelected = { selected = it }) { tab ->
+                RootTabTransition(selected, rememberSaveableStateHolder(), onSelected = { selected = it }, fade = fade) { tab ->
                     var count by rememberSaveable { mutableIntStateOf(0) }
                     val color = listOf(ComposeColor.Blue,ComposeColor.Red,ComposeColor.Green,ComposeColor.Magenta)[tab]
                     Box(Modifier.fillMaxSize().background(color)) {
@@ -57,6 +58,28 @@ class RootTabTransitionTest {
         return bitmap.getPixel(bitmap.width/2, bitmap.height/2)
     }
     private fun change(tab: Int) = compose.runOnUiThread { select(tab) }
+
+    @Test fun fadeChoiceCrossfadesOnlyTheEndpointsAndSwitchingStylesKeepsPageState() {
+        fade = true
+        compose.mainClock.autoAdvance = false
+        compose.setContent { Fixture() }
+        compose.onNodeWithText("page0:0").performClick()
+        val bounds = compose.onNodeWithTag("stationary_dock").fetchSemanticsNode().boundsInRoot
+        change(3); compose.mainClock.advanceTimeBy(112)
+        val middle = compose.onNodeWithTag("root_tab_transition").captureToImage().asAndroidBitmap()
+        val left = middle.getPixel(5, middle.height / 2)
+        val right = middle.getPixel(middle.width - 6, middle.height / 2)
+        assertEquals("Fade must not expose a horizontal seam", left, right)
+        assertNotEquals(Color.BLUE, left); assertNotEquals(Color.MAGENTA, left)
+        assertTrue("A long fade must not reveal the intermediate green page", Color.green(left) < 100)
+        compose.mainClock.advanceTimeBy(400)
+        assertEquals(Color.MAGENTA, pixel())
+        compose.runOnUiThread { fade = false }
+        change(0); compose.mainClock.advanceTimeBy(600)
+        compose.onNodeWithText("page0:1").assertExists()
+        assertEquals(Color.BLUE, pixel())
+        assertEquals(bounds, compose.onNodeWithTag("stationary_dock").fetchSemanticsNode().boundsInRoot)
+    }
 
     @Test fun switchesThroughIntermediateFrameAndKeepsDockAndPageBoundsFixed() {
         compose.mainClock.autoAdvance = false
