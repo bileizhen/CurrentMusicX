@@ -40,6 +40,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
             combine(container.accountRepository.state.map { it.account?.id }.distinctUntilChanged(),
                 container.musicSettings.state.map { it.server }.distinctUntilChanged(), container.libraryRepository.revision,
                 refreshRequest, container.primaryLibrary.identity) { id, server, revision, refresh, primary -> listOf(id, server, revision, refresh, primary) }
+                .combine(container.neteaseLibrary.revision) { keys, revision -> keys + revision }
                 .combine(container.neteaseSessions.state.map { it.profile?.uid }.distinctUntilChanged()) { keys, uid -> keys + uid }
                 .collectLatest { keys ->
                     prefetchJob?.cancel()
@@ -273,12 +274,25 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
             } == true
         else it.editable(accountId)
     } == true
+    fun removable(playlist: Playlist?, accountId: Long) = playlist?.let {
+        if (it.source == "netease") !it.nativeLiked &&
+            container.bindingRepository.state.value?.let { binding ->
+                val uid = binding.profile?.uid ?: 0L
+                binding.bound && !binding.stale && uid > 0 &&
+                    (if (it.nativeOwned) it.ownerId == uid else it.nativeSubscribed)
+            } == true
+        else it.editable(accountId)
+    } == true
     suspend fun rename(name: String) {
         if (state.value.playlist?.source == "netease") container.neteaseLibrary.rename(id, name)
         else container.libraryRepository.rename(id, name)
     }
     suspend fun delete() {
-        if (state.value.playlist?.source == "netease") container.neteaseLibrary.delete(id)
+        val playlist = state.value.playlist ?: throw ApiException(ErrorKind.NotFound)
+        if (playlist.source == "netease") {
+            if (playlist.nativeOwned) container.neteaseLibrary.delete(id)
+            else container.neteaseLibrary.unsubscribe(id)
+        }
         else container.libraryRepository.delete(id)
     }
     suspend fun remove(song: Song) {
