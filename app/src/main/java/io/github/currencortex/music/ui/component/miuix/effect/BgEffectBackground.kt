@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
@@ -32,6 +33,9 @@ fun BgEffectBackground(
     effectBackground: Boolean = true,
     alpha: () -> Float = { 1f },
     animationSpeed: Float = 1f,
+    palette: List<Color>? = null,
+    darkTheme: Boolean? = null,
+    surfaceColor: Color? = null,
     content: @Composable BoxScope.() -> Unit,
 ) {
     if (android.os.Build.VERSION.SDK_INT < 33 || !isRuntimeShaderSupported()) {
@@ -41,13 +45,14 @@ fun BgEffectBackground(
     Box(
         modifier = modifier,
     ) {
-        val surface = MiuixTheme.colorScheme.surface
+        val surface = surfaceColor ?: MiuixTheme.colorScheme.surface
         val deviceType = if (shouldShowSplitPane()) DeviceType.PAD else DeviceType.PHONE
-        val isDarkTheme = LocalDarkTheme.current
+        val isDarkTheme = darkTheme ?: LocalDarkTheme.current
         val painter = remember { BgEffectPainter() }
 
-        val preset = remember(deviceType, isDarkTheme) {
-            BgEffectConfig.get(deviceType, isDarkTheme)
+        val preset = remember(deviceType, isDarkTheme, palette) {
+            val base = BgEffectConfig.get(deviceType, isDarkTheme)
+            if (palette == null) base else BgEffectConfig.withPalette(base, palette)
         }
 
         val colorStage = remember { Animatable(0f) }

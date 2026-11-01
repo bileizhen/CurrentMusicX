@@ -61,11 +61,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         Column(Modifier.fillMaxWidth().heightIn(max = 480.dp).verticalScroll(rememberScrollState())
             .testTag("player_background_settings"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.fillMaxWidth().height(140.dp)
-                .clip(RoundedCornerShape(18.dp)).testTag("player_background_preview"), file, blur)
+                .clip(RoundedCornerShape(18.dp)).testTag("player_background_preview"), file, blur,
+                dynamicBackground = config.playerDynamicBackground)
             Text(if (busy) "正在保存图片…" else if (file != null) "自定义背景 · 图片仅保存在本机"
                 else if (config.playerBackground.isNotBlank()) "图片不可用，请重新选择"
                 else "默认背景 · 跟随歌曲封面取色", fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            io.github.currencortex.music.ui.component.SettingsSwitch("动态背景", config.playerDynamicBackground,
+                { enabled -> scope.launch { container.settings.edit { it.copy(playerDynamicBackground = enabled) } } },
+                Modifier.testTag("player_dynamic_background"), enabled = !busy && file == null,
+                summary = if (file != null) "恢复默认背景后可设置" else "随歌曲封面取色并流动，关闭后使用静态封面")
             MusicDialogActions(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MusicDialogButton(if (file == null) "选择图片" else "更换图片",
                     colors = ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.primary, textColor = MiuixTheme.colorScheme.onPrimary),

@@ -7,6 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -15,6 +18,10 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.MotionDurationScale
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -30,20 +37,54 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import java.io.File
 import kotlin.math.roundToInt
+import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
 import io.github.currencortex.music.ui.component.coverRequestUrl
+import io.github.currencortex.music.ui.component.miuix.effect.BgEffectBackground
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
 
-/** A low-resolution cover creates the atmosphere; controls stay on a separate sharp layer. */
+/** About's flowing colour pools follow the artwork; controls stay on a separate sharp layer. */
 @Composable fun PlayerBackdrop(cover: String, modifier: Modifier = Modifier, customImage: File? = null,
-    blurPercent: Float = 35f) {
-    val context = LocalContext.current
+    blurPercent: Float = 35f, active: Boolean = true, dynamicBackground: Boolean = true) {
     Box(modifier.clipToBounds().background(Color(0xFF262428))) {
-        Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color(0xFF635047), Color(0xFF222832)))))
         if (customImage != null) CustomPlayerBackground(customImage, blurPercent, Modifier.matchParentSize())
-        else if (cover.isNotBlank() && Build.VERSION.SDK_INT >= 31) AsyncImage(
-            model = remember(cover) { ImageRequest.Builder(context).data(coverRequestUrl(cover, 160)).size(160).build() },
+        else if (dynamicBackground) ArtworkPlayerBackground(cover, active, Modifier.matchParentSize())
+        else StaticArtworkBackground(cover, Modifier.matchParentSize())
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .33f), Color.Black.copy(alpha = .62f)))))
+    }
+}
+
+@Composable private fun StaticArtworkBackground(cover: String, modifier: Modifier) {
+    val context = LocalContext.current
+    Box(modifier.testTag("player_static_background")
+        .background(Brush.verticalGradient(listOf(Color(0xFF635047), Color(0xFF222832))))) {
+        if (cover.isNotBlank() && Build.VERSION.SDK_INT >= 31) AsyncImage(
+            model = remember(context, cover) { ImageRequest.Builder(context).data(coverRequestUrl(cover, 160)).size(160).build() },
             contentDescription = null, contentScale = ContentScale.Crop,
             modifier = Modifier.matchParentSize().graphicsLayer { scaleX = 1.3f; scaleY = 1.3f }.blur(65.dp))
-        Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .33f), Color.Black.copy(alpha = .62f)))))
+    }
+}
+
+@Composable private fun ArtworkPlayerBackground(cover: String, active: Boolean, modifier: Modifier) {
+    // Reuse the dock/lyrics palette cache and Coil's small software cover request.
+    val palette by rememberArtworkGlowPalette(cover)
+    val primary by animateColorAsState(Color(palette.primary), tween(900), label = "player background primary")
+    val secondary by animateColorAsState(Color(palette.secondary), tween(900), label = "player background secondary")
+    val pools = remember(primary, secondary) {
+        listOf(primary.copy(alpha = .85f), secondary.copy(alpha = .8f),
+            lerp(primary, secondary, .35f).copy(alpha = .65f),
+            lerp(secondary, Color.Black, .25f).copy(alpha = .9f))
+    }
+    val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    val motionEnabled = (rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) > 0f
+    val accelerated = LocalView.current.isHardwareAccelerated
+    Box(modifier.testTag("player_artwork_background")
+        .background(Brush.verticalGradient(listOf(lerp(Color(0xFF171719), primary, .6f),
+            lerp(Color(0xFF171719), secondary, .35f))))) {
+        BgEffectBackground(dynamicBackground = active && motionEnabled && lifecycle.isAtLeast(Lifecycle.State.RESUMED),
+            modifier = Modifier.matchParentSize(), isFullSize = true, effectBackground = accelerated,
+            palette = pools, darkTheme = true, surfaceColor = Color(0xFF171719)) { }
     }
 }
 

@@ -49,6 +49,7 @@ data class AppearanceSettings(
     val playerBackgroundBlur: Float = 35f,
     val launchStyle: LaunchStyle = LaunchStyle.CLASSIC,
     val customFont: String = "",
+    val playerDynamicBackground: Boolean = true,
     val pureBlack: Boolean = false,
     val primaryColor: Long = DefaultThemeColors.first(),
     val primaryColors: List<Long> = DefaultThemeColors,
