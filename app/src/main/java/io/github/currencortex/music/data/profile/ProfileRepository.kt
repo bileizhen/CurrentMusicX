@@ -67,22 +67,31 @@ class ProfileRepository(private val api: ApiClient, private val avatarCache: Ava
     suspend fun decorate(id: String, expected: RequestSession = session()): ProfileUser =
         write("decorations/mine", buildJsonObject { put("id", id) }, expected)
     suspend fun password(oldPassword: String, newPassword: String) {
-        require(oldPassword.isNotEmpty() && newPassword.length >= 6)
+        require(oldPassword.isNotEmpty() && newPassword.length in 6..64)
         api.request("PUT", "profile/password", body = buildJsonObject { put("oldPassword", oldPassword); put("newPassword", newPassword) },
-            authenticated = true, expectedSession = session())
+            authenticated = true, expectedSession = session(), retryConnection = false)
+    }
+    suspend fun sendPasswordCode() {
+        api.request("POST", "profile/password/code", authenticated = true, expectedSession = session(), retryConnection = false)
+    }
+    suspend fun passwordWithEmailCode(emailCode: String, newPassword: String) {
+        require(emailCode.isNotBlank() && newPassword.length in 6..64)
+        api.request("PUT", "profile/password", body = buildJsonObject {
+            put("emailCode", emailCode.trim()); put("newPassword", newPassword)
+        }, authenticated = true, expectedSession = session(), retryConnection = false)
     }
     fun avatarUrl(server: String, filename: String, versions: Map<String, String> = avatarVersions.value): String? =
         rawAvatarUrl(server, filename)?.let { versionedAvatarUrl(it, versions[it]) }
     private fun rawAvatarUrl(server: String, filename: String): String? {
         if (filename.startsWith("https://") || filename.startsWith("http://")) return filename
         if (!filename.matches(Regex("[a-zA-Z0-9_.-]+")) || filename.contains("..")) return null
-        return ServerUrl.endpoint(server, "avatar/$filename", emptyMap()).toString()
+        return ServerUrl.endpoint(api.routeServer(server), "avatar/$filename", emptyMap()).toString()
     }
     fun decorationUrl(server: String, id: String): String? {
         if (id.isBlank() || id.contains("..") || id.any { it == '/' || it == '\\' || it.isISOControl() }) return null
         // Production IDs include Chinese names. Encode the ID as one segment,
         // including reserved characters, instead of restricting it to ASCII.
-        return ServerUrl.endpoint(server, "decor", emptyMap()).newBuilder().addPathSegment("$id.gif").build().toString()
+        return ServerUrl.endpoint(api.routeServer(server), "decor", emptyMap()).newBuilder().addPathSegment("$id.gif").build().toString()
     }
     fun account(user: ProfileUser) = UserDto(user.id, user.username, user.nickname, user.avatar, user.isAdmin, user.isSuper, user.title)
 }

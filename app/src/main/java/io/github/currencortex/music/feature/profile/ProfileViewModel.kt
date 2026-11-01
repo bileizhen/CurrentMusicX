@@ -20,6 +20,7 @@ data class ProfileState(val loading: Boolean = false, val profile: ProfileDto? =
 class ProfileViewModel(val container: AppContainer, private val userId: Long? = null) : ViewModel() {
     val state = MutableStateFlow(ProfileState())
     val busy = MutableStateFlow(false)
+    val passwordCodeUntil = MutableStateFlow(0L)
     val message = MutableStateFlow<String?>(null)
     val dialog = MutableStateFlow<String?>(null)
     val avatar = MutableStateFlow<Uri?>(null)
@@ -89,7 +90,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         viewModelScope.launch {
             try { when (val r = appResult { block() }) {
                 is AppResult.Success -> message.value = success
-                is AppResult.Failure -> container.errorNotices.show(r.kind.message)
+                is AppResult.Failure -> container.errorNotices.show(r.message)
             } } finally { busy.value = false }
         }
     }
@@ -112,6 +113,17 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
     fun password(old: String, new: String) = action("密码已更新，请确认当前会话") {
         container.profileRepository.password(old, new); dialog.value = null
         container.authRepository.restore(container.accountRepository.server); reload()
+    }
+    fun passwordCode() {
+        if (android.os.SystemClock.elapsedRealtime() < passwordCodeUntil.value) return
+        action("验证码已发送，5 分钟内有效") {
+            container.profileRepository.sendPasswordCode()
+            passwordCodeUntil.value = android.os.SystemClock.elapsedRealtime() + 60_000
+        }
+    }
+    fun passwordWithEmailCode(code: String, new: String) = action("密码已更新，其他设备已下线") {
+        container.profileRepository.passwordWithEmailCode(code, new); dialog.value = null
+        container.authRepository.validateRestored(); reload()
     }
     companion object {
         fun avatarBytes(resolver: ContentResolver, uri: Uri, crop: AvatarCrop? = null): ByteArray {

@@ -9,6 +9,41 @@ import org.junit.Test
 import kotlinx.serialization.json.*
 
 class AuthRepositoryTest {
+    @Test fun passwordRecoveryIsAnonymousAndNeverReplacesTheActiveAccount() = runBlocking {
+        MockWebServer().use { server ->
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            try {
+                val store = Store(); val accounts = AccountRepository(store, scope)
+                val base = server.url("/cm/").toString(); accounts.server = base
+                accounts.save("other-session", UserDto(9, "other"))
+                val repo = AuthRepository(ApiClient({ base }, { accounts.token }, accounts::expired), accounts, "test-device") { _, _ -> }
+                server.enqueue(MockResponse().setBody("{}"))
+                assertTrue(repo.sendPasswordResetCode(" reset@example.com ") is AppResult.Success)
+                val send = server.takeRequest()
+                assertEquals("POST", send.method); assertEquals("/cm/auth/password/code", send.path)
+                assertNull(send.getHeader("Authorization"))
+                assertEquals("reset@example.com", ApiJson.parseToJsonElement(send.body.readUtf8()).jsonObject["email"]!!.jsonPrimitive.content)
+                server.enqueue(MockResponse().setBody("""{"ok":true,"username":"reset-user"}"""))
+                assertTrue(repo.resetPassword(" reset@example.com ", " 123456 ", "new-password") is AppResult.Success)
+                val reset = server.takeRequest()
+                assertEquals("POST", reset.method); assertEquals("/cm/auth/password/reset", reset.path)
+                assertNull(reset.getHeader("Authorization"))
+                val body = ApiJson.parseToJsonElement(reset.body.readUtf8()).jsonObject
+                assertEquals("123456", body["code"]!!.jsonPrimitive.content)
+                assertEquals("new-password", body["newPassword"]!!.jsonPrimitive.content)
+                assertEquals("app", body["platform"]!!.jsonPrimitive.content)
+                assertEquals("other-session", accounts.token); assertEquals("other-session", store.value)
+                assertEquals(9L, accounts.state.value.account!!.id)
+                server.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"验证码无效或已过期"}"""))
+                val failed = repo.resetPassword("reset@example.com", "000000", "new-password") as AppResult.Failure
+                assertEquals("验证码无效或已过期", failed.message)
+                server.takeRequest()
+                assertTrue(repo.resetPassword("reset@example.com", "123456", "short") is AppResult.Failure)
+                assertTrue(repo.resetPassword("reset@example.com", "123456", "x".repeat(65)) is AppResult.Failure)
+                assertNull(server.takeRequest(100, java.util.concurrent.TimeUnit.MILLISECONDS))
+            } finally { scope.cancel() }
+        }
+    }
     @Test fun registrationAndVerificationCodesUseContactSpecificFieldsWithoutCurrentCredentials() = runBlocking {
         MockWebServer().use { server ->
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

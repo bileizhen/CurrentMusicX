@@ -10,6 +10,24 @@ import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 class ProfileRepositoryTest {
+    @Test fun emailPasswordChangeUsesTheBoundAccountAndKeepsValidationErrors() = runBlocking {
+        MockWebServer().use { s ->
+            val base = s.url("/cm/").toString()
+            val repo = ProfileRepository(ApiClient({ base }, { "credential" }, {})) { RequestSession(base, "credential") }
+            s.enqueue(MockResponse().setBody("{}")); repo.sendPasswordCode()
+            val send = s.takeRequest(); assertEquals("POST", send.method)
+            assertEquals("/cm/profile/password/code", send.path); assertEquals("Bearer credential", send.getHeader("Authorization"))
+            assertEquals("{}", send.body.readUtf8())
+            s.enqueue(MockResponse().setBody("{}")); repo.passwordWithEmailCode(" 123456 ", "new-password")
+            val change = s.takeRequest(); assertEquals("PUT", change.method)
+            assertEquals("/cm/profile/password", change.path); assertEquals("Bearer credential", change.getHeader("Authorization"))
+            val body = ApiJson.parseToJsonElement(change.body.readUtf8()).jsonObject
+            assertEquals(setOf("emailCode", "newPassword"), body.keys)
+            assertEquals("123456", body["emailCode"]!!.jsonPrimitive.content)
+            s.enqueue(MockResponse().setResponseCode(400).setBody("""{"error":"请先绑定邮箱"}"""))
+            assertEquals("请先绑定邮箱", (appResult { repo.sendPasswordCode() } as AppResult.Failure).message)
+        }
+    }
     private class RecordingAvatarCache : AvatarCache {
         override var versions = emptyMap<String, String>()
         val invalidated = mutableListOf<Set<String>>()
