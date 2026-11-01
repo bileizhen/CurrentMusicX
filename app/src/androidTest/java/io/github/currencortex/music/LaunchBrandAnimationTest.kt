@@ -164,6 +164,23 @@ class LaunchBrandAnimationTest {
         assertFalse(motion.active)
     }
 
+    @Test fun disabledAnimationsCannotWaitForHomeForever() {
+        reduced = true
+        compose.mainClock.autoAdvance = false
+        compose.setContent { Fixture(ready = false) }
+        compose.onNodeWithTag("launch_animation").assertExists()
+        val started = android.os.SystemClock.elapsedRealtime()
+        compose.waitUntil(6_000) {
+            compose.mainClock.advanceTimeBy(100)
+            compose.onAllNodesWithTag("launch_animation").fetchSemanticsNodes().isEmpty()
+        }
+        assertTrue(android.os.SystemClock.elapsedRealtime() - started < 5_500)
+        assertFalse(motion.active)
+        assertEquals(0f, motion.flight.value)
+        compose.onNodeWithTag("launch_fixture_action").performClick()
+        assertEquals(1, clicks)
+    }
+
     @Test fun textDoesNotAnimateUnderTheSystemSplash() {
         val windowReady = mutableStateOf(false)
         compose.mainClock.autoAdvance = false
