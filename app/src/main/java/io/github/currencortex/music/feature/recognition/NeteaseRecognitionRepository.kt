@@ -7,11 +7,12 @@ import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.IOException
 import java.util.UUID
+import java.util.Base64
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
-/** NetEase's public fingerprint endpoint. No application account, cookies or raw audio is sent. */
+/** Anonymous recognition requests; lyric recognition sends an explicitly disclosed short AAC clip. */
 class NeteaseRecognitionRepository(client: OkHttpClient = OkHttpClient(),
     baseUrl: String = "https://interface.music.163.com/") {
     private val base = baseUrl.toHttpUrl()
@@ -20,14 +21,31 @@ class NeteaseRecognitionRepository(client: OkHttpClient = OkHttpClient(),
         .proxyAuthenticator(Authenticator.NONE).followRedirects(false).followSslRedirects(false)
         .retryOnConnectionFailure(false).apply { interceptors().clear(); networkInterceptors().clear() }.build()
 
-    suspend fun recognize(fingerprint: String, durationSeconds: Double): List<Song> {
-        require(durationSeconds in 3.0..10.0 && fingerprint.length in 4..128_000 &&
+    suspend fun recognize(fingerprint: String, durationSeconds: Double): List<Song> =
+        recognize(fingerprint, durationSeconds, UUID.randomUUID().toString(), 1)
+
+    suspend fun recognize(fingerprint: String, durationSeconds: Double, sessionId: String, times: Int): List<Song> {
+        require(durationSeconds in 2.0..15.0 && fingerprint.length in 4..128_000 &&
             fingerprint.matches(Regex("[A-Za-z0-9+/=]+"))) { "识别片段无效，请重新录音" }
-        val body = FormBody.Builder().add("sessionId", UUID.randomUUID().toString())
+        require(sessionId.matches(Regex("[A-Za-z0-9-]{1,64}")) && times in 1..7)
+        val body = FormBody.Builder().add("sessionId", sessionId)
             .add("algorithmCode", "shazam_v2").add("duration", durationSeconds.toString())
-            .add("rawdata", fingerprint).add("times", "1").add("decrypt", "1").build()
+            .add("rawdata", fingerprint).add("times", times.toString()).add("decrypt", "1").build()
+        return request("api/music/audio/match", body)
+    }
+
+    suspend fun recognizeLyrics(audio: ByteArray, sessionId: String): List<Song> {
+        require(audio.size in 8..128_000 && sessionId.matches(Regex("[A-Za-z0-9-]{1,64}")))
+        val body = FormBody.Builder().add("sessionId", sessionId).add("queryId", UUID.randomUUID().toString())
+            .add("algorithmCode", "ASR").add("algorithmVer", "1.0.0")
+            .add("recordAudio", Base64.getEncoder().encodeToString(audio))
+            .add("recordAudioFormat", "AAC").add("from", "app").add("decrypt", "1").build()
+        return request("api/music/hum/audio/unifymatch", body)
+    }
+
+    private suspend fun request(path: String, body: FormBody): List<Song> {
         return suspendCancellableCoroutine { continuation ->
-            val call = client.newCall(Request.Builder().url(base.resolve("api/music/audio/match")!!)
+            val call = client.newCall(Request.Builder().url(base.resolve(path)!!)
                 .header("Referer", "https://music.163.com/").header("User-Agent", "Mozilla/5.0")
                 .post(body).build())
             continuation.invokeOnCancellation { call.cancel() }

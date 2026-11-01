@@ -40,7 +40,7 @@ import top.yukonga.miuix.kmp.basic.Icon
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
         DesktopIslandFrame(song, Modifier.islandAnimatedWidth(width).fillMaxWidth().padding(vertical = desktopIslandDrawingSpace)
             .onSizeChanged(onSize).onGloballyPositioned { onTop(kotlin.math.round(it.positionInRoot().y).toInt()) }
-            .testTag("recognition_island"), coverPosition = position, durationMs = 10_000,
+            .testTag("recognition_island"), coverPosition = position, durationMs = 15_000,
             leading = if (state.phase == RecognitionPhase.MATCHED && !song.cover.isNullOrBlank()) null else { modifier ->
                 Box(modifier.fillMaxSize().clip(CircleShape).background(Color(0xFF203049)), contentAlignment = Alignment.Center) {
                     Icon(if (state.source == RecognitionAudioSource.SYSTEM) MusicIcons.Headphones else MusicIcons.Microphone,

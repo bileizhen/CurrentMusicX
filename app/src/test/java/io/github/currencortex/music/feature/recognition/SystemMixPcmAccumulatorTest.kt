@@ -69,7 +69,7 @@ class SystemMixPcmAccumulatorTest {
         assertEquals(((127L * 256 * 3900) / 44100).toShort(), resampler.copyPcm()[1])
     }
 
-    @Test fun boundedOutputStopsAtTenSecondsAndClearRemovesPreviousAudioState() {
+    @Test fun boundedOutputStopsAtCapacityAndClearRemovesPreviousAudioState() {
         val capture = SystemMixPcmAccumulator(8000, maximumSamples = 5)
         capture.appendSnapshot(frame(129, 130, 131, 132))
         capture.appendSnapshot(frame(140, 141, 142, 143))

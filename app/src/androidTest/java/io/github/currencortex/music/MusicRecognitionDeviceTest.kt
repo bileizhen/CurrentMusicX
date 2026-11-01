@@ -13,6 +13,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
@@ -182,13 +183,23 @@ class MusicRecognitionDeviceTest {
             return null
         }
         while (SystemClock.uptimeMillis() < deadline) {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) break
             val node = allowButton(automation.rootInActiveWindow)
             if (node != null) { node.performAction(AccessibilityNodeInfo.ACTION_CLICK); break }
-            if (androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.RECORD_AUDIO) == android.content.pm.PackageManager.PERMISSION_GRANTED) break
             SystemClock.sleep(100)
         }
-        compose.waitUntil(5000) {
-            compose.onAllNodesWithText("正在聆听 · 1 秒").fetchSemanticsNodes().isNotEmpty()
+        try {
+            compose.waitUntil(5000) {
+                // Permission UI traversal may outlast the one-second label. Require actual
+                // capture progress without depending on a single transient second.
+                compose.onAllNodes(hasTestTag("recognition_status") and SemanticsMatcher("recording has progressed") { node ->
+                    node.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)
+                        ?.any { Regex("正在聆听 · [1-9][0-9]* 秒").matches(it.text) } == true
+                }).fetchSemanticsNodes().isNotEmpty()
+            }
+        } catch (failure: Throwable) {
+            screenshot("recognition-microphone-start-failure.png")
+            throw failure
         }
         compose.onNodeWithTag("recognition_back").performClick()
         compose.onNodeWithTag("music_recognition").assertDoesNotExist()

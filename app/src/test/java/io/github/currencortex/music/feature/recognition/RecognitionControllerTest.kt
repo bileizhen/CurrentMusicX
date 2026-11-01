@@ -40,7 +40,7 @@ class RecognitionControllerTest {
         var recordings = 0
         val controller = RecognitionController(this, RecognitionRecorder { stop, _ ->
             recordings++; while (!stop.get()) delay(100)
-            ShortArray(24_000)
+            ShortArray(24_000) { 1 }
         }, { "fp" }, { _, _ -> emptyList() })
         controller.start(); runCurrent(); controller.start()
         controller.finishRecording(); advanceUntilIdle()
@@ -60,7 +60,7 @@ class RecognitionControllerTest {
 
     @Test fun staleNetworkResultCannotReplaceANewerAttempt() = runTest {
         var attempts = 0
-        val controller = RecognitionController(this, RecognitionRecorder { _, _ -> ShortArray(24_000) }, { "fp" }, { _, _ ->
+        val controller = RecognitionController(this, RecognitionRecorder { _, _ -> ShortArray(24_000) { 1 } }, { "fp" }, { _, _ ->
             val attempt = ++attempts
             if (attempt == 1) withContext(NonCancellable) { delay(1000) }
             listOf(Song(attempt.toLong(), "Attempt $attempt"))
@@ -70,7 +70,7 @@ class RecognitionControllerTest {
     }
 
     @Test fun resettingForDesktopHandoffClearsThePreviousLocalResult() = runTest {
-        val controller = RecognitionController(this, RecognitionRecorder { _, _ -> ShortArray(24_000) },
+        val controller = RecognitionController(this, RecognitionRecorder { _, _ -> ShortArray(24_000) { 1 } },
             { "fp" }, { _, _ -> listOf(Song(1, "Old local result")) })
         controller.start(); advanceUntilIdle()
         assertEquals(RecognitionPhase.MATCHED, controller.state.value.phase)
