@@ -166,6 +166,73 @@ class DiscoverSectionsTest {
         compose.onNodeWithText("发现").performClick()
         compose.onNodeWithTag("discover_music").assertExists()
     }
+    @Test fun chatHidesTheWholeDockAndReleasesComposerSpaceThenRestoresItOnExit() {
+        val song = io.github.currencortex.music.data.song.Song(900, "暂停的测试歌曲")
+        container.playerController.queue.replace(listOf(song), 0)
+        container.playerController.state.value = io.github.currencortex.music.core.media.PlayerState(song = song)
+        open()
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNodeWithTag("music_dock").assertIsDisplayed()
+        compose.onNodeWithTag("discover_tabs_3").performClick()
+        compose.onNodeWithTag("discover_chat").assertExists()
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNodeWithTag("music_dock").assertDoesNotExist()
+        compose.onNodeWithTag("mini_player").assertDoesNotExist()
+        compose.onNodeWithTag("tab_0").assertDoesNotExist()
+        val chat = compose.onNodeWithTag("discover_chat").fetchSemanticsNode().boundsInRoot
+        val composer = compose.onNodeWithTag("chat_composer").fetchSemanticsNode().boundsInRoot
+        val density = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().targetContext.resources.displayMetrics.density
+        assertTrue("Composer must use the released bottom space", chat.bottom - composer.bottom < 24 * density)
+        compose.onNodeWithTag("discover_chat").captureToImage().asAndroidBitmap().let { bitmap ->
+            val app = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+            java.io.File(app.externalCacheDir, "chat-without-dock.png").outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            bitmap.recycle()
+        }
+        compose.onNodeWithTag("discover_tabs_0").performClick()
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNodeWithTag("music_dock").assertIsDisplayed()
+        compose.onNodeWithTag("mini_player").assertIsDisplayed()
+        compose.onNodeWithTag("tab_0").assertIsDisplayed()
+        compose.onNodeWithTag("tab_0").performClick()
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNodeWithTag("music_dock").assertIsDisplayed()
+        assertEquals(900L, container.playbackQueue.state.value.current?.id)
+        assertFalse(container.playerController.state.value.playing)
+        assertEquals(0, chatWrites.get())
+    }
+
+    @Test fun darkLargeChatCanAttachAndRemoveMusicWithoutPublishingOrStartingPlayback() {
+        runBlocking { container.settings.edit { it.copy(
+            themeMode = io.github.currencortex.music.data.settings.ThemeMode.DARK,
+            customTextScale = true, textScale = 1.3f) } }
+        val song = io.github.currencortex.music.data.song.Song(900, "暂停的测试歌曲")
+        container.playerController.queue.replace(listOf(song), 0)
+        container.playerController.state.value = io.github.currencortex.music.core.media.PlayerState(song = song)
+        open(); compose.onNodeWithTag("discover_tabs_3").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat_message_3").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("chat_add_content").performClick()
+        compose.onNodeWithTag("chat_pick_image").assertIsDisplayed()
+        compose.onNodeWithTag("chat_attach_current").performClick()
+        compose.onNodeWithText("引用当前歌曲").performClick()
+        compose.onNodeWithTag("chat_attachment_song_900").assertIsDisplayed()
+        compose.onNodeWithTag("chat_send").assertIsEnabled()
+        compose.onNodeWithTag("discover_chat").captureToImage().asAndroidBitmap().let { bitmap ->
+            val app = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+            java.io.File(app.externalCacheDir, "chat-redesign-dark-large.png").outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+            bitmap.recycle()
+        }
+        compose.onNodeWithTag("chat_remove_attachment_song_900").performClick()
+        compose.onNodeWithTag("chat_attachment_song_900").assertDoesNotExist()
+        compose.onNodeWithTag("chat_send").assertIsNotEnabled()
+        compose.onNodeWithTag("music_dock").assertDoesNotExist()
+        assertFalse(container.playerController.state.value.playing)
+        assertEquals(0, chatWrites.get())
+    }
+
     @Test fun chatSupportsLiveMessagesMentionsExplicitRetryAndOwnMessageDeletion() {
         open(); compose.onNodeWithText("Chat").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat_message_3").fetchSemanticsNodes().isNotEmpty() }
@@ -225,14 +292,14 @@ class DiscoverSectionsTest {
                 io.github.currencortex.music.ui.component.ScrollEdgeBlurKey))
         assertEquals(header.left, composer.left, 1f)
         assertEquals(header.right, composer.right, 1f)
-        val photo = bounds("chat_pick_image")
+        val photo = bounds("chat_add_content")
         val send = bounds("chat_send")
         assertEquals(photo.width, send.width, 1f)
         assertEquals(photo.center.y, send.center.y, 1f)
         compose.onNodeWithTag("chat_send").assertIsNotEnabled()
         compose.onNodeWithTag("chat_input").performTextInput("第一行\n第二行\n第三行")
         compose.onNodeWithTag("chat_send").assertIsEnabled()
-        assertEquals(bounds("chat_pick_image").bottom, bounds("chat_send").bottom, 1f)
+        assertEquals(bounds("chat_add_content").bottom, bounds("chat_send").bottom, 1f)
         compose.onNodeWithTag("chat_input").performTextClearance()
         compose.runOnIdle { keyboard?.hide() }
         compose.waitForIdle()
