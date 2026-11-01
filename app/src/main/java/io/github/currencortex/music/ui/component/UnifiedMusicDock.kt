@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.currencortex.music.ui.component.nativeui.ElasticPress
 
 internal val DockExpansion = SemanticsPropertyKey<Float>("DockExpansion")
 internal val LocalMusicDockNavigation = staticCompositionLocalOf<(@Composable (Modifier) -> Unit)?> { null }
@@ -72,6 +73,10 @@ private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerS
             .semantics { this[DockExpansion] = progress.value }
             .graphicsLayer {
                 translationY = navigationTravel.toPx() * (1 - progress.value)
+            }) {
+        ElasticPress(Modifier.fillMaxSize().testTag("dock_surface_press"), enabled = drawDock,
+            paintedHeight = miniSpace + navigationTravel * progress.value) {
+        Box(Modifier.fillMaxSize().graphicsLayer {
                 shape = DockShape(miniSpace.toPx() + navigationTravel.toPx() * progress.value, 32.dp.toPx())
                 // The resting indicator can stretch outside the panel. Only crop children
                 // while navigation is disappearing into the shorter secondary-page surface.
@@ -102,8 +107,10 @@ private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerS
                 reportOrigin {
                     if (!coordinates.isAttached) null else with(density) {
                         val topLeft = coordinates.localToRoot(Offset.Zero)
-                        PlayerSheetOrigin(Rect(topLeft, Size(coordinates.size.width.toFloat(),
-                            miniSpace.toPx() + navigationTravel.toPx() * progress.value)), 32.dp.toPx())
+                        val bottomRight = coordinates.localToRoot(Offset(coordinates.size.width.toFloat(),
+                            miniSpace.toPx() + navigationTravel.toPx() * progress.value))
+                        val scale = (bottomRight.x - topLeft.x) / coordinates.size.width.coerceAtLeast(1)
+                        PlayerSheetOrigin(Rect(topLeft, bottomRight), 32.dp.toPx() * scale)
                     }
                 }
             }) {
@@ -127,6 +134,8 @@ private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerS
                     Box(Modifier.height(navigationSpace)) { navigation(Modifier.fillMaxWidth()) }
                 }
             }
+        }
+        }
         }
     }
 }
