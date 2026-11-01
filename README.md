@@ -22,7 +22,7 @@
 
 CurrentMusicX 是 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic) 的原生 Android 客户端，支持网易云音乐库、Navidrome 自建曲库和双人一起听。圆形封面、动态取色、逐字歌词与悬浮播放器组成日常听歌体验，适配竖屏、横屏和宽屏布局。
 
-本页介绍当前源码的功能；已发布版本的具体改动请查看[更新记录](CHANGELOG.md)。源码位于本仓库 `main` 分支，同时维护于 [CurrentMusic 的 app 分支](https://github.com/backrooms-yrc/CurrentMusic/tree/app)。
+本页介绍当前源码的功能；已发布版本的具体改动请查看[更新记录](CHANGELOG.md)。Android 客户端源码维护于本仓库 `main` 分支。
 
 ## 开始使用
 
