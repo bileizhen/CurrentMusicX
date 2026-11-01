@@ -197,6 +197,13 @@ class AudioOutputSettingsTest {
         try {
             container.ready.await()
             compose.setContent { LeiTheme(AppearanceSettings()) { Scaffold { AudioOutputScreen(container) } } }
+            compose.onNodeWithTag("output_mode").performClick()
+            compose.onNodeWithTag("output_mode_OBOE").performScrollTo().performClick()
+            compose.waitUntil(5000) { container.audioOutput.state.value.mode == io.github.currencortex.music.data.settings.AudioOutputMode.OBOE }
+            compose.onNodeWithTag("settings_choice_panel").assertDoesNotExist()
+            compose.onNodeWithTag("output_mode").performClick()
+            compose.onNodeWithTag("output_mode_AUDIO_TRACK").performScrollTo().performClick()
+            compose.waitUntil(5000) { container.audioOutput.state.value.mode == io.github.currencortex.music.data.settings.AudioOutputMode.AUDIO_TRACK }
             compose.onNodeWithTag("audio_output_settings").performScrollToNode(hasTestTag("output_sample_rate"))
             compose.onNodeWithTag("output_sample_rate").performClick()
             compose.onNodeWithTag("output_rate_48000").performClick()

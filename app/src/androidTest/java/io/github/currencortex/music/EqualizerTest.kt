@@ -125,6 +125,7 @@ class EqualizerTest {
             restoration.setContent { LeiTheme(AppearanceSettings()) { EqualizerScreen(vm) } }
             compose.onNodeWithTag("equalizer_enabled").performClick()
             compose.waitUntil(5000) { vm.settings.value.enabled }
+            compose.onNodeWithTag("equalizer_selected").performClick()
             compose.onNodeWithTag("equalizer_preset_bass").performClick()
             compose.waitUntil(5000) { vm.settings.value.preset == EqualizerPreset.BASS }
             compose.onNodeWithTag("equalizer_screen").performScrollToNode(hasTestTag("equalizer_band_2"))

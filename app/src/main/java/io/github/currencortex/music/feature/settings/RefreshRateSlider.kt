@@ -10,7 +10,7 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.settings.RefreshRatePreference
-import top.yukonga.miuix.kmp.basic.Slider
+import io.github.currencortex.music.ui.component.nativeui.GlassSlider as Slider
 import top.yukonga.miuix.kmp.basic.SliderDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -33,8 +33,9 @@ internal fun refreshRateSliderOptions(supported: List<Int>): List<RefreshRatePre
         if (options.size > 1) {
             Slider(value = position, onValueChange = { position = it },
                 onValueChangeFinished = {
-                    position = index.toFloat()
-                    onSelected(options[index])
+                    val finalIndex=position.roundToInt().coerceIn(options.indices)
+                    position = finalIndex.toFloat()
+                    onSelected(options[finalIndex])
                 }, valueRange = 0f..options.lastIndex.toFloat(), showKeyPoints = true,
                 keyPoints = options.indices.map(Int::toFloat), magnetThreshold = .2f,
                 hapticEffect = SliderDefaults.SliderHapticEffect.Step,

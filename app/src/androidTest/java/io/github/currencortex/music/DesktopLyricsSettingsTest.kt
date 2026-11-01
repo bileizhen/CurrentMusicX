@@ -2,7 +2,10 @@ package io.github.currencortex.music
 
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.test.platform.app.InstrumentationRegistry
+import java.io.File
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.test.core.app.ApplicationProvider
@@ -25,12 +28,29 @@ class DesktopLyricsSettingsTest {
         container = AppContainer(app, "desktop-settings-${UUID.randomUUID()}", useNativeNetease = false)
         runBlocking { container.ready.await(); container.desktopLyrics.ready.await() }
         compose.setContent { LeiTheme(appearance.value) {
-            if (showPage.value) DesktopLyricsSettingsScreen(container)
+            top.yukonga.miuix.kmp.basic.Scaffold {
+                if (showPage.value) DesktopLyricsSettingsScreen(container)
+            }
         } }
     }
     @After fun finish() { container.close() }
     private fun scroll(tag: String) {
-        compose.onNodeWithTag("desktop_lyrics_settings").performScrollToNode(hasTestTag(tag))
+        val list = compose.onNodeWithTag("desktop_lyrics_settings")
+        list.performScrollToNode(hasTestTag(tag))
+        compose.onNodeWithTag(tag).performScrollTo()
+        val viewport = list.fetchSemanticsNode().boundsInRoot
+        val target = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+        list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, target.center.y - (viewport.top + viewport.height * .45f)) }
+        compose.waitForIdle()
+    }
+    private fun expandGlow() {
+        scroll("desktop_glow_details")
+        compose.onNodeWithTag("desktop_glow_details").performClick()
+    }
+    private fun screenshot(name: String) {
+        val image = compose.onRoot().captureToImage().asAndroidBitmap()
+        File(InstrumentationRegistry.getInstrumentation().targetContext.externalCacheDir, name)
+            .outputStream().use { image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
     }
     private fun await(condition: () -> Boolean) { compose.waitUntil(5000, condition) }
     @Test fun previewChoicesAndTranslationWorkWithoutEnablingOverlay() {
@@ -41,10 +61,11 @@ class DesktopLyricsSettingsTest {
         compose.onNodeWithText("透明字幕").assertDoesNotExist()
         compose.onNodeWithTag("desktop_appearance_CAPTION").assertDoesNotExist()
         compose.onNodeWithTag("desktop_appearance_CAPSULE").assertDoesNotExist()
-        scroll("desktop_effect_STAGE")
+        scroll("desktop_effect")
+        compose.onNodeWithTag("desktop_effect").performClick()
         compose.onNodeWithTag("desktop_effect_STAGE").performClick()
         await { container.desktopLyrics.state.value.effect == DesktopEffect.STAGE }
-        compose.onNodeWithTag("desktop_effect_STAGE").assertIsSelected()
+        compose.onNodeWithTag("desktop_effect").assertTextContains("舞台")
         scroll("desktop_preview")
         compose.onNodeWithTag("desktop_island").assertIsDisplayed()
         compose.onNodeWithTag("desktop_island_fps").assertExists()
@@ -57,6 +78,7 @@ class DesktopLyricsSettingsTest {
         scroll("desktop_island_height")
         compose.onNodeWithTag("desktop_island_height").performSemanticsAction(SemanticsActions.SetProgress) { it(.3f) }
         await { container.desktopLyrics.state.value.islandY == .3f }
+        scroll("desktop_island_height_reset")
         compose.onNodeWithTag("desktop_island_height_reset").performClick()
         await { container.desktopLyrics.state.value.islandY == DESKTOP_ISLAND_HEIGHT }
         scroll("desktop_translation")
@@ -95,23 +117,34 @@ class DesktopLyricsSettingsTest {
         compose.onNodeWithTag("desktop_preview").assertIsDisplayed()
         compose.onNodeWithTag("desktop_island").assertIsDisplayed()
         compose.onNodeWithTag("desktop_island_fps").assertExists()
-        scroll("desktop_effect_PRECISE")
+        screenshot("desktop-layout-dark.png")
+        expandGlow()
+        scroll("desktop_glow_strength")
+        screenshot("desktop-layout-glow.png")
+        scroll("desktop_offset")
+        screenshot("desktop-layout-sync.png")
+        scroll("desktop_effect")
+        compose.onNodeWithTag("desktop_effect").performClick()
         compose.onNodeWithTag("desktop_effect_PRECISE").assertIsSelected().assertIsDisplayed()
         compose.runOnIdle { showPage.value = false }
         await { !container.desktopLyricsSettingsVisible.value }
     }
     @Test fun separateTextAndGlowColorsValidateHexAndSaveGlowControls() {
         val appBefore = container.musicSettings.state.value
-        scroll("desktop_text_color_80DEFF")
+        scroll("desktop_text_color")
+        compose.onNodeWithTag("desktop_text_color").performClick()
         compose.onNodeWithTag("desktop_text_color_80DEFF").performClick()
+        compose.onNodeWithTag("desktop_text_color_apply").performClick()
         await { container.desktopLyrics.state.value.textColor == 0xFF80DEFFL }
+        expandGlow()
         scroll("desktop_glow_strength")
         compose.onNodeWithTag("desktop_glow_strength").performSemanticsAction(SemanticsActions.SetProgress) { it(1.5f) }
         await { container.desktopLyrics.state.value.glowStrength == 1.5f }
         scroll("desktop_glow_spread")
         compose.onNodeWithTag("desktop_glow_spread").performSemanticsAction(SemanticsActions.SetProgress) { it(1.6f) }
         await { container.desktopLyrics.state.value.glowSpread == 1.6f }
-        scroll("desktop_glow_color_hex")
+        scroll("desktop_glow_color")
+        compose.onNodeWithTag("desktop_glow_color").performClick()
         compose.onNodeWithTag("desktop_glow_color_hex").performTextReplacement("GGHHII")
         compose.onNodeWithTag("desktop_glow_color_apply").assertIsNotEnabled()
         compose.onNodeWithTag("desktop_glow_color_hex").performTextReplacement("#00FF66")
@@ -125,11 +158,58 @@ class DesktopLyricsSettingsTest {
         Assert.assertEquals(0xFF00FF66L, container.desktopLyrics.state.value.glowColor)
         compose.onNodeWithTag("desktop_glow_enabled").performClick()
         await { container.desktopLyrics.state.value.glowEnabled }
-        scroll("desktop_glow_color_reset")
+        scroll("desktop_glow_color")
+        compose.onNodeWithTag("desktop_glow_color").performClick()
         compose.onNodeWithTag("desktop_glow_color_reset").performClick()
+        compose.onNodeWithTag("desktop_glow_color_apply").performClick()
         await { container.desktopLyrics.state.value.glowColor == 0xFFE0E0E0L }
         Assert.assertEquals(0xFF80DEFFL, container.desktopLyrics.state.value.textColor)
         Assert.assertEquals(appBefore, container.musicSettings.state.value)
+    }
+    @Test fun glowDragPreviewsBeforeReleaseAndSavedValueSurvivesReopening() {
+        expandGlow()
+        scroll("desktop_glow_strength")
+        val before=container.desktopLyrics.state.value.glowStrength
+        val slider=compose.onNodeWithTag("desktop_glow_strength")
+        slider.performTouchInput {down(center);moveTo(Offset(width*.75f,centerY),delayMillis=240)}
+        compose.waitForIdle()
+        Assert.assertEquals(before,container.desktopLyrics.state.value.glowStrength,.0001f)
+        slider.performTouchInput {up()}
+        await {container.desktopLyrics.state.value.glowStrength>1.4f}
+        val saved=container.desktopLyrics.state.value.glowStrength
+        compose.runOnIdle {showPage.value=false};compose.waitForIdle()
+        compose.runOnIdle {showPage.value=true};compose.waitForIdle()
+        expandGlow()
+        scroll("desktop_glow_strength")
+        Assert.assertEquals(saved,container.desktopLyrics.state.value.glowStrength,.0001f)
+        Assert.assertEquals(saved,compose.onNodeWithTag("desktop_glow_strength").fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsProperties.ProgressBarRangeInfo].current,.0001f)
+    }
+    @Test fun colorDraftCanBeCancelledAndLargeTextKeepsActionsReachable() {
+        screenshot("desktop-layout-light.png")
+        val original = container.desktopLyrics.state.value.textColor
+        compose.onNodeWithTag("desktop_text_color_hex").assertDoesNotExist()
+        scroll("desktop_glow_details")
+        compose.onNodeWithTag("desktop_glow_strength").assertDoesNotExist()
+        compose.runOnIdle { appearance.value = AppearanceSettings(themeMode = ThemeMode.DARK,
+            customTextScale = true, textScale = 1.4f) }
+        scroll("desktop_text_color")
+        compose.onNodeWithTag("desktop_text_color").performClick()
+        compose.onNodeWithTag("desktop_text_color_80DEFF").performClick()
+        compose.waitForIdle()
+        Assert.assertEquals(original, container.desktopLyrics.state.value.textColor)
+        screenshot("desktop-layout-color.png")
+        compose.onNodeWithTag("desktop_text_color_cancel").performClick()
+        compose.onNodeWithTag("desktop_text_color_hex").assertDoesNotExist()
+        Assert.assertEquals(original, container.desktopLyrics.state.value.textColor)
+        scroll("desktop_offset_earlier")
+        compose.onNodeWithTag("desktop_offset_earlier").assertIsDisplayed().performClick()
+        await { container.desktopLyrics.state.value.offsetMs == 100L }
+        scroll("desktop_offset_zero")
+        compose.onNodeWithTag("desktop_offset_zero").assertIsDisplayed().performClick()
+        await { container.desktopLyrics.state.value.offsetMs == 0L }
+        screenshot("desktop-layout-large-text.png")
+        Assert.assertFalse(container.desktopLyrics.state.value.enabled)
     }
     @Test fun noSongPreviewUsesCircularAppIconAndFpsWithoutInventingLyrics() {
         compose.onNodeWithTag("desktop_preview").assertIsDisplayed()

@@ -22,7 +22,7 @@ import io.github.currencortex.music.core.media.NeteaseUsbDevices
 import io.github.currencortex.music.data.settings.AudioOutputSettings
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.MusicDialogChoiceRow
-import top.yukonga.miuix.kmp.basic.Card
+import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 

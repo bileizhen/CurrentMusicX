@@ -13,7 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+// Keep asynchronous DataStore/VM updates serialized with Compose measurement.
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ApplicationProvider
@@ -112,6 +113,21 @@ class RefreshRateSettingsTest {
             compose.onNodeWithTag("refresh_rate_selection").assertTextEquals(rate.label)
             assertEquals(rate, runBlocking { container.settings.snapshot() }.refreshRate)
         }
+    }
+
+    @Test fun quickTrackTapsCommitTheNewRefreshStepOnce() {
+        val selected=mutableStateOf(RefreshRatePreference.SYSTEM)
+        var commits=0
+        compose.setContent {LeiTheme(AppearanceSettings()) {
+            RefreshRateSlider(selected.value,listOf(60,90,120)) {selected.value=it;commits++}
+        }}
+        val slider=compose.onNodeWithTag("refresh_rate_slider")
+        slider.performTouchInput {click(androidx.compose.ui.geometry.Offset(width*.9f,centerY))}
+        compose.waitUntil(5000) {selected.value==RefreshRatePreference.HZ120}
+        assertEquals(1,commits)
+        slider.performTouchInput {click(androidx.compose.ui.geometry.Offset(width*.1f,centerY))}
+        compose.waitUntil(5000) {selected.value==RefreshRatePreference.SYSTEM}
+        assertEquals(2,commits)
     }
 
     @Test fun backgroundRestoresPolicyAndResumeKeepsSavedSelection() {

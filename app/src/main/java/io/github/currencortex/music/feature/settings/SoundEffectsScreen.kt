@@ -1,5 +1,8 @@
 package io.github.currencortex.music.feature.settings
 
+import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
+
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -82,7 +85,7 @@ import kotlinx.serialization.json.*
     val engineImport by vm.originalImport.collectAsStateWithLifecycle()
     val colors = MiuixTheme.colorScheme
     val dark = colors.background.luminance() < .5f
-    val background = if (dark) Color.Black else Color(0xFFF4F7FA)
+    val background = colors.background
     val listState = rememberLazyListState()
     val catalogListState = rememberLazyListState()
     val context = LocalContext.current
@@ -135,26 +138,18 @@ import kotlinx.serialization.json.*
         runtime.active -> "正在使用本机均衡器"
         else -> "等待连接播放器"
     }
+    SettingsUiScope {
     Box(Modifier.fillMaxSize().background(background), contentAlignment = Alignment.TopCenter) {
-    Column(Modifier.widthIn(max = 680.dp).fillMaxSize().statusBarsPadding().testTag("native_sound_effects_page")) {
-        Box(Modifier.fillMaxWidth().height(48.dp)) {
-            IconButton({ if (expandedCatalog) expandedCatalog = false else onBack() }, Modifier.align(Alignment.CenterStart).padding(start = 4.dp).size(48.dp)
-                .testTag("sound_effects_back")) {
-                    EffectsArtwork(NativeEffectsAssets.local(if (dark) "back_dark-V7HQ34UL.png" else "back_light-JEKHG5AD.png"),
-                        Modifier.size(28.dp), "返回")
-                }
-            Text(if (expandedCatalog) "官方精选音效" else "音效", Modifier.align(Alignment.Center), fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            IconButton(onEqualizer, Modifier.align(Alignment.CenterEnd).padding(end = 4.dp).size(48.dp)
-                .testTag("sound_open_equalizer")) {
-                EffectsArtwork(NativeEffectsAssets.local(if (dark) "equalizer_dark-E6LSHWIG.png" else "equalizer_light-F2DPORXJ.png"),
-                    Modifier.size(32.dp), "均衡器")
-            }
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("sound_effects_screen"), state = if (expandedCatalog) catalogListState else listState,
-            contentPadding = musicScrollPadding(PaddingValues(bottom = 20.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())),
+    io.github.currencortex.music.ui.component.nativeui.SettingsScrollLayout(
+        Modifier.widthIn(max = 680.dp).fillMaxSize().testTag("native_sound_effects_page"),background=background,topBar={
+        SettingsTopBar(if (expandedCatalog) "官方精选音效" else "音效",
+            onBack = { if (expandedCatalog) expandedCatalog = false else onBack() }, backTag = "sound_effects_back")
+        }) {topInset->
+        LazyColumn(Modifier.fillMaxSize().testTag("sound_effects_screen"), state = if (expandedCatalog) catalogListState else listState,
+            contentPadding = musicScrollPadding(PaddingValues(top=topInset,bottom = 20.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!expandedCatalog) {
-            item { Text("大师音效", Modifier.padding(horizontal = 16.dp), fontSize = 16.sp, fontWeight = FontWeight.Bold) }
+            item { SettingsInfoHeader("大师音效", MusicIcons.Headphones) }
             item(key = "masters") {
                 val visible by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == "masters" } } }
                 NativeMasterPager(dark, moodChosen, originalMood.loading,
@@ -338,23 +333,14 @@ import kotlinx.serialization.json.*
                 } }
             }
 
-            item {
-                Column(Modifier.padding(horizontal = 16.dp).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("本机调音", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text("免费智能分析，也可以按自己的喜好调节", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-                }
-            }
-            item { Card(Modifier.padding(horizontal = 16.dp)) {
-                Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text("本机智能调音", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                        Text(if (options.smartEnabled) status else "依据网易云歌曲分析，随切歌调整均衡器",
-                            Modifier.testTag("sound_smart_status"), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-                    }
-                    EffectButton(if (options.smartEnabled) "取消" else "使用", { if (options.smartEnabled) vm.turnOff() else vm.smartEnabled(true) },
-                        Modifier.padding(start = 10.dp).testTag("sound_smart_action"),
-                        selected = options.smartEnabled, enabled = canApply || options.smartEnabled)
-                }
+            item { SettingsSection("本机调音", MusicIcons.Scale, Modifier.padding(horizontal = 16.dp)) {
+                SettingsToggle("本机智能调音", options.smartEnabled,
+                    { if (it) vm.smartEnabled(true) else vm.turnOff() },
+                    Modifier.testTag("sound_smart_action"), enabled = canApply || options.smartEnabled,
+                    summary = if (options.smartEnabled) status else "依据歌曲分析，随切歌调整均衡器")
+                SettingsDivider()
+                PageNavigationPreference("均衡器", manual.preset.label, Modifier.testTag("sound_open_equalizer"),
+                    onClick = onEqualizer)
             } }
             if (options.smartEnabled) item {
                 Card(Modifier.padding(horizontal = 16.dp)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -381,34 +367,6 @@ import kotlinx.serialization.json.*
                     Text("歌曲分析来自网易云，调音由本机完成；与网易云客户端的 AI 音效算法不同。",
                         color = colors.onSurfaceVariantSummary, fontSize = 12.sp)
                 } }
-            }
-            item {
-                Column(Modifier.padding(horizontal = 16.dp).padding(top = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("本机音效", fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                    Text("直接生效，也可以进入均衡器继续调节", color = colors.onSurfaceVariantSummary, fontSize = 12.sp)
-                }
-            }
-            item {
-                Column(Modifier.padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    EqualizerPreset.entries.filter { it != EqualizerPreset.CUSTOM }.chunked(3).forEach { presets ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            presets.forEach { preset ->
-                                val chosen = original.selectedId == null && !smartChosen && !moodChosen && !singleChosen && !options.smartEnabled && manual.enabled && manual.preset == preset
-                                Card(Modifier.weight(1f).testTag("sound_local_${preset.name.lowercase()}")
-                                    .semantics { selected = chosen }
-                                    .clickable(enabled = canApply, role = Role.Button) { vm.useLocal(preset) }) {
-                                    Column(Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 17.dp),
-                                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Icon(if (chosen) MusicIcons.Check else MusicIcons.Headphones, null,
-                                            tint = if (chosen) colors.primary else colors.onSurfaceVariantSummary, modifier = Modifier.size(22.dp))
-                                        Text(preset.label, fontSize = 15.sp, color = if (chosen) colors.primary else colors.onSurface)
-                                        Text(if (chosen) "使用中" else "使用", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
             }
 
             }
@@ -460,6 +418,7 @@ import kotlinx.serialization.json.*
             }, Modifier.testTag("sound_open_netease"))
             MusicTextAction("返回音效页", { selectedEffect = null }, Modifier.testTag("sound_official_close"))
         }
+    }
     }
 }
 

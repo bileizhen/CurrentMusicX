@@ -1,5 +1,15 @@
 package io.github.currencortex.music.feature.settings
 
+import io.github.currencortex.music.ui.component.nativeui.*
+
+import io.github.currencortex.music.ui.component.nativeui.GlassSlider as Slider
+
+import io.github.currencortex.music.ui.component.nativeui.SettingsChoiceButton
+
+import io.github.currencortex.music.ui.component.nativeui.SettingsPage
+import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
+import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,30 +49,22 @@ import java.util.Locale
         runtime.active -> "已连接本机播放器"
         else -> "开始本机播放后自动生效"
     }
-    Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), contentAlignment = Alignment.TopCenter) {
-        LazyColumn(Modifier.widthIn(max = 640.dp).fillMaxWidth().testTag("equalizer_screen"),
-            contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            item { Text("均衡器", fontSize = 28.sp) }
+    SettingsUiScope {
+        SettingsPage("均衡器","equalizer_screen") {
             item { Card {
                 SettingsSwitch("开启均衡器", settings.enabled, vm::enabled, summary = status,
                     enabled = runtime.supported, modifier = Modifier.testTag("equalizer_enabled"))
             } }
-            item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(settings.preset.label, Modifier.weight(1f).testTag("equalizer_selected"), fontSize = 18.sp)
-                    MusicTextAction("重置", { vm.preset(EqualizerPreset.FLAT) }, Modifier.testTag("equalizer_reset"))
-                }
-                Column {
-                    EqualizerPreset.entries.filter { it != EqualizerPreset.CUSTOM }.chunked(3).forEach { row ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            row.forEach { preset ->
-                                MusicTextAction((if (settings.preset == preset) "✓ " else "") + preset.label, { vm.preset(preset) },
-                                    Modifier.weight(1f).testTag("equalizer_preset_${preset.name.lowercase()}")
-                                        .semantics { selected = settings.preset == preset })
-                            }
-                        }
-                    }
-                }
+            item { SettingsSection("预设与曲线", MusicIcons.Headphones) {
+                SettingsOptionsRow("预设", settings.preset.label,
+                    EqualizerPreset.entries.filter { it != EqualizerPreset.CUSTOM }.map { preset ->
+                        SettingsOption("equalizer_preset_${preset.name.lowercase()}", preset.label, settings.preset == preset,
+                            onSelect = { vm.preset(preset) })
+                    }, Modifier.testTag("equalizer_selected"))
+                SettingsDivider()
+                SettingsPreference("恢复平直", "将各频段恢复为 0 dB", Modifier.testTag("equalizer_reset"),
+                    onClick = { vm.preset(EqualizerPreset.FLAT) }, enabled = settings.preset != EqualizerPreset.FLAT)
+                Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 Canvas(Modifier.fillMaxWidth().height(96.dp).testTag("equalizer_curve")) {
                     val inset = 10.dp.toPx()
                     val width = size.width - inset * 2
@@ -79,8 +81,10 @@ import java.util.Locale
                     }
                     drawPath(path, accent, style = Stroke(2.dp.toPx()))
                 }
-            } } }
-            item { Card { Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                }
+            } }
+            item { SettingsSection("频段调节", MusicIcons.Scale,
+                footer = "−12 dB 至 +12 dB · 1 dB 步进 · 自动保存") { Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 EqualizerSettings.FREQUENCIES.forEachIndexed { index, frequency ->
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(if (frequency >= 1000) String.format(Locale.ROOT, "%.1f kHz", frequency / 1000f) else "$frequency Hz",
@@ -106,7 +110,6 @@ import java.util.Locale
                             }
                         })
                 }
-                Text("−12 dB 至 +12 dB · 1 dB 步进 · 自动保存", Modifier.padding(vertical = 10.dp), fontSize = 12.sp, color = hint)
             } } }
         }
     }
