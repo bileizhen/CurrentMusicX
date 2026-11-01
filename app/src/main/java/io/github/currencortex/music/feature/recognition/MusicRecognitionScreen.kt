@@ -41,6 +41,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -60,8 +61,13 @@ import java.time.format.DateTimeFormatter
     val lifecycle = LocalLifecycleOwner.current
     val controller = remember {
         val encoder = NeteaseFingerprint(context)
+        val aacEncoder = RecognitionAacEncoder()
         val repository = NeteaseRecognitionRepository()
-        RecognitionController(scope, MicrophoneRecorder(), encoder::encode, repository::recognize)
+        RecognitionController(scope, MicrophoneRecorder(), encoder::encode, repository::recognize,
+            recognizeInSession = repository::recognize, recognizeLyrics = { samples, session ->
+                val audio = aacEncoder.encode(samples)
+                try { repository.recognizeLyrics(audio, session) } finally { audio.fill(0) }
+            })
     }
     val localState by controller.state.collectAsStateWithLifecycle()
     val desktopState by RecognitionDesktopSession.state.collectAsStateWithLifecycle()
@@ -191,26 +197,18 @@ import java.time.format.DateTimeFormatter
     }
     val colors = MiuixTheme.colorScheme
     val bottom = LocalMusicBottomInset.current
-    Column(Modifier.fillMaxSize().background(colors.background)
-        .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
-        .testTag("music_recognition")) {
-        Box(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 20.dp).testTag("recognition_header")) {
-            Box(Modifier.align(Alignment.CenterStart)) {
-                RecognitionIconButton("返回", MusicIcons.Back, "recognition_back", { if (showingHistory) showingHistory = false else { controller.cancel(); onBack() } })
+    MusicSubpage(if (showingHistory) "识别记录" else "听歌识曲", "music_recognition",
+        onBack = { if (showingHistory) showingHistory = false else { controller.cancel(); onBack() } },
+        backTag = "recognition_back", toolbarTag = "recognition_header", actions = {
+            if (showingHistory) GlassActionButton("清空", { historyStore.clear(); history = emptyList() },
+                Modifier.testTag("recognition_clear_history"), fillWidth = false, minHeight = 36.dp)
+            else GlassIconButton({ controller.cancel(); showingHistory = true }, "识别记录", Modifier.testTag("recognition_history")) {
+                Icon(MusicIcons.Update, null)
             }
-            Text(if (showingHistory) "识别记录" else "听歌识曲", Modifier.align(Alignment.Center).padding(horizontal = 52.dp),
-                fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            Box(Modifier.align(Alignment.CenterEnd)) {
-                if (showingHistory) {
-                    Text("清空", Modifier.clip(RoundedCornerShape(12.dp)).clickable(role = Role.Button) {
-                        historyStore.clear(); history = emptyList()
-                    }.padding(10.dp).testTag("recognition_clear_history"), color = colors.primary, fontSize = 14.sp)
-                } else RecognitionIconButton("识别记录", MusicIcons.Update, "recognition_history", { controller.cancel(); showingHistory = true })
-            }
-        }
+        }) { topInset ->
         if (showingHistory) {
             LazyColumn(Modifier.fillMaxSize().testTag("recognition_history_list"),
-                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = bottom + 24.dp),
+                contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = topInset + 8.dp, bottom = bottom + 24.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (history.isEmpty()) item { Text("还没有识别记录，听见喜欢的音乐就来试试", Modifier.padding(vertical = 30.dp), color = colors.onSurfaceVariantSummary, fontSize = 14.sp) }
                 itemsIndexed(history, key = { _, item -> item.song.id }) { index, entry ->
@@ -228,7 +226,7 @@ import java.time.format.DateTimeFormatter
                     context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
                 }, onPlay = play, onDesktop = { begin(desktop = true) }, desktopStarting = desktopStarting,
                 source = source, onSource = { if (!state.busy) source = it }, useProjection = useProjection,
-                onProjectionMode = { if (!state.busy) useProjection = !useProjection })
+                onProjectionMode = { if (!state.busy) useProjection = !useProjection }, topInset = topInset)
         }
     }
 }
@@ -237,19 +235,19 @@ import java.time.format.DateTimeFormatter
     onAction: () -> Unit, onSettings: () -> Unit, onPlay: (List<Song>, Int) -> Unit,
     onDesktop: (() -> Unit)? = null, desktopStarting: Boolean = false,
     source: RecognitionAudioSource = RecognitionAudioSource.MICROPHONE, onSource: ((RecognitionAudioSource) -> Unit)? = null,
-    useProjection: Boolean = false, onProjectionMode: (() -> Unit)? = null) {
+    useProjection: Boolean = false, onProjectionMode: (() -> Unit)? = null, topInset: androidx.compose.ui.unit.Dp = 0.dp) {
     val colors = MiuixTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // Center the listening group in the usable area above the floating player, rather than
         // anchoring a fixed-height stack to the top of a full-screen scene.
-        val usableHeight = (maxHeight - bottom - 24.dp).coerceAtLeast(0.dp)
+        val usableHeight = (maxHeight - topInset - bottom - 24.dp).coerceAtLeast(0.dp)
         val orbSize = minOf(maxWidth - 44.dp,
             if (state.songs.isEmpty()) (usableHeight * .48f).coerceIn(190.dp, 300.dp)
             else (usableHeight * .34f).coerceIn(160.dp, 220.dp))
         val topSpace = if (state.songs.isEmpty() && permissionMessage == null)
             ((usableHeight - orbSize - 238.dp) / 2).coerceIn(12.dp, 64.dp) else 12.dp
         LazyColumn(Modifier.fillMaxSize().padding(bottom = bottom + 12.dp).testTag("recognition_content"), horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = topSpace, bottom = 24.dp),
+            contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = topInset + topSpace, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp)) {
             item {
                 Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally,
@@ -287,7 +285,7 @@ import java.time.format.DateTimeFormatter
                         else -> "点击开始听歌识曲"
                     }, Modifier.testTag("recognition_status"), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text(when (state.phase) {
-                        RecognitionPhase.RECORDING -> if (state.seconds < 3) "至少聆听 3 秒，最长 10 秒" else "点击中央按钮，立即开始识别"
+                        RecognitionPhase.RECORDING -> if (state.round == 0) "边听边识别，最快 2 秒，最长 15 秒" else "正在第 ${state.round} 次匹配 · 点击结束聆听"
                         RecognitionPhase.RECOGNIZING -> (if (state.step == RecognitionStep.MATCH) "正在匹配歌曲" else "正在分析声音") + " · 点击可取消"
                         RecognitionPhase.MATCHED -> "点击歌曲即可播放，也可继续识别"
                         else -> state.message ?: "支持识别正在播放的歌曲原声"
@@ -310,7 +308,7 @@ import java.time.format.DateTimeFormatter
                     if (useProjection) "需系统录制/投射授权，仅采集声音，不录制画面\n部分应用不允许采集，可切换麦克风\n"
                     else "读取系统正在播放的音乐，不使用麦克风\n设备不支持时可切换录制授权方式\n"
                 } else "识别时使用麦克风\n") +
-                    "音频指纹发送至网易云，仅保存歌曲记录\n桌面模式关闭灵动岛或锁屏即停，普通模式离页即停",
+                    "向网易云发送音频指纹；未命中时发送前 10 秒音频辅助识别歌词\n本机仅保存歌曲记录，普通模式离页即停，桌面模式关闭或锁屏即停",
                     Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 10.dp).testTag("recognition_disclosure"), fontSize = 11.sp,
                     lineHeight = 18.sp, color = colors.onSurfaceVariantSummary.copy(alpha = .75f), textAlign = TextAlign.Center)
                 }

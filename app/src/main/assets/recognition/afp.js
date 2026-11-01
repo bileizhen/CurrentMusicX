@@ -1,24 +1,5 @@
 'use strict'
 const WASM_BINARY_PLACEHOLDER = 'WASM_BINARY_PLACEHOLDER';
-// See https://github.com/Distributive-Network/PythonMonkey/issues/266
-if (typeof globalThis.setInterval != 'function'){
-    globalThis.setInterval = function pm$$setInterval(fn, timeout) {
-    const timerHnd = { cancel: false };
-        function fnWrapper()
-        {
-            if (timerHnd.cancel)
-            return;
-            setTimeout(fnWrapper, timeout);
-            fn();
-        }
-        timerHnd.id = setTimeout(fnWrapper, timeout);
-        return timerHnd;
-    }
-    globalThis.clearInterval = function pm$$clearInterval(timerHnd) {
-    timerHnd.clear = true;
-    clearTimeout(timerHnd.id);
-    }
-}
 globalThis.b64decode = function b64decode(data) {
     return Uint8Array.from(atob(data), c => c.charCodeAt(0));
 }
@@ -26,8 +7,8 @@ globalThis.b64encode = function b64encode(data) {
     return btoa(String.fromCharCode(...data));
 }
 // https://fn.music.163.com/g/chrome-extension-home-page-beta/
-let AudioFingerprintRuntime = (() => {
-    var n, o = void 0 !== o ? o : {},i = {};
+let AudioFingerprintRuntime = ((options = {}) => {
+    var n, o = options,i = {};
     for (n in o)
         o.hasOwnProperty(n) && (i[n] = o[n]);
     var read_, readSync, readBinary, c, f, l = [],
@@ -1594,32 +1575,36 @@ let AudioFingerprintRuntime = (() => {
     return o;
 })
 
-// XXX: With PythonMonkey, the required module
-// is destructed(?) once the function is called
-// This is probably not what actaully happened, but
-// for now, everytime an FP is generated, the entire
-// WASM module is reloaded as a workaround
-function instantiateRuntime(){
+// Emscripten invokes these hooks on the same module object, including when
+// initialization completes synchronously. No WebView timer polling is needed.
+function instantiateRuntime(factory = AudioFingerprintRuntime){
     return new Promise((resolve, reject) => {
-        var fpRuntime = AudioFingerprintRuntime()
-        var monitor = setInterval(() => {
-            if (typeof fpRuntime.ExtractQueryFP == "function")
-                clearInterval(monitor) || resolve(fpRuntime)
-        })
+        const runtime = {
+            onRuntimeInitialized() {
+                if (typeof runtime.ExtractQueryFP === 'function') resolve(runtime);
+                else reject(new Error('Fingerprint runtime did not expose ExtractQueryFP'));
+            },
+            onAbort() { reject(new Error('Fingerprint runtime initialization failed')); }
+        };
+        try { factory(runtime); } catch (error) { reject(error); }
     })
 }
 
-function GenerateFP(floatArray) {
-    let PCMBuffer = Float32Array.from(floatArray)
-    console.info('[afp] input samples n=', PCMBuffer.length)
-    return instantiateRuntime().then((fpRuntime) => {
-        console.info('[afp] begin fingerprinting')
-        let fp_vector = fpRuntime.ExtractQueryFP(PCMBuffer.buffer)
-        let result_buf = new Uint8Array(fp_vector.size());
-        for (let t = 0; t < fp_vector.size(); t++)
-            result_buf[t] = fp_vector.get(t);
-        return globalThis.b64encode(result_buf)
-    });
+async function GenerateFP(floatArray) {
+    const PCMBuffer = Float32Array.from(floatArray);
+    let fp_vector;
+    let result_buf;
+    try {
+        const fpRuntime = await instantiateRuntime();
+        fp_vector = fpRuntime.ExtractQueryFP(PCMBuffer.buffer);
+        result_buf = new Uint8Array(fp_vector.size());
+        for (let t = 0; t < result_buf.length; t++) result_buf[t] = fp_vector.get(t);
+        return globalThis.b64encode(result_buf);
+    } finally {
+        PCMBuffer.fill(0);
+        if (result_buf) result_buf.fill(0);
+        if (fp_vector) fp_vector.delete();
+    }
 }
 
 if (typeof exports != 'undefined') /* Node, PythonMonkey */

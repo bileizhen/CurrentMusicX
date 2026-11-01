@@ -88,8 +88,13 @@ class RecognitionDesktopService : Service() {
                 MicrophoneRecorder()
             }
             val encoder = NeteaseFingerprint(this)
+            val aacEncoder = RecognitionAacEncoder()
             val repository = NeteaseRecognitionRepository()
-            val next = RecognitionController(scope, recorder, encoder::encode, repository::recognize, source)
+            val next = RecognitionController(scope, recorder, encoder::encode, repository::recognize, source,
+                recognizeInSession = repository::recognize, recognizeLyrics = { samples, session ->
+                    val audio = aacEncoder.encode(samples)
+                    try { repository.recognizeLyrics(audio, session) } finally { audio.fill(0) }
+                })
             controller = next
             ContextCompat.registerReceiver(this, screen, IntentFilter(Intent.ACTION_SCREEN_OFF), ContextCompat.RECEIVER_NOT_EXPORTED)
             registered = true

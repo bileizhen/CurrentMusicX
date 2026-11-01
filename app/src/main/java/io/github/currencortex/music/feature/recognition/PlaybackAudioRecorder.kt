@@ -10,6 +10,7 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicBoolean
@@ -18,8 +19,12 @@ import kotlin.math.abs
 /** Audio only: no virtual display, screen images, microphone source or capture-policy override. */
 @RequiresApi(Build.VERSION_CODES.Q)
 class PlaybackAudioRecorder(private val projection: MediaProjection) : RecognitionRecorder {
+    override suspend fun record(stop: AtomicBoolean, progress: (Int, Float) -> Unit): ShortArray =
+        recordStreaming(stop, progress) { }
+
     @SuppressLint("MissingPermission") // The visible activity obtains RECORD_AUDIO and projection consent first.
-    override suspend fun record(stop: AtomicBoolean, progress: (Int, Float) -> Unit): ShortArray = withContext(Dispatchers.IO) {
+    override suspend fun recordStreaming(stop: AtomicBoolean, progress: (Int, Float) -> Unit,
+        onWindow: (ShortArray) -> Unit): ShortArray = withContext(Dispatchers.IO) {
         val capture = AudioPlaybackCaptureConfiguration.Builder(projection)
             .addMatchingUsage(AudioAttributes.USAGE_MEDIA).addMatchingUsage(AudioAttributes.USAGE_GAME)
             .addMatchingUsage(AudioAttributes.USAGE_UNKNOWN).build()
@@ -36,7 +41,8 @@ class PlaybackAudioRecorder(private val projection: MediaProjection) : Recogniti
             next.release()
         }
         val recorder = audio ?: error("无法采集系统音频，请重新授权后重试")
-        val output = ShortArray(80_000)
+        val output = ShortArray(RecognitionWindows.MAX_SAMPLES)
+        val windows = RecognitionWindows()
         val buffer = ShortArray(rate / 10)
         var count = 0
         var accumulated = 0; var accumulatedCount = 0
@@ -46,8 +52,9 @@ class PlaybackAudioRecorder(private val projection: MediaProjection) : Recogniti
             check(recorder.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "系统音频采集未开始，请重新授权" }
             while (count < output.size && !stop.get()) {
                 currentCoroutineContext().ensureActive()
-                val read = recorder.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING)
-                check(read > 0) { "系统音频采集中断，请重新授权" }
+                val read = recorder.read(buffer, 0, buffer.size, AudioRecord.READ_NON_BLOCKING)
+                check(read >= 0) { "系统音频采集中断，请重新授权" }
+                if (read == 0) { delay(10); continue }
                 var peak = 0
                 for (index in 0 until read) {
                     peak = maxOf(peak, abs(buffer[index].toInt()))
@@ -58,6 +65,7 @@ class PlaybackAudioRecorder(private val projection: MediaProjection) : Recogniti
                     }
                 }
                 progress(count / 8000, (peak / 12000f).coerceIn(0f, 1f))
+                windows.emitAvailable(count, { output.copyOf(it) }, onWindow)
             }
             check((0 until count).any { output[it] != 0.toShort() }) { "未采集到系统声音，请播放音乐；部分应用不允许采集，可切换麦克风" }
             output.copyOf(count)

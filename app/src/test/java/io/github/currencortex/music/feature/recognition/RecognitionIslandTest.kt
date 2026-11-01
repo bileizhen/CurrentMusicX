@@ -8,8 +8,8 @@ class RecognitionIslandTest {
     @Test fun islandDistinguishesCaptureMatchingResultsAndFailures() {
         val capture = RecognitionState(RecognitionPhase.RECORDING, seconds = 2)
         assertEquals("正在聆听 · 2 秒", recognitionIslandTitle(capture))
-        assertTrue(recognitionIslandSubtitle(capture).contains("最长 10 秒"))
-        assertTrue(recognitionIslandSubtitle(capture.copy(seconds = 3)).contains("立即识别"))
+        assertTrue(recognitionIslandSubtitle(capture).contains("最长 15 秒"))
+        assertEquals("边听边识别 · 第 2 次匹配", recognitionIslandSubtitle(capture.copy(seconds = 3, round = 2)))
         assertEquals("正在识别音乐…", recognitionIslandTitle(capture.copy(phase = RecognitionPhase.RECOGNIZING)))
         val matched = RecognitionState(RecognitionPhase.MATCHED, songs = listOf(Song(1, "测试歌曲", "测试歌手")))
         assertEquals("测试歌曲", recognitionIslandTitle(matched))

@@ -1,10 +1,10 @@
 package io.github.currencortex.music.feature.recognition
 
 /** Integrates unsigned 8-bit samples into exact 8 kHz bins without losing fractional phase. */
-internal class Unsigned8PcmResampler(private val inputRateHz: Int, maximumSamples: Int = 80_000) {
+internal class Unsigned8PcmResampler(private val inputRateHz: Int, maximumSamples: Int = RecognitionWindows.MAX_SAMPLES) {
     init {
         require(inputRateHz in 1..384_000)
-        require(maximumSamples in 1..80_000)
+        require(maximumSamples in 1..RecognitionWindows.MAX_SAMPLES)
     }
 
     private val output = ShortArray(maximumSamples)
@@ -47,7 +47,10 @@ internal class Unsigned8PcmResampler(private val inputRateHz: Int, maximumSample
         lastLevel = peak / 32768f
     }
 
-    fun copyPcm(): ShortArray = output.copyOf(size)
+    fun copyPcm(count: Int = size): ShortArray {
+        require(count in 0..size)
+        return output.copyOf(count)
+    }
 
     fun clear() {
         output.fill(0)
@@ -57,7 +60,7 @@ internal class Unsigned8PcmResampler(private val inputRateHz: Int, maximumSample
 }
 
 /** Visualizer returns overlapping snapshots, not a stream of disjoint buffers. */
-internal class SystemMixPcmAccumulator(inputRateHz: Int, maximumSamples: Int = 80_000) {
+internal class SystemMixPcmAccumulator(inputRateHz: Int, maximumSamples: Int = RecognitionWindows.MAX_SAMPLES) {
     private val resampler = Unsigned8PcmResampler(inputRateHz, maximumSamples)
     private var previous = ByteArray(0)
     private var prefix = IntArray(0)
@@ -102,7 +105,7 @@ internal class SystemMixPcmAccumulator(inputRateHz: Int, maximumSamples: Int = 8
         return matched
     }
 
-    fun copyPcm(): ShortArray = resampler.copyPcm()
+    fun copyPcm(count: Int = size): ShortArray = resampler.copyPcm(count)
 
     fun clear() {
         previous.fill(0); prefix.fill(0); resampler.clear()
