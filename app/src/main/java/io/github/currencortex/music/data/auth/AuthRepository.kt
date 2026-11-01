@@ -143,6 +143,20 @@ class AuthRepository(private val api: ApiClient, val accounts: AccountRepository
     suspend fun sendRegistrationCode(value: String, phone: Boolean): AppResult<Unit> = appResult<Unit> {
         api.request("POST", if (phone) "auth/phone/code" else "auth/email/code", body = buildJsonObject { put(if (phone) "phone" else "email", value) })
     }
+    suspend fun sendPasswordResetCode(email: String): AppResult<Unit> = appResult {
+        require(email.isNotBlank())
+        api.request("POST", "auth/password/code", body = buildJsonObject { put("email", email.trim()) }, retryConnection = false)
+        Unit
+    }
+    suspend fun resetPassword(email: String, code: String, newPassword: String): AppResult<Unit> = appResult {
+        require(email.isNotBlank() && code.isNotBlank() && newPassword.length in 6..64)
+        // Public recovery never borrows or replaces a different saved account's session.
+        api.request("POST", "auth/password/reset", body = buildJsonObject {
+            put("email", email.trim()); put("code", code.trim()); put("newPassword", newPassword)
+            put("device", device); put("platform", "app")
+        }, retryConnection = false)
+        Unit
+    }
     suspend fun resetServer(server: String) = sessionMutex.withLock {
         accounts.clear(rememberSaved = true); persistAccount(0, ""); accounts.server = server
     }

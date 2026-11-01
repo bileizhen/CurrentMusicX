@@ -15,6 +15,7 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
     val account = container.accountRepository.state
     val errorNotices = container.errorNotices
     val codeUntil = MutableStateFlow(0L)
+    val resetCodeUntil = MutableStateFlow(0L)
     fun begin() { state.value = AuthUiState() }
     /** Drops a stale outcome without touching an in-flight request. */
     fun clearMessage() { state.update { it.copy(message = null, failed = false) } }
@@ -48,6 +49,15 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
         container.dlnaController.stop()
         if (container.playerController.state.value.mode == io.github.currencortex.music.core.media.PlayerMode.LOCAL) container.playerController.pause()
         container.authRepository.switchAccount(key)
+    }
+    fun passwordCode(email: String) {
+        if (SystemClock.elapsedRealtime() < resetCodeUntil.value) return
+        action("验证码已发送，5 分钟内有效") { container.authRepository.sendPasswordResetCode(email).also {
+            if (it is AppResult.Success) resetCodeUntil.value = SystemClock.elapsedRealtime() + 60_000
+        } }
+    }
+    fun resetPassword(email: String, code: String, newPassword: String) = action("密码已重置，请使用新密码登录") {
+        container.authRepository.resetPassword(email, code, newPassword)
     }
     fun removeSaved(key: String) = action("已移除本机保存的账号") { appResult { container.accountRepository.removeSaved(key) } }
     fun retry() = viewModelScope.launch {
