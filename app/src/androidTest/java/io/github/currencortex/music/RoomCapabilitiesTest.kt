@@ -192,7 +192,10 @@ class RoomCapabilitiesTest {
         show(wide = true)
         compose.onNodeWithTag("room_two_panes").assertExists()
         compose.onNodeWithText("Requested song").assertExists()
-        compose.onNodeWithText("Fixture user · 房主").assertExists()
+        compose.onNodeWithTag("room_two_panes").onChildren().filter(hasScrollAction()).onLast()
+            .performScrollToNode(hasText("Fixture user"))
+        compose.onNodeWithText("Fixture user").assertExists()
+        compose.onAllNodesWithText("房主").onLast().assertExists()
     }
     private fun captureRoom(name: String) {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()

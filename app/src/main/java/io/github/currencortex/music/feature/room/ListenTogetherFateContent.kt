@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.room
 
+import io.github.currencortex.music.ui.component.nativeui.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -45,20 +47,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     activeRoom: Boolean = false,
 ) {
     val colors = MiuixTheme.colorScheme
-    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp)
-        .testTag("listen_fate_screen")) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(colors.surfaceContainer)
-                .clickable(role = Role.Button, onClick = onBack).testTag("listen_fate_back"), contentAlignment = Alignment.Center) {
-                Icon(MusicIcons.Back, "返回", Modifier.size(22.dp), tint = colors.onSurface)
-            }
-            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("和 TA 的缘分报告", fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                FateMuted("网易云一起听")
-            }
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("listen_fate_list"),
-            contentPadding = musicScrollPadding(PaddingValues(top = 8.dp, bottom = 24.dp)),
+    MusicSubpage("缘分报告", "listen_fate_screen", onBack, backTag = "listen_fate_back") { topInset ->
+        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("listen_fate_list"),
+            contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 24.dp)),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (loading) item {
                 if (report == null) ListenTogetherSkeleton("正在读取缘分报告…", "listen_fate_loading")
@@ -71,7 +62,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 FateStatus("暂时无法读取报告", "listen_fate_error", "请稍后重试。", onRetry)
             }
             if (report != null && !permissionRequired) {
-                item { Card(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_summary")) {
+                item { SettingsGroup(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_summary")) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             val people = listOfNotNull(report.self, report.peer)
@@ -103,7 +94,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         }
                     }
                 } }
-                item { Card(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_first")) {
+                item { SettingsGroup(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_first")) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                         Text("从第一次一起听开始", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -113,7 +104,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     }
                 } }
                 if (report.latestLateNightTimeMs != null || report.mostPlayedSongName.isNotBlank()) item {
-                    Card(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_memories")) {
+                    SettingsGroup(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_memories")) {
                         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                             Text("难忘的音乐时刻", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                             if (report.latestLateNightTimeMs != null) {
@@ -131,19 +122,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         }
                     }
                 }
-                item { Card(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_longest")) {
+                item { SettingsGroup(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_longest")) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("一次最长的陪伴", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                         Text(fateDuration(report.longestDurationMs), fontSize = 24.sp, fontWeight = FontWeight.SemiBold, color = colors.primary)
                     }
                 } }
-                item { Card(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_actions")) {
+                item { SettingsGroup(Modifier.fillMaxWidth().animateItem().testTag("listen_fate_actions")) {
                     Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Button(onClick = { onShare(report) }, enabled = !busy && !sharing && !loading,
-                            colors = ButtonDefaults.buttonColorsPrimary(), modifier = Modifier.fillMaxWidth().testTag("listen_fate_share")) {
-                            if (sharing) ListenLoadingLabel("正在生成报告…", primary = true)
-                            else Text("分享缘分报告", fontSize = 14.sp, color = colors.onPrimary)
-                        }
+                        GlassActionButton(if (sharing) "正在生成报告…" else "分享缘分报告", { onShare(report) },
+                            Modifier.fillMaxWidth().testTag("listen_fate_share"), primary = true, enabled = !busy && !sharing && !loading)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             MusicTextAction("一起听记录", { onHistory(report.partnerUid) }, Modifier.weight(1f).testTag("listen_fate_history"),
                                 enabled = report.partnerUid > 0 && !busy)
@@ -173,7 +161,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable private fun FateStatus(title: String, tag: String, message: String? = null, retry: (() -> Unit)? = null) {
-    Card(Modifier.fillMaxWidth().testTag(tag)) {
+    SettingsGroup(Modifier.fillMaxWidth().testTag(tag)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             message?.let { FateMuted(it) }

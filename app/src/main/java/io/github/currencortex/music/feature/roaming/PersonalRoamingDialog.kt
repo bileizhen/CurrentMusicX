@@ -23,6 +23,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil3.compose.AsyncImage
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -60,6 +61,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     LaunchedEffect(settings) { onDialogActive(settings) }
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
+    SettingsUiScope {
     if (settings) MusicDialog("漫游设置", { settings = false }, footer = {
         MusicDialogButton("返回模式选择", { settings = false }, Modifier.testTag("roaming_settings_done"))
     }) {
@@ -102,22 +104,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         Column(Modifier.fillMaxWidth().then(if (embedded) Modifier else
             Modifier.heightIn(max = bodyHeight).verticalScroll(rememberScrollState()))
             .testTag("roaming_choices"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            state.catalog.modes.forEach { mode ->
-                val selected = choice.key == mode.key
-                Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
-                    .background(if (selected) colors.primary.copy(alpha = .1f) else colors.surfaceContainer)
-                    .selectable(selected, enabled = state.ready && !state.loading, role = Role.RadioButton,
-                        onClick = { draftKey = mode.key }).testTag("roaming_mode_${mode.code}")
-                    .padding(horizontal = 14.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
-                    Column(Modifier.fillMaxWidth().padding(horizontal = 26.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text(mode.title, Modifier.fillMaxWidth(), fontSize = 15.sp, fontWeight = FontWeight.Medium,
-                            textAlign = TextAlign.Center,
-                            color = if (selected) colors.primary else colors.onSurface)
-                        if (mode.subtitle.isNotBlank()) Text(mode.subtitle, Modifier.fillMaxWidth(), fontSize = 11.sp, textAlign = TextAlign.Center,
-                            color = colors.onSurfaceVariantSummary, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    }
-                    if (selected) Icon(MusicIcons.Check, "已选择", Modifier.align(Alignment.CenterEnd).size(20.dp), tint = colors.primary)
+            SettingsGroup {
+                state.catalog.modes.forEachIndexed { index, mode ->
+                    SettingsChoiceRow(mode.title, choice.key == mode.key, { draftKey = mode.key },
+                        Modifier.testTag("roaming_mode_${mode.code}"), summary = mode.subtitle,
+                        enabled = state.ready && !state.loading)
+                    if (index < state.catalog.modes.lastIndex) SettingsDivider()
                 }
             }
             Text("场景模式", Modifier.padding(top = 8.dp, bottom = 4.dp), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
@@ -148,10 +140,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     if (embedded) Column(modifier.verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
         header()
-        Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        SettingsGroup { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             body()
             footer()
         } }
     } else if (!settings) MusicDialog(null, onDismiss, footer = { footer() }) { body() }
 
+    }
 }

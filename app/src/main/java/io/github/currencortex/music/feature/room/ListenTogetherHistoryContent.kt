@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.room
 
+import io.github.currencortex.music.ui.component.nativeui.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -51,23 +53,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         ListenArchivePage.REPORT -> "和 TA 的一起听"
         else -> "一起听记录"
     }
-    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 20.dp)
-        .testTag("listen_archive_screen")) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(colors.surfaceContainer)
-                .clickable(role = Role.Button, onClick = onBack).testTag("listen_archive_back"), contentAlignment = Alignment.Center) {
-                Icon(MusicIcons.Back, "返回", Modifier.size(22.dp), tint = colors.onSurface)
-            }
-            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(title, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                Text("网易云音乐", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-            }
-            if (state.page != ListenArchivePage.HISTORY || state.peerFilter != null) {
+    MusicSubpage(title, "listen_archive_screen", onBack, backTag = "listen_archive_back",
+        actions = {
+            if (state.page != ListenArchivePage.HISTORY || state.peerFilter != null)
                 MusicTextAction("全部记录", { onHistory(null) }, Modifier.testTag("listen_archive_all"))
-            }
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("listen_archive_list"),
-            contentPadding = musicScrollPadding(PaddingValues(top = 8.dp, bottom = 24.dp)),
+        }) { topInset ->
+        LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("listen_archive_list"),
+            contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 24.dp)),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             val hasContent = when (state.page) {
                 ListenArchivePage.HISTORY -> state.history != null
@@ -98,7 +90,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             MusicTextAction("排行", onRanking, Modifier.testTag("listen_archive_ranking"))
                         } }
                         page?.mostListen?.let { most -> item {
-                            Card(Modifier.fillMaxWidth().animateItem().testTag("listen_archive_most")) {
+                            SettingsGroup(Modifier.fillMaxWidth().animateItem().testTag("listen_archive_most")) {
                                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                                     Row(verticalAlignment = Alignment.CenterVertically) {
                                         val self = state.self?.let { current -> current.copy(avatarUrl = most.selfAvatarUrl.ifBlank { current.avatarUrl }) }
@@ -147,7 +139,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         ArchiveMessage("暂无一起听排行", "暂时没有可展示的排行数据。", tag = "listen_archive_empty")
                     }
                     items(rankings) { entry ->
-                        Card(Modifier.fillMaxWidth().animateItem().testTag("listen_archive_rank_${entry.user.userId}")) {
+                        SettingsGroup(Modifier.fillMaxWidth().animateItem().testTag("listen_archive_rank_${entry.user.userId}")) {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(entry.rank.takeIf { it > 0 }?.toString() ?: "—", Modifier.width(28.dp), fontSize = 22.sp,
@@ -174,7 +166,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     if (raw != null) {
                         val report = resolveReportPeople(raw, state)
                         val peer = report.peer
-                        item { Card(Modifier.fillMaxWidth().animateItem().testTag("listen_archive_partner")) {
+                        item { SettingsGroup(Modifier.fillMaxWidth().animateItem().testTag("listen_archive_partner")) {
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     if (peer != null) ArchiveAvatar(peer, report.online)
@@ -200,7 +192,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                 report.failMessage.takeIf(String::isNotBlank)?.let { ArchiveMuted(it) }
                             }
                         } }
-                        item { Card(Modifier.fillMaxWidth().animateItem().testTag("listen_archive_report")) {
+                        item { SettingsGroup(Modifier.fillMaxWidth().animateItem().testTag("listen_archive_report")) {
                             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                     Text("这一次的陪伴", Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
@@ -215,17 +207,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                 if (listOf(report.durationMs, report.songCount, report.totalDurationMs, report.totalSongCount).any { it == null }) {
                                     ArchiveMuted("— 表示网易云未提供该项数据，部分累计数据仅会员可查看。")
                                 }
-                                if (report.showCollectButton) Button(onClick = onCollect, enabled = !state.collecting,
-                                    modifier = Modifier.fillMaxWidth().testTag("listen_archive_collect")) {
-                                    if (state.collecting) ListenLoadingLabel("正在读取歌曲…")
-                                    else Text("收藏本次歌曲到歌单", fontSize = 14.sp)
-                                }
+                                if (report.showCollectButton) GlassActionButton(
+                                    if (state.collecting) "正在读取歌曲…" else "收藏本次歌曲到歌单", onCollect,
+                                    Modifier.fillMaxWidth().testTag("listen_archive_collect"), enabled = !state.collecting)
                                 state.collectionError?.let { Text(it, Modifier.testTag("listen_archive_collection_error"), fontSize = 12.sp, color = colors.error) }
-                                Button(onClick = { onShare(report) }, enabled = !sharing && !state.loading, colors = ButtonDefaults.buttonColorsPrimary(),
-                                    modifier = Modifier.fillMaxWidth().testTag("listen_archive_share")) {
-                                    if (sharing) ListenLoadingLabel("正在生成报告…", primary = true)
-                                    else Text("分享一起听报告", color = colors.onPrimary, fontSize = 14.sp)
-                                }
+                                GlassActionButton(if (sharing) "正在生成报告…" else "分享一起听报告", { onShare(report) },
+                                    Modifier.fillMaxWidth().testTag("listen_archive_share"), primary = true, enabled = !sharing && !state.loading)
                                 MusicTextAction("在网易云查看报告", { onOfficial(report) }, Modifier.testTag("listen_archive_official"))
                             }
                         } }
@@ -240,20 +227,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable private fun HistoryRecordCard(record: ListenTogetherHistoryRecord, activeRoom: Boolean, onReport: () -> Unit, onInvite: () -> Unit) {
-    Card(Modifier.fillMaxWidth().testTag("listen_archive_record_${record.id}")) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Row(Modifier.weight(1f).clickable(enabled = record.roomId.isNotBlank(), role = Role.Button, onClick = onReport)
-                .testTag("listen_archive_open_${record.id}"), verticalAlignment = Alignment.CenterVertically) {
-                ArchiveAvatar(record.user, record.online)
-                Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(record.user.displayName(), fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    ArchiveMuted(listOf(dateLabel(record.startTimeMs, "HH:mm"), durationLabel(record.durationMs), countLabel(record.songCount))
-                        .filter(String::isNotBlank).joinToString(" · "))
-                    record.failMessage.takeIf(String::isNotBlank)?.let { ArchiveMuted(it) }
-                }
-            }
-            MusicTextAction("邀请", onInvite, Modifier.testTag("listen_archive_invite_${record.id}"), enabled = record.canInvite && !activeRoom)
-        }
+    SettingsGroup(Modifier.fillMaxWidth().testTag("listen_archive_record_${record.id}")) {
+        SettingsPreference(record.user.displayName(),
+            listOf(dateLabel(record.startTimeMs, "HH:mm"), durationLabel(record.durationMs), countLabel(record.songCount),
+                record.failMessage).filter(String::isNotBlank).joinToString(" · "),
+            Modifier.testTag("listen_archive_open_${record.id}"), enabled = record.roomId.isNotBlank(), onClick = onReport,
+            leading = { ArchiveAvatar(record.user, record.online) }, trailing = {
+                MusicTextAction("邀请", onInvite, Modifier.testTag("listen_archive_invite_${record.id}"),
+                    enabled = record.canInvite && !activeRoom)
+            })
     }
 }
 
@@ -301,7 +283,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable private fun ArchiveRule() { Box(Modifier.fillMaxWidth().height(1.dp).background(MiuixTheme.colorScheme.onSurface.copy(alpha = .07f))) }
 
 @Composable private fun ArchiveMessage(title: String, message: String? = null, detail: String? = null, tag: String, onRetry: (() -> Unit)? = null) {
-    Card(Modifier.fillMaxWidth().testTag(tag)) {
+    SettingsGroup(Modifier.fillMaxWidth().testTag(tag)) {
         Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             message?.let { ArchiveMuted(it) }

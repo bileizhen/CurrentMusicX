@@ -36,6 +36,8 @@ import io.github.currencortex.music.ui.component.MusicDialog
 import io.github.currencortex.music.ui.component.MusicCover
 import io.github.currencortex.music.ui.component.MusicTextAction
 import io.github.currencortex.music.ui.component.MusicCategoryTabs
+import io.github.currencortex.music.ui.component.MusicSearchBar
+import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.launch
@@ -51,10 +53,12 @@ import top.yukonga.miuix.kmp.basic.*
     LaunchedEffect(nativePage, nativeDialog, roomDialog) { onDialogActive(if (nativePage) nativeDialog else roomDialog) }
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     LaunchedEffect(native.active, native.endedRoom?.roomId) { if (native.active || native.endedRoom != null) nativePage = true }
+    SettingsUiScope {
     ListenTogetherPageTransition(nativePage, { if (it) "netease" else "rooms" }, { if (it) 1 else 0 }, Modifier.fillMaxSize()) { showNative ->
         if (showNative) NeteaseListenTogetherScreen(vm.container, onBack = { nativePage = false }, onSearch = onSearch,
             onPlayer = onPlayer, onBinding = onBinding, onDialogActive = { nativeDialog = it })
         else CurrentMusicRoomContent(vm, onBack, onSearch, onPlayer, { roomDialog = it }, onNative = { nativePage = true })
+    }
     }
 }
 
@@ -76,53 +80,76 @@ import top.yukonga.miuix.kmp.basic.*
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     val clipboard = LocalClipboard.current; val scope = rememberCoroutineScope()
     LaunchedEffect(live.detail?.room?.id) { if (live.detail != null) create = false }
-    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(16.dp).testTag("room_screen")) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            MusicTextAction("返回", onClick = onBack)
-            Text("一起听", Modifier.weight(1f), fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
-        }
-        Card(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
-            MusicDestinationRow("网易云双人一起听", onNative, Modifier.testTag("open_netease_listen_together"),
-                summary = if (native.active) "正在一起听 · 查看会话" else "和网易云好友同步听歌")
-        }
+    MusicSubpage("一起听", "room_page", onBack) { topInset ->
+    Column(Modifier.fillMaxSize().testTag("room_screen")) {
         val detail = live.detail
         if (detail == null) {
-            TextField(query, { query = it }, label = "六位房间号或房间名称", modifier = Modifier.fillMaxWidth().testTag("room_query"))
-            Row { MusicTextAction("查找", onClick = { vm.search(query.trim()) }, enabled = !busy)
-                MusicTextAction("创建房间", onClick = { create = true }, enabled = account.account != null && !busy)
-                MusicTextAction(if (browser.loading) "刷新中" else "刷新", onClick = { vm.load() }, enabled = !browser.loading && !busy) }
-            if (busy) Text("正在进入房间…", color = MiuixTheme.colorScheme.primary, fontSize = 14.sp)
-            if (browser.loading && browser.rooms.isEmpty()) Text("正在加载房间…")
-            browser.error?.let { Text(it); MusicTextAction("重试", onClick = { vm.load() }) }
-            live.error?.let { Text(it) }
-            LazyColumn(Modifier.weight(1f), contentPadding = musicScrollPadding(PaddingValues(0.dp)), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                items(browser.rooms, key = { it.id }) { room ->
-                    Card(Modifier.fillMaxWidth().animateItem()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(room.name, Modifier.weight(1f), fontSize = 21.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            MusicTextAction("加入", onClick = { vm.find(room.code) }, enabled = !busy)
-                        }
-                        Text("#${room.code} · ${room.online} 人在线", color = MiuixTheme.colorScheme.primary, fontSize = 14.sp)
-                        Text(listOf(room.ownerName.takeIf { it.isNotBlank() }, if (room.freeMode) "自由点歌" else "点歌需要审批").filterNotNull().joinToString(" · "),
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 14.sp)
-                    } }
+            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 24.dp)),
+                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                item {
+                    SettingsSection("与好友一起", io.github.currencortex.music.ui.component.MusicIcons.Headphones) {
+                        MusicDestinationRow("网易云双人一起听", onNative, Modifier.testTag("open_netease_listen_together"),
+                            summary = if (native.active) "正在一起听 · 查看会话" else "和网易云好友同步听歌")
+                    }
                 }
-                if (browser.more) item { MusicTextAction("加载更多", onClick = { vm.load(more = true) }, enabled = !browser.loading) }
-                if (!browser.loading && browser.rooms.isEmpty() && browser.error == null) item { Text("暂无公开房间") }
+                item {
+                    SettingsSectionHeader("CurrentMusic 房间")
+                }
+                item {
+                    MusicSearchBar(query, { vm.search(query.trim()) }, onInput = { query = it },
+                        placeholder = "六位房间号或房间名称", inputTag = "room_query")
+                }
+                item {
+                    FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        GlassActionButton("查找", { vm.search(query.trim()) }, enabled = !busy, fillWidth = false)
+                        GlassActionButton("创建房间", { create = true }, primary = true,
+                            enabled = account.account != null && !busy, fillWidth = false)
+                        GlassActionButton(if (browser.loading) "刷新中" else "刷新", { vm.load() },
+                            enabled = !browser.loading && !busy, fillWidth = false)
+                    }
+                    if (account.account == null) SettingsHint("登录 CurrentMusic 账号后可创建房间。")
+                }
+                if (busy) item { ListenLoadingLabel("正在进入房间…") }
+                if (browser.loading && browser.rooms.isEmpty()) item { ListenTogetherSkeleton("正在加载房间…", "room_browser_loading", rows = 2) }
+                browser.error?.let { error -> item {
+                    SettingsGroup { SettingsHint(error, error = true); MusicTextAction("重试", { vm.load() }, Modifier.padding(16.dp)) }
+                } }
+                live.error?.let { error -> item { SettingsHint(error, error = true) } }
+                items(browser.rooms, key = { it.id }) { room ->
+                    SettingsGroup(Modifier.animateItem()) {
+                        SettingsPreference(room.name,
+                            "#${room.code} · ${room.online} 人在线",
+                            trailing = { MusicTextAction("加入", { vm.find(room.code) }, enabled = !busy) })
+                        SettingsDivider()
+                        SettingsHint(listOf(room.ownerName.takeIf { it.isNotBlank() },
+                            if (room.freeMode) "自由点歌" else "点歌需要审批").filterNotNull().joinToString(" · "))
+                    }
+                }
+                if (browser.more) item { GlassActionButton("加载更多", { vm.load(more = true) }, enabled = !browser.loading) }
+                if (!browser.loading && browser.rooms.isEmpty() && browser.error == null) item {
+                    SettingsGroup { SettingsPreference("暂无公开房间", "创建一个房间，或使用好友的六位房间号加入。") }
+                }
             }
         } else {
+            Column(Modifier.fillMaxSize().padding(start = 16.dp, end = 16.dp, top = topInset + 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)) {
             val role = detail.role(account.account?.id ?: 0)
+            SettingsGroup {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(detail.room.name, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text("#${detail.room.code} · ${detail.members.size} 人 · ${when(role) { RoomRole.OWNER -> "房主"; RoomRole.ADMIN -> "管理员"; else -> "成员" }}",
                 fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             Text(if (live.connected) "已连接 · 播放同步中" else "正在连接房间，自动恢复同步…", fontSize = 13.sp, color = MiuixTheme.colorScheme.primary)
             Row { MusicTextAction("复制房间号", onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("房间号", detail.room.code))) } })
                 MusicTextAction("退出房间", onClick = { exit = true }, enabled = !busy) }
+            } }
             live.error?.let { Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(it, Modifier.weight(1f), fontSize = 13.sp)
                 MusicTextAction("知道了", onClick = vm.session::dismissError)
             } }
-            Card(Modifier.fillMaxWidth()) {
+            SettingsGroup(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(14.dp)) {
                     val track = detail.timeline?.trackMeta
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -164,6 +191,8 @@ import top.yukonga.miuix.kmp.basic.*
                 }
             }
         }
+        }
+    }
     }
     if (create) RoomForm("创建房间", { if (!busy) create = false }, saving = busy, error = browser.error) { name, pw, public, free -> vm.create(name, pw.orEmpty(), public, free) }
     passwordRoom?.let { room ->
@@ -184,27 +213,26 @@ import top.yukonga.miuix.kmp.basic.*
     }
 }
 @Composable private fun RoomTransport(label: String, icon: Int, onClick: () -> Unit, enabled: Boolean, primary: Boolean = false) {
-    val colors = MiuixTheme.colorScheme
-    val ink = (if (primary) colors.onPrimary else colors.onSurface).copy(alpha = if (enabled) 1f else .35f)
-    Column(Modifier.width(72.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(vertical = 4.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(5.dp)) {
-        Box(Modifier.size(44.dp).background(if (primary) colors.primary.copy(alpha = if (enabled) 1f else .35f) else Color.Transparent, CircleShape), contentAlignment = Alignment.Center) {
-            Icon(painterResource(icon), contentDescription = null, modifier = Modifier.size(28.dp), tint = ink)
+    Column(Modifier.width(72.dp), horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        GlassIconButton(onClick, label, enabled = enabled, size = if (primary) 48.dp else 44.dp) {
+            Icon(painterResource(icon), null, Modifier.size(28.dp),
+                tint = (if (primary) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface).copy(alpha = if (enabled) 1f else .35f))
         }
-        Text(label, fontSize = 12.sp, color = colors.onSurface.copy(alpha = if (enabled) .65f else .3f))
+        Text(label, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
     }
 }
 @Composable private fun RoomQueue(detail: RoomDetail, role: RoomRole?, vm: RoomViewModel, modifier: Modifier) {
     val live by vm.session.state.collectAsStateWithLifecycle()
     LazyColumn(modifier, contentPadding = musicScrollPadding(PaddingValues(0.dp)), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        items(detail.queue, key = { it.id }) { item -> Card(Modifier.fillMaxWidth().animateItem()) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+        items(detail.queue, key = { it.id }) { item -> SettingsGroup(Modifier.fillMaxWidth().animateItem()) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             val pending = "queue:${item.id}" in live.pendingActions
             Text(item.name, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             val subtitle = listOf(item.artists, item.requester).filter { it.isNotBlank() }.joinToString(" · ")
             if (subtitle.isNotBlank()) Text(subtitle, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             Text(when(item.status) { "pending" -> "待审批"; "playing" -> "正在播放"; "rejected" -> "已拒绝"; else -> "已加入队列" })
             if (pending) Text("正在提交…", fontSize = 12.sp, color = MiuixTheme.colorScheme.primary)
-            Row {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (item.status == "pending" && role?.controls == true) {
                     MusicTextAction("通过", onClick = { vm.session.queueAction(item, "approve") }, enabled = !pending)
                     MusicTextAction("拒绝", onClick = { vm.session.queueAction(item, "reject") }, enabled = !pending)
@@ -212,7 +240,9 @@ import top.yukonga.miuix.kmp.basic.*
                 if (RoomPermissions.remove(role, item)) MusicTextAction("移除", onClick = { vm.session.queueAction(item, "remove") }, enabled = !pending)
             }
         } } }
-        if (detail.queue.isEmpty()) item { Text("还没有点歌。进入搜索，选择“加入队列”即可提交点歌。") }
+        if (detail.queue.isEmpty()) item {
+            SettingsGroup { SettingsPreference("还没有点歌", "进入搜索，选择“加入队列”即可提交点歌。") }
+        }
     }
 }
 @Composable private fun RoomMembers(detail: RoomDetail, role: RoomRole?, vm: RoomViewModel, modifier: Modifier, onClose: () -> Unit,
@@ -224,15 +254,27 @@ import top.yukonga.miuix.kmp.basic.*
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     LazyColumn(modifier, contentPadding = musicScrollPadding(PaddingValues(0.dp)), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (role == RoomRole.OWNER) item {
-            MusicTextAction("房间设置", onClick = { settings = true })
-            MusicTextAction(if (detail.room.joinLocked) "允许加入" else "锁定加入", onClick = {
-                vm.session.action("settings", buildJsonObject { put("joinLocked", !detail.room.joinLocked) }, { it == RoomRole.OWNER }) })
-            MusicTextAction("关闭房间", onClick = onClose)
+            SettingsGroup {
+                MusicDestinationRow("房间设置", { settings = true }, summary = "名称、密码、可见性与点歌权限")
+                SettingsDivider()
+                SettingsToggle("锁定加入", detail.room.joinLocked, { locked ->
+                    vm.session.action("settings", buildJsonObject { put("joinLocked", locked) }, { it == RoomRole.OWNER }) },
+                    summary = "开启后不再接受新成员")
+                SettingsDivider()
+                SettingsPreference("关闭房间", "所有成员都会离开", onClick = onClose,
+                    trailing = { Icon(io.github.currencortex.music.ui.component.MusicIcons.Close, null, tint = MiuixTheme.colorScheme.error) })
+            }
         }
+        item { SettingsSectionHeader("成员 · ${detail.members.size}") }
         items(detail.members, key = { it.userId }) { member ->
-            Row { Text("${member.nickname} · ${when(RoomRole.parse(member.role)) { RoomRole.OWNER -> "房主"; RoomRole.ADMIN -> "管理员"; else -> "成员" }}", Modifier.weight(1f))
-                if (member.userId != account.account?.id && RoomPermissions.kick(role, RoomRole.parse(member.role)))
-                    MusicTextAction("管理", onClick = { target = member }) }
+            SettingsGroup(Modifier.animateItem()) {
+                SettingsPreference(member.nickname, when (RoomRole.parse(member.role)) {
+                    RoomRole.OWNER -> "房主"; RoomRole.ADMIN -> "管理员"; else -> "成员"
+                }, leading = { Icon(io.github.currencortex.music.ui.component.MusicIcons.Account, null) }, trailing = {
+                    if (member.userId != account.account?.id && RoomPermissions.kick(role, RoomRole.parse(member.role)))
+                        MusicTextAction("管理", { target = member })
+                })
+            }
         }
     }
     target?.let { member -> MusicChoiceDialog("管理 ${member.nickname}", onDismiss = { target = null }) {
@@ -261,10 +303,13 @@ import top.yukonga.miuix.kmp.basic.*
         Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()).testTag("room_form"),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             TextField(name, { name = it }, label = "房间名称", modifier = Modifier.fillMaxWidth())
-            if (initial != null) Row { Text("修改密码（留空解除密码）", Modifier.weight(1f)); Switch(changePassword, { changePassword = it }) }
+            if (initial != null) SettingsToggle("修改密码", changePassword, { changePassword = it }, summary = "留空保存可解除密码")
             if (changePassword) TextField(password, { password = it }, label = "房间密码", visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
-            Row { Text("公开房间", Modifier.weight(1f)); Switch(public, { public = it }) }
-            Row { Text("自由点歌", Modifier.weight(1f)); Switch(free, { free = it }) }
+            SettingsGroup {
+                SettingsToggle("公开房间", public, { public = it }, summary = "在房间大厅中显示")
+                SettingsDivider()
+                SettingsToggle("自由点歌", free, { free = it }, summary = "关闭后，点歌需要房主或管理员审批")
+            }
             error?.let { Text(it, fontSize = 13.sp) }
             MusicDialogButton(if (saving) "正在创建…" else "保存", enabled = name.isNotBlank() && !saving, onClick = { onSave(name, if (changePassword) password else null, public, free) })
         }
