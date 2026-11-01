@@ -39,6 +39,8 @@ class HomeAvatarTest {
     private val imageGate = CountDownLatch(1)
     private val imageRequested = CountDownLatch(1)
     private var opened = 0
+    @Volatile private var catalogSearches = 0
+    @Volatile private var populatedHome = false
     private val launch = LaunchBrandState()
     private lateinit var backDispatcher: androidx.activity.OnBackPressedDispatcher
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
@@ -65,9 +67,16 @@ class HomeAvatarTest {
                 "/cm/decor/fixture.gif" -> MockResponse().setHeader("Content-Type", "image/png").setBody(Buffer().write(frame))
                 "/cm/auth/me" -> json("""{"id":7,"nickname":"Avatar fixture","avatar":"fixture.png","avatarDecoration":"fixture","stat":{}}""")
                 "/cm/ncm/search/hot/detail" -> json("""{"code":200,"data":[{"searchWord":"Fixture hot","content":"Live fixture"}]}""")
-                "/cm/daily" -> json("""{"daily":[],"forYou":[],"artists":[]}""")
+                "/cm/ncm/search" -> {
+                    catalogSearches++
+                    json("""{"songs":[{"ncm_id":901,"name":"Glass search fixture","artists":"Fixture artist","duration":30000}],"totals":{"song":1},"hasMore":{"song":false}}""")
+                }
+                "/home-cover.png" -> MockResponse().setHeader("Content-Type", "image/png").setBody(Buffer().write(png))
+                "/cm/daily" -> if (populatedHome) json("""{"daily":[{"ncm_id":901,"name":"晨间音乐","artists":"示例艺人","pic":"${server.url("/home-cover.png")}"}],"forYou":[{"ncm_id":902,"name":"午后旋律","artists":"示例艺人","pic":"${server.url("/home-cover.png")}"}],"artists":[]}""")
+                    else json("""{"daily":[],"forYou":[],"artists":[]}""")
                 "/cm/plays/recent", "/cm/likes/mine" -> json("""{"songs":[]}""")
-                "/cm/playlists" -> json("""{"playlists":[]}""")
+                "/cm/playlists" -> if (populatedHome) json("""{"playlists":[{"id":22,"name":"收藏歌单","cover":"${server.url("/home-cover.png")}","count":8}]}""")
+                    else json("""{"playlists":[]}""")
                 "/cm/decorations/scales" -> json("""{"scales":{"fixture":1.5}}""")
                 else -> MockResponse().setResponseCode(404)
             }
@@ -303,56 +312,51 @@ class HomeAvatarTest {
         assertTrue("Interrupted flight must land back on home", (greenBounds().center - home.center).getDistance() < 3f)
     }
 
-    @Test fun hiddenHomeAvatarSkipsFlightAndRestoresNormalTravelAfterScrollingBack() {
-        imageGate.countDown()
-        compose.mainClock.autoAdvance = false
-        compose.setContent { CurrentMusicApp(container) }
-        pumpUntil { compose.onAllNodesWithTag("home_avatar_image", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
-        compose.mainClock.advanceTimeBy(1500)
+    @Test fun scrolledHomeKeepsTheToolbarAvatarAndItsReturnFlight() {
+        startInteractiveFlightFixture()
         compose.onNodeWithTag("music_home").performScrollToIndex(6)
         compose.mainClock.advanceTimeBy(300)
-        compose.onNodeWithTag("home_profile_avatar").assertIsNotDisplayed()
+        compose.onNodeWithTag("home_profile_avatar").assertIsDisplayed()
+        val home = greenBounds()
         repeat(2) {
             compose.onNodeWithTag("tab_2").performClick()
             compose.mainClock.advanceTimeBy(32)
-            compose.onNodeWithTag("home_avatar_transition").assertDoesNotExist()
-            compose.mainClock.advanceTimeBy(800)
+            compose.onNodeWithTag("home_avatar_transition").assertExists()
+            compose.mainClock.advanceTimeBy(900)
             compose.onNodeWithTag("my_profile_avatar").assertIsDisplayed()
             compose.onNodeWithTag("tab_0").performClick()
             compose.mainClock.advanceTimeBy(32)
-            compose.onNodeWithTag("home_avatar_transition").assertDoesNotExist()
-            compose.mainClock.advanceTimeBy(800)
-            compose.onNodeWithTag("music_home").assertIsDisplayed()
-            compose.onNodeWithTag("home_profile_avatar").assertIsNotDisplayed()
+            compose.onNodeWithTag("home_avatar_transition").assertExists()
+            compose.mainClock.advanceTimeBy(900)
+            compose.onNodeWithTag("home_profile_avatar").assertIsDisplayed()
+            assertTrue("Return must land at the fixed toolbar slot", (greenBounds().center - home.center).getDistance() < 3f)
         }
-        // Keep the saved scroll position; visible endpoints still use the decorated flight.
-        compose.onNodeWithTag("music_home").performScrollToIndex(0)
-        pumpUntil { compose.onAllNodesWithTag("home_avatar_image", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
-        compose.mainClock.advanceTimeBy(800)
-        compose.onNodeWithTag("home_profile_avatar").assertIsDisplayed()
-        compose.onNodeWithTag("tab_2").performClick()
-        compose.mainClock.advanceTimeBy(32)
-        compose.onNodeWithTag("home_avatar_transition").assertExists()
-        compose.mainClock.advanceTimeBy(800)
-        compose.onNodeWithTag("home_avatar_transition").assertDoesNotExist()
-        compose.onNodeWithTag("tab_0").performClick()
-        compose.mainClock.advanceTimeBy(32)
-        compose.onNodeWithTag("home_avatar_transition").assertExists()
-        compose.mainClock.advanceTimeBy(800)
-        compose.onNodeWithTag("home_avatar_transition").assertDoesNotExist()
-        compose.onNodeWithTag("home_profile_avatar").assertIsDisplayed()
-        assertEquals(7L, container.accountRepository.state.value.account!!.id)
-        assertFalse(container.playerController.state.value.playing)
     }
 
-    @Test fun searchMovesInputUpFocusesAndReturnsToRetainedHome() {
+    @Test fun searchMovesInputUpFocusesAndReturnsToRetainedHome() = verifyGlassSearch(ThemeMode.LIGHT)
+    @Test fun darkHomeSearchUsesTheSameGlassAndSubmissionFlow() = verifyGlassSearch(ThemeMode.DARK)
+
+    private fun saveSearch(name: String) {
+        val app = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
+        java.io.File(app.externalCacheDir, name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        bitmap.recycle()
+    }
+    private fun verifyGlassSearch(mode: ThemeMode) {
+        populatedHome = true
+        runBlocking { container.settings.edit { it.copy(themeMode = mode) } }
         imageGate.countDown()
         compose.mainClock.autoAdvance = false
         compose.setContent { CurrentMusicApp(container) }
         pumpUntil { compose.onAllNodesWithTag("open_home_search").fetchSemanticsNodes().isNotEmpty() }
+        pumpUntil { compose.onAllNodesWithTag("home_daily_title").fetchSemanticsNodes().isNotEmpty() }
         compose.mainClock.advanceTimeBy(1500)
         val homeId = compose.onNodeWithTag("music_home").fetchSemanticsNode().id
         val source = compose.onNodeWithTag("open_home_search").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("home_search_field_surface", useUnmergedTree = true).assert(SemanticsMatcher.expectValue(
+            io.github.currencortex.music.ui.component.nativeui.LiquidGlassOpticsKey, true))
+        compose.onNodeWithTag("home_search_field_cancel").assertDoesNotExist()
+        saveSearch("home-glass-search-${mode.name.lowercase()}.png")
         compose.onNodeWithTag("open_home_search").performTouchInput { click(androidx.compose.ui.geometry.Offset(width * .35f, height * .5f)) }
         compose.mainClock.advanceTimeBy(64)
         fun progress() = compose.onNodeWithTag("search_sheet").fetchSemanticsNode().config[io.github.currencortex.music.feature.search.SearchSheetProgress]
@@ -364,6 +368,8 @@ class HomeAvatarTest {
         assertTrue("Input must move towards the top", middleBounds.top < earlyBounds.top)
         compose.mainClock.advanceTimeBy(700)
         compose.onNodeWithTag("search_input").assertIsFocused()
+        compose.onNodeWithTag("search_input_surface").assert(SemanticsMatcher.expectValue(
+            io.github.currencortex.music.ui.component.nativeui.LiquidGlassOpticsKey, true))
         val end = compose.onNodeWithTag("search_header_field").fetchSemanticsNode().boundsInRoot
         assertTrue(end.top < source.top)
         compose.onNodeWithTag("search_back").assertDoesNotExist()
@@ -372,10 +378,26 @@ class HomeAvatarTest {
         assertEquals("Search bar must keep the home height", source.height, end.height, 1f)
         assertEquals(1f, progress(), .001f)
         pumpUntil { compose.onAllNodesWithTag("search_hot_0").fetchSemanticsNodes().isNotEmpty() }
+        saveSearch("expanded-glass-search-${mode.name.lowercase()}.png")
+        compose.onNodeWithTag("search_input_cancel").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(800)
+        compose.onNodeWithTag("search_sheet").assertDoesNotExist()
+        compose.onNodeWithTag("open_home_search").assertIsDisplayed()
+        assertEquals("Cancelling an empty search must not submit a request", 0, catalogSearches)
+        compose.onNodeWithTag("open_home_search").performTouchInput { click() }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("search_input").assertIsFocused()
         compose.onNodeWithTag("search_input").performTextInput("sheet draft")
+        assertEquals("Editing the draft must not submit the catalog search", 0, catalogSearches)
         compose.onNodeWithTag("submit_search").performClick()
+        pumpUntil { catalogSearches == 1 && compose.onAllNodesWithText("Glass search fixture").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("search_input").assertIsNotFocused()
-        compose.onNodeWithTag("search_sheet").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.Dismiss) { it() }
+        compose.onNodeWithTag("search_input").performTextReplacement("keyboard draft")
+        assertEquals(1, catalogSearches)
+        compose.onNodeWithTag("search_input").performImeAction()
+        pumpUntil { catalogSearches == 2 }
+        saveSearch("results-glass-search-${mode.name.lowercase()}.png")
+        compose.onNodeWithTag("search_input_cancel").performTouchInput { click() }
         compose.mainClock.advanceTimeBy(80)
         assertTrue("Closing must animate instead of replacing the home page: ${progress()}", progress() > 0f && progress() < 1f)
         compose.mainClock.advanceTimeBy(700)
@@ -385,6 +407,17 @@ class HomeAvatarTest {
         assertEquals(source, compose.onNodeWithTag("open_home_search").fetchSemanticsNode().boundsInRoot)
         assertEquals(7L, container.accountRepository.state.value.account!!.id)
         assertFalse(container.playerController.state.value.playing)
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithTag("music_home").performScrollToIndex(4)
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithTag("home_recommendation_902").assertIsDisplayed()
+        val card = compose.onNodeWithTag("home_recommendation_902").fetchSemanticsNode().boundsInRoot
+        assertTrue("Recommendation card must clear the floating navigation", card.bottom <=
+            compose.onNodeWithTag("tab_0").fetchSemanticsNode().boundsInRoot.top)
+        saveSearch("home-recommendations-unified-${mode.name.lowercase()}.png")
+        compose.onNodeWithTag("music_home").performScrollToNode(hasText("收藏歌单"))
+        compose.mainClock.advanceTimeBy(300)
+        saveSearch("home-playlists-unified-${mode.name.lowercase()}.png")
     }
 
     @Test fun fourTabsKeepSearchSecondaryAndSettingsPrimary() {

@@ -285,9 +285,19 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         var roomDialogOpen by remember { mutableStateOf(false) }
         var playerDialogOpen by remember { mutableStateOf(false) }
         var castDialogOpen by remember { mutableStateOf(false) }
+        val pageNavigation=remember {PageContainerNavigation()}
+        val pageSceneStrategy=remember(pageNavigation) {PageContainerSceneStrategy(pageNavigation,
+            setOf(ROOT.toString(),SETTINGS.toString(),APPEARANCE.toString(),NETWORK.toString(),STORAGE.toString(),ABOUT.toString(),
+                "user/security","user/binding","user/netease-tasks","user/playlist-import","user/decorations",
+                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome")+
+                LegalDocument.entries.map {it.route().toString()})}
+        SideEffect {pageNavigation.onClosed={route->
+            if(backStack.lastOrNull()==route)backStack=backStack.dropLast(1)
+        }}
         fun navigateBack() {
             if (roomDialogOpen || castDialogOpen || playerDialogOpen || miniQueueOpen || songMenu != null) return
             if (backStack.size > 1) {
+                if(pageNavigation.close(backStack.last()))return
                 if (backStack.last() == SEARCH.toString()) { searchFocusManager.clearFocus(); searchKeyboard?.hide() }
                 playerSheetMotion = if (backStack.last() == PLAYER.toString()) PlayerSheetMotion.CLOSE else PlayerSheetMotion.NONE
                 if (backStack.last() == "lib/video") container.playerController.closeVideo()
@@ -309,12 +319,13 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             }
             else playerSheetMotion = PlayerSheetMotion.NONE
             if (route == SEARCH) { searchSheet.source = searchBounds; searchFocus = true }
+            pageNavigation.record(route.toString())
             backStack = backStack + route.toString()
         }
         var roamingRequest by rememberSaveable { mutableIntStateOf(0) }
         fun navigateLibrary(route: String) {
             if (route == "lib/roaming") { roamingRequest++; navigateTo(PLAYER); return }
-            if (backStack.last() != route) { playerSheetMotion = PlayerSheetMotion.NONE; backStack = backStack + route }
+            if (backStack.last() != route) { pageNavigation.record(route); playerSheetMotion = PlayerSheetMotion.NONE; backStack = backStack + route }
         }
         LaunchedEffect(Unit) {
             if ("lib/roaming" in backStack) {
@@ -461,11 +472,12 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             backStack = sceneStack,
             modifier = Modifier.weight(1f).fillMaxSize().testTag("music_navigation").background(MiuixTheme.colorScheme.background),
             entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), sceneInsets),
+            sceneStrategies = listOf(pageSceneStrategy),
             onBack = ::navigateBack,
             entryProvider = entryProvider {
                 entry(ROOT.toString()) {
                     Box(Modifier.fillMaxSize()) {
-                    Box(Modifier.fillMaxSize().statusBarsPadding()
+                    Box(Modifier.fillMaxSize()
                         .then(if (wideLayout) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) else Modifier)
                         .padding(end = if (wideLayout) SideNavigationSpace else 0.dp,
                         bottom = if (rootFloating) 0.dp else rootTabSpace + if (miniAvailable) miniHeight else 0.dp)) {
@@ -477,7 +489,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             LocalMusicComposerBottomInset provides composerBottom) {
                         Box(Modifier.fillMaxSize().nestedScroll(dockScroll)
                             .then(if (searchPresented) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
-                        RootTabTransition(selected, tabsState, onSelected = ::selectTab) { tab ->
+                        RootTabTransition(selected, tabsState, onSelected = ::selectTab,
+                            fade = settings.tabAnimation == io.github.currencortex.music.data.settings.RootTabAnimation.FADE) { tab ->
+                            // Each main page owns its floating header and status inset. The alternate library keeps its own layout.
+                            Box(Modifier.fillMaxSize().then(if (tab == HOME_TAB && navidromeAccount.configured && navidromeAccount.home)
+                                Modifier.statusBarsPadding() else Modifier)) {
                             when (tab) {
                                 HOME_TAB -> if (navidromeAccount.configured && navidromeAccount.home)
                                     io.github.currencortex.music.feature.navidrome.NavidromeScreen(navidromeVm, libraryVm, ::navigateLibrary,
@@ -497,7 +513,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     onStorage = { navigateTo(STORAGE) },
                                     onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
                                     onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") },
-                                    onLocalMusic = { navigateLibrary("lib/local") }, updateTransfer = updateTransferState)
+                                    onPlayback = { navigateLibrary("playback-settings") }, onEffects = { navigateTo(EQUALIZER) },
+                                    updateTransfer = updateTransferState, onNavigateFrom = pageNavigation::from)
+                            }
                             }
                         }
                         }
@@ -521,22 +539,23 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     }
                 }
                 entry(SETTINGS.toString()) {
-                    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-                        TextButton("返回", onClick = ::navigateBack)
-                        Box(Modifier.weight(1f)) { SettingsScreen(
+                    Box(Modifier.fillMaxSize().navigationBarsPadding()) {
+                        SettingsScreen(
                             onAppearance = { navigateTo(APPEARANCE) }, onNetwork = { navigateTo(NETWORK) },
                             onStorage = { navigateTo(STORAGE) },
                             onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
                             onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") },
-                            onLocalMusic = { navigateLibrary("lib/local") }, updateTransfer = updateTransferState) }
+                            onPlayback = { navigateLibrary("playback-settings") }, onEffects = { navigateTo(EQUALIZER) },
+                            updateTransfer = updateTransferState, onNavigateFrom = pageNavigation::from, onBack = ::navigateBack)
                     }
                 }
-                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onEqualizer = { navigateTo(EQUALIZER) }, onNavidrome = { navigateLibrary("navidrome") }, onDesktopLyrics = { navigateLibrary("desktop-lyrics") }) { navigateTo(STORAGE) } }
+                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onNavidrome = { navigateLibrary("navidrome") }) }
+                entry("playback-settings") { io.github.currencortex.music.feature.settings.PlaybackSettingsScreen(musicSettingsVm) }
                 entry("audio-output") { io.github.currencortex.music.feature.settings.AudioOutputScreen(container) }
                 entry("desktop-lyrics") { io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsSettingsScreen(container) }
                 entry("navidrome") {
                     io.github.currencortex.music.feature.navidrome.NavidromeScreen(navidromeVm, libraryVm, ::navigateLibrary,
-                        { songs, index -> playWithPermission { container.playerController.playList(songs, index) } })
+                        { songs, index -> playWithPermission { container.playerController.playList(songs, index) } }, onBack = ::navigateBack)
                 }
                 entry(EQUALIZER.toString()) {
                     val vm: io.github.currencortex.music.feature.settings.SoundEffectsViewModel = viewModel(factory = viewModelFactory {
@@ -601,7 +620,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 }
                 backStack.filter { it.startsWith("user/") }.distinct().forEach { route ->
                     entry(route) {
-                        Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
+                        Box(Modifier.fillMaxSize()) {
                             when {
                                 route == "user/announcements" -> {
                                     val vm: io.github.currencortex.music.feature.announcement.AnnouncementArchiveViewModel =
@@ -611,10 +630,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                         })
                                     io.github.currencortex.music.feature.announcement.AnnouncementArchiveScreen(vm, ::navigateBack)
                                 }
-                                route == "user/security" -> AccountSecurityScreen(profileVm, authVm) {
+                                route == "user/security" -> AccountSecurityScreen(profileVm, authVm, add = {
                                     authVm.begin(); navigateLibrary("user/login")
-                                }
-                                route == "user/login" -> LoginScreen(authVm, addingAccount = true, onDone = ::navigateBack)
+                                }, onBack = ::navigateBack)
+                                route == "user/login" -> LoginScreen(authVm, addingAccount = true, onDone = ::navigateBack, onBack = ::navigateBack)
                                 route == "user/decorations" -> {
                                     val vm: DecorationViewModel = viewModel(key = route, factory = viewModelFactory { DecorationViewModel(container) })
                                     DecorationScreen(vm, ::navigateBack)

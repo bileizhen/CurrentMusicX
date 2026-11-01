@@ -35,7 +35,7 @@ private fun postTime(seconds: Long) = if (seconds <= 0) "" else
     SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(seconds * 1000))
 
 @Suppress("DEPRECATION")
-@Composable internal fun PostsScreen(vm: PostsViewModel, navigate: (String) -> Unit) {
+@Composable internal fun PostsScreen(vm: PostsViewModel, navigate: (String) -> Unit, contentTopInset: androidx.compose.ui.unit.Dp = 0.dp) {
     val state by vm.state.collectAsPageState()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val songFlow = remember(vm) { vm.container.playerController.state.map { it.song }.distinctUntilChanged() }
@@ -47,7 +47,7 @@ private fun postTime(seconds: Long) = if (seconds <= 0) "" else
     LaunchedEffect(account.account?.id) { deleting = null; deletingComment = null }
     MusicPullToRefresh(state.loading, { vm.reload() }, Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize().testTag("discover_posts"),
-        contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 20.dp + bottom),
+        contentPadding = PaddingValues(start = 16.dp, top = contentTopInset + 8.dp, end = 16.dp, bottom = 20.dp + bottom),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         item { Row(verticalAlignment = Alignment.CenterVertically) {
             Text(if (state.loaded) "${state.total} 条帖子" else "音乐与生活", Modifier.weight(1f), fontSize = 13.sp,
@@ -58,7 +58,7 @@ private fun postTime(seconds: Long) = if (seconds <= 0) "" else
         } }
         state.message?.let { item { Text(it, fontSize = 13.sp, color = MiuixTheme.colorScheme.primary) } }
         state.error?.let { item { Text(it); MusicTextAction("重试", { vm.reload() }, Modifier.testTag("post_retry")) } }
-        if (state.loading && state.posts.isEmpty()) item { LoadingSongList(3) }
+        if (state.loading && state.posts.isEmpty()) item { LoadingPostList() }
         if (state.loaded && !state.loading && state.posts.isEmpty() && state.error == null) item {
             Text("还没有帖子，分享你的音乐生活吧", Modifier.testTag("posts_empty"), fontSize = 14.sp)
         }
