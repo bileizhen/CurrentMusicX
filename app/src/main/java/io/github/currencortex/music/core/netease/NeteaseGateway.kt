@@ -286,6 +286,11 @@ class NeteaseGateway(val transport: NeteaseTransport) {
             "playlist/create" -> return official("/api/playlist/create", data("name" to arg("name"), "privacy" to arg("privacy", "0"), "type" to "NORMAL"), web = true, expected = expected, authenticated = true)
             "playlist/name/update" -> return official("/api/playlist/update/name", data("id" to id, "name" to arg("name")), expected = expected, authenticated = true)
             "playlist/delete" -> return official("/api/playlist/remove", data("ids" to "[$id]"), web = true, expected = expected, authenticated = true)
+            "playlist/subscribe" -> {
+                // Only cancellation is exposed by the library's removal action.
+                require(arg("t") == "2")
+                return official("/api/playlist/unsubscribe", data("id" to id), expected = expected, authenticated = true)
+            }
         }
         // Unmapped routes fail immediately; music requests never fall back to CurrentMusic.
         throw ApiException(ErrorKind.NotFound)

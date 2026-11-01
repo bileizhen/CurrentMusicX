@@ -29,7 +29,13 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     suspend fun daily(fresh: Boolean = false): Daily = backgroundRead("daily", fresh) { expected ->
         val d = api.netease?.takeIf { api.nativeMediaEnabled || api.hasLocalNeteaseLogin || expected.token == null }
             ?.let { api.decode<DailyDto>(it.daily(expected.neteaseRevision)) } ?: read<DailyDto>("daily", expected)
-        Daily(d.daily.map(SongDto::toDomain), d.forYou.map(SongDto::toDomain), d.artists)
+        val daily = d.daily.map(SongDto::toDomain)
+        val recommended = d.forYou.map(SongDto::toDomain).distinctBy { it.id }
+        // Preserve FM/server order; fill a short batch from the already loaded daily list.
+        // This also covers legacy servers that only provide three forYou songs.
+        val forYou = if (recommended.size >= 12) recommended else
+            (recommended + daily).distinctBy { it.id }.take(12)
+        Daily(daily, forYou, d.artists)
     }
     suspend fun recent(fresh: Boolean = false): List<Song> = backgroundRead("recent", fresh) {
         // Project play reports are already uploaded separately from NetEase scrobbles.

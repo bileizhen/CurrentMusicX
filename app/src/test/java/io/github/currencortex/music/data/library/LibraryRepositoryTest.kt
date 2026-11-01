@@ -77,6 +77,26 @@ class LibraryRepositoryTest {
             assertEquals(1L, r.likedSongs().first().id); assertEquals("/cm/likes/mine", s.takeRequest().path)
         }
     }
+    @Test fun shortRecommendationsFillFromDailyWithoutDuplicatesOrReordering() = runBlocking {
+        MockWebServer().use { s ->
+            val daily = (1L..20L).joinToString(",") { """{"ncm_id":$it,"name":"Song $it"}""" }
+            s.enqueue(MockResponse().setBody("""{"daily":[$daily],"forYou":[{"ncm_id":3,"name":"FM 3"},{"ncm_id":2,"name":"FM 2"},{"ncm_id":3,"name":"duplicate"}]}"""))
+            val r = repo(s)
+            val result = r.daily()
+            assertEquals(listOf(3L, 2L, 1L) + (4L..12L).toList(), result.forYou.map { it.id })
+            assertEquals("FM 3", result.forYou.first().name)
+            assertEquals((1L..20L).toList(), result.songs.map { it.id })
+            assertEquals(result, r.daily())
+            assertEquals("Refill reuses the loaded daily response and the session cache", 1, s.requestCount)
+        }
+    }
+    @Test fun completeServerRecommendationsAreNotTruncatedOrMixedWithDaily() = runBlocking {
+        MockWebServer().use { s ->
+            val recommended = (1L..20L).joinToString(",") { """{"ncm_id":$it,"name":"Song $it"}""" }
+            s.enqueue(MockResponse().setBody("""{"daily":[{"ncm_id":99,"name":"daily"}],"forYou":[$recommended]}"""))
+            assertEquals((1L..20L).toList(), repo(s).daily().forYou.map { it.id })
+        }
+    }
     @Test fun optimisticLikeRollsBackOnServerFailureAndPreservesFavoriteState() = runBlocking {
         MockWebServer().use { s ->
             val r = repo(s)

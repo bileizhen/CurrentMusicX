@@ -502,6 +502,40 @@ class NeteaseGatewayTest {
         enqueue(page); assertEquals(ErrorKind.Forbidden, (appResult { library.rename(89, "Foreign") } as AppResult.Failure).kind)
         assertEquals(2, upstream.requestCount); assertEquals(0, current.requestCount)
     }
+    @Test fun subscribedPlaylistRemovalUsesUnsubscribeAndInvalidatesTheLibrary() = runBlocking {
+        login(); val library = NeteaseLibraryRepository(api, binding, NeteaseSongActionsRepository(api, session = ::owner), ::owner)
+        enqueue("""{"code":200,"playlist":[{"id":89,"subscribed":true,"creator":{"userId":99}}]}""")
+        assertTrue(library.playlists().single().nativeSubscribed)
+        enqueue("""{"code":200,"playlist":[{"id":89,"subscribed":true,"creator":{"userId":99}}]}""")
+        enqueue("""{"code":200}""")
+        library.unsubscribe(89)
+        upstream.takeRequest(); upstream.takeRequest()
+        val write = upstream.takeRequest()
+        assertEquals("/eapi/playlist/unsubscribe", write.path)
+        assertEquals("89", payload(write)["id"]!!.jsonPrimitive.content)
+        assertEquals(1L, library.revision.value)
+        enqueue("""{"code":200,"playlist":[]}""")
+        assertTrue(library.playlists().isEmpty())
+        assertEquals(0, current.requestCount)
+    }
+    @Test fun unsubscribingRejectsOwnedLikedAndUnlistedPlaylistsWithoutWriting() = runBlocking {
+        login(); val library = NeteaseLibraryRepository(api, binding, NeteaseSongActionsRepository(api, session = ::owner), ::owner)
+        val page = """{"code":200,"playlist":[{"id":88,"creator":{"userId":42}},{"id":90,"specialType":5,"creator":{"userId":42}}]}"""
+        for (id in listOf(88L, 90L, 999L)) {
+            enqueue(page)
+            assertEquals(ErrorKind.Forbidden, (appResult { library.unsubscribe(id) } as AppResult.Failure).kind)
+        }
+        assertEquals(3, upstream.requestCount)
+        assertEquals(0L, library.revision.value)
+        assertEquals(0, current.requestCount)
+    }
+    @Test fun failedUnsubscribeKeepsTheLibraryRevisionAndReportsFailure() = runBlocking {
+        login(); val library = NeteaseLibraryRepository(api, binding, NeteaseSongActionsRepository(api, session = ::owner), ::owner)
+        enqueue("""{"code":200,"playlist":[{"id":89,"subscribed":true,"creator":{"userId":99}}]}""")
+        enqueue("""{"code":500}""")
+        assertEquals(ErrorKind.Server, (appResult { library.unsubscribe(89) } as AppResult.Failure).kind)
+        assertEquals(0L, library.revision.value)
+    }
     @Test fun removingTrackFromOwnPlaylistUsesOfficialDeleteOperation() = runBlocking {
         login(); val library = NeteaseLibraryRepository(api, binding, NeteaseSongActionsRepository(api, session = ::owner), ::owner)
         enqueue("""{"code":200,"playlist":[{"id":88,"creator":{"userId":42}}]}"""); enqueue("""{"code":200}""")

@@ -146,6 +146,16 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
         val expected = session(); editable(id, expected)
         request("playlist/delete", mapOf("id" to "$id"), expected); invalidate()
     }
+    suspend fun unsubscribe(id: Long) = writeMutex.withLock {
+        val expected = session()
+        owner(fresh = true)
+        val target = playlists(fresh = true).firstOrNull { it.id == id }
+            ?: throw ApiException(ErrorKind.Forbidden)
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+        if (target.nativeOwned || target.nativeLiked) throw ApiException(ErrorKind.Forbidden)
+        request("playlist/subscribe", mapOf("id" to "$id", "t" to "2"), expected)
+        invalidate()
+    }
     suspend fun remove(id: Long, song: Song) = writeMutex.withLock {
         val songId = NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound)
         val expected = session(); editable(id, expected)
@@ -159,7 +169,8 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
             this["description"]?.jsonPrimitive?.contentOrNull.orEmpty(),
             this["coverImgUrl"]?.jsonPrimitive?.contentOrNull.orEmpty().replace("http:", "https:"),
             "netease", owner, this["trackCount"]?.jsonPrimitive?.intOrNull ?: 0, emptyList(),
-            nativeOwned = owner == uid, nativeLiked = this["specialType"]?.jsonPrimitive?.intOrNull == 5)
+            nativeOwned = owner == uid, nativeLiked = this["specialType"]?.jsonPrimitive?.intOrNull == 5,
+            nativeSubscribed = this["subscribed"]?.jsonPrimitive?.booleanOrNull == true)
     }
 }
 
@@ -177,14 +188,19 @@ class PrimaryMusicLibrary(private val current: LibraryRepository, private val ne
     suspend fun resolveLikeNetease(): Boolean = settings.snapshot().likeMode.useNetease(binding.cachedStatus().bound)
     suspend fun playlists(fresh: Boolean = false): List<Playlist> = coroutineScope {
         if (fresh) current.clearReads()
-        // Both collections can contain the same numeric ID in different namespaces.
-        // Do not hide cloud-created/imported playlists behind the primary-heart preference.
+        // Imported NetEase playlists are snapshots with CurrentMusic IDs. Once the live
+        // library succeeds it owns membership; stale snapshots must not resurrect removals.
+        // Keep CurrentMusic playlists even when their numeric IDs match native playlists.
         val cloud = async { appResult { if (current.hasCurrentMusicAccount) current.playlists() else emptyList() } }
-        val native = appResult { if (resolveNetease()) netease.playlists(fresh) else emptyList() }
+        val native = appResult { if (resolveNetease()) netease.playlists(fresh) else null }
         val saved = cloud.await()
         if (saved is AppResult.Failure && native is AppResult.Failure) throw ApiException(saved.kind, saved.status)
-        val combined = (saved as? AppResult.Success)?.value.orEmpty() + (native as? AppResult.Success)?.value.orEmpty()
-        if (combined.isEmpty()) {
+        val live = (native as? AppResult.Success)?.value
+        val snapshots = (saved as? AppResult.Success)?.value.orEmpty().filterNot {
+            live != null && it.source in setOf("ncm", "netease")
+        }
+        val combined = snapshots + live.orEmpty()
+        if (combined.isEmpty() && live == null) {
             if (saved is AppResult.Failure) throw ApiException(saved.kind, saved.status)
             if (native is AppResult.Failure) throw ApiException(native.kind, native.status)
         }
