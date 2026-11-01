@@ -303,15 +303,39 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         val tracks = raw.obj("data").array("dailySongs").takeIf { it.isNotEmpty() }
             ?: raw.array("recommend").takeIf { it.isNotEmpty() }
             ?: JsonArray(raw.array("result").mapNotNull { (it as? JsonObject)?.get("song") })
-        val forYou = if (expected.credential.profile != null && !expected.credential.stale) {
-            when (val fm = withTimeoutOrNull(3_000) {
-                appResult { official("/api/v1/radio/get", web = true, expected = expected, authenticated = true) }
-            } ?: AppResult.Failure(ErrorKind.Timeout)) {
-                is AppResult.Success -> fm.value.array("data").takeIf { it.isNotEmpty() } ?: tracks
-                is AppResult.Failure -> { sessions.check(expected); tracks }
-            }
-        } else tracks
+        val forYou = if (expected.credential.profile != null && !expected.credential.stale)
+            homeRadioRecommendations(expected).takeIf { it.isNotEmpty() } ?: tracks else tracks
         return buildJsonObject { put("daily", songs(tracks)); put("forYou", songs(forYou)); put("artists", JsonArray(emptyList())) }
+    }
+
+    /** FM returns small batches. Keep successful batches even if a later request times out;
+     * exclusions, a request cap and a shared deadline prevent duplicate or endless loading. */
+    private suspend fun homeRadioRecommendations(expected: NeteaseSession): JsonArray {
+        val collected = linkedMapOf<Long, JsonObject>()
+        withTimeoutOrNull(3_000) {
+            for (batch in 0 until 4) {
+                val result = appResult { official("/api/v1/radio/get", buildJsonObject {
+                    put("mode", "DEFAULT"); put("subMode", ""); put("limit", 3)
+                    put("unplaySongIds", collected.keys.joinToString(",")); put("entranceType", "")
+                    put("openAidj", false); put("aidjReqTimes", 0)
+                }, expected = expected, authenticated = true, clientProfile = NeteaseClientProfile.ANDROID) }
+                if (result !is AppResult.Success) break
+                val data = result.value["data"]
+                val rows = data as? JsonArray ?: (data as? JsonObject)?.array("songs") ?: JsonArray(emptyList())
+                val before = collected.size
+                for (row in rows) {
+                    val raw = row as? JsonObject ?: continue
+                    val normalized = song(raw["songInfo"] as? JsonObject ?: raw)
+                    val id = normalized.long("ncm_id")
+                    if (id > 0 && normalized.text("name").isNotBlank()) collected.putIfAbsent(id, normalized)
+                    if (collected.size >= 12) break
+                }
+                if (collected.size == before || collected.size >= 12) break
+            }
+        }
+        // Switching accounts must discard all batches belonging to the old account.
+        sessions.check(expected)
+        return JsonArray(collected.values.toList())
     }
     suspend fun recent(limit: Int = 50, expectedRevision: Long? = null): JsonObject {
         val expected = sessions.snapshot()
