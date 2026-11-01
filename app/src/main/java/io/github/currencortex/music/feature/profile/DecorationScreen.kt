@@ -29,6 +29,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.profile.*
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.util.collectAsPageState
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -58,20 +59,14 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
     val focus = LocalFocusManager.current
     val grid = rememberLazyGridState()
     LaunchedEffect(state.query) { grid.scrollToItem(0) }
-    BoxWithConstraints(Modifier.fillMaxSize().background(colors.background).testTag("decoration_screen")) {
+    MusicSubpage("头像挂件", "decoration_screen", onBack, backTag = "decoration_back", actions = {
+        MusicTextAction(if (state.loading) "更新中" else "刷新", reload, enabled = !busy && !state.loading)
+    }) { topInset ->
+    BoxWithConstraints(Modifier.fillMaxSize().padding(top = topInset)) {
         val compact = maxHeight < 480.dp
-        Column(Modifier.fillMaxSize().padding(horizontal = 20.dp).padding(bottom = LocalMusicBottomInset.current)) {
-            Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Box(Modifier.size(44.dp).clip(CircleShape).background(colors.surfaceContainer)
-                    .clickable(role = Role.Button, onClick = onBack).testTag("decoration_back"), Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", Modifier.size(23.dp))
-                }
-                Text("头像挂件", Modifier.weight(1f), fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
-                MusicTextAction(if (state.loading) "更新中" else "刷新", reload, enabled = !busy && !state.loading)
-            }
+        Column(Modifier.fillMaxSize().padding(horizontal = 16.dp).padding(bottom = LocalMusicBottomInset.current)) {
             if (catalog != null && !compact) {
-                Card(Modifier.fillMaxWidth().testTag("decoration_preview")) {
+                SettingsGroup(Modifier.fillMaxWidth().testTag("decoration_preview")) {
                     Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Box(Modifier.size(64.dp), Alignment.Center) {
@@ -141,16 +136,16 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             MusicTextAction("还原", { preview(null) }, enabled = changed && !busy)
-                            TextButton(if (busy) "正在保存…" else if (!changed) "当前装扮" else if (selectedId.isEmpty()) "取消佩戴"
+                            GlassActionButton(if (busy) "正在保存…" else if (!changed) "当前装扮" else if (selectedId.isEmpty()) "取消佩戴"
                                 else if (!catalog.unlocked) "听歌后解锁" else "佩戴此挂件", { apply(selectedId) },
-                                Modifier.weight(1f).testTag("wear_decoration"), enabled = !busy && changed && (selectedId.isEmpty() || catalog.unlocked),
-                                colors = ButtonDefaults.textButtonColors(color = colors.primary, textColor = colors.onPrimary),
-                                minHeight = 44.dp, textStyle = MiuixTheme.textStyles.button.copy(fontSize = 14.sp))
+                                Modifier.weight(1f).testTag("wear_decoration"), primary = true,
+                                enabled = !busy && changed && (selectedId.isEmpty() || catalog.unlocked))
                         }
                     }
                 }
             }
         }
+    }
     }
 }
 
@@ -165,7 +160,7 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
         horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.fillMaxWidth().height(78.dp), Alignment.Center) {
             avatar(item.id, 30.dp)
-            if (selected) Icon(Icons.Default.Check, "已选择", Modifier.align(Alignment.TopEnd).size(16.dp), tint = colors.primary)
+            SettingsSelectionCheck(selected, Modifier.align(Alignment.TopEnd).size(18.dp))
         }
         Text(item.label(), fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import io.github.currencortex.music.data.binding.BindingState
 import io.github.currencortex.music.data.binding.NeteaseMembershipTier
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.SimpleDateFormat
@@ -44,14 +45,9 @@ import java.util.Locale
 
 @Composable internal fun BindingAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     enabled: Boolean = true, icon: ImageVector? = null, destructive: Boolean = false) {
-    val color = (if (destructive) Color(0xFFD45B5B) else MiuixTheme.colorScheme.primary).copy(alpha = if (enabled) 1f else .4f)
-    Row(modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(12.dp))
-        .clickable(enabled = enabled, role = Role.Button, interactionSource = remember { MutableInteractionSource() },
-            indication = null, onClick = onClick).padding(horizontal = 8.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally), verticalAlignment = Alignment.CenterVertically) {
-        if (icon != null) Icon(icon, null, Modifier.size(18.dp), tint = color)
-        Text(label, color = color, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-    }
+    GlassActionButton(label, onClick, modifier, enabled = enabled, destructive = destructive,
+        fillWidth = false)
+
 }
 
 @Composable internal fun BindingNotice(text: String, modifier: Modifier = Modifier, busy: Boolean = false) {
@@ -69,7 +65,7 @@ import java.util.Locale
 @Composable internal fun BindingAccountCard(binding: BindingState, busy: Boolean,
     onSync: () -> Unit, onLive: () -> Unit, onRefresh: () -> Unit, onRelogin: () -> Unit, onUnbind: () -> Unit,
     mainLibrary: Boolean = false, membership: BindingMembershipState = BindingMembershipState(), onMembershipRetry: () -> Unit = {}) {
-    Card(Modifier.fillMaxWidth().testTag("binding_account_card")) {
+    SettingsGroup(Modifier.fillMaxWidth().testTag("binding_account_card")) {
         Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 val avatar = binding.profile?.avatar.orEmpty()
@@ -115,13 +111,8 @@ import java.util.Locale
                 Text("已同步 ${binding.lastSyncCount} 个歌单 · $date", fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
             } else Text("连接已完成，可以同步你的网易云歌单。", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
-            Button(onClick = onSync, enabled = !busy, colors = ButtonDefaults.buttonColorsPrimary(),
-                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("sync_binding")) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Refresh, null, Modifier.size(19.dp), tint = MiuixTheme.colorScheme.onPrimary)
-                    Text(if (mainLibrary) "刷新网易云音乐库" else "同步网易云歌单", color = MiuixTheme.colorScheme.onPrimary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                }
-            }
+            GlassActionButton(if (mainLibrary) "刷新网易云音乐库" else "同步网易云歌单", onSync,
+                Modifier.fillMaxWidth().testTag("sync_binding"), primary = true, enabled = !busy)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 BindingAction("检查登录态", onLive, Modifier.weight(1f), !busy, Icons.Default.Check)
                 Box(Modifier.width(1.dp).height(16.dp).background(MiuixTheme.colorScheme.onSurface.copy(alpha = .08f)))
@@ -137,26 +128,10 @@ import java.util.Locale
 }
 
 @Composable internal fun BindingMethods(qr: Boolean, enabled: Boolean, onSelect: (Boolean) -> Unit) {
-    val progress = animateFloatAsState(if (qr) 0f else 1f, tween(220), label = "binding method")
-    val shape = remember { RoundedCornerShape(14.dp) }
-    BoxWithConstraints(Modifier.fillMaxWidth().height(48.dp).clip(shape)
-        .background(MiuixTheme.colorScheme.onSurface.copy(alpha = .05f))) {
-        val width = (maxWidth - 8.dp) / 2
-        Box(Modifier.padding(4.dp).width(width).height(40.dp).graphicsLayer { translationX = width.toPx() * progress.value }
-            .clip(RoundedCornerShape(11.dp)).background(MiuixTheme.colorScheme.surface))
-        Row(Modifier.fillMaxSize().padding(4.dp).selectableGroup()) {
-            listOf("扫码登录", "手机验证码").forEachIndexed { index, label ->
-                val selected = qr == (index == 0)
-                Box(Modifier.weight(1f).fillMaxHeight().testTag(if (index == 0) "qr_binding" else "phone_binding_tab")
-                    .selectable(selected, enabled = enabled, role = Role.Tab,
-                        interactionSource = remember { MutableInteractionSource() }, indication = null,
-                        onClick = { onSelect(index == 0) }), contentAlignment = Alignment.Center) {
-                    Text(label, fontSize = 13.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-                        color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
-                }
-            }
-        }
-    }
+    SettingsSegmentedControl(listOf("扫码登录", "手机验证码"), if (qr) 0 else 1,
+        { onSelect(it == 0) }, enabled = enabled, role = Role.Tab,
+        tag = "binding_method", itemTag = { if (it == 0) "qr_binding" else "phone_binding_tab" })
+
 }
 
 @Composable internal fun BindingQrContent(bitmap: Bitmap?, state: BindingUiState, busy: Boolean, onRefresh: () -> Unit) {
