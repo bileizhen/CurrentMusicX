@@ -69,7 +69,8 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
     onInstall: () -> Unit, onCancel: () -> Unit, onChangeSource: (UpdateSource) -> Unit,
     downloadExperience: Boolean, settings: UpdateSettings, onAutoCheck: (Boolean) -> Unit,
     onChannel: (UpdateChannel) -> Unit, cover: String, origin: UpdatePageOrigin? = null,
-    onPresentedChanged: (Boolean) -> Unit = {}, versionPreview: String = BuildConfig.UPDATE_ANIMATION_PREVIEW_VERSION) {
+    onPresentedChanged: (Boolean) -> Unit = {}, versionPreview: String = BuildConfig.UPDATE_ANIMATION_PREVIEW_VERSION,
+    sourceCheck: UpdateSourceCheck = remember { UpdateSourceProbe() }) {
     var entryCheckFinished by remember(visible) { mutableStateOf(false) }
     LaunchedEffect(visible) {
         if (visible) { delay(2000); entryCheckFinished = true }
@@ -89,7 +90,7 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
             if (showResult) transferState else UpdateTransferState(), notes, onDismiss, onRetry, onIgnore, onOpenRelease,
             onDownload, onInstall, onCancel, onChangeSource, downloadExperience, settings, onAutoCheck, onChannel,
             cover = cover, backgroundActive = visible,
-            versionPreview = if (showResult) versionPreview else "")
+            versionPreview = if (showResult) versionPreview else "", sourceCheck = sourceCheck)
     }
 }
 

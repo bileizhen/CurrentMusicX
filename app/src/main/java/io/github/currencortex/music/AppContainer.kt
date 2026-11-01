@@ -50,12 +50,17 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     )
 
     val updateTransfer = io.github.currencortex.music.core.update.UpdateTransfer(
-        io.github.currencortex.music.core.update.UpdateDownloader(okhttp3.OkHttpClient(), java.io.File(context.cacheDir, "updates")),
+        io.github.currencortex.music.core.update.UpdateDownloader(okhttp3.OkHttpClient(), java.io.File(context.cacheDir, "updates"),
+            urlFor = ::updateAssetUrl),
         io.github.currencortex.music.core.update.AndroidUpdateInstaller(context.applicationContext), playerScope,
         if (storageNamespace.isEmpty()) io.github.currencortex.music.core.update.WorkManagerUpdateBackground(context) else null)
     val logger = AppLogger(context)
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
     val serverRouter = CurrentMusicServerRouter(serverCheck)
+    fun updateAssetUrl(release: io.github.currencortex.music.core.update.AppRelease,
+        source: io.github.currencortex.music.core.update.UpdateSource): String = source.url(release,
+        io.github.currencortex.music.core.update.UpdateProxy.forServer(serverRouter.resolve(musicSettings.state.value.server)))
+    val updateSourceCheck = io.github.currencortex.music.core.update.UpdateSourceProbe(urlFor = ::updateAssetUrl)
 
     val audioOutput = io.github.currencortex.music.data.settings.AudioOutputSettingsRepository(settingsStore, appScope)
     val soundEffectNotices = io.github.currencortex.music.core.media.SoundEffectNoticeCenter(playerScope)

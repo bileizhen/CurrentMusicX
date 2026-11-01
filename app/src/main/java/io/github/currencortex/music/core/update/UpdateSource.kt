@@ -19,10 +19,10 @@ enum class UpdateSource(val label: String, val prefix: String) {
         else -> listOf(this) + available.filter { it != this && it != GITHUB } + GITHUB
     }
 
-    fun url(release: AppRelease): String {
+    fun url(release: AppRelease, proxy: UpdateProxy = UpdateProxy.current): String {
         val official = requireNotNull(release.apkUrl) { "此发布没有 APK" }
         require(official.startsWith("${AppMetadata.RELEASES_PROJECT_URL}/releases/download/")) { "更新来源不匹配" }
-        if (this == CURRENTMUSIC) return UpdateProxy.current.assetUrl(official.toHttpUrl())
+        if (this == CURRENTMUSIC) return proxy.assetUrl(official.toHttpUrl())
         if (prefix.isNotEmpty()) require(prefix.startsWith("https://")) { "下载源必须使用 HTTPS" }
         val result = prefix + official
         val uri = URI(result)
