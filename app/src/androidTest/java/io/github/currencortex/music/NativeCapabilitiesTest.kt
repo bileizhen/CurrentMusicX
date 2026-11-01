@@ -187,7 +187,11 @@ class NativeCapabilitiesTest {
         lateinit var activity: ComponentActivity
         compose.setContent { activity = LocalContext.current.activity(); CurrentMusicApp(container) }
         compose.onNodeWithTag("tab_3").performClick()
-        compose.onNodeWithText("网络与播放").performClick()
+        compose.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("open_network"))
+            compose.onNodeWithTag("open_network").performClick()
+            compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("server_source"))
+            compose.onNodeWithTag("server_source").performClick()
+            compose.onNodeWithTag("server_source_CUSTOM").performScrollTo().performClick()
         compose.onNodeWithTag("server_input").assertExists()
         compose.runOnUiThread { activity.onBackPressedDispatcher.onBackPressed() }
         compose.onNodeWithText("外观").performScrollTo().performClick()
@@ -256,7 +260,11 @@ class NativeCapabilitiesTest {
             destination.start()
             compose.setContent { CurrentMusicApp(container) }
             compose.onNodeWithTag("tab_3").performClick()
-            compose.onNodeWithText("网络与播放").performClick()
+            compose.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("open_network"))
+            compose.onNodeWithTag("open_network").performClick()
+            compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("server_source"))
+            compose.onNodeWithTag("server_source").performClick()
+            compose.onNodeWithTag("server_source_CUSTOM").performScrollTo().performClick()
             compose.onNodeWithTag("server_input").performTextReplacement(destination.url("/new").toString())
             compose.onNodeWithTag("server_input").assertTextContains(destination.port.toString(), substring = true)
             // The page is scrollable and the floating mini player overlays the lower part of it.

@@ -1,9 +1,11 @@
 package io.github.currencortex.music.feature.settings
 
-import io.github.currencortex.music.ui.component.musicScrollPadding
+import io.github.currencortex.music.ui.component.nativeui.SettingsPage
+import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
+import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -16,7 +18,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.ui.component.MusicTextAction
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
@@ -29,6 +30,7 @@ private fun formatSize(bytes: Long): String = when {
 }
 
 @Composable fun StorageScreen(vm: StorageViewModel) {
+    SettingsUiScope {
     val state by vm.state.collectAsStateWithLifecycle()
     val usage = state.usage
     LaunchedEffect(vm) { vm.refresh() }
@@ -37,9 +39,7 @@ private fun formatSize(bytes: Long): String = when {
     // One hue stepped down: the bar reads as a single system instead of borrowing another app's palette.
     val ramp = listOf(colors.primary, colors.primary.copy(alpha = .5f), colors.primary.copy(alpha = .28f),
         colors.onSurface.copy(alpha = .14f))
-    LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().testTag("storage_screen"),
-        contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        item { Text("存储空间", fontSize = 28.sp) }
+    SettingsPage("存储空间","storage_screen") {
         item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("CurrentMusic 占用", fontSize = 13.sp, color = hint)
             Text(formatSize(usage.total), fontSize = 32.sp, fontWeight = FontWeight.SemiBold,
@@ -105,6 +105,7 @@ private fun formatSize(bytes: Long): String = when {
         } } }
 
         state.message?.let { item { Text(it, fontSize = 13.sp, color = hint, modifier = Modifier.testTag("storage_message")) } }
+    }
     }
 }
 

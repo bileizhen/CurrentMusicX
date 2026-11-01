@@ -167,10 +167,10 @@ class SoundEffectsTest {
         open()
         val queue = container.playbackQueue.state.value
         val account = container.accountRepository.state.value
-        compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_local_vocal"))
-        compose.onNodeWithTag("sound_local_vocal").performClick()
+        compose.runOnIdle { vm.useLocal(EqualizerPreset.VOCAL) }
         waitFor { container.equalizerSettings.state.value.enabled && container.equalizerSettings.state.value.preset == EqualizerPreset.VOCAL }
-        compose.onNodeWithTag("sound_local_vocal").assertIsSelected()
+        compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_open_equalizer"))
+        compose.onNodeWithTag("sound_open_equalizer").assertTextContains(EqualizerPreset.VOCAL.label)
         waitFor { container.smartTuning.effective.value.preset == EqualizerPreset.VOCAL && container.equalizer.state.value.active }
         nativeMatchesSaved()
         assertFalse(container.soundEffectsSettings.state.value.smartEnabled)
