@@ -3,29 +3,29 @@ changelog:
     labels:
       - ignore-for-release
   categories:
-    - title: '⚠️ 不兼容变更'
+    - title: Breaking Changes
       labels:
         - breaking
         - breaking-change
-    - title: '✨ 新功能'
+    - title: New features
       labels:
         - enhancement
         - feature
-    - title: '🐛 问题修复'
+    - title: Bug Fixes
       labels:
         - bug
         - fix
-    - title: '⚡ 性能优化'
+    - title: Performance Improvements
       labels:
         - performance
         - perf
-    - title: '📝 文档更新'
+    - title: Documentation
       labels:
         - documentation
-    - title: '📦 依赖更新'
+    - title: Dependencies
       labels:
         - dependencies
-    - title: '🔧 工程维护'
+    - title: Maintenance
       labels:
         - maintenance
         - chore
@@ -33,6 +33,6 @@ changelog:
         - build
         - refactor
         - test
-    - title: '其他变更'
+    - title: Other Changes
       labels:
         - '*'
