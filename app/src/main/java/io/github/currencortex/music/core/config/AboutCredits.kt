@@ -1,4 +1,4 @@
-// CurrentMusic development team, displayed with the LeiFetch member cards.
+// CurrentMusic contributors, displayed with the LeiFetch member cards.
 package io.github.currencortex.music.core.config
 
 data class AboutMember(
@@ -18,8 +18,13 @@ object AboutCredits {
                 githubUrl = "https://github.com/bileizhen"),
             AboutMember("1945826346", "Rcst20", "原项目开发",
                 githubUrl = "https://github.com/backrooms-yrc"),
-            AboutMember("2536843865", "Hutao_felicity", "镜像站",
+        )),
+        AboutSection("CDN 组", listOf(
+            AboutMember("2536843865", "Hutao_felicity", "CDN · currentmusic.geekertao.com",
                 githubUrl = "https://github.com/Geekertao"),
+            AboutMember("3140014249", "bileizhen", "CDN · cm.bileizhen.top",
+                githubUrl = "https://github.com/bileizhen"),
+            AboutMember("1462302892", "Var username:String?=null", "CDN · music.ctcehs.com"),
         )),
     )
 }
