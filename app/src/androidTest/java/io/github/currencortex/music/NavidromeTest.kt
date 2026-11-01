@@ -1,7 +1,9 @@
 package io.github.currencortex.music
 
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.graphics.asAndroidBitmap
+// Keep asynchronous DataStore/VM updates serialized with Compose measurement.
+import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.media3.common.*
@@ -128,7 +130,14 @@ class NavidromeTest {
             compose.onNodeWithTag("navidrome_server").performTextInput(server.url("/music/").toString())
             compose.onNodeWithTag("navidrome_username").performTextInput("fixture")
             compose.onNodeWithTag("navidrome_password").performTextInput("fixture-password")
-            compose.onNodeWithTag("navidrome_connect").performScrollTo().performClick()
+            compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasTestTag("navidrome_connect"))
+            val connectButton=compose.onNodeWithTag("navidrome_connect").performScrollTo()
+            File(context.externalCacheDir,"settings-header-navidrome-connect.png").outputStream().use {
+                compose.onRoot().captureToImage().asAndroidBitmap().compress(android.graphics.Bitmap.CompressFormat.PNG,100,it)
+            }
+            assertTrue("The connection action must remain below the floating header",
+                connectButton.fetchSemanticsNode().boundsInRoot.top>=compose.onNodeWithTag("settings_floating_header").fetchSemanticsNode().boundsInRoot.bottom)
+            connectButton.performClick()
             compose.waitUntil(15000) { container.navidrome.state.value.configured && vm.state.value.entries.isNotEmpty() }
             compose.onNodeWithTag("navidrome_entry_album-uuid").performScrollTo().performClick()
             compose.waitUntil(10000) { vm.state.value.songs.isNotEmpty() }

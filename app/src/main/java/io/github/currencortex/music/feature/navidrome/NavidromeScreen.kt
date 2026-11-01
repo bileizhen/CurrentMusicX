@@ -34,11 +34,12 @@ import io.github.currencortex.music.feature.library.*
 import io.github.currencortex.music.feature.style.*
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.flow.distinctUntilChanged
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable fun NavidromeScreen(vm: NavidromeViewModel, library: LibraryViewModel, navigate: (String) -> Unit,
-    play: (List<Song>, Int) -> Unit, root: Boolean = false) {
+    play: (List<Song>, Int) -> Unit, root: Boolean = false, onBack: (() -> Unit)? = null) {
     val account by vm.account.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
@@ -74,7 +75,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         configuration -> { configuration = false; vm.clearError() }
         filterOpen -> { filterOpen = false; filter = "" }
         vm.nested -> vm.back()
-        else -> Unit
+        else -> onBack?.invoke()
     } }
     BackHandler(configuration || filterOpen || vm.nested) { back() }
     LaunchedEffect(message) { message?.let { vm.container.errorNotices.showMessage(it); vm.message.value = null } }
@@ -83,12 +84,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             listOf(song.name, song.artists, song.album).any { it.contains(filter.trim(), ignoreCase = true) }
         }
     }
-    BoxWithConstraints(Modifier.fillMaxSize().then(if (root) Modifier else Modifier.statusBarsPadding()).testTag("navidrome_screen"), contentAlignment = Alignment.TopCenter) {
+    val browser: @Composable (androidx.compose.ui.unit.Dp) -> Unit = { topInset ->
+    BoxWithConstraints(Modifier.fillMaxSize().padding(top = topInset), contentAlignment = Alignment.TopCenter) {
         val columns = if (maxWidth >= 760.dp) 4 else if (maxWidth >= 600.dp) 3 else 2
         val compact = maxWidth > maxHeight && maxHeight < 500.dp
         val showSearch = !settings && (!songDetail || filterOpen)
-        Column(Modifier.widthIn(max = 840.dp).fillMaxSize()) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.widthIn(max = if(settings)760.dp else 840.dp).fillMaxSize()) {
+            if (root) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp).heightIn(min = 56.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (configuration || vm.nested) NavIcon(Icons.AutoMirrored.Filled.ArrowBack, "返回曲库", ::back, "navidrome_back")
                 Column((if (compact && showSearch) Modifier.widthIn(max = 200.dp) else Modifier.weight(1f)).padding(horizontal = 8.dp)) {
                     Text(if (settings) "Navidrome 账号" else if (vm.nested) when (state.page.kind) {
@@ -106,9 +108,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             if (settings) {
                 NavidromeAccountPage(vm, onConnected = { configuration = false }, onDisconnect = { action("disconnect") })
             } else {
-                if (showSearch && !compact) searchBar(Modifier.padding(horizontal = 20.dp, vertical = 8.dp))
+                if (showSearch && (!compact || !root)) searchBar(Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
                 if (!vm.nested) MusicCategoryTabs(listOf("albums" to "专辑", "artists" to "艺术家", "playlists" to "歌单", "likes" to "我喜欢"),
-                    state.page.kind, { focus.clearFocus(); keyboard?.hide(); vm.tab(it) }, "navidrome_tab", Modifier.padding(horizontal = 20.dp))
+                    state.page.kind, { focus.clearFocus(); keyboard?.hide(); vm.tab(it) }, "navidrome_tab", Modifier.padding(horizontal = 16.dp))
                 val positionKey = "${if (root) "home" else "route"}:${account.revision}:${state.page.key}"
                 val grid = remember(positionKey) { vm.position(positionKey).let { LazyGridState(it.index, it.offset) } }
                 DisposableEffect(grid, positionKey) { onDispose { vm.savePosition(positionKey, grid.firstVisibleItemIndex, grid.firstVisibleItemScrollOffset) } }
@@ -125,7 +127,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 val canPlay = playback.mode == PlayerMode.LOCAL
                 Box(Modifier.weight(1f).clipToBounds().nestedScroll(motion)) {
                     LazyVerticalGrid(GridCells.Fixed(columns), Modifier.fillMaxSize().playlistPullSurface(motion).testTag("navidrome_grid"), state = grid,
-                        contentPadding = musicScrollPadding(PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 24.dp)),
+                        contentPadding = musicScrollPadding(PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp)),
                         horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(if (entriesAsRows) 4.dp else 12.dp)) {
                         if (vm.nested && state.page.kind != "search") item("hero", span = { GridItemSpan(maxLineSpan) }) { NavDetailHero(state) }
                         if (state.page.kind == "playlists") item("create", span = { GridItemSpan(maxLineSpan) }) {
@@ -171,7 +173,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         items(state.albums, key = { "search-album-${it.id}" }) { entry -> NavAlbumCard(entry) { vm.open("album", entry) } }
                         if (!state.loaded && state.loading) {
                             if (state.page.kind in setOf("albums", "artist")) items(4, key = { "placeholder-$it" }) {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) { MusicPlaceholder(Modifier.fillMaxWidth().aspectRatio(1f)); MusicPlaceholder(Modifier.fillMaxWidth(.7f).height(16.dp)) }
+                                LoadingCoverTile(cornerRadius = 14.dp, titleGap = 7.dp)
                             } else item("loading", span = { GridItemSpan(maxLineSpan) }) { LoadingSongList(5) }
                         }
                         if (!state.loading && state.error == null && state.entries.isEmpty() && shownSongs.isEmpty() && state.artists.isEmpty() && state.albums.isEmpty()) item("empty", span = { GridItemSpan(maxLineSpan) }) {
@@ -190,6 +192,23 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
         }
     }
+    }
+    if (root) browser(0.dp)
+    else MusicSubpage(if (settings) "Navidrome 账号" else if (vm.nested) state.page.title else "我的曲库",
+        "navidrome_screen", ::back, backTag = "navidrome_back", actions = {
+            if (!settings) {
+                if (songDetail) NavIcon(Icons.Default.Search, "搜索当前列表", {
+                    filterOpen = !filterOpen; if (!filterOpen) filter = ""
+                }, "navidrome_filter")
+                NavIcon(Icons.Default.Settings, "曲库账号", { configuration = true; vm.clearError() }, "navidrome_account")
+                NavIcon(Icons.Default.MoreVert, "曲库操作", { dialog = "menu"; vm.clearError() }, "navidrome_menu")
+            }
+        }) { topInset ->
+        if (settings) NavidromeAccountPage(vm, onConnected = { configuration = false },
+            onDisconnect = { action("disconnect") }, topInset = topInset)
+        else browser(topInset)
+    }
+    SettingsUiScope {
     if (dialog == "menu") MusicChoiceDialog("曲库操作", { dialog = "" }) {
         MusicDestinationRow("刷新曲库", { dialog = ""; vm.refresh() }, enabled = !state.loading, chevron = false)
         if (state.page.kind == "playlists") MusicDestinationRow("新建歌单", { action("create") }, enabled = !busy, chevron = false)
@@ -209,10 +228,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }, enabled = !busy && (dialog !in setOf("create", "rename") || name.isNotBlank()), modifier = Modifier.weight(1f).testTag("navidrome_confirm"))
         }
     }
+    }
 }
 
 @Composable private fun NavIcon(icon: ImageVector, description: String, click: () -> Unit, tag: String) {
-    IconButton(click, Modifier.size(48.dp).testTag(tag)) { Icon(icon, description, Modifier.size(22.dp)) }
+    GlassIconButton(click, description, Modifier.testTag(tag)) { Icon(icon, null, Modifier.size(22.dp)) }
 }
 @Composable internal fun NavHint(text: String, modifier: Modifier = Modifier) {
     Text(text, modifier, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f), maxLines = 2, overflow = TextOverflow.Ellipsis)

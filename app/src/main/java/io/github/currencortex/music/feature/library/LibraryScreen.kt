@@ -18,6 +18,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.library.*
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -87,18 +88,20 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     }
 }
 
-@Composable fun PlaylistIndexScreen(vm: LibraryViewModel, navigate: (String) -> Unit) {
+@Composable fun PlaylistIndexScreen(vm: LibraryViewModel, navigate: (String) -> Unit, onBack: (() -> Unit)? = null) {
     val busy by vm.busy.collectAsStateWithLifecycle()
     val neteaseMain by vm.container.primaryLibrary.usesNetease.collectAsStateWithLifecycle()
     var create by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
-    PlaylistIndexBody(vm, navigate, onCreate = { create = true })
+    PlaylistIndexBody(vm, navigate, onBack, onCreate = { create = true })
+    SettingsUiScope {
     if (create) MusicDialog("新建歌单", onDismiss = { if (!busy) create = false }) {
         TextField(name, { name = it }, label = "歌单名称", modifier = Modifier.fillMaxWidth().then(Modifier.testTag("playlist_name")))
         if (!neteaseMain || vm.container.nativeNetease == null) TextField(description, { description = it }, label = "介绍", modifier = Modifier.fillMaxWidth())
         MusicDialogButton("创建", onClick = { vm.create(name, description) { create = false; name = ""; description = "" } },
             enabled = name.isNotBlank() && !busy, modifier = Modifier.testTag("confirm_create_playlist"))
+    }
     }
 }
 
@@ -130,7 +133,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     if (vm.route.startsWith("lib/mv/")) {
         io.github.currencortex.music.feature.mv.MvDetailScreen(state, vm.container, onBack, playMv,
             onArtist = { navigate("lib/artist/$it") }, onRefresh = { vm.reload(force = true) }, onDialogActive = onDialogActive)
-    } else if (vm.route.split('/').getOrNull(1) in setOf("playlist", "ncmplaylist", "likes", "daily", "foryou", "recent")) {
+    } else if (vm.route.split('/').getOrNull(1) in setOf("playlist", "ncmplaylist", "album", "likes", "daily", "foryou", "recent")) {
         PlaylistDetailBody(state, vm, library, onBack, navigate, play,
             onRename = { name = state.title; rename = true }, onDelete = { delete = true })
     } else {
@@ -180,13 +183,18 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
         }
     }
     }
+    SettingsUiScope {
     if (rename) MusicDialog("重命名歌单", onDismiss = { if (!busy) rename = false }) {
         TextField(name, { name = it }, label = "歌单名称", modifier = Modifier.fillMaxWidth().then(Modifier.testTag("rename_input")))
         MusicDialogButton("保存", onClick = { library.action("名称已更新") { vm.rename(name); rename = false } }, enabled = name.isNotBlank() && !busy)
     }
-    if (delete) MusicDialog("删除歌单？", onDismiss = { if (!busy) delete = false }) {
-        Text("删除后无法恢复。")
-        MusicDialogButton("确认删除", onClick = { library.action("歌单已删除") { vm.delete(); delete = false; deleted() } }, enabled = !busy)
+    val unsubscribe = state.playlist?.let { it.source == "netease" && !it.nativeOwned } == true
+    if (delete) MusicDialog(if (unsubscribe) "取消收藏歌单？" else "删除歌单？", onDismiss = { if (!busy) delete = false }) {
+        Text(if (unsubscribe) "歌单将从你的网易云收藏中移除。" else "删除后无法恢复。")
+        MusicDialogButton(if (unsubscribe) "确认取消收藏" else "确认删除", onClick = {
+            library.action(if (unsubscribe) "已取消收藏歌单" else "歌单已删除") { vm.delete(); delete = false; deleted() }
+        }, enabled = !busy)
+    }
     }
 }
 
@@ -195,25 +203,26 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     fun submit() { keyboard?.hide(); focus.clearFocus(); vm.search() }
-    LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().testTag("catalog_screen"), contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    MusicSubpage(if (state.albums) "专辑" else "歌手", "catalog_page", onBack) { topInset ->
+    LazyColumn(Modifier.fillMaxSize().testTag("catalog_screen"),
+        contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         item {
-            TextButton("返回", onClick = onBack); Text(if (state.albums) "专辑" else "歌手", fontSize = 30.sp)
-            TextField(state.query, vm::input, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("catalog_query"),
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Search),
-                keyboardActions = androidx.compose.foundation.text.KeyboardActions(onSearch = { submit() }))
-            TextButton("搜索", onClick = ::submit, enabled = !state.loading, modifier = Modifier.testTag("catalog_submit"))
+            MusicSearchBar(state.query, ::submit, onInput = vm::input, placeholder = "搜索${if (state.albums) "专辑" else "歌手"}",
+                inputTag = "catalog_query", submitTag = "catalog_submit")
         }
-        if (state.loading) item { Text("正在加载…") }
-        state.error?.let { error -> item { Text(error); TextButton("重试", onClick = { vm.search() }) } }
+        if (state.loading) item { LoadingSongList(3) }
+        state.error?.let { error -> item { Text(error); MusicTextAction("重试", onClick = { vm.search() }) } }
         if (state.submitted.isNotBlank() && !state.loading && state.entries.isEmpty() && state.error == null) item { Text("没有找到结果") }
         itemsIndexed(state.entries, key = { index, entry -> "${entry.id}-$index" }) { _, entry -> CatalogCard(entry) { navigate("lib/${if (state.albums) "album" else "artist"}/${entry.id}") } }
-        if (state.more) item { TextButton("加载更多", onClick = { vm.search(true) }, enabled = !state.loading) }
+        if (state.more) item { MusicTextAction("加载更多", onClick = { vm.search(true) }, enabled = !state.loading) }
+    }
     }
 }
 
 @Composable private fun CatalogCard(entry: CatalogEntry, open: () -> Unit) {
-    Row(Modifier.fillMaxWidth().testTag("catalog_entry_${entry.id}").clickable(onClick = open).padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        MusicCover(entry.cover, Modifier.size(64.dp))
-        Column(Modifier.weight(1f).padding(start = 12.dp)) { Text(entry.name); if (entry.subtitle.isNotBlank()) Text(entry.subtitle) }
+    SettingsGroup {
+        SettingsPreference(entry.name, entry.subtitle, Modifier.testTag("catalog_entry_${entry.id}"), onClick = open,
+            leading = { MusicCover(entry.cover, Modifier.size(56.dp), cornerRadius = 12.dp) },
+            trailing = { Text("›", fontSize = 22.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary) })
     }
 }

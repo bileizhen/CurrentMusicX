@@ -82,7 +82,7 @@ class LocalPlaylistPageTest {
         compose.onNodeWithTag("playlist_song_-11").assertDoesNotExist()
         compose.onNodeWithTag("play_library_all").performClick()
         compose.runOnIdle { assertEquals(listOf(-22L), played.map { it.id }); assertEquals(0, playedIndex) }
-        compose.onNodeWithContentDescription("关闭歌单搜索").performClick()
+        compose.onNodeWithTag("playlist_query_cancel").performClick()
         compose.onNodeWithTag("playlist_sort").performClick()
         compose.onNodeWithTag("playlist_order_1").performClick()
         compose.onNodeWithTag("play_library_all").performClick()
