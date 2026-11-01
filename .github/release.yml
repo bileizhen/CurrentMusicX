@@ -1,0 +1,38 @@
+changelog:
+  exclude:
+    labels:
+      - ignore-for-release
+  categories:
+    - title: '⚠️ 不兼容变更'
+      labels:
+        - breaking
+        - breaking-change
+    - title: '✨ 新功能'
+      labels:
+        - enhancement
+        - feature
+    - title: '🐛 问题修复'
+      labels:
+        - bug
+        - fix
+    - title: '⚡ 性能优化'
+      labels:
+        - performance
+        - perf
+    - title: '📝 文档更新'
+      labels:
+        - documentation
+    - title: '📦 依赖更新'
+      labels:
+        - dependencies
+    - title: '🔧 工程维护'
+      labels:
+        - maintenance
+        - chore
+        - ci
+        - build
+        - refactor
+        - test
+    - title: '其他变更'
+      labels:
+        - '*'
