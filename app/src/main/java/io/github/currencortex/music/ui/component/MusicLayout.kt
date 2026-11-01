@@ -43,6 +43,11 @@ val LocalMusicPageActive = androidx.compose.runtime.compositionLocalOf { true }
 
 @Composable fun MusicTextAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
     destructive: Boolean = false) {
+    if(io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current) {
+        io.github.currencortex.music.ui.component.nativeui.GlassActionButton(label,onClick,modifier,
+            destructive=destructive,enabled=enabled,fillWidth=false)
+        return
+    }
     Text(label, modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick).heightIn(min = 48.dp)
         .padding(horizontal = if (LocalMusicDialogContent.current) 0.dp else 8.dp, vertical = 12.dp),
         fontSize = 13.sp, fontWeight = FontWeight.Medium,
@@ -50,6 +55,10 @@ val LocalMusicPageActive = androidx.compose.runtime.compositionLocalOf { true }
 }
 
 @Composable fun MusicSectionHeader(title: String, action: String? = null, onClick: () -> Unit = {}) {
+    if(io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current) {
+        io.github.currencortex.music.ui.component.nativeui.SettingsSectionHeader(title,action,onClick)
+        return
+    }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(title, Modifier.weight(1f), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         action?.let { MusicTextAction(it, onClick) }
@@ -62,11 +71,20 @@ val LocalMusicPageActive = androidx.compose.runtime.compositionLocalOf { true }
     val press = rememberMusicDialogPress()
     val clicks = remember { MutableInteractionSource() }
     val ink = MiuixTheme.colorScheme.onBackground
-    Row(modifier.fillMaxWidth().then(if (dialog) Modifier.drawBehind {
+    val source=rememberPageNavigationSource(title,summary.orEmpty())
+    if(io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current&&!dialog) {
+        io.github.currencortex.music.ui.component.nativeui.SettingsPreference(title,summary,
+            modifier.then(if(chevron)source.modifier else Modifier),enabled,
+            onClick={if(chevron)source.open(onClick)else onClick()},
+            trailing={if(chevron)Text("›",fontSize=22.sp,color=ink.copy(alpha=.4f))})
+        return
+    }
+    Row(modifier.then(if(!dialog&&chevron)source.modifier else Modifier).fillMaxWidth().then(if (dialog) Modifier.drawBehind {
         drawRect(ink.copy(alpha = .06f * press.amount.value))
     }.then(if (enabled) Modifier.musicDialogRowPress(press) else Modifier) else Modifier)
         .clickable(enabled = enabled, role = Role.Button, interactionSource = clicks,
-            indication = if (dialog) null else androidx.compose.foundation.LocalIndication.current, onClick = onClick)
+            indication = if (dialog) null else androidx.compose.foundation.LocalIndication.current,
+            onClick = {if(!dialog&&chevron)source.open(onClick)else onClick()})
         .heightIn(min = if (dialog) 48.dp else 52.dp)
         .padding(horizontal = if (!dialog) 16.dp else if (LocalMusicDialogEdgeToEdge.current) 24.dp else 0.dp,
             vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {

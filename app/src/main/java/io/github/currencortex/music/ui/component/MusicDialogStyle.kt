@@ -73,6 +73,13 @@ private fun Modifier.frostedMusicDialog(backdrop: Backdrop, dark: Boolean, shape
     modifier: Modifier = Modifier, summary: String? = null, enabled: Boolean = true, showDivider: Boolean = true,
     leadingContent: (@Composable () -> Unit)? = null) {
     val colors = MiuixTheme.colorScheme
+    if(io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current) {
+        io.github.currencortex.music.ui.component.nativeui.SettingsChoiceRow(label,selected,onClick,
+            modifier.drawBehind {if(showDivider)drawLine(colors.onBackground.copy(alpha=.06f),
+                Offset((if(leadingContent==null)16.dp else 52.dp).toPx(),size.height),
+                Offset(size.width-16.dp.toPx(),size.height),.5.dp.toPx())},summary,enabled,leadingContent)
+        return
+    }
     val dark = isInDarkTheme()
     val press = rememberMusicDialogPress()
     val clicks = remember { MutableInteractionSource() }
