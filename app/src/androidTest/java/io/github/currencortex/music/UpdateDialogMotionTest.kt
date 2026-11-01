@@ -55,13 +55,13 @@ class UpdateDialogMotionTest {
         surface.assertDoesNotExist(); body.assertDoesNotExist()
     }
 
-    @Test fun pressCompressesAndReleaseRecoversWithoutFiringOnCancelledDrag() {
+    @Test fun pressSwellsAndReleaseRecoversWithoutFiringOnCancelledDrag() {
         var clicks = 0
         compose.mainClock.autoAdvance = false
         compose.setContent { LeiTheme(AppearanceSettings()) { Scaffold {
             UpdateOptionsDialog("按压反馈", onDismiss = {}, actions = {
                 UpdateDialogAction("保存", { clicks++ }, Modifier.weight(1f).testTag("motion_action"))
-            }) { Text("按钮按下时轻微压缩，松手后恢复。") }
+            }) { Text("按钮按下时膨胀，拖动时拉伸。") }
         } } }
         compose.mainClock.advanceTimeBy(1_000); compose.waitForIdle()
         val button = compose.onNodeWithTag("motion_action")
@@ -69,7 +69,8 @@ class UpdateDialogMotionTest {
         button.performTouchInput { down(center) }
         compose.mainClock.advanceTimeBy(120); compose.waitForIdle()
         val pressed = button.fetchSemanticsNode().boundsInRoot.width
-        assertTrue("Pressed button should compress slightly", pressed < initial && pressed > initial * .94f)
+        assertEquals("Hit width stays at rest",initial,pressed,.5f)
+        assertTrue(button.fetchSemanticsNode().config[io.github.currencortex.music.ui.component.nativeui.ElasticPressGeometry].scaleX>1f)
         button.performTouchInput { up() }
         compose.mainClock.advanceTimeBy(400); compose.waitForIdle()
         assertEquals(initial, button.fetchSemanticsNode().boundsInRoot.width, 1f)

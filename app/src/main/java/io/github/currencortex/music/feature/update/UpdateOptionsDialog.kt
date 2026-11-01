@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.*
@@ -35,7 +36,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     content: @Composable ColumnScope.() -> Unit) {
     val colors = musicDialogColors()
     MiuixTheme(colors = colors) {
-        CompositionLocalProvider(LocalContentColor provides colors.onBackground) {
+        CompositionLocalProvider(LocalContentColor provides colors.onBackground, LocalGlassBackdrop provides backdrop) {
         MusicOverlayDialog(show = true, onDismissRequest = onDismiss, onDismissFinished = onDismissFinished,
             matchPanelMotion = true,
             backgroundColor = Color.Transparent, insideMargin = DpSize(0.dp, 0.dp),
@@ -71,9 +72,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable internal fun UpdateDialogAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     enabled: Boolean = true, destructive: Boolean = false, compact: Boolean = false) {
-    MusicDialogButton(label, onClick, modifier, enabled = enabled, destructive = destructive,
-        minHeight = if (compact) 44.dp else 48.dp,
-        insideMargin = PaddingValues(horizontal = 12.dp, vertical = if (compact) 10.dp else 13.dp))
+    GlassActionButton(label, onClick, modifier, enabled = enabled, destructive = destructive,
+        minHeight = if (compact) 44.dp else 48.dp)
 }
 
 @Composable internal fun UpdateOptionGroup(content: @Composable ColumnScope.() -> Unit) {
@@ -95,7 +95,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         .heightIn(min = 48.dp).padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Text("启动时自动检查", color = MiuixTheme.colorScheme.onBackground, fontSize = 15.sp, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(12.dp))
-        Switch(checked = checked, onCheckedChange = null)
+        GlassSwitch(checked, null, pressed = press.amount.value > .1f)
     }
 }
 

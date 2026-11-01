@@ -97,6 +97,41 @@ class UpdateContainerTransformTest {
         assertTrue(presented.contains(true)); assertEquals(false, presented.last())
     }
 
+    @Test fun returnRecapturesSourceGeometryAndColourChangedByAppearance() {
+        val open=mutableStateOf(false)
+        val top=mutableFloatStateOf(120f)
+        val color=mutableStateOf(Color.White)
+        compose.mainClock.autoAdvance=false
+        compose.setContent {LeiTheme(AppearanceSettings(blur=false)) {
+            var coordinates by remember {mutableStateOf<LayoutCoordinates?>(null)}
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                Box(Modifier.padding(top=top.floatValue.dp).padding(horizontal=16.dp).fillMaxWidth().height(80.dp)
+                    .onGloballyPositioned {coordinates=it}.background(color.value).testTag("resized_source"))
+                UpdateContainerTransform(open.value,coordinates?.let {
+                    UpdatePageOrigin(it,Color.White,"外观","主题与缩放",currentColor=color)
+                }) {Box(Modifier.fillMaxSize().background(Color.Blue))}
+            }
+        }}
+        compose.runOnIdle {open.value=true};compose.mainClock.advanceTimeBy(750)
+        compose.runOnIdle {top.floatValue=260f;color.value=Color.Green}
+        compose.mainClock.advanceTimeByFrame();compose.waitForIdle()
+        val source=compose.onNodeWithTag("resized_source").fetchSemanticsNode().boundsInRoot
+        compose.runOnIdle {open.value=false};compose.mainClock.advanceTimeByFrame()
+        compose.mainClock.advanceTimeBy(160)
+        val returning=frame()
+        val viewport=compose.onRoot().fetchSemanticsNode().boundsInRoot
+        val expected=androidx.compose.ui.geometry.lerp(source,Rect(0f,0f,viewport.width,viewport.height),returning.progress)
+        assertEquals("Return uses the resized source row",expected.top,returning.bounds.top,2f)
+        compose.mainClock.advanceTimeBy(230)
+        val almost=frame()
+        val bitmap=compose.onRoot().captureToImage().asAndroidBitmap()
+        val pixel=bitmap.getPixel(almost.bounds.center.x.toInt(),(almost.bounds.bottom-8).toInt())
+        bitmap.recycle()
+        assertTrue("Return uses the source's current colour",
+            android.graphics.Color.green(pixel)>android.graphics.Color.red(pixel)+40&&
+                android.graphics.Color.green(pixel)>android.graphics.Color.blue(pixel)+40)
+    }
+
     private fun frame() = compose.onNodeWithTag("update_container_transform").fetchSemanticsNode().config[UpdateTransformGeometry]
     private fun capture(name: String) {
         val context = InstrumentationRegistry.getInstrumentation().targetContext

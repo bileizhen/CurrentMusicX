@@ -135,110 +135,96 @@ class UpdatePageTest {
     }
 
     @Test fun sourceSelectionAndChannelMenuUseNativeCallbacks() {
-        var selected: UpdateSource? = null
-        var channel: UpdateChannel? = null
-        var ignored = false
+        var selected: UpdateSource? = null; var channel: UpdateChannel? = null; var ignored = false
         val state = mutableStateOf(UpdateTransferState(UpdateDownloadState.Downloading(42, 100), activeSource = UpdateSource.GITHUB))
         compose.setContent { TestTheme {
             UpdatePageContent(UpdateState.Available(release), state.value, onChangeSource = { selected = it },
-                onChannel = { channel = it }, onIgnore = { ignored = true })
+                onChannel = { channel = it }, onIgnore = { ignored = true },sourceCheck=fixtureSourceCheck)
         } }
-        compose.onNodeWithTag("update_source").assertDoesNotExist()
-        compose.onNodeWithTag("update_menu").performClick()
-        compose.onNodeWithText("下载源").performClick()
-        compose.onNodeWithText(UpdateSource.GITHUB.label).assertIsSelected()
+        compose.onNodeWithTag("update_menu").performClick(); settle()
+        compose.onNodeWithTag("update_menu_action_1").performClick(); settle()
+        compose.onNodeWithTag("update_source_GITHUB").assertIsSelected()
         capture("update-source-sheet.png")
-        compose.onNodeWithTag("update_source_confirm").assertDoesNotExist()
-        compose.onNodeWithText(UpdateSource.DPIK.label).performTouchInput { click(Offset(2f, centerY)) }
-        compose.runOnIdle { assertEquals(UpdateSource.DPIK, selected) }
-        compose.onNodeWithTag("update_options_sheet").assertDoesNotExist()
-        compose.onNodeWithTag("update_menu").performClick()
-        compose.onNodeWithText("更新设置").performClick()
-        compose.onNode(hasText("正式版") and hasAnyAncestor(hasTestTag("update_options_sheet"))).assertIsSelected()
-        compose.onNodeWithContentDescription("关闭更新设置").assertIsDisplayed()
-        capture("update-settings-sheet.png")
-        compose.onNodeWithText("预发布版").performClick()
-        compose.runOnIdle { assertNull(channel) }
-        compose.onNodeWithTag("update_settings_save").performClick()
-        compose.runOnIdle { assertEquals(UpdateChannel.PRERELEASE, channel); state.value = UpdateTransferState() }
-        compose.onNodeWithTag("update_menu").performClick()
-        compose.onNodeWithText("忽略此版本").performClick()
-        compose.runOnIdle { assertTrue(ignored) }
+        compose.onNodeWithTag("update_source_DPIK").performClick(); settle()
+        compose.waitUntil(3000){selected==UpdateSource.DPIK}
+        compose.onNodeWithTag("update_overflow_panel").assertDoesNotExist()
+        compose.onNodeWithTag("update_menu").performClick(); settle()
+        compose.onNodeWithTag("update_menu_action_0").performClick(); settle()
+        compose.onNodeWithTag("update_channel").performClick(); settle()
+        compose.onNodeWithTag("update_channel_stable").assertIsSelected()
+        capture("update-settings-channel.png")
+        compose.onNodeWithTag("update_channel_prerelease").performClick(); settle()
+        compose.runOnIdle { assertEquals(UpdateChannel.PRERELEASE,channel);state.value = UpdateTransferState() }
+        compose.onNodeWithTag("update_menu_action_back").performClick(); settle()
+        compose.onNodeWithTag("update_menu_action_3").performClick(); settle()
+        compose.waitUntil(3000){ignored}
     }
 
-    @Test fun selectingCurrentSourceAndCancellingSettingsKeepsTheActiveDownloadAndPreferences() {
-        var sourceChanges = 0; var channelChanges = 0; var checkChanges = 0
-        compose.setContent { TestTheme {
+    @Test fun selectingCurrentSourceKeepsDownloadAndSettingsPersistWithoutSave() {
+        var sourceChanges=0;var channelChanges=0;var checkChanges=0
+        val preferences=mutableStateOf(UpdateSettings())
+        compose.setContent {TestTheme {
             UpdatePageContent(UpdateState.Available(release),
-                UpdateTransferState(UpdateDownloadState.Downloading(42, 100), activeSource = UpdateSource.GITHUB),
-                onChangeSource = { sourceChanges++ }, onChannel = { channelChanges++ }, onAutoCheck = { checkChanges++ })
-        } }
-        compose.onNodeWithTag("update_menu").performClick()
-        compose.onNodeWithText("下载源").performClick()
-        compose.onNodeWithText(UpdateSource.GITHUB.label).performTouchInput { click(Offset(width - 2f, centerY)) }
-        compose.onNodeWithTag("update_options_sheet").assertDoesNotExist()
-        compose.onNodeWithTag("update_progress").assertTextContains("42%", substring = true)
-        compose.onNodeWithTag("update_menu").performClick()
-        compose.onNodeWithText("下载源").performClick()
-        compose.onNodeWithText(UpdateSource.GITHUB.label).assertIsSelected()
-        compose.onNodeWithTag("update_source_cancel").performClick()
-        compose.onNodeWithTag("update_menu").performClick()
-        compose.onNodeWithText("更新设置").performClick()
-        compose.onNodeWithTag("update_auto_check").performClick()
-        compose.onNodeWithText("预发布版").performClick()
-        compose.onNodeWithTag("update_settings_cancel").performClick()
-        compose.onNodeWithTag("update_menu").performClick()
-        compose.onNodeWithText("更新设置").performClick()
-        compose.onNode(hasText("正式版") and hasAnyAncestor(hasTestTag("update_options_sheet"))).assertIsSelected()
-        compose.onNodeWithTag("update_auto_check").assertIsOn()
-        compose.runOnIdle { assertEquals(0, sourceChanges); assertEquals(0, channelChanges); assertEquals(0, checkChanges) }
+                UpdateTransferState(UpdateDownloadState.Downloading(42,100),activeSource=UpdateSource.GITHUB),
+                settings=preferences.value,onChangeSource={sourceChanges++},
+                onChannel={channelChanges++;preferences.value=preferences.value.copy(channel=it)},
+                onAutoCheck={checkChanges++;preferences.value=preferences.value.copy(autoCheckOnLaunch=it)},sourceCheck=fixtureSourceCheck)
+        }}
+        compose.onNodeWithTag("update_menu").performClick();settle()
+        compose.onNodeWithTag("update_menu_action_1").performClick();settle()
+        compose.onNodeWithTag("update_source_GITHUB").performClick();settle()
+        compose.onNodeWithTag("update_overflow_panel").assertDoesNotExist()
+        compose.onNodeWithTag("update_progress").assertTextContains("42%",substring=true)
+        compose.onNodeWithTag("update_menu").performClick();settle()
+        compose.onNodeWithTag("update_menu_action_0").performClick();settle()
+        val auto=compose.onNodeWithTag("update_auto_check")
+        auto.assertIsOn()
+        auto.assert(SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role,
+            androidx.compose.ui.semantics.Role.Checkbox))
+        assertTrue("Update channel precedes automatic checking",
+            compose.onNodeWithTag("update_channel").getUnclippedBoundsInRoot().bottom<=auto.getUnclippedBoundsInRoot().top)
+        capture("update-settings-checkmark.png")
+        auto.performClick();settle()
+        compose.onNodeWithTag("update_overflow_panel").assertDoesNotExist()
+        compose.runOnIdle {assertFalse(preferences.value.autoCheckOnLaunch);assertEquals(1,checkChanges)}
+        compose.onNodeWithTag("update_menu").performClick();settle()
+        compose.onNodeWithTag("update_menu_action_0").performClick();settle()
+        compose.onNodeWithTag("update_auto_check").assertIsOff()
+        compose.onNodeWithTag("update_channel").performClick();settle()
+        compose.onNodeWithTag("update_channel_prerelease").performClick();settle()
+        compose.onNodeWithTag("update_settings_cancel").assertDoesNotExist()
+        compose.onNodeWithTag("update_settings_save").assertDoesNotExist()
+        compose.onNodeWithTag("update_back").performClick();settle()
+        compose.onNodeWithTag("update_menu").performClick();settle()
+        compose.onNodeWithTag("update_menu_action_0").performClick();settle()
+        compose.onNodeWithTag("update_auto_check").assertIsOff()
+        compose.onNodeWithTag("update_channel").assertTextContains("预发布版",substring=true)
+        compose.runOnIdle {assertEquals(0,sourceChanges);assertEquals(1,channelChanges);assertEquals(1,checkChanges)}
+        compose.onNodeWithTag("update_auto_check").performClick();settle()
+        compose.onNodeWithTag("update_overflow_panel").assertDoesNotExist()
+        compose.runOnIdle {assertTrue(preferences.value.autoCheckOnLaunch);assertEquals(2,checkChanges)}
     }
 
-    @Test fun settingsDialogSupportsBothThemesAndAlignedActions() {
-        val theme = mutableStateOf(io.github.currencortex.music.data.settings.ThemeMode.LIGHT)
-        compose.setContent { LeiTheme(AppearanceSettings(themeMode = theme.value, blur = false)) {
-            top.yukonga.miuix.kmp.basic.Scaffold { UpdatePageContent(UpdateState.UpToDate) }
-        } }
-        compose.onNodeWithTag("update_menu").performClick()
-        compose.onNodeWithText("更新设置").performClick()
-        val cancel = compose.onNodeWithTag("update_settings_cancel").getUnclippedBoundsInRoot()
-        val save = compose.onNodeWithTag("update_settings_save").getUnclippedBoundsInRoot()
-        val sheetBounds = compose.onNodeWithTag("update_options_sheet").fetchSemanticsNode().boundsInRoot
-        val optionBounds = compose.onNode(hasText("正式版") and hasAnyAncestor(hasTestTag("update_options_sheet")))
-            .fetchSemanticsNode().boundsInRoot
-        assertEquals(sheetBounds.left, optionBounds.left, 1f)
-        assertEquals(sheetBounds.right, optionBounds.right, 1f)
-        assertEquals(cancel.top.value, save.top.value, .5f)
-        assertEquals((cancel.right - cancel.left).value, (save.right - save.left).value, .5f)
-        capture("update-settings-light.png")
-        compose.mainClock.autoAdvance = false
-        val option = compose.onNodeWithText("预发布版")
-        val rowBounds = option.fetchSemanticsNode().boundsInRoot
-        val beforePress = compose.onRoot().captureToImage().asAndroidBitmap()
-        option.performTouchInput { down(Offset(2f, centerY)) }
-        compose.mainClock.advanceTimeBy(120); compose.waitForIdle()
-        val heldPress = compose.onRoot().captureToImage().asAndroidBitmap()
-        capture("update-settings-pressed-width.png")
-        for (edgeX in listOf(rowBounds.left.toInt() + 6, rowBounds.right.toInt() - 6)) {
-            val y = rowBounds.center.y.toInt()
-            assertTrue("Pressed highlight must reach both sheet edges",
-                android.graphics.Color.red(heldPress.getPixel(edgeX, y)) < android.graphics.Color.red(beforePress.getPixel(edgeX, y)))
-        }
-        option.performTouchInput { cancel() }
-        compose.mainClock.autoAdvance = true
-        compose.runOnIdle { theme.value = io.github.currencortex.music.data.settings.ThemeMode.DARK }
-        compose.waitForIdle()
-        compose.onNodeWithTag("update_settings_save").assertIsDisplayed()
-        capture("update-settings-dark.png")
-        compose.onNodeWithTag("update_settings_cancel").performClick()
-        compose.onNodeWithTag("update_menu").performClick()
-        compose.onNodeWithText("下载源").performClick()
-        compose.onNodeWithTag("update_source_cancel").assertIsDisplayed()
+    @Test fun settingsMenuHasConsistentRowWidthsAndHeaderReturnsToParent() {
+        compose.setContent { TestTheme { UpdatePageContent(UpdateState.UpToDate,sourceCheck=fixtureSourceCheck) } }
+        compose.onNodeWithTag("update_menu").performClick(); settle()
+        compose.onNodeWithTag("update_menu_action_0").performClick(); settle()
+        compose.onNodeWithTag("update_settings_cancel").assertDoesNotExist()
+        compose.onNodeWithTag("update_settings_save").assertDoesNotExist()
+        val auto=compose.onNodeWithTag("update_auto_check").getUnclippedBoundsInRoot()
+        val option=compose.onNodeWithTag("update_channel").getUnclippedBoundsInRoot()
+        assertEquals(auto.left.value,option.left.value,.5f)
+        assertEquals((auto.right-auto.left).value,(option.right-option.left).value,.5f)
+        assertTrue(option.bottom<=auto.top)
+        compose.onNodeWithTag("update_channel").performClick(); settle()
+        compose.onNodeWithTag("update_menu_action_back").performClick(); settle()
+        compose.onNodeWithTag("update_auto_check").assertIsDisplayed()
+        compose.onNodeWithTag("update_menu_action_back").performClick(); settle()
+        compose.onNodeWithTag("update_menu_action_1").assertIsDisplayed()
+        compose.onNodeWithTag("update_menu_action_1").performClick(); settle()
+        compose.onNodeWithTag("update_source_cancel").assertDoesNotExist()
         compose.onNodeWithTag("update_source_confirm").assertDoesNotExist()
-        capture("update-sources-dark.png")
-        compose.runOnIdle { theme.value = io.github.currencortex.music.data.settings.ThemeMode.LIGHT }
-        compose.waitForIdle()
-        capture("update-sources-light.png")
+        capture("update-sources-glass.png")
     }
 
     @Test fun overflowMenuAnimatesFromButtonAndOutsideTapDoesNotActivatePage() {
@@ -272,44 +258,25 @@ class UpdatePageTest {
         compose.onNodeWithTag("update_download").assertIsDisplayed()
     }
 
-    @Test fun menuUsesSeparateWavesAndReversesWithoutRestartingOrDroppingShield() {
-        compose.mainClock.autoAdvance = false
+    @Test fun menuMorphReversesAndKeepsShieldUntilReturnCompletes() {
+        compose.mainClock.autoAdvance=false
         compose.setContent { TestTheme { UpdatePageContent(UpdateState.Available(release)) } }
         compose.mainClock.advanceTimeBy(1000)
-        val button = compose.onNodeWithTag("update_menu")
-        val panel = compose.onNodeWithTag("update_overflow_panel")
-        button.performClick()
-        compose.mainClock.advanceTimeBy(96)
-        val opening = panel.fetchSemanticsNode().config[UpdateMenuWavesKey]
-        assertTrue("Scale and path must not share a single tween", kotlin.math.abs(opening.path - opening.scale) > .02f)
-        assertTrue(opening.opacity > .1f && opening.scale > .1f)
-        button.performClick()
-        compose.mainClock.advanceTimeBy(16)
-        val turning = panel.fetchSemanticsNode().config[UpdateMenuWavesKey]
-        // Semantics clicks can pump recomposition frames; exact continuity is covered with
-        // a controlled frame clock in UpdateMenuMotionTest, rather than a wall-clock delta here.
-        assertTrue("Retargeting must not hide the panel: $opening -> $turning", turning.scale > .01f)
-        compose.mainClock.advanceTimeBy(112)
-        val closing = panel.fetchSemanticsNode().config[UpdateMenuWavesKey]
-        assertTrue("The reversed wave should now be closing: $opening -> $closing",
-            closing.scale > .001f && closing.scale < opening.scale)
+        val button=compose.onNodeWithTag("update_menu")
+        val panel=compose.onNodeWithTag("update_overflow_panel")
+        button.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){it()};compose.mainClock.advanceTimeBy(96)
+        val opening=panel.fetchSemanticsNode().config[io.github.currencortex.music.ui.component.nativeui.GlassMenuFrameKey]
+        assertTrue(opening.bounds.width>0f&&opening.content>0f&&opening.progress<1.1f)
+        button.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){it()};compose.mainClock.advanceTimeBy(80)
+        val returning=panel.fetchSemanticsNode().config[io.github.currencortex.music.ui.component.nativeui.GlassMenuFrameKey]
+        assertTrue(returning.bounds.width>0f)
         compose.onNodeWithTag("update_menu_dismiss").assertExists()
-        capture("update-menu-spring-closing.png")
-        button.performClick()
-        compose.mainClock.advanceTimeBy(16)
-        val reversed = panel.fetchSemanticsNode().config[UpdateMenuWavesKey]
-        assertTrue("Reopening keeps the current scale instead of snapping to zero", reversed.scale > .01f)
+        button.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){it()};compose.mainClock.advanceTimeBy(800)
+        assertEquals(1f,panel.fetchSemanticsNode().config[UpdateMenuWavesKey].scale,.002f)
+        button.performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick){it()};compose.mainClock.advanceTimeBy(32)
+        panel.assertExists();compose.onNodeWithTag("update_menu_dismiss").assertExists()
         compose.mainClock.advanceTimeBy(800)
-        val settled = panel.fetchSemanticsNode().config[UpdateMenuWavesKey]
-        assertEquals(1f, settled.scale, .002f)
-        capture("update-menu-spring-open.png")
-        button.performClick()
-        compose.mainClock.advanceTimeBy(32)
-        panel.assertExists()
-        compose.onNodeWithTag("update_menu_dismiss").assertExists()
-        compose.mainClock.advanceTimeBy(800)
-        panel.assertDoesNotExist()
-        compose.onNodeWithTag("update_menu_dismiss").assertDoesNotExist()
+        panel.assertDoesNotExist();compose.onNodeWithTag("update_menu_dismiss").assertDoesNotExist()
     }
 
     @Test fun menuDragTracksOneCapsuleAndOnlyRunsTheReleasedOption() {
@@ -335,11 +302,12 @@ class UpdatePageTest {
         val drag = panel.fetchSemanticsNode().config[UpdateMenuInteractionKey]
         assertEquals(2, drag.selected)
         assertTrue("The capsule follows the selected row", drag.highlight.top > first.y)
-        assertTrue("The glass panel should respond subtly to the finger", drag.displacement.getDistance() > .1f)
+        assertEquals("Moving across rows must not pull the menu away from the finger",0f,drag.displacement.getDistance(),.1f)
         compose.runOnIdle { assertEquals(0, retries); assertEquals(0, releases) }
         capture("update-menu-drag-highlight.png")
         panel.performTouchInput { up() }
         compose.mainClock.advanceTimeBy(600)
+        compose.waitUntil(2000){releases==1}
         compose.runOnIdle { assertEquals(0, retries); assertEquals(1, releases) }
         panel.assertDoesNotExist()
 
@@ -349,15 +317,18 @@ class UpdatePageTest {
         panel.performTouchInput { down(selected); moveTo(Offset(-60f, selected.y), delayMillis = 150); up() }
         compose.mainClock.advanceTimeBy(400)
         panel.assertIsDisplayed()
-        assertEquals(-1, panel.fetchSemanticsNode().config[UpdateMenuInteractionKey].selected)
+        assertEquals(Int.MIN_VALUE, panel.fetchSemanticsNode().config[UpdateMenuInteractionKey].selected)
         compose.runOnIdle { assertEquals("Dragging outside must cancel the option", 1, releases) }
 
         panel.performTouchInput { down(point(2)); cancel() }
         compose.mainClock.advanceTimeBy(400)
         panel.assertIsDisplayed()
-        assertEquals(-1, panel.fetchSemanticsNode().config[UpdateMenuInteractionKey].selected)
+        assertEquals(Int.MIN_VALUE, panel.fetchSemanticsNode().config[UpdateMenuInteractionKey].selected)
         compose.runOnIdle { assertEquals("A cancelled gesture must not run the option", 1, releases) }
     }
+
+    private val fixtureSourceCheck=UpdateSourceCheck {_,_->UpdateSourceHealth(UpdateSourceStatus.AVAILABLE,125)}
+    private fun settle() { compose.mainClock.advanceTimeByFrame();compose.mainClock.advanceTimeBy(900);compose.waitForIdle() }
 
     @Composable private fun TestTheme(content: @Composable () -> Unit) {
         LeiTheme(AppearanceSettings(blur = false)) {
