@@ -25,6 +25,7 @@ class ApiClient(
     private val nativeMedia: () -> Boolean = { false },
     private val currentMusicAccountReady: () -> Boolean = { !token().isNullOrBlank() },
     private val currentMusicSessionRevision: () -> Long = { 0L },
+    val routeServer: (String) -> String = { it },
 ) {
     private val http = client.newBuilder().addInterceptor(AuthInterceptor()).build()
     private val singleAttemptHttp = http.newBuilder().retryOnConnectionFailure(false).build()
@@ -33,10 +34,10 @@ class ApiClient(
     private fun useNative(path: String, authenticated: Boolean, projectToken: String?): Boolean {
         if (netease?.handles(path, nativeMedia()) != true) return false
         // Imported snapshots belong to the project account, even with a local NetEase login.
-        if (path == "ncmbind/sync") return false
+        if (path == "ncmbind/sync" || path == "ncmbind/import") return false
         // Explicit native mode never falls back to the project server for NetEase routes.
         if (nativeMedia()) return true
-        // New logins remain device-local; membership/medal adapters are local-only routes.
+        // Login runs on-device; project binding is synchronized separately over HTTPS.
         if (path.startsWith("ncmbind/phone/") || path.startsWith("ncmbind/qr/") ||
             path in setOf("ncmbind/membership", "ncmbind/medals", "ncm/captcha/sent/v1")) return true
         // Without a local credential, the project server can use its own saved binding.
@@ -47,7 +48,7 @@ class ApiClient(
                         retryConnection: Boolean = true, callTimeoutMillis: Long? = null,
                         projectOnly: Boolean = false): JsonElement = withContext(Dispatchers.IO) {
         val session = RequestSession(server(), if (authenticated) token() else null)
-        val requiresAccount = path.startsWith("ncmbind/qr/") || path.startsWith("ncmbind/phone/") || path == "ncm/captcha/sent/v1"
+        val requiresAccount = path == "ncmbind/import" || path.startsWith("ncmbind/qr/") || path.startsWith("ncmbind/phone/") || path == "ncm/captcha/sent/v1"
         val loginOwner = RequestSession(server(), token())
         val loginRevision = currentMusicSessionRevision()
         fun checkLoginOwner() {
@@ -58,8 +59,8 @@ class ApiClient(
         // Native routes bypass project HTTP authentication, so login needs its own prerequisite.
         checkLoginOwner()
         if (expectedSession != null && (expectedSession.server != session.server || expectedSession.token != session.token)) throw ApiException(ErrorKind.Unauthorized)
-        if (netease?.handles(path) == true && expectedSession?.neteaseRevision != null &&
-            expectedSession.neteaseRevision != netease.sessions.state.value.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
+        if ((netease?.handles(path) == true || path == "ncmbind/import") && expectedSession?.neteaseRevision != null &&
+            expectedSession.neteaseRevision != netease?.sessions?.state?.value?.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
         if (!projectOnly && useNative(path, authenticated, session.token)) {
             val netease = requireNotNull(netease)
             if (expectedSession?.neteaseRevision != null && expectedSession.neteaseRevision != netease.sessions.state.value.revision)
@@ -73,7 +74,7 @@ class ApiClient(
                 throw ApiException(ErrorKind.NeteaseSessionChanged)
             return@withContext response
         }
-        val url = ServerUrl.endpoint(session.server, path, query)
+        val url = ServerUrl.endpoint(routeServer(session.server), path, query)
         val request = Request.Builder().url(url).tag(RequestSession::class.java, session)
             .header("Accept", "application/json")
             .method(method, if (method == "GET") null else (body?.toString() ?: "{}").toRequestBody("application/json".toMediaType()))
@@ -93,17 +94,18 @@ class ApiClient(
             checkLoginOwner()
             if (expectedSession != null && (expectedSession.server != server() || expectedSession.token != if (authenticated) token() else null))
                 throw ApiException(ErrorKind.Unauthorized)
-            if (netease?.handles(path) == true && expectedSession?.neteaseRevision != null &&
-                expectedSession.neteaseRevision != netease.sessions.state.value.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
+            if ((netease?.handles(path) == true || path == "ncmbind/import") && expectedSession?.neteaseRevision != null &&
+                expectedSession.neteaseRevision != netease?.sessions?.state?.value?.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
             log("$method $path HTTP ${it.code}")
             if (!it.isSuccessful) {
                 // Older NCM gateway also uses 401 for missing NCM binding. Only a project-session
                 // rejection should invalidate the account.
                 val errorText = it.body?.string().orEmpty()
                 if (it.code == 401 && authenticated && !errorText.contains("绑定")) onUnauthorized(session)
-                // Registration validation is user-facing upstream text, not a generic HTTP failure.
+                // Account validation is user-facing upstream text, not a generic HTTP failure.
                 // Other routes and server failures retain their existing bounded error mapping.
-                val registrationError = if (it.code in 400..499 && path in setOf("auth/register", "auth/email/code", "auth/phone/code"))
+                val accountError = if (it.code in 400..499 && path in setOf("auth/register", "auth/email/code", "auth/phone/code",
+                        "auth/password/code", "auth/password/reset", "profile/password/code", "profile/password"))
                     runCatching {
                         (ApiJson.parseToJsonElement(errorText).jsonObject["error"] as? JsonPrimitive)
                             ?.takeIf { value -> value.isString }?.content?.trim()?.takeIf { value -> value.isNotEmpty() }?.take(240)
@@ -112,7 +114,7 @@ class ApiClient(
                     401 -> if (errorText.contains("绑定")) ErrorKind.Forbidden else ErrorKind.Unauthorized
                     403 -> ErrorKind.Forbidden; 404 -> ErrorKind.NotFound; 429 -> ErrorKind.RateLimited
                     in 500..599 -> ErrorKind.Server; else -> ErrorKind.Unknown
-                }, it.code, registrationError)
+                }, it.code, accountError)
             }
             val raw = it.body?.string().orEmpty()
             if (raw.isBlank()) JsonNull else ApiJson.parseToJsonElement(raw)

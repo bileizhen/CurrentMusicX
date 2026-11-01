@@ -5,6 +5,7 @@ import androidx.datastore.preferences.core.*
 import io.github.currencortex.music.core.config.ServerDefaults
 import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.core.network.ServerUrl
+import io.github.currencortex.music.core.network.CurrentMusicServer
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -21,7 +22,9 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val transitionMode: MusicTransitionMode = MusicTransitionMode.OFF,
                          val crossfadeSeconds: Int = 5, val likeMode: LikeMode = LikeMode.AUTO,
                          val lyricsSource: LyricsSource = LyricsSource.AUTO,
-                         val lyricsFont: LyricsFont = LyricsFont.SYSTEM, val lyricsFontFile: String = "")
+                         val lyricsFont: LyricsFont = LyricsFont.SYSTEM, val lyricsFontFile: String = "",
+                         val serverMode: CurrentMusicServer = CurrentMusicServer.AUTO,
+                         val customServer: String = "")
 
 enum class LyricsFont(val label: String) {
     SYSTEM("系统字体"), WENKAI("霞鹜文楷"), IMPORTED("导入字体");
@@ -82,6 +85,8 @@ object LyricsTypography {
 }
 class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: CoroutineScope) {
     private val server = stringPreferencesKey("music.server")
+    private val serverMode = stringPreferencesKey("music.serverMode")
+    private val customServer = stringPreferencesKey("music.customServer")
     private val quality = stringPreferencesKey("music.quality")
     private val restore = booleanPreferencesKey("music.restore")
     private val nickname = stringPreferencesKey("account.nickname")
@@ -142,16 +147,38 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true,
             p[perspective] ?: true, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false, p[particles] ?: false).normalized(), p[neteaseMain] ?: true,
         p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), LikeMode.from(p[likeMode]), decodeLyricsSource(p),
-        LyricsFont.from(p[lyricsFont]), p[lyricsFontFile].orEmpty())
+        LyricsFont.from(p[lyricsFont]), p[lyricsFontFile].orEmpty(),
+        CurrentMusicServer.from(p[serverMode], p[server]),
+        p[customServer] ?: p[server]?.takeIf { CurrentMusicServer.infer(it) == CurrentMusicServer.CUSTOM }.orEmpty())
     // Read the persisted value directly, without the StateFlow's initial defaults.
     val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: false }.distinctUntilChanged()
     val state = store.data.map(::decode)
         .stateIn(scope, SharingStarted.Eagerly, MusicSettings())
+    val serverSelection = store.data.map {
+        CurrentMusicServer.from(it[serverMode], it[server]) to (it[server] ?: ServerDefaults.URL)
+    }.distinctUntilChanged()
     suspend fun snapshot(): MusicSettings {
         val p = store.data.first()
         return decode(p)
     }
-    suspend fun setServer(value: String) { val normalized = ServerUrl.normalize(value); store.edit { it[server] = normalized } }
+    suspend fun setServer(value: String) {
+        val normalized = ServerUrl.normalize(value)
+        store.edit {
+            // Restoring the same saved account must not turn AUTO/CDN back into MAIN.
+            if (it[server] != normalized) it[serverMode] = CurrentMusicServer.infer(normalized).name
+            it[server] = normalized
+            if (CurrentMusicServer.infer(normalized) == CurrentMusicServer.CUSTOM) it[customServer] = normalized
+        }
+    }
+    suspend fun setServerSelection(mode: CurrentMusicServer, value: String) {
+        val normalized = ServerUrl.normalize(value)
+        require(mode == CurrentMusicServer.CUSTOM || CurrentMusicServer.builtIn(normalized))
+        store.edit {
+            it[server] = normalized
+            it[serverMode] = mode.name
+            if (mode == CurrentMusicServer.CUSTOM) it[customServer] = normalized
+        }
+    }
     suspend fun setQuality(value: AudioQuality) { store.edit { it[quality] = value.value } }
     suspend fun setRestore(value: Boolean) { store.edit { it[restore] = value } }
     suspend fun setConcurrentPlayback(value: Boolean) { store.edit { it[concurrentPlayback] = value } }

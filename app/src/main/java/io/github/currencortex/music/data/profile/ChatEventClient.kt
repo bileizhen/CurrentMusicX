@@ -11,13 +11,14 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class ChatEventClient(client: OkHttpClient = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
-    .readTimeout(45, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS).build()) {
+    .readTimeout(45, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS).build(),
+    private val routeServer: (String) -> String = { it }) {
     private val factory = EventSources.createFactory(client.newBuilder()
         .followRedirects(false).retryOnConnectionFailure(false).build())
 
     fun events(session: RequestSession, since: Long, onOpen: () -> Unit = {}): Flow<ChatLiveEvent> = callbackFlow {
         require(since >= 0)
-        val request = Request.Builder().url(ServerUrl.endpoint(session.server, "live/chat",
+        val request = Request.Builder().url(ServerUrl.endpoint(routeServer(session.server), "live/chat",
             mapOf("sse" to "1", "since" to since.toString())))
             .header("Accept", "text/event-stream")
         if (!session.token.isNullOrBlank()) request.header("Authorization", "Bearer ${session.token}")
