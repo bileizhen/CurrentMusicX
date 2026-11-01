@@ -1,0 +1,173 @@
+// SPDX-License-Identifier: GPL-3.0-only
+// chen08209's upstream project shaders/liquid_glass.frag, commit 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7.
+// Flutter sampler mapped to an Android RuntimeShader child. Gaussian frost is supplied by
+// the backdrop capture. Circular Compose corners replace Flutter rounded superellipses.
+// The ultra optical profile, smooth-min goo normals, adaptive tint and rim lighting remain.
+uniform shader content;
+uniform float4 uFrame;
+uniform float4 uSample;
+uniform float4 uPane;
+uniform float4 uDrop;
+uniform float4 uExtra; // optional third pill of a toolbar's GooSurface
+uniform float uExtraBlend;
+uniform float4 uGeometry; // radius, goo blend, has droplet, dp per pixel
+uniform float uHalfMinor; // optical envelope, including the returning droplet
+uniform float4 uOptics; // refraction, saturation, brightness, bevel
+uniform float4 uTint;
+uniform float4 uLight; // rim, width, tail, added
+uniform float4 uEdge; // hairline, side hairline, menu shine, adaptive tint
+uniform float4 uGlow;
+uniform float3 uLens; // ultra dispersion, rim frost, rounded-end shade
+uniform float2 uBounds;
+uniform float4 uShineTurns0;
+uniform float4 uShineTurns1;
+const float3 kLuma=float3(.2126,.7152,.0722);
+const float kLine=.67;
+const float kLineCap=.298;
+const float kRimTail=4.5;
+
+float roundedBoxDistance(float2 p,float2 halfSize,float radius) {
+    float2 q=abs(p)-halfSize+radius;
+    return length(max(q,0.0))+min(max(q.x,q.y),0.0)-radius;
+}
+float2 roundedBoxNormal(float2 p,float2 halfSize,float radius) {
+    float2 q=abs(p)-halfSize+radius;
+    float2 n=q.x>0.0&&q.y>0.0?normalize(q):(q.x>q.y?float2(1,0):float2(0,1));
+    return n*float2(p.x<0.0?-1:1,p.y<0.0?-1:1);
+}
+// upstream gooGeometry: polynomial smooth minimum and the same blended normals.
+float3 gooGeometry(float2 point) {
+    float2 p=point-uPane.xy;
+    float d=roundedBoxDistance(p,uPane.zw,uGeometry.x);
+    float2 normal=roundedBoxNormal(p,uPane.zw,uGeometry.x);
+    if(uGeometry.z>.5) {
+        float2 q=point-uDrop.xy;
+        float di=roundedBoxDistance(q,uDrop.zw,min(uDrop.z,uDrop.w));
+        float2 ni=roundedBoxNormal(q,uDrop.zw,min(uDrop.z,uDrop.w));
+        float k=max(uGeometry.y,1e-3);
+        float h=clamp(.5+.5*(di-d)/k,0.0,1.0);
+        d=mix(di,d,h)-k*h*(1.0-h);
+        float2 m=mix(ni,normal,h);
+        normal=dot(m,m)>1e-8?normalize(m):normal;
+    }
+    if(min(uExtra.z,uExtra.w)>.05) {
+        float2 q=point-uExtra.xy;
+        float di=roundedBoxDistance(q,uExtra.zw,min(uExtra.z,uExtra.w));
+        float2 ni=roundedBoxNormal(q,uExtra.zw,min(uExtra.z,uExtra.w));
+        float k=max(uExtraBlend,1e-3);
+        float h=clamp(.5+.5*(di-d)/k,0.0,1.0);
+        d=mix(di,d,h)-k*h*(1.0-h);
+        float2 m=mix(ni,normal,h);
+        normal=dot(m,m)>1e-8?normalize(m):normal;
+    }
+    return float3(d,normal);
+}
+float4 sampleGlass(float2 point) {
+    return content.eval(clamp((point-uSample.xy)/uSample.zw,float2(.5),uBounds-.5));
+}
+// A five-point mean matches the upstream adaptive tint's sampling, independent of rim refraction.
+float4 sampleBehind(float2 point) {return sampleGlass(point);}
+float4 sampleFrosted(float2 point,float sigma) {
+    if(sigma<=.01)return sampleGlass(point);
+    float4 sum=sampleGlass(point)*.4;
+    // Additional rim frost; the capture already holds the pane's Gaussian frost.
+    sum+=(sampleGlass(point+float2(sigma,0))+sampleGlass(point-float2(sigma,0))
+        +sampleGlass(point+float2(0,sigma))+sampleGlass(point-float2(0,sigma)))*.15;
+    return sum;
+}
+
+// LiquidGlassRim._turns / shineAround: light fades by position around the
+// actual pane, rather than staying uniformly white along its straight sides.
+float menuShineAround(float turn) {
+    float4 firstEnds=float4(uShineTurns0.yzw,uShineTurns1.x);
+    float3 lastEnds=uShineTurns1.yzw;
+    float4 startLit=float4(1.0,.68,.48,.38);
+    float4 lastLit=float4(.17,.07,.03,0.0);
+    return startLit.x+dot(float4(startLit.yzw,lastLit.x)-startLit,
+        clamp((turn-uShineTurns0)/max(firstEnds-uShineTurns0,float4(1e-5)),0.0,1.0))
+        +dot(lastLit.yzw-lastLit.xyz,
+        clamp((turn-uShineTurns1.xyz)/max(lastEnds-uShineTurns1.xyz,float3(1e-5)),0.0,1.0));
+}
+float shineShare(float a,float b,float start,float end,float share) {
+    return max(min(b,end)-max(a,start),0.0)*share;
+}
+// Integrate the nine inward bands over a device pixel, as upstream does.
+float menuShineAcross(float edge) {
+    float a=max(edge-uGeometry.w*.5,0.0);
+    float b=edge+uGeometry.w*.5;
+    return (shineShare(a,b,0.0,1.0/3.0,1.0)+shineShare(a,b,1.0/3.0,2.0/3.0,.7)
+        +shineShare(a,b,2.0/3.0,1.0,.47)+shineShare(a,b,1.0,5.0/3.0,.18)
+        +shineShare(a,b,5.0/3.0,7.0/3.0,.12)+shineShare(a,b,7.0/3.0,3.0,.085)
+        +shineShare(a,b,3.0,11.0/3.0,.065)+shineShare(a,b,11.0/3.0,13.0/3.0,.045)
+        +shineShare(a,b,13.0/3.0,5.0,.035))/max(b-a,1e-4);
+}
+
+half4 main(float2 fragCoord) {
+    float2 point=uFrame.xy+fragCoord*uFrame.zw;
+    float3 geometry=gooGeometry(point);
+    float coverageMask=clamp(.5-geometry.x/uGeometry.w,0.0,1.0);
+    if(coverageMask<=0.0)return half4(0);
+    float inset=max(-geometry.x,0.0);
+    float edge=inset;
+    float2 normal=geometry.yz;
+    float halfMinor=uHalfMinor;
+    float bevel=max(min(uOptics.w,halfMinor*.5),1e-3);
+    float rise=1.0-clamp(inset/bevel,0.0,1.0);
+    // The original circular bevel reads far inside at the rim, squeezing and mirroring content.
+    float depth=min(uOptics.x,halfMinor)*(1.0-sqrt(1.0-rise*rise));
+    bool lens=uOptics.x<0.0;
+    float2 shift=lens?normal*-uOptics.x*smoothstep(0.0,bevel,inset)
+        *(1.0-smoothstep(bevel,halfMinor,inset)):-normal*depth;
+    float frost=uLens.y*rise*rise;
+    float4 base=sampleFrosted(point+shift,frost);
+    if(uLens.x>0.0&&inset<10.0) {
+        float2 part=normal.yx*.5*uLens.x
+            *(.6+.4*abs(normal.y)*max(1.0-inset/7.0,0.0))*(1.0-smoothstep(7.0,10.0,inset));
+        float4 red=sampleFrosted(point+shift+part,frost);
+        float4 blue=sampleFrosted(point+shift-part,frost);
+        base=float4(red.r,base.g,blue.b,max(base.a,max(red.a,blue.a)));
+    }
+    float alpha=base.a;
+    float3 color=base.rgb/max(alpha,1e-4);
+    color=mix(float3(dot(color,kLuma)),color,uOptics.y)*uOptics.z;
+    color*=1.0-uLens.z*abs(normal.x)*exp(-inset/3.0);
+    float4 behind=sampleBehind(uPane.xy)
+        +sampleBehind(uPane.xy+uPane.zw*float2(-.6,-.4))
+        +sampleBehind(uPane.xy+uPane.zw*float2(.6,-.4))
+        +sampleBehind(uPane.xy+uPane.zw*float2(-.6,.4))
+        +sampleBehind(uPane.xy+uPane.zw*float2(.6,.4));
+    behind*=.2;
+    float behindLuma=dot(behind.rgb/max(behind.a,1e-4),kLuma);
+    float clash=clamp((sign(uEdge.w)*(dot(uTint.rgb,kLuma)-behindLuma)-.3)/.5,0.0,1.0);
+    float cover=uTint.a+(1.0-uTint.a)*clash*abs(uEdge.w);
+    float coverage=alpha*(1.0-cover)+cover;
+    float3 glass=color*alpha*(1.0-cover)+uTint.rgb*cover;
+    float within=max(edge-kLine,0.0);
+    float rise2=normal.y*normal.y;
+    float rise4=rise2*rise2;
+    float rise16=rise4*rise4*rise4*rise4;
+    float facing=lens?smoothstep(.65,.95,abs(normal.y)):.5*rise2*abs(normal.y)*(1.0+rise16);
+    float band=clamp(1.0-within/max(uLight.y,1e-3),0.0,1.0);
+    float tail=clamp(1.0-max(inset-kLine,0.0)/kRimTail,0.0,1.0);
+    float shine=min(uLight.x*facing*mix(band,tail,uLight.z),1.0);
+    glass+=(float3(coverage)-(1.0-uLight.w)*glass)*shine;
+    float line=clamp((kLine-edge)/uGeometry.w+.5,0.0,1.0);
+    float across=abs(normal.x);
+    float darken=mix(uEdge.x,uEdge.y,across*across*across);
+    // The whole hairline is enabled by its style, including where its directional
+    // darkening is zero. Skipping just those pixels leaves a raised straight rim.
+    if((uEdge.x>0.0||uEdge.y>0.0)&&line>0.0) {
+        float4 under=sampleGlass(point);
+        float3 dark=max(under.rgb-kLineCap*under.a,.22*under.rgb);
+        glass=mix(glass,mix(under.rgb,dark,darken),line);
+        coverage=mix(coverage,under.a,line);
+    }
+    float2 toGlow=point-uGlow.xy;
+    glass+=uGlow.z*coverage*mix(exp(-dot(toGlow,toGlow)/max(uGlow.w*uGlow.w,1.0)),1.0,1.0/3.0);
+    if(uEdge.z>0.0&&edge<5.0+uGeometry.w) {
+        float2 centered=point-uPane.xy;
+        float turn=atan(abs(centered.x),abs(centered.y));
+        glass+=coverage*uEdge.z*menuShineAround(turn)*menuShineAcross(edge);
+    }
+    return half4(min(glass,float3(coverage)),coverage)*half(coverageMask);
+}

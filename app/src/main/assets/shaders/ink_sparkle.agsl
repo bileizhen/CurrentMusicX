@@ -1,0 +1,98 @@
+// Native AGSL translation of Flutter material_ui 1.5.0 InkSparkle.
+// SPDX-License-Identifier: BSD-3-Clause
+
+// Copyright 2013 The Flutter Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+// TODO(antrob): Put these in a more logical order (e.g. separate consts vs varying, etc)
+
+uniform float4 u_color;
+// u_composite_1.x, u_composite_1.y, u_composite_1.z, u_composite_1.w
+uniform float4 u_composite_1;
+uniform float2 u_center;
+uniform float u_max_radius;
+uniform float2 u_resolution_scale;
+uniform float2 u_noise_scale;
+uniform float u_noise_phase;
+uniform float2 u_circle1;
+uniform float2 u_circle2;
+uniform float2 u_circle3;
+uniform float2 u_rotation1;
+uniform float2 u_rotation2;
+uniform float2 u_rotation3;
+
+uniform float u_density;
+
+const float PI = 3.1415926535897932384626;
+const float PI_ROTATE_RIGHT = PI * 0.0078125;
+const float PI_ROTATE_LEFT = PI * -0.0078125;
+const float ONE_THIRD = 1./3.;
+const float2 TURBULENCE_SCALE = float2(0.8);
+
+
+float triangle_noise(float2 n) {
+  n = fract(n * float2(5.3987, 5.4421));
+  n += dot(n.yx, n.xy + float2(21.5351, 14.3137));
+  float xy = n.x * n.y;
+  return fract(xy * 95.4307) + fract(xy * 75.04961) - 1.0;
+}
+
+float threshold(float v, float l, float h) {
+  return step(l, v) * (1.0 - step(h, v));
+}
+
+float2x2 rotate2d(float2 rad){
+  return float2x2(rad.x, -rad.y, rad.y, rad.x);
+}
+
+float soft_circle(float2 uv, float2 xy, float radius, float blur) {
+  float blur_half = blur * 0.5;
+  float d = distance(uv, xy);
+  return 1.0 - smoothstep(1.0 - blur_half, 1.0 + blur_half, d / radius);
+}
+
+float soft_ring(float2 uv, float2 xy, float radius, float thickness, float blur) {
+  float circle_outer = soft_circle(uv, xy, radius + thickness, blur);
+  float circle_inner = soft_circle(uv, xy, max(radius - thickness, 0.0), blur);
+  return clamp(circle_outer - circle_inner, 0.0, 1.0);
+}
+
+float circle_grid(float2 resolution, float2 p, float2 xy, float2 rotation, float cell_diameter) {
+  p = rotate2d(rotation) * (xy - p) + xy;
+  p = (p - cell_diameter * floor(p / cell_diameter)) / resolution;
+  float cell_uv = cell_diameter / resolution.y * 0.5;
+  float r = 0.65 * cell_uv;
+  return soft_circle(p, float2(cell_uv), r, r * 50.0);
+}
+
+float sparkle(float2 uv, float t) {
+  float n = triangle_noise(uv);
+  float s = threshold(n, 0.0, 0.05);
+  s += threshold(n + sin(PI * (t + 0.35)), 0.1, 0.15);
+  s += threshold(n + sin(PI * (t + 0.7)), 0.2, 0.25);
+  s += threshold(n + sin(PI * (t + 1.05)), 0.3, 0.35);
+  return clamp(s, 0.0, 1.0) * 0.55;
+}
+
+float turbulence(float2 uv) {
+  float2 uv_scale = uv * TURBULENCE_SCALE;
+  float g1 = circle_grid(TURBULENCE_SCALE, uv_scale, u_circle1, u_rotation1, 0.17);
+  float g2 = circle_grid(TURBULENCE_SCALE, uv_scale, u_circle2, u_rotation2, 0.2);
+  float g3 = circle_grid(TURBULENCE_SCALE, uv_scale, u_circle3, u_rotation3, 0.275);
+  float v = (g1 * g1 + g2 - g3) * 0.5;
+  return clamp(0.45 + 0.8 * v, 0.0, 1.0);
+}
+
+half4 main(float2 fragCoord) {
+  float2 p = fragCoord / u_density;
+  float2 uv = p * u_resolution_scale;
+  float2 density_uv = uv - (p - u_noise_scale * floor(p / u_noise_scale));
+  float radius = u_max_radius * u_composite_1.w;
+  float turbulence_value = turbulence(uv);
+  float ring = soft_ring(p, u_center, radius, 0.05 * u_max_radius, u_composite_1.z);
+  float sparkle_value = sparkle(density_uv, u_noise_phase) * ring * turbulence_value * u_composite_1.y;
+  float wave_alpha = soft_circle(p, u_center, radius, u_composite_1.z) * u_composite_1.x * u_color.a;
+  float4 wave_color = float4(u_color.rgb * wave_alpha, wave_alpha);
+  return half4(mix(wave_color, float4(1.0), sparkle_value));
+}

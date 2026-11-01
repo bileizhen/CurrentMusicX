@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // Outline construction and download/file paths adapted from LeiFetch TransferIcons.
+// Font and TextSize paths from upstream lib/ui/icons/app_glyphs.dart @ 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7.
 package io.github.currencortex.music.ui.component
 
 import androidx.compose.ui.graphics.Color
@@ -12,6 +13,60 @@ import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.unit.dp
 
 object MusicIcons {
+    val Sun = icon("Sun") {
+        moveTo(16f, 12f); curveTo(16f, 17.3f, 8f, 17.3f, 8f, 12f); curveTo(8f, 6.7f, 16f, 6.7f, 16f, 12f)
+        moveTo(12f, 2f); lineTo(12f, 4f); moveTo(12f, 20f); lineTo(12f, 22f)
+        moveTo(2f, 12f); lineTo(4f, 12f); moveTo(20f, 12f); lineTo(22f, 12f)
+        moveTo(5f, 5f); lineTo(6.5f, 6.5f); moveTo(17.5f, 17.5f); lineTo(19f, 19f)
+        moveTo(5f, 19f); lineTo(6.5f, 17.5f); moveTo(17.5f, 6.5f); lineTo(19f, 5f)
+    }
+    val Moon = icon("Moon") {
+        moveTo(20f, 15f); curveTo(10f, 19f, 5f, 9f, 10f, 3f)
+        curveTo(-2f, 6f, 2f, 23f, 13f, 21f); curveTo(17f, 21f, 19f, 18f, 20f, 15f); close()
+    }
+    val Palette = glyphIcon("Palette", outline = {
+        moveTo(20.59f, 13.9f); arcTo(8.8f, 8.8f, 0f, true, false, 13.9f, 20.59f)
+        arcTo(1.2f, 1.2f, 0f, false, false, 14.83f, 19.28f)
+        arcTo(4f, 4f, 0f, false, true, 19.28f, 14.83f)
+        arcTo(1.2f, 1.2f, 0f, false, false, 20.59f, 13.9f); close()
+    }, solid = {
+        solidCircle(7.54f, 13.89f, 1.4f); solidCircle(7.96f, 9.32f, 1.4f)
+        solidCircle(12f, 7.15f, 1.4f); solidCircle(16.04f, 9.32f, 1.4f)
+    })
+    val PureBlack = glyphIcon("PureBlack", outline = {
+        moveTo(5.5f, 3.5f); lineTo(18.5f, 3.5f); arcTo(2.5f, 2.5f, 0f, false, true, 21f, 6f)
+        lineTo(21f, 14f); arcTo(2.5f, 2.5f, 0f, false, true, 18.5f, 16.5f)
+        lineTo(5.5f, 16.5f); arcTo(2.5f, 2.5f, 0f, false, true, 3f, 14f)
+        lineTo(3f, 6f); arcTo(2.5f, 2.5f, 0f, false, true, 5.5f, 3.5f); close()
+        moveTo(12f, 16.5f); lineTo(12f, 20.4f); moveTo(8f, 20.4f); lineTo(16f, 20.4f)
+    }, solid = {
+        moveTo(7f, 6f); lineTo(17f, 6f); arcTo(1.5f, 1.5f, 0f, false, true, 18.5f, 7.5f)
+        lineTo(18.5f, 12.5f); arcTo(1.5f, 1.5f, 0f, false, true, 17f, 14f)
+        lineTo(7f, 14f); arcTo(1.5f, 1.5f, 0f, false, true, 5.5f, 12.5f)
+        lineTo(5.5f, 7.5f); arcTo(1.5f, 1.5f, 0f, false, true, 7f, 6f); close()
+    })
+    val Eyedropper = icon("Eyedropper") {
+        moveTo(4.79f, 19.21f); lineTo(8.46f, 18.08f); lineTo(14.4f, 12.14f)
+        lineTo(16.24f, 13.98f); lineTo(18.79f, 11.43f); lineTo(17.73f, 10.37f)
+        lineTo(21.4f, 6.7f); lineTo(17.3f, 2.6f); lineTo(13.63f, 6.27f)
+        lineTo(12.57f, 5.21f); lineTo(10.02f, 7.76f); lineTo(11.86f, 9.6f); lineTo(5.92f, 15.54f); close()
+    }
+    val PaletteAdd = icon("PaletteAdd") { moveTo(12f, 5f); lineTo(12f, 19f); moveTo(5f, 12f); lineTo(19f, 12f) }
+    val Font = icon("Font") {
+        moveTo(5.2f, 19.6f); lineTo(11.75f, 4.95f)
+        curveTo(11.9167f, 4.5833f, 12.0833f, 4.5833f, 12.25f, 4.95f); lineTo(18.8f, 19.6f)
+        moveTo(7.7f, 14f); lineTo(16.3f, 14f)
+    }
+    val TextSize = icon("TextSize") {
+        moveTo(3.2f, 4.4f); lineTo(14f, 4.4f); moveTo(8.6f, 4.4f); lineTo(8.6f, 19.6f)
+        moveTo(14.8f, 10.8f); lineTo(21f, 10.8f); moveTo(17.9f, 10.8f); lineTo(17.9f, 19.6f)
+    }
+    val Reset = icon("Reset") {
+        moveTo(5.7006f, 10.5603f)
+        arcTo(7.07f, 7.07f, 0f, true, false, 12f, 6.7f)
+        moveTo(12f, 6.7f); lineTo(9.9f, 6.7f)
+        moveTo(13.7f, 10.5f); lineTo(9.9f, 6.7f); lineTo(13.7f, 2.9f)
+    }
     val Stop = icon("Stop") { moveTo(6f, 6f); lineTo(18f, 6f); lineTo(18f, 18f); lineTo(6f, 18f); close() }
     val Microphone = icon("Microphone") {
         moveTo(9f, 5f); curveTo(9f, 1f, 15f, 1f, 15f, 5f)
@@ -72,6 +127,16 @@ object MusicIcons {
         path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
             strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round, pathBuilder = draw)
     }.build()
+    private fun glyphIcon(name: String, outline: PathBuilder.() -> Unit, solid: PathBuilder.() -> Unit) =
+        ImageVector.Builder(name, 24.dp, 24.dp, 24f, 24f).apply {
+            path(fill = null, stroke = SolidColor(Color.Black), strokeLineWidth = 1.8f,
+                strokeLineCap = StrokeCap.Round, strokeLineJoin = StrokeJoin.Round, pathBuilder = outline)
+            path(fill = SolidColor(Color.Black), pathBuilder = solid)
+        }.build()
+    private fun PathBuilder.solidCircle(x: Float, y: Float, radius: Float) {
+        moveTo(x + radius, y); arcTo(radius, radius, 0f, false, true, x - radius, y)
+        arcTo(radius, radius, 0f, false, true, x + radius, y); close()
+    }
     val Folder = icon("Folder") {
         moveTo(3f, 7f); lineTo(3f, 20f); lineTo(21f, 20f); lineTo(21f, 7f)
         lineTo(11f, 7f); lineTo(9f, 4f); lineTo(3f, 4f); close()
