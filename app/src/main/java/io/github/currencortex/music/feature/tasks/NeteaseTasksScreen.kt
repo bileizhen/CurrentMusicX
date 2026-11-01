@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.netease.tasks.*
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.time.Instant
@@ -49,42 +50,26 @@ import java.time.format.DateTimeFormatter
     val connected = account.loggedIn && !account.stale
     val list = remember(state.group) { LazyListState() }
     var expandedLogs by rememberSaveable(account.profile?.uid) { mutableStateOf(false) }
-    Column(Modifier.widthIn(max = 600.dp).fillMaxSize().testTag("netease_tasks")) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (onBack != null) Box(Modifier.size(44.dp).clip(CircleShape).background(colors.surfaceContainer)
-                .clickable(role = Role.Button, onClick = onBack).testTag("tasks_back"), Alignment.Center) {
-                Icon(MusicIcons.Back, "返回", Modifier.size(23.dp))
-            }
-            Text("网易云任务", Modifier.weight(1f), fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
-            MusicTextAction(if (state.loading) "更新中" else "刷新", vm::refresh, Modifier.testTag("tasks_refresh"),
-                enabled = connected && !state.loading && !busy)
+    MusicSubpage("网易云任务", "netease_tasks", onBack, backTag = "tasks_back", actions = {
+        MusicTextAction(if (state.loading) "更新中" else "刷新", vm::refresh, Modifier.testTag("tasks_refresh"),
+            enabled = connected && !state.loading && !busy)
+    }) { topInset ->
+        LazyColumn(Modifier.fillMaxSize().testTag("tasks_list"), state = list,
+            contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        item("account") { SettingsGroup {
+            SettingsPreference(account.profile?.nickname ?: "尚未登录网易云",
+                if (connected) "本机直连" else "需要本机登录", leading = {
+                    Box(Modifier.size(8.dp).background(if (connected) colors.primary else colors.onSurfaceVariantSummary, CircleShape))
+                })
+        } }
+        if (connected) item("categories") {
+            SettingsSegmentedControl(NeteaseTaskGroup.entries.map { it.title }, state.group.ordinal,
+                { vm.select(NeteaseTaskGroup.entries[it]) }, tag = "tasks_categories", role = Role.Tab,
+                itemTag = { "tasks_tab_${NeteaseTaskGroup.entries[it].name}" })
         }
-        Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 4.dp, bottom = 16.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Box(Modifier.size(5.dp).background(if (connected) colors.primary else colors.onSurfaceVariantSummary, CircleShape))
-            Text(account.profile?.nickname ?: "尚未登录网易云", fontSize = 12.sp, fontWeight = FontWeight.Medium,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-            Text(if (connected) "本机直连" else "需要本机登录", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-        }
-        if (connected) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(bottom = 12.dp).selectableGroup(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            NeteaseTaskGroup.entries.forEach { group ->
-                val selected = state.group == group
-                val background by animateColorAsState(if (selected) colors.primary.copy(alpha = .12f) else colors.surfaceContainer,
-                    tween(180), label = "task category")
-                Box(Modifier.weight(1f).height(38.dp).clip(RoundedCornerShape(13.dp)).background(background)
-                    .selectable(selected, role = Role.Tab, onClick = { vm.select(group) }).testTag("tasks_tab_${group.name}"), Alignment.Center) {
-                    Text(group.title, fontSize = 13.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                        color = if (selected) colors.primary else colors.onSurface)
-                }
-            }
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("tasks_list"), state = list,
-            contentPadding = musicScrollPadding(PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp)),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!connected) item {
-                Card(Modifier.fillMaxWidth()) {
+                SettingsGroup(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(if (account.stale) "网易云登录已过期" else "连接网易云账号", fontSize = 18.sp, fontWeight = FontWeight.Medium)
                         Text("登录后查看任务、签到和已完成的奖励。", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
@@ -99,7 +84,7 @@ import java.time.format.DateTimeFormatter
                     }
                     val done = options.signedDay(kind) == NeteaseTaskPreferences.day() ||
                         (state.group == NeteaseTaskGroup.DAILY && state.page?.signedToday == true)
-                    Card(Modifier.fillMaxWidth().animateContentSize(tween(200))) {
+                    SettingsGroup(Modifier.fillMaxWidth().animateContentSize(tween(200))) {
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                 Text(when (state.group) {
@@ -127,20 +112,13 @@ import java.time.format.DateTimeFormatter
                     }
                 }
                 item {
-                    Card(Modifier.fillMaxWidth()) {
-                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                                Text("使用时自动签到", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                Text("日常与云贝 · 每天一次", fontSize = 11.sp, color = colors.onSurfaceVariantSummary)
-                            }
-                            Switch(checked = options.automatic, onCheckedChange = vm::automatic, enabled = !busy && action == null,
-                                modifier = Modifier.testTag("tasks_automatic"))
-                        }
+                    SettingsGroup(Modifier.fillMaxWidth()) {
+                        SettingsSwitch("使用时自动签到", options.automatic, vm::automatic,
+                            Modifier.testTag("tasks_automatic"), summary = "日常与云贝 · 每天一次", enabled = !busy && action == null)
                     }
                 }
                 if (state.loading && state.page == null) items(2, key = { "task-loading-$it" }) {
-                    Card(Modifier.fillMaxWidth()) {
+                    SettingsGroup(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             MusicPlaceholder(Modifier.fillMaxWidth(.45f).height(18.dp))
                             MusicPlaceholder(Modifier.fillMaxWidth(.8f).height(12.dp))
@@ -148,7 +126,7 @@ import java.time.format.DateTimeFormatter
                     }
                 }
                 state.error?.let { error -> item {
-                    Card(Modifier.fillMaxWidth()) {
+                    SettingsGroup(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("暂时无法读取${state.group.title}任务", fontSize = 14.sp, fontWeight = FontWeight.Medium)
                             Text(error, fontSize = 12.sp, lineHeight = 18.sp, color = colors.onSurfaceVariantSummary)
@@ -168,7 +146,7 @@ import java.time.format.DateTimeFormatter
                         }
                     }
                     items(page.items, key = { it.id }) { item ->
-                        Card(Modifier.fillMaxWidth()) {
+                        SettingsGroup(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(item.title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                                 if (item.detail.isNotBlank()) Text(item.detail, fontSize = 12.sp, lineHeight = 18.sp,
@@ -180,7 +158,7 @@ import java.time.format.DateTimeFormatter
                     }
                 }
                 if (options.logs.isNotEmpty()) item {
-                    Card(Modifier.fillMaxWidth().testTag("tasks_journal").animateContentSize(tween(200))) {
+                    SettingsGroup(Modifier.fillMaxWidth().testTag("tasks_journal").animateContentSize(tween(200))) {
                         Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
                             Row(Modifier.fillMaxWidth().heightIn(min = 44.dp).clip(RoundedCornerShape(10.dp))
                                 .clickable(role = Role.Button) { expandedLogs = !expandedLogs }
@@ -212,14 +190,5 @@ import java.time.format.DateTimeFormatter
 
 @Composable private fun TaskAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     primary: Boolean = false, enabled: Boolean = true) {
-    val colors = MiuixTheme.colorScheme
-    Box(modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(13.dp)).clickable(enabled, role = Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center) {
-        Box(Modifier.clip(RoundedCornerShape(13.dp)).background(
-            if (primary) colors.primary.copy(alpha = if (enabled) 1f else .35f) else colors.onSurface.copy(alpha = .055f))
-            .padding(horizontal = 16.dp, vertical = 9.dp)) {
-            Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium,
-                color = (if (primary) colors.onPrimary else colors.onSurface).copy(alpha = if (enabled) 1f else .45f))
-        }
-    }
+    GlassActionButton(label, onClick, modifier, primary = primary, enabled = enabled, fillWidth = false)
 }

@@ -38,6 +38,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -81,19 +82,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         PlaylistImportMode.IMAGES -> state.images.isNotEmpty() && state.targetId != null && !state.targetsLoading
         PlaylistImportMode.LOCAL -> state.selected.isNotEmpty()
     }
-    MiuixTheme(colors = colors, textStyles = MiuixTheme.textStyles) {
-    Column(Modifier.fillMaxSize().background(colors.background).imePadding().testTag("playlist_import")) {
-        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 22.dp, top = 8.dp, bottom = 16.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(42.dp).clip(CircleShape).background(colors.surfaceContainer)
-                .clickable(role = Role.Button, onClick = onBack).testTag("playlist_import_back"), contentAlignment = Alignment.Center) {
-                Icon(MusicIcons.Back, "返回", Modifier.size(22.dp))
-            }
-            Text("导入歌单", fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
-        }
-        if (state.task == null) {
-            Row(Modifier.fillMaxWidth().testTag("playlist_import_actions").background(colors.background)
-                .padding(horizontal = 22.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
+    MusicSubpage("导入歌单", "playlist_import", onBack, backTag = "playlist_import_back",
+        modifier = Modifier.imePadding()) { topInset ->
+        LazyColumn(Modifier.fillMaxSize().testTag("playlist_import_list"),
+            contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (state.task == null) item("actions") { SettingsGroup {
+            Row(Modifier.fillMaxWidth().testTag("playlist_import_actions")
+                .padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (connected) Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("网易云 · ${account.profile?.nickname.orEmpty()}", fontSize = 11.sp,
@@ -102,39 +98,23 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("加入「我喜欢」", Modifier.weight(1f), fontSize = 13.sp,
                             color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Switch(state.importStar, vm::importStar, enabled = editable, modifier = Modifier.testTag("playlist_import_star"))
+                        GlassSwitch(state.importStar, vm::importStar, enabled = editable, modifier = Modifier.testTag("playlist_import_star"))
                     } else Text("保存到所选歌单", fontSize = 13.sp, color = colors.onSurfaceVariantSummary,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Box((if (connected) Modifier.width(132.dp) else Modifier.fillMaxWidth()).height(46.dp).clip(RoundedCornerShape(15.dp))
-                    .background(if (connected && !ready) colors.primary.copy(alpha = .14f) else colors.primary)
-                    .clickable(enabled = if (connected) ready else true, role = Role.Button) {
-                        focus.clearFocus(); keyboard?.hide(); if (connected) vm.submit() else onLogin()
-                    }.testTag(if (connected) "playlist_import_submit" else "playlist_import_login"), contentAlignment = Alignment.Center) {
-                    Text(if (!connected) "登录网易云后导入" else if (state.busy) "正在提交…" else "开始导入",
-                        fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-                        color = if (connected && !ready) colors.primary.copy(alpha = .5f) else colors.onPrimary)
-                }
+                GlassActionButton(if (!connected) "登录网易云后导入" else if (state.busy) "正在提交…" else "开始导入", {
+                    focus.clearFocus(); keyboard?.hide(); if (connected) vm.submit() else onLogin()
+                }, modifier = (if (connected) Modifier.width(132.dp) else Modifier.fillMaxWidth())
+                    .testTag(if (connected) "playlist_import_submit" else "playlist_import_login"),
+                    primary = true, enabled = !connected || ready)
             }
+        } }
+        item("modes") {
+            SettingsSegmentedControl(PlaylistImportMode.entries.map { it.label.removeSuffix("导入") }, state.mode.ordinal, {
+                focus.clearFocus(); keyboard?.hide(); vm.mode(PlaylistImportMode.entries[it])
+            }, enabled = editable, tag = "playlist_import_modes", role = Role.Tab,
+                itemTag = { "playlist_import_tab_${PlaylistImportMode.entries[it].name}" })
         }
-        Row(Modifier.fillMaxWidth().selectableGroup().padding(horizontal = 22.dp)
-            .background(colors.surfaceContainer, RoundedCornerShape(18.dp)).padding(5.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            PlaylistImportMode.entries.forEach { tab ->
-                val selected = state.mode == tab
-                Row(Modifier.weight(1f).height(42.dp).clip(RoundedCornerShape(13.dp))
-                    .background(if (selected) colors.primary else Color.Transparent)
-                    .selectable(selected, enabled = editable, role = Role.Tab, onClick = { focus.clearFocus(); keyboard?.hide(); vm.mode(tab) })
-                    .testTag("playlist_import_tab_${tab.name}"), verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center) {
-                    Text(tab.label.removeSuffix("导入"), fontSize = 14.sp, fontWeight = FontWeight.Medium,
-                        color = if (selected) colors.onPrimary else colors.onSurfaceVariantSummary)
-                }
-            }
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp).testTag("playlist_import_list"),
-            contentPadding = PaddingValues(start = 22.dp, end = 22.dp, top = 8.dp, bottom = LocalMusicBottomInset.current + 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (!connected) item {
                 Text(if (account.stale) "网易云登录已过期，请重新登录后导入。" else "登录网易云后即可导入歌单。",
                     fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
@@ -266,7 +246,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     }
                 }
                 if (state.task != null) item {
-                    Card { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    SettingsGroup { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text(if (state.result?.finished == true) "导入结果" else "导入处理中",
                             fontSize = 18.sp, fontWeight = FontWeight.Medium)
                         state.message?.let { Text(it, fontSize = 14.sp, modifier = Modifier.testTag("playlist_import_status")) }
@@ -285,20 +265,18 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         }
 
     }
-    }
 }
 
 @Composable private fun ImportTextAction(label: String, onClick: () -> Unit, enabled: Boolean, modifier: Modifier = Modifier) {
-    val colors = MiuixTheme.colorScheme
-    Text(label, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.primary.copy(alpha = if (enabled) 1f else .45f),
-        modifier = modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick).heightIn(min = 40.dp).wrapContentHeight())
+    GlassActionButton(label, onClick, modifier, enabled = enabled, fillWidth = false)
+
 }
 
 @Composable private fun ImportLinkField(value: String, onValue: (String) -> Unit, label: String, enabled: Boolean,
     onPaste: () -> Unit, onRemove: (() -> Unit)?, modifier: Modifier, tag: String) {
     val colors = MiuixTheme.colorScheme
     Column(modifier.clip(RoundedCornerShape(18.dp)).background(colors.surfaceContainer)
-        .border(1.dp, colors.onSurfaceVariantSummary.copy(alpha = .08f), RoundedCornerShape(18.dp)).padding(16.dp),
+        .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(label, Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.onSurfaceVariantSummary)

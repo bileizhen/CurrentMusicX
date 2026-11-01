@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.time.Instant
@@ -35,20 +36,13 @@ import java.time.format.DateTimeFormatter
     var selected by rememberSaveable { mutableStateOf<Int?>(null) }
     // A refreshed catalog cannot leave a detail dialog pointing at a different announcement.
     LaunchedEffect(state.items) { selected = null }
-    Column(Modifier.fillMaxSize().background(colors.background).testTag("announcement_archive")) {
-        Row(Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 4.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(colors.surfaceContainer)
-                .clickable(role = Role.Button, onClick = onBack).testTag("announcement_back"), Alignment.Center) {
-                Icon(MusicIcons.Back, "返回", Modifier.size(23.dp))
-            }
-            Text("公告", Modifier.weight(1f), fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
-            MusicTextAction(if (state.loading) "加载中" else "刷新", refresh,
-                Modifier.testTag("announcement_refresh"), enabled = !state.loading)
-        }
-        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("announcement_list"),
-            contentPadding = musicScrollPadding(PaddingValues(start = 20.dp, end = 20.dp, bottom = 24.dp)),
-            verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    MusicSubpage("公告", "announcement_archive", onBack, backTag = "announcement_back", actions = {
+        MusicTextAction(if (state.loading) "加载中" else "刷新", refresh,
+            Modifier.testTag("announcement_refresh"), enabled = !state.loading)
+    }) { topInset ->
+        LazyColumn(Modifier.fillMaxSize().testTag("announcement_list"),
+            contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
+            verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (state.error != null) item {
                 Text(state.error, fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
                 MusicTextAction("重试", refresh, Modifier.testTag("announcement_retry"))
@@ -68,11 +62,11 @@ import java.time.format.DateTimeFormatter
                 Text("全部公告 · ${state.items.size} 条", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
             }
             itemsIndexed(state.items, key = { index, item -> "${item.id}:$index" }) { index, item ->
-                Card(Modifier.fillMaxWidth().testTag("announcement_item_${item.id}")
-                    .clickable(role = Role.Button) { selected = index }) {
-                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingsGroup {
+                    SettingsPreference(item.title, modifier = Modifier.testTag("announcement_item_${item.id}"),
+                        onClick = { selected = index }, footer = {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         if (item.pinned) Text("置顶", fontSize = 12.sp, color = colors.primary)
-                        Text(item.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                         val date = remember(item.createdAt) {
                             if (item.createdAt <= 0) "" else runCatching {
                                 DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.systemDefault())
@@ -82,6 +76,7 @@ import java.time.format.DateTimeFormatter
                         Text(listOf(item.author.ifBlank { "CurrentStation" }, date).filter(String::isNotBlank).joinToString(" · "),
                             fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
                     }
+                    })
                 }
             }
         }

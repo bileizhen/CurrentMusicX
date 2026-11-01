@@ -13,11 +13,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import io.github.currencortex.music.ui.component.nativeui.SettingsGroup
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable internal fun BindingMedalsCard(state: BindingMedalsState, onRetry: () -> Unit) {
-    Card(Modifier.fillMaxWidth().testTag("binding_medals")) {
+    SettingsGroup(Modifier.fillMaxWidth().testTag("binding_medals")) {
         Column(Modifier.padding(vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("我的勋章", Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)

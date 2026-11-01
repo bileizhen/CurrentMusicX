@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -40,23 +41,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         PlaylistImportMode.IMAGES -> "识别截图，收藏喜欢的歌曲。"
         PlaylistImportMode.LOCAL -> "只匹配信息，音频留在本机。"
     }
-    Row(Modifier.fillMaxWidth().background(colors.surfaceContainer, RoundedCornerShape(24.dp)).padding(20.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("CurrentMusic", fontSize = 11.sp, fontWeight = FontWeight.Medium, color = colors.onSurfaceVariantSummary)
-            Text(title, fontSize = 23.sp, lineHeight = 31.sp, fontWeight = FontWeight.SemiBold)
-            Text(summary, fontSize = 12.sp, lineHeight = 19.sp, color = colors.onSurfaceVariantSummary)
-        }
-        Canvas(Modifier.size(76.dp)) {
-            val center = Offset(size.width / 2, size.height / 2)
-            val radius = size.minDimension / 2
-            drawCircle(Color(0xFF26272C), radius, center)
-            for (ring in 1..4) drawCircle(Color.White.copy(alpha = .09f), radius * (.43f + ring * .105f), center,
-                style = androidx.compose.ui.graphics.drawscope.Stroke(width = 1.dp.toPx()))
-            drawCircle(colors.primary, radius * .34f, center)
-            drawCircle(colors.surfaceContainer, radius * .065f, center)
-        }
-    }
+    SettingsGroup { SettingsPreference(title, summary) }
+
 }
 
 @Composable internal fun PlaylistImportGuide() {
