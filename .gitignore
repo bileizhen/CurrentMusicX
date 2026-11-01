@@ -30,3 +30,18 @@ keystore.properties
 **/CODEX.md
 **/M0_CODEX_TASK.md
 **/DEVELOPMENT_PLAN.md
+
+# Keep README files and Markdown required by the application or source attribution.
+*.md
+*.MD
+*.markdown
+!README.md
+!README-*.md
+!/CHANGELOG.md
+!/PRIVACY.md
+!/THIRD_PARTY_NOTICES.md
+!/NETEASE_USB_OUTPUT.md
+!/app/src/main/assets/legal/NOTICES.md
+!/app/src/main/assets/legal/PRIVACY.md
+!/app/src/main/cpp/oboe/UPSTREAM.md
+!/app/src/test/resources/ttml/SOURCE.md
