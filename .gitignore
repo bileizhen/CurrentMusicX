@@ -35,7 +35,6 @@ keystore.properties
 *.markdown
 !README.md
 !README-*.md
-!/CHANGELOG.md
 !/PRIVACY.md
 !/THIRD_PARTY_NOTICES.md
 !/NETEASE_USB_OUTPUT.md

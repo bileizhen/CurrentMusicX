@@ -14,7 +14,7 @@
   <a href="#开源与致谢"><img src="https://img.shields.io/badge/License-GPL--3.0_%2B_AGPL--3.0-555555?style=flat-square" alt="GPL-3.0 与 AGPL-3.0 组件"></a>
 </p>
 
-**[下载应用](https://github.com/bileizhen/CurrentMusicX/releases/latest)** · [界面预览](#界面预览) · [更新记录](CHANGELOG.md) · [反馈问题](https://github.com/bileizhen/CurrentMusicX/issues)
+**[下载应用](https://github.com/bileizhen/CurrentMusicX/releases/latest)** · [界面预览](#界面预览) · [更新记录](https://github.com/bileizhen/CurrentMusicX/releases) · [反馈问题](https://github.com/bileizhen/CurrentMusicX/issues)
 
 </div>
 
@@ -22,7 +22,7 @@
 
 CurrentMusicX 是 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic) 的原生 Android 客户端，支持网易云音乐库、Navidrome 自建曲库和双人一起听。圆形封面、动态取色、逐字歌词与悬浮播放器组成日常听歌体验，适配竖屏、横屏和宽屏布局。
 
-本页介绍当前源码的功能；已发布版本的具体改动请查看[更新记录](CHANGELOG.md)。Android 客户端源码维护于本仓库 `main` 分支。
+本页介绍当前源码的功能；已发布版本的具体改动请查看[GitHub Releases](https://github.com/bileizhen/CurrentMusicX/releases)。Android 客户端源码维护于本仓库 `main` 分支。
 
 ## 开始使用
 
@@ -173,7 +173,7 @@ CurrentMusicX 是 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic) 
 本机账号凭据加密保存，服务分别请求对应的网易云、CurrentMusic 或 Navidrome 接口；音频、MV 与图片从对应服务返回的地址加载。下载文件保存在用户选择的目录。数据用途及保存方式见[隐私说明](PRIVACY.md)。
 
 - [从源码构建与设备测试](#从源码构建与设备测试)
-- [更新记录](CHANGELOG.md)
+- [更新记录](https://github.com/bileizhen/CurrentMusicX/releases)
 - [第三方依赖与许可证](THIRD_PARTY_NOTICES.md)
 
 欢迎提交 Issue 或 Pull Request。请说明解决的问题、实际验证结果，并按独立功能或修复拆分提交。
