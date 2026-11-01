@@ -35,7 +35,7 @@ fun coverRequestUrl(url: String, pixels: Int): String {
     var loading by remember(url, pixels) { mutableStateOf(url.isNotBlank()) }
     var failed by remember(url, pixels) { mutableStateOf(url.isBlank()) }
     Box(modifier.squircleClip(cornerRadius)) {
-    if (loading) MusicPlaceholder(Modifier.matchParentSize())
+    if (loading) MusicPlaceholder(Modifier.matchParentSize(), shape = RoundedCornerShape(cornerRadius))
     if (failed) Box(Modifier.matchParentSize().background(MiuixTheme.colorScheme.onSurface.copy(alpha = .06f)), contentAlignment = androidx.compose.ui.Alignment.Center) { Text("♪", fontSize = 20.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .3f)) }
     AsyncImage(remember(context, url, pixels) { ImageRequest.Builder(context).data(coverRequestUrl(url, pixels)).size(pixels).build() },
         contentDescription = "歌曲封面", contentScale = ContentScale.Crop,
