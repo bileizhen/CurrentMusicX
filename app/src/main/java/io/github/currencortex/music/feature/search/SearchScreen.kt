@@ -11,21 +11,20 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.*
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.*
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import io.github.currencortex.music.core.media.PlayerController
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -74,21 +73,35 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         (page.songs.take(8).map { it.cover } + page.entries.take(8).map { it.cover }).distinct()
     }
     val categoryTabs = remember(categories) { categories.map { it.route to it.label } }
+    val categoryStrip: @Composable () -> Unit = {
+        MusicCategoryTabs(categoryTabs, category.route,
+            { key -> focus.clearFocus(); keyboard?.hide(); vm.select(SearchCategory.entries.first { it.route == key }) },
+            "search_category", Modifier.padding(vertical = 4.dp))
+    }
     PreloadMusicCovers(covers)
     LaunchedEffect(page.songs) { if (page.songs.isNotEmpty()) onResults(page.songs) }
     fun submit(keyword: String = state.query) { focus.clearFocus(); keyboard?.hide(); vm.search(keyword) }
     fun back() { focus.clearFocus(); keyboard?.hide(); onBack?.invoke() }
     val colors = MiuixTheme.colorScheme
     val showSuggestions = inputFocused && state.query.isNotBlank() && state.query.trim() != state.submitted && suggestions.query == state.query.trim()
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val height = with(LocalDensity.current) { maxHeight.toPx() }
-        Column(Modifier.fillMaxSize().then(if (sheet != null) Modifier.statusBarsPadding().imePadding() else Modifier)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = if (sheet == null) 12.dp else 20.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (onBack != null && sheet == null) Box(Modifier.size(40.dp).graphicsLayer { alpha = sheet?.progress ?: 1f }
-                    .clickable(role = Role.Button) { back() }.testTag(if (roomName != null) "room_search_back" else "search_back"), contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", Modifier.size(24.dp), tint = colors.onSurface)
+    var headerHeight by remember { mutableIntStateOf(0) }
+    val density = LocalDensity.current
+    val status = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val toolbarHeight = with(density) { if (headerHeight > 0) headerHeight.toDp() - status else 72.dp }
+    SettingsUiScope {
+    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.widthIn(max = 840.dp).fillMaxSize().align(Alignment.TopCenter)) {
+        val height = with(density) { maxHeight.toPx() }
+        SettingsScrollLayout(Modifier.fillMaxSize().then(if (sheet != null) Modifier.imePadding() else Modifier),
+            toolbarHeight = toolbarHeight, topBar = {
+            Column(Modifier.fillMaxWidth().onSizeChanged { headerHeight = it.height }.statusBarsPadding().testTag("search_toolbar")) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (onBack != null && sheet == null) {
+                    GlassIconButton(::back, "返回", Modifier.testTag(if (roomName != null) "room_search_back" else "search_back")) {
+                        Icon(MusicIcons.Back, null)
+                    }
+                    Spacer(Modifier.width(12.dp))
                 }
-                if (sheet == null) Spacer(Modifier.width(6.dp))
                 Box(Modifier.weight(1f).height(48.dp).onGloballyPositioned { target = it.boundsInRoot() }) {
                     MusicSearchBar(state.query, { if (state.query.isBlank()) { requester.requestFocus(); keyboard?.show() } else submit() },
                         Modifier.fillMaxSize().graphicsLayer {
@@ -97,18 +110,22 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                 translationX = (source.left - end.left) * (1f - p)
                                 translationY = (source.top - end.top) * (1f - p)
                             }
-                        }.testTag("search_header_field"), onInput = vm::input, requester = requester, onInputFocus = { inputFocused = it })
+                        }.testTag("search_header_field"), onInput = vm::input, requester = requester,
+                        onInputFocus = { inputFocused = it }, onCancel = ::back)
                 }
             }
-            MusicCategoryTabs(categoryTabs, category.route,
-                { key -> focus.clearFocus(); keyboard?.hide(); vm.select(SearchCategory.entries.first { it.route == key }) }, "search_category",
-                Modifier.padding(horizontal = 20.dp))
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+
+            }
+        }) { topInset ->
+            Box(Modifier.fillMaxSize()) {
             if (!showSuggestions) LazyColumn(Modifier.fillMaxSize().testTag("search_screen").graphicsLayer {
                 val p = sheet?.progress ?: 1f
                 translationY = height * (1f - p); alpha = (p / .65f).coerceIn(0f, 1f)
-            }, state = scroll, contentPadding = PaddingValues(start = 20.dp, top = 6.dp, end = 20.dp, bottom = 20.dp + bottomInset),
+            }, state = scroll, contentPadding = PaddingValues(start = 16.dp, top = topInset + 8.dp, end = 16.dp, bottom = 32.dp + bottomInset),
                 verticalArrangement = Arrangement.spacedBy(if (state.searched) 2.dp else 16.dp)) {
+                item(key = "search_categories") {
+                    categoryStrip()
+                }
                 if (roomName != null) item { Text("$roomName · 点击歌曲提交点歌", fontSize = 13.sp) }
                 if (!state.searched) item {
                     SearchLandingContent(history, landing, charts, recommendations, recent,
@@ -121,7 +138,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             Text(error)
             MusicTextAction("重试", vm::retry, Modifier.testTag("search_retry"), enabled = !page.loading)
         } }
-        if (page.loading && page.count == 0) item { LoadingSongList(4) }
+        if (page.loading && page.count == 0) item { LoadingSongList(4, searchActions = quickActions != null) }
         if (state.searched && page.loaded) item {
             val count = when (category) {
                 SearchCategory.SONG -> "${page.total} 首歌曲"
@@ -163,18 +180,20 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     extraActions = { actions?.invoke(song) })
             }
         }
-        if (page.loading && page.count > 0) item { LoadingSongList(2) }
+        if (page.loading && page.count > 0) item { LoadingSongList(2, searchActions = quickActions != null) }
         if (page.more && page.error == null) item {
             MusicTextAction("加载更多", { vm.search(more = true) }, Modifier.fillMaxWidth().testTag("search_load_more"), enabled = !page.loading)
         }
             }
                 if (showSuggestions) SearchSuggestionsContent(state.query.trim(), suggestions, ::submit,
-                    Modifier.fillMaxSize().background(colors.background).graphicsLayer {
+                    Modifier.fillMaxSize().padding(top = topInset).background(colors.background).graphicsLayer {
                         val p = sheet?.progress ?: 1f
                         translationY = height * (1f - p); alpha = (p / .65f).coerceIn(0f, 1f)
-                    })
+                    }, header = categoryStrip)
 
             }
         }
+    }
+    }
     }
 }

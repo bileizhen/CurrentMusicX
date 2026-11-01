@@ -32,6 +32,7 @@ class MusicStyleCapabilitiesTest {
     @Before fun setup() = runBlocking {
         container = AppContainer(ApplicationProvider.getApplicationContext<CurrentMusicApplication>(), "styles-${UUID.randomUUID()}")
         container.ready.await(); container.sessionRestored.await()
+        container.desktopLyrics.markRecommendationSeen()
         val app = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         fun cover(name: String, color: Int): String {
             val file = java.io.File(app.cacheDir, name)
@@ -108,13 +109,15 @@ class MusicStyleCapabilitiesTest {
     @Test fun stylesNavigateSortPageRetryAndAddToQueueWithoutTouchingCurrentPlayback() {
         compose.setContent { CurrentMusicApp(container) }
         waitFor("mini_cover")
-        compose.onNodeWithText("发现").performClick()
+        compose.mainClock.advanceTimeBy(750)
+        compose.onNodeWithTag("tab_1").performClick()
+        compose.onNodeWithTag("tab_1").assertIsSelected()
         waitFor("style_catalog_retry")
         catalogFail = false
         compose.onNodeWithTag("style_catalog_retry").performScrollTo().performClick()
         waitFor("style_category_1000")
         waitForCoverTint("style_category_1000", green = true)
-        compose.onNodeWithText("音乐社区").assertExists()
+        compose.onNodeWithTag("discover_tabs_0").assertIsSelected()
         save("style-catalog-test.png")
         compose.onNodeWithTag("style_category_1013").assertDoesNotExist()
         assertFalse(requests.any { it.requestUrl!!.queryParameter("tagId") == "1013" })

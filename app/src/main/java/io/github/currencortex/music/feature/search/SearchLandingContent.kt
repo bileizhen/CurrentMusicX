@@ -26,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.local.SearchHistoryEntity
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -89,7 +90,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 flingBehavior = rememberSnapFlingBehavior(carousel), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (charts.charts.isEmpty()) item(key = "hot") {
                     SearchRankingCard("热搜榜", "大家正在搜", Modifier.width(cardWidth)) {
-                        if (landing.loading) LoadingSongList(3)
+                        if (landing.loading) LoadingTextList(3)
                         else if (landing.error != null) { Text("热搜暂时不可用", fontSize = 13.sp); MusicTextAction("重新加载", onRetryHot, Modifier.testTag("search_hot_retry")) }
                         else if (landing.words.isEmpty()) Text("暂无热搜", fontSize = 13.sp)
                         landing.words.take(8).forEachIndexed { index, word ->
@@ -101,7 +102,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     LaunchedEffect(chart.id) { onLoadChart(chart.id, false) }
                     val page = charts.pages[chart.id] ?: SearchChartPage(loading = true)
                     SearchRankingCard(chart.name, "", Modifier.width(cardWidth).testTag("search_chart_${chart.id}")) {
-                        if (page.loading) LoadingSongList(3)
+                        if (page.loading) LoadingTextList(3)
                         else if (page.error != null) {
                             Text("榜单暂时不可用", fontSize = 13.sp)
                             MusicTextAction("重新加载", { onLoadChart(chart.id, true) }, Modifier.testTag("search_chart_retry_${chart.id}"))
@@ -113,7 +114,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 }
                 if (charts.error != null) item(key = "charts_status") {
                     SearchRankingCard("音乐榜单", "", Modifier.width(cardWidth)) {
-                        if (charts.loading) LoadingSongList(3)
+                        if (charts.loading) LoadingTextList(3)
                         else { Text("榜单暂时不可用", fontSize = 13.sp); MusicTextAction("重新加载", onRetryCharts) }
                     }
                 }
@@ -134,44 +135,38 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable private fun SearchRankingCard(title: String, subtitle: String, modifier: Modifier, onOpen: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit) {
     val colors = MiuixTheme.colorScheme
-    Column(modifier.heightIn(min = 476.dp).clip(RoundedCornerShape(22.dp)).background(colors.surfaceContainer).padding(horizontal = 16.dp, vertical = 14.dp)) {
+    SettingsGroup(modifier.heightIn(min = 476.dp)) {
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 36.dp).then(if (onOpen != null) Modifier.clickable(role = Role.Button, onClick = onOpen) else Modifier),
             verticalAlignment = Alignment.CenterVertically) {
-            Text(title, Modifier.weight(1f), fontSize = 19.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (onOpen != null) SearchChevron("查看完整$title", Modifier.size(18.dp))
         }
-        if (subtitle.isNotBlank()) Text(subtitle, Modifier.padding(bottom = 10.dp), fontSize = 11.sp, color = colors.onSurface.copy(alpha = .4f))
+        if (subtitle.isNotBlank()) Text(subtitle, Modifier.padding(bottom = 10.dp), fontSize = 13.sp, color = colors.onSurface.copy(alpha = .4f))
         content()
+    }
     }
 }
 
 @Composable private fun RankingRow(index: Int, title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
     val colors = MiuixTheme.colorScheme
-    Row(modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onClick).padding(vertical = 7.dp),
-        verticalAlignment = Alignment.CenterVertically) {
+    SettingsPreference(title, subtitle, modifier, onClick = onClick, leading = {
         Text("${index + 1}", Modifier.width(26.dp), fontSize = 15.sp, fontWeight = FontWeight.Medium,
-            color = if (index < 3) colors.primary.copy(alpha = .8f) else colors.onSurface.copy(alpha = .35f))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(title, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (subtitle.isNotBlank()) Text(subtitle, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = colors.onSurface.copy(alpha = .4f))
-        }
-    }
+            color = if (index < 3) colors.primary else colors.onSurfaceVariantSummary)
+    })
 }
 
-@Composable internal fun SearchSuggestionsContent(query: String, suggestions: SearchSuggestions, onSearch: (String) -> Unit, modifier: Modifier) {
+@Composable internal fun SearchSuggestionsContent(query: String, suggestions: SearchSuggestions, onSearch: (String) -> Unit, modifier: Modifier, header: @Composable () -> Unit = {}) {
     val colors = MiuixTheme.colorScheme
     LazyColumn(modifier.testTag("search_suggestions"), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)) {
+        item { header() }
         item { Text("搜索建议", Modifier.padding(bottom = 8.dp), fontSize = 13.sp, color = colors.onSurface.copy(alpha = .45f)) }
         itemsIndexed(suggestions.words, key = { _, word -> word }) { index, word ->
-            Row(Modifier.fillMaxWidth().heightIn(min = 50.dp).clickable(role = Role.Button) { onSearch(word) }
-                .testTag("search_suggestion_$index").padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Search, null, Modifier.size(18.dp), tint = colors.onSurface.copy(alpha = .35f))
-                Text(word, Modifier.padding(start = 12.dp), fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
+            SettingsPreference(word, modifier = Modifier.testTag("search_suggestion_$index"), onClick = { onSearch(word) },
+                leading = { Icon(MusicIcons.Search, null, Modifier.size(20.dp), tint = colors.onSurfaceVariantSummary) })
         }
         if (suggestions.words.isEmpty()) item {
-            if (suggestions.loading) LoadingSongList(3)
+            if (suggestions.loading) LoadingTextList(3, leading = true)
             else MusicTextAction("搜索“$query”", { onSearch(query) }, Modifier.fillMaxWidth().testTag("search_suggestion_direct"))
         }
     }

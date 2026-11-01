@@ -27,6 +27,7 @@ class SearchArtistCapabilitiesTest {
     @Volatile private var playlistPageFail = true
     @Volatile private var playlistFixture = false
     @Volatile private var projectLiked = false
+    @Volatile private var longSearchPage = false
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
     private fun song(id: Int) = """{"ncm_id":$id,"name":"Fixture song $id","artists":"Fixture Artist","artist_ids":[31]}"""
     private fun album(id: Int) = """{"id":$id,"name":"Fixture Album $id","artist":"Fixture Artist","size":2,"publishTime":1790870400000}"""
@@ -44,7 +45,9 @@ class SearchArtistCapabilitiesTest {
                     "/cm/ncm/search/chart/list" -> json("""{"code":200,"data":{"tabInfo":{"list":[{"id":"HOT_SEARCH_SONG#@#","name":"热搜榜"},{"id":"HOT_SEARCH_STYLE_ACG#@#","name":"ACG榜"}]},"items":{"HOT_SEARCH_SONG#@#":[{"searchWord":"Fixture hot"}]}}}""")
                     "/cm/ncm/search/chart/detail" -> json("""{"code":200,"data":{"itemList":[{"searchWord":"fixture complete"},{"searchWord":"fixture lyric"}]}}""")
                     "/cm/ncm/search/suggest" -> json("""{"code":200,"result":{"allMatch":[{"keyword":"fixture complete"},{"keyword":"fixture complete"},{"keyword":"fixture lyric"}]}}""")
-                    "/cm/ncm/search" -> when (url.queryParameter("type")) {
+                    "/cm/ncm/search" -> if (longSearchPage && url.queryParameter("type") == "song")
+                        json("""{"songs":[${(11..35).joinToString(",") { song(it) }}],"totals":{"song":25},"hasMore":{"song":false}}""")
+                    else when (url.queryParameter("type")) {
                         "lyric" -> when {
                             url.queryParameter("offset") == "2" && songPageFail -> MockResponse().setResponseCode(503)
                             url.queryParameter("offset") == "2" -> json("""{"songs":[${song(12)},{"ncm_id":13,"name":"Lyric hit 13","lyric":"second matching lyric"}],"totals":{"song":3},"hasMore":{"song":false}}""")
@@ -129,6 +132,26 @@ class SearchArtistCapabilitiesTest {
         awaitTag("search_song_11")
     }
 
+    @Test fun categoriesScrollWithResultsWhileTheSearchFieldStaysFixed() {
+        longSearchPage = true
+        openResults()
+        val field = compose.onNodeWithTag("search_header_field").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("search_category_song").assertIsDisplayed().assertIsSelected()
+        compose.onNodeWithTag("search_screen").performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(centerX, height * .7f),
+                androidx.compose.ui.geometry.Offset(centerX, height * .3f), 450)
+        }
+        compose.onNodeWithTag("search_category_song").assertIsNotDisplayed()
+        assertEquals(field, compose.onNodeWithTag("search_header_field").fetchSemanticsNode().boundsInRoot)
+        save("search-tabs-scrolled.png")
+        compose.onNodeWithTag("search_screen").performScrollToIndex(0)
+        compose.onNodeWithTag("search_category_song").assertIsDisplayed().assertIsSelected()
+        compose.onNodeWithTag("search_category_artist").performClick()
+        awaitTag("search_artist_31")
+        assertEquals(listOf(900L), container.playbackQueue.state.value.songs.map { it.id })
+        assertFalse(container.playerController.state.value.playing)
+    }
+
     @Test fun resultActionsKeepPlaybackAndTextDoesNotOverlapInEitherTheme() {
         openResults()
         for (mode in listOf(io.github.currencortex.music.data.settings.ThemeMode.LIGHT, io.github.currencortex.music.data.settings.ThemeMode.DARK)) {
@@ -140,7 +163,10 @@ class SearchArtistCapabilitiesTest {
             val playlist = compose.onNodeWithTag("search_playlist_11").fetchSemanticsNode().boundsInRoot
             val more = compose.onNodeWithTag("song_menu_11").fetchSemanticsNode().boundsInRoot
             assertTrue("Text must leave room for all three actions", title.right <= like.left && subtitle.right <= like.left)
-            assertTrue(like.right <= playlist.left && playlist.right <= more.left)
+            assertTrue(like.right <= playlist.left && playlist.right < more.left)
+            val capsule = compose.onNodeWithTag("search_quick_actions_11", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+            assertTrue(capsule.left <= like.left && capsule.right >= playlist.right)
+            assertTrue("More must remain outside the two-action capsule", capsule.right < more.left)
             save("search-results-${mode.name.lowercase()}.png")
         }
         compose.onNodeWithTag("search_like_11").performClick()
@@ -319,11 +345,15 @@ class SearchArtistCapabilitiesTest {
         compose.onNodeWithTag("search_screen").performScrollToIndex(0)
         compose.onNodeWithTag("search_category_artist").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_artist_31")
         compose.onNodeWithTag("search_artist_31").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("artist_name")
+        val fixedArtistBar = compose.onNodeWithTag("artist_page_toolbar").fetchSemanticsNode().boundsInRoot
+        save("home-artist-unified.png")
         compose.onNodeWithText("3 首歌曲 · 2 张专辑").assertExists()
         artistTab("about"); awaitTag("artist_bio_retry")
         biographyFail = false; scroll("artist_home", "artist_bio_retry"); compose.onNodeWithTag("artist_bio_retry").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         compose.waitUntil(10000) { compose.onAllNodesWithText("Fixture biography").fetchSemanticsNodes().isNotEmpty() }
         artistTab("songs"); scroll("artist_home", "artist_more_songs"); compose.onNodeWithTag("artist_more_songs").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
+        assertEquals("Artist chrome stays fixed while its body scrolls", fixedArtistBar,
+            compose.onNodeWithTag("artist_page_toolbar").fetchSemanticsNode().boundsInRoot)
         compose.waitUntil(10000) { requests.any { it.requestUrl!!.encodedPath == "/cm/ncm/artist" && it.requestUrl!!.queryParameter("offset") == "2" } }
         scroll("artist_home", "artist_song_13"); compose.onAllNodesWithTag("artist_song_12").assertCountEquals(1)
         artistTab("albums"); clickFooter("artist_home", "artist_more_albums")
@@ -331,12 +361,15 @@ class SearchArtistCapabilitiesTest {
         scroll("artist_home", "catalog_entry_42")
         assertEquals("1", requests.first { it.requestUrl!!.encodedPath == "/cm/ncm/artist/albums" }.requestUrl!!.queryParameter("offset"))
         scroll("artist_home", "catalog_entry_41"); compose.onNodeWithTag("catalog_entry_41").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("library_detail")
-        compose.onNodeWithText("返回").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("artist_home")
+        compose.onNodeWithText("专辑信息").assertExists()
+        compose.onNodeWithTag("playlist_artwork_background").assertIsDisplayed()
+        save("home-album-unified.png")
+        compose.onNodeWithTag("navigate_back").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("artist_home")
         scroll("artist_home", "catalog_entry_42")
         compose.onNodeWithTag("artist_home").performScrollToIndex(0); compose.onNodeWithTag("artist_back").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_artist_31")
         compose.onNodeWithTag("search_category_album").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_album_41")
         compose.onNodeWithTag("search_album_41").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("library_detail")
-        compose.onNodeWithText("返回").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_album_41")
+        compose.onNodeWithTag("navigate_back").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_album_41")
         assertEquals("fixture", requests.last { it.requestUrl!!.encodedPath == "/cm/ncm/search" }.requestUrl!!.queryParameter("keywords"))
         compose.onNodeWithTag("search_category_song").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }; awaitTag("search_song_13")
         compose.onNodeWithTag("search_input").assertTextContains("draft")

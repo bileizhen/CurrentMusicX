@@ -80,10 +80,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable fun MusicStyleCategories(state: StyleCatalogState, retry: () -> Unit, navigate: (String) -> Unit,
-    loadCover: (Long) -> Unit) {
+    loadCover: (Long) -> Unit, listHeader: Boolean = false) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().testTag("style_categories"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        if (listHeader) io.github.currencortex.music.ui.component.nativeui.SettingsListHeader("曲风分类") {
+            if (state.styles.size > 6) StyleAction(if (expanded) "收起" else "全部 ${state.styles.size}",
+                { expanded = !expanded }, Modifier.testTag("style_catalog_expand"))
+        }
+        else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text("曲风分类", Modifier.weight(1f), fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
             if (state.styles.size > 6) StyleAction(if (expanded) "收起" else "全部 ${state.styles.size}",
                 { expanded = !expanded }, Modifier.testTag("style_catalog_expand"))
