@@ -165,14 +165,14 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
                     if (enabled) customActions = listOf(CustomAccessibilityAction("上一首") { previous(); true }, CustomAccessibilityAction("下一首") { next(); true })
                 }, verticalArrangement = Arrangement.Center) {
                 val artistColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f)
-                Text(song?.name ?: "等待房间点歌", Modifier.fillMaxWidth().testTag("mini_title")
+                MiniPlayerSongText(song?.name ?: "等待房间点歌", Modifier.fillMaxWidth().testTag("mini_title")
                     .then(if (active) Modifier else Modifier.clearAndSetSemantics {}).graphicsLayer {
                     translationX = dragged.coerceIn(-threshold * 2, threshold * 2) * .15f
-                }, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(lyric.ifBlank { subtitle }, Modifier.fillMaxWidth().testTag("mini_lyric")
+                }, color = MiuixTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                MiniPlayerSongText(lyric.ifBlank { subtitle }, Modifier.fillMaxWidth().testTag("mini_lyric")
                     .then(if (active) Modifier else Modifier.clearAndSetSemantics {}).graphicsLayer {
                     translationX = dragged.coerceIn(-threshold * 2, threshold * 2) * .15f
-                }, color = artistColor, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }, subtitle = true, color = artistColor, fontSize = 11.sp)
             }
             MiniControl(if (state.showPause) "暂停" else "播放", onToggle, Modifier.testTag("mini_toggle").semantics {
                 progressBarRangeInfo = if (loading) ProgressBarRangeInfo.Indeterminate else ProgressBarRangeInfo(progress, 0f..1f)

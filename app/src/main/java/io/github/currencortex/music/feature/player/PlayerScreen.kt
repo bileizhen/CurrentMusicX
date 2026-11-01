@@ -79,7 +79,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     }
     var content by rememberSaveable { mutableStateOf(PlayerContent.COVER) }
     val pager = rememberPagerState(initialPage = content.ordinal) { 2 }
-    val pagerArtwork = remember(pager) { PlayerPagerArtworkTransition { pager.currentPage + pager.currentPageOffsetFraction } }
+    val queueMotion = remember { QueuePageMotion() }
+    val pagerArtwork = remember(pager, queueMotion) { PlayerPagerArtworkTransition(
+        { pager.currentPage + pager.currentPageOffsetFraction }, { queueMotion.progress }) }
     val scope = rememberCoroutineScope()
     val sidePage = remember(scope) { PlayerSidePageState(scope) }
     var sideDialog by remember { mutableStateOf(false) }
@@ -89,7 +91,6 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         if (roamingRequest > 0) { overlay = PlayerOverlay.ROAMING; onRoamingRequestConsumed() }
     }
     LaunchedEffect(roaming.error) { if (roaming.active) roaming.error?.let(vm.container.errorNotices::show) }
-    val queueMotion = remember { QueuePageMotion() }
     var queueGesture by remember { mutableStateOf(false) }
     var queueGestureJob by remember { mutableStateOf<Job?>(null) }
     var controlsRevealed by rememberSaveable { mutableStateOf(false) }
@@ -223,17 +224,22 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         }) else null)
                 }
             }) {
-        PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize(), backgroundImage, appearance.playerBackgroundBlur)
+        PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize(), backgroundImage, appearance.playerBackgroundBlur,
+            active = expanded && !sidePage.active, dynamicBackground = appearance.playerDynamicBackground)
         // The artwork viewport uses light ink; dialogs below inherit the app appearance.
         MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
         CompositionLocalProvider(LocalIndication provides indication) {
-        Column(Modifier.fillMaxSize().graphicsLayer { translationY = -size.height * queueMotion.progress }
+        CompositionLocalProvider(LocalPlayerPagerArtwork provides pagerArtwork) {
+        Box(Modifier.fillMaxSize().onGloballyPositioned { pagerArtwork.root = it; pagerArtwork.updateBounds() }) {
+        Box(Modifier.fillMaxSize().graphicsLayer { translationY = -size.height * queueMotion.progress }
+            .onGloballyPositioned { pagerArtwork.mainPage = it; pagerArtwork.updateBounds() }) {
+        Column(Modifier.fillMaxSize()
             .then(if (overlay == PlayerOverlay.QUEUE || queueGesture) Modifier.semantics { hideFromAccessibility() } else Modifier)
             .then(if (widePlayer) Modifier.padding(horizontal = wideSafeInset, vertical = wideVerticalInset)
                 else Modifier.statusBarsPadding().navigationBarsPadding()
                     .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)))
             .padding(horizontal = 24.dp).testTag("player_safe_content")
-            .graphicsLayer { alpha = playerSheetContentAlpha(sheetProgress()) }) {
+            .graphicsLayer { alpha = playerSheetContentAlpha(sheetProgress()) * (1 - queueMotion.progress / .35f).coerceIn(0f, 1f) }) {
             if (!widePlayer) header()
             BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
                 if (widePlayer) {
@@ -262,7 +268,6 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     PlayerIconButton(PlayerIcon.MORE, "播放与歌词设置", { overlay = PlayerOverlay.OPTIONS },
                         Modifier.align(Alignment.TopEnd).testTag("lyrics_options"))
                 } else Column(Modifier.fillMaxSize()) {
-                    CompositionLocalProvider(LocalPlayerPagerArtwork provides pagerArtwork) {
                     Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { pagerArtwork.container = it; pagerArtwork.updateBounds() }) {
                     HorizontalPager(pager, Modifier.fillMaxSize().testTag("player_content_pager")
                         .semantics { this[PlayerPagePosition] = pager.currentPage + pager.currentPageOffsetFraction },
@@ -281,9 +286,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                 PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.size(46.dp).testTag("player_lyrics_cover"), pixels = 800,
                                     pagerRole = PlayerPagerArtworkRole.LYRICS)
                                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                                    Text(queue.current?.name ?: "还没有选择歌曲", color = Color.White,
+                                    PlayerSongText(queue.current?.name ?: "还没有选择歌曲", role = PlayerPagerArtworkRole.LYRICS, color = Color.White,
                                         fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    Text(queue.current?.artists.orEmpty(), fontSize = 13.sp, color = Color.White.copy(alpha = .55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    PlayerSongText(queue.current?.artists.orEmpty(), role = PlayerPagerArtworkRole.LYRICS, subtitle = true, fontSize = 13.sp, color = Color.White.copy(alpha = .55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                             LyricsPanel(vm, Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { lyricsCoordinates = it },
@@ -294,9 +299,6 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                             pagerRole = PlayerPagerArtworkRole.COVER,
                             onPreviewCoordinates = { previewCoordinates = it })
                         }
-                    }
-                    if (!roaming.active || roaming.choice.code != "PUZZLE_MODE_RCMD")
-                        PlayerPagerArtwork(pagerArtwork, queue.current?.cover.orEmpty())
                     }
                     }
                     Column(Modifier.fillMaxWidth().testTag("player_controls")
@@ -328,11 +330,16 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             }
         }
         }
+        if (queueGesture || overlay == PlayerOverlay.QUEUE)
+            PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss, actions)
+        if (!widePlayer && (!roaming.active || roaming.choice.code != "PUZZLE_MODE_RCMD"))
+            PlayerPagerArtwork(pagerArtwork, queue.current)
+        }
+        }
+        }
         }
         }
         BackHandler(enabled = sidePage.active && !sideDialog && overlay == PlayerOverlay.NONE && !queueGesture) { sidePage.close() }
-        if (queueGesture || overlay == PlayerOverlay.QUEUE)
-            PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss, actions)
         when (overlay) {
             PlayerOverlay.NONE -> Unit
             PlayerOverlay.BACKGROUND -> PlayerBackgroundDialog(vm.container, dismiss)
@@ -451,8 +458,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             } else PlayerArtwork(song?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"),
                 transitionTarget = transitionTarget, pagerRole = pagerRole)
             Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(song?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"), color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(song?.artists.orEmpty(), fontSize = 18.sp, color = Color.White.copy(alpha = .55f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                PlayerSongText(song?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"), role = pagerRole, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                PlayerSongText(song?.artists.orEmpty(), role = pagerRole, subtitle = true, fontSize = 18.sp, color = Color.White.copy(alpha = .55f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             if (showPreview) CoverLyricPreview(vm, Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 8.dp)
                 .onGloballyPositioned(onPreviewCoordinates), active)

@@ -298,6 +298,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     // Keep these endpoints when reversing an unfinished close. Re-measuring
                     // the retained dock mid-transition can move the cover and panel suddenly.
                     artworkTransition.origin = miniArtworkOrigin?.invoke()
+                    artworkTransition.text.captureOrigin()
                 }
                 playerSheetMotion = PlayerSheetMotion.OPEN
             }
@@ -408,6 +409,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             containerColor = MiuixTheme.colorScheme.background) {
         CompositionLocalProvider(LocalSongMenu provides { songMenu = it }, LocalRoomSongRequest provides roomRequest,
             LocalPlayerSheetDrag provides playerDrag, LocalPlayerArtworkRotation provides artworkRotation,
+            LocalPlayerSheetText provides artworkTransition.text,
             LocalRecordFlightTarget provides { miniArtworkOrigin?.invoke()?.bounds }) {
         BoxWithConstraints(Modifier.fillMaxSize().musicDialogBackdropSource().testTag("music_window")
             .onGloballyPositioned { navigationBounds = it.boundsInRoot() }) {

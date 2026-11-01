@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.*
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -81,6 +82,9 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         { batch = displayed.songs.toList(); collecting = true },
         { song -> openMenu?.invoke(SongMenu(song, { vm.together.selectSong(song.id) },
             { vm.player.add(song, true) }, { vm.player.add(song) }, extra = { songActions?.invoke(song) })) }) else null
+    CompositionLocalProvider(LocalPlayerPagerArtwork provides LocalPlayerPagerArtwork.current.takeIf {
+        queue.current?.id == displayed.current?.id
+    }) {
     PlaybackQueueContent(displayed, if (shared) !together.busy else player.mode == PlayerMode.LOCAL,
         if (shared) together.queueLoading else loading,
         !shared && NeteaseSongActionsRepository.songId(queue.current) != null,
@@ -91,6 +95,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         onClear = { if (shared) vm.together.clearQueue() else vm.player.clear() },
         onMode = vm::setPlaybackMode, onDismiss = onDismiss, shared = shared, nativeActions = nativeActions,
         customBackground = background, backgroundBlur = appearance.playerBackgroundBlur)
+    }
     NativeQueueCollectionDialog(vm, batch, collecting) { collecting = false }
     io.github.currencortex.music.feature.download.QueueDownloadDialog(vm.container, batch, downloading) { downloading = false }
 }
@@ -101,6 +106,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
     onSelect: (Int) -> Unit, onRemove: (Int) -> Unit, onClear: () -> Unit,
     onMode: (PlaybackMode) -> Unit, onDismiss: () -> Unit, shared: Boolean = false,
     nativeActions: NativeQueueActions? = null, customBackground: java.io.File? = null, backgroundBlur: Float = 35f) {
+    val transfer = LocalPlayerPagerArtwork.current.takeUnless { backdrop }
     val scope = rememberCoroutineScope()
     val dismiss by rememberUpdatedState(onDismiss)
     val list = rememberLazyListState((queue.index - 2).coerceAtLeast(0))
@@ -182,18 +188,21 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         height = constraints.maxHeight.toFloat().coerceAtLeast(1f)
         if (backdrop) PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize().graphicsLayer { alpha = motion.progress },
             customBackground, backgroundBlur)
-        Column(Modifier.fillMaxSize().graphicsLayer { translationY = size.height * (1 - motion.progress) }
-            .statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)
+        Box(Modifier.fillMaxSize().graphicsLayer { translationY = size.height * (1 - motion.progress) }
+            .onGloballyPositioned { transfer?.queuePage = it; transfer?.updateBounds() }) {
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)
             .align(Alignment.TopCenter)) {
             Column(Modifier.fillMaxWidth().then(dragHeader).testTag("queue_drag_handle")) {
                 queue.current?.let { song ->
                     Row(Modifier.fillMaxWidth().testTag("queue_current_song")
                         .clickable(interactionSource = interactions, indication = null) { settle(true) }
                         .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        MusicCover(song.cover, Modifier.size(48.dp), cornerRadius = 8.dp)
+                        if (transfer != null) PlayerArtwork(song.cover, Modifier.size(48.dp).testTag("queue_current_cover"),
+                            transitionTarget = false, pagerRole = PlayerPagerArtworkRole.QUEUE)
+                        else MusicCover(song.cover, Modifier.size(48.dp), cornerRadius = 8.dp)
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                            Text(song.name, color = Color.White, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(song.queueSummary(), color = Color.White.copy(alpha = .5f), fontSize = 13.sp,
+                            PlayerSongText(song.name, Modifier.testTag("queue_current_title"), role = if (transfer != null) PlayerPagerArtworkRole.QUEUE else null, color = Color.White, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            PlayerSongText(song.queueSummary(), Modifier.testTag("queue_current_subtitle"), role = if (transfer != null) PlayerPagerArtworkRole.QUEUE else null, subtitle = true, color = Color.White.copy(alpha = .5f), fontSize = 13.sp,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
@@ -263,6 +272,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                         maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.End)
                 }
             }
+        }
         }
         MusicOverlayDialog(show = modeOpen, title = "播放模式", edgeToEdgeContent = true, onDismissRequest = { modeOpen = false }) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
