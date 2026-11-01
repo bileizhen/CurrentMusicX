@@ -48,6 +48,30 @@ class NeteaseGatewayTest {
         binding = BindingRepository(api, ::owner) {}
     }
     @After fun cleanup() { scope.cancel(); upstream.shutdown(); current.shutdown() }
+    @Test fun bindingImportRejectsAStaleLocalLoginBeforeHttp() = runBlocking {
+        login()
+        val previous = owner()
+        login(43)
+        val result = appResult {
+            api.request("POST", "ncmbind/import", body = buildJsonObject {
+                put("cookie", "MUSIC_U=old-device-login"); put("expectedNcmUid", 42)
+            }, authenticated = true, expectedSession = previous, projectOnly = true)
+        }
+        assertTrue(result is AppResult.Failure)
+        assertEquals(0, current.requestCount)
+    }
+    @Test fun bindingImportAlwaysUsesAuthenticatedProjectServer() = runBlocking {
+        login()
+        current.enqueue(response("""{"ok":true,"profile":{"uid":42}}"""))
+        api.request("POST", "ncmbind/import", body = buildJsonObject {
+            put("cookie", "MUSIC_U=example-device-login"); put("expectedNcmUid", 42)
+        }, authenticated = true, expectedSession = owner(), projectOnly = true, retryConnection = false)
+        val request = current.takeRequest(2, TimeUnit.SECONDS)!!
+        assertEquals("/cm/ncmbind/import", request.path)
+        assertEquals("Bearer current-secret", request.getHeader("Authorization"))
+        assertTrue(request.body.readUtf8().contains("expectedNcmUid"))
+        assertEquals(0, upstream.requestCount)
+    }
     private suspend fun login(uid: Long = 42) = sessions.login(mapOf("MUSIC_U" to "native-cookie-$uid"), BoundProfile(uid, "Native $uid"), sessions.snapshot())
     private suspend fun call(path: String, query: Map<String, String> = emptyMap()) = api.request("GET", path, query, authenticated = true, expectedSession = owner())
     private fun nativeApi(): ApiClient {
