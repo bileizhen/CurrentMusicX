@@ -3,6 +3,8 @@
 
 package io.github.currencortex.music.ui.component.miuix.effect
 
+import androidx.compose.ui.graphics.Color
+
 internal object BgEffectConfig {
 
     internal class Config(
@@ -66,5 +68,16 @@ internal object BgEffectConfig {
     ): Config = when (deviceType) {
         DeviceType.PHONE -> if (!isDark) PHONE_LIGHT else PHONE_DARK
         DeviceType.PAD -> if (!isDark) PAD_LIGHT else PAD_DARK
+    }
+
+    /** Keep About's geometry and motion while rotating a caller's four colour pools. */
+    internal fun withPalette(base: Config, palette: List<Color>): Config {
+        require(palette.size == 4)
+        fun colors(offset: Int) = FloatArray(16) { index ->
+            val color = palette[(index / 4 + offset) % 4]
+            when (index % 4) { 0 -> color.red; 1 -> color.green; 2 -> color.blue; else -> color.alpha }
+        }
+        return Config(base.points, colors(0), colors(1), colors(2), base.colorInterpPeriod,
+            base.lightOffset, base.saturateOffset, base.pointOffset)
     }
 }

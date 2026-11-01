@@ -32,6 +32,7 @@ internal object SettingsPreferences {
     private val REFRESH_RATE = stringPreferencesKey("refresh_rate")
     private val PLAYER_BACKGROUND = stringPreferencesKey("player_background")
     private val PLAYER_BACKGROUND_BLUR = floatPreferencesKey("player_background_blur")
+    private val PLAYER_DYNAMIC_BACKGROUND = booleanPreferencesKey("player_dynamic_background")
 
     fun read(p: Preferences) = AppearanceSettings(
         customFont = p[CUSTOM_FONT].orEmpty(),
@@ -58,6 +59,7 @@ internal object SettingsPreferences {
         refreshRate = runCatching { RefreshRatePreference.valueOf(p[REFRESH_RATE] ?: RefreshRatePreference.SYSTEM.name) }.getOrDefault(RefreshRatePreference.SYSTEM),
         playerBackground = p[PLAYER_BACKGROUND].orEmpty(),
         playerBackgroundBlur = p[PLAYER_BACKGROUND_BLUR] ?: 35f,
+        playerDynamicBackground = p[PLAYER_DYNAMIC_BACKGROUND] ?: true,
     ).normalized()
 
     fun write(p: MutablePreferences, s: AppearanceSettings) {
@@ -86,5 +88,6 @@ internal object SettingsPreferences {
         p[REFRESH_RATE] = v.refreshRate.name
         p[PLAYER_BACKGROUND] = v.playerBackground
         p[PLAYER_BACKGROUND_BLUR] = v.playerBackgroundBlur
+        p[PLAYER_DYNAMIC_BACKGROUND] = v.playerDynamicBackground
     }
 }

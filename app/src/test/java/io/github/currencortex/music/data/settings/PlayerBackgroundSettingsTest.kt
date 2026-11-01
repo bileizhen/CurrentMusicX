@@ -6,6 +6,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class PlayerBackgroundSettingsTest {
+    @Test fun dynamicBackgroundSwitchPersistsAndDoesNotChangeImageOrBlur() {
+        val p = mutablePreferencesOf()
+        assertTrue(SettingsPreferences.read(p).playerDynamicBackground)
+        val initial = AppearanceSettings(playerBackground = "custom.image", playerBackgroundBlur = 72f)
+        SettingsPreferences.write(p, initial.copy(playerDynamicBackground = false))
+        assertEquals(initial.copy(playerDynamicBackground = false), SettingsPreferences.read(p))
+        SettingsPreferences.write(p, SettingsPreferences.read(p).copy(playerDynamicBackground = true))
+        assertEquals(initial, SettingsPreferences.read(p))
+    }
     @Test fun imageAndBlurPersistAlongsideExistingAppearanceAndResetIndependently() {
         val preferences = mutablePreferencesOf()
         val original = AppearanceSettings(themeMode = ThemeMode.DARK, uiScale = .9f,

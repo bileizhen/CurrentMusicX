@@ -48,7 +48,7 @@ class PlayerBackgroundTest {
         var owner = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         try {
             var settings = SettingsRepository(PreferenceDataStoreFactory.create(scope = owner) { preferences }, owner)
-            settings.edit { it.copy(themeMode = ThemeMode.DARK, playerBackgroundBlur = 72f) }
+            settings.edit { it.copy(themeMode = ThemeMode.DARK, playerBackgroundBlur = 72f, playerDynamicBackground = false) }
             val store = PlayerBackgroundStore(wrapped, settings)
             val input = fixture(root)
             val expected = input.readBytes()
@@ -64,6 +64,7 @@ class PlayerBackgroundTest {
             assertEquals(name, settings.snapshot().playerBackground)
             assertTrue(requireNotNull(reopened.file(name)).isFile)
             assertEquals(72f, settings.snapshot().playerBackgroundBlur)
+            assertFalse(settings.snapshot().playerDynamicBackground)
             reopened.clear()
             assertEquals("", settings.snapshot().playerBackground)
             assertFalse(copied.exists())
@@ -130,10 +131,10 @@ class PlayerBackgroundTest {
             container.playerBackgrounds.import(Uri.fromFile(fixture(root)))
             container.playbackQueue.replace(listOf(Song(900, "Paused fixture")), 0)
             compose.setContent { LeiTheme(AppearanceSettings()) { Scaffold {
-                PlayerBackgroundDialog(container) {}
+                Box(Modifier.fillMaxSize().testTag("background_dialog_host")) { PlayerBackgroundDialog(container) {} }
             } } }
             compose.waitUntil(10000) { compose.onAllNodesWithTag("player_background_blur").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("player_background_blur").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(81f) }
+            compose.onNodeWithTag("player_background_blur").performScrollTo().performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(81f) }
             compose.waitUntil(5000) { container.settings.state.value.playerBackgroundBlur == 81f }
             compose.onNodeWithTag("player_background_blur").performTouchInput {
                 swipe(Offset(width * .81f, centerY), Offset(0f, centerY), 600)
@@ -143,12 +144,123 @@ class PlayerBackgroundTest {
                 swipe(Offset(24f, centerY), Offset(width.toFloat(), centerY), 600)
             }
             compose.waitUntil(5000) { container.settings.state.value.playerBackgroundBlur == 100f }
-            compose.onNodeWithTag("player_background_reset").performClick()
+            compose.onNodeWithTag("player_background_reset").performScrollTo().performClick()
             compose.waitUntil(5000) { container.settings.state.value.playerBackground.isEmpty() }
             compose.onNodeWithTag("player_background_reset").assertIsNotEnabled()
             compose.onNodeWithTag("player_background_blur").assertIsNotEnabled()
             assertEquals(listOf(900L), container.playbackQueue.state.value.songs.map { it.id })
             assertFalse(container.playerController.state.value.playing)
         } finally { container.playerBackgrounds.clear(); container.close(); root.deleteRecursively() }
+    }
+
+    private fun solidCover(root: File, name: String, color: Int): File {
+        val bitmap = Bitmap.createBitmap(64, 64, Bitmap.Config.ARGB_8888).apply { eraseColor(color) }
+        return File(root, name).also { file ->
+            file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            bitmap.recycle()
+        }
+    }
+
+    @Test fun dynamicSwitchUpdatesPreviewAndRemembersChoiceWhenReopened() = runBlocking<Unit> {
+        val container = AppContainer(context, "background-switch-${UUID.randomUUID()}")
+        var shown by mutableStateOf(true)
+        try {
+            container.ready.await(); container.sessionRestored.await()
+            compose.setContent { LeiTheme(AppearanceSettings()) { Scaffold {
+                Box(Modifier.fillMaxSize().testTag("background_dialog_host")) {
+                    if (shown) PlayerBackgroundDialog(container) { shown = false }
+                    else top.yukonga.miuix.kmp.basic.TextButton("再次打开", onClick = { shown = true })
+                }
+            } } }
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("player_dynamic_background").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("player_dynamic_background").assertIsOn().performClick()
+            compose.waitUntil(5000) { !container.settings.state.value.playerDynamicBackground }
+            compose.onNodeWithTag("player_static_background").assertExists()
+            compose.onNodeWithTag("player_artwork_background").assertDoesNotExist()
+            compose.onNodeWithText("完成").performScrollTo().performClick()
+            compose.waitUntil(5000) { !shown }
+            compose.onNodeWithText("再次打开").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("player_dynamic_background").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("player_dynamic_background").assertIsOff().performClick()
+            compose.waitUntil(5000) { container.settings.state.value.playerDynamicBackground }
+            compose.onNodeWithTag("player_artwork_background").assertExists()
+            compose.onNodeWithTag("player_static_background").assertDoesNotExist()
+            assertTrue(container.settings.snapshot().playerDynamicBackground)
+        } finally { container.close() }
+    }
+
+    private fun renderedBackground() = compose.onNodeWithTag("background_render").captureToImage().asAndroidBitmap()
+
+    private fun redBlueBalance(bitmap: Bitmap): Int {
+        var balance = 0; var samples = 0
+        for (y in 0 until bitmap.height step 8) for (x in 0 until bitmap.width step 8) {
+            val color = bitmap.getPixel(x, y)
+            balance += (color ushr 16 and 255) - (color and 255)
+            samples++
+        }
+        return balance / samples
+    }
+
+    @Test fun artworkColoursFollowCoverChangesAndMissingArtworkReturnsToNeutral() {
+        val root = File(context.cacheDir, "background-colours-${UUID.randomUUID()}").apply { mkdirs() }
+        val warm = solidCover(root, "warm.png", 0xffe45b26.toInt())
+        val cool = solidCover(root, "cool.png", 0xff245cde.toInt())
+        var cover by mutableStateOf(warm.toURI().toString())
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.setContent { LeiTheme(AppearanceSettings(themeMode = ThemeMode.LIGHT)) {
+                PlayerBackdrop(cover, Modifier.size(260.dp, 360.dp).testTag("background_render"), active = false)
+            } }
+            fun awaitBalance(predicate: (Int) -> Boolean) = compose.waitUntil(10_000) {
+                compose.mainClock.advanceTimeBy(100)
+                predicate(redBlueBalance(renderedBackground()))
+            }
+            awaitBalance { it > 20 }
+            compose.runOnIdle { cover = cool.toURI().toString() }
+            awaitBalance { it < -20 }
+            compose.mainClock.advanceTimeBy(1200)
+            renderedBackground().let { bitmap -> File(context.externalCacheDir, "player-flowing-cover-cool.png")
+                .outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) } }
+            compose.runOnIdle { cover = "" }
+            awaitBalance { kotlin.math.abs(it) < 15 }
+            compose.runOnIdle { cover = File(root, "missing.png").toURI().toString() }
+            compose.mainClock.advanceTimeBy(1200)
+            assertTrue(kotlin.math.abs(redBlueBalance(renderedBackground())) < 15)
+        } finally { compose.mainClock.autoAdvance = true; root.deleteRecursively() }
+    }
+
+    @Test fun aboutMotionFlowsWithArtworkColoursAndStopsWhenInactive() {
+        org.junit.Assume.assumeTrue(android.os.Build.VERSION.SDK_INT >= 33 &&
+            top.yukonga.miuix.kmp.shader.isRuntimeShaderSupported())
+        val root = File(context.cacheDir, "background-motion-${UUID.randomUUID()}").apply { mkdirs() }
+        val cover = solidCover(root, "orange.png", 0xffe45b26.toInt()).toURI().toString()
+        var active by mutableStateOf(true)
+        compose.mainClock.autoAdvance = false
+        try {
+            compose.setContent { LeiTheme(AppearanceSettings(themeMode = ThemeMode.DARK)) {
+                PlayerBackdrop(cover, Modifier.size(260.dp, 360.dp).testTag("background_render"), active = active)
+            } }
+            compose.waitUntil(10_000) {
+                compose.mainClock.advanceTimeBy(100)
+                redBlueBalance(renderedBackground()) > 20
+            }
+            compose.mainClock.advanceTimeBy(1500)
+            val before = renderedBackground()
+            compose.mainClock.advanceTimeBy(900)
+            val after = renderedBackground()
+            var changed = 0
+            for (y in 0 until before.height step 4) for (x in 0 until before.width step 4) {
+                if (before.getPixel(x, y) != after.getPixel(x, y)) changed++
+            }
+            assertTrue("About's colour pools must move even with a single-colour cover", changed > 200)
+            File(context.externalCacheDir, "player-flowing-cover-warm.png").outputStream().use {
+                after.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+            compose.runOnIdle { active = false }
+            compose.mainClock.advanceTimeBy(1500)
+            val stopped = renderedBackground()
+            compose.mainClock.advanceTimeBy(900)
+            assertTrue("Hidden player backgrounds must stop rendering motion", stopped.sameAs(renderedBackground()))
+        } finally { compose.mainClock.autoAdvance = true; root.deleteRecursively() }
     }
 }
