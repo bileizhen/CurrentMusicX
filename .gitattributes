@@ -2,3 +2,6 @@
 gradlew text eol=lf
 *.bat text eol=crlf
 *.jar binary
+
+# Hash-pinned local recognition scripts must have identical bytes on every host.
+app/src/main/assets/recognition/*.js text eol=lf
