@@ -8,6 +8,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.github.currencortex.music.core.update.*
 import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.feature.update.UpdateSourceDialog
+import io.github.currencortex.music.feature.update.menuLabel
 import io.github.currencortex.music.ui.theme.LeiTheme
 import java.io.File
 import kotlinx.coroutines.awaitCancellation
@@ -40,14 +41,15 @@ class UpdateSourceBadgeTest {
         } }
         UpdateSource.available.forEach { source ->
             val badge = compose.onNodeWithTag("update_source_badge_${source.name}", useUnmergedTree = true)
-            val label = compose.onNodeWithText(source.label, useUnmergedTree = true)
+            val label = compose.onNodeWithText(source.menuLabel, useUnmergedTree = true)
             compose.onNodeWithTag("update_source_${source.name}").performScrollTo()
             badge.assertIsDisplayed()
             assertTrue("Badge must be left of ${source.label}",
                 badge.getUnclippedBoundsInRoot().right <= label.getUnclippedBoundsInRoot().left)
         }
         compose.onNode(hasText("限流") and hasAnyAncestor(hasTestTag("update_source_badge_GEEKERTAO")), useUnmergedTree = true).assertExists()
-        compose.onNode(hasText("8000 ms") and hasAnyAncestor(hasTestTag("update_source_badge_DPIK")), useUnmergedTree = true).assertExists()
+        compose.onNode(hasText("超时") and hasAnyAncestor(hasTestTag("update_source_badge_DPIK")), useUnmergedTree = true).assertExists()
+        compose.onAllNodes(hasText("ms",substring=true),useUnmergedTree=true).assertCountEquals(0)
         listOf(UpdateSource.TBAP, UpdateSource.GH_PROXY).forEach { source ->
             compose.onNodeWithTag("update_source_${source.name}").performScrollTo().performClick().assertIsSelected()
             compose.runOnIdle { assertEquals(source, selected.value) }
