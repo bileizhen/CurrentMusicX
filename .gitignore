@@ -16,9 +16,7 @@ keystore.properties
 /.verification/
 /.workbuddy-ai/
 /update-proxy.properties
-/services/update-proxy/node_modules/
-/services/update-proxy/.wrangler/
-/services/update-proxy/.dev.vars*
+/services/update-proxy/
 
 # Local documentation and tool configuration.
 /docs/
