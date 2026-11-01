@@ -13,7 +13,7 @@ import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.data.settings.ThemeMode
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.CurrentMusicApp
-import io.github.currencortex.music.feature.library.PlaylistPanelCornerRadius
+import io.github.currencortex.music.ui.component.nativeui.BarSearchGeometry
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.*
 import okio.Buffer
@@ -436,7 +436,9 @@ class PlaylistPagesTest {
         compose.onNodeWithText("加入队列").performClick()
         assertEquals(listOf(99L, 2L), container.playbackQueue.state.value.songs.map { it.id })
         assertFalse(container.playerController.state.value.playing)
-        compose.onNodeWithContentDescription("关闭歌单搜索").performClick()
+        compose.onNodeWithTag("playlist_query_cancel").performClick()
+        // Playback and sorting now scroll with the songs, so return to their row.
+        compose.onNodeWithTag("playlist_tracks").performScrollToIndex(0)
         compose.onNodeWithTag("playlist_sort").performClick()
         compose.onNodeWithTag("playlist_order_1").performClick()
         compose.onNodeWithTag("play_library_all").performClick()
@@ -447,7 +449,7 @@ class PlaylistPagesTest {
         compose.runOnUiThread { container.playerController.pause() }
     }
 
-    @Test fun coverHeroAndStickyPlaybackRemainVisibleInLightAndDarkThemes() {
+    @Test fun coverHeroAndPlaybackControlsWorkInLightAndDarkThemes() {
         open()
         compose.waitForIdle()
         fun screenshot(name: String) {
@@ -462,10 +464,80 @@ class PlaylistPagesTest {
         compose.onNodeWithTag("playlist_search_toggle").performClick()
         compose.onNodeWithTag("play_library_all").assertIsDisplayed()
         compose.onNodeWithTag("playlist_query").performTextInput("not found")
+        screenshot("playlist-search-empty.png")
         compose.onNodeWithText("没有找到匹配的歌曲").assertIsDisplayed()
         compose.onNodeWithTag("play_library_all").assertIsNotEnabled()
-        compose.onNodeWithContentDescription("关闭歌单搜索").performClick()
+        compose.onNodeWithTag("playlist_query_cancel").performClick()
         assertEquals(listOf(99L), container.playbackQueue.state.value.songs.map { it.id })
+    }
+
+    @Test fun barSearchStaysInTheToolbarAndOpeningDoesNotMoveThePlaylist() {
+        open()
+        val hero = compose.onNodeWithTag("playlist_hero").fetchSemanticsNode().boundsInRoot
+        val bar = compose.onNodeWithTag("playlist_top_bar").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("playlist_search_toggle").performClick()
+        val query = compose.onNodeWithTag("playlist_query").fetchSemanticsNode().boundsInRoot
+        assertTrue("The editor belongs to the fixed toolbar", query.top >= bar.top && query.bottom <= bar.bottom)
+        assertEquals("Opening search must not insert a row or scroll the hero", hero,
+            compose.onNodeWithTag("playlist_hero").fetchSemanticsNode().boundsInRoot)
+        compose.onNodeWithTag("navigate_back").assertDoesNotExist()
+        compose.onNodeWithTag("playlist_query").performTextInput("library moonlight")
+        compose.onNodeWithTag("playlist_song_1").assertIsDisplayed()
+        compose.onNodeWithTag("playlist_song_2").assertDoesNotExist()
+        compose.onNodeWithTag("playlist_query_clear").performClick()
+        assertEquals("Clear keeps an empty editor, independently of its placeholder", "",
+            compose.onNodeWithTag("playlist_query").fetchSemanticsNode().config[
+                androidx.compose.ui.semantics.SemanticsProperties.EditableText].text)
+        compose.onNodeWithTag("playlist_query_cancel").assertIsDisplayed()
+        compose.onNodeWithTag("playlist_query_cancel").performClick()
+        compose.onNodeWithTag("playlist_query").assertDoesNotExist()
+        compose.onNodeWithTag("navigate_back").assertIsDisplayed()
+        compose.onNodeWithTag("library_detail").assertIsDisplayed()
+        assertEquals(listOf(99L), container.playbackQueue.state.value.songs.map { it.id })
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun barSearchMorphsThroughIntermediateFramesAndStretchesUnderDrag() {
+        open()
+        val window = compose.onNodeWithTag("music_window")
+        fun capture(name: String) {
+            window.captureToImage().asAndroidBitmap().let { bitmap ->
+                File(context.externalCacheDir, name).outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+            }
+        }
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("playlist_search_toggle").performClick()
+        compose.mainClock.advanceTimeBy(128)
+        fun field() = compose.onNodeWithTag("playlist_query_surface").fetchSemanticsNode().config[BarSearchGeometry]
+        val opening = field()
+        capture("playlist-bar-search-opening.png")
+        compose.mainClock.advanceTimeBy(1200)
+        val settled = field()
+        assertTrue("The field must visibly grow from its source button", opening.width > 44 * context.resources.displayMetrics.density && opening.width < settled.width)
+        capture("playlist-bar-search-open.png")
+        compose.onNodeWithTag("playlist_query").performTouchInput {
+            down(center); moveBy(androidx.compose.ui.geometry.Offset(45f, 15f), delayMillis = 120)
+        }
+        compose.mainClock.advanceTimeBy(160)
+        assertTrue("The shared glass pane follows the pressed editor's stretch", field().width > settled.width + 1)
+        capture("playlist-bar-search-drag.png")
+        compose.onNodeWithTag("playlist_query").performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(1400)
+        assertEquals(settled.width, field().width, 1f)
+        compose.onNodeWithTag("playlist_query_cancel").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        assertTrue("Cancel must retain a shrinking field before the original buttons return", field().width < settled.width)
+        capture("playlist-bar-search-closing.png")
+        compose.mainClock.advanceTimeBy(240)
+        compose.onNodeWithTag("playlist_search_toggle").performClick()
+        compose.mainClock.advanceTimeBy(128)
+        assertTrue("A second tap reverses the closing spring without losing the editor", field().width > 44 * context.resources.displayMetrics.density)
+        compose.mainClock.advanceTimeBy(1400)
+        compose.onNodeWithTag("playlist_query_cancel").performClick()
+        compose.mainClock.advanceTimeBy(1400)
+        compose.mainClock.autoAdvance = true
+        compose.onNodeWithTag("playlist_query").assertDoesNotExist()
+        compose.onNodeWithTag("playlist_search_toggle").assertIsDisplayed()
     }
 
     @Test fun pullMovesOnlyTheSongSurfaceAndReboundsWithoutAWhiteHeader() {
@@ -637,41 +709,47 @@ class PlaylistPagesTest {
         compose.onNodeWithText("3 首 · 9分钟").assertIsDisplayed()
     }
 
-    @Test fun scrollingMorphsThePanelToAnOpaqueRectangleAndRestoresItsCorners() {
+    @Test fun coverBackgroundReachesTheStatusBarsAndPlaybackScrollsAwayWithTheList() {
         longPlaylist = true
         open()
-        val density = context.resources.displayMetrics.density
-        fun radius() = compose.onNodeWithTag("playlist_playback_panel").fetchSemanticsNode().config[PlaylistPanelCornerRadius]
-        assertEquals(26 * density, radius(), 1f)
-        val list = compose.onNodeWithTag("playlist_tracks")
-        val travel = compose.onNodeWithTag("playlist_playback_panel").fetchSemanticsNode().boundsInRoot.top - list.fetchSemanticsNode().boundsInRoot.top
-        compose.mainClock.autoAdvance = false
-        list.performTouchInput {
-            down(center.copy(y = height * .65f))
-            moveBy(androidx.compose.ui.geometry.Offset(0f, -(travel - 24 * density)), delayMillis = 300)
-        }
-        compose.mainClock.advanceTimeBy(32)
-        assertTrue("Corners must change continuously before reaching the toolbar", radius() > 0 && radius() < 26 * density)
-        list.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(0f, -100 * density), delayMillis = 300) }
-        compose.mainClock.advanceTimeBy(32)
-        assertEquals("Pinned playback panel must be exactly rectangular", 0f, radius(), .01f)
-        val panel = compose.onNodeWithTag("playlist_playback_panel").fetchSemanticsNode().boundsInRoot
-        val viewport = list.fetchSemanticsNode().boundsInRoot
-        assertEquals(viewport.top, panel.top, 1f)
+        compose.waitForIdle()
         val window = compose.onNodeWithTag("music_window")
         val root = window.fetchSemanticsNode().boundsInRoot
-        val bitmap = window.captureToImage().asAndroidBitmap()
-        for (x in listOf(panel.left + 18 * density, panel.right - 18 * density)) {
-            val pixel = bitmap.getPixel((x - root.left).toInt(), (panel.top - root.top + 2).toInt())
-            assertTrue("Pinned corners must cover the album art underneath", android.graphics.Color.red(pixel) > 210 &&
-                android.graphics.Color.green(pixel) > 210 && android.graphics.Color.blue(pixel) > 210)
+        val artwork = compose.onNodeWithTag("playlist_artwork_background").fetchSemanticsNode().boundsInRoot
+        val bar = compose.onNodeWithTag("playlist_top_bar").fetchSemanticsNode().boundsInRoot
+        assertEquals("The blurred cover must include the status region", root.top, artwork.top, 1f)
+        assertTrue("The backdrop must extend beyond the toolbar", artwork.bottom > bar.bottom)
+        fun lightStatusIcons(): Boolean {
+            var light = false
+            compose.runOnIdle {
+                val activity = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                    .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).first()
+                light = androidx.core.view.WindowCompat.getInsetsController(activity.window, activity.window.decorView)
+                    .isAppearanceLightStatusBars
+            }
+            return light
         }
-        File(context.externalCacheDir, "playlist-panel-pinned.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
-        list.performTouchInput { cancel() }
-        compose.mainClock.autoAdvance = true
+        assertFalse("Status icons must be light over the cover", lightStatusIcons())
+        val bitmap = window.captureToImage().asAndroidBitmap()
+        val pixel = bitmap.getPixel((root.width * .4f).toInt(), (bar.top - root.top + 4 * context.resources.displayMetrics.density).toInt())
+        assertTrue("The initial header must show the cover instead of a solid light toolbar",
+            androidx.core.graphics.ColorUtils.calculateLuminance(pixel) < .5)
+        File(context.externalCacheDir, "playlist-cover-header-light.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
+        val list = compose.onNodeWithTag("playlist_tracks")
+        compose.onNodeWithTag("play_library_all").assertIsDisplayed()
+        list.performScrollToIndex(15)
+        assertTrue("Status icons must become dark over the light list", lightStatusIcons())
+        compose.onNodeWithTag("play_library_all").assertIsNotDisplayed()
+        assertEquals(bar, compose.onNodeWithTag("playlist_top_bar").fetchSemanticsNode().boundsInRoot)
+        val scrolled = window.captureToImage().asAndroidBitmap()
+        val settled = scrolled.getPixel((root.width * .4f).toInt(), (bar.top - root.top + 4 * context.resources.displayMetrics.density).toInt())
+        assertTrue("The scrolled toolbar must fade into the light list background",
+            android.graphics.Color.red(settled) > 210 && android.graphics.Color.green(settled) > 210 && android.graphics.Color.blue(settled) > 210)
+        File(context.externalCacheDir, "playlist-cover-header-scrolled.png").outputStream().use { scrolled.compress(Bitmap.CompressFormat.PNG, 100, it) }
         list.performScrollToIndex(0)
-        compose.waitForIdle()
-        assertEquals(26 * density, radius(), 1f)
+        compose.onNodeWithTag("play_library_all").assertIsDisplayed()
         compose.onNodeWithTag("mini_player").assertIsDisplayed()
+        assertEquals(listOf(99L), container.playbackQueue.state.value.songs.map { it.id })
+        assertFalse(container.playerController.state.value.playing)
     }
 }

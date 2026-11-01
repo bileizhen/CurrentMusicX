@@ -1,25 +1,18 @@
 package io.github.currencortex.music.feature.library
 
 import android.content.Intent
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -28,25 +21,16 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
@@ -54,7 +38,6 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,40 +50,31 @@ import io.github.currencortex.music.feature.style.StyleArtwork
 import io.github.currencortex.music.feature.style.rememberStyleTint
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.launch
+import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Cover-first library entrance; the existing create dialog and server ownership stay in the host. */
 @Composable internal fun PlaylistIndexBody(vm: LibraryViewModel,
-    navigate: (String) -> Unit, onCreate: () -> Unit) {
+    navigate: (String) -> Unit, onBack: (() -> Unit)? = null, onCreate: () -> Unit) {
     val home by vm.home.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val neteaseMain by vm.container.primaryLibrary.usesNetease.collectAsStateWithLifecycle()
     val nativeAccount by vm.container.neteaseSessions.state.collectAsStateWithLifecycle()
-    MusicPullToRefresh(home.loading, vm::refresh, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding(), showIndicator = false) {
+    MusicSubpage("我的歌单", "playlist_index_page", onBack, actions = {
+        if (account.account != null || (nativeAccount.loggedIn && !nativeAccount.stale))
+            GlassIconButton(onCreate, "新建歌单", Modifier.testTag("create_playlist")) { Icon(Icons.Default.Add, null) }
+    }) { topInset ->
+    MusicPullToRefresh(home.loading, vm::refresh, Modifier.fillMaxSize(), showIndicator = false) {
         LazyVerticalGrid(GridCells.Adaptive(148.dp), Modifier.fillMaxSize().testTag("playlist_index"),
-            contentPadding = musicScrollPadding(PaddingValues(20.dp, 8.dp, 20.dp, 24.dp)),
-            horizontalArrangement = Arrangement.spacedBy(18.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f)) {
-                            Text("我的歌单", fontSize = 30.sp, fontWeight = FontWeight.SemiBold)
-                            Text("${home.playlists.size} 个歌单 · 你的音乐收藏", Modifier.padding(top = 6.dp),
-                                fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
-                        }
-                        if (account.account != null || (nativeAccount.loggedIn && !nativeAccount.stale)) PlaylistIconAction(Icons.Default.Add, "新建歌单", onCreate,
-                            Modifier.testTag("create_playlist"), ink = MiuixTheme.colorScheme.primary,
-                            background = MiuixTheme.colorScheme.primary.copy(alpha = .1f))
-                    }
-                }
-            }
+            contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
+            horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+            item(span = { GridItemSpan(maxLineSpan) }) { SettingsHint("${home.playlists.size} 个歌单 · 你的音乐收藏") }
             home.errors["我的歌单"]?.let { error -> item(span = { GridItemSpan(maxLineSpan) }) {
                 Column { Text(error); TextButton("重试", onClick = vm::refresh) }
             } }
             if ((home.loading || account.loading) && home.playlists.isEmpty()) items(4) {
-                Column { MusicPlaceholder(Modifier.fillMaxWidth().aspectRatio(1f).clip(RoundedCornerShape(18.dp)))
-                    MusicPlaceholder(Modifier.padding(top = 10.dp).fillMaxWidth(.7f).height(18.dp)) }
+                LoadingCoverTile()
             }
             if (!home.loading && !account.loading && home.playlists.isEmpty() && home.errors["我的歌单"] == null)
                 item(span = { GridItemSpan(maxLineSpan) }) {
@@ -124,6 +98,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 }
             }
         }
+    }
     }
 }
 
@@ -153,13 +128,12 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val appearance by vm.container.settings.state.collectAsStateWithLifecycle()
     val room = LocalRoomSongRequest.current
     val editable = vm.editable(state.playlist, account.account?.id ?: 0)
+    val removable = vm.removable(state.playlist, account.account?.id ?: 0)
     val cover = state.cover.ifBlank { state.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() }
     val tint = rememberStyleTint(cover)
-    val backdrop by animateColorAsState(lerp(Color(0xFF222831), tint.value ?: Color(0xFF69798A), .30f), tween(280), label = "playlist cover tint")
     val surface = MiuixTheme.colorScheme.background
-    val headerBottom = lerp(backdrop, Color.White, .04f)
     val list = rememberLazyListState()
-    val panelDensity = LocalDensity.current
+    var heroHeightPx by remember { mutableIntStateOf(0) }
     val pullMotion = rememberPlaylistPullMotion(state.loading || state.refreshing, ::refresh)
     val scope = rememberCoroutineScope()
     var searching by rememberSaveable(vm.route) { mutableStateOf(false) }
@@ -168,9 +142,11 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     var sortOpen by rememberSaveable(vm.route) { mutableStateOf(false) }
     var menuOpen by rememberSaveable(vm.route) { mutableStateOf(false) }
     var infoOpen by rememberSaveable(vm.route) { mutableStateOf(false) }
+    // Reserve result scroll range without inserting an editor into the song list.
+    val searchClearance = with(LocalDensity.current) { if (searching && query.isNotBlank()) heroHeightPx.toDp() else 0.dp }
     val songs = remember(state.songs, query, order) {
-        val needle = query.trim()
-        val filtered = state.songs.filter { needle.isBlank() || listOf(it.name, it.artists, it.album).any { value -> value.contains(needle, ignoreCase = true) } }
+        val needle = MusicSearchQuery(query)
+        val filtered = state.songs.filter { needle.matches(it.name, it.artists, it.album) }
         val collator = java.text.Collator.getInstance(java.util.Locale.SIMPLIFIED_CHINESE).apply {
             strength = java.text.Collator.PRIMARY
         }
@@ -225,8 +201,11 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
             onClose = { scope.launch { vm.container.settings.edit { it.copy(playlistDepthRibbon = false) } } })
         return
     }
-    val title = state.title.ifBlank { if (state.loading) "正在加载歌单" else "歌单" }
+    val albumPage = vm.route.startsWith("lib/album/")
+    val collectionKind = if (albumPage) "专辑" else "歌单"
+    val title = state.title.ifBlank { if (state.loading) "正在加载$collectionKind" else collectionKind }
     val origin = when {
+        albumPage -> state.description.lineSequence().firstOrNull { it.isNotBlank() } ?: "专辑"
         localMusic != null -> "本地曲库 · ${state.songs.size} 首歌曲"
         state.playlist?.source == "ncm" -> "网易云音乐 · 同步歌单只读"
         state.playlist?.source == "netease" -> "网易云音乐"
@@ -238,7 +217,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         else -> "CurrentMusic 歌单"
     }
     val heroOrigin = if (state.playlist?.source == "ncm") "网易云音乐" else origin
-    val heroDescription = state.description.trim().takeUnless {
+    val heroDescription = (if (albumPage) state.description.substringAfter('\n', "") else state.description).trim().takeUnless {
         it == "来自网易云音乐" || it == heroOrigin
     }.orEmpty()
     fun start(shuffle: Boolean) {
@@ -247,9 +226,10 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         play(songs, if (shuffle) songs.indices.random() else 0)
     }
     val context = LocalContext.current
-    val keyboard = LocalSoftwareKeyboardController.current
-    val focus = LocalFocusManager.current
-    fun closeSearch() { query = ""; searching = false; focus.clearFocus(); keyboard?.hide() }
+    // Opening only transforms the toolbar. Reveal results when filtering starts.
+    LaunchedEffect(searching && query.isNotBlank()) {
+        if (searching && query.isNotBlank()) list.animateScrollToItem(1)
+    }
     fun share() {
         val text = buildString {
             appendLine("《$title》 · ${state.songs.size} 首歌曲")
@@ -257,48 +237,28 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
             append("来自 CurrentMusic")
         }
         runCatching { context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain")
-            .putExtra(Intent.EXTRA_TEXT, text), "分享歌单")) }.onFailure { library.container.errorNotices.show("暂时无法打开分享") }
+            .putExtra(Intent.EXTRA_TEXT, text), "分享$collectionKind")) }.onFailure { library.container.errorNotices.show("暂时无法打开分享") }
     }
-    Column(Modifier.fillMaxSize().background(backdrop).statusBarsPadding().navigationBarsPadding()
-        .testTag(if (localMusic != null) "local_music_screen" else "library_detail")) {
-        Row(Modifier.fillMaxWidth().background(backdrop).height(52.dp).padding(horizontal = 12.dp).testTag("playlist_top_bar"), verticalAlignment = Alignment.CenterVertically) {
-            PlaylistIconAction(Icons.AutoMirrored.Filled.ArrowBack, "返回", onBack, Modifier.testTag("navigate_back"), background = Color.Transparent)
-            val compact by remember { derivedStateOf { list.firstVisibleItemIndex > 0 } }
-            Text(if (compact || localMusic != null) title else "歌单", Modifier.weight(1f).padding(horizontal = 12.dp), fontSize = 17.sp,
-                fontWeight = FontWeight.Medium, color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            PlaylistIconAction(Icons.Default.Search, "搜索歌单内歌曲", {
-                if (searching) closeSearch() else searching = true
-                scope.launch { list.animateScrollToItem(1) }
-            }, Modifier.testTag("playlist_search_toggle"), background = Color.Transparent)
-            Row(Modifier.height(40.dp).clip(RoundedCornerShape(20.dp))
-                .clickable(role = Role.Button) {
+    PlaylistPageLayout(cover, list, heroHeightPx,
+        if (localMusic != null) "local_music_screen" else "library_detail", toolbar = { progress ->
+            GlassSearchToolbar(title, ((progress - .35f) / .65f).coerceIn(0f, 1f), onBack,
+                searching, { searching = it }, query, { query = it },
+                action = GlassToolbarAction(MusicIcons.Image, "CD 唱片架", {
                     scope.launch { vm.container.settings.edit { it.copy(playlistRecordShelf = true, playlistDepthRibbon = false) } }
-                }.semantics { contentDescription = "CD 唱片架" }.testTag("playlist_record_shelf_toggle")
-                .padding(horizontal = 10.dp), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                Icon(MusicIcons.Image, null, Modifier.size(18.dp), tint = Color.White)
-                Text("唱片架", color = Color.White, fontSize = 13.sp)
-            }
-            PlaylistIconAction(Icons.Default.MoreVert, "歌单操作", { menuOpen = true }, Modifier.testTag("playlist_more"), background = Color.Transparent)
-        }
-        Box(Modifier.weight(1f).background(backdrop).testTag("playlist_refresh")) {
-            LazyColumn(Modifier.fillMaxSize().clipToBounds().nestedScroll(pullMotion).drawBehind {
-                // Paint the moving body from below its rounded toolbar, rather than
-                // stretching a full white list background above the fixed artwork.
-                val toolbar = list.layoutInfo.visibleItemsInfo.firstOrNull { it.key == "playback" }
-                val panelTop = toolbar?.offset?.toFloat() ?: size.height
-                if (panelTop < size.height) drawRect(headerBottom, topLeft = Offset(0f, panelTop.coerceAtLeast(0f)),
-                    size = Size(size.width, size.height - panelTop.coerceAtLeast(0f)))
-                val bodyTop = panelTop + playlistPanelCornerPx(list, pullMotion.offset, panelDensity) + pullMotion.offset
-                if (bodyTop < size.height) drawRect(surface, topLeft = Offset(0f, bodyTop.coerceAtLeast(0f)),
-                    size = Size(size.width, size.height - bodyTop.coerceAtLeast(0f)))
-            }.testTag("playlist_tracks"), state = list, overscrollEffect = null,
-                contentPadding = PaddingValues(bottom = musicScrollPadding(PaddingValues(bottom = 24.dp)).calculateBottomPadding())) {
+                }, "playlist_record_shelf_toggle"),
+                trailing = GlassToolbarAction(Icons.Default.MoreVert, "歌单操作", { menuOpen = true }, "playlist_more"),
+                modifier = Modifier.testTag("playlist_top_bar"), inputTag = "playlist_query", searchTag = "playlist_search_toggle",
+                placeholder = "搜索$collectionKind")
+        }) { topInset ->
+        Box(Modifier.fillMaxSize().testTag("playlist_refresh")) {
+            LazyColumn(Modifier.fillMaxSize().clipToBounds().nestedScroll(pullMotion).testTag("playlist_tracks"),
+                state = list, overscrollEffect = null,
+                contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 32.dp + searchClearance))) {
                 item(key = "hero") {
-                    Column(Modifier.fillMaxWidth().background(Brush.verticalGradient(listOf(backdrop, headerBottom)))
-                        .padding(start = 20.dp, end = 20.dp, top = 18.dp, bottom = 20.dp).testTag("playlist_hero")) {
+                    Column(Modifier.fillMaxWidth().onSizeChanged { heroHeightPx = it.height }
+                        .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp).testTag("playlist_hero")) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                            StyleArtwork(cover, Modifier.size(112.dp).clip(RoundedCornerShape(16.dp)).testTag("playlist_cover"), tint,
+                            StyleArtwork(cover, Modifier.size(128.dp).clip(RoundedCornerShape(16.dp)).testTag("playlist_cover"), tint,
                                 pixels = 420, pending = state.loading && state.songs.isEmpty(), contentDescription = "歌单封面")
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Text(title, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
@@ -315,20 +275,13 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                             if (localMusic != null) PlaylistPill(if (localMusic.allowed) "扫描音乐" else "授权扫描", Icons.Default.Refresh,
                                 ::refresh, Modifier.weight(1f).testTag(if (localMusic.allowed) "local_music_refresh" else "local_music_permission"),
                                 enabled = !state.loading && !state.refreshing)
-                            else PlaylistPill("歌单信息", Icons.Default.Info, { infoOpen = true }, Modifier.weight(1f).testTag("playlist_info"))
+                            else PlaylistPill("${collectionKind}信息", Icons.Default.Info, { infoOpen = true }, Modifier.weight(1f).testTag("playlist_info"))
                         }
                     }
                 }
-                stickyHeader(key = "playback") {
-                    Box(Modifier.fillMaxWidth().graphicsLayer {
-                        translationY = pullMotion.offset
-                        val corner = (playlistPanelCornerPx(list, pullMotion.offset, panelDensity) / panelDensity.density).dp
-                        shape = RoundedCornerShape(topStart = corner, topEnd = corner)
-                        clip = true
-                    }.testTag("playlist_playback_panel").semantics {
-                        this[PlaylistPanelCornerRadius] = playlistPanelCornerPx(list, pullMotion.offset, panelDensity)
-                    }) {
-                    Column(Modifier.fillMaxWidth().background(surface)) {
+                item(key = "playback") {
+                    Column(Modifier.fillMaxWidth().playlistPullSurface(pullMotion).background(surface)
+                        .testTag("playlist_playback_panel")) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
                             MusicTransportButton("播放全部", { start(false) }, Modifier.size(48.dp).testTag("play_library_all"),
                                 prominent = true, enabled = songs.isNotEmpty() && canPlay)
@@ -341,14 +294,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                             PlaylistIconAction(MusicIcons.Sort, "歌曲排序", { sortOpen = true }, Modifier.testTag("playlist_sort"),
                                 ink = MiuixTheme.colorScheme.onSurface, background = Color.Transparent)
                         }
-                        if (searching) Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 10.dp, bottom = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            val inputFocus = remember { FocusRequester() }
-                            LaunchedEffect(Unit) { inputFocus.requestFocus() }
-                            TextField(query, { query = it }, singleLine = true, label = "搜索歌名、歌手或专辑",
-                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), modifier = Modifier.weight(1f).focusRequester(inputFocus).testTag("playlist_query"))
-                            PlaylistIconAction(Icons.Default.Close, "关闭歌单搜索", ::closeSearch, ink = MiuixTheme.colorScheme.onSurface, background = Color.Transparent)
-                        }
-                    }
+
                     }
                 }
                 val resume = queue.current?.takeIf { current -> state.songs.any { it.id == current.id && it.musicSource == current.musicSource } }
@@ -392,13 +338,14 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
             }
         }
     }
+    SettingsUiScope {
     if (sortOpen) MusicChoiceDialog("歌曲排序", onDismiss = { sortOpen = false }) {
         listOf("默认顺序", "歌名 A–Z", "歌手 A–Z").forEachIndexed { index, label ->
             MusicDialogChoiceRow(label, order == index, { order = index; sortOpen = false },
                 modifier = Modifier.testTag("playlist_order_$index"))
         }
     }
-    if (menuOpen) MusicChoiceDialog("歌单操作", onDismiss = { menuOpen = false }) {
+    if (menuOpen) MusicChoiceDialog("${collectionKind}操作", onDismiss = { menuOpen = false }) {
         MusicDestinationRow("CD 唱片架", {
             menuOpen = false
             scope.launch { vm.container.settings.edit { it.copy(playlistRecordShelf = true, playlistDepthRibbon = false) } }
@@ -407,7 +354,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
             menuOpen = false
             scope.launch { vm.container.settings.edit { it.copy(playlistDepthRibbon = true, playlistRecordShelf = false) } }
         }, modifier = Modifier.testTag("playlist_depth_ribbon_toggle"), chevron = false)
-        MusicDestinationRow("歌单信息", { menuOpen = false; infoOpen = true }, modifier = Modifier.testTag("playlist_menu_info"), chevron = false)
+        MusicDestinationRow("${collectionKind}信息", { menuOpen = false; infoOpen = true }, modifier = Modifier.testTag("playlist_menu_info"), chevron = false)
         MusicDestinationRow(if (localMusic != null) "重新扫描本地音乐" else "刷新歌单", { menuOpen = false; refresh() }, chevron = false)
         if (state.playlist?.editable(account.account?.id ?: 0) == true) {
             MusicDestinationRow(if (importState.running) "查看网易云导入进度" else "一键导入网易云我喜欢", {
@@ -419,10 +366,13 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         }
         if (editable) {
             MusicDestinationRow("重命名", { menuOpen = false; onRename() }, enabled = !busy, modifier = Modifier.testTag("rename_playlist"), chevron = false)
-            MusicDestinationRow("删除歌单", { menuOpen = false; onDelete() }, enabled = !busy, modifier = Modifier.testTag("delete_playlist"), chevron = false)
+        }
+        if (removable) {
+            MusicDestinationRow(if (state.playlist?.source == "netease" && !state.playlist.nativeOwned) "取消收藏" else "删除歌单",
+                { menuOpen = false; onDelete() }, enabled = !busy, modifier = Modifier.testTag("delete_playlist"), chevron = false)
         }
     }
-    if (infoOpen) MusicDialog("歌单信息", onDismiss = { infoOpen = false }) {
+    if (infoOpen) MusicDialog("${collectionKind}信息", onDismiss = { infoOpen = false }) {
         Text(title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
         Text(origin, fontSize = 13.sp)
         Text(playlistDurationLabel(state.songs), fontSize = 13.sp)
@@ -432,6 +382,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     if (importOpen) PlaylistLikeImportDialog(importState, onClose = { importOpen = false },
         onStop = vm.container.playlistLikeImporter::stop,
         onRetry = { vm.container.playlistLikeImporter.start(importState.playlistId, importState.name) })
+    }
 }
 
 internal fun playlistDurationLabel(songs: List<Song>): String {
@@ -473,24 +424,13 @@ internal fun playlistDurationLabel(songs: List<Song>): String {
 
 @Composable private fun PlaylistPill(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
     onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, emphasized: Boolean = false) {
-    val interactions = remember { MutableInteractionSource() }
-    val pressed by interactions.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) .96f else 1f, tween(130), label = "playlist pill press")
-    Box(modifier.heightIn(min = 48.dp).graphicsLayer { scaleX = scale; scaleY = scale; alpha = if (enabled) 1f else .38f }
-        .clickable(enabled = enabled, role = Role.Button, interactionSource = interactions, indication = null, onClick = onClick)
-        .semantics { if (!enabled) disabled() }, contentAlignment = Alignment.Center) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = if (emphasized) .17f else .10f))
-        .heightIn(min = 40.dp).padding(horizontal = 6.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally)) {
-        Icon(icon, null, Modifier.size(18.dp), tint = Color.White)
-        Text(label, fontSize = 12.sp, color = Color.White, maxLines = 1)
-    }
-    }
+    GlassActionButton(label, onClick, modifier, primary = emphasized, enabled = enabled)
 }
 
 @Composable private fun PlaylistIconAction(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String,
     onClick: () -> Unit, modifier: Modifier = Modifier, ink: Color = Color.White,
     background: Color = Color.White.copy(alpha = .08f), enabled: Boolean = true) {
-    IconButton(onClick = onClick, enabled = enabled, modifier = modifier.size(48.dp).clip(CircleShape).background(background)
-        .semantics { contentDescription = label }) { Icon(icon, null, Modifier.size(22.dp), tint = ink) }
+    GlassIconButton(onClick, label, modifier, enabled = enabled) {
+        Icon(icon, null, Modifier.size(22.dp), tint = ink)
+    }
 }

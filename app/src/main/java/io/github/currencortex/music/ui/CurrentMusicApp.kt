@@ -117,7 +117,7 @@ import io.github.currencortex.music.feature.profile.*
 import io.github.currencortex.music.feature.binding.*
 import io.github.currencortex.music.feature.room.*
 
-private fun isPlaylistRoute(route: String) = route == "lib/local" || route.startsWith("lib/playlist/") || route.startsWith("lib/ncmplaylist/") ||
+private fun isPlaylistRoute(route: String) = route == "lib/local" || route.startsWith("lib/playlist/") || route.startsWith("lib/ncmplaylist/") || route.startsWith("lib/album/") ||
     route in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent")
 
 private val UnifiedMiniScrollClearance = 36.dp
@@ -223,11 +223,16 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
     var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
     val playlistPage = isPlaylistRoute(backStack.last())
+    var playlistDarkStatus by remember(backStack.last()) { mutableStateOf(true) }
+    val playlistStatusStyle = remember(backStack.last()) { { dark: Boolean -> playlistDarkStatus = dark } }
     val haloVisible = (!launchFinished && launchStyle == io.github.currencortex.music.data.settings.LaunchStyle.HALO) ||
         launchPreview == io.github.currencortex.music.data.settings.LaunchStyle.HALO
     LeiTheme(settings, darkSystemBars = if (haloVisible || updateDialogVisible || miniQueueOpen || (playlistPage && (settings.playlistDepthRibbon || settings.playlistRecordShelf)) || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
-        darkStatusBars = if (haloVisible || updateDialogVisible || playlistPage) true else null) {
+        darkStatusBars = if (haloVisible || updateDialogVisible || miniQueueOpen ||
+            (playlistPage && (settings.playlistDepthRibbon || settings.playlistRecordShelf))) true
+            else if (playlistPage) playlistDarkStatus else null) {
         CompositionLocalProvider(io.github.currencortex.music.feature.lyrics.ui.LocalLyricsFont provides lyricsFont,
+            io.github.currencortex.music.feature.library.LocalPlaylistStatusBarStyle provides playlistStatusStyle,
             LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight,
             LocalRefreshRatePreference provides settings.refreshRate) {
         Box(Modifier.fillMaxSize().musicRefreshRate(settings.refreshRate)) {
@@ -654,7 +659,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             route == "lib/recognition" -> io.github.currencortex.music.feature.recognition.MusicRecognitionScreen(::navigateBack) { songs, index ->
                                 playWithPermission { container.playerController.playList(songs, index) }
                             }
-                            route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateLibrary)
+                            route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateLibrary, onBack = ::navigateBack)
                             route == "lib/local" -> {
                                 val detailVm: LibraryDetailViewModel = viewModel(key = route, factory = viewModelFactory { LibraryDetailViewModel(container, route) })
                                 LocalMusicScreen(detailVm, libraryVm, ::navigateBack, ::navigateLibrary) { songs, index ->

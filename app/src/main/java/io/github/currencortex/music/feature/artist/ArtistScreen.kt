@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -33,6 +32,7 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.library.LibrarySongActions
 import io.github.currencortex.music.feature.library.LibraryViewModel
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.util.collectAsPageState
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -59,17 +59,13 @@ import java.time.format.DateTimeFormatter
 }
 
 @Composable private fun ArtistAlbumCard(album: Album, modifier: Modifier, navigate: (String) -> Unit) {
-    Column(modifier.clickable(enabled = album.id > 0, role = Role.Button) { navigate("lib/album/${album.id}") }
-        .testTag("catalog_entry_${album.id}"), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        MusicCover(album.cover, Modifier.fillMaxWidth().aspectRatio(1f), 480)
-        Text(album.name, Modifier.heightIn(min = 38.dp), fontSize = 14.sp, fontWeight = FontWeight.Medium,
-            maxLines = 2, overflow = TextOverflow.Ellipsis)
-        val date = remember(album.publishTime) {
-            if (album.publishTime > 0) Instant.ofEpochMilli(album.publishTime).atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofPattern("yyyy.MM.dd")) else ""
-        }
-        val caption = listOf(date, if (album.size > 0) "${album.size} 首" else "").filter(String::isNotBlank).joinToString(" · ")
-        if (caption.isNotEmpty()) Text(caption, fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+    val date = remember(album.publishTime) {
+        if (album.publishTime > 0) Instant.ofEpochMilli(album.publishTime).atZone(ZoneId.systemDefault())
+            .format(DateTimeFormatter.ofPattern("yyyy.MM.dd")) else ""
     }
+    val caption = listOf(date, if (album.size > 0) "${album.size} 首" else "").filter(String::isNotBlank).joinToString(" · ")
+    MusicArtworkCard(album.cover, album.name, caption, { navigate("lib/album/${album.id}") },
+        modifier.testTag("catalog_entry_${album.id}"), enabled = album.id > 0, pixels = 480)
 }
 
 @Composable fun ArtistScreen(vm: ArtistViewModel, library: LibraryViewModel, onBack: () -> Unit,
@@ -81,15 +77,10 @@ import java.time.format.DateTimeFormatter
     var tab by rememberSaveable(vm.id) { mutableStateOf("songs") }
     LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
     PreloadMusicCovers(if (tab == "albums") state.albums.take(10).map { it.cover } else state.songs.take(12).map { it.cover })
-    MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
-        LazyColumn(Modifier.fillMaxSize().testTag("artist_home"), contentPadding = musicScrollPadding(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    MusicSubpage(state.artist?.name?.ifBlank { "艺人主页" } ?: "艺人主页", "artist_page", onBack, backTag = "artist_back") { topInset ->
+    MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.fillMaxSize().testTag("artist_home"), contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             item {
-                Row(Modifier.heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onBack).testTag("artist_back"),
-                    verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(22.dp), tint = colors.onSurface)
-                    Text("艺人主页", fontSize = 15.sp)
-                }
-                Spacer(Modifier.height(8.dp))
                 ArtistHero(state.artist)
             }
             state.artist?.let { artist -> item {
@@ -109,11 +100,13 @@ import java.time.format.DateTimeFormatter
                 "songs" -> {
                     if (state.songs.isNotEmpty()) item {
                         val enabled = room == null && playback.mode == PlayerMode.LOCAL
-                        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = enabled, role = Role.Button) {
+                        val start = {
                             vm.container.playerController.setMode(PlaybackMode.LIST); play(state.songs, 0)
-                        }.testTag("play_library_all"), verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(28.dp), tint = colors.primary.copy(alpha = if (enabled) 1f else .35f))
-                            Text("播放全部", Modifier.padding(start = 8.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium,
+                        }
+                        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable(enabled = enabled, role = Role.Button, onClick = start)
+                            .testTag("play_library_all").padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                            MusicTransportButton("播放全部", start, Modifier.size(44.dp), prominent = true, enabled = enabled)
+                            Text("播放全部", Modifier.padding(start = 12.dp), fontSize = 17.sp, fontWeight = FontWeight.Medium,
                                 color = colors.onSurface.copy(alpha = if (enabled) 1f else .4f))
                         }
                     }
@@ -141,7 +134,11 @@ import java.time.format.DateTimeFormatter
                             if (pair.size == 1) Spacer(Modifier.weight(1f))
                         }
                     }
-                    if (state.albumsLoading) item { LoadingSongList(2) }
+                    if (state.albumsLoading) item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            repeat(2) { LoadingArtworkCard(Modifier.weight(1f)) }
+                        }
+                    }
                     state.albumsError?.let { error -> item {
                         Text(error, fontSize = 13.sp)
                         MusicTextAction("重试专辑", vm::moreAlbums, Modifier.testTag("artist_albums_retry"))
@@ -152,7 +149,7 @@ import java.time.format.DateTimeFormatter
                     if (!state.loading && state.albums.isEmpty() && state.error == null) item { Text("暂无专辑", fontSize = 14.sp) }
                 }
                 "about" -> {
-                    if (state.biographyLoading && state.biography == null) item { LoadingSongList(3) }
+                    if (state.biographyLoading && state.biography == null) item { LoadingTextList(4) }
                     state.biographyError?.let { error -> item {
                         Text("简介加载失败：$error", fontSize = 13.sp)
                         MusicTextAction("重试简介", { vm.loadBiography() }, Modifier.testTag("artist_bio_retry"), enabled = !state.biographyLoading)
@@ -171,5 +168,6 @@ import java.time.format.DateTimeFormatter
                 }
             }
         }
+    }
     }
 }
