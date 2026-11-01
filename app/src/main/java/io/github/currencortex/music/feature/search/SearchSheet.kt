@@ -24,6 +24,9 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.currencortex.music.ui.component.nativeui.LocalGlassBackdrop
+import io.github.currencortex.music.ui.component.nativeui.rememberGlassBackdrop
+import top.yukonga.miuix.kmp.blur.layerBackdrop
 
 internal class SearchSheetState(initiallyOpen: Boolean = false) {
     val animation = Animatable(if (initiallyOpen) 1f else 0f)
@@ -53,6 +56,7 @@ private val easing = CubicBezierEasing(.2f, 0f, 0f, 1f)
     }
     BackHandler(enabled = open && backEnabled && !imeOpen && !predictiveBack, onBack = onBack)
     if (!open && state.progress <= .0001f) return
+    val backdrop = rememberGlassBackdrop()
     BoxWithConstraints(Modifier.fillMaxSize().testTag("search_sheet")
         .semantics { this[SearchSheetProgress] = state.progress; if (!open) hideFromAccessibility() else dismiss { onBack(); true } }
         .pointerInput(open) { awaitPointerEventScope { while (true) {
@@ -64,7 +68,8 @@ private val easing = CubicBezierEasing(.2f, 0f, 0f, 1f)
             translationY = height * (1f - state.progress)
             shape = RoundedCornerShape(topStart = 30.dp * (1f - state.progress), topEnd = 30.dp * (1f - state.progress))
             clip = true
-        }.background(MiuixTheme.colorScheme.background))
-        content()
+        }.then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
+            .background(MiuixTheme.colorScheme.background))
+        CompositionLocalProvider(LocalGlassBackdrop provides backdrop) { content() }
     }
 }

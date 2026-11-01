@@ -2,12 +2,8 @@ package io.github.currencortex.music.feature.search
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.PlayArrow
@@ -18,7 +14,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.path
 import androidx.compose.ui.platform.testTag
@@ -35,6 +30,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.library.LibraryViewModel
 import io.github.currencortex.music.ui.component.*
+import io.github.currencortex.music.ui.component.nativeui.GlassIconButton
+import io.github.currencortex.music.ui.component.nativeui.GlassButtonGroup
+import io.github.currencortex.music.ui.component.nativeui.GlassGroupIconButton
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -82,7 +80,10 @@ internal fun searchMatchText(text: String, query: String, accent: Color): Annota
                 color = colors.onSurface.copy(alpha = .58f), maxLines = 2, overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.testTag("search_lyric_${song.id}"))
         }
-        quickActions?.invoke()
+        quickActions?.let { actions ->
+            GlassButtonGroup(Modifier.testTag("search_quick_actions_${song.id}")) { actions() }
+            Spacer(Modifier.width(8.dp))
+        }
         SearchResultIconAction(MusicIcons.More, "更多操作：${song.name}", Modifier.testTag("song_menu_${song.id}"), enabled = !pending) {
             val menu = SongMenu(song, primary, onNext, onQueue, request != null, extraActions)
             if (host == null) localMenu = menu else host(menu)
@@ -102,9 +103,9 @@ internal fun searchMatchText(text: String, query: String, accent: Color): Annota
     SearchResultIconAction(if (liked) Icons.Default.Favorite else MusicIcons.Heart,
         if (liked) "取消喜欢：${song.name}" else "喜欢：${song.name}",
         Modifier.testTag("search_like_${song.id}").semantics { stateDescription = if (liked) "已喜欢" else "未喜欢" },
-        enabled = !liking && statuses[song.id]?.pending != true, accent = liked) { vm.togglePrimaryLike(song) }
+        enabled = !liking && statuses[song.id]?.pending != true, accent = liked, grouped = true) { vm.togglePrimaryLike(song) }
     SearchResultIconAction(playlistAddIcon, "加入歌单：${song.name}", Modifier.testTag("search_playlist_${song.id}"),
-        enabled = !busy) { vm.choosePlaylist(song) }
+        enabled = !busy, grouped = true) { vm.choosePlaylist(song) }
 }
 
 @Composable internal fun SearchResultsToolbar(count: Int, total: Int, onPlayAll: () -> Unit, onQueueAll: () -> Unit) {
@@ -125,16 +126,14 @@ internal fun searchMatchText(text: String, query: String, accent: Color): Annota
 }
 
 @Composable private fun SearchResultIconAction(icon: ImageVector, description: String, modifier: Modifier = Modifier,
-    enabled: Boolean = true, accent: Boolean = false, onClick: () -> Unit) {
+    enabled: Boolean = true, accent: Boolean = false, grouped: Boolean = false, onClick: () -> Unit) {
     val colors = MiuixTheme.colorScheme
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) .9f else 1f, tween(140), label = "search action press")
-    Box(modifier.size(40.dp).clickable(source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
-        contentAlignment = Alignment.Center) {
-        Icon(icon, description, Modifier.size(21.dp).graphicsLayer { scaleX = scale; scaleY = scale },
-            tint = (if (accent) colors.primary else colors.onSurface.copy(alpha = .4f)).copy(alpha = if (enabled) (if (accent) 1f else .4f) else .2f))
+    val content: @Composable () -> Unit = {
+        Icon(icon, null, Modifier.size(21.dp),
+            tint = (if (accent) colors.primary else colors.onSurfaceVariantSummary).let { it.copy(alpha = it.alpha * if (enabled) 1f else .38f) })
     }
+    if (grouped) GlassGroupIconButton(onClick, description, modifier, enabled = enabled, content = content)
+    else GlassIconButton(onClick, description, modifier, enabled = enabled, content = content)
 }
 
 private val playlistAddIcon = ImageVector.Builder("SearchPlaylistAdd", 24.dp, 24.dp, 24f, 24f).apply {
