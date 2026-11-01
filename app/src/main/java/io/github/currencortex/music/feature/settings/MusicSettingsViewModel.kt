@@ -19,6 +19,20 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
     val cacheState = MutableStateFlow(AudioCacheSettingsState())
     val audioProvider = container.audioSettings.state
     val audioState = MutableStateFlow(NetworkSettingsState())
+    val serverHealth = container.serverRouter.health
+    val automaticServer = container.serverRouter.automatic
+    val serverProbeBusy = MutableStateFlow(false)
+    fun refreshServers() = viewModelScope.launch {
+        if (serverProbeBusy.value) return@launch
+        serverProbeBusy.value = true
+        try {
+            container.ready.await()
+            container.serverRouter.refresh(container.musicSettings.snapshot().customServer)
+        } catch (cancelled: CancellationException) { throw cancelled
+        } catch (_: Exception) {
+            state.value = state.value.copy(message = "线路检测失败，请重试")
+        } finally { serverProbeBusy.value = false }
+    }
     private fun audioEdit(change: suspend () -> Unit) = viewModelScope.launch {
         if (audioState.value.busy) return@launch
         val previous = container.audioSettings.access().identity
@@ -65,24 +79,37 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
         } catch (e: CancellationException) { throw e }
         catch (_: Exception) { cacheState.value = AudioCacheSettingsState(message = "缓存清理失败，请重试") }
     }
-    fun server(value: String) = viewModelScope.launch {
+    fun server(value: String) = selectServer(CurrentMusicServer.CUSTOM, value)
+    fun selectServer(mode: CurrentMusicServer, custom: String = "") = viewModelScope.launch {
         if (state.value.busy) return@launch
-        val normalized = try { ServerUrl.normalize(value) } catch (e: IllegalArgumentException) {
-            state.value = NetworkSettingsState(message = e.message); return@launch
-        }
-        container.ready.await()
         state.value = NetworkSettingsState(busy = true)
-        // Credentials are scoped to one server. Never send the previous server's token to a new host.
-        container.playerController.clear()
-        container.database.music().clearLyrics()
-        container.authRepository.resetServer(normalized)
-        container.musicSettings.setServer(normalized)
-        container.accountRepository.server = normalized
-        val validation = appResult { container.apiClient.get<UserDto>("auth/me", authenticated = true) }
-        state.value = NetworkSettingsState(message = if (validation is AppResult.Failure && validation.kind != ErrorKind.Unauthorized)
-            validation.kind.message else "服务器已更新，请在新服务器重新登录")
+        try {
+            container.ready.await()
+            val previous = container.musicSettings.snapshot()
+            // Presets share an account. Keep its logical server stable when changing only transport.
+            val normalized = if (mode == CurrentMusicServer.CUSTOM) ServerUrl.normalize(custom)
+                else previous.server.takeIf(CurrentMusicServer::builtIn) ?: mode.url ?: io.github.currencortex.music.core.config.ServerDefaults.URL
+            val changedAccountServer = normalized != container.accountRepository.server
+            if (changedAccountServer) {
+                container.playerController.clear()
+                container.database.music().clearLyrics()
+                container.authRepository.resetServer(normalized)
+            }
+            container.musicSettings.setServerSelection(mode, normalized)
+            container.serverRouter.configure(mode, normalized)
+            container.accountRepository.server = normalized
+            state.value = NetworkSettingsState(message = if (changedAccountServer)
+                "服务器已更新，请在新服务器重新登录" else "服务器线路已更新")
+            if (mode == CurrentMusicServer.AUTO || mode == CurrentMusicServer.CUSTOM) refreshServers()
+        } catch (cancelled: CancellationException) { throw cancelled
+        } catch (failure: IllegalArgumentException) {
+            state.value = NetworkSettingsState(message = failure.message)
+        } catch (_: Exception) {
+            state.value = NetworkSettingsState(message = "服务器设置保存失败，请重试")
+        }
     }
     fun test() = viewModelScope.launch {
+        if (state.value.busy) return@launch
         state.value = NetworkSettingsState(busy = true)
         val result = appResult { container.apiClient.get<UserDto>("auth/me", authenticated = true) }
         state.value = NetworkSettingsState(message = when (result) {

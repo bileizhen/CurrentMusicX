@@ -29,12 +29,14 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.collectLatest
 import io.github.currencortex.music.core.netease.*
 
 class AppContainer(context: Context, storageNamespace: String = "", externalPlayer: ExternalPlayer? = null,
     ttmlProvider: io.github.currencortex.music.feature.lyrics.data.LyricsProvider? = null,
     useNativeNetease: Boolean = storageNamespace.isEmpty(),
     neteaseEndpoints: NeteaseEndpoints = NeteaseEndpoints(),
+    serverCheck: ServerCheck = CurrentMusicServerProbe(),
     automaticLyricsProvider: (suspend (io.github.currencortex.music.data.song.Song) ->
         io.github.currencortex.music.feature.lyrics.data.SavedLyrics?)? = null) : java.io.Closeable {
     private val storageSuffix = if (storageNamespace.isEmpty()) "" else ".$storageNamespace".also {
@@ -53,6 +55,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         if (storageNamespace.isEmpty()) io.github.currencortex.music.core.update.WorkManagerUpdateBackground(context) else null)
     val logger = AppLogger(context)
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
+    val serverRouter = CurrentMusicServerRouter(serverCheck)
+
     val audioOutput = io.github.currencortex.music.data.settings.AudioOutputSettingsRepository(settingsStore, appScope)
     val soundEffectNotices = io.github.currencortex.music.core.media.SoundEffectNoticeCenter(playerScope)
     val errorNotices = io.github.currencortex.music.core.media.IslandErrorNoticeCenter(playerScope)
@@ -123,6 +127,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         nativeMedia = { audioSettings.access().provider == AudioProvider.NETEASE },
         currentMusicAccountReady = { accountRepository.state.value.account != null && !accountRepository.token.isNullOrBlank() },
         currentMusicSessionRevision = { accountRepository.sessionRevision.value },
+        routeServer = serverRouter::resolve,
     )
     val authRepository = AuthRepository(apiClient, accountRepository, "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
         persistServer = musicSettings::setServer, persistAccount = musicSettings::setAccount)
@@ -388,7 +393,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val sleepTimer = io.github.currencortex.music.core.media.SleepTimer(playerController, playerScope)
     val roomRepository = io.github.currencortex.music.data.room.RoomRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
     val roomSession = io.github.currencortex.music.core.room.RoomSession(roomRepository,
-        io.github.currencortex.music.core.room.RoomSseClient(), externalPlayer ?: playerController, playerScope,
+        io.github.currencortex.music.core.room.RoomSseClient(routeServer = serverRouter::resolve), externalPlayer ?: playerController, playerScope,
         { accountRepository.state.value.account?.id ?: 0 }, accountRepository::expired)
     internal val listenTogetherHistory = io.github.currencortex.music.data.netease.listen.NeteaseListenTogetherHistoryRepository(neteaseTransport)
     internal val listenTogetherFate = io.github.currencortex.music.data.netease.listen.NeteaseListenTogetherFateRepository(neteaseTransport)
@@ -483,6 +488,13 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 navidrome.ready.await()
                 if (nativeNetease != null) neteaseSessions.ready.await()
                 accountRepository.server = initial.server
+                serverRouter.configure(initial.serverMode, initial.server)
+                appScope.launch {
+                    musicSettings.serverSelection.collectLatest { (mode, server) ->
+                        serverRouter.configure(mode, server)
+                        if (mode == CurrentMusicServer.AUTO) serverRouter.refresh()
+                    }
+                }
                 if (initial.restoreQueue) database.music().queue()?.let {
                     playbackQueue.restore(ApiJson.decodeFromString<QueueSnapshot>(it.payload))
                 }

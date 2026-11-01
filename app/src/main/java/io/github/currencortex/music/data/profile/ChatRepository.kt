@@ -82,7 +82,7 @@ class ChatRepository(private val api: ApiClient, private val session: () -> Requ
     }
 
     fun imageUrl(server: String, image: String): String? = if (!validChatImageName(image)) null else
-        ServerUrl.endpoint(server, "chat/image", emptyMap()).newBuilder().addPathSegment(image).build().toString()
+        ServerUrl.endpoint(api.routeServer(server), "chat/image", emptyMap()).newBuilder().addPathSegment(image).build().toString()
 }
 
 private fun validChatImageName(value: String) = value.isNotBlank() && !value.contains("..") &&

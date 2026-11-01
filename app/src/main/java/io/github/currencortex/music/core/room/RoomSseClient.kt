@@ -13,11 +13,12 @@ sealed interface RoomSignal {
     data class Event(val type: String, val data: String, val id: String?) : RoomSignal
 }
 class RoomSseClient(client: OkHttpClient = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
-    .readTimeout(45, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS).followRedirects(false).build()) {
+    .readTimeout(45, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS).followRedirects(false).build(),
+    private val routeServer: (String) -> String = { it }) {
     private val factory = EventSources.createFactory(client)
     fun events(roomId: String, seq: Long, lastId: String?, session: RequestSession) = callbackFlow {
         require(!session.token.isNullOrBlank())
-        val request = Request.Builder().url(ServerUrl.endpoint(session.server, "live/$roomId/events",
+        val request = Request.Builder().url(ServerUrl.endpoint(routeServer(session.server), "live/$roomId/events",
             mapOf("since" to seq.toString(), "sse" to "1")))
             .header("Authorization", "Bearer ${session.token}").header("Accept", "text/event-stream")
         if (!lastId.isNullOrBlank()) request.header("Last-Event-ID", lastId)

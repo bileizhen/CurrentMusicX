@@ -19,13 +19,14 @@ data class PlayerAiEvent(val type: String, val text: String = "", val cards: Lis
 /** Private player scope. Never posts to the public chat and never retries a POST automatically. */
 class PlayerAiRepository(private val session: () -> RequestSession,
     client: OkHttpClient = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(90, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS).build()) {
+        .readTimeout(90, TimeUnit.SECONDS).callTimeout(0, TimeUnit.SECONDS).build(),
+    private val routeServer: (String) -> String = { it }) {
     private val factory = EventSources.createFactory(client.newBuilder().followRedirects(false).retryOnConnectionFailure(false).build())
     fun ask(question: String, song: PostAttachment, reset: Boolean, expected: RequestSession = session()): Flow<PlayerAiEvent> = callbackFlow {
         require(question.isNotBlank() && question.length <= 500 && song.type == "song" && validMusicAttachments(listOf(song)).size == 1)
         if (expected.token.isNullOrBlank() || expected != session()) { close(ApiException(ErrorKind.Unauthorized)); return@callbackFlow }
         val body = buildJsonObject { put("question", question.trim()); put("song", ApiJson.encodeToJsonElement(song)); put("reset", reset) }
-        val request = Request.Builder().url(ServerUrl.endpoint(expected.server, "ai/live", emptyMap()))
+        val request = Request.Builder().url(ServerUrl.endpoint(routeServer(expected.server), "ai/live", emptyMap()))
             .header("Authorization", "Bearer ${expected.token}").header("Accept", "text/event-stream")
             .post(body.toString().toRequestBody("application/json".toMediaType())).build()
         var terminal = false
