@@ -46,6 +46,12 @@ fun MusicDialogButton(text: String, onClick: () -> Unit, modifier: Modifier = Mo
     colors: TextButtonColors = musicDialogButtonColors(),
     insideMargin: PaddingValues = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
     textStyle: TextStyle? = null, fillWidth: Boolean = true, destructive: Boolean = false) {
+    if(io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current) {
+        io.github.currencortex.music.ui.component.nativeui.GlassActionButton(text,onClick,modifier,
+            destructive=destructive,enabled=enabled,minHeight=minHeight,fillWidth=fillWidth,
+            backdrop=io.github.currencortex.music.ui.component.nativeui.LocalGlassBackdrop.current ?: LocalMusicDialogBackdrop.current)
+        return
+    }
     val press = rememberMusicDialogPress()
     val inkWash = MiuixTheme.colorScheme.onBackground
     val ink = if (destructive) MiuixTheme.colorScheme.error.copy(alpha = if (enabled) 1f else .35f)

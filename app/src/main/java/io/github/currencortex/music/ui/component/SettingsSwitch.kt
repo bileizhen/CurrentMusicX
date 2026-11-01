@@ -22,6 +22,10 @@ fun SettingsSwitch(
     enabled: Boolean = true,
     startAction: (@Composable () -> Unit)? = null,
 ) {
+    if(io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current) {
+        io.github.currencortex.music.ui.component.nativeui.SettingsToggle(title,checked,onCheckedChange,modifier,summary,enabled,startAction)
+        return
+    }
     BasicComponent(
         modifier = modifier.semantics { toggleableState = if (checked) ToggleableState.On else ToggleableState.Off },
         title = title,

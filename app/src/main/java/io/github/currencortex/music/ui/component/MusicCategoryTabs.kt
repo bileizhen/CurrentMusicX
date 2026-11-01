@@ -25,6 +25,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable fun MusicCategoryTabs(tabs: List<Pair<String, String>>, selectedKey: String, onSelect: (String) -> Unit,
     tagPrefix: String, modifier: Modifier = Modifier) {
+    if (io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current) {
+        io.github.currencortex.music.ui.component.nativeui.SettingsSegmentedControl(tabs.map { it.second },
+            tabs.indexOfFirst { it.first == selectedKey }, { onSelect(tabs[it].first) }, modifier,
+            tag = tagPrefix, role = Role.Tab, itemTag = { "${tagPrefix}_${tabs[it].first}" }, onReselect = { onSelect(selectedKey) })
+        return
+    }
     val colors = MiuixTheme.colorScheme
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         tabs.forEach { (key, label) ->
