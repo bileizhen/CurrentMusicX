@@ -3,6 +3,7 @@ package io.github.currencortex.music.ui.component
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.Orientation
@@ -17,6 +18,7 @@ import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -48,13 +50,16 @@ val LocalRootTabPlacement = staticCompositionLocalOf<RootTabPlacement?> { null }
 /** Only root-page title containers opt into moving the root pager. */
 val LocalRootTabSwipe = compositionLocalOf<Modifier> { Modifier }
 
-/** Continuous full-width pages, including intermediate tabs; no fade, overshoot or pre-jump. */
+/** Retained root pages: continuous full-width movement, or the optional upstream crossfade. */
 @Composable fun RootTabTransition(selected: Int, states: SaveableStateHolder,
-    onSelected: (Int) -> Unit, content: @Composable (Int) -> Unit) {
+    onSelected: (Int) -> Unit, fade: Boolean = false, content: @Composable (Int) -> Unit) {
     val pager = rememberPagerState(initialPage = selected, pageCount = { 4 })
     val easing = remember { CubicBezierEasing(.2f, 0f, .2f, 1f) }
     var viewport by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var gesturePending by remember { mutableStateOf(false) }
+    var previousSelection by remember { mutableIntStateOf(selected) }
+    var fadeFrom by remember { mutableStateOf<Int?>(null) }
+    val fadeProgress = remember { Animatable(1f) }
     val latestSelected by rememberUpdatedState(selected)
     val parentActive = LocalMusicPageActive.current
     val select by rememberUpdatedState(onSelected)
@@ -76,11 +81,26 @@ val LocalRootTabSwipe = compositionLocalOf<Modifier> { Modifier }
             }
         }
     }
-    LaunchedEffect(selected) {
+    LaunchedEffect(selected, fade) {
+        val previous = previousSelection
+        previousSelection = selected
         snapshotFlow { pager.layoutInfo.pageSize }.first { it > 0 }
         // Selection follows a finger drag immediately; it must not start a second animation.
-        if (gesturePending && pager.isScrollInProgress && selected == pager.currentPage) return@LaunchedEffect
+        if (gesturePending && pager.isScrollInProgress && selected == pager.currentPage) {
+            fadeFrom = null; fadeProgress.snapTo(1f); return@LaunchedEffect
+        }
         gesturePending = false
+        if (fade && previous != selected) {
+            // upstream motion.dart: 220ms easeInOut. Keep the same four retained page owners.
+            fadeFrom = previous
+            fadeProgress.snapTo(0f)
+            pager.scrollToPage(selected)
+            if ((coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) == 0f) fadeProgress.snapTo(1f)
+            else fadeProgress.animateTo(1f, tween(220, easing = CubicBezierEasing(.42f, 0f, .58f, 1f)))
+            fadeFrom = null
+            return@LaunchedEffect
+        }
+        fadeFrom = null; fadeProgress.snapTo(1f)
         if (abs(pager.getOffsetDistanceInPages(selected)) < .0001f) return@LaunchedEffect
         if ((coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) == 0f) pager.scrollToPage(selected)
         else pager.scroll {
@@ -103,7 +123,7 @@ val LocalRootTabSwipe = compositionLocalOf<Modifier> { Modifier }
         states.SaveableStateProvider(tab) {
             var page by remember { mutableStateOf<LayoutCoordinates?>(null) }
             val placement = remember { RootTabPlacement({ viewport }, { page }) }
-            val moving = pager.isScrollInProgress || pager.settledPage != selected
+            val moving = pager.isScrollInProgress || pager.settledPage != selected || fadeFrom != null
             val active = parentActive && tab == selected && !moving
             val lifecycle = rememberLifecycleOwner(maxLifecycle = when {
                 active -> Lifecycle.State.RESUMED
@@ -113,6 +133,13 @@ val LocalRootTabSwipe = compositionLocalOf<Modifier> { Modifier }
             CompositionLocalProvider(LocalRootTabPlacement provides placement, LocalRootTabSwipe provides swipe,
                 LocalLifecycleOwner provides lifecycle, LocalMusicPageActive provides active) {
                 Box(Modifier.fillMaxSize().onGloballyPositioned { page = it }
+                    .graphicsLayer {
+                        if (fade && !gesturePending) {
+                            translationX = if (tab == selected || tab == fadeFrom)
+                                (pager.currentPage - tab + pager.currentPageOffsetFraction) * size.width else 0f
+                            alpha = when (tab) { selected -> fadeProgress.value; fadeFrom -> 1f - fadeProgress.value; else -> 0f }
+                        }
+                    }
                     .then(if (tab != selected) Modifier.clearAndSetSemantics {} else Modifier)) { content(tab) }
             }
         }
