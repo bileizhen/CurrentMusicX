@@ -1,27 +1,22 @@
 package io.github.currencortex.music.feature.room
 
+import io.github.currencortex.music.ui.component.nativeui.*
+
 import android.content.ClipData
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.ui.graphics.graphicsLayer
 import io.github.currencortex.music.core.netease.listen.ListenTogetherOperation
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalContext
@@ -252,31 +247,28 @@ internal data class NeteaseListenTogetherActions(
             value.operation in setOf(ListenTogetherOperation.REFRESH, ListenTogetherOperation.RESTORE) -> "checking"
         else -> "idle"
     }
-    Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()
-        .padding(horizontal = 20.dp).testTag("netease_listen_screen")) {
-        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(colors.surfaceContainer)
-                .clickable(role = androidx.compose.ui.semantics.Role.Button, onClick = onBack).testTag("netease_listen_back"), contentAlignment = Alignment.Center) {
-                Icon(MusicIcons.Back, "返回", Modifier.size(22.dp), tint = colors.onSurface)
+    MusicSubpage("双人一起听", "netease_listen_screen", onBack, backTag = "netease_listen_back",
+        actions = {
+            if (ready && onHistory != null) GlassIconButton(onHistory, "一起听记录", Modifier.testTag("netease_listen_history")) {
+                Icon(MusicIcons.Update, null)
             }
-            Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text("双人一起听", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                Text(if (showAccountCard) "网易云音乐" else "网易云音乐 · $accountSummary",
-                    if (showAccountCard) Modifier else Modifier.testTag("netease_listen_account"),
-                    fontSize = 12.sp, color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            if (ready && onHistory != null) MusicTextAction("记录", onHistory, Modifier.testTag("netease_listen_history"))
-        }
-        ListenTogetherPageTransition(state, ::phase, { if (it.active) 1 else 0 }, Modifier.weight(1f).fillMaxWidth()) { state ->
+        }) { topInset ->
+        ListenTogetherPageTransition(state, ::phase, { if (it.active) 1 else 0 }, Modifier.fillMaxSize().imePadding().padding(horizontal = 16.dp)) { state ->
         if (phase(state) == "checking") {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = musicScrollPadding(PaddingValues(top = 8.dp, bottom = 24.dp))) {
+            LazyColumn(Modifier.fillMaxSize(), contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 24.dp))) {
                 item { ListenTogetherSkeleton(if (state.operation == ListenTogetherOperation.RESTORE) "正在恢复一起听…" else "正在检查已有会话…",
                     "netease_listen_loading", rows = 2) }
             }
         } else LazyColumn(Modifier.fillMaxSize().testTag("netease_listen_content"),
-            contentPadding = musicScrollPadding(PaddingValues(top = 8.dp, bottom = 24.dp)),
+            contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 24.dp)),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (showAccountCard) item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (!showAccountCard) item {
+                SettingsGroup {
+                    SettingsPreference("网易云音乐", accountSummary, Modifier.testTag("netease_listen_account"),
+                        leading = { Icon(MusicIcons.Headphones, null, tint = colors.primary) })
+                }
+            }
+            if (showAccountCard) item { SettingsGroup(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("网易云账号", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                 Text(accountSummary, Modifier.testTag("netease_listen_account"), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
                 if (!ready) {
@@ -285,12 +277,12 @@ internal data class NeteaseListenTogetherActions(
                         Modifier.testTag("netease_listen_login"))
                 }
             } } }
-            if (currentMusicRoomActive) item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (currentMusicRoomActive) item { SettingsGroup(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("正在使用 CurrentMusic 房间", fontWeight = FontWeight.SemiBold)
                 Text("请先退出当前房间，再开启网易云双人一起听。", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
                 MusicTextAction("返回房间", onBack)
             } } }
-            state.error?.let { error -> item { Card(Modifier.fillMaxWidth().testTag("netease_listen_error")) {
+            state.error?.let { error -> item { SettingsGroup(Modifier.fillMaxWidth().testTag("netease_listen_error")) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(error, fontSize = 14.sp, color = colors.error)
                     Row { MusicTextAction("重试同步", actions.refresh, Modifier.testTag("netease_listen_retry"), enabled = ready && !state.busy)
@@ -298,7 +290,7 @@ internal data class NeteaseListenTogetherActions(
                 }
             } } }
             if (state.active) {
-                item { Card(Modifier.fillMaxWidth().testTag("netease_listen_session")) { Column(Modifier.padding(20.dp)) {
+                item { SettingsGroup(Modifier.fillMaxWidth().testTag("netease_listen_session")) { Column(Modifier.padding(20.dp)) {
                     val participants = state.room?.participants.orEmpty()
                     val pair = ListenTogetherPair(participants.map { ListenTogetherParticipant(it.userId, it.nickname, it.avatarUrl) })
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -323,33 +315,28 @@ internal data class NeteaseListenTogetherActions(
                     }
                     Spacer(Modifier.height(20.dp))
                     val invitation = state.invitationUrl
-                    Button(onClick = { if (invitation != null && !copying) scope.launch {
+                    GlassActionButton(
+                        if (copying) "正在复制…" else if (clipboardMessage == "邀请链接已复制") "已复制邀请链接" else "复制邀请链接",
+                        onClick = { if (invitation != null && !copying) scope.launch {
                         copying = true
                         clipboardMessage = try { actions.copyInvitation(invitation); "邀请链接已复制" }
                         catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
                         catch (_: Exception) { "暂时无法复制，请重试" }
                         finally { copying = false }
                     } },
-                        enabled = !invitation.isNullOrBlank() && !copying && !state.busy, colors = ButtonDefaults.buttonColorsPrimary(),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("netease_listen_copy")) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            if (copying) ListenProgress(size = 18.dp, primary = true) else Icon(MusicIcons.Copy, null, Modifier.size(18.dp), tint = colors.onPrimary)
-                            Text(if (copying) "正在复制…" else if (clipboardMessage == "邀请链接已复制") "已复制邀请链接" else "复制邀请链接",
-                                fontSize = 14.sp, fontWeight = FontWeight.Medium, color = colors.onPrimary)
-                        }
-                    }
+                        enabled = !invitation.isNullOrBlank() && !copying && !state.busy, primary = true,
+                        modifier = Modifier.fillMaxWidth().testTag("netease_listen_copy"))
                     Text(clipboardMessage ?: "好友可在网易云音乐打开链接加入。", Modifier.fillMaxWidth().padding(top = 8.dp),
                         fontSize = 11.sp, color = if (clipboardMessage == null) colors.onSurfaceVariantSummary else colors.primary,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ListenPageAction(if (state.operation == ListenTogetherOperation.REFRESH) "正在同步…" else "刷新同步", MusicIcons.Update,
-                            actions.refresh, Modifier.weight(1f).testTag("netease_listen_refresh"), enabled = ready && !state.busy,
-                            loading = state.operation == ListenTogetherOperation.REFRESH)
-                        ListenPageAction("退出一起听", MusicIcons.Close, { leaveConfirmation = true }, Modifier.weight(1f).testTag("netease_listen_leave"), enabled = !state.busy, destructive = true)
+                        GlassActionButton(if (state.operation == ListenTogetherOperation.REFRESH) "正在同步…" else "刷新同步",
+                            actions.refresh, Modifier.weight(1f).testTag("netease_listen_refresh"), enabled = ready && !state.busy)
+                        GlassActionButton("退出一起听", { leaveConfirmation = true }, Modifier.weight(1f).testTag("netease_listen_leave"), enabled = !state.busy, destructive = true)
                     }
                 } } }
-                item { Card(Modifier.fillMaxWidth().testTag("netease_listen_now_playing")) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                item { SettingsGroup(Modifier.fillMaxWidth().testTag("netease_listen_now_playing")) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                         AnimatedContent(playback.song, contentKey = { it?.id }, label = "listen-now-playing",
                             transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(120)) }) { song ->
@@ -367,27 +354,24 @@ internal data class NeteaseListenTogetherActions(
                         }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        ListenPageAction("选择歌曲", MusicIcons.Search, onSearch, Modifier.weight(1f).testTag("netease_listen_search"), enabled = !state.busy)
-                        ListenPageAction("打开播放器", MusicIcons.Headphones, onPlayer, Modifier.weight(1f).testTag("netease_listen_player"), enabled = playback.song != null)
+                        GlassActionButton("选择歌曲", onSearch, Modifier.weight(1f).testTag("netease_listen_search"), enabled = !state.busy)
+                        GlassActionButton("打开播放器", onPlayer, Modifier.weight(1f).testTag("netease_listen_player"), enabled = playback.song != null)
                     }
                 } } }
             } else {
-                if (state.availableRoom != null) item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                if (state.availableRoom != null) item { SettingsGroup(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("发现已有一起听会话", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                     Text("恢复后在本机继续同步播放。", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
-                    Button(onClick = actions.resume, enabled = canStart,
-                        modifier = Modifier.fillMaxWidth().testTag("netease_listen_resume")) {
-                        if (state.operation == ListenTogetherOperation.RESTORE) ListenLoadingLabel("正在恢复…") else Text("恢复一起听") }
+                    GlassActionButton(if (state.operation == ListenTogetherOperation.RESTORE) "正在恢复…" else "恢复一起听",
+                        actions.resume, Modifier.fillMaxWidth().testTag("netease_listen_resume"), enabled = canStart)
                 } } }
-                item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                item { SettingsGroup(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("和好友听同一首歌", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
                     Text("创建双人会话，复制邀请链接，与好友同步播放、暂停和切歌。", fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
-                    Button(onClick = actions.create, enabled = canStart, colors = ButtonDefaults.buttonColorsPrimary(),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag("netease_listen_create")) {
-                        if (state.operation == ListenTogetherOperation.CREATE) ListenLoadingLabel("正在创建…", primary = true)
-                        else Text("创建一起听", color = colors.onPrimary, fontSize = 14.sp) }
+                    GlassActionButton(if (state.operation == ListenTogetherOperation.CREATE) "正在创建…" else "创建一起听",
+                        actions.create, Modifier.fillMaxWidth().testTag("netease_listen_create"), primary = true, enabled = canStart)
                 } } }
-                item { Card(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                item { SettingsGroup(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("加入好友", fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
                     TextField(invite, { invite = it; inputError = null; clipboardMessage = null }, label = "网易云一起听邀请链接",
                         enabled = !state.busy, modifier = Modifier.fillMaxWidth().testTag("netease_listen_invite"))
@@ -414,6 +398,9 @@ internal data class NeteaseListenTogetherActions(
                     if (state.operation == ListenTogetherOperation.JOIN) ListenLoadingLabel("正在连接好友的会话…", Modifier.testTag("netease_listen_join_loading"))
                     Text("请使用网易云音乐的邀请链接；CurrentMusic 六位房间号请返回房间页加入。", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
                 } } }
+                if (ready && onHistory != null) item {
+                    SettingsGroup { MusicDestinationRow("一起听记录", onHistory, summary = "历史、排行与缘分报告") }
+                }
                 item { MusicTextAction(if (state.busy) "正在检查…" else "检查已有会话", actions.refresh,
                     Modifier.testTag("netease_listen_check"), enabled = ready && !state.busy) }
             }
@@ -427,22 +414,5 @@ internal data class NeteaseListenTogetherActions(
             MusicDialogButton("确认退出", { leaveConfirmation = false; actions.leave() },
                 Modifier.weight(1f).testTag("netease_listen_confirm_leave"), destructive = true, enabled = !state.busy)
         }
-    }
-}
-
-@Composable private fun ListenPageAction(label: String, icon: ImageVector, onClick: () -> Unit,
-    modifier: Modifier = Modifier, enabled: Boolean = true, destructive: Boolean = false, loading: Boolean = false) {
-    val colors = MiuixTheme.colorScheme
-    val ink = (if (destructive) colors.error else colors.onSurface).copy(alpha = if (enabled) 1f else .4f)
-    val interaction = remember { MutableInteractionSource() }
-    val pressed by interaction.collectIsPressedAsState()
-    val scale by animateFloatAsState(if (pressed) .97f else 1f, tween(120), label = "listen-action-press")
-    Row(modifier.graphicsLayer { scaleX = scale; scaleY = scale }.heightIn(min = 48.dp).clip(RoundedCornerShape(14.dp)).background(colors.surfaceContainer)
-        .clickable(enabled = enabled, interactionSource = interaction, indication = androidx.compose.foundation.LocalIndication.current,
-            role = androidx.compose.ui.semantics.Role.Button, onClick = onClick)
-        .padding(horizontal = 8.dp, vertical = 10.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-        if (loading) ListenProgress(size = 18.dp) else Icon(icon, null, Modifier.size(18.dp), tint = ink)
-        Spacer(Modifier.width(6.dp))
-        Text(label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = ink, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

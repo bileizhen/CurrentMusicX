@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.room
 
+import io.github.currencortex.music.ui.component.nativeui.*
+
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -64,26 +66,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Same geometry as the result cards. No fake progress percentage or delayed network result. */
 @Composable internal fun ListenTogetherSkeleton(label: String, tag: String, rows: Int = 3) {
-    val active = LocalMusicPageActive.current
-    val pulse = if (active) {
-        val transition = rememberInfiniteTransition(label = "listen-loading")
-        transition.animateFloat(.45f, 1f, infiniteRepeatable(tween(850), RepeatMode.Reverse), label = "skeleton-opacity")
-    } else remember { mutableFloatStateOf(.7f) }
-    val color = MiuixTheme.colorScheme.onSurface.copy(alpha = .075f)
-    Column(Modifier.fillMaxWidth().testTag(tag), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        ListenLoadingLabel(label)
-        repeat(rows) { index ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(18.dp).graphicsLayer { alpha = pulse.value }, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Box(Modifier.size(44.dp).background(color, CircleShape))
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            Box(Modifier.fillMaxWidth(.55f).height(15.dp).background(color, RoundedCornerShape(5.dp)))
-                            Box(Modifier.fillMaxWidth(.8f).height(11.dp).background(color, RoundedCornerShape(4.dp)))
-                        }
-                    }
-                    if (index == 0) Box(Modifier.fillMaxWidth().height(40.dp).background(color, RoundedCornerShape(12.dp)))
-                }
+    io.github.currencortex.music.ui.component.MusicPlaceholderScope {
+        Column(Modifier.fillMaxWidth().testTag(tag), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            ListenLoadingLabel(label)
+            repeat(rows) { index ->
+                io.github.currencortex.music.ui.component.LoadingPreferenceCard(showAction = index == 0)
             }
         }
     }
