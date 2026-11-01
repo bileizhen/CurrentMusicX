@@ -127,8 +127,8 @@ class AudioQualitySheetTest {
             container.ready.await(); container.sessionRestored.await()
             val vm = MusicSettingsViewModel(container)
             store.put("quality", vm)
-            compose.setContent { LeiTheme(AppearanceSettings(themeMode = ThemeMode.LIGHT)) { Scaffold { MusicSettingsScreen(vm) {} } } }
-            compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("default_quality"))
+            compose.setContent { LeiTheme(AppearanceSettings(themeMode = ThemeMode.LIGHT)) { Scaffold { PlaybackSettingsScreen(vm) } } }
+            compose.onNodeWithTag("playback_settings").performScrollToNode(hasTestTag("default_quality"))
             compose.onNodeWithTag("default_quality").performClick()
             compose.onNodeWithTag("quality_LOSSLESS").performScrollTo()
             compose.onNodeWithTag("quality_LOSSLESS").performClick()

@@ -48,8 +48,7 @@ class SoundEffectsMiniPlayerTest {
             compose.waitUntil(15000) { compose.onAllNodesWithTag("open_likes").fetchSemanticsNodes().isNotEmpty() }
             compose.mainClock.advanceTimeBy(700)
             compose.onNodeWithTag("tab_3").performClick()
-            compose.onNodeWithTag("open_network").performScrollTo().performClick()
-            compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("open_equalizer"))
+            compose.onNodeWithTag("settings_screen").performScrollToNode(hasTestTag("open_equalizer"))
             compose.onNodeWithTag("open_equalizer").performClick()
             compose.onNodeWithTag("native_sound_effects_page").assertIsDisplayed()
             compose.onNodeWithTag("mini_player").assertIsDisplayed()
@@ -59,9 +58,9 @@ class SoundEffectsMiniPlayerTest {
             val player = compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot
             assertTrue("Content must extend behind the whole player: $list / $player", list.bottom >= player.bottom)
             assertEquals("No blank bottom strip may truncate the scrolling viewport", window.bottom, list.bottom, 1f)
-            compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_local_jazz"))
+            compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_open_equalizer"))
             compose.onNodeWithTag("sound_effects_screen").performTouchInput { swipeUp() }
-            val last = compose.onNodeWithTag("sound_local_jazz").fetchSemanticsNode().boundsInRoot
+            val last = compose.onNodeWithTag("sound_open_equalizer").fetchSemanticsNode().boundsInRoot
             val mini = compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot
             assertTrue("The last effect must scroll above the player: $last / $mini", last.bottom < mini.top)
             compose.onNodeWithTag("mini_queue").performClick()

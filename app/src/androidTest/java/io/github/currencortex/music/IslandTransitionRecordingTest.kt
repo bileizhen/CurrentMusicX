@@ -83,7 +83,7 @@ class IslandTransitionRecordingTest {
             container.desktopLyrics.ready.await()
             if (container.desktopLyrics.state.value.enabled) container.playerController.connect()
         }
-        clickText("设置"); clickText("网络与播放")
+        clickText("设置")
         repeat(8) {
             if (nodes().any { it.text?.toString() == "音效" }) return@repeat
             val bounds = Rect().also { automation.rootInActiveWindow.getBoundsInScreen(it) }

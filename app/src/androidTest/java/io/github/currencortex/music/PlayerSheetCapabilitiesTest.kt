@@ -14,6 +14,15 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.player.PlayerSheetGeometry
 import io.github.currencortex.music.feature.player.PlayerSheetFrame
 import io.github.currencortex.music.feature.player.PlayerSideProgress
+import io.github.currencortex.music.feature.player.PlayerPagerArtworkGeometry
+import io.github.currencortex.music.feature.player.PlayerSharedTitleGeometry
+import io.github.currencortex.music.feature.player.PlayerSharedSubtitleGeometry
+import io.github.currencortex.music.feature.player.PlayerSharedTextLayouts
+import io.github.currencortex.music.feature.player.PlayerSharedTextWeights
+import io.github.currencortex.music.feature.player.PlayerSheetTextGeometry
+import io.github.currencortex.music.feature.player.PlayerMiniTextVisible
+import io.github.currencortex.music.feature.player.PlayerArtworkVisible
+import io.github.currencortex.music.feature.player.QueuePageProgress
 import io.github.currencortex.music.ui.CurrentMusicApp
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.*
@@ -29,6 +38,8 @@ class PlayerSheetCapabilitiesTest {
     private lateinit var dispatcher: androidx.activity.OnBackPressedDispatcher
     private lateinit var activity: androidx.activity.ComponentActivity
     private var coverFixture: java.io.File? = null
+    @Volatile private var lyricFixtureEnabled = true
+    @Volatile private var lyricResponseGate: java.util.concurrent.CountDownLatch? = null
 
     @Before fun setup() = runBlocking {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
@@ -36,12 +47,15 @@ class PlayerSheetCapabilitiesTest {
         server = MockWebServer().apply {
             this.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse {
+                    if (request.requestUrl!!.encodedPath == "/cm/ncm/lyric")
+                        lyricResponseGate?.await(10, java.util.concurrent.TimeUnit.SECONDS)
                     val body = when (request.requestUrl!!.encodedPath) {
                         "/cm/daily" -> """{"daily":[],"forYou":[],"artists":[]}"""
                         "/cm/plays/recent" -> """{"songs":[]}"""
                         "/cm/likes/mine" -> """{"songs":[]}"""
                         "/cm/playlists" -> """{"playlists":[]}"""
-                        "/cm/ncm/lyric" -> """{"lines":[{"t":0,"txt":"星光陪着你"},{"t":5000,"txt":"一起听音乐"}]}"""
+                        "/cm/ncm/lyric" -> if (lyricFixtureEnabled) """{"lines":[{"t":0,"txt":"星光陪着你"},{"t":5000,"txt":"一起听音乐"}]}"""
+                            else """{"lines":[]}"""
                         else -> return MockResponse().setResponseCode(404)
                     }
                     return MockResponse().setHeader("Content-Type", "application/json").setBody(body)
@@ -56,12 +70,13 @@ class PlayerSheetCapabilitiesTest {
         container.accountRepository.save("isolated-sheet-token", UserDto(7, nickname = "Sheet fixture"))
         container.updateSettings.setAutoCheck(false)
         container.settings.edit { it.copy(themeMode = ThemeMode.LIGHT, blur = true, predictiveBack = true) }
+        container.musicSettings.setLyricsSource(io.github.currencortex.music.data.settings.LyricsSource.CURRENT_MUSIC)
         val song = Song(55, "星光", artists = "展开动画预览", durationMs = 9000)
         container.playerController.queue.replace(listOf(song), 0)
         container.playerController.state.value = PlayerState(song = song, positionMs = 1500, durationMs = 9000)
     }
 
-    @After fun cleanup() { compose.mainClock.autoAdvance = true; container.close(); server.shutdown(); coverFixture?.delete() }
+    @After fun cleanup() { lyricResponseGate?.countDown(); compose.mainClock.autoAdvance = true; container.close(); server.shutdown(); coverFixture?.delete() }
 
     private fun start() {
         compose.setContent {
@@ -74,6 +89,12 @@ class PlayerSheetCapabilitiesTest {
     }
 
     private fun frame(): PlayerSheetFrame = compose.onNodeWithTag("player_sheet").fetchSemanticsNode().config[PlayerSheetGeometry]
+    private fun useSharedArtistFixture() {
+        lyricFixtureEnabled = false
+        val song = container.playerController.queue.state.value.current!!.copy(id = 56)
+        container.playerController.queue.replace(listOf(song), 0)
+        container.playerController.state.value = container.playerController.state.value.copy(song = song)
+    }
     private fun viewport(): Rect = compose.onNodeWithTag("music_navigation").fetchSemanticsNode().boundsInRoot
     private fun save(name: String) {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
@@ -366,6 +387,248 @@ class PlayerSheetCapabilitiesTest {
         compose.onNodeWithTag("plain_floating_bar").assertDoesNotExist()
         compose.onNodeWithTag("mini_cover").assertIsDisplayed()
         assertEquals(original, viewport())
+    }
+
+    @Test fun miniTitleAndArtistShareAReversibleSheetArcWithoutRelayingOutTheGlyphs() {
+        useSharedArtistFixture()
+        start()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        val title = compose.onNodeWithTag("player_sheet_title_flight")
+        val artist = compose.onNodeWithTag("player_sheet_subtitle_flight")
+        val layouts = title.fetchSemanticsNode().config[PlayerSharedTextLayouts]
+        fun assertArc() {
+            for (node in listOf(title, artist)) {
+                val data = node.fetchSemanticsNode()
+                val flight = data.config[PlayerSheetTextGeometry]
+                assertTrue(flight.progress > 0f && flight.progress < 1f)
+                assertEquals(1f, data.config[PlayerSharedTextWeights].sum(), .0001f)
+            }
+            val frame = title.fetchSemanticsNode().config[PlayerSheetTextGeometry]
+            val linearCenter = frame.start.center * (1 - frame.progress) + frame.end.center * frame.progress
+            assertTrue("Text follows a real curved path", kotlin.math.abs(frame.bounds.center.y - linearCenter.y) > 1f)
+            val artistFrame = artist.fetchSemanticsNode().config[PlayerSheetTextGeometry]
+            fun verticalFraction(value: io.github.currencortex.music.feature.player.PlayerSheetTextFrame) =
+                (value.bounds.center.y - value.start.center.y) / (value.end.center.y - value.start.center.y)
+            assertEquals("Title and artist travel together", verticalFraction(frame), verticalFraction(artistFrame), .001f)
+            assertEquals("Text keeps a shared left edge during flight", frame.bounds.left, artistFrame.bounds.left, 1f)
+        }
+        assertArc()
+        compose.onAllNodesWithTag("player_sheet_title_flight").assertCountEquals(1)
+        compose.onAllNodesWithTag("player_sheet_subtitle_flight").assertCountEquals(1)
+        compose.mainClock.advanceTimeBy(96)
+        assertArc()
+        layouts.zip(title.fetchSemanticsNode().config[PlayerSharedTextLayouts]).forEach { (before, after) ->
+            assertSame("Animation reuses measured glyphs", before, after)
+        }
+        save("player-sheet-text-opening.png")
+        compose.mainClock.advanceTimeBy(1000)
+        title.assertDoesNotExist(); artist.assertDoesNotExist()
+        compose.onNodeWithTag("navigate_back").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        assertArc()
+        save("player-sheet-text-closing.png")
+        compose.mainClock.advanceTimeBy(1000)
+        title.assertDoesNotExist(); artist.assertDoesNotExist()
+        compose.onNodeWithTag("mini_title", true).assert(SemanticsMatcher.expectValue(PlayerMiniTextVisible, true))
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun heldMiniOpeningKeepsSharedTextStillAndReversesOnCancelledDrag() {
+        useSharedArtistFixture()
+        start()
+        compose.mainClock.autoAdvance = false
+        val root = compose.onNodeWithTag("music_window")
+        val bounds = root.fetchSemanticsNode().boundsInRoot
+        val start = compose.onNodeWithTag("mini_song_gesture").fetchSemanticsNode().boundsInRoot.center - bounds.topLeft
+        root.performTouchInput { down(start); moveBy(androidx.compose.ui.geometry.Offset(0f, -bounds.height * .1f)) }
+        compose.mainClock.advanceTimeBy(64)
+        val title = compose.onNodeWithTag("player_sheet_title_flight")
+        val held = title.fetchSemanticsNode().config[PlayerSheetTextGeometry]
+        compose.mainClock.advanceTimeBy(240)
+        assertEquals(held, title.fetchSemanticsNode().config[PlayerSheetTextGeometry])
+        root.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(0f, bounds.height * .08f)) }
+        compose.mainClock.advanceTimeBy(64)
+        assertTrue(title.fetchSemanticsNode().config[PlayerSheetTextGeometry].progress < held.progress)
+        root.performTouchInput { advanceEventTime(500); up() }
+        compose.mainClock.advanceTimeBy(1000)
+        title.assertDoesNotExist()
+        compose.onNodeWithTag("mini_title", true).assert(SemanticsMatcher.expectValue(PlayerMiniTextVisible, true))
+        assertFalse(container.playerController.state.value.playing)
+        assertEquals(56L, container.playerController.queue.state.value.current?.id)
+    }
+
+    @Test fun lyricArrivingDuringOpeningDoesNotReplaceTheFlyingArtist() {
+        val gate = java.util.concurrent.CountDownLatch(1)
+        lyricResponseGate = gate
+        val song = container.playerController.queue.state.value.current!!.copy(id = 57)
+        container.playerController.queue.replace(listOf(song), 0)
+        container.playerController.state.value = container.playerController.state.value.copy(song = song)
+        start()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        val artist = compose.onNodeWithTag("player_sheet_subtitle_flight")
+        val source = artist.fetchSemanticsNode().config[PlayerSharedTextLayouts].first()
+        gate.countDown()
+        compose.waitUntil(5000) {
+            container.playbackLyrics.state.value.let { it.songId == 57L && !it.loading && it.document.lines.isNotEmpty() }
+        }
+        compose.waitForIdle()
+        assertSame("Late lyric data must not replace a shared element mid-flight", source,
+            artist.fetchSemanticsNode().config[PlayerSharedTextLayouts].first())
+        assertEquals(song.artists, source.layoutInput.text.text)
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("navigate_back").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        artist.assertDoesNotExist() // The return now has a live lyric instead of a matching artist.
+    }
+
+    @Test fun liveMiniLyricIsNotMistakenForTheSharedArtistLabel() {
+        start()
+        compose.waitUntil(5000) { compose.onAllNodesWithText("星光陪着你", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        compose.onNodeWithTag("player_sheet_title_flight").assertExists()
+        compose.onNodeWithTag("player_sheet_subtitle_flight").assertDoesNotExist()
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun sharedTitleReusesNativeLayoutsAndRendererThroughBothEndpointsAndSongChanges() {
+        val original = container.playerController.queue.state.value.current!!
+        val name = "沿着星光缓缓前行，这是一首需要换行显示的很长很长的歌曲名称，继续向前看"
+        val song = original.copy(name = name)
+        container.playerController.queue.replace(listOf(song), 0)
+        container.playerController.state.value = container.playerController.state.value.copy(song = song)
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.waitForIdle()
+        fun title() = compose.onNodeWithTag("player_shared_title").fetchSemanticsNode()
+        val renderer = title().id
+        val layouts = title().config[PlayerSharedTextLayouts]
+        assertEquals(2, layouts.size)
+        assertEquals(2, layouts[0].lineCount)
+        assertEquals(1, layouts[1].lineCount)
+        fun assertStable() {
+            val node = title()
+            assertEquals("No renderer handoff at a page boundary", renderer, node.id)
+            val current = node.config[PlayerSharedTextLayouts]
+            layouts.indices.forEach { assertSame("Dragging must not remeasure or reshape title $it", layouts[it], current[it]) }
+            assertEquals("Blended glyph coverage stays constant", 1f, node.config[PlayerSharedTextWeights].sum(), .0001f)
+        }
+        val pager = compose.onNodeWithTag("player_content_pager")
+        compose.mainClock.autoAdvance = false
+        pager.performTouchInput { down(androidx.compose.ui.geometry.Offset(width * .9f, height * .4f)) }
+        repeat(6) {
+            pager.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(-width * .12f, 0f)) }
+            compose.mainClock.advanceTimeBy(32)
+            assertStable()
+            if (it == 2) save("player-title-stable-long-mid.png")
+        }
+        pager.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(1000)
+        assertStable()
+        assertEquals(1f, title().config[PlayerSharedTextWeights][1], .001f)
+        save("player-title-stable-long-end.png")
+        pager.performTouchInput { swipeRight() }
+        compose.mainClock.advanceTimeBy(1000)
+        assertStable()
+        assertEquals(1f, title().config[PlayerSharedTextWeights][0], .001f)
+        compose.mainClock.autoAdvance = true
+        val next = song.copy(id = 56, name = "下一首新的歌名", artists = "新的歌手")
+        compose.runOnUiThread {
+            container.playerController.queue.replace(listOf(next), 0)
+            container.playerController.state.value = container.playerController.state.value.copy(song = next)
+        }
+        compose.waitForIdle()
+        assertEquals(renderer, title().id)
+        assertTrue("The persistent renderer must not keep the previous song",
+            title().config[PlayerSharedTextLayouts].all { it.layoutInput.text.text == next.name })
+    }
+
+    @Test fun titleAndArtistFollowTheArtworkArcAndRestoreAfterCancelledPagerDrag() {
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.waitForIdle()
+        val pager = compose.onNodeWithTag("player_content_pager")
+        val pane = pager.fetchSemanticsNode().boundsInRoot.topLeft
+        val start = compose.onNodeWithTag("player_song_title").fetchSemanticsNode().boundsInRoot.translate(-pane)
+        compose.mainClock.autoAdvance = false
+        pager.performTouchInput {
+            down(androidx.compose.ui.geometry.Offset(width * .9f, height * .4f))
+            moveBy(androidx.compose.ui.geometry.Offset(-width * .4f, 0f))
+        }
+        compose.mainClock.advanceTimeBy(64)
+        val held = compose.onNodeWithTag("player_shared_title").fetchSemanticsNode().config[PlayerSharedTitleGeometry]
+        compose.onAllNodesWithTag("player_shared_title").assertCountEquals(1)
+        compose.onAllNodesWithTag("player_shared_subtitle").assertCountEquals(1)
+        assertTrue("Title lifts with the shrinking artwork", held.top < start.top)
+        val subtitle = compose.onNodeWithTag("player_shared_subtitle").fetchSemanticsNode().config[PlayerSharedSubtitleGeometry]
+        assertTrue("Artist remains below the title", subtitle.top >= held.bottom - 2f)
+        save("player-shared-pager-held.png")
+        compose.mainClock.advanceTimeBy(176)
+        assertEquals(held, compose.onNodeWithTag("player_shared_title").fetchSemanticsNode().config[PlayerSharedTitleGeometry])
+        pager.performTouchInput { advanceEventTime(400); up() }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("player_shared_title").assertExists()
+        assertEquals(start, compose.onNodeWithTag("player_song_title").fetchSemanticsNode().boundsInRoot.translate(-pane))
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun queueSharesArtworkAndTextFromBothPlayerPagesAndReversesOnReturn() {
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.waitForIdle()
+        for (lyrics in listOf(false, true)) {
+            val pager = compose.onNodeWithTag("player_content_pager")
+            if (lyrics) pager.performTouchInput { swipeLeft() }
+            compose.waitForIdle()
+            val pane = pager.fetchSemanticsNode().boundsInRoot.topLeft
+            fun artwork() = compose.onNodeWithTag("player_pager_artwork").fetchSemanticsNode().config[PlayerPagerArtworkGeometry]
+            val source = artwork().bounds
+            compose.mainClock.autoAdvance = false
+            compose.onAllNodesWithTag("open_player_queue").onFirst().performClick()
+            compose.mainClock.advanceTimeBy(96)
+            val q = compose.onNodeWithTag("player_queue_sheet").fetchSemanticsNode().config[QueuePageProgress]
+            assertTrue("Queue opening is sampled during motion", q > 0f && q < 1f)
+            val held = artwork().bounds
+            compose.onAllNodesWithTag("player_shared_title").assertCountEquals(1)
+            compose.onAllNodesWithTag("player_shared_subtitle").assertCountEquals(1)
+            assertFalse(compose.onNodeWithTag("queue_current_cover", useUnmergedTree = true).fetchSemanticsNode().config[PlayerArtworkVisible])
+            save(if (lyrics) "player-shared-lyrics-queue-held.png" else "player-shared-cover-queue-held.png")
+            compose.mainClock.advanceTimeBy(1000)
+            val target = compose.onNodeWithTag("queue_current_cover", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.translate(-pane)
+            assertEquals(target.left, artwork().bounds.left, 2f)
+            assertEquals(target.top, artwork().bounds.top, 2f)
+            assertEquals(target.width, artwork().bounds.width, 2f)
+            val straight = source.center * (1 - q) + target.center * q
+            assertTrue("Queue uses the same arc above the straight path", held.center.y < straight.y - 1f)
+            compose.onNodeWithTag("player_shared_title").assertExists()
+            compose.onNodeWithTag("queue_current_song").performClick()
+            compose.mainClock.advanceTimeBy(96)
+            compose.onNodeWithTag("player_shared_title").assertExists()
+            compose.mainClock.advanceTimeBy(1000)
+            assertEquals("Returning restores the exact source", source, artwork().bounds)
+            compose.onNodeWithTag("player_queue_sheet").assertDoesNotExist()
+            compose.mainClock.autoAdvance = true
+            compose.waitForIdle()
+        }
+        assertEquals(55L, container.playerController.queue.state.value.current?.id)
+        assertFalse(container.playerController.state.value.playing)
+        // Removing the destination must not strand a large shared cover over the empty list.
+        val sourcePane = compose.onNodeWithTag("player_content_pager").fetchSemanticsNode().boundsInRoot.topLeft
+        compose.onAllNodesWithTag("open_player_queue").onFirst().performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("queue_clear").performClick()
+        compose.onNodeWithTag("queue_clear_confirm").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithText("播放队列为空").assertIsDisplayed()
+        save("player-shared-empty-queue.png")
+        val emptyArtwork = compose.onNodeWithTag("player_pager_artwork").fetchSemanticsNode().config[PlayerPagerArtworkGeometry]
+        assertTrue("Shared artwork leaves with the source when the queue becomes empty",
+            emptyArtwork.bounds.translate(sourcePane).bottom <= compose.onNodeWithTag("player_screen").fetchSemanticsNode().boundsInRoot.top)
     }
 
     @Test fun pagerSharesOneCircularArtworkAlongReversibleArc() {

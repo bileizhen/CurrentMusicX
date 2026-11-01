@@ -12,7 +12,7 @@ import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.player.*
 import io.github.currencortex.music.feature.settings.MusicSettingsViewModel
-import io.github.currencortex.music.feature.settings.MusicSettingsScreen
+import io.github.currencortex.music.feature.settings.PlaybackSettingsScreen
 import io.github.currencortex.music.feature.settings.StorageScreen
 import io.github.currencortex.music.feature.settings.StorageViewModel
 import io.github.currencortex.music.ui.CurrentMusicApp
@@ -188,14 +188,17 @@ class MiniPlayerInteractionTest {
     }
     @Test fun audioCachePreloadPolicyPersistsAndKeepsQueue() = runBlocking<Unit> {
         val vm = MusicSettingsViewModel(container)
-        compose.setContent { LeiTheme(AppearanceSettings()) { MusicSettingsScreen(vm) {} } }
-        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("preload_audio"))
+        compose.setContent { LeiTheme(AppearanceSettings()) { PlaybackSettingsScreen(vm) } }
+        compose.onNodeWithTag("playback_settings").performScrollToNode(hasTestTag("preload_audio"))
         compose.onNodeWithTag("preload_audio").performClick()
         compose.waitUntil(3000) { !vm.settings.value.preloadAudio }
-        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("preload_metered"))
+        compose.onNodeWithTag("playback_settings").performScrollToNode(hasTestTag("preload_metered"))
+        compose.onNodeWithTag("preload_metered").assertIsNotEnabled()
+        compose.onNodeWithTag("preload_audio").performClick()
+        compose.waitUntil(3000) { vm.settings.value.preloadAudio }
         compose.onNodeWithTag("preload_metered").performClick()
         compose.waitUntil(3000) { vm.settings.value.preloadMetered }
-        assertFalse(container.musicSettings.snapshot().preloadAudio)
+        assertTrue(container.musicSettings.snapshot().preloadAudio)
         assertTrue(container.musicSettings.snapshot().preloadMetered)
         assertEquals(3, container.playbackQueue.state.value.songs.size)
     }

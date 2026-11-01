@@ -13,6 +13,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -65,8 +66,23 @@ internal data class PlayerArtworkFrame(val progress: Float, val bounds: Rect, va
 internal val PlayerArtworkGeometry = SemanticsPropertyKey<PlayerArtworkFrame>("PlayerArtworkGeometry")
 internal val PlayerArtworkVisible = SemanticsPropertyKey<Boolean>("PlayerArtworkVisible")
 
+/** A quadratic curve with its control point at (end.x, start.y), shared by all sheet elements. */
+internal fun playerSheetElementArc(start: Rect, end: Rect, progress: Float, anchorTopLeft: Boolean = false): Rect {
+    val p = progress.coerceIn(0f, 1f)
+    val horizontal = 1 - (1 - p) * (1 - p)
+    val vertical = p * p
+    val startAnchor = if (anchorTopLeft) start.topLeft else start.center
+    val endAnchor = if (anchorTopLeft) end.topLeft else end.center
+    val position = Offset(startAnchor.x * (1 - horizontal) + endAnchor.x * horizontal,
+        startAnchor.y * (1 - vertical) + endAnchor.y * vertical)
+    val size = Size(start.width * (1 - vertical) + end.width * vertical,
+        start.height * (1 - vertical) + end.height * vertical)
+    return Rect(if (anchorTopLeft) position else position - Offset(size.width / 2, size.height / 2), size)
+}
+
 /** Destination coordinates remain full-size; the sheet translation is removed for the flight. */
 internal class PlayerArtworkTransition(val progress: () -> Float) {
+    val text = PlayerSheetTextTransition(progress)
     var origin by mutableStateOf<PlayerArtworkOrigin?>(null)
     var target by mutableStateOf<LayoutCoordinates?>(null)
     var destination by mutableStateOf<(() -> Rect?)?>(null)
@@ -85,6 +101,7 @@ internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtwo
     DisposableEffect(pager, pagerRole) { onDispose {
         if (pagerRole == PlayerPagerArtworkRole.COVER && pager?.cover === coordinates) pager?.cover = null
         if (pagerRole == PlayerPagerArtworkRole.LYRICS && pager?.lyrics === coordinates) pager?.lyrics = null
+        if (pagerRole == PlayerPagerArtworkRole.QUEUE && pager?.queue === coordinates) pager?.queue = null
     } }
     SideEffect { if (pagerRole == null && transitionTarget && coordinates?.isAttached == true) transfer?.target = coordinates }
     Box(modifier.onGloballyPositioned {
@@ -92,6 +109,7 @@ internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtwo
         when (pagerRole) {
             PlayerPagerArtworkRole.COVER -> pager?.cover = it
             PlayerPagerArtworkRole.LYRICS -> pager?.lyrics = it
+            PlayerPagerArtworkRole.QUEUE -> pager?.queue = it
             null -> if (transitionTarget) transfer?.target = it
         }
         if (pagerRole != null) pager?.updateBounds()
@@ -103,8 +121,9 @@ internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtwo
         }) {
         MusicCover(url, Modifier.matchParentSize().graphicsLayer {
             alpha = if (transfer?.moving == true || (pagerRole != null && pager?.ready == true)) 0f else 1f
-            rotationZ = rotation?.value ?: 0f
-        }.clip(CircleShape), pixels)
+            rotationZ = if (pagerRole == PlayerPagerArtworkRole.QUEUE) 0f else rotation?.value ?: 0f
+        }.clip(if (pagerRole == PlayerPagerArtworkRole.QUEUE) RoundedCornerShape(8.dp) else CircleShape), pixels,
+            cornerRadius = if (pagerRole == PlayerPagerArtworkRole.QUEUE) 8.dp else 0.dp)
     }
 }
 
@@ -160,6 +179,7 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
             PlayerSheetExpansion(origin, viewport, expansion::value) { content() }
         }
         PlayerArtworkFlight(artwork, artworkUrl, viewport)
+        PlayerSheetSongTextFlight(artwork.text, viewport)
         // The shrinking player still owns its full touch layer. Keep the mini's opening
         // area above it so the next press reverses the close immediately, before release
         // (the old layer may otherwise disappear between that press and release).
@@ -230,7 +250,7 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
             shape = SheetClip(frame.bounds.width, frame.bounds.height, frame.radius); clip = true
         }) {
         // Measure in the content coordinate space, inside the moving graphics layer.
-        Box(Modifier.fillMaxSize().onGloballyPositioned { artwork?.sheet = it }) { content() }
+        Box(Modifier.fillMaxSize().onGloballyPositioned { artwork?.sheet = it; artwork?.text?.sheet = it }) { content() }
     }
 }
 
@@ -255,12 +275,7 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
         val start = source.bounds.translate(-window.topLeft)
         // Measured from the supplied recording: horizontal travel eases out, while the
         // vertical travel and diameter ease in. This rolls inward before lifting up.
-        val horizontal = 1 - (1 - p) * (1 - p)
-        val vertical = p * p
-        val center = Offset(start.center.x * (1 - horizontal) + destination.center.x * horizontal,
-            start.center.y * (1 - vertical) + destination.center.y * vertical)
-        val diameter = start.width * (1 - vertical) + destination.width * vertical
-        PlayerArtworkFrame(p, Rect(center - Offset(diameter / 2, diameter / 2), Size(diameter, diameter)), rotation?.value ?: source.rotation)
+        PlayerArtworkFrame(p, playerSheetElementArc(start, destination, p), rotation?.value ?: source.rotation)
     } }
     val moving by remember(transfer) { derivedStateOf { transfer.moving } }
     if (moving) MusicCover(url, Modifier.requiredSize(with(density) { targetSize.width.toDp() })
