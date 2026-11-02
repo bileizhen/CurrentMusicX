@@ -95,7 +95,14 @@ android {
                 manifestPlaceholders["appLabel"] = "CurrentMusic 下载体验"
             }
         }
-        getByName("release") { signingConfig = keystoreProperties?.let { signingConfigs.getByName("release") } }
+        getByName("release") {
+            signingConfig = keystoreProperties?.let { signingConfigs.getByName("release") }
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            // Retain symbols as an external diagnostic artifact, not in every shipped ELF.
+            ndk.debugSymbolLevel = "SYMBOL_TABLE"
+        }
     }
     compileOptions {
         encoding = "UTF-8"
@@ -106,7 +113,12 @@ android {
     packaging { resources.excludes += setOf("META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/AL2.0", "META-INF/LGPL2.1") }
     // Extract version-bound vendor libraries to the app's native library directory.
     packaging.jniLibs.useLegacyPackaging = true
-    packaging.jniLibs.keepDebugSymbols += "**/*.so"
+    // These exact, version-pinned vendor bytes are verified at configuration and import.
+    // Stripping them would invalidate their ABI/hash contract. Our own JNI libraries can
+    // be stripped normally; their symbol artifacts remain in the build output.
+    packaging.jniLibs.keepDebugSymbols += setOf(
+        "**/libncmusbaudio.so", "**/libneaudioeffects.so", "**/libc++_shared.so",
+        "**/libMNN.so", "**/libMNN_Express.so", "**/libCore_MNN_JNI.so")
 }
 
 dependencies {

@@ -1,0 +1,13 @@
+// Same-source Release control: retain features, signature, ABIs and pinned vendor bytes.
+// Use only for size attribution; do not distribute the unoptimized control as a release.
+allprojects {
+    layout.buildDirectory.set(rootProject.layout.projectDirectory.dir("output/optimization/control-build/${project.name}"))
+    plugins.withId("com.android.application") {
+        extensions.getByName("androidComponents").finalizeDsl { dsl ->
+            dsl.buildTypes.getByName("release").minifyEnabled = false
+            dsl.buildTypes.getByName("release").shrinkResources = false
+            dsl.buildTypes.getByName("release").ndk.debugSymbolLevel = "NONE"
+            dsl.packaging.jniLibs.keepDebugSymbols.add("**/*.so")
+        }
+    }
+}
