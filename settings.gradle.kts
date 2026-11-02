@@ -1,11 +1,19 @@
 pluginManagement {
+    resolutionStrategy {
+        eachPlugin {
+            if (requested.id.id == "com.google.devtools.ksp") {
+                // Avoid mirror errors when resolving the KSP plugin marker artifact.
+                useModule("com.google.devtools.ksp:symbol-processing-gradle-plugin:${requested.version}")
+            }
+        }
+    }
     repositories {
         val officialFirst = providers.gradleProperty("lei.officialRepositoriesFirst").orNull == "true"
         if (officialFirst) {
             google(); mavenCentral(); gradlePluginPortal()
         }
-        maven("https://maven.aliyun.com/repository/public")
         maven("https://maven.aliyun.com/repository/google")
+        maven("https://maven.aliyun.com/repository/public")
         maven("https://maven.aliyun.com/repository/gradle-plugin")
         if (!officialFirst) {
             google(); mavenCentral(); gradlePluginPortal()
