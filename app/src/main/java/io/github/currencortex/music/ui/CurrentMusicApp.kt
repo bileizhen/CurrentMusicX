@@ -285,7 +285,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val density = LocalDensity.current
         val rootPage = sceneStack.last() == ROOT.toString() && !searchPresented
         val hideDockForChat = rootPage && selected == DISCOVER_TAB && discoverPager.targetPage == 3
-        val keyboardOpen = WindowInsets.ime.getBottom(density) > 0
+        val imeInsets = WindowInsets.ime
+        val keyboardOpen by remember(imeInsets, density) { derivedStateOf { imeInsets.getBottom(density) > 0 } }
         val miniRetainedAvailable = currentSong != null || playerState.mode == PlayerMode.ROOM
         val miniAvailable = !keyboardOpen && miniRetainedAvailable
         val showMini = miniAvailable && !hideDockForChat && !playerPresented && sceneStack.last() !in setOf("lib/video", "appearance-font") &&
@@ -828,7 +829,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             backEnabled = !playerEffectsPresented && !showLogs && pendingPlay == null && !updateDialogVisible && !announcementVisible &&
                 !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null &&
                 !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
-            miniOpenBounds = miniOpenBounds.takeIf { miniAvailable },
+            // Only the tap target that reverses a closing sheet needs the moving dock bounds.
+            miniOpenBounds = if (miniAvailable && playerSheetMotion == PlayerSheetMotion.CLOSE) miniOpenBounds else null,
             onReopen = { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
             onBack = ::navigateBack, onSettled = { playerSheetMotion = PlayerSheetMotion.NONE }) {
             CompositionLocalProvider(LocalMusicPageActive provides !playerEffectsPresented) {
