@@ -517,6 +517,15 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 
 @Composable private fun LyricsPanel(vm: PlayerViewModel, modifier: Modifier, active: Boolean = true, minimal: Boolean = false,
     expandLyricsWindow: Boolean = false) {
+    // The pager keeps its neighbouring header measured for shared-element endpoints.
+    // Its full lyric rail (paragraphs, blur layers and animations) is not needed until
+    // that page is actually revealed. Retain it after first use to preserve browsing.
+    var revealed by remember { mutableStateOf(false) }
+    if (!active && !revealed) {
+        Box(modifier.testTag("player_lyrics_deferred"))
+        return
+    }
+    SideEffect { revealed = true }
     val lyrics by vm.lyrics.collectAsStateWithLifecycle()
     val player by vm.state.collectAsStateWithLifecycle()
     val position = rememberLyricsPosition(if (active) player else player.copy(playing = false))

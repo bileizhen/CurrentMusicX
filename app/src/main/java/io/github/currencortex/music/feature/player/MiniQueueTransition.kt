@@ -120,7 +120,7 @@ internal class MiniQueueTransition {
         } }
         if (frame == null) continue
         Canvas(Modifier.fillMaxSize().testTag(if (subtitle) "mini_queue_subtitle_flight" else "mini_queue_title_flight")
-            .semantics { hideFromAccessibility() }.semantics {
+            .semantics { hideFromAccessibility() }.playerMotionDiagnostics {
                 frame?.let { this[PlayerSheetTextGeometry] = it }
                 this[PlayerSharedTextLayouts] = metrics.layouts.filterNotNull()
             }) {

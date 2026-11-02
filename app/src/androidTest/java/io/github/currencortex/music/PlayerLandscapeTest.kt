@@ -67,7 +67,8 @@ class PlayerLandscapeTest {
 
     @Test fun floatingSideTabsKeepContentClearAndRecoverAfterSecondaryAndPlayer() {
         val restoration = StateRestorationTester(compose)
-        restoration.setContent { Box(Modifier.requiredSize(780.dp, 350.dp)) { CurrentMusicApp(container) } }
+        restoration.setContent { Box(Modifier.requiredSize(780.dp, 350.dp)) { androidx.compose.runtime.CompositionLocalProvider(
+                io.github.currencortex.music.feature.player.LocalPlayerMotionDiagnostics provides true) { CurrentMusicApp(container) } } }
         compose.waitUntil(10000) { compose.onAllNodesWithTag("wide_navigation").fetchSemanticsNodes().isNotEmpty() }
         compose.waitForIdle()
         val rail = compose.onNodeWithTag("wide_navigation").fetchSemanticsNode().boundsInRoot
@@ -135,7 +136,8 @@ class PlayerLandscapeTest {
     }
 
     @Test fun landscapeCentersBothPanesAndSwipesBetweenLyricsAndControls() {
-        compose.setContent { CurrentMusicApp(container) }
+        compose.setContent { androidx.compose.runtime.CompositionLocalProvider(
+                io.github.currencortex.music.feature.player.LocalPlayerMotionDiagnostics provides true) { CurrentMusicApp(container) } }
         compose.waitUntil(10000) { compose.onAllNodesWithTag("mini_cover").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("mini_cover").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithTag("lyrics_list").fetchSemanticsNodes().isNotEmpty() }

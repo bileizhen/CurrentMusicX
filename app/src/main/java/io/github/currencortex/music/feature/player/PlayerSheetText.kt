@@ -97,7 +97,7 @@ internal val LocalPlayerSheetText = staticCompositionLocalOf<PlayerSheetTextTran
         }
     } }
     Text(text, modifier.onGloballyPositioned { coordinates = it; transfer?.mini?.set(subtitle, it) }
-        .semantics { this[PlayerMiniTextVisible] = transfer?.moving(subtitle) != true && queue?.textMoving(subtitle) != true }
+        .playerMotionDiagnostics { this[PlayerMiniTextVisible] = transfer?.moving(subtitle) != true && queue?.textMoving(subtitle) != true }
         .graphicsLayer { alpha = if (transfer?.moving(subtitle) == true || queue?.textMoving(subtitle) == true) 0f else 1f },
         color = color, fontSize = fontSize, fontWeight = fontWeight, maxLines = 1, overflow = TextOverflow.Ellipsis,
         onTextLayout = {
@@ -117,9 +117,10 @@ internal val LocalPlayerSheetText = staticCompositionLocalOf<PlayerSheetTextTran
             val layouts = if (subtitle) pager?.subtitleLayouts else pager?.titleLayouts
             playerTextDrawMetrics(listOf(transfer.sourceLayouts[subtitle]) + PlayerPagerArtworkRole.entries.map { layouts?.get(it)?.layout })
         } }
-        if (!transfer.moving(subtitle)) continue
+        val moving by remember(transfer, subtitle) { derivedStateOf { transfer.moving(subtitle) } }
+        if (!moving) continue
         Canvas(Modifier.fillMaxSize().testTag(if (subtitle) "player_sheet_subtitle_flight" else "player_sheet_title_flight")
-            .semantics { hideFromAccessibility() }.semantics {
+            .semantics { hideFromAccessibility() }.playerMotionDiagnostics {
                 transfer.frame(subtitle, window, bend)?.let { this[PlayerSheetTextGeometry] = it }
                 this[PlayerSharedTextLayouts] = metrics.value.layouts.filterNotNull()
                 this[PlayerSharedTextWeights] = transfer.weights()
