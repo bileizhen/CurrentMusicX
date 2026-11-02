@@ -112,7 +112,7 @@ class ApiClient(
                 if (it.code == 401 && authenticated && !errorText.contains("绑定")) onUnauthorized(session)
                 // Account validation is user-facing upstream text, not a generic HTTP failure.
                 // Other routes and server failures retain their existing bounded error mapping.
-                val accountError = if (it.code in 400..499 && path in setOf("auth/register", "auth/email/code", "auth/phone/code",
+                val accountError = if (it.code in 400..499 && path in setOf("auth/login", "auth/2fa/login", "auth/register", "auth/email/code", "auth/phone/code",
                         "auth/password/code", "auth/password/reset", "profile/password/code", "profile/password"))
                     runCatching {
                         (ApiJson.parseToJsonElement(errorText).jsonObject["error"] as? JsonPrimitive)

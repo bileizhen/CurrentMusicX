@@ -74,8 +74,10 @@ class AccountRepository(private val store: TokenStore, private val scope: Corout
 }
 class AuthRepository(private val api: ApiClient, val accounts: AccountRepository,
                      private val device: String, private val persistServer: suspend (String) -> Unit = {},
+                     private val clock: () -> Long = { System.nanoTime() / 1_000_000 },
                      private val persistAccount: suspend (Long, String) -> Unit) {
     private val sessionMutex = Mutex()
+    @Volatile private var loginChallenge: LoginChallenge? = null
     suspend fun validateRestored() = sessionMutex.withLock {
         val expected = RequestSession(accounts.server, accounts.token)
         val credential = expected.token ?: return@withLock
@@ -109,16 +111,54 @@ class AuthRepository(private val api: ApiClient, val accounts: AccountRepository
             }
         }
     }
-    suspend fun login(username: String, password: String): AppResult<Account> = sessionMutex.withLock { appResult {
-        val dto = ApiJson.decodeFromJsonElement<LoginDto>(api.request("POST", "auth/login", body = buildJsonObject {
+    suspend fun login(username: String, password: String): AppResult<LoginOutcome> = sessionMutex.withLock { appResult {
+        loginChallenge = null
+        val owner = RequestSession(accounts.server, accounts.token)
+        val revision = accounts.sessionRevision.value
+        val response = api.request("POST", "auth/login", body = buildJsonObject {
             put("username", username); put("password", password); put("device", device); put("platform", "app")
-        }))
-        require(dto.token.isNotBlank())
-        accounts.save(dto.token, dto.user)
-        persistAccount(dto.user.id, dto.user.nickname)
-        accounts.state.value.account!!
+        }, expectedSession = RequestSession(owner.server, null), retryConnection = false).jsonObject
+        checkLoginOwner(owner, revision)
+        if (response["requires2FA"]?.jsonPrimitive?.booleanOrNull == true) {
+            val token = response["challengeToken"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            val seconds = response["expiresIn"]?.jsonPrimitive?.longOrNull ?: 300L
+            require(token.isNotBlank() && token.length <= 8192 && seconds > 0)
+            val challenge = LoginChallenge(token, owner, revision, clock() + seconds.coerceAtMost(300) * 1000, clock)
+            loginChallenge = challenge
+            LoginOutcome.VerificationRequired(challenge)
+        } else LoginOutcome.SignedIn(acceptLogin(response, owner, revision))
     } }
+    suspend fun verifyLogin(challenge: LoginChallenge, code: String): AppResult<LoginOutcome.SignedIn> = sessionMutex.withLock { appResult {
+        if (loginChallenge !== challenge || challenge.remainingSeconds <= 0)
+            throw ApiException(ErrorKind.Unauthorized, userMessage = "登录验证已失效，请重新登录")
+        checkLoginOwner(challenge.owner, challenge.revision)
+        require(code.isNotBlank() && code.length <= 128)
+        val response = api.request("POST", "auth/2fa/login", body = buildJsonObject {
+            put("challengeToken", challenge.token); put("code", code.trim())
+        }, expectedSession = RequestSession(challenge.owner.server, null), retryConnection = false).jsonObject
+        if (loginChallenge !== challenge || challenge.remainingSeconds <= 0)
+            throw ApiException(ErrorKind.Unauthorized, userMessage = "登录验证已失效，请重新登录")
+        val account = acceptLogin(response, challenge.owner, challenge.revision)
+        loginChallenge = null
+        LoginOutcome.SignedIn(account)
+    } }
+    fun discardLoginChallenge(challenge: LoginChallenge) {
+        if (loginChallenge === challenge) loginChallenge = null
+    }
+    private fun checkLoginOwner(owner: RequestSession, revision: Long) {
+        if (owner != RequestSession(accounts.server, accounts.token) || revision != accounts.sessionRevision.value)
+            throw ApiException(ErrorKind.Unauthorized, userMessage = "账号或服务器已改变，请重新登录")
+    }
+    private suspend fun acceptLogin(response: JsonObject, owner: RequestSession, revision: Long): Account {
+        checkLoginOwner(owner, revision)
+        val dto = ApiJson.decodeFromJsonElement<LoginDto>(response)
+        require(dto.token.isNotBlank() && dto.user.id > 0)
+        accounts.save(dto.token, dto.user, owner)
+        persistAccount(dto.user.id, dto.user.nickname)
+        return requireNotNull(accounts.state.value.account)
+    }
     suspend fun switchAccount(key: String): AppResult<UserDto> = sessionMutex.withLock { appResult {
+        loginChallenge = null
         val selected = accounts.activate(key)
         persistServer(selected.server); persistAccount(selected.id, selected.nickname)
         when (val result = appResult { api.get<UserDto>("auth/me", authenticated = true) }) {
@@ -158,9 +198,11 @@ class AuthRepository(private val api: ApiClient, val accounts: AccountRepository
         Unit
     }
     suspend fun resetServer(server: String) = sessionMutex.withLock {
+        loginChallenge = null
         accounts.clear(rememberSaved = true); persistAccount(0, ""); accounts.server = server
     }
     suspend fun logout() = sessionMutex.withLock {
+        loginChallenge = null
         try { api.request("POST", "auth/logout", authenticated = true) }
         finally { accounts.clear(); persistAccount(0, "") }
     }

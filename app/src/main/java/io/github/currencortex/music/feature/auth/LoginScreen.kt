@@ -37,6 +37,8 @@ import io.github.currencortex.music.data.auth.RegistrationInput
     showTitle: Boolean = true, contentTopInset: androidx.compose.ui.unit.Dp = 0.dp, onBack: (() -> Unit)? = null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val account by vm.account.collectAsStateWithLifecycle()
+    val challenge by vm.loginChallenge.collectAsStateWithLifecycle()
+    DisposableEffect(vm) { onDispose { vm.dismissLogin() } }
     var username by rememberSaveable { mutableStateOf("") }
     // Password is intentionally not saved in SavedState or a persistent store.
     var password by remember { mutableStateOf("") }
@@ -58,7 +60,7 @@ import io.github.currencortex.music.data.auth.RegistrationInput
     // Entering the page starts a clean attempt: a stale error must not greet the user.
     LaunchedEffect(Unit) { vm.clearMessage() }
     LaunchedEffect(state.message, state.failed, account.error) {
-        (if (state.failed) state.message else account.error)?.let(vm.errorNotices::show)
+        if (challenge == null) (if (state.failed) state.message else account.error)?.let(vm.errorNotices::show)
     }
     // Editing any field clears the previous outcome, so the message never describes stale input.
     fun edit(block: () -> Unit) { block(); if (state.message != null) vm.clearMessage() }
@@ -68,6 +70,9 @@ import io.github.currencortex.music.data.auth.RegistrationInput
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())
         .padding(musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp))).testTag("login_screen"),
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (challenge != null) TwoFactorLoginCard(requireNotNull(challenge), state.loading,
+            state.message.takeIf { state.failed }, vm::clearMessage, vm::verifyLogin, vm::dismissLogin)
+        else {
         account.account?.takeIf { !addingAccount }?.let {
             Text(it.nickname, fontSize = 24.sp)
             GlassActionButton("退出登录", onClick = { vm.logout() }, enabled = !state.loading)
@@ -141,6 +146,7 @@ import io.github.currencortex.music.data.auth.RegistrationInput
                         modifier = Modifier.fillMaxWidth().testTag("login_submit"))
                 }
             }
+        }
         }
         if (account.loading) Text("正在验证会话…", fontSize = 13.sp, color = secondary)
         state.message?.takeIf { !state.failed }?.let {
