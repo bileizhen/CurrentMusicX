@@ -21,7 +21,7 @@ class ElasticLazyRowTest {
 
     private fun checkOverflow(direction: Float) {
         lateinit var press: ElasticPressState
-        compose.setContent {
+        compose.setContentWithPressDiagnostics {
             press = rememberElasticPressState()
             Column(Modifier.fillMaxSize().background(Color.Black).padding(top = 120.dp)) {
                 ElasticLazyRow(Modifier.fillMaxWidth().testTag("elastic_row")) {

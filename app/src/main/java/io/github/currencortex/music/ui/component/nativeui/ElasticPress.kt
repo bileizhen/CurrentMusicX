@@ -33,6 +33,7 @@ import kotlin.math.min
 @Immutable data class ElasticPressFrame(val lift: Float, val pull: Offset, val scaleX: Float, val scaleY: Float)
 val ElasticPressGeometry = SemanticsPropertyKey<ElasticPressFrame>("ElasticPressGeometry")
 val GlassPressLight = SemanticsPropertyKey<Float>("GlassPressLight")
+internal val LocalElasticPressDiagnostics = staticCompositionLocalOf { false }
 
 /** The upstream rubber band: asymptotically approaches limit rather than stopping the finger. */
 internal fun elasticRubberBand(distance: Float, limit: Float): Float {
@@ -106,8 +107,12 @@ internal fun elasticRubberBand(distance: Float, limit: Float): Float {
     }
     val currentEnabled by rememberUpdatedState(enabled)
     LaunchedEffect(enabled) { if (!enabled) state.release() }
+    val diagnostics = if (LocalElasticPressDiagnostics.current) Modifier.semantics {
+        this[ElasticPressGeometry] = state.frame(growth)
+        this[GlassPressLight] = state.amount.coerceIn(0f, 1f)
+    } else Modifier
     Box(modifier.onSizeChanged { state.size = Size(it.width.toFloat(), currentHeight ?: it.height.toFloat()) }
-        .semantics { this[ElasticPressGeometry] = state.frame(growth); this[GlassPressLight] = state.amount.coerceIn(0f, 1f) }
+        .then(diagnostics)
         .then(if (observePointer) Modifier.pointerInput(state) {
             awaitEachGesture {
                 val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)

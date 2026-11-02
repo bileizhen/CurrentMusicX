@@ -32,7 +32,7 @@ class DockSurfacePressTest {
     private var opens = 0
 
     private fun show(expanded: Boolean) {
-        compose.setContent { LeiTheme(AppearanceSettings(blur = true, liquidGlass = true)) {
+        compose.setContentWithPressDiagnostics { LeiTheme(AppearanceSettings(blur = true, liquidGlass = true)) {
             HighApiFloatingNavigation(selected, listOf("首页", "发现", "我的", "设置"), List(4) { Icons.Default.Home },
                 { selected = it }, blur = true, glass = true,
                 content = { Box(Modifier.fillMaxSize().background(Color.Black)) }, overlay = {
