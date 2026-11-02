@@ -125,7 +125,8 @@ object LyricsParser {
 
     private fun millis(minutes: String, seconds: String) = ((minutes.toLongOrNull() ?: 0) * 60000 + (seconds.toDoubleOrNull() ?: 0.0) * 1000).toLong()
     private fun finish(lines: List<LyricLine>): LyricsDocument {
-        val sorted = lines.filter { it.text.isNotBlank() }.distinctBy { it.startTimeMs to it.text }.sortedBy { it.startTimeMs }
+        val sorted = lines.map { it.withInlineTranslationBlocks() }.filter { it.text.isNotBlank() }
+            .distinctBy { it.startTimeMs to it.text }.sortedBy { it.startTimeMs }
         val nextStarts = sorted.map { it.startTimeMs }.distinct().zipWithNext().toMap()
         return LyricsDocument(sorted.map { line -> line.copy(
             // Partial enhanced/normalized word data must not leave the rest of the line dim forever.

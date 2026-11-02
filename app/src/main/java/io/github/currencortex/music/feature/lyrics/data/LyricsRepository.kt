@@ -105,5 +105,6 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
         // A failed default lookup may still have a reliable match on another platform.
         // Cache that document as a lookup result, separately from durable manual choices.
         matchAutomatically() ?: unavailable()
-    } }
+    }.let { result -> result.copy(document = result.document.withInlineTranslationBlocks(),
+        sourceDocument = result.sourceDocument?.withInlineTranslationBlocks()) } }
 }
