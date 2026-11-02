@@ -68,8 +68,8 @@ private fun formatSize(bytes: Long): String = when {
                 MusicTextAction(if (state.busy) "正在清理…" else "清理", { vm.clearAudio() },
                     Modifier.testTag("clear_audio_storage"), enabled = !state.busy && usage.audio > 0, destructive = true)
             }
-            Text("听歌时缓存的音频，断网也能重播；清理后需要重新加载。", fontSize = 12.sp, color = hint)
-            Text("不设上限：缓存会一直保留，需要时在这里清理；系统空间紧张时也可能被回收。",
+            Text("完整缓存的音频可离线重播；被回收或清理后需要重新加载。", fontSize = 12.sp, color = hint)
+            Text("默认上限 1 GiB，按最近使用情况自动回收。这里只清理播放缓存，不影响下载文件。",
                 fontSize = 12.sp, color = hint)
         } } }
 
