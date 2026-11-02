@@ -7,6 +7,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.devtools.ksp")
+    id("androidx.baselineprofile")
 }
 
 // keystore.properties (gitignored): storeFile / storePassword / keyAlias / keyPassword.
@@ -103,6 +104,14 @@ android {
             // Retain symbols as an external diagnostic artifact, not in every shipped ELF.
             ndk.debugSymbolLevel = "SYMBOL_TABLE"
         }
+        create("performance") {
+            initWith(getByName("release"))
+            applicationIdSuffix = ".benchmark"
+            signingConfig = signingConfigs.getByName("debug")
+            isDebuggable = false
+            matchingFallbacks += listOf("release")
+            manifestPlaceholders["appLabel"] = "CurrentMusic 性能测试"
+        }
     }
     compileOptions {
         encoding = "UTF-8"
@@ -121,7 +130,45 @@ android {
         "**/libMNN.so", "**/libMNN_Express.so", "**/libCore_MNN_JNI.so")
 }
 
+baselineProfile {
+    // Profile generation is an explicit connected-device task, never a side effect
+    // of assembling a release. The generated profile is shared with release.
+    automaticGenerationDuringBuild = false
+    mergeIntoMain = true
+    saveInSrc = true
+    dexLayoutOptimization = true
+    filter { exclude("io.github.currencortex.music.benchmark.**") }
+    variants {
+        create("performance") { from(project(":baselineprofile")) }
+    }
+}
+
+// AndroidX Baseline Profile 1.5 copies AndroidSourceDirectorySet.directories as strings.
+// On AGP 8.13.2 that iterator calls Provider.toString(), producing a literal "provider(?)"
+// source path in the synthetic variant. KSP then rejects '?' on Windows. Repair only that
+// synthetic variant's static roots using AGP 8's resolved File API; KSP/Room still run and
+// can register their generated roots normally after DSL finalization.
+androidComponents.finalizeDsl { extension ->
+    val original = extension.sourceSets.findByName("performance")
+    val generated = extension.sourceSets.findByName("nonMinifiedPerformance")
+    if (original != null && generated != null) {
+        @Suppress("DEPRECATION")
+        fun repairCopiedRoots(from: com.android.build.api.dsl.AndroidSourceDirectorySet,
+                              to: com.android.build.api.dsl.AndroidSourceDirectorySet) {
+            if (to.directories.any { it.startsWith("provider(") }) {
+                val fromLegacy = from as com.android.build.gradle.api.AndroidSourceDirectorySet
+                val toLegacy = to as com.android.build.gradle.api.AndroidSourceDirectorySet
+                val staticRoots = toLegacy.srcDirs.filterNot { it.name.startsWith("provider(") } + fromLegacy.srcDirs
+                to.setSrcDirs(staticRoots.distinct())
+            }
+        }
+        repairCopiedRoots(original.java, generated.java)
+        repairCopiedRoots(original.kotlin, generated.kotlin)
+    }
+}
+
 dependencies {
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     implementation("androidx.javascriptengine:javascriptengine:1.1.1")
     implementation("org.mozilla:rhino:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")

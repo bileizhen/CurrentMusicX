@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "CurrentMusic"
 include(":app")
+include(":baselineprofile", ":benchmark")

@@ -38,7 +38,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     neteaseEndpoints: NeteaseEndpoints = NeteaseEndpoints(),
     serverCheck: ServerCheck = CurrentMusicServerProbe(),
     automaticLyricsProvider: (suspend (io.github.currencortex.music.data.song.Song) ->
-        io.github.currencortex.music.feature.lyrics.data.SavedLyrics?)? = null) : java.io.Closeable {
+        io.github.currencortex.music.feature.lyrics.data.SavedLyrics?)? = null,
+    apiHttpClient: okhttp3.OkHttpClient? = null,
+    releaseChecker: io.github.currencortex.music.core.update.ReleaseChecker? = null) : java.io.Closeable {
     private val storageSuffix = if (storageNamespace.isEmpty()) "" else ".$storageNamespace".also {
         require(storageNamespace.matches(Regex("[a-zA-Z0-9-]+")))
     }
@@ -133,6 +135,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         server = { accountRepository.server.ifBlank { musicSettings.state.value.server } },
         token = { accountRepository.token }, onUnauthorized = accountRepository::expired,
         log = { logger.info("Network", it) },
+        client = apiHttpClient ?: ApiClient.defaultHttpClient(),
         netease = nativeNetease,
         nativeMedia = { audioSettings.access().provider == AudioProvider.NETEASE },
         currentMusicAccountReady = { accountRepository.state.value.account != null && !accountRepository.token.isNullOrBlank() },
@@ -539,7 +542,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val playerBackgrounds = io.github.currencortex.music.data.settings.PlayerBackgroundStore(context, settings, storageSuffix)
     val updateSettings = UpdateSettingsRepository(settingsStore, appScope)
     val updates = UpdateService(
-        checker = GitHubUpdateChecker(
+        checker = releaseChecker ?: GitHubUpdateChecker(
             owner = AppMetadata.RELEASES_OWNER,
             repository = AppMetadata.RELEASES_REPO,
             installedVersion = BuildConfig.VERSION_NAME,

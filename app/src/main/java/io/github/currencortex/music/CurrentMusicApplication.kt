@@ -10,7 +10,7 @@ import io.github.currencortex.music.core.logging.CrashLogger
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
-class CurrentMusicApplication : Application(), SingletonImageLoader.Factory {
+open class CurrentMusicApplication : Application(), SingletonImageLoader.Factory {
     lateinit var container: AppContainer
         private set
     private val containerReady = kotlinx.coroutines.CompletableDeferred<AppContainer>()
@@ -20,11 +20,14 @@ class CurrentMusicApplication : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
-        container = AppContainer(this)
+        container = createContainer()
         containerReady.complete(container)
         CrashLogger.install(container.logger)
         container.logger.info("Application", "Application started")
     }
+
+    /** Performance builds override dependency creation without touching the user's storage. */
+    protected open fun createContainer(): AppContainer = AppContainer(this)
 
     override fun newImageLoader(context: Context): ImageLoader {
         // Match the API's bounded timeout for cold server responses and large GIFs.
