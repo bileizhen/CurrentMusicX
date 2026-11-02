@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" xmlns:tools="http://schemas.android.com/tools">
+    <!-- An offline, independently signed application; never send fixture requests to production. -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <application android:name="io.github.currencortex.music.benchmark.BenchmarkApplication" tools:replace="android:name">
+        <profileable android:shell="true" />
+        <activity android:name="io.github.currencortex.music.benchmark.BenchmarkActivity"
+            android:exported="true" android:theme="@style/Theme.CurrentMusic" />
+        <!-- The fixture owns one local player and must never bind the user playback service. -->
+        <service android:name="io.github.currencortex.music.core.media.MusicService" tools:node="remove" />
+    </application>
+</manifest>
