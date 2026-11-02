@@ -222,22 +222,23 @@ private val LocalSettingsPicker=compositionLocalOf<((Rect,List<GlassMenuItem>)->
 }
 
 @Immutable internal data class SettingsOption(val id:String,val label:String,val selected:Boolean,
-    val summary:String?=null,val onSelect:()->Unit)
+    val summary:String?=null,val leadingContent:(@Composable ()->Unit)?=null,val onSelect:()->Unit)
 
 /** Options expand from the value; selecting an entry saves once and closes the shared glass menu. */
 @Composable internal fun SettingsOptionsRow(title:String,value:String,options:List<SettingsOption>,
-    modifier:Modifier=Modifier,summary:String?=null,enabled:Boolean=true) {
+    modifier:Modifier=Modifier,summary:String?=null,enabled:Boolean=true,valueLeading:(@Composable ()->Unit)?=null) {
     val open=LocalSettingsPicker.current
     var rowBounds by remember {mutableStateOf<Rect?>(null)}
     var valueBounds by remember {mutableStateOf<Rect?>(null)}
     GlassMenuAnchor(enabled,onOpen={val anchor=valueBounds?:rowBounds
             if(anchor!=null)open?.invoke(anchor,options.map {option->GlassMenuItem(option.id,option.label,
-                subtitle=option.summary,checked=option.selected,keepOpen=true,onClick=option.onSelect)})}) {openValue,target->
+                subtitle=option.summary,checked=option.selected,keepOpen=true,leadingContent=option.leadingContent,onClick=option.onSelect)})}) {openValue,target->
     SettingsPreference(title,summary,modifier.onGloballyPositioned {rowBounds=it.boundsInWindow()},enabled,
         onClick=openValue,
         trailing={Row(target.widthIn(max=196.dp).heightIn(min=40.dp)
             .onGloballyPositioned {valueBounds=it.boundsInWindow()}.padding(horizontal=8.dp),
             horizontalArrangement=Arrangement.spacedBy(4.dp),verticalAlignment=Alignment.CenterVertically) {
+            valueLeading?.invoke()
             Text(value,Modifier.weight(1f,false).widthIn(max=160.dp),fontSize=17.sp,lineHeight=22.sp,maxLines=1,overflow=TextOverflow.Ellipsis,
                 color=MiuixTheme.colorScheme.onSurfaceVariantSummary)
             val ink=MiuixTheme.colorScheme.onSurfaceVariantSummary

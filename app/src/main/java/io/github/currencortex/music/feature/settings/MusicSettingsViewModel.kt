@@ -19,6 +19,13 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
     val cacheState = MutableStateFlow(AudioCacheSettingsState())
     val audioProvider = container.audioSettings.state
     val audioState = MutableStateFlow(NetworkSettingsState())
+    val lxSources = container.lxSources.state
+    val lxHealth = container.lxSources.health
+    suspend fun checkLxSources() {
+        val selected = audioProvider.value.lxSourceId
+        lxSources.value.sortedBy { if (it.id == selected) 0 else 1 }.forEach { container.lxSources.checkAvailability(it.id) }
+    }
+    fun lxSupported() = container.lxSources.supported()
     val serverHealth = container.serverRouter.health
     val automaticServer = container.serverRouter.automatic
     val serverProbeBusy = MutableStateFlow(false)
@@ -50,12 +57,26 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
             }
             audioState.value = NetworkSettingsState(message = "音源设置已保存")
         } catch (e: CancellationException) { throw e }
-        catch (_: IllegalArgumentException) { audioState.value = NetworkSettingsState(message = "请输入有效的 API Key") }
+        catch (e: io.github.currencortex.music.data.lx.LxSourceException) { audioState.value = NetworkSettingsState(message = e.message) }
+        catch (e: IllegalArgumentException) { audioState.value = NetworkSettingsState(message = e.message?.take(160) ?: "设置无效，请检查后重试") }
         catch (_: Exception) { audioState.value = NetworkSettingsState(message = "音源设置保存失败，请重试") }
     }
     fun audioProvider(value: AudioProvider) = audioEdit { container.audioSettings.select(value) }
     fun audioKey(value: String) = audioEdit { container.audioSettings.saveKey(value) }
     fun clearAudioKey() = audioEdit { container.audioSettings.clearKey() }
+    fun selectLxSource(id: String) = audioEdit { container.audioSettings.selectLxSource(id) }
+    fun importLxFile(uri: android.net.Uri) = audioEdit {
+        container.audioSettings.selectLxSource(container.lxSources.importFile(uri).id)
+    }
+    fun importLxUrl(url: String) = audioEdit {
+        container.audioSettings.selectLxSource(container.lxSources.importUrl(url).id)
+    }
+    fun removeLxSource(id: String) = audioEdit {
+        if (container.audioSettings.access().lxSourceId == id) {
+            container.audioSettings.selectLxSource("")
+        }
+        container.lxSources.remove(id)
+    }
     fun refreshCache() = viewModelScope.launch(Dispatchers.IO) {
         runCatching { container.audioCache.refreshUsage() }.onFailure {
             cacheState.value = AudioCacheSettingsState(message = "歌曲缓存暂不可用")

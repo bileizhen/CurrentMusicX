@@ -408,3 +408,16 @@ entitlement bypass. USB exclusive output is not advertised as Bit-perfect.
 ## Flutter Material ink response
 
 The list/card and palette ink response adapts Flutter material_ui 1.5.0 `InkSparkle`, `InkHighlight`, and `FilledButton.styleFrom`, including `lib/shaders/ink_sparkle.frag`, from https://github.com/flutter/packages/tree/material_ui-v1.5.0/packages/material_ui. Copyright 2013 The Flutter Authors, BSD-3-Clause. The shader is translated from GLSL to AGSL; Android 8–12 and software canvases retain the wave without the sparkle fragment pass. The complete license is bundled in `assets/legal/Flutter-BSD-3-Clause.txt`.
+
+## LX Music custom-source compatibility and CryptoJS
+
+The local source host implements the LX Music mobile v2 custom-source protocol:
+https://lxmusic.toside.cn/mobile/custom-source . User-supplied scripts are not bundled.
+Scripts run in AndroidX JavaScriptEngine 1.1.1 (Apache-2.0), in a separate sandbox
+with bounded memory, execution time and HTTP responses. They receive song metadata,
+not the application's accounts, cookies or filesystem.
+
+`assets/lx/crypto-js.js` is the unmodified CryptoJS 4.2.0 distribution by Evan Vosberg
+and contributors, MIT: https://github.com/brix/crypto-js/tree/4.2.0 . Its license is
+included at `legal/CRYPTO-JS-MIT.txt`. The buffer, timer, HTTP, compression and raw
+RSA protocol adapters are CurrentMusic implementations.
