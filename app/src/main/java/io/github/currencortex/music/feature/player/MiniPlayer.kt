@@ -174,7 +174,8 @@ private fun PlayerState.miniTransport() =
                 MiniPlayerSongText(lyric.ifBlank { subtitle }, Modifier.fillMaxWidth().testTag("mini_lyric")
                     .then(if (active) Modifier else Modifier.clearAndSetSemantics {}).graphicsLayer {
                     translationX = dragged.coerceIn(-threshold * 2, threshold * 2) * .15f
-                }, subtitle = true, color = artistColor, fontSize = 11.sp)
+                }, subtitle = true, color = artistColor, fontSize = 11.sp,
+                    lyricTrackKey = songKey.takeIf { active && currentMatches })
             }
             MiniControl(if (state.showPause) "暂停" else "播放", onToggle, Modifier.testTag("mini_toggle").semantics {
                 progressBarRangeInfo = if (loading) ProgressBarRangeInfo.Indeterminate else ProgressBarRangeInfo(progress, 0f..1f)
