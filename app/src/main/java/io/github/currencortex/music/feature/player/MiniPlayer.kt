@@ -148,7 +148,7 @@ private fun PlayerState.miniTransport() =
             if (pair != null) ListeningPairArtwork(pair, Modifier.fillMaxSize().testTag("mini_pair_artwork")
                 .clickable(onClick = onOpen))
             else MusicCover(song?.cover.orEmpty(), Modifier.size(42.dp).testTag("mini_cover")
-                .semantics { this[CoverRotation] = rotation.value }
+                .playerMotionDiagnostics { this[CoverRotation] = rotation.value }
                 .graphicsLayer { rotationZ = rotation.value; alpha = if (artworkVisible()) 1f else 0f }.clip(CircleShape)
                 .border(2.dp, coverBorder, CircleShape).clickable(onClick = onOpen))
             }
