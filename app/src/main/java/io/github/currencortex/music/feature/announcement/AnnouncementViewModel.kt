@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.data.announcement.Announcement
 import io.github.currencortex.music.data.announcement.AnnouncementReadState
-import io.github.currencortex.music.data.announcement.announcementKey
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -16,7 +15,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
-class AnnouncementViewModel(private val container: AppContainer, private val refreshIntervalMillis: Long = 60_000) : ViewModel() {
+class AnnouncementViewModel(private val container: AppContainer, private val refreshIntervalMillis: Long = 15 * 60_000L) : ViewModel() {
     private val pending = MutableStateFlow<List<Announcement>>(emptyList())
     val items = pending.asStateFlow()
     private val suppress = MutableStateFlow(false)
@@ -24,7 +23,6 @@ class AnnouncementViewModel(private val container: AppContainer, private val ref
     private var readState = AnnouncementReadState()
     private var source = ""
     private val foreground = MutableStateFlow(true)
-    private val dismissed = mutableSetOf<String>()
 
     fun setForeground(active: Boolean) { foreground.value = active }
 
@@ -38,8 +36,8 @@ class AnnouncementViewModel(private val container: AppContainer, private val ref
                     container.musicSettings.state.map { it.server }.onEach { server ->
                         if (source != server) { source = server; pending.value = emptyList() }
                     }, refreshes = flow { while (true) { delay(refreshIntervalMillis); emit(Unit) } },
-                    retryCount = 2, clearBeforeFetch = false).collect { notices ->
-                    pending.value = readState.unread(source, notices).filter { announcementKey(source, it) !in dismissed }
+                    retryCount = 2, clearBeforeFetch = false, minimumRefreshMillis = refreshIntervalMillis).collect { notices ->
+                    pending.value = container.announcements.pendingAutomatic(source, notices, readState)
                 }
             }
         }
@@ -48,7 +46,7 @@ class AnnouncementViewModel(private val container: AppContainer, private val ref
     fun dismiss(suppressFuture: Boolean) {
         val shown = pending.value
         val server = source
-        dismissed += shown.map { announcementKey(server, it) }
+        container.announcements.dismissAutomatic(server, shown)
         readState = readState.copy(suppressRead = suppressFuture)
         suppress.value = suppressFuture
         pending.value = emptyList()

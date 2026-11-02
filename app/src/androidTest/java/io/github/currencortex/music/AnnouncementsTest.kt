@@ -189,7 +189,7 @@ class AnnouncementsTest {
         compose.runOnIdle { assertTrue(suppressed) }
     }
 
-    @Test fun rememberedNoticesStayHiddenAcrossStartupButNewNoticeAppears() {
+    @Test fun recreationReusesTheStartupCheckAndManualArchiveStillFindsNewNotices() {
         release.countDown()
         var store = ViewModelStore()
         lateinit var vm: AnnouncementViewModel
@@ -205,15 +205,17 @@ class AnnouncementsTest {
             store = ViewModelStore()
             extraNotice = true
             start()
-            compose.waitUntil(10_000) { vm.items.value.map { it.id } == listOf(3L) }
+            compose.waitUntil(5_000) { vm.suppressRead.value }
+            compose.waitForIdle()
+            assertTrue(vm.items.value.isEmpty())
             assertTrue(vm.suppressRead.value)
-            assertEquals(2, requests.get())
-            compose.runOnIdle { vm.dismiss(true) }
-            compose.waitUntil(5_000) { runBlocking { container.announcementPreferences.snapshot().read.size == 3 } }
+            assertEquals(1, requests.get())
+            val archive = runBlocking { container.announcements.fetchAll(container.musicSettings.snapshot().server) }
+            assertTrue(archive.any { it.id == 3L }); assertEquals(2, requests.get())
         } finally { compose.runOnIdle { store.clear() } }
     }
 
-    @Test fun returningToForegroundChecksNewNoticesWithoutRepeatingDismissedOnes() {
+    @Test fun shortForegroundReturnsDoNotRefetchOrRepeatDismissedNotices() {
         release.countDown()
         val store = ViewModelStore()
         lateinit var vm: AnnouncementViewModel
@@ -226,14 +228,13 @@ class AnnouncementsTest {
             compose.waitForIdle()
             extraNotice = true
             compose.runOnIdle { vm.setForeground(true) }
-            compose.waitUntil(10_000) { vm.items.value.map { it.id } == listOf(3L) }
-            assertEquals(2, requests.get())
+            compose.waitForIdle()
+            assertTrue(vm.items.value.isEmpty()); assertEquals(1, requests.get())
             compose.runOnIdle { vm.dismiss(false); vm.setForeground(false) }
             compose.waitForIdle()
             compose.runOnIdle { vm.setForeground(true) }
-            compose.waitUntil(10_000) { requests.get() == 3 }
             compose.waitForIdle()
-            assertTrue(vm.items.value.isEmpty())
+            assertTrue(vm.items.value.isEmpty()); assertEquals(1, requests.get())
         } finally { compose.runOnIdle { store.clear() } }
     }
 
