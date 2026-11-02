@@ -9,9 +9,11 @@ data class LyricsDocument(val lines: List<LyricLine> = emptyList(), val metadata
 
     /** Compatibility with cached documents written by the old estimation adapter. */
     fun withoutEstimatedTiming(): LyricsDocument {
-        fun clean(line: LyricLine): LyricLine = line.copy(
-            words = if (line.wordsEstimated) emptyList() else line.words,
-            wordsEstimated = false, backgroundVocals = line.backgroundVocals.map(::clean))
+        fun clean(line: LyricLine): LyricLine {
+            val inline = line.withInlineTranslationBlocks()
+            return inline.copy(words = if (inline.wordsEstimated) emptyList() else inline.words,
+                wordsEstimated = false, backgroundVocals = inline.backgroundVocals.map(::clean))
+        }
         return copy(lines = lines.map(::clean))
     }
 }
