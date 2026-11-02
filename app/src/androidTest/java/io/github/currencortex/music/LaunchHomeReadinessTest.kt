@@ -129,7 +129,7 @@ class LaunchHomeReadinessTest {
         compose.mainClock.advanceTimeBy(1000)
         compose.onNodeWithTag("appearance_screen").performScrollToNode(hasTestTag("setting_launch_preview"))
         compose.onNodeWithTag("setting_launch_preview").assertIsNotEnabled()
-        compose.onNodeWithTag("setting_launch_style_2").performScrollTo().assertIsSelected()
+        compose.onNodeWithTag("setting_launch_style_3").performScrollTo().assertIsSelected()
         compose.onNodeWithTag("setting_launch_style_0").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         compose.waitUntil(5000) { container.settings.state.value.launchStyle == io.github.currencortex.music.data.settings.LaunchStyle.CLASSIC }
         compose.onNodeWithTag("setting_launch_preview").assertExists()

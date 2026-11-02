@@ -9,8 +9,8 @@ enum class RecordShelfPreviewMode { ONCE, LOOP, NEXT, RANDOM }
 enum class LaunchStyle(val label: String, val description: String) {
     CLASSIC("经典", "原有文字与头像开屏动画"),
     HALO("光环", "光环展开、星芒与蓝色粒子，展示当前用户名"),
-    NONE("无开屏动画", "启动后直接进入应用"),
     SIGNATURE("签名", "当前用户名连笔写出，柔光定格后进入应用"),
+    NONE("无开屏动画", "启动后直接进入应用"),
 }
 /** Device-reported rates are not limited to a fixed list of 60/90/120 Hz. */
 data class RefreshRatePreference(val hz: Int) {
