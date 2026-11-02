@@ -109,7 +109,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
         verticalArrangement = Arrangement.spacedBy(16.dp)) {
         if (!canLoginNetease) item {
             SettingsGroup(Modifier.fillMaxWidth().testTag("binding_currentmusic_required")) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("先登录 CurrentMusic", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text("请先注册并登录 CurrentMusic 账号，再登录网易云。已有账号可直接登录。",
                         fontSize = 14.sp, lineHeight = 22.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
@@ -120,7 +120,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
         }
         if (state.loading && state.binding == null) item {
             SettingsGroup(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     MusicPlaceholder(Modifier.fillMaxWidth(.65f).height(24.dp))
                     MusicPlaceholder(Modifier.fillMaxWidth(.9f).height(14.dp))
                     Text("正在检查绑定…", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
@@ -202,7 +202,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
             }
             item {
                 SettingsGroup(Modifier.fillMaxWidth().testTag("binding_login_card")) {
-                    Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
                         BindingMethods(qr, !busy) { method -> finishInput(); qr = method }
                         if (qr) BindingQrContent(bitmap, state, busy) { vm.clearQr(); generation++ }
                         else Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {

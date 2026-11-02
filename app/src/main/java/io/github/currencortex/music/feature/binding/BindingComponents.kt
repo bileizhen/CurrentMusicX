@@ -44,9 +44,9 @@ import java.util.Date
 import java.util.Locale
 
 @Composable internal fun BindingAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
-    enabled: Boolean = true, icon: ImageVector? = null, destructive: Boolean = false) {
+    enabled: Boolean = true, icon: ImageVector? = null, destructive: Boolean = false, fillWidth: Boolean = false) {
     GlassActionButton(label, onClick, modifier, enabled = enabled, destructive = destructive,
-        fillWidth = false)
+        fillWidth = fillWidth)
 
 }
 
@@ -66,7 +66,7 @@ import java.util.Locale
     onSync: () -> Unit, onLive: () -> Unit, onRefresh: () -> Unit, onRelogin: () -> Unit, onUnbind: () -> Unit,
     mainLibrary: Boolean = false, membership: BindingMembershipState = BindingMembershipState(), onMembershipRetry: () -> Unit = {}) {
     SettingsGroup(Modifier.fillMaxWidth().testTag("binding_account_card")) {
-        Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 val avatar = binding.profile?.avatar.orEmpty()
                 if (avatar.isNotBlank()) AsyncImage(avatar, "网易云头像", Modifier.size(48.dp).clip(CircleShape), contentScale = ContentScale.Crop)
@@ -113,15 +113,14 @@ import java.util.Locale
             } else Text("连接已完成，可以同步你的网易云歌单。", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
             GlassActionButton(if (mainLibrary) "刷新网易云音乐库" else "同步网易云歌单", onSync,
                 Modifier.fillMaxWidth().testTag("sync_binding"), primary = true, enabled = !busy)
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                BindingAction("检查登录态", onLive, Modifier.weight(1f), !busy, Icons.Default.Check)
-                Box(Modifier.width(1.dp).height(16.dp).background(MiuixTheme.colorScheme.onSurface.copy(alpha = .08f)))
-                BindingAction("刷新登录态", onRefresh, Modifier.weight(1f), !busy, Icons.Default.Refresh)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                BindingAction("检查登录态", onLive, Modifier.weight(1f), !busy, Icons.Default.Check, fillWidth = true)
+                BindingAction("刷新登录态", onRefresh, Modifier.weight(1f), !busy, Icons.Default.Refresh, fillWidth = true)
             }
             Box(Modifier.fillMaxWidth().height(1.dp).background(MiuixTheme.colorScheme.onSurface.copy(alpha = .05f)))
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                BindingAction("重新登录", onRelogin, Modifier.testTag("relogin_binding"), !busy)
-                BindingAction("解绑", onUnbind, Modifier.testTag("unbind_binding"), !busy, destructive = true)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                BindingAction("重新登录", onRelogin, Modifier.weight(1f).testTag("relogin_binding"), !busy, fillWidth = true)
+                BindingAction("解绑", onUnbind, Modifier.weight(1f).testTag("unbind_binding"), !busy, destructive = true, fillWidth = true)
             }
         }
     }

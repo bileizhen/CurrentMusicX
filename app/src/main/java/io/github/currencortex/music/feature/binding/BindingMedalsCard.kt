@@ -19,24 +19,24 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable internal fun BindingMedalsCard(state: BindingMedalsState, onRetry: () -> Unit) {
     SettingsGroup(Modifier.fillMaxWidth().testTag("binding_medals")) {
-        Column(Modifier.padding(vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.padding(vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("我的勋章", Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 state.value?.let { Text("${it.total} 枚", fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f)) }
             }
             when {
-                state.loading -> Text("正在加载勋章…", Modifier.padding(horizontal = 18.dp), fontSize = 13.sp,
+                state.loading -> Text("正在加载勋章…", Modifier.padding(horizontal = 16.dp), fontSize = 13.sp,
                     color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
-                state.error != null -> Row(Modifier.padding(horizontal = 18.dp), verticalAlignment = Alignment.CenterVertically) {
+                state.error != null -> Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(state.error, Modifier.weight(1f), fontSize = 13.sp,
                         color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
                     BindingAction("重试", onRetry, Modifier.testTag("binding_medals_retry"))
                 }
                 state.value != null -> if (state.value.medals.isEmpty()) {
-                    Text("还没有获得勋章", Modifier.padding(horizontal = 18.dp).testTag("binding_medals_empty"), fontSize = 13.sp,
+                    Text("还没有获得勋章", Modifier.padding(horizontal = 16.dp).testTag("binding_medals_empty"), fontSize = 13.sp,
                         color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
-                } else LazyRow(contentPadding = PaddingValues(horizontal = 18.dp),
+                } else LazyRow(contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     itemsIndexed(state.value.medals) { index, medal ->
                         Column(Modifier.width(96.dp).testTag("binding_medal_$index"),
