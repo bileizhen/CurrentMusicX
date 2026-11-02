@@ -1056,7 +1056,12 @@ class PlayerSheetCapabilitiesTest {
         assertFalse(container.playerController.state.value.playing)
     }
 
-    @Test fun rightSwipeRevealsScalingSidePageAndReturnsWithoutClosingPlayer() {
+    @Test fun rightSwipeRevealsScalingSidePageAndReturnsWithoutClosingPlayer() = verifyFourPlayerPages(ThemeMode.LIGHT)
+
+    @Test fun fourPlayerPagesKeepGlassSamplingOutsideTheirOwnRenderTreeInDarkMode() = verifyFourPlayerPages(ThemeMode.DARK)
+
+    private fun verifyFourPlayerPages(theme: ThemeMode) {
+        runBlocking { container.settings.edit { it.copy(themeMode = theme, liquidGlass = true, blur = true) } }
         start()
         compose.onNodeWithTag("mini_cover").performClick()
         compose.mainClock.advanceTimeBy(1000)
@@ -1064,6 +1069,14 @@ class PlayerSheetCapabilitiesTest {
         val host = compose.onNodeWithTag("player_side_host")
         val original = host.fetchSemanticsNode().boundsInRoot
         fun progress() = host.fetchSemanticsNode().config[PlayerSideProgress]
+        val pager = compose.onNodeWithTag("player_content_pager")
+        pager.performTouchInput { swipeLeft(durationMillis = 200) }
+        compose.mainClock.advanceTimeBy(700)
+        assertEquals(1f, pager.fetchSemanticsNode().config[io.github.currencortex.music.feature.player.PlayerPagePosition], .001f)
+        save("player-cover-left-${theme.name}.png")
+        pager.performTouchInput { swipeRight(durationMillis = 200) }
+        compose.mainClock.advanceTimeBy(700)
+        assertEquals(0f, pager.fetchSemanticsNode().config[io.github.currencortex.music.feature.player.PlayerPagePosition], .001f)
         val y = original.height * .35f
         fun openSide() {
             host.performTouchInput {
