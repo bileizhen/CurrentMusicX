@@ -27,6 +27,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         AppearanceMiniThumb(colors, true, config.liquidGlass)
         return
     }
+    if (style == LaunchStyle.SIGNATURE) {
+        io.github.currencortex.music.ui.component.SignatureLaunchFrame("Music", { 1500f },
+            Modifier.width((30f * 96 / 66).dp).height(30.dp).clip(RoundedCornerShape(8.dp)))
+        return
+    }
     val font = LocalCustomTypeface.current
     val label = remember(font) { Paint(Paint.ANTI_ALIAS_FLAG).apply {
         typeface = font ?: Typeface.create("sans-serif-medium", Typeface.NORMAL)

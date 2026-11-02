@@ -20,6 +20,8 @@
 
 ## 简介
 
+「设置 → 外观 → 开屏动画 → 签名」提供约 2.1 秒的离线签名开屏：250 ms 深色氛围、950 ms 当前账号用户名书写、400 ms 柔光高亮，随后短暂停留并淡出。英文使用 Parisienne 连笔轨迹，覆盖的常用中文使用文楷笔画；未覆盖的生僻字及表情保留原字形渐显。用户名为空时显示「欢迎聆听」，长名字自动换行缩放，超出 64 个字素时省略；系统关闭动画时直接显示完成态并进入应用。既有开屏选择保持不变，可在同页预览。
+
 CurrentMusicX 是 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic) 的原生 Android 客户端，支持网易云音乐库、Navidrome 自建曲库和双人一起听。圆形封面、动态取色、逐字歌词与悬浮播放器组成日常听歌体验，适配竖屏、横屏和宽屏布局。
 
 本页介绍当前源码的功能；已发布版本的具体改动请查看[GitHub Releases](https://github.com/bileizhen/CurrentMusicX/releases)。Android 客户端源码维护于本仓库 `main` 分支。

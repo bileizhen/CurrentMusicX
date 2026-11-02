@@ -17,6 +17,8 @@ class LaunchStyleSettingsTest {
         val preferences = mutablePreferencesOf()
         val before = AppearanceSettings(themeMode = ThemeMode.DARK, blur = false, uiScale = .9f,
             playerBackground = "content://background", playerBackgroundBlur = 66f)
+        SettingsPreferences.write(preferences, before.copy(launchStyle = LaunchStyle.SIGNATURE))
+        assertEquals(before.copy(launchStyle = LaunchStyle.SIGNATURE), SettingsPreferences.read(preferences))
         SettingsPreferences.write(preferences, before.copy(launchStyle = LaunchStyle.HALO))
         assertEquals(before.copy(launchStyle = LaunchStyle.HALO), SettingsPreferences.read(preferences))
         SettingsPreferences.write(preferences, before.copy(launchStyle = LaunchStyle.NONE))

@@ -154,7 +154,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 launchBrand.active = false
                 launchFinished = true
             }
-            container.sessionRestored.await()
+            if (launchStyle == io.github.currencortex.music.data.settings.LaunchStyle.SIGNATURE) {
+                // Cached identity normally restores immediately; online auth validation must not
+                // turn a short signature into an unbounded loading screen.
+                kotlinx.coroutines.withTimeoutOrNull(300) { container.sessionRestored.await() }
+            } else container.sessionRestored.await()
         }
         value = true
     }
@@ -227,8 +231,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val playlistPage = isPlaylistRoute(backStack.last())
     var playlistDarkStatus by remember(backStack.last()) { mutableStateOf(true) }
     val playlistStatusStyle = remember(backStack.last()) { { dark: Boolean -> playlistDarkStatus = dark } }
-    val haloVisible = (!launchFinished && launchStyle == io.github.currencortex.music.data.settings.LaunchStyle.HALO) ||
-        launchPreview == io.github.currencortex.music.data.settings.LaunchStyle.HALO
+    val darkLaunchStyles = setOf(io.github.currencortex.music.data.settings.LaunchStyle.HALO,
+        io.github.currencortex.music.data.settings.LaunchStyle.SIGNATURE)
+    val haloVisible = (!launchFinished && launchStyle in darkLaunchStyles) || launchPreview in darkLaunchStyles
     LeiTheme(settings, darkSystemBars = if (haloVisible || updateDialogVisible || miniQueueOpen || (playlistPage && (settings.playlistDepthRibbon || settings.playlistRecordShelf)) || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
         darkStatusBars = if (haloVisible || updateDialogVisible || miniQueueOpen ||
             (playlistPage && (settings.playlistDepthRibbon || settings.playlistRecordShelf))) true
@@ -928,6 +933,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         if (!launchFinished) {
             val finish = { launchBrand.active = false; launchFinished = true }
             when (launchStyle) {
+                io.github.currencortex.music.data.settings.LaunchStyle.SIGNATURE -> {
+                    if (launchReady) SignatureLaunchOverlay(launchUsername(account.account), launchWindowReady, onFinished = finish)
+                    else LaunchPreparationOverlay(dark = true)
+                }
                 io.github.currencortex.music.data.settings.LaunchStyle.HALO -> HaloLaunchOverlay(
                     launchUsername(account.account), pageReady, launchWindowReady, onFinished = finish)
                 io.github.currencortex.music.data.settings.LaunchStyle.CLASSIC -> LaunchBrandOverlay(launchBrand, pageReady,
@@ -940,6 +949,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             val previewBrand = remember(style) { LaunchBrandState() }
             androidx.activity.compose.BackHandler { launchPreview = null }
             when (style) {
+                io.github.currencortex.music.data.settings.LaunchStyle.SIGNATURE -> SignatureLaunchOverlay(
+                    launchUsername(account.account), preview = true, onFinished = { launchPreview = null })
                 io.github.currencortex.music.data.settings.LaunchStyle.HALO -> HaloLaunchOverlay(
                     launchUsername(account.account), ready = true, preview = true, onFinished = { launchPreview = null })
                 io.github.currencortex.music.data.settings.LaunchStyle.CLASSIC -> LaunchBrandOverlay(previewBrand,

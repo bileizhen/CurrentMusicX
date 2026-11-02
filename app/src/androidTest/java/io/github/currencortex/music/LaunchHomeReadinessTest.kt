@@ -75,6 +75,21 @@ class LaunchHomeReadinessTest {
         condition()
     }
 
+    @Test fun signatureUsesRestoredAccountAndExitsWhileHomeIsStillLoading() {
+        runBlocking { container.settings.edit { it.copy(launchStyle = io.github.currencortex.music.data.settings.LaunchStyle.SIGNATURE) } }
+        compose.mainClock.autoAdvance = false
+        compose.setContent { CurrentMusicApp(container, animateLaunch = true) }
+        pumpUntil { compose.onAllNodesWithTag("signature_launch_frame").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("signature_launch_frame").assertContentDescriptionEquals("CurrentMusic · Fixture user")
+        compose.onNodeWithTag("launch_wordmark", useUnmergedTree = true).assertDoesNotExist()
+        compose.mainClock.advanceTimeBy(2800)
+        pumpUntil { compose.onAllNodesWithTag("launch_animation").fetchSemanticsNodes().isEmpty() }
+        assertEquals(1L, daily.count)
+        runBlocking { container.settings.edit { it.copy(launchStyle = io.github.currencortex.music.data.settings.LaunchStyle.CLASSIC) } }
+        compose.mainClock.advanceTimeBy(500)
+        compose.onNodeWithTag("launch_animation").assertDoesNotExist()
+    }
+
     @Test fun storedHaloStartsDirectlyWithRestoredAccountAndDoesNotReplayOnRecomposition() {
         runBlocking { container.settings.edit { it.copy(launchStyle = io.github.currencortex.music.data.settings.LaunchStyle.HALO) } }
         daily.countDown(); recent.countDown(); playlists.countDown()
