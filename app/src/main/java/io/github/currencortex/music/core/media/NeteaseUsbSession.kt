@@ -40,7 +40,7 @@ internal class NeteaseUsbSession private constructor(
         try {
             check(connected()) { "[USB_DISCONNECTED] USB DAC 已断开或授权已撤销" }
             driver.verify(handle)
-        } catch (e: Exception) { runCatching { close() }.exceptionOrNull()?.let(e::addSuppressed); throw e }
+        } catch (e: Throwable) { runCatching { close() }.exceptionOrNull()?.let(e::addSuppressed); throw e }
     }
     @Synchronized fun write(buffer: ByteBuffer): Int = guarded {
         check(buffer.isDirect && buffer.remaining() % pcm.frameBytes == 0) { "[USB_BUFFER] PCM 缓冲区未按帧对齐" }
@@ -69,7 +69,7 @@ internal class NeteaseUsbSession private constructor(
     @Synchronized fun position() = guarded { driver.position(handle).coerceAtLeast(0) }
     private inline fun <T> guarded(action: () -> T): T {
         verify()
-        try { return action() } catch (e: Exception) { runCatching { close() }.exceptionOrNull()?.let(e::addSuppressed); throw e }
+        try { return action() } catch (e: Throwable) { runCatching { close() }.exceptionOrNull()?.let(e::addSuppressed); throw e }
     }
     @Synchronized override fun close() {
         if (closed) return
@@ -88,7 +88,7 @@ internal class NeteaseUsbSession private constructor(
                 handle = driver.open(fd, pcm.wireFormat)
                 check(handle != 0L) { "[USB_OPEN] 原生 USB 输出初始化失败" }
                 return NeteaseUsbSession(driver, connection, connected, handle, pcm)
-            } catch (e: Exception) {
+            } catch (e: Throwable) {
                 runCatching { if (handle != 0L) driver.close(handle) }.exceptionOrNull()?.let(e::addSuppressed)
                 runCatching { connection.close() }.exceptionOrNull()?.let(e::addSuppressed)
                 throw e

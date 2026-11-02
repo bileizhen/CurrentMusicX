@@ -66,7 +66,8 @@ internal interface BitPerfectTrack {
 /** One requested HAL configuration, one track, and fail-closed cleanup. No conversion or mixed fallback. */
 internal class BitPerfectSession private constructor(private val platform: BitPerfectPlatform,
     val device: BitPerfectDevice, val mixer: BitPerfectMixer, val track: BitPerfectTrack,
-    private val nowMs: () -> Long, private val log: (String) -> Unit, private val report: (String) -> Unit) : AutoCloseable {
+    private val nowMs: () -> Long, private val log: (String) -> Unit, private val report: (String) -> Unit,
+    private val confirmedOutput: (BitPerfectPcm) -> Unit = {}) : AutoCloseable {
     private var closed = false
     private var failure: BitPerfectFailure? = null
     private var confirmed = false
@@ -122,6 +123,7 @@ internal class BitPerfectSession private constructor(private val platform: BitPe
                     throw failure!!
                 }
                 confirmed = true
+                confirmedOutput(track.format)
                 log("finalState=CONFIRMED_ANDROID_API routedDevice=$route actualTrack=${track.format.describe()}; physical DAC bit transparency not measured")
                 report("Bit-perfect · Android 已确认 USB 路由及逐位配置 · ${mixer.format.describe()}")
             }
@@ -141,7 +143,13 @@ internal class BitPerfectSession private constructor(private val platform: BitPe
 
     companion object {
         fun open(platform: BitPerfectPlatform, decoded: BitPerfectPcm, deviceKey: String,
-            nowMs: () -> Long, log: (String) -> Unit, report: (String) -> Unit): BitPerfectSession {
+            nowMs: () -> Long, diagnosticLog: (String) -> Unit, diagnosticReport: (String) -> Unit,
+            diagnosticOutput: (BitPerfectPcm) -> Unit = {}): BitPerfectSession {
+            // These are observers, not platform operations. Their failure must neither
+            // invalidate a verified route nor skip release/clearing mixer ownership.
+            val log = safeObserver(diagnosticLog)
+            val report = safeObserver(diagnosticReport)
+            val confirmedOutput = safeObserver(diagnosticOutput)
             log("androidSdk=${platform.sdk} usage=${platform.usage} decodedPcm=${decoded.describe()}")
             var device: BitPerfectDevice? = null
             var requested: BitPerfectMixer? = null
@@ -178,7 +186,7 @@ internal class BitPerfectSession private constructor(private val platform: BitPe
                 val preferred = track.prefer(selected)
                 log("audioTrack.setPreferredDevice=$preferred targetId=${selected.id} initialRoute=${track.routedDeviceId ?: "unknown"}")
                 if (!preferred) throw BitPerfectFailure(BitPerfectFailureCode.DEVICE_PREFERENCE, "AudioTrack 拒绝所选 USB 输出设备")
-                val result = BitPerfectSession(platform, selected, mixer, track, nowMs, log, report)
+                val result = BitPerfectSession(platform, selected, mixer, track, nowMs, log, report, confirmedOutput)
                 session = result
                 result.verify(forcePolicyCheck = true)
                 report("Bit-perfect · Android 已接受逐位配置，等待实际 USB 播放路由")
@@ -190,6 +198,11 @@ internal class BitPerfectSession private constructor(private val platform: BitPe
                 log("finalState=FAILED failure=${failure.message}")
                 throw failure
             }
+        }
+
+        private fun <T> safeObserver(observer: (T) -> Unit): (T) -> Unit = { value ->
+            runCatching { observer(value) }
+            Unit
         }
 
         private fun missingConfiguration(decoded: BitPerfectPcm, supported: List<BitPerfectMixer>): BitPerfectFailure {

@@ -4,6 +4,7 @@
 #include <jni.h>
 #include <dlfcn.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
@@ -109,21 +110,30 @@ void record(const std::string& line) {
 std::vector<currentmusic_usb::StreamingInfo> candidates(void* device) {
     auto& a = api();
     const currentmusic_usb::Config* raw = nullptr;
-    if (a.getConfig(a.usbDevice(device), &raw) != 0 || !raw)
+    const auto usb = a.usbDevice(device);
+    if (!usb || a.getConfig(usb, &raw) != 0 || !raw)
         throw std::runtime_error("[USB_CAPABILITIES] cannot read active USB configuration");
     std::unique_ptr<const currentmusic_usb::Config, decltype(a.freeConfig)> config(raw, a.freeConfig);
-    if (!config->interfaces && config->interfaceCount) throw std::runtime_error("[USB_CAPABILITIES] invalid USB configuration");
+    if (config->length < 9 || config->type != 2 || config->totalLength < config->length ||
+        (!config->interfaces && config->interfaceCount)) throw std::runtime_error("[USB_CAPABILITIES] invalid USB configuration");
     std::vector<currentmusic_usb::StreamingInfo> result;
     // Same order as AudioDeviceImpl::initAudioStreamingInterfaces and
     // setupOutputAudioStreamingInfo. Sorting interface IDs would corrupt indices.
     for (int i = 0; i < config->interfaceCount; ++i) {
         const auto& group = config->interfaces[i];
-        if (group.count < 1 || !group.alternate) continue;
+        if (group.count < 0 || group.count > 256 || (group.count > 0 && !group.alternate))
+            throw std::runtime_error("[USB_CAPABILITIES] invalid alternate-setting list");
+        if (group.count == 0) continue;
         const auto& first = group.alternate[0];
+        if (first.length < 9 || first.type != 4)
+            throw std::runtime_error("[USB_CAPABILITIES] invalid audio interface descriptor");
         if (first.deviceClass != 1 || first.subclass != 2) continue;
         auto face = a.getInterface(device, first.number);
         if (!face || !a.isOutput(face)) continue;
         auto entries = a.infos(face);
+        if (entries.size() > 512 || result.size() + entries.size() > 512 ||
+            std::any_of(entries.begin(), entries.end(), [](const auto& info) { return info.rates.size() > 512; }))
+            throw std::runtime_error("[USB_CAPABILITIES] excessive native format declarations");
         result.insert(result.end(), entries.begin(), entries.end());
     }
     record("usbHost.supported.count=" + std::to_string(result.size()));
@@ -223,7 +233,7 @@ Java_io_github_currencortex_music_core_media_NeteaseUsbBridge_open(JNIEnv* env, 
             (sourceBits != 16 && sourceBits != 24 && sourceBits != 32) || sourceBits > (encoding == 2 ? 16 : 32))
             throw std::runtime_error("[USB_PCM] this pinned adapter accepts only native 16/32-bit integer PCM, mono/stereo, 8-192 kHz");
         auto next = std::make_unique<Stream>();
-        next->fd = dup(fd);
+        next->fd = fcntl(fd, F_DUPFD_CLOEXEC, 0);
         if (next->fd < 0) throw std::runtime_error("[USB_FD] could not retain authorized USB descriptor");
         auto& a = api();
         next->manager = a.manager();

@@ -18,10 +18,22 @@ internal object NeteaseUsbDevices {
         .filter { device -> (0 until device.interfaceCount).any {
             val face = device.getInterface(it)
             face.interfaceClass == UsbConstants.USB_CLASS_AUDIO && face.interfaceSubclass == 2 &&
-                (0 until face.endpointCount).any { endpoint -> face.getEndpoint(endpoint).direction == UsbConstants.USB_DIR_OUT }
+                (0 until face.endpointCount).any { endpoint -> face.getEndpoint(endpoint).let {
+                    usableUsbIsoOutput(it.direction, it.type, it.maxPacketSize, it.attributes)
+                } }
         } }.sortedBy { it.deviceId }
     fun key(device: UsbDevice) = "${device.vendorId}:${device.productId}:${device.deviceName}"
     fun label(device: UsbDevice) = device.productName ?: "USB Audio ${device.vendorId.toString(16)}:${device.productId.toString(16)}"
+    /** Reads descriptors only, without claiming an interface or requesting permission. */
+    fun descriptors(context: Context, device: UsbDevice): UsbAudioDescriptorReport {
+        val manager = context.getSystemService(UsbManager::class.java)
+        if (!manager.hasPermission(device)) return UsbAudioDescriptorReport(emptyList(), "尚未获得 USB 描述符读取授权")
+        val connection = manager.openDevice(device)
+            ?: return UsbAudioDescriptorReport(emptyList(), "系统未能打开 USB 描述符连接")
+        return try { UsbAudioDescriptorParser.parse(connection.rawDescriptors) }
+        catch (_: Exception) { UsbAudioDescriptorReport(emptyList(), "系统未提供完整 USB Audio 描述符") }
+        finally { connection.close() }
+    }
     fun select(devices: List<UsbDevice>, selected: String): UsbDevice {
         if (selected.isNotEmpty()) return devices.singleOrNull { key(it) == selected }
             ?: error("[USB_MISSING] 所选 USB Host 设备未连接，请重新选择")

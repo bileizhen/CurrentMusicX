@@ -161,4 +161,25 @@ class BitPerfectSessionTest {
         val p = Platform(); p.open().close()
         assertTrue(p.logs.any { "supportedMixer[0]=" in it && "192000" in it && "(21)" in it && "position=0xc" in it && "behavior=1" in it })
     }
+    @Test fun diagnosticExceptionsDoNotRejectVerifiedPlaybackOrSkipCleanup() {
+        val p = Platform()
+        var observations = 0
+        val session = BitPerfectSession.open(p, pcm, "usb", { p.time },
+            { error("logger unavailable") }, { error("UI observer unavailable") },
+            { observations++; error("diagnostic snapshot unavailable") })
+        p.track.playing = true; p.track.routedDeviceId = usb.id
+        session.verify(); session.verify()
+        assertEquals(1, observations)
+        assertEquals(0, p.track.releases)
+        session.close(); session.close()
+        assertEquals(1, p.track.releases); assertEquals(1, p.clears)
+    }
+    @Test fun diagnosticExceptionsDoNotMaskRealDisconnectOrCleanupSteps() {
+        val p = Platform()
+        val session = BitPerfectSession.open(p, pcm, "usb", { p.time },
+            { error("log") }, { error("report") })
+        p.connected = emptyList(); p.time = 501
+        failure(BitPerfectFailureCode.DISCONNECTED) { session.verify() }
+        assertEquals(1, p.track.releases); assertEquals(1, p.clears)
+    }
 }

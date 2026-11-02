@@ -13,10 +13,10 @@ class NeteaseUsbSessionTest {
     }
     private class Driver : NeteaseUsbDriver {
         var opens = 0; var closes = 0; var bytesPerWrite = 8; var failed = false; var reject = false
-        var playing = false
+        var playing = false; var failLinkage = false
         val captured = mutableListOf<Byte>()
         val formats = mutableListOf<NeteaseUsbPcm>()
-        override fun open(fd: Int, pcm: NeteaseUsbPcm): Long { opens++; formats += pcm; check(!reject) { "USB_NEGOTIATION" }; return 1 }
+        override fun open(fd: Int, pcm: NeteaseUsbPcm): Long { opens++; formats += pcm; if (failLinkage) throw UnsatisfiedLinkError("fixture"); check(!reject) { "USB_NEGOTIATION" }; return 1 }
         override fun write(handle: Long, buffer: ByteBuffer): Int {
             val count = bytesPerWrite.coerceAtMost(buffer.remaining())
             repeat(count.coerceAtLeast(0)) { captured += buffer.get(buffer.position() + it) }
@@ -71,6 +71,11 @@ class NeteaseUsbSessionTest {
         val d = Driver().apply { reject = true }; val c = Connection()
         assertThrows(IllegalStateException::class.java) { open(d, c) }
         assertEquals(1, c.closes)
+    }
+    @Test fun nativeLinkageFailureStillReleasesTheAuthorizedConnection() {
+        val d = Driver().apply { failLinkage = true }; val c = Connection()
+        assertThrows(UnsatisfiedLinkError::class.java) { open(d, c) }
+        assertEquals(1, c.closes); assertEquals(0, d.closes)
     }
     @Test fun disconnectReleasesDriverBeforeFurtherWrites() {
         val d = Driver(); val c = Connection(); var connected = true

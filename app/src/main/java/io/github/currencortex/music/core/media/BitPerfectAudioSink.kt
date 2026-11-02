@@ -19,12 +19,15 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
     private val report: (String) -> Unit,
     private val open: (Format, AudioAttributes, Clock) -> BitPerfectStream,
 ) : ForwardingAudioSink(normal) {
-    constructor(context: Context, normal: AudioSink, settings: () -> AudioOutputSettings, report: (String) -> Unit) :
+    constructor(context: Context, normal: AudioSink, settings: () -> AudioOutputSettings, report: (String) -> Unit,
+        diagnostics: io.github.currencortex.music.core.media.engine.AudioDiagnostics? = null, primary: () -> Boolean = { true }) :
         this(normal, settings, report, { format, attributes, clock ->
-            if (settings().mode == AudioOutputMode.NETEASE_USB)
-                NeteaseUsbStream.open(context, format, settings(), report)
+            if (settings().mode == AudioOutputMode.NETEASE_USB) {
+                val usb = NeteaseUsbStream.open(context, format, settings()) { message -> runCatching { report(message) }; Unit }
+                if (diagnostics == null) usb else io.github.currencortex.music.core.media.engine.UsbDiagnosticStream(usb, diagnostics, primary)
+            }
             else if (Build.VERSION.SDK_INT >= 34)
-                AndroidBitPerfectStream.open(context, format, settings(), attributes, clock, report)
+                AndroidBitPerfectStream.open(context, format, settings(), attributes, clock, report, diagnostics, primary)
             else throw BitPerfectFailure(BitPerfectFailureCode.ANDROID_VERSION, "Bit-perfect 需要 Android API 34 或更新版本")
         })
     private fun selected() = settings().mode.rawPcm

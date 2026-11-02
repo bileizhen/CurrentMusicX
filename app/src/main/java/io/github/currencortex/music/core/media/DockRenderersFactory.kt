@@ -15,7 +15,12 @@ internal class DockRenderersFactory(context: Context, private val meter: DockAud
     private val outputSampleRate: () -> Int = { 0 },
     private val outputSettings: () -> io.github.currencortex.music.data.settings.AudioOutputSettings = {
         io.github.currencortex.music.data.settings.AudioOutputSettings(sampleRate = outputSampleRate()) },
-    private val outputStatus: (String) -> Unit = {}) : DefaultRenderersFactory(context) {
+    private val outputStatus: (String) -> Unit = {},
+    private val diagnostics: io.github.currencortex.music.core.media.engine.AudioDiagnostics? = null,
+    private val primary: () -> Boolean = { true },
+    private val router: io.github.currencortex.music.core.media.engine.AudioOutputRouter? = null,
+    private val processingSettings: () -> io.github.currencortex.music.data.settings.AudioOutputSettings = outputSettings,
+    private val formatState: io.github.currencortex.music.core.media.engine.AudioFormatState = io.github.currencortex.music.core.media.engine.AudioFormatState()) : DefaultRenderersFactory(context) {
     override fun buildAudioRenderers(context: Context, extensionRendererMode: Int,
         mediaCodecSelector: androidx.media3.exoplayer.mediacodec.MediaCodecSelector, enableDecoderFallback: Boolean,
         audioSink: AudioSink, eventHandler: android.os.Handler,
@@ -37,6 +42,11 @@ internal class DockRenderersFactory(context: Context, private val meter: DockAud
                 return result
             }
             override fun onOutputFormatChanged(format: androidx.media3.common.Format, mediaFormat: android.media.MediaFormat?) {
+                runCatching {
+                    formatState.source(io.github.currencortex.music.core.media.engine.AudioPcmFormat(
+                        format.sampleRate.takeIf { it > 0 }, format.pcmEncoding.takeIf { it > 0 }, format.channelCount.takeIf { it > 0 }))
+                    if (primary()) diagnostics?.let(formatState::publish)
+                }
                 if (outputSettings().mode.rawPcm) {
                     CurrentMusicAudioDiagnostics.format("source.declared", format)
                     fun number(key: String) = mediaFormat?.takeIf { it.containsKey(key) }?.getInteger(key)
@@ -60,15 +70,18 @@ internal class DockRenderersFactory(context: Context, private val meter: DockAud
             }
         })
     }
-    override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean): AudioSink =
-        BitPerfectAudioSink(context, DefaultAudioSink.Builder(context).setEnableFloatOutput(false)
+    override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean): AudioSink {
+        val sink = BitPerfectAudioSink(context, DefaultAudioSink.Builder(context).setEnableFloatOutput(false)
             .setEnableAudioOutputPlaybackParameters(false)
-            .setAudioOutputProvider(MusicAudioOutputProvider(context, outputSettings, outputStatus))
+            .setAudioOutputProvider(MusicAudioOutputProvider(context, outputSettings, outputStatus,
+                diagnostics = diagnostics, primary = primary, router = router))
             // Keep the optional stage present before an engine import, so an existing
             // playback session can begin using it without recreating the player.
             .setAudioProcessors(arrayOf(NeteaseOriginalAudioProcessor({
-                if (outputSettings().mode == io.github.currencortex.music.data.settings.AudioOutputMode.DIRECT) null else originalPreset()
+                if (processingSettings().mode.bypassProcessing) null else originalPreset()
             }, originalFailure, originalProcessing), DockAudioProcessor(meter, probe), OutputSampleRateProcessor(requestedRate = {
-                if (outputSettings().mode == io.github.currencortex.music.data.settings.AudioOutputMode.DIRECT) 0 else outputSampleRate()
-            }))).build(), outputSettings, outputStatus)
+                if (processingSettings().mode.bypassProcessing) 0 else outputSampleRate()
+            }))).build(), outputSettings, outputStatus, diagnostics, primary)
+        return diagnostics?.let { io.github.currencortex.music.core.media.engine.DiagnosticAudioSink(sink, it, primary, formatState) } ?: sink
+    }
 }

@@ -4,22 +4,16 @@ import io.github.currencortex.music.ui.component.nativeui.*
 
 import io.github.currencortex.music.ui.component.nativeui.SettingsPage
 import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
-import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
-import io.github.currencortex.music.ui.component.nativeui.SettingsChoiceRow
 import io.github.currencortex.music.ui.component.nativeui.SettingsOptionsRow
 import io.github.currencortex.music.ui.component.nativeui.SettingsOption
 
-import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import android.os.Handler
-import android.os.Looper
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -27,17 +21,17 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.AppContainer
-import io.github.currencortex.music.R
 import io.github.currencortex.music.core.media.outputKey
 import io.github.currencortex.music.core.media.outputLabel
 import io.github.currencortex.music.core.media.CurrentMusicAudioDiagnostics
 import io.github.currencortex.music.data.settings.AudioOutputSettings
 import io.github.currencortex.music.data.settings.AudioOutputMode
+import io.github.currencortex.music.data.settings.AudioBufferPolicy
+import io.github.currencortex.music.core.media.engine.BitPerfectEvidence
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
@@ -47,19 +41,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     SettingsUiScope {
     val settings by container.audioOutput.state.collectAsStateWithLifecycle()
     val outputStatus by container.audioOutput.status.collectAsStateWithLifecycle()
+    val diagnostics by container.audioDiagnostics.state.collectAsStateWithLifecycle()
+    val devices by container.audioDevices.devices.collectAsStateWithLifecycle()
     val clipboard = LocalClipboardManager.current
     val context = LocalContext.current
     val manager = remember(context) { context.getSystemService(AudioManager::class.java) }
-    var devices by remember { mutableStateOf(manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).toList()) }
-    DisposableEffect(manager) {
-        val callback = object : AudioDeviceCallback() {
-            override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) { refresh() }
-            override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) { refresh() }
-            fun refresh() { devices = manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).toList() }
-        }
-        manager.registerAudioDeviceCallback(callback, Handler(Looper.getMainLooper()))
-        onDispose { manager.unregisterAudioDeviceCallback(callback) }
-    }
     val supportedRates = remember { AudioOutputSettings.rates.filter { it == 0 ||
         AudioTrack.getMinBufferSize(it, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT) > 0 } }
     val selectedDevice = devices.firstOrNull { it.outputKey() == settings.deviceKey }
@@ -80,10 +66,17 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     var diagnosticMessage by remember { mutableStateOf<String?>(null) }
+    suspend fun diagnosticReport(): String {
+        val structured = container.audioDiagnostics.text()
+        val capability = bitPerfectDevices
+        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            "$structured\nUSB 系统能力查询:\n$capability\n\n完整原生诊断:\n${CurrentMusicAudioDiagnostics.fullSnapshot()}"
+        }
+    }
     val exportDiagnostics = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) scope.launch {
             try {
-                val report = CurrentMusicAudioDiagnostics.fullSnapshot()
+                val report = diagnosticReport()
                 kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                     requireNotNull(context.contentResolver.openOutputStream(uri)) { "无法打开文件" }.bufferedWriter(Charsets.UTF_8).use { it.write(report) }
                 }
@@ -111,8 +104,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     SettingsPage("音频输出", "audio_output_settings") {
         item("mode") { SettingsSection("输出方式", MusicIcons.Headphones,
             footer = when (settings.mode) {
-                AudioOutputMode.BIT_PERFECT -> "逐位输出关闭音效、变速、静音跳过与淡入淡出。使用 DAC 调节音量；设备或格式不支持时停止，不自动回退。仅用于主播放器。"
-                AudioOutputMode.NETEASE_USB -> "USB Host 跳过应用音效、变速、重采样与淡入淡出。原驱动自身的音量与启动淡入仍存在，不保证 Bit-perfect；设备不可用时停止。"
+                AudioOutputMode.BIT_PERFECT -> "逐位路径绕过音效、重采样、变速、静音跳过与淡入淡出，使用 DAC 调节音量。设备或格式失败后自动回退标准路径一次，保留 DSP 旁路；可手动重试。最终硬件逐位透明度未验证。"
+                AudioOutputMode.NETEASE_USB -> "USB Host 绕过应用音效、变速、重采样与淡入淡出。原驱动自身的音量与启动淡入仍存在，不保证 Bit-perfect。设备失败后自动回退标准路径一次，保留 DSP 旁路。"
                 else -> "原生接口不可用时回退 AudioTrack；Direct 暂停变速与淡入淡出，独占结果以实际输出状态为准。"
             }) {
             SettingsOptionsRow("输出模式", settings.mode.label, AudioOutputMode.entries.map { mode ->
@@ -121,6 +114,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }, Modifier.testTag("output_mode"))
             SettingsDivider()
             SettingsPreference("运行状态", outputStatus, Modifier.testTag("output_status"))
+            diagnostics.fallbackReason?.let { reason ->
+                SettingsHint(reason, Modifier.testTag("output_fallback_reason"))
+                SettingsPreference("重试所选输出模式", "重新检查设备、权限与格式", Modifier.testTag("output_retry"), onClick = {
+                    diagnosticMessage = if (container.audioOutputRetry.tryEmit(Unit)) "已请求重试输出模式" else "正在处理，请稍后重试"
+                })
+            }
             if (settings.mode == AudioOutputMode.BIT_PERFECT)
                 SettingsHint(bitPerfectDevices, Modifier.testTag("bit_perfect_capability"))
         } }
@@ -132,6 +131,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 Modifier.testTag("output_sample_rate"),
                 summary = if (settings.mode.bypassProcessing) "${settings.mode.label} 使用音源采样率" else null,
                 enabled = !settings.mode.bypassProcessing)
+            SettingsDivider()
+            SettingsOptionsRow("缓冲策略", settings.bufferPolicy.label, AudioBufferPolicy.entries.map { policy ->
+                SettingsOption("output_buffer_${policy.name}", policy.label, settings.bufferPolicy == policy,
+                    summary = when (policy) {
+                        AudioBufferPolicy.BALANCED -> "兼顾起播速度与播放稳定性"
+                        AudioBufferPolicy.RESPONSIVE -> "较快起播，减少提前缓冲"
+                        AudioBufferPolicy.RESILIENT -> "增加提前缓冲，应对网络波动"
+                    }, onSelect = { save { container.audioOutput.setBufferPolicy(policy) } })
+            }, Modifier.testTag("output_buffer_policy"), summary = "调整解码与网络缓冲；设备缓冲以实际输出为准")
         } }
         if (settings.mode == AudioOutputMode.NETEASE_USB) item("usb") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -139,7 +147,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 NeteaseUsbOutputSettings(settings) { key -> save { container.audioOutput.setUsbDevice(key) } }
             }
         } else item("device") { SettingsSection("输出设备", MusicIcons.Device,
-            footer = if (settings.mode == AudioOutputMode.BIT_PERFECT) "逐位输出必须确认实际 USB 路由；设备断开或路由不符时停止播放。"
+            footer = if (settings.mode == AudioOutputMode.BIT_PERFECT) "逐位路径必须确认实际 USB 路由；断开或路由不符时回退标准路径，诊断中记录原因。"
                 else "实际路由由系统决定。设备断开后回到系统默认输出。") {
             SettingsOptionsRow("首选设备", selectedDevice?.outputLabel() ?: if (settings.deviceKey.isEmpty()) "跟随系统" else "设备未连接",
                 listOf(SettingsOption("output_device_system", "跟随系统", settings.deviceKey.isEmpty(),
@@ -147,6 +155,41 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     SettingsOption("output_device_${device.id}", device.outputLabel(), settings.deviceKey == device.outputKey(),
                         onSelect = { save { container.audioOutput.setDevice(device.outputKey()) } })
                 }, Modifier.testTag("output_device"))
+        } }
+        item("live_diagnostics") { SettingsSection("播放诊断", MusicIcons.Headphones,
+            footer = "以下格式来自解码器或已打开的输出对象，不代表系统混音后或 DAC 最终硬件格式。最终 DAC 逐位透明度未验证；蓝牙编码格式仅在系统明确提供时才可确认。") {
+            val rows = listOf(
+                "引擎请求模式" to diagnostics.requestedMode.label,
+                "实际音频后端" to (diagnostics.backend ?: "系统未提供"),
+                "播放状态" to if (diagnostics.playing) "播放中" else "暂停或未播放",
+                "输入音频声明" to diagnostics.source.describe(),
+                "解码后的 PCM" to diagnostics.decoded.describe(),
+                "请求输出采样率" to (diagnostics.requestedRate?.let { "$it Hz" } ?: "跟随音源"),
+                "可验证的输出格式" to diagnostics.output.describe(),
+                "输出格式证据" to diagnostics.formatEvidence,
+                "当前输出设备" to ((diagnostics.device ?: "系统未提供") + (diagnostics.deviceId?.let { " · ID $it" } ?: "")),
+                "USB DAC 声明能力" to (diagnostics.usbCapabilities ?: "系统未提供"),
+                "软件 / 设备缓冲帧" to "${diagnostics.softwareBufferFrames ?: "系统未提供"} / ${diagnostics.deviceBufferFrames ?: "系统未提供"}",
+                "设备缓冲容量" to (diagnostics.capacityFrames?.let { "$it 帧" } ?: "系统未提供"),
+                "缓冲欠载次数" to (diagnostics.underruns?.toString() ?: "系统未提供"),
+                "输出延迟" to ((diagnostics.latencyMs?.let { "%.2f ms".format(java.util.Locale.ROOT, it) } ?: "无法验证") + " · ${diagnostics.latencyEvidence}"),
+                "请求的 DSP" to diagnostics.requestedEffects.joinToString("、").ifBlank { "无" },
+                "已观察到的 DSP" to diagnostics.appliedEffects.joinToString("、").ifBlank { "未观察到处理" },
+                "处理策略" to (diagnostics.processingBypass ?: "正常处理链"),
+                "Bit-perfect 验证状态" to when (diagnostics.bitPerfect) {
+                    BitPerfectEvidence.INACTIVE -> "未启用"
+                    BitPerfectEvidence.REQUESTED -> "已请求，等待验证"
+                    BitPerfectEvidence.ANDROID_CONFIGURATION_VERIFIED -> "Android 路由与格式配置已核实，最终硬件未验证"
+                    BitPerfectEvidence.UNVERIFIED -> "无法验证"
+                    BitPerfectEvidence.FALLBACK -> "已回退标准路径"
+                },
+                "蓝牙当前编码格式" to "系统未提供",
+                "最终 DAC 逐位透明度" to "未验证"
+            )
+            rows.forEachIndexed { index, (title, value) ->
+                if (index > 0) SettingsDivider()
+                SettingsPreference(title, value, Modifier.testTag("audio_diagnostic_$index"))
+            }
         } }
         item("diagnostics") { SettingsSection("设备与诊断", MusicIcons.Info,
             footer = "设备报告值不代表当前实际格式。蓝牙编码与硬件独占由系统和设备决定。") {
@@ -164,18 +207,20 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     }
                 }
             }
-            if (settings.mode.rawPcm) {
-                SettingsDivider()
-                SettingsPreference("复制最近一次音频诊断", "本次解码格式、支持配置、路由与结果",
-                    Modifier.testTag("copy_audio_diagnostics"), onClick = {
-                        val recent = CurrentMusicAudioDiagnostics.latestAttempt()
-                        clipboard.setText(AnnotatedString(if (CurrentMusicAudioDiagnostics.text.value.isEmpty()) "$recent\n$bitPerfectDevices" else recent))
-                        diagnosticMessage = "已复制最近一次诊断"
-                    })
-                SettingsDivider()
-                SettingsPreference("导出完整音频诊断", "保存完整记录，便于分享与排查",
-                    Modifier.testTag("export_audio_diagnostics"), onClick = { exportDiagnostics.launch("CurrentMusicAudio.txt") })
-            }
+            SettingsDivider()
+            SettingsPreference("复制音频诊断", "实时状态与完整原生记录",
+                Modifier.testTag("copy_audio_diagnostics"), onClick = {
+                    scope.launch {
+                        try {
+                            clipboard.setText(AnnotatedString(diagnosticReport()))
+                            diagnosticMessage = "已复制完整音频诊断"
+                        } catch (e: kotlinx.coroutines.CancellationException) { throw e }
+                        catch (_: Exception) { diagnosticMessage = "复制失败，请重试" }
+                    }
+                })
+            SettingsDivider()
+            SettingsPreference("导出完整音频诊断", "保存完整记录，便于分享与排查",
+                Modifier.testTag("export_audio_diagnostics"), onClick = { exportDiagnostics.launch("CurrentMusicAudio.txt") })
             diagnosticMessage?.let { SettingsHint(it) }
         } }
         error?.let { message -> item { SettingsHint(message, error = true) } }
