@@ -19,7 +19,8 @@ class ChatRepository(private val api: ApiClient, private val session: () -> Requ
         query: Map<String, String> = emptyMap(), body: JsonElement? = null): JsonElement {
         if (method != "GET" && expected.token.isNullOrBlank()) throw ApiException(ErrorKind.Unauthorized)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
-        val result = api.request(method, path, query, body, authenticated = true,
+        // Public reads remain available anonymously; protected writes were checked above.
+        val result = api.request(method, path, query, body, authenticated = !expected.token.isNullOrBlank(),
             expectedSession = expected, retryConnection = method == "GET")
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         return result

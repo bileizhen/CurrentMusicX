@@ -18,8 +18,8 @@ class PostsRepository(private val api: ApiClient, private val session: () -> Req
     private suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
         body: JsonElement? = null): JsonElement {
         val expected = session()
-        if (method != "GET" && expected.token == null) throw ApiException(ErrorKind.Unauthorized)
-        val result = api.request(method, path, query, body, authenticated = true, expectedSession = expected,
+        if (method != "GET" && expected.token.isNullOrBlank()) throw ApiException(ErrorKind.Unauthorized)
+        val result = api.request(method, path, query, body, authenticated = !expected.token.isNullOrBlank(), expectedSession = expected,
             retryConnection = method == "GET")
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         return result

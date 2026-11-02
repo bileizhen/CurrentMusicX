@@ -18,15 +18,19 @@ class ApiClient(
     private val token: () -> String?,
     private val onUnauthorized: (RequestSession) -> Unit,
     private val log: (String) -> Unit = {},
-    client: OkHttpClient = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(75, TimeUnit.SECONDS).writeTimeout(30, TimeUnit.SECONDS)
-        .callTimeout(90, TimeUnit.SECONDS).followRedirects(false).build(),
+    client: OkHttpClient = defaultHttpClient(),
     val netease: NeteaseGateway? = null,
     private val nativeMedia: () -> Boolean = { false },
     private val currentMusicAccountReady: () -> Boolean = { !token().isNullOrBlank() },
     private val currentMusicSessionRevision: () -> Long = { 0L },
     val routeServer: (String) -> String = { it },
 ) {
+    companion object {
+        fun defaultHttpClient(): OkHttpClient = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
+            .readTimeout(75, TimeUnit.SECONDS).writeTimeout(30, TimeUnit.SECONDS)
+            .callTimeout(90, TimeUnit.SECONDS).followRedirects(false).build()
+    }
+
     private val http = client.newBuilder().addInterceptor(AuthInterceptor()).build()
     private val singleAttemptHttp = http.newBuilder().retryOnConnectionFailure(false).build()
     val hasLocalNeteaseLogin get() = netease?.sessions?.state?.value?.loggedIn == true
@@ -74,6 +78,10 @@ class ApiClient(
                 throw ApiException(ErrorKind.NeteaseSessionChanged)
             return@withContext response
         }
+        // Native routing above owns its own credentials. Project-only protected requests
+        // need a project session; do not send known-anonymous requests just to receive 401.
+        if (authenticated && session.token.isNullOrBlank())
+            throw ApiException(ErrorKind.Unauthorized, userMessage = "请先登录 CurrentMusic 账号")
         val url = ServerUrl.endpoint(routeServer(session.server), path, query)
         val request = Request.Builder().url(url).tag(RequestSession::class.java, session)
             .header("Accept", "application/json")

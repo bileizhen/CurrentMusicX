@@ -131,6 +131,26 @@ class ApiClientTest {
             assertNull(server.takeRequest().getHeader("Authorization"))
         }
     }
+    @Test fun missingProjectCredentialsDoNotSendProtectedRequestsOrExpireAnotherSession() = runBlocking {
+        MockWebServer().use { server ->
+            var token: String? = null
+            var expired = 0
+            val api = ApiClient({ server.url("/cm/").toString() }, { token }, { expired++ })
+            for (path in listOf("likes/mine", "ncm/song/url")) {
+                val result = appResult { api.request("GET", path, authenticated = true) } as AppResult.Failure
+                assertEquals(ErrorKind.Unauthorized, result.kind)
+                assertEquals("请先登录 CurrentMusic 账号", result.message)
+            }
+            assertEquals(0, server.requestCount); assertEquals(0, expired)
+            token = "valid-fixture"
+            server.enqueue(MockResponse().setBody("""{"ok":true}"""))
+            assertTrue(api.get<Value>("auth/me", authenticated = true).ok)
+            assertEquals("Bearer valid-fixture", server.takeRequest().getHeader("Authorization"))
+            server.enqueue(MockResponse().setResponseCode(401))
+            assertEquals(ErrorKind.Unauthorized, (appResult { api.get<Value>("auth/me", authenticated = true) } as AppResult.Failure).kind)
+            assertEquals(1, expired)
+        }
+    }
     @Test fun callerCancellationStopsPendingNetworkCall() = runBlocking {
         MockWebServer().use { server ->
             val api = ApiClient({ server.url("/").toString() }, { null }, {})

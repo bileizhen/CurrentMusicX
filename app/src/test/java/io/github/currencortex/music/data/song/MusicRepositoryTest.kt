@@ -21,7 +21,7 @@ class MusicRepositoryTest {
     }
     @Test fun preservesReportedSourceLifetimeAndUsesBoundedCurrentMusicFallback() = runBlocking {
         MockWebServer().use { server ->
-            val repo = MusicRepository(ApiClient({ server.url("/cm/").toString() }, { null }, {}))
+            val repo = MusicRepository(ApiClient({ server.url("/cm/").toString() }, { "project-user" }, {}))
             for ((expi, expected) in listOf(1200 to 1200L, 60 to 60L, 0 to 300L, -1 to 300L)) {
                 server.enqueue(MockResponse().setBody("""{"url":"https://example.com/audio","expi":$expi}"""))
                 assertEquals(expected, repo.source(7, AudioQuality.STANDARD).validForSeconds)
@@ -93,7 +93,7 @@ class MusicRepositoryTest {
     }
     @Test fun consumesLegacyNormalizedContractsAndDoesNotCacheUrls() = runBlocking {
         MockWebServer().use { server ->
-            val repo = MusicRepository(ApiClient({ server.url("/cm/").toString() }, { null }, {}))
+            val repo = MusicRepository(ApiClient({ server.url("/cm/").toString() }, { "project-user" }, {}))
             server.enqueue(MockResponse().setBody("""{"songs":[{"ncm_id":7,"name":"song","artists":"artist","pic":"http://example.com/cover","duration":1200}],"totals":{"song":44},"hasMore":{"song":true}}"""))
             val page = (repo.search("曲") as AppResult.Success).value
             assertEquals(44, page.total); assertTrue(page.hasMore)
