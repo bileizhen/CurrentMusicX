@@ -289,6 +289,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
         var roomDialogOpen by remember { mutableStateOf(false) }
         var playerDialogOpen by remember { mutableStateOf(false) }
+        var playerEffectsOpen by rememberSaveable { mutableStateOf(false) }
+        var playerEffectsPresented by remember { mutableStateOf(false) }
         var castDialogOpen by remember { mutableStateOf(false) }
         val pageNavigation=remember {PageContainerNavigation()}
         val pageSceneStrategy=remember(pageNavigation) {PageContainerSceneStrategy(pageNavigation,
@@ -814,25 +816,39 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 miniOverlay()
             }
         }
+        Box(Modifier.fillMaxSize().then(if (playerEffectsPresented) Modifier.clearAndSetSemantics {} else Modifier)) {
         PlayerSheetHost(open = playerOpen, motion = playerSheetMotion, expansion = playerExpansion,
             origin = playerOrigin, viewport = navigationBounds, artwork = artworkTransition,
             artworkUrl = currentSong?.cover.orEmpty(), predictiveBack = predictiveBack,
-            backEnabled = !showLogs && pendingPlay == null && !updateDialogVisible && !announcementVisible &&
+            backEnabled = !playerEffectsPresented && !showLogs && pendingPlay == null && !updateDialogVisible && !announcementVisible &&
                 !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null &&
                 !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
             miniOpenBounds = miniOpenBounds.takeIf { miniAvailable },
             onReopen = { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
             onBack = ::navigateBack, onSettled = { playerSheetMotion = PlayerSheetMotion.NONE }) {
+            CompositionLocalProvider(LocalMusicPageActive provides !playerEffectsPresented) {
             playerSavedState.SaveableStateProvider(PLAYER) {
                 PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
                     actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
                     onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") },
                     onDialogActive = { playerDialogOpen = it }, onNetwork = { navigateTo(NETWORK) },
-                    onLike = { currentSong?.let(libraryVm::choosePlaylist) }, onEqualizer = { navigateTo(EQUALIZER) },
+                    onLike = { currentSong?.let(libraryVm::choosePlaylist) }, onEqualizer = { playerEffectsOpen = true },
                     onAiNavigate = ::navigateLibrary, roamingRequest = roamingRequest,
                     onRoamingRequestConsumed = { roamingRequest = 0 })
             }
         }
+        }
+        }
+        PlayerEffectsOverlay(playerEffectsOpen, onDismiss = { playerEffectsOpen = false },
+            onPresentedChanged = { playerEffectsPresented = it }, effects = { back, equalizer ->
+                val vm: io.github.currencortex.music.feature.settings.SoundEffectsViewModel = viewModel(key = "player-effects",
+                    factory = viewModelFactory { io.github.currencortex.music.feature.settings.SoundEffectsViewModel(container) })
+                io.github.currencortex.music.feature.settings.SoundEffectsScreen(vm, back, equalizer)
+            }, equalizer = { back ->
+                val vm: io.github.currencortex.music.feature.settings.EqualizerViewModel = viewModel(key = "player-equalizer",
+                    factory = viewModelFactory { io.github.currencortex.music.feature.settings.EqualizerViewModel(container) })
+                io.github.currencortex.music.feature.settings.EqualizerScreen(vm, onBack = back)
+            })
         if (miniQueueOpen) io.github.currencortex.music.feature.player.PlaybackQueueSheet(playerVm,
             onDismiss = { miniQueueOpen = false }, actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) })
         }
