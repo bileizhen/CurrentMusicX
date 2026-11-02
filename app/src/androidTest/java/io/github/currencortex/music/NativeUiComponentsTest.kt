@@ -41,7 +41,7 @@ class NativeUiComponentsTest {
     private val check=UpdateSourceCheck {_,_->UpdateSourceHealth(UpdateSourceStatus.AVAILABLE,125)}
     private fun showUpdate(onRelease:()->Unit={},onChannel:(UpdateChannel)->Unit={},onCancel:()->Unit={}) {
         compose.mainClock.autoAdvance=false
-        compose.setContent {LeiTheme(AppearanceSettings()) {Scaffold {
+        compose.setContentWithPressDiagnostics {LeiTheme(AppearanceSettings()) {Scaffold {
             UpdatePageContent(UpdateState.Available(release),onOpenRelease={onRelease()},onChannel=onChannel,
                 onCancel=onCancel,sourceCheck=check)
         }}}
@@ -62,7 +62,7 @@ class NativeUiComponentsTest {
     @Test fun elasticButtonStretchesInTheDraggedAxisKeepsItsHitBoxAndCancelsOutside() {
         var clicks=0
         compose.mainClock.autoAdvance=false
-        compose.setContent {LeiTheme(AppearanceSettings()) {Scaffold {Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {
+        compose.setContentWithPressDiagnostics {LeiTheme(AppearanceSettings()) {Scaffold {Box(Modifier.fillMaxSize(),contentAlignment=Alignment.Center) {
             GlassActionButton("可复用按钮",{clicks++},Modifier.width(200.dp).testTag("reused_button"))
         }}}}
         advance()
@@ -84,6 +84,20 @@ class NativeUiComponentsTest {
         button.performTouchInput{down(center);advanceEventTime(8);up()};advance(100)
         assertTrue("A quick tap still completes its lift",button.fetchSemanticsNode().config[ElasticPressGeometry].lift>.5f)
         advance(1200);assertEquals(1,clicks)
+    }
+    @Test fun normalElasticButtonKeepsItsClickWithoutPublishingPressFrames() {
+        var clicks = 0
+        compose.setContent {
+            LeiTheme(AppearanceSettings()) {
+                GlassActionButton("按钮", { clicks++ }, Modifier.testTag("normal_button"))
+            }
+        }
+        val button = compose.onNodeWithTag("normal_button")
+        val semantics = button.fetchSemanticsNode().config
+        assertFalse(semantics.contains(ElasticPressGeometry))
+        assertFalse(semantics.contains(GlassPressLight))
+        button.performClick()
+        assertEquals(1, clicks)
     }
     @Test fun popupOpensOnDownAndCarriesTheSamePointerIntoItsReleasedAction() {
         var releases=0
