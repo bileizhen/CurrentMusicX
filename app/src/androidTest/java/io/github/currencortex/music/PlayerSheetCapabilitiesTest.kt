@@ -80,11 +80,12 @@ class PlayerSheetCapabilitiesTest {
 
     @After fun cleanup() { lyricResponseGate?.countDown(); compose.mainClock.autoAdvance = true; container.close(); server.shutdown(); coverFixture?.delete() }
 
-    private fun start() {
+    private fun start(motionDiagnostics: Boolean = true) {
         compose.setContent {
             activity = androidx.activity.compose.LocalActivity.current as androidx.activity.ComponentActivity
             dispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current!!.onBackPressedDispatcher
-            CurrentMusicApp(container)
+            androidx.compose.runtime.CompositionLocalProvider(
+                io.github.currencortex.music.feature.player.LocalPlayerMotionDiagnostics provides motionDiagnostics) { CurrentMusicApp(container) }
         }
         compose.waitUntil(10000) { compose.onAllNodesWithTag("mini_cover").fetchSemanticsNodes().isNotEmpty() }
         compose.waitForIdle()
@@ -391,6 +392,56 @@ class PlayerSheetCapabilitiesTest {
         assertEquals(original, viewport())
     }
 
+    @Test fun miniQueueCoverTitleAndArtistFollowOneArcAndReturnToTheSameDock() {
+        useSharedArtistFixture()
+        start()
+        val before = container.playbackQueue.state.value
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("mini_queue").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        val cover = compose.onNodeWithTag("mini_queue_artwork_flight")
+        val title = compose.onNodeWithTag("mini_queue_title_flight")
+        val artist = compose.onNodeWithTag("mini_queue_subtitle_flight")
+        val first = title.fetchSemanticsNode().config[PlayerSheetTextGeometry]
+        val glyphs = title.fetchSemanticsNode().config[PlayerSharedTextLayouts]
+        val artwork = cover.fetchSemanticsNode().config[io.github.currencortex.music.feature.player.MiniQueueArtworkGeometry]
+        assertTrue(first.progress > 0f && first.progress < 1f)
+        assertEquals(first.progress, artwork.progress, .001f)
+        assertEquals(first.progress, artist.fetchSemanticsNode().config[PlayerSheetTextGeometry].progress, .001f)
+        val linear = first.start.center * (1 - first.progress) + first.end.center * first.progress
+        assertTrue("Queue title travels on the existing parabolic curve", kotlin.math.abs(first.bounds.center.y - linear.y) > 1f)
+        compose.mainClock.advanceTimeBy(48)
+        assertEquals(glyphs, title.fetchSemanticsNode().config[PlayerSharedTextLayouts])
+        save("mini-queue-open-arc.png")
+        compose.mainClock.advanceTimeBy(700)
+        title.assertDoesNotExist(); cover.assertDoesNotExist()
+        save("mini-queue-rest.png")
+        compose.onNodeWithTag("queue_current_title", true).assertIsDisplayed()
+        val handle = compose.onNodeWithTag("queue_drag_handle")
+        handle.performTouchInput { down(center); moveBy(androidx.compose.ui.geometry.Offset(0f, 180f)) }
+        compose.mainClock.advanceTimeByFrame()
+        val held = title.fetchSemanticsNode().config[PlayerSheetTextGeometry]
+        assertTrue(held.progress < 1f && held.progress > .8f)
+        handle.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(0f, -70f)) }
+        compose.mainClock.advanceTimeByFrame()
+        assertTrue(title.fetchSemanticsNode().config[PlayerSheetTextGeometry].progress > held.progress)
+        handle.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(700)
+        title.assertDoesNotExist()
+        compose.runOnIdle { dispatcher.onBackPressed() }
+        compose.mainClock.advanceTimeBy(64)
+        val returning = title.fetchSemanticsNode().config[PlayerSheetTextGeometry]
+        assertTrue(returning.progress > 0f && returning.progress < 1f)
+        assertEquals(first.start, returning.start)
+        assertEquals(first.end, returning.end)
+        save("mini-queue-close-arc.png")
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithTag("mini_queue_sheet").assertDoesNotExist()
+        compose.onNodeWithTag("mini_title", true).assert(SemanticsMatcher.expectValue(PlayerMiniTextVisible, true))
+        assertEquals(before, container.playbackQueue.state.value)
+        assertFalse(container.playerController.state.value.playing)
+    }
+
     @Test fun miniTitleAndArtistShareAReversibleSheetArcWithoutRelayingOutTheGlyphs() {
         useSharedArtistFixture()
         start()
@@ -633,6 +684,112 @@ class PlayerSheetCapabilitiesTest {
             emptyArtwork.bounds.translate(sourcePane).bottom <= compose.onNodeWithTag("player_screen").fetchSemanticsNode().boundsInRoot.top)
     }
 
+    @Test fun immersiveCoverFillsViewportMorphsToLyricsAndQueueAndReturnsToMini() = verifyImmersiveCover(false)
+
+    @Test fun immersiveCoverKeepsControlsReachableWithDarkLargeText() = verifyImmersiveCover(true)
+
+    private fun verifyImmersiveCover(largeText: Boolean): Unit = runBlocking {
+        container.settings.edit { it.copy(playerCoverStyle = io.github.currencortex.music.data.settings.PlayerCoverStyle.IMMERSIVE,
+            themeMode = if (largeText) ThemeMode.DARK else ThemeMode.LIGHT, customTextScale = largeText,
+            textScale = if (largeText) 1.3f else 1f) }
+        val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        val file = java.io.File(context.cacheDir, "immersive-artwork-${UUID.randomUUID()}.png")
+        coverFixture = file
+        android.graphics.Bitmap.createBitmap(600, 600, android.graphics.Bitmap.Config.ARGB_8888).apply {
+            val canvas = android.graphics.Canvas(this)
+            val paint = android.graphics.Paint().apply { shader = android.graphics.LinearGradient(0f, 0f, 600f, 600f,
+                intArrayOf(0xFFFF9B52.toInt(), 0xFF943F5C.toInt(), 0xFF35668B.toInt()), null, android.graphics.Shader.TileMode.CLAMP) }
+            canvas.drawRect(0f, 0f, 600f, 600f, paint)
+            paint.shader = null; paint.color = android.graphics.Color.WHITE
+            canvas.drawCircle(400f, 170f, 65f, paint)
+            file.outputStream().use { compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }; recycle()
+        }
+        val song = container.playerController.queue.state.value.current!!.copy(cover = file.toURI().toString())
+        container.playerController.queue.replace(listOf(song), 0)
+        container.playerController.state.value = container.playerController.state.value.copy(song = song)
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.waitForIdle()
+        fun artwork() = compose.onNodeWithTag("player_pager_artwork").fetchSemanticsNode().config[PlayerPagerArtworkGeometry]
+        val root = compose.onNodeWithTag("player_screen").fetchSemanticsNode().boundsInRoot
+        assertEquals(root.width, artwork().bounds.width, 1f)
+        assertEquals(root.height, artwork().bounds.height, 1f)
+        assertEquals(0f, compose.onNodeWithTag("player_pager_artwork").fetchSemanticsNode().config[io.github.currencortex.music.feature.player.CoverRotation], .001f)
+        compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        save("player-immersive-cover.png")
+        val pager = compose.onNodeWithTag("player_content_pager")
+        compose.mainClock.autoAdvance = false
+        pager.performTouchInput { down(androidx.compose.ui.geometry.Offset(width * .85f, height * .3f)); moveBy(androidx.compose.ui.geometry.Offset(-width * .4f, 0f)) }
+        compose.mainClock.advanceTimeBy(64)
+        assertTrue(artwork().bounds.width < root.width && artwork().bounds.width > root.width * .4f)
+        save("player-immersive-pager-held.png")
+        pager.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(width * .4f, 0f)); advanceEventTime(400); up() }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals(root.width, artwork().bounds.width, 1f)
+        pager.performTouchInput { swipeLeft(durationMillis = 200) }
+        compose.mainClock.advanceTimeBy(1000)
+        val lyricCover = compose.onNodeWithTag("player_lyrics_cover").fetchSemanticsNode().boundsInRoot
+        assertEquals(lyricCover.width, artwork().bounds.width, 1f)
+        assertEquals(lyricCover.height, artwork().bounds.height, 1f)
+        save("player-immersive-lyrics.png")
+        compose.onAllNodesWithTag("open_player_queue").onFirst().performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        val queueCover = compose.onNodeWithTag("queue_current_cover", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals(queueCover.width, artwork().bounds.width, 1f)
+        save("player-immersive-queue.png")
+        compose.runOnIdle { dispatcher.onBackPressed() }
+        compose.mainClock.advanceTimeBy(1000)
+        pager.performTouchInput { swipeRight(durationMillis = 200) }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals(root.width, artwork().bounds.width, 1f)
+        compose.onNodeWithContentDescription("收起播放器").performClick()
+        compose.mainClock.advanceTimeBy(160)
+        compose.onNodeWithTag("player_artwork_flight").assertExists()
+        save("player-immersive-closing.png")
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+        assertEquals(song.id, container.playerController.queue.state.value.current?.id)
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun normalPlayerOmitsPerFrameGeometryButKeepsAccessibleControls() {
+        start(motionDiagnostics = false)
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.waitForIdle()
+        assertFalse(compose.onNodeWithTag("player_sheet").fetchSemanticsNode().config.contains(PlayerSheetGeometry))
+        assertFalse(compose.onNodeWithTag("player_pager_artwork").fetchSemanticsNode().config.contains(PlayerPagerArtworkGeometry))
+        compose.onNodeWithContentDescription("收起播放器").performClick()
+        compose.waitForIdle()
+        compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+    }
+
+    @Test fun openingCoverDefersLyricRailButKeepsSharedEndpointsAndRestoresVisitedLyrics() {
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.waitUntil(12000) { container.playbackLyrics.state.value.document.lines.isNotEmpty() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("player_lyrics_deferred", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("lyrics_list", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("player_pager_artwork").assertExists()
+        val pager = compose.onNodeWithTag("player_content_pager")
+        pager.performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(width * .85f, height * .4f),
+                androidx.compose.ui.geometry.Offset(width * .15f, height * .4f), 180)
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("lyrics_list", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("player_lyrics_deferred", useUnmergedTree = true).assertDoesNotExist()
+        pager.performTouchInput {
+            swipe(androidx.compose.ui.geometry.Offset(width * .15f, height * .4f),
+                androidx.compose.ui.geometry.Offset(width * .85f, height * .4f), 180)
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("lyrics_list", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("player_lyrics_deferred", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("player_pager_artwork").assertExists()
+        assertEquals(55L, container.playerController.queue.state.value.current?.id)
+    }
+
     @Test fun pagerSharesOneCircularArtworkAlongReversibleArc() {
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         val file = java.io.File(context.cacheDir, "pager-artwork-${UUID.randomUUID()}.png")
@@ -776,7 +933,10 @@ class PlayerSheetCapabilitiesTest {
             val vm: io.github.currencortex.music.feature.player.PlayerViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
                 factory = io.github.currencortex.music.ui.util.viewModelFactory { io.github.currencortex.music.feature.player.PlayerViewModel(container) })
             top.yukonga.miuix.kmp.basic.Scaffold {
-                io.github.currencortex.music.feature.player.PlayerScreen(vm, {}, {})
+                androidx.compose.runtime.CompositionLocalProvider(
+                    io.github.currencortex.music.feature.player.LocalPlayerMotionDiagnostics provides true) {
+                    io.github.currencortex.music.feature.player.PlayerScreen(vm, {}, {})
+                }
             }
         } }
         compose.waitUntil(5000) { compose.onAllNodesWithTag("player_pager_artwork").fetchSemanticsNodes().isNotEmpty() }
@@ -1352,10 +1512,24 @@ class PlayerSheetCapabilitiesTest {
                 source.width * (1 - vertical) + destination.width * vertical, f.bounds.width, .5f)
         }
         assertPath(first); assertPath(middle)
-        val pixels = compose.onNodeWithTag("player_pager_artwork").captureToImage().toPixelMap()
-        assertTrue("The cover image has loaded", pixels[pixels.width / 2, pixels.height / 2].red > .9f)
-        for ((x, y) in listOf(4 to 4, pixels.width - 5 to 4, 4 to pixels.height - 5, pixels.width - 5 to pixels.height - 5)) {
-            assertTrue("Square corners show the player backdrop outside the circular cover", pixels[x, y].red < .8f)
+        save("player-circular-rest.png")
+        // Capture the composed window: capturing the child alone omits its ancestor's GPU clip.
+        val windowNode = compose.onNodeWithTag("music_window")
+        val windowBounds = windowNode.fetchSemanticsNode().boundsInRoot
+        val coverBounds = destination.translate(-windowBounds.topLeft)
+        val pixels = windowNode.captureToImage().toPixelMap()
+        val center = pixels[coverBounds.center.x.toInt(), coverBounds.center.y.toInt()]
+        assertTrue("The magenta fixture has loaded", center.red > .9f && center.blue > .9f && center.green < .1f)
+        for ((x, y) in listOf(coverBounds.left.toInt() + 4 to coverBounds.top.toInt() + 4,
+            coverBounds.right.toInt() - 5 to coverBounds.top.toInt() + 4,
+            coverBounds.left.toInt() + 4 to coverBounds.bottom.toInt() - 5,
+            coverBounds.right.toInt() - 5 to coverBounds.bottom.toInt() - 5)) {
+            val corner = pixels[x, y]
+            // The dynamic background also takes on the magenta cover's red channel.
+            // Compare against the fixture itself instead of assuming the background is dark red.
+            val distance = kotlin.math.abs(corner.red - center.red) + kotlin.math.abs(corner.green - center.green) +
+                kotlin.math.abs(corner.blue - center.blue)
+            assertTrue("Square corners exclude the circular fixture: center=$center corner=$corner", distance > .15f)
         }
         compose.onNodeWithContentDescription("收起播放器").performClick()
         compose.mainClock.advanceTimeBy(96)
@@ -1525,124 +1699,4 @@ class PlayerSheetCapabilitiesTest {
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
         assertFalse(container.playerController.state.value.playing)
     }
-    @Test fun immersiveCoverFillsViewportMorphsToLyricsAndQueueAndReturnsToMini() = verifyImmersiveCover(false)
-
-    @Test fun immersiveCoverKeepsControlsReachableWithDarkLargeText() = verifyImmersiveCover(true)
-
-    private fun verifyImmersiveCover(largeText: Boolean): Unit = runBlocking {
-        container.settings.edit { it.copy(playerCoverStyle = io.github.currencortex.music.data.settings.PlayerCoverStyle.IMMERSIVE,
-            themeMode = if (largeText) ThemeMode.DARK else ThemeMode.LIGHT, customTextScale = largeText,
-            textScale = if (largeText) 1.3f else 1f) }
-        val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
-        val file = java.io.File(context.cacheDir, "immersive-artwork-${UUID.randomUUID()}.png")
-        coverFixture = file
-        android.graphics.Bitmap.createBitmap(600, 600, android.graphics.Bitmap.Config.ARGB_8888).apply {
-            val canvas = android.graphics.Canvas(this)
-            val paint = android.graphics.Paint().apply { shader = android.graphics.LinearGradient(0f, 0f, 600f, 600f,
-                intArrayOf(0xFFFF9B52.toInt(), 0xFF943F5C.toInt(), 0xFF35668B.toInt()), null, android.graphics.Shader.TileMode.CLAMP) }
-            canvas.drawRect(0f, 0f, 600f, 600f, paint)
-            paint.shader = null; paint.color = android.graphics.Color.WHITE
-            canvas.drawCircle(400f, 170f, 65f, paint)
-            file.outputStream().use { compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }; recycle()
-        }
-        val song = container.playerController.queue.state.value.current!!.copy(cover = file.toURI().toString())
-        container.playerController.queue.replace(listOf(song), 0)
-        container.playerController.state.value = container.playerController.state.value.copy(song = song)
-        start()
-        compose.onNodeWithTag("mini_cover").performClick()
-        compose.waitForIdle()
-        fun artwork() = compose.onNodeWithTag("player_pager_artwork").fetchSemanticsNode().config[PlayerPagerArtworkGeometry]
-        val root = compose.onNodeWithTag("player_screen").fetchSemanticsNode().boundsInRoot
-        assertEquals(root.width, artwork().bounds.width, 1f)
-        assertEquals(root.height, artwork().bounds.height, 1f)
-        assertEquals(0f, compose.onNodeWithTag("player_pager_artwork").fetchSemanticsNode().config[io.github.currencortex.music.feature.player.CoverRotation], .001f)
-        compose.onNodeWithTag("player_transport").assertIsDisplayed()
-        save("player-immersive-cover.png")
-        val pager = compose.onNodeWithTag("player_content_pager")
-        compose.mainClock.autoAdvance = false
-        pager.performTouchInput { down(androidx.compose.ui.geometry.Offset(width * .85f, height * .3f)); moveBy(androidx.compose.ui.geometry.Offset(-width * .4f, 0f)) }
-        compose.mainClock.advanceTimeBy(64)
-        assertTrue(artwork().bounds.width < root.width && artwork().bounds.width > root.width * .4f)
-        save("player-immersive-pager-held.png")
-        pager.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(width * .4f, 0f)); advanceEventTime(400); up() }
-        compose.mainClock.advanceTimeBy(1000)
-        assertEquals(root.width, artwork().bounds.width, 1f)
-        pager.performTouchInput { swipeLeft(durationMillis = 200) }
-        compose.mainClock.advanceTimeBy(1000)
-        val lyricCover = compose.onNodeWithTag("player_lyrics_cover").fetchSemanticsNode().boundsInRoot
-        assertEquals(lyricCover.width, artwork().bounds.width, 1f)
-        assertEquals(lyricCover.height, artwork().bounds.height, 1f)
-        save("player-immersive-lyrics.png")
-        compose.onAllNodesWithTag("open_player_queue").onFirst().performClick()
-        compose.mainClock.advanceTimeBy(1000)
-        val queueCover = compose.onNodeWithTag("queue_current_cover", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
-        assertEquals(queueCover.width, artwork().bounds.width, 1f)
-        save("player-immersive-queue.png")
-        compose.runOnIdle { dispatcher.onBackPressed() }
-        compose.mainClock.advanceTimeBy(1000)
-        pager.performTouchInput { swipeRight(durationMillis = 200) }
-        compose.mainClock.advanceTimeBy(1000)
-        assertEquals(root.width, artwork().bounds.width, 1f)
-        compose.onNodeWithContentDescription("收起播放器").performClick()
-        compose.mainClock.advanceTimeBy(160)
-        compose.onNodeWithTag("player_artwork_flight").assertExists()
-        save("player-immersive-closing.png")
-        compose.mainClock.advanceTimeBy(1000)
-        compose.onNodeWithTag("mini_cover").assertIsDisplayed()
-        assertEquals(song.id, container.playerController.queue.state.value.current?.id)
-        assertFalse(container.playerController.state.value.playing)
-    }
-
-
-    @Test fun miniQueueCoverTitleAndArtistFollowOneArcAndReturnToTheSameDock() {
-        useSharedArtistFixture()
-        start()
-        val before = container.playbackQueue.state.value
-        compose.mainClock.autoAdvance = false
-        compose.onNodeWithTag("mini_queue").performClick()
-        compose.mainClock.advanceTimeBy(64)
-        val cover = compose.onNodeWithTag("mini_queue_artwork_flight")
-        val title = compose.onNodeWithTag("mini_queue_title_flight")
-        val artist = compose.onNodeWithTag("mini_queue_subtitle_flight")
-        val first = title.fetchSemanticsNode().config[PlayerSheetTextGeometry]
-        val glyphs = title.fetchSemanticsNode().config[PlayerSharedTextLayouts]
-        val artwork = cover.fetchSemanticsNode().config[io.github.currencortex.music.feature.player.MiniQueueArtworkGeometry]
-        assertTrue(first.progress > 0f && first.progress < 1f)
-        assertEquals(first.progress, artwork.progress, .001f)
-        assertEquals(first.progress, artist.fetchSemanticsNode().config[PlayerSheetTextGeometry].progress, .001f)
-        val linear = first.start.center * (1 - first.progress) + first.end.center * first.progress
-        assertTrue("Queue title travels on the existing parabolic curve", kotlin.math.abs(first.bounds.center.y - linear.y) > 1f)
-        compose.mainClock.advanceTimeBy(48)
-        assertEquals(glyphs, title.fetchSemanticsNode().config[PlayerSharedTextLayouts])
-        save("mini-queue-open-arc.png")
-        compose.mainClock.advanceTimeBy(700)
-        title.assertDoesNotExist(); cover.assertDoesNotExist()
-        save("mini-queue-rest.png")
-        compose.onNodeWithTag("queue_current_title", true).assertIsDisplayed()
-        val handle = compose.onNodeWithTag("queue_drag_handle")
-        handle.performTouchInput { down(center); moveBy(androidx.compose.ui.geometry.Offset(0f, 180f)) }
-        compose.mainClock.advanceTimeByFrame()
-        val held = title.fetchSemanticsNode().config[PlayerSheetTextGeometry]
-        assertTrue(held.progress < 1f && held.progress > .8f)
-        handle.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(0f, -70f)) }
-        compose.mainClock.advanceTimeByFrame()
-        assertTrue(title.fetchSemanticsNode().config[PlayerSheetTextGeometry].progress > held.progress)
-        handle.performTouchInput { up() }
-        compose.mainClock.advanceTimeBy(700)
-        title.assertDoesNotExist()
-        compose.runOnIdle { dispatcher.onBackPressed() }
-        compose.mainClock.advanceTimeBy(64)
-        val returning = title.fetchSemanticsNode().config[PlayerSheetTextGeometry]
-        assertTrue(returning.progress > 0f && returning.progress < 1f)
-        assertEquals(first.start, returning.start)
-        assertEquals(first.end, returning.end)
-        save("mini-queue-close-arc.png")
-        compose.mainClock.advanceTimeBy(700)
-        compose.onNodeWithTag("mini_queue_sheet").assertDoesNotExist()
-        compose.onNodeWithTag("mini_title", true).assert(SemanticsMatcher.expectValue(PlayerMiniTextVisible, true))
-        assertEquals(before, container.playbackQueue.state.value)
-        assertFalse(container.playerController.state.value.playing)
-    }
-
-
 }

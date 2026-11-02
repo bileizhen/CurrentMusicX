@@ -204,7 +204,7 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
     if (transfer.immersive) {
         val queueRadius = with(density) { 8.dp.toPx() }
         val sheetOffset = LocalPlayerSheetOffset.current
-        val moving = sheet?.moving == true
+        val moving by remember(sheet) { derivedStateOf { sheet?.moving == true } }
         val visual = remember(transfer, sheet, sheetOffset, geometry) { derivedStateOf {
             val destinationBounds = geometry.value?.bounds?.translate(transfer.paneOffset) ?: return@derivedStateOf null
             val p = sheetProgress().coerceIn(0f, 1f)
@@ -216,7 +216,7 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
             } else PlayerArtworkFrame(1f, destinationBounds, 0f)
         } }
         PlayerImmersiveCover(song?.cover.orEmpty(), Modifier.fillMaxSize().testTag(if (moving) "player_artwork_flight" else "player_pager_artwork")
-            .semantics { contentDescription = "歌曲封面" }.semantics {
+            .semantics { contentDescription = "歌曲封面" }.playerMotionDiagnostics {
                 geometry.value?.let { this[PlayerPagerArtworkGeometry] = it }
                 visual.value?.let { this[PlayerArtworkGeometry] = it }
                 this[CoverRotation] = 0f
@@ -230,7 +230,7 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
     val width = transfer.cover!!.size.width
     if (width <= 0) return
     MusicCover(song?.cover.orEmpty(), Modifier.requiredSize(with(density) { width.toDp() }).testTag("player_pager_artwork")
-        .semantics {
+        .playerMotionDiagnostics {
             geometry.value?.let { this[PlayerPagerArtworkGeometry] = it.copy(rotation = rotation?.value ?: 0f) }
             this[CoverRotation] = rotation?.value ?: 0f
         }
@@ -241,6 +241,8 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
             translationX = (frame?.bounds?.left ?: 0f) + transfer.paneOffset.x
             translationY = (frame?.bounds?.top ?: 0f) + transfer.paneOffset.y
             scaleX = (frame?.bounds?.width ?: 0f) / width; scaleY = scaleX
+        }.playerCoverShadow() {
+            1f - if (transfer.queueReady) transfer.queueProgress().coerceIn(0f, 1f) else 0f
         }.graphicsLayer {
             val frame = geometry.value
             val scale = (frame?.bounds?.width ?: 0f) / width
@@ -293,7 +295,7 @@ internal fun playerTextDrawMetrics(layouts: List<TextLayoutResult?>): PlayerText
         return listOf((1 - p) * (1 - q), p * (1 - q), q)
     }
     Canvas(Modifier.fillMaxSize().testTag(if (subtitle) "player_shared_subtitle" else "player_shared_title")
-        .semantics { hideFromAccessibility() }.semantics {
+        .semantics { hideFromAccessibility() }.playerMotionDiagnostics {
             transfer.textFrame(subtitle, bend)?.let {
                 if (subtitle) this[PlayerSharedSubtitleGeometry] = it else this[PlayerSharedTitleGeometry] = it
             }

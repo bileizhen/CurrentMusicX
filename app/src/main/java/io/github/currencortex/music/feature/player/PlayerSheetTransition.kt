@@ -118,7 +118,7 @@ internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtwo
         }
         if (pagerRole != null) pager?.updateBounds()
     }
-        .semantics {
+        .playerMotionDiagnostics {
             this[CoverRotation] = rotation?.value ?: 0f
             this[PlayerArtworkVisible] = transfer?.moving != true && !(pagerRole != null && pager?.ready == true)
         }.semantics {
@@ -127,7 +127,7 @@ internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtwo
         MusicCover(url, Modifier.matchParentSize().graphicsLayer {
             alpha = if (transfer?.moving == true || (pagerRole != null && pager?.ready == true)) 0f else 1f
             rotationZ = if (pagerRole == PlayerPagerArtworkRole.QUEUE) 0f else rotation?.value ?: 0f
-        }.clip(if (pagerRole == PlayerPagerArtworkRole.QUEUE) RoundedCornerShape(8.dp) else CircleShape), pixels,
+        }.then(if (pagerRole == PlayerPagerArtworkRole.QUEUE) Modifier else Modifier.playerCoverShadow()).clip(if (pagerRole == PlayerPagerArtworkRole.QUEUE) RoundedCornerShape(8.dp) else CircleShape), pixels,
             cornerRadius = if (pagerRole == PlayerPagerArtworkRole.QUEUE) 8.dp else 0.dp)
     }
 }
@@ -241,7 +241,7 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
     } }
     Box(Modifier.fillMaxSize().testTag("player_sheet")
         .onSizeChanged { layerSize = Size(it.width.toFloat(), it.height.toFloat()) }
-        .semantics { this[PlayerSheetGeometry] = frame }
+        .playerMotionDiagnostics { this[PlayerSheetGeometry] = frame }
         .pointerInput(progress) {
             awaitPointerEventScope {
                 while (true) {
@@ -293,13 +293,13 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
     } }
     val moving by remember(transfer) { derivedStateOf { transfer.moving } }
     if (moving) MusicCover(url, Modifier.requiredSize(with(density) { targetSize.width.toDp() })
-        .testTag("player_artwork_flight").semantics { this[PlayerArtworkGeometry] = frame }
+        .testTag("player_artwork_flight").playerMotionDiagnostics { this[PlayerArtworkGeometry] = frame }
         .graphicsLayer {
             val f = frame
             transformOrigin = TransformOrigin(0f, 0f)
             translationX = f.bounds.left; translationY = f.bounds.top
             scaleX = f.bounds.width / targetSize.width; scaleY = scaleX
-        }.graphicsLayer { rotationZ = frame.rotation }.clip(CircleShape)
+        }.graphicsLayer { rotationZ = frame.rotation }.playerCoverShadow() { frame.progress }.clip(CircleShape)
         .drawWithContent {
             drawContent()
             val stroke = 2.dp.toPx() * (1 - frame.progress) / (frame.bounds.width / targetSize.width)
