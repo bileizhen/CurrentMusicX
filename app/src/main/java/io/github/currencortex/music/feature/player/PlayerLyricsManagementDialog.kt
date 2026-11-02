@@ -16,6 +16,8 @@ import io.github.currencortex.music.data.settings.LyricsSource
 import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.lyrics.data.*
+import io.github.currencortex.music.feature.lyrics.model.LyricsException
+import io.github.currencortex.music.feature.lyrics.model.LyricsErrorCode
 import kotlinx.coroutines.*
 import java.io.ByteArrayOutputStream
 
@@ -316,7 +318,14 @@ private fun lyricExportName(song: Song, extension: String): String = listOf(song
     .filter(String::isNotBlank).joinToString(" - ").replace(Regex("""[<>:"/\\|?*\p{Cntrl}]"""), "_")
     .take(80).trim(' ', '.').ifEmpty { "lyrics" } + ".$extension"
 
-private fun lyricManagementError(failure: Exception): String = when (failure) {
+internal fun lyricManagementError(failure: Exception): String = when (failure) {
+    is LyricsException -> when (failure.code) {
+        LyricsErrorCode.NO_LYRICS -> "此来源没有提供可识别的歌词"
+        LyricsErrorCode.NETWORK_ERROR -> "歌词网络请求失败，请稍后重试"
+        LyricsErrorCode.PARSE_ERROR -> "歌词文件格式有误，无法解析"
+        LyricsErrorCode.UNSUPPORTED_FORMAT -> "暂不支持此歌词文件格式"
+        LyricsErrorCode.INVALID_TIMELINE -> "歌词时间轴有误，请选择其他候选"
+    }
     is LyricsMatchException, is IllegalArgumentException, is IllegalStateException -> failure.message?.take(180) ?: "歌词处理失败，请重试"
     is SecurityException -> "没有文件访问权限，请重新选择文件或保存位置"
     else -> "无法读取或保存歌词，请重试"
