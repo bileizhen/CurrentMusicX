@@ -22,13 +22,30 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 
 /** One process owner, private disk storage, and no account headers on CDN requests. */
 @androidx.annotation.OptIn(UnstableApi::class)
 class AudioCache(context: Context, directory: File,
-    client: OkHttpClient = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS).build()) : java.io.Closeable {
-    // No size cap: cached audio is kept until the user clears it or the system reclaims cacheDir.
-    private val cacheDelegate = lazy { SimpleCache(directory, NoOpCacheEvictor(), StandaloneDatabaseProvider(context.applicationContext)) }
+    client: OkHttpClient = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS).build(),
+    val maxBytes: Long = DEFAULT_MAX_BYTES) : java.io.Closeable {
+    init { require(maxBytes > 0) { "Audio cache capacity must be positive" } }
+    // This is reclaimable playback cache, never the user's explicit downloads directory.
+    // Defer accounting until outside SimpleCache's lock to avoid lock inversion on eviction.
+    private val evicted = AtomicBoolean(false)
+    private val evictor = object : CacheEvictor {
+        private val lru = LeastRecentlyUsedCacheEvictor(maxBytes)
+        override fun requiresCacheSpanTouches() = lru.requiresCacheSpanTouches()
+        override fun onCacheInitialized() = lru.onCacheInitialized()
+        override fun onStartFile(cache: Cache, key: String, position: Long, length: Long) = lru.onStartFile(cache, key, position, length)
+        override fun onSpanAdded(cache: Cache, span: CacheSpan) = lru.onSpanAdded(cache, span)
+        override fun onSpanRemoved(cache: Cache, span: CacheSpan) {
+            lru.onSpanRemoved(cache, span)
+            evicted.set(true)
+        }
+        override fun onSpanTouched(cache: Cache, oldSpan: CacheSpan, newSpan: CacheSpan) = lru.onSpanTouched(cache, oldSpan, newSpan)
+    }
+    private val cacheDelegate = lazy { SimpleCache(directory, evictor, StandaloneDatabaseProvider(context.applicationContext)) }
     private val cache get() = cacheDelegate.value
     private val upstream = OkHttpDataSource.Factory(client)
     private val localAware = DefaultDataSource.Factory(context.applicationContext, upstream)
@@ -80,7 +97,8 @@ class AudioCache(context: Context, directory: File,
         entries.value = cachedKeys.size
     }
     private fun updateUsage(key: String) = synchronized(usageLock) {
-        if (!usageInitialized) refreshUsage()
+        // An LRU write can remove another track, not only the key being written.
+        if (!usageInitialized || evicted.getAndSet(false)) refreshUsage()
         if (cache.getCachedSpans(key).any { it.length > 0 }) cachedKeys.add(key) else cachedKeys.remove(key)
         bytes.value = cache.cacheSpace
         entries.value = cachedKeys.size
@@ -147,6 +165,7 @@ class AudioCache(context: Context, directory: File,
         if (cacheDelegate.isInitialized()) cache.release()
     }
     companion object {
+        const val DEFAULT_MAX_BYTES = 1024L * 1024 * 1024
         const val PRELOAD_BYTES = 2L * 1024 * 1024
         private const val PREFIX = "cm-audio-v1:"
         private const val SOURCE = "cm.audio.source"

@@ -11,7 +11,9 @@ internal class NextAudioPreloader(
     private val preload: suspend (ResolvedAudio) -> Boolean,
     private val onFailure: (Exception) -> Unit = {},
     private val nowMs: () -> Long = { System.nanoTime() / 1_000_000 },
+    private val maxTransientRetries: Int = 3,
 ) {
+    init { require(maxTransientRetries >= 0) }
     suspend fun run() {
         var refresh = false
         var failures = 0
@@ -27,7 +29,9 @@ internal class NextAudioPreloader(
             catch (e: Exception) {
                 onFailure(e)
                 val retryable = if (e is ApiException) e.kind == ErrorKind.Server || e.kind == ErrorKind.RateLimited else e is IOException
-                if (!retryable) return
+                // A next-track optimization must not poll a broken endpoint for the rest of a
+                // long playing track. A new playback/settings/network plan can start a new run.
+                if (!retryable || failures >= maxTransientRetries) return
                 delay(longArrayOf(2_000, 5_000, 15_000, 30_000)[failures.coerceAtMost(3)])
                 failures++
                 // A failed CDN URL needs renewal too; existing bytes remain reusable.

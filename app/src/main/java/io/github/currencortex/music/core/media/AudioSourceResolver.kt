@@ -34,6 +34,12 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
     private fun saved(request: AudioRequest): ResolvedAudio? {
         checkRequest(request)
         val entry = memo[request.key]?.takeIf { it.request == request && it.until > now() } ?: return null
+        // A network failure can memoize a fully cached source. LRU may reclaim its spans
+        // before the memo expires; metadata and a cache:// URI alone are not playable audio.
+        if (entry.source.url.startsWith("cache://audio/") && cache.completeSource(request.key) == null) {
+            memo.remove(request.key, entry)
+            return null
+        }
         return result(entry)
     }
     private fun result(entry: Entry): ResolvedAudio {

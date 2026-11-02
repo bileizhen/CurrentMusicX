@@ -178,15 +178,60 @@ class AudioCacheTest {
         assertEquals(0L, cache.cachedBytes(key, payload.size.toLong()))
         read(null, source()); assertEquals(0L, cache.cachedBytes(key, payload.size.toLong()))
     }
-    @Test fun everyCachedTrackIsKeptAndClearRemovesMetadata() = runBlocking(Dispatchers.IO) {
+    @Test fun tracksWithinCapacityAreKeptAndClearRemovesMetadata() = runBlocking(Dispatchers.IO) {
         cache.rememberSource(key, source()); cache.preload(key, source(), 64 * 1024L)
         val newer = AudioCache.key("https://fixture/cm", 7, 2, AudioQuality.STANDARD)
         cache.rememberSource(newer, source("/two")); cache.preload(newer, source("/two"), 64 * 1024L)
-        // The cache has no size cap, so an older rendition is not evicted by a newer one.
+        // Both opening fragments fit within the default reclaimable cache capacity.
         assertEquals(64 * 1024L, cache.cachedBytes(key, payload.size.toLong()))
         assertEquals(64 * 1024L, cache.cachedBytes(newer, payload.size.toLong()))
         cache.clear()
         assertEquals(0L, cache.bytes.value); assertNull(cache.cachedSource(newer))
+    }
+    @Test fun boundedLruEvictsUntouchedTrackAndCannotReportItAsCompleteOfflineAudio() = runBlocking(Dispatchers.IO) {
+        cache.close()
+        cache = AudioCache(context, directory, maxBytes = payload.size * 2L)
+        assertEquals(payload.size * 2L, cache.maxBytes)
+        val second = AudioCache.key("https://fixture/cm", 7, 2, AudioQuality.STANDARD)
+        val third = AudioCache.key("https://fixture/cm", 7, 3, AudioQuality.STANDARD)
+        cache.rememberSource(key, source()); assertArrayEquals(payload, read(key, source()))
+        Thread.sleep(5)
+        cache.rememberSource(second, source("/two")); read(second, source("/two"))
+        val session = RequestSession("https://fixture/cm", "fixture-token")
+        var sourceRequests = 0
+        val resolver = AudioSourceResolver(cache, { session }) { _, _, _ -> sourceRequests++; throw IOException("offline") }
+        assertTrue(resolver.resolve(AudioRequest(2, AudioQuality.STANDARD, 7, session), refresh = true)
+            .source.url.startsWith("cache://audio/"))
+        assertEquals(1, sourceRequests)
+        Thread.sleep(5)
+        // Reading an old entry must update its recency, without another CDN request.
+        read(key, source()); assertEquals(2, requests)
+        Thread.sleep(5)
+        cache.rememberSource(third, source("/three")); read(third, source("/three"))
+        assertTrue(cache.bytes.value <= cache.maxBytes)
+        assertEquals("Usage must remove keys evicted by another track's write", 2, cache.entries.value)
+        assertNotNull(cache.completeSource(key)); assertNotNull(cache.completeSource(third))
+        assertEquals(0L, cache.cachedBytes(second, payload.size.toLong()))
+        assertNull("Metadata alone cannot imply complete offline playback", cache.completeSource(second))
+        try { resolver.resolve(AudioRequest(2, AudioQuality.STANDARD, 7, session)); fail("Evicted audio is not offline playback") }
+        catch (_: IOException) { }
+        assertEquals("A cache-only memo must be revalidated after eviction", 2, sourceRequests)
+        cache.close(); cache = AudioCache(context, directory, maxBytes = payload.size * 2L)
+        cache.refreshUsage()
+        assertNull(cache.completeSource(second)); assertEquals(2, cache.entries.value)
+        assertTrue(cache.bytes.value <= cache.maxBytes)
+    }
+    @Test fun smallerCapacityReclaimsExistingSpansWithoutClearingAllTracks() = runBlocking(Dispatchers.IO) {
+        cache.rememberSource(key, source()); read(key, source())
+        Thread.sleep(5)
+        val newer = AudioCache.key("https://fixture/cm", 7, 2, AudioQuality.STANDARD)
+        cache.rememberSource(newer, source("/two")); read(newer, source("/two"))
+        cache.close(); cache = AudioCache(context, directory, maxBytes = payload.size.toLong())
+        cache.refreshUsage()
+        assertTrue(cache.bytes.value <= payload.size)
+        assertEquals(1, cache.entries.value)
+        assertNull(cache.completeSource(key)); assertNotNull(cache.completeSource(newer))
+        assertEquals("Reopening and LRU reclamation must not contact a server", 2, requests)
     }
     @Test fun switchAfterSeveralMinutesReusesPrefetchedUrlAndBytesWithoutAnotherRequest() = runBlocking(Dispatchers.IO) {
         val session = RequestSession("https://fixture/cm", "fixture-token")

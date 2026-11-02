@@ -12,6 +12,24 @@ import java.io.IOException
 class NextAudioPreloaderTest {
     private val audio = ResolvedAudio(AudioSource("fixture", "standard", 44100, 2), "key", 20_000)
 
+    @Test fun persistentTransportFailureStopsAfterThreeBackedOffRetries() = runTest {
+        var attempts = 0
+        NextAudioPreloader({ attempts++; throw IOException("offline") }, {
+            fail("An unresolved next track must not download"); true
+        }, nowMs = { testScheduler.currentTime }).run()
+        assertEquals(4, attempts)
+        assertEquals(22_000L, testScheduler.currentTime)
+        advanceTimeBy(300_000); runCurrent()
+        assertEquals(4, attempts)
+    }
+
+    @Test fun unauthorizedSourceIsNeverRetried() = runTest {
+        var attempts = 0
+        NextAudioPreloader({ attempts++; throw ApiException(ErrorKind.Unauthorized) }, { true }).run()
+        assertEquals(1, attempts)
+        assertEquals(0L, testScheduler.currentTime)
+    }
+
     @Test fun renewsBeforeExpiryAndCancellationStopsAllFutureWork() = runTest {
         val refreshes = mutableListOf<Boolean>()
         var downloads = 0

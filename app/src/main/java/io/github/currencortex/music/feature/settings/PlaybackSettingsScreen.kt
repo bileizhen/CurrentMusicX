@@ -56,7 +56,7 @@ import kotlin.math.roundToInt
                 summary = "重新打开应用时回到上次的播放位置", modifier = Modifier.testTag("restore_queue"))
         } }
         item("preload") { SettingsSection("预加载", MusicIcons.Download,
-            footer = "正常播放后提前加载下一首。播放缓存不设上限，完整缓存的歌曲可离线重播。") {
+            footer = "正常播放后提前加载下一首。播放缓存默认最多 1 GiB，按最近使用情况自动回收；完整缓存可离线重播，下载文件不受影响。") {
             SettingsSwitch("预加载下一首", settings.preloadAudio, vm::preload, modifier = Modifier.testTag("preload_audio"))
             SettingsDivider()
             SettingsSwitch("允许计费网络预加载", settings.preloadMetered, vm::preloadMetered,
