@@ -86,6 +86,7 @@ internal val LocalPlayerSheetText = staticCompositionLocalOf<PlayerSheetTextTran
 @Composable internal fun MiniPlayerSongText(text: String, modifier: Modifier, subtitle: Boolean = false,
     color: Color, fontSize: TextUnit, fontWeight: FontWeight = FontWeight.Normal) {
     val transfer = LocalPlayerSheetText.current
+    val queue = LocalMiniQueueTransition.current
     val snapshot = remember(transfer, subtitle) { PlayerSharedTextSnapshot(text) }
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     SideEffect { snapshot.text = text; transfer?.snapshots?.set(subtitle, snapshot) }
@@ -96,8 +97,8 @@ internal val LocalPlayerSheetText = staticCompositionLocalOf<PlayerSheetTextTran
         }
     } }
     Text(text, modifier.onGloballyPositioned { coordinates = it; transfer?.mini?.set(subtitle, it) }
-        .semantics { this[PlayerMiniTextVisible] = transfer?.moving(subtitle) != true }
-        .graphicsLayer { alpha = if (transfer?.moving(subtitle) == true) 0f else 1f },
+        .semantics { this[PlayerMiniTextVisible] = transfer?.moving(subtitle) != true && queue?.textMoving(subtitle) != true }
+        .graphicsLayer { alpha = if (transfer?.moving(subtitle) == true || queue?.textMoving(subtitle) == true) 0f else 1f },
         color = color, fontSize = fontSize, fontWeight = fontWeight, maxLines = 1, overflow = TextOverflow.Ellipsis,
         onTextLayout = {
             snapshot.layout = it
@@ -118,8 +119,7 @@ internal val LocalPlayerSheetText = staticCompositionLocalOf<PlayerSheetTextTran
         } }
         if (!transfer.moving(subtitle)) continue
         Canvas(Modifier.fillMaxSize().testTag(if (subtitle) "player_sheet_subtitle_flight" else "player_sheet_title_flight")
-            .semantics {
-                hideFromAccessibility()
+            .semantics { hideFromAccessibility() }.semantics {
                 transfer.frame(subtitle, window, bend)?.let { this[PlayerSheetTextGeometry] = it }
                 this[PlayerSharedTextLayouts] = metrics.value.layouts.filterNotNull()
                 this[PlayerSharedTextWeights] = transfer.weights()

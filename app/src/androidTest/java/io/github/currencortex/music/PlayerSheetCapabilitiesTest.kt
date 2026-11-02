@@ -1594,4 +1594,55 @@ class PlayerSheetCapabilitiesTest {
     }
 
 
+    @Test fun miniQueueCoverTitleAndArtistFollowOneArcAndReturnToTheSameDock() {
+        useSharedArtistFixture()
+        start()
+        val before = container.playbackQueue.state.value
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("mini_queue").performClick()
+        compose.mainClock.advanceTimeBy(64)
+        val cover = compose.onNodeWithTag("mini_queue_artwork_flight")
+        val title = compose.onNodeWithTag("mini_queue_title_flight")
+        val artist = compose.onNodeWithTag("mini_queue_subtitle_flight")
+        val first = title.fetchSemanticsNode().config[PlayerSheetTextGeometry]
+        val glyphs = title.fetchSemanticsNode().config[PlayerSharedTextLayouts]
+        val artwork = cover.fetchSemanticsNode().config[io.github.currencortex.music.feature.player.MiniQueueArtworkGeometry]
+        assertTrue(first.progress > 0f && first.progress < 1f)
+        assertEquals(first.progress, artwork.progress, .001f)
+        assertEquals(first.progress, artist.fetchSemanticsNode().config[PlayerSheetTextGeometry].progress, .001f)
+        val linear = first.start.center * (1 - first.progress) + first.end.center * first.progress
+        assertTrue("Queue title travels on the existing parabolic curve", kotlin.math.abs(first.bounds.center.y - linear.y) > 1f)
+        compose.mainClock.advanceTimeBy(48)
+        assertEquals(glyphs, title.fetchSemanticsNode().config[PlayerSharedTextLayouts])
+        save("mini-queue-open-arc.png")
+        compose.mainClock.advanceTimeBy(700)
+        title.assertDoesNotExist(); cover.assertDoesNotExist()
+        save("mini-queue-rest.png")
+        compose.onNodeWithTag("queue_current_title", true).assertIsDisplayed()
+        val handle = compose.onNodeWithTag("queue_drag_handle")
+        handle.performTouchInput { down(center); moveBy(androidx.compose.ui.geometry.Offset(0f, 180f)) }
+        compose.mainClock.advanceTimeByFrame()
+        val held = title.fetchSemanticsNode().config[PlayerSheetTextGeometry]
+        assertTrue(held.progress < 1f && held.progress > .8f)
+        handle.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(0f, -70f)) }
+        compose.mainClock.advanceTimeByFrame()
+        assertTrue(title.fetchSemanticsNode().config[PlayerSheetTextGeometry].progress > held.progress)
+        handle.performTouchInput { up() }
+        compose.mainClock.advanceTimeBy(700)
+        title.assertDoesNotExist()
+        compose.runOnIdle { dispatcher.onBackPressed() }
+        compose.mainClock.advanceTimeBy(64)
+        val returning = title.fetchSemanticsNode().config[PlayerSheetTextGeometry]
+        assertTrue(returning.progress > 0f && returning.progress < 1f)
+        assertEquals(first.start, returning.start)
+        assertEquals(first.end, returning.end)
+        save("mini-queue-close-arc.png")
+        compose.mainClock.advanceTimeBy(700)
+        compose.onNodeWithTag("mini_queue_sheet").assertDoesNotExist()
+        compose.onNodeWithTag("mini_title", true).assert(SemanticsMatcher.expectValue(PlayerMiniTextVisible, true))
+        assertEquals(before, container.playbackQueue.state.value)
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+
 }
