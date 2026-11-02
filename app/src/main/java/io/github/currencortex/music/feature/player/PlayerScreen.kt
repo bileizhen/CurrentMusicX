@@ -160,6 +160,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 listOfNotNull(lyricsCoordinates, previewCoordinates)
             } else Modifier)) {
         val widePlayer = maxWidth > maxHeight
+        val immersiveCover = !widePlayer && appearance.playerCoverStyle == io.github.currencortex.music.data.settings.PlayerCoverStyle.IMMERSIVE &&
+            !(roaming.active && roaming.choice.code == "PUZZLE_MODE_RCMD")
+        SideEffect { pagerArtwork.immersive = immersiveCover; pagerArtwork.updateBounds() }
         PlayerSystemBars(immersive = widePlayer)
         val density = LocalDensity.current
         val layoutDirection = LocalLayoutDirection.current
@@ -231,6 +234,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         CompositionLocalProvider(LocalIndication provides indication) {
         CompositionLocalProvider(LocalPlayerPagerArtwork provides pagerArtwork) {
         Box(Modifier.fillMaxSize().onGloballyPositioned { pagerArtwork.root = it; pagerArtwork.updateBounds() }) {
+        if (immersiveCover) PlayerPagerArtwork(pagerArtwork, queue.current, drawText = false)
         Box(Modifier.fillMaxSize().graphicsLayer { translationY = -size.height * queueMotion.progress }
             .onGloballyPositioned { pagerArtwork.mainPage = it; pagerArtwork.updateBounds() }) {
         Column(Modifier.fillMaxSize()
@@ -297,6 +301,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         } else CoverContent(vm, Modifier.fillMaxSize(), transitionTarget = pager.currentPage == 0,
                             active = pager.currentPage == 0 || pager.isScrollInProgress,
                             pagerRole = PlayerPagerArtworkRole.COVER,
+                            immersive = immersiveCover,
                             onPreviewCoordinates = { previewCoordinates = it })
                         }
                     }
@@ -333,7 +338,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         if (queueGesture || overlay == PlayerOverlay.QUEUE)
             PlaybackQueuePage(vm, queueMotion, false, "player_queue_sheet", dismiss, actions)
         if (!widePlayer && (!roaming.active || roaming.choice.code != "PUZZLE_MODE_RCMD"))
-            PlayerPagerArtwork(pagerArtwork, queue.current)
+            if (immersiveCover) PlayerPagerSongText(pagerArtwork) else PlayerPagerArtwork(pagerArtwork, queue.current)
         }
         }
         }
@@ -442,16 +447,22 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 
 @Composable private fun CoverContent(vm: PlayerViewModel, modifier: Modifier, transitionTarget: Boolean = true,
     active: Boolean = true, pagerRole: PlayerPagerArtworkRole? = null, showPreview: Boolean = true,
+    immersive: Boolean = false,
     onPreviewCoordinates: (LayoutCoordinates) -> Unit = {}) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     val song = queue.current
     val roaming by vm.container.personalRoaming.state.collectAsStateWithLifecycle()
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val coverSize = minOf(maxWidth * .92f, (maxHeight - if (showPreview) 200.dp else 128.dp).coerceAtLeast(72.dp), 360.dp)
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 16.dp),
+        Column(Modifier.fillMaxSize().then(if (immersive) Modifier else Modifier.verticalScroll(rememberScrollState())).padding(vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
             val puzzle = roaming.active && roaming.choice.code == "PUZZLE_MODE_RCMD"
-            if (puzzle) Box(Modifier.size(coverSize)) {
+            if (immersive) {
+                Spacer(Modifier.weight(1f))
+                // Retain an endpoint owner; the drawing bounds use the entire player viewport.
+                PlayerArtwork(song?.cover.orEmpty(), Modifier.size(1.dp).testTag("player_cover").graphicsLayer { alpha = 0f },
+                    transitionTarget = transitionTarget, pagerRole = pagerRole)
+            } else if (puzzle) Box(Modifier.size(coverSize)) {
                 PlayerArtwork(song?.cover.orEmpty(), Modifier.fillMaxSize().testTag("player_cover")
                     .graphicsLayer { alpha = 0f }, transitionTarget = transitionTarget)
                 io.github.currencortex.music.feature.roaming.RoamingCoverPuzzle(song?.cover.orEmpty(), song?.id, showCaption = false)

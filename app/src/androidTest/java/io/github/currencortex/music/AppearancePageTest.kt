@@ -46,6 +46,20 @@ class AppearancePageTest {
         }
         bitmap.recycle()
     }
+    @Test fun playerCoverListSwitchesAndPersistsWithoutChangingBackground(): Unit = runBlocking {
+        container.settings.edit { it.copy(playerBackground = "existing.jpg", playerDynamicBackground = false) }
+        click("appearance_player_cover_1")
+        compose.waitUntil(5000) { container.settings.state.value.playerCoverStyle == PlayerCoverStyle.IMMERSIVE }
+        compose.onNodeWithTag("appearance_player_cover_1").assertIsSelected()
+        assertEquals(PlayerCoverStyle.IMMERSIVE, container.settings.snapshot().playerCoverStyle)
+        assertEquals("existing.jpg", container.settings.snapshot().playerBackground)
+        assertFalse(container.settings.snapshot().playerDynamicBackground)
+        capture("appearance-player-cover-list.png")
+        click("appearance_player_cover_0")
+        compose.waitUntil(5000) { container.settings.state.value.playerCoverStyle == PlayerCoverStyle.CIRCLE }
+        compose.onNodeWithTag("appearance_player_cover_0").assertIsSelected()
+        assertEquals(PlayerCoverStyle.CIRCLE, container.settings.snapshot().playerCoverStyle)
+    }
     @Test fun resetActionAppearingAndDisappearingKeepsPaletteBoundsFixed(): Unit = runBlocking {
         reach("appearance_palette")
         val chip = compose.onNodeWithTag("appearance_color_ffcb30e0")

@@ -33,6 +33,7 @@ internal object SettingsPreferences {
     private val PLAYER_BACKGROUND = stringPreferencesKey("player_background")
     private val PLAYER_BACKGROUND_BLUR = floatPreferencesKey("player_background_blur")
     private val PLAYER_DYNAMIC_BACKGROUND = booleanPreferencesKey("player_dynamic_background")
+    private val PLAYER_COVER_STYLE = stringPreferencesKey("player_cover_style")
 
     fun read(p: Preferences) = AppearanceSettings(
         customFont = p[CUSTOM_FONT].orEmpty(),
@@ -60,6 +61,7 @@ internal object SettingsPreferences {
         playerBackground = p[PLAYER_BACKGROUND].orEmpty(),
         playerBackgroundBlur = p[PLAYER_BACKGROUND_BLUR] ?: 35f,
         playerDynamicBackground = p[PLAYER_DYNAMIC_BACKGROUND] ?: true,
+        playerCoverStyle = runCatching { PlayerCoverStyle.valueOf(p[PLAYER_COVER_STYLE].orEmpty()) }.getOrDefault(PlayerCoverStyle.CIRCLE),
     ).normalized()
 
     fun write(p: MutablePreferences, s: AppearanceSettings) {
@@ -89,5 +91,6 @@ internal object SettingsPreferences {
         p[PLAYER_BACKGROUND] = v.playerBackground
         p[PLAYER_BACKGROUND_BLUR] = v.playerBackgroundBlur
         p[PLAYER_DYNAMIC_BACKGROUND] = v.playerDynamicBackground
+        p[PLAYER_COVER_STYLE] = v.playerCoverStyle.name
     }
 }

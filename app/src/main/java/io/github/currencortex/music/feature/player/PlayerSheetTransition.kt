@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.findRootCoordinates
 import io.github.currencortex.music.ui.component.MusicCover
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -60,6 +61,7 @@ internal fun playerSheetSurfaceAlpha(progress: Float) = (progress / .14f).coerce
 internal fun playerSheetCornerScale(progress: Float) = 1 - ((progress - .94f) / .06f).coerceIn(0f, 1f)
 internal fun playerSheetContentAlpha(progress: Float) = ((progress - .16f) / .6f).coerceIn(0f, 1f)
 internal val LocalPlayerSheetProgress = staticCompositionLocalOf<() -> Float> { { 1f } }
+internal val LocalPlayerSheetOffset = staticCompositionLocalOf<() -> Offset> { { Offset.Zero } }
 
 internal data class PlayerArtworkOrigin(val bounds: Rect, val rotation: Float, val borderColor: Color)
 internal data class PlayerArtworkFrame(val progress: Float, val bounds: Rect, val rotation: Float)
@@ -87,6 +89,8 @@ internal class PlayerArtworkTransition(val progress: () -> Float) {
     var target by mutableStateOf<LayoutCoordinates?>(null)
     var destination by mutableStateOf<(() -> Rect?)?>(null)
     var sheet by mutableStateOf<LayoutCoordinates?>(null)
+    var immersiveArtwork by mutableStateOf<PlayerPagerArtworkTransition?>(null)
+    var viewport by mutableStateOf<Rect?>(null)
     val moving: Boolean get() = origin != null && target?.isAttached == true && sheet?.isAttached == true && progress() > 0f && progress() < 1f
 }
 internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtworkTransition?> { null }
@@ -117,6 +121,7 @@ internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtwo
         .semantics {
             this[CoverRotation] = rotation?.value ?: 0f
             this[PlayerArtworkVisible] = transfer?.moving != true && !(pagerRole != null && pager?.ready == true)
+        }.semantics {
             if (pagerRole != null && pager?.ready == true) hideFromAccessibility()
         }) {
         MusicCover(url, Modifier.matchParentSize().graphicsLayer {
@@ -144,6 +149,7 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
     miniOpenBounds: Rect? = null, onReopen: () -> Unit = {},
     onBack: () -> Unit, onSettled: () -> Unit, content: @Composable () -> Unit) {
     val settled by rememberUpdatedState(onSettled)
+    SideEffect { artwork.viewport = viewport }
     val scope = rememberCoroutineScope()
     val isOpen by rememberUpdatedState(open)
     LaunchedEffect(open, motion) {
@@ -250,13 +256,17 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
             shape = SheetClip(frame.bounds.width, frame.bounds.height, frame.radius); clip = true
         }) {
         // Measure in the content coordinate space, inside the moving graphics layer.
-        Box(Modifier.fillMaxSize().onGloballyPositioned { artwork?.sheet = it; artwork?.text?.sheet = it }) { content() }
+        Box(Modifier.fillMaxSize().onGloballyPositioned { artwork?.sheet = it; artwork?.text?.sheet = it }) {
+            CompositionLocalProvider(LocalPlayerSheetOffset provides { frame.bounds.topLeft }) { content() }
+        }
     }
 }
 
 /** Shared circular artwork follows the same progress as the sheet, including direct dragging. */
 @Composable private fun PlayerArtworkFlight(transfer: PlayerArtworkTransition, url: String,
     viewport: Rect?) {
+    // The immersive cover flies below its controls, inside the sheet, using the same arc.
+    if (transfer.immersiveArtwork != null) return
     val sheet = transfer.sheet?.takeIf { it.isAttached } ?: return
     val target = transfer.target?.takeIf { it.isAttached } ?: return
     val source = transfer.origin ?: return
@@ -265,14 +275,18 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
     if (targetSize.width <= 0 || targetSize.height <= 0) return
     val density = LocalDensity.current
     val rotation = LocalPlayerArtworkRotation.current
+    val lastDestination = remember(transfer, target, sheet) { arrayOfNulls<Rect>(1) }
     val frame by remember(transfer, target, source, sheet, window, rotation) { derivedStateOf {
         val p = transfer.progress().coerceIn(0f, 1f)
         // Relative coordinates cancel the sheet's moving layer transform without relying
         // on which graphics layer happened to update first in this frame.
-        val destinationTop = sheet.localPositionOf(target, Offset.Zero)
-        val destination = transfer.destination?.invoke()
-            ?: Rect(destinationTop, Size(targetSize.width.toFloat(), targetSize.height.toFloat()))
         val start = source.bounds.translate(-window.topLeft)
+        // A draw observer may run once more while the sheet's subtree is being removed.
+        // Keep the last measured endpoint rather than querying detached/different roots.
+        val destination = if (sheet.isAttached && target.isAttached && sheet.findRootCoordinates() === target.findRootCoordinates()) {
+            (transfer.destination?.invoke() ?: Rect(sheet.localPositionOf(target, Offset.Zero),
+                Size(targetSize.width.toFloat(), targetSize.height.toFloat()))).also { lastDestination[0] = it }
+        } else lastDestination[0] ?: start
         // Measured from the supplied recording: horizontal travel eases out, while the
         // vertical travel and diameter ease in. This rolls inward before lifting up.
         PlayerArtworkFrame(p, playerSheetElementArc(start, destination, p), rotation?.value ?: source.rotation)

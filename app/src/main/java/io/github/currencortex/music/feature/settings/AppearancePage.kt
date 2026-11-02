@@ -92,6 +92,12 @@ import kotlin.math.roundToInt
                     }
                 }
             }
+            item("player_cover") {
+                SettingsPreviewChoiceGroup("播放封面", MusicIcons.Image, PlayerCoverStyle.entries.map { it.label },
+                    config.playerCoverStyle.ordinal, { index -> viewModel.edit {
+                        it.copy(playerCoverStyle = PlayerCoverStyle.entries[index])
+                    } }, "appearance_player_cover") { index -> AppearancePlayerCoverThumb(PlayerCoverStyle.entries[index]) }
+            }
             item("font_family") {
                 AppearanceSection("字体", MusicIcons.Font) {
                     val source = rememberPageNavigationSource("字体", fontLabel, MusicIcons.Font)

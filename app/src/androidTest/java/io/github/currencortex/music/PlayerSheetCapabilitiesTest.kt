@@ -1525,4 +1525,73 @@ class PlayerSheetCapabilitiesTest {
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
         assertFalse(container.playerController.state.value.playing)
     }
+    @Test fun immersiveCoverFillsViewportMorphsToLyricsAndQueueAndReturnsToMini() = verifyImmersiveCover(false)
+
+    @Test fun immersiveCoverKeepsControlsReachableWithDarkLargeText() = verifyImmersiveCover(true)
+
+    private fun verifyImmersiveCover(largeText: Boolean): Unit = runBlocking {
+        container.settings.edit { it.copy(playerCoverStyle = io.github.currencortex.music.data.settings.PlayerCoverStyle.IMMERSIVE,
+            themeMode = if (largeText) ThemeMode.DARK else ThemeMode.LIGHT, customTextScale = largeText,
+            textScale = if (largeText) 1.3f else 1f) }
+        val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        val file = java.io.File(context.cacheDir, "immersive-artwork-${UUID.randomUUID()}.png")
+        coverFixture = file
+        android.graphics.Bitmap.createBitmap(600, 600, android.graphics.Bitmap.Config.ARGB_8888).apply {
+            val canvas = android.graphics.Canvas(this)
+            val paint = android.graphics.Paint().apply { shader = android.graphics.LinearGradient(0f, 0f, 600f, 600f,
+                intArrayOf(0xFFFF9B52.toInt(), 0xFF943F5C.toInt(), 0xFF35668B.toInt()), null, android.graphics.Shader.TileMode.CLAMP) }
+            canvas.drawRect(0f, 0f, 600f, 600f, paint)
+            paint.shader = null; paint.color = android.graphics.Color.WHITE
+            canvas.drawCircle(400f, 170f, 65f, paint)
+            file.outputStream().use { compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }; recycle()
+        }
+        val song = container.playerController.queue.state.value.current!!.copy(cover = file.toURI().toString())
+        container.playerController.queue.replace(listOf(song), 0)
+        container.playerController.state.value = container.playerController.state.value.copy(song = song)
+        start()
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.waitForIdle()
+        fun artwork() = compose.onNodeWithTag("player_pager_artwork").fetchSemanticsNode().config[PlayerPagerArtworkGeometry]
+        val root = compose.onNodeWithTag("player_screen").fetchSemanticsNode().boundsInRoot
+        assertEquals(root.width, artwork().bounds.width, 1f)
+        assertEquals(root.height, artwork().bounds.height, 1f)
+        assertEquals(0f, compose.onNodeWithTag("player_pager_artwork").fetchSemanticsNode().config[io.github.currencortex.music.feature.player.CoverRotation], .001f)
+        compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        save("player-immersive-cover.png")
+        val pager = compose.onNodeWithTag("player_content_pager")
+        compose.mainClock.autoAdvance = false
+        pager.performTouchInput { down(androidx.compose.ui.geometry.Offset(width * .85f, height * .3f)); moveBy(androidx.compose.ui.geometry.Offset(-width * .4f, 0f)) }
+        compose.mainClock.advanceTimeBy(64)
+        assertTrue(artwork().bounds.width < root.width && artwork().bounds.width > root.width * .4f)
+        save("player-immersive-pager-held.png")
+        pager.performTouchInput { moveBy(androidx.compose.ui.geometry.Offset(width * .4f, 0f)); advanceEventTime(400); up() }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals(root.width, artwork().bounds.width, 1f)
+        pager.performTouchInput { swipeLeft(durationMillis = 200) }
+        compose.mainClock.advanceTimeBy(1000)
+        val lyricCover = compose.onNodeWithTag("player_lyrics_cover").fetchSemanticsNode().boundsInRoot
+        assertEquals(lyricCover.width, artwork().bounds.width, 1f)
+        assertEquals(lyricCover.height, artwork().bounds.height, 1f)
+        save("player-immersive-lyrics.png")
+        compose.onAllNodesWithTag("open_player_queue").onFirst().performClick()
+        compose.mainClock.advanceTimeBy(1000)
+        val queueCover = compose.onNodeWithTag("queue_current_cover", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        assertEquals(queueCover.width, artwork().bounds.width, 1f)
+        save("player-immersive-queue.png")
+        compose.runOnIdle { dispatcher.onBackPressed() }
+        compose.mainClock.advanceTimeBy(1000)
+        pager.performTouchInput { swipeRight(durationMillis = 200) }
+        compose.mainClock.advanceTimeBy(1000)
+        assertEquals(root.width, artwork().bounds.width, 1f)
+        compose.onNodeWithContentDescription("收起播放器").performClick()
+        compose.mainClock.advanceTimeBy(160)
+        compose.onNodeWithTag("player_artwork_flight").assertExists()
+        save("player-immersive-closing.png")
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+        assertEquals(song.id, container.playerController.queue.state.value.current?.id)
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+
 }
