@@ -5,3 +5,4 @@ gradlew text eol=lf
 
 # Hash-pinned local recognition scripts must have identical bytes on every host.
 app/src/main/assets/recognition/*.js text eol=lf
+app/src/main/assets/lx/*.js text eol=lf
