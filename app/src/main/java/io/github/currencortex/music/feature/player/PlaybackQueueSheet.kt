@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
@@ -107,6 +108,12 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
     onMode: (PlaybackMode) -> Unit, onDismiss: () -> Unit, shared: Boolean = false,
     nativeActions: NativeQueueActions? = null, customBackground: java.io.File? = null, backgroundBlur: Float = 35f) {
     val transfer = LocalPlayerPagerArtwork.current.takeUnless { backdrop }
+    val miniTransfer = LocalMiniQueueTransition.current.takeIf { backdrop }
+    SideEffect {
+        miniTransfer?.motion = motion
+        miniTransfer?.headerKey = queue.current?.let(io.github.currencortex.music.feature.lyrics.data.SongLyricsStore::identity)
+    }
+    DisposableEffect(miniTransfer) { onDispose { miniTransfer?.clear() } }
     val scope = rememberCoroutineScope()
     val dismiss by rememberUpdatedState(onDismiss)
     val list = rememberLazyListState((queue.index - 2).coerceAtLeast(0))
@@ -182,14 +189,14 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
     val dragHeader = Modifier.draggable(rememberDraggableState { drag(it) }, Orientation.Vertical,
         onDragStopped = { release(it) })
     val interactions = remember { MutableInteractionSource() }
-    BoxWithConstraints(Modifier.fillMaxSize().testTag(tag)
+    BoxWithConstraints(Modifier.fillMaxSize().testTag(tag).onGloballyPositioned { miniTransfer?.viewport = it.boundsInRoot() }
         .semantics { this[QueuePageProgress] = motion.progress; isTraversalGroup = true }
         .pointerInput(Unit) { detectTapGestures {} }) {
         height = constraints.maxHeight.toFloat().coerceAtLeast(1f)
         if (backdrop) PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize().graphicsLayer { alpha = motion.progress },
             customBackground, backgroundBlur)
         Box(Modifier.fillMaxSize().graphicsLayer { translationY = size.height * (1 - motion.progress) }
-            .onGloballyPositioned { transfer?.queuePage = it; transfer?.updateBounds() }) {
+            .onGloballyPositioned { transfer?.queuePage = it; transfer?.updateBounds(); miniTransfer?.page = it }) {
         Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)
             .align(Alignment.TopCenter)) {
             Column(Modifier.fillMaxWidth().then(dragHeader).testTag("queue_drag_handle")) {
@@ -199,11 +206,18 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                         .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         if (transfer != null) PlayerArtwork(song.cover, Modifier.size(48.dp).testTag("queue_current_cover"),
                             transitionTarget = false, pagerRole = PlayerPagerArtworkRole.QUEUE)
-                        else MusicCover(song.cover, Modifier.size(48.dp), cornerRadius = 8.dp)
+                        else MusicCover(song.cover, Modifier.size(48.dp).testTag("queue_current_cover")
+                            .onGloballyPositioned { miniTransfer?.cover = it }
+                            .graphicsLayer { alpha = if (miniTransfer?.coverMoving == true) 0f else 1f }, cornerRadius = 8.dp)
                         Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                            if (miniTransfer != null) {
+                                MiniQueueHeaderText(miniTransfer, song.name, Modifier.testTag("queue_current_title"))
+                                MiniQueueHeaderText(miniTransfer, song.queueSummary(), Modifier.testTag("queue_current_subtitle"), subtitle = true)
+                            } else {
                             PlayerSongText(song.name, Modifier.testTag("queue_current_title"), role = if (transfer != null) PlayerPagerArtworkRole.QUEUE else null, color = Color.White, fontSize = 20.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             PlayerSongText(song.queueSummary(), Modifier.testTag("queue_current_subtitle"), role = if (transfer != null) PlayerPagerArtworkRole.QUEUE else null, subtitle = true, color = Color.White.copy(alpha = .5f), fontSize = 13.sp,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
                         }
                     }
                 }
@@ -274,6 +288,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
             }
         }
         }
+        miniTransfer?.let { MiniQueueSharedElements(it) }
         MusicOverlayDialog(show = modeOpen, title = "播放模式", edgeToEdgeContent = true, onDismissRequest = { modeOpen = false }) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             PlaybackMode.entries.filter { !shared || it != PlaybackMode.HEART }.forEach { mode ->

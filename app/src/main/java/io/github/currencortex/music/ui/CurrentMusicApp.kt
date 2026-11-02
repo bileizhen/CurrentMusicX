@@ -260,6 +260,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val playerExpansion = remember { PlayerSheetState() }
         val artworkRotation = rememberPlayerArtworkRotation(playerVm)
         val artworkTransition = remember { PlayerArtworkTransition(playerExpansion::value) }
+        val miniQueueTransition = remember { MiniQueueTransition() }
         var miniArtworkOrigin by remember { mutableStateOf<(() -> PlayerArtworkOrigin?)?>(null) }
         val playerOpen = backStack.last() == PLAYER.toString()
         val playerPresented by remember(playerOpen) { derivedStateOf { playerOpen || playerExpansion.value > .0001f } }
@@ -429,7 +430,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             containerColor = MiuixTheme.colorScheme.background) {
         CompositionLocalProvider(LocalSongMenu provides { songMenu = it }, LocalRoomSongRequest provides roomRequest,
             LocalPlayerSheetDrag provides playerDrag, LocalPlayerArtworkRotation provides artworkRotation,
-            LocalPlayerSheetText provides artworkTransition.text,
+            LocalPlayerSheetText provides artworkTransition.text, LocalMiniQueueTransition provides miniQueueTransition,
             LocalRecordFlightTarget provides { miniArtworkOrigin?.invoke()?.bounds }) {
         BoxWithConstraints(Modifier.fillMaxSize().musicDialogBackdropSource().testTag("music_window")
             .onGloballyPositioned { navigationBounds = it.boundsInRoot() }) {
@@ -764,9 +765,12 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 .onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp),
             onNext = { container.playerController.next(container.playerController.state.value.showPause) },
             onPrevious = { container.playerController.previous(container.playerController.state.value.showPause) },
-            onQueue = { if (playerState.mode == PlayerMode.ROOM && !container.listenTogether.state.value.active) navigateLibrary("room/list") else miniQueueOpen = true },
+            onQueue = { if (playerState.mode == PlayerMode.ROOM && !container.listenTogether.state.value.active) navigateLibrary("room/list") else {
+                miniQueueTransition.capture(currentSong, miniArtworkOrigin?.invoke(), artworkTransition.text)
+                miniQueueOpen = true
+            } },
             onSurfaceBounds = { miniBounds = it }, active = showMini, onSurfaceCoordinates = { miniCoordinates = it },
-            onArtworkOrigin = { miniArtworkOrigin = it }, artworkVisible = { !artworkTransition.moving },
+            onArtworkOrigin = { miniArtworkOrigin = it }, artworkVisible = { !artworkTransition.moving && !miniQueueTransition.coverMoving },
             onOpenBounds = { miniOpenBounds = it })
         }
         if (unifiedDock) {
