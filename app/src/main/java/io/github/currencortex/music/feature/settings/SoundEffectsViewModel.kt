@@ -40,7 +40,11 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
     val manual = container.equalizerSettings.state
     val runtime = container.equalizer.state
     val playback = container.playerController.state
+    internal val presentation = playback.map { it.effectsPresentation() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), playback.value.effectsPresentation())
     val queue = container.playbackQueue.state
+    internal val queueSong = queue.map { it.current }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), queue.value.current)
     private val auditionController = container.createEffectsAudition(viewModelScope)
     val audition = auditionController.state
     val masterDetail = MutableStateFlow<io.github.currencortex.music.data.effects.OriginalAiMasterMaterial?>(null)
@@ -456,3 +460,9 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
         container.smartTuning.clearManualPreview()
     }
 }
+
+/** The gallery does not display the playback clock or buffer; those ticks must not rebuild it. */
+internal data class EffectsPlaybackPresentation(val song: io.github.currencortex.music.data.song.Song?,
+    val playing: Boolean, val mode: io.github.currencortex.music.core.media.PlayerMode)
+internal fun io.github.currencortex.music.core.media.PlayerState.effectsPresentation() =
+    EffectsPlaybackPresentation(song, playing, mode)

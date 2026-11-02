@@ -26,6 +26,9 @@ import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.*
 
+/** Expensive decorative media can start once the enclosing container has settled. */
+internal val LocalPageContainerSettled = compositionLocalOf { true }
+
 /** A live source coordinate is converted into the destination's local space, including UI scaling. */
 data class PageContainerOrigin(val coordinates: LayoutCoordinates, val color: Color,
     val title: String, val summary: String, val icon: androidx.compose.ui.graphics.vector.ImageVector? = MusicIcons.Download,
@@ -47,6 +50,8 @@ private class ContainerClip(private val frame: PageContainerFrame) : Shape {
         expansion.animateTo(if (visible) 1f else 0f,
             tween(if (visible) 600 else 460, easing = FastOutSlowInEasing))
     }
+    val settled by remember(visible) { derivedStateOf { visible && !expansion.isRunning && expansion.value >= .9999f } }
+    val parentSettled = LocalPageContainerSettled.current
     val presented by remember(visible) { derivedStateOf { visible || expansion.value > .0001f || expansion.isRunning } }
     val report by rememberUpdatedState(onPresentedChanged)
     SideEffect { report(presented) }
@@ -100,7 +105,9 @@ private class ContainerClip(private val frame: PageContainerFrame) : Shape {
                 Box(Modifier.fillMaxSize().background(source?.color ?: Color(0xFF0A0A0A)))
                 Box(Modifier.fillMaxSize().graphicsLayer {
                     alpha = if (source == null) 1f else ((progress.value - .12f) / .5f).coerceIn(0f, 1f)
-                }) { content() }
+                }) {
+                    CompositionLocalProvider(LocalPageContainerSettled provides (parentSettled && settled)) { content() }
+                }
                 source?.let { entry -> entry.layer?.let { layer ->
                     // Reuse the real row's glyphs and layout. A reconstructed ArrowPreference
                     // used different metrics and was composed/disposed at the .25 boundary.

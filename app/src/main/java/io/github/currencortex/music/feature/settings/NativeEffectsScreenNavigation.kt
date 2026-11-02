@@ -32,8 +32,8 @@ import top.yukonga.miuix.kmp.basic.Text
     var route by rememberSaveable { mutableStateOf("") }
     val holder = rememberSaveableStateHolder()
     val active = LocalMusicPageActive.current
-    val playback by vm.playback.collectAsStateWithLifecycle()
-    val queue by vm.queue.collectAsStateWithLifecycle()
+    val playback by vm.presentation.collectAsStateWithLifecycle()
+    val queueSong by vm.queueSong.collectAsStateWithLifecycle()
     val account by vm.originalPageAccount.collectAsStateWithLifecycle()
     val mood by vm.originalMood.collectAsStateWithLifecycle()
     val master by vm.originalAiMaster.collectAsStateWithLifecycle()
@@ -43,7 +43,7 @@ import top.yukonga.miuix.kmp.basic.Text
     val metadataSongId by vm.masterDetailSongId.collectAsStateWithLifecycle()
     val metadataLoading by vm.masterDetailLoading.collectAsStateWithLifecycle()
     val metadataError by vm.masterDetailError.collectAsStateWithLifecycle()
-    val song = playback.song ?: queue.current
+    val song = playback.song ?: queueSong
     fun leaveDetail() { vm.stopPreview(); route = "" }
     BackHandler(enabled = active && route.isNotEmpty()) { leaveDetail() }
     LaunchedEffect(route, song?.id, account.revision) {
