@@ -99,7 +99,7 @@ class AuthRepositoryTest {
                 val base = server.url("/cm/").toString(); accounts.server = base
                 val repo = AuthRepository(ApiClient({ base }, { accounts.token }, accounts::expired), accounts, "device") { _, _ -> }
                 server.enqueue(MockResponse().setBody("""{"token":"new-session","user":{"id":5,"nickname":"name"}}"""))
-                assertEquals(5L, (repo.login("user", "password") as AppResult.Success).value.id)
+                assertEquals(5L, ((repo.login("user", "password") as AppResult.Success).value as LoginOutcome.SignedIn).account.id)
                 assertEquals("new-session", store.value)
                 val request = server.takeRequest()
                 assertNull(request.getHeader("Authorization")); assertTrue(request.body.readUtf8().contains("platform"))
