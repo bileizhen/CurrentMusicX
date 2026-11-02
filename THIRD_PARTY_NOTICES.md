@@ -1,5 +1,12 @@
 # Third-party notices
 
+## Signature launch handwriting
+
+The optional Signature launch style renders the current account name offline using the unmodified `fonts/parisienne/glyphData.json` and `fonts/lxgw-wenkai/glyphData.json` datasets from Tegaki 1.1.0 (https://github.com/gkurt/tegaki; package https://registry.npmjs.org/tegaki/-/tegaki-1.1.0.tgz). No remote script, WebView or username upload is used. The Android renderer interpolates the bundled centre lines and pressure values; it does not trace glyph outlines. The Parisienne data covers 90 characters; the WenKai data covers 1,110 characters. Unsupported grapheme clusters use the installed glyphs with a short dissolve, rather than invented handwriting strokes.
+
+Tegaki: Copyright (c) 2026 Gokhan Kurt, MIT; the upstream notice is bundled as `legal/TEGAKI-MIT.txt`. Parisienne: Copyright (c) 2012 by Brian J. Bonislawsky DBA Astigmatic (AOETI), reserved name Parisienne, SIL Open Font License 1.1 (`legal/Parisienne-OFL.txt`). LXGW WenKai: Copyright 2021-2026 LXGW and Copyright 2020 The Klee Project Authors, SIL Open Font License 1.1 (`legal/LXGW-WenKai-OFL.txt`). The font-derived stroke data remains under the corresponding font license.
+
+
 ## FlClash reusable glass controls
 
 The reusable Kotlin/Compose controls in `ui/component/nativeui/` adapt the button press/stretch, rubber-band tracking, popup morph/return, carried press, drag selection, submenu dwell/unfold and switch geometry from [chen08209/FlClash](https://github.com/chen08209/FlClash), GPL-3.0, commit `7fd417fb9a9a277c6a9339a8ac87f907df7c25f7`.

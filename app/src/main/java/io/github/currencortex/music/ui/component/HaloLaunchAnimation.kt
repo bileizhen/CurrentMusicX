@@ -30,8 +30,8 @@ internal fun launchUsername(account: Account?): String =
         ?: account?.nickname?.trim()?.takeIf(String::isNotEmpty) ?: "欢迎聆听"
 
 /** Consume input while disk settings select the actual animation, before either timeline mounts. */
-@Composable internal fun LaunchPreparationOverlay() {
-    val background = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.background
+@Composable internal fun LaunchPreparationOverlay(dark: Boolean = false) {
+    val background = if (dark) Color(0xFF05070C) else top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.background
     BackHandler { }
     Canvas(Modifier.fillMaxSize().testTag("launch_preparing").pointerInput(Unit) {
         awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }
