@@ -110,11 +110,11 @@ class AppearancePageTest {
         click("setting_launch_style_1")
         compose.waitUntil(5000) { container.settings.state.value.launchStyle == LaunchStyle.HALO }
         compose.onNodeWithTag("setting_launch_style_1").assertIsSelected()
-        click("setting_launch_style_3")
-        compose.waitUntil(5000) { container.settings.state.value.launchStyle == LaunchStyle.SIGNATURE }
-        compose.onNodeWithTag("setting_launch_style_3").assertIsSelected()
-        compose.onNodeWithTag("setting_launch_preview").assertIsEnabled()
         click("setting_launch_style_2")
+        compose.waitUntil(5000) { container.settings.state.value.launchStyle == LaunchStyle.SIGNATURE }
+        compose.onNodeWithTag("setting_launch_style_2").assertIsSelected()
+        compose.onNodeWithTag("setting_launch_preview").assertIsEnabled()
+        click("setting_launch_style_3")
         compose.waitUntil(5000) { container.settings.state.value.launchStyle == LaunchStyle.NONE }
         compose.onNodeWithTag("setting_launch_preview").assertIsNotEnabled()
         click("setting_launch_style_0")
