@@ -110,6 +110,7 @@ android {
 }
 
 dependencies {
+    implementation("androidx.javascriptengine:javascriptengine:1.1.1")
     implementation("org.mozilla:rhino:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")

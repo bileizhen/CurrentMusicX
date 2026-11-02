@@ -1,0 +1,83 @@
+package io.github.currencortex.music.data.lx
+
+import io.github.currencortex.music.core.media.AudioQuality
+import io.github.currencortex.music.data.song.*
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.*
+import java.security.MessageDigest
+
+internal const val LX_MAX_SCRIPT_BYTES = 1024 * 1024
+internal const val LX_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+internal val lxQualities = listOf("128k", "320k", "flac", "flac24bit")
+internal val lxPlatforms = linkedMapOf("wy" to "网易云")
+
+/** Also applied to saved declarations from versions which exposed other platforms. */
+internal fun lxNeteaseCapabilities(sources: List<LxCapability>): List<LxCapability> {
+    val qualities = lxQualities.filter { quality -> sources.any { it.platform == "wy" && quality in it.qualities } }
+    return if (qualities.isEmpty()) emptyList() else listOf(LxCapability("wy", qualities))
+}
+
+@Serializable data class LxCapability(val platform: String, val qualities: List<String>)
+@Serializable data class LxSourceInfo(val id: String, val name: String, val description: String = "",
+    val version: String = "", val author: String = "", val homepage: String = "",
+    val origin: String = "", val capabilities: List<LxCapability> = emptyList()) {
+    val summary get() = (if (lxNeteaseCapabilities(capabilities).isEmpty()) "未声明网易云接口" else "网易云") +
+        version.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()
+}
+@Serializable internal class LxStoredSource(val info: LxSourceInfo, val script: String) {
+    override fun toString() = "LxStoredSource(${info.id}, script=[private])"
+}
+class LxSourceException(message: String) : java.io.IOException(message)
+
+internal fun lxScriptInfo(script: String, origin: String = ""): LxSourceInfo {
+    require(script.toByteArray(Charsets.UTF_8).size in 1..LX_MAX_SCRIPT_BYTES) { "音源脚本为空或超过 1 MB" }
+    val header = Regex("^\\s*/\\*[\\s\\S]*?\\*/").find(script.removePrefix("\uFEFF"))?.value
+        ?: throw IllegalArgumentException("不是有效的落雪音源：缺少脚本信息注释")
+    val fields = Regex("(?m)^\\s*\\*?\\s*@(name|description|version|author|homepage)\\s+([^\\r\\n]+)")
+        .findAll(header).associate { it.groupValues[1] to it.groupValues[2].trim() }
+    val name = fields["name"].orEmpty()
+    require(name.isNotBlank() && name.length <= 256) { "音源脚本缺少有效名称" }
+    require(fields.values.all { it.length <= 8192 }) { "音源脚本信息过长" }
+    val id = MessageDigest.getInstance("SHA-256").digest(script.toByteArray()).joinToString("") { "%02x".format(it) }
+    return LxSourceInfo(id, name, fields["description"].orEmpty(), fields["version"].orEmpty(),
+        fields["author"].orEmpty(), fields["homepage"].orEmpty(), origin)
+}
+
+internal fun lxCapabilities(value: JsonObject): List<LxCapability> {
+    val sources = value["sources"] as? JsonObject ?: throw LxSourceException("音源未声明支持的平台")
+    return lxPlatforms.keys.mapNotNull { key ->
+        val source = sources[key] as? JsonObject ?: return@mapNotNull null
+        val actions = (source["actions"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+        if (source["type"]?.jsonPrimitive?.contentOrNull != "music" || "musicUrl" !in actions) return@mapNotNull null
+        val declared = (source["qualitys"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+        val qualities = lxQualities.filter { it in declared }
+        qualities.takeIf { it.isNotEmpty() }?.let { LxCapability(key, it) }
+    }.also { if (it.isEmpty()) throw LxSourceException("此音源没有声明网易云播放接口，目前仅支持网易云") }
+}
+
+internal data class LxTrackRequest(val platform: String, val quality: String, val data: JsonObject)
+internal fun lxTrackRequest(song: Song, quality: AudioQuality, sources: List<LxCapability>): LxTrackRequest {
+    val wy = song.externalIds.neteaseId?.takeIf { it.toLongOrNull()?.let { id -> id > 0 } == true }
+        ?: song.id.takeIf { song.musicSource == MusicSource.NETEASE && it > 0 }?.toString()
+    val id = wy ?: throw LxSourceException("落雪音源目前仅支持带有效网易云 ID 的歌曲")
+    val platform = "wy"
+    val supported = lxNeteaseCapabilities(sources).firstOrNull()?.qualities
+        ?: throw LxSourceException("此音源没有声明网易云播放接口，请切换音源")
+    val desired = when (quality) { AudioQuality.STANDARD -> 0; AudioQuality.EXHIGH -> 1; AudioQuality.LOSSLESS -> 2; else -> 3 }
+    val selected = lxQualities.take(desired + 1).lastOrNull { it in supported }
+        ?: lxQualities.first { it in supported }
+    return LxTrackRequest(platform, selected, buildJsonObject {
+        put("source", platform); put("action", "musicUrl")
+        put("info", buildJsonObject {
+            put("type", selected)
+            put("musicInfo", buildJsonObject {
+                put("source", platform); put("songmid", id); put("name", song.name)
+                put("singer", song.artists); put("albumName", song.album); put("img", song.cover)
+                put("interval", "%02d:%02d".format(java.util.Locale.ROOT, song.durationMs / 60000, song.durationMs / 1000 % 60))
+                put("_types", buildJsonObject { supported.forEach { put(it, buildJsonObject { put("type", it) }) } })
+                put("types", JsonArray(supported.map { buildJsonObject { put("type", it) } }))
+                put("meta", buildJsonObject { put("songId", id); put("albumName", song.album) })
+            })
+        })
+    })
+}

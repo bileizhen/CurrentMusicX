@@ -27,6 +27,81 @@ class AudioSourceSettingsTest {
         assertTrue(container.playbackQueue.state.value.songs.isEmpty())
     }
     @After fun finish() { container.close() }
+    @Test fun importedLxSourcesSelectWithScopedIdentityAndRemovalKeepsLxProvider(): Unit = runBlocking {
+        val prefix = "/**\n * @name Source A\n * @version 1\n */\n"
+        val script = prefix + "lx.on('request', () => Promise.resolve('https://audio.example.com/song.mp3'));" +
+            "lx.send('inited',{sources:{wy:{type:'music',actions:['musicUrl'],qualitys:['128k','320k']}}});"
+        val first = container.lxSources.importScript(script)
+        val second = container.lxSources.importScript(script.replace("Source A", "Source B"))
+        container.lxSources.health.value = mapOf(first.id to io.github.currencortex.music.data.lx.LxSourceHealth(
+            io.github.currencortex.music.core.network.SourceAvailabilityStatus.AVAILABLE, android.os.SystemClock.elapsedRealtime()),
+            second.id to io.github.currencortex.music.data.lx.LxSourceHealth(
+                io.github.currencortex.music.core.network.SourceAvailabilityStatus.UNAVAILABLE, android.os.SystemClock.elapsedRealtime()))
+        container.audioSettings.selectLxSource(first.id)
+        val vm = MusicSettingsViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings()) { top.yukonga.miuix.kmp.basic.Scaffold { MusicSettingsScreen(vm) {} } } }
+        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("audio_provider"))
+        compose.onNodeWithTag("audio_provider").performClick()
+        compose.onNodeWithTag("audio_provider_lx").performClick()
+        compose.waitUntil(5000) { vm.audioProvider.value.provider == AudioProvider.LX && !vm.audioState.value.busy }
+        val previous = container.audioSettings.access().identity
+        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("lx_source_select"))
+        compose.onNode(hasTestTag("lx_source_badge_${first.id}") and hasAnyAncestor(hasTestTag("lx_source_select")), true)
+            .assertContentDescriptionEquals("音源：可用")
+        compose.onNodeWithTag("lx_source_select").performClick()
+        compose.onNodeWithTag("lx_source_${second.id}").assertExists()
+        compose.onNodeWithTag("lx_source_${second.id}").performClick()
+        compose.waitUntil(5000) { vm.audioProvider.value.lxSourceId == second.id && !vm.audioState.value.busy }
+        assertNotEquals(previous, container.audioSettings.access().identity)
+        compose.onNode(hasTestTag("lx_source_badge_${second.id}") and hasAnyAncestor(hasTestTag("lx_source_select")), true)
+            .assertContentDescriptionEquals("音源：不可用")
+        val encrypted = File(context.noBackupFilesDir, "session.lx-sources.$namespace.aes").readBytes()
+        assertFalse(encrypted.toString(Charsets.ISO_8859_1).contains("Source A"))
+        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("lx_import_url"))
+        compose.onNodeWithTag("lx_import_url").performClick()
+        compose.onNodeWithTag("lx_url_input").assertExists()
+        compose.onNodeWithText("取消").performClick()
+        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("lx_remove"))
+        compose.onNodeWithTag("lx_remove").performClick()
+        compose.onNodeWithTag("lx_remove_confirm").performClick()
+        compose.waitUntil(5000) { vm.audioProvider.value.provider == AudioProvider.LX &&
+            vm.audioProvider.value.lxSourceId.isEmpty() && !vm.audioState.value.busy }
+        assertEquals(listOf(first), container.lxSources.state.value)
+        // An empty LX selection must not silently request a URL from the project server.
+        try {
+            container.musicRepository.source(io.github.currencortex.music.data.song.Song(42, "Removed source fixture"),
+                io.github.currencortex.music.core.media.AudioQuality.STANDARD)
+            fail("An unselected LX source must require choosing a script")
+        } catch (error: io.github.currencortex.music.core.network.ApiException) {
+            assertEquals(io.github.currencortex.music.core.network.ErrorKind.Server, error.kind)
+        }
+        vm.selectLxSource(first.id).join()
+        vm.removeLxSource(first.id).join()
+        assertTrue(container.lxSources.state.value.isEmpty())
+        assertEquals(AudioProvider.LX, container.audioSettings.access().provider)
+        assertEquals("", container.audioSettings.access().lxSourceId)
+        assertTrue(container.playbackQueue.state.value.songs.isEmpty())
+    }
+    @Test fun visibleLxSettingsAutomaticallyChecksAndShowsTheResultWithoutAButton(): Unit = runBlocking {
+        val script = "/**\n * @name Automatic check fixture\n */\n" +
+            "lx.on('request', async () => 'http://127.0.0.1/blocked-audio');" +
+            "lx.send('inited',{sources:{wy:{type:'music',actions:['musicUrl'],qualitys:['128k']}}});"
+        val source = container.lxSources.importScript(script)
+        container.audioSettings.selectLxSource(source.id)
+        container.audioSettings.select(AudioProvider.LX)
+        assertNull(container.lxSources.health.value[source.id])
+        val vm = MusicSettingsViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings()) { top.yukonga.miuix.kmp.basic.Scaffold { MusicSettingsScreen(vm) {} } } }
+        compose.onNodeWithTag("network_settings").performScrollToNode(hasTestTag("lx_source_select"))
+        compose.waitUntil(5000) {
+            vm.lxHealth.value[source.id]?.status == io.github.currencortex.music.core.network.SourceAvailabilityStatus.UNAVAILABLE
+        }
+        compose.onNodeWithTag("lx_source_badge_${source.id}", true).assertContentDescriptionEquals("音源：不可用")
+        compose.onNodeWithText("检测音源可用性").assertDoesNotExist()
+        assertEquals(source.id, container.audioSettings.access().lxSourceId)
+        assertTrue(container.playbackQueue.state.value.songs.isEmpty())
+    }
+
     @Test fun nativeSourceIsSelectablePersistsAndScopesCacheToTheNeteaseAccount(): Unit = runBlocking {
         val vm = MusicSettingsViewModel(container)
         compose.setContent { LeiTheme(AppearanceSettings()) { MusicSettingsScreen(vm) {} } }

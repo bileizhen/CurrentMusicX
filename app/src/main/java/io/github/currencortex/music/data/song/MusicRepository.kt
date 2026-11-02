@@ -13,7 +13,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 class MusicRepository(private val api: ApiClient,
     private val audioAccess: () -> AudioSourceAccess = { AudioSourceAccess(AudioProvider.CURRENT_MUSIC) },
     private val leiz: LeizAudioClient = LeizAudioClient(),
-    private val navidrome: io.github.currencortex.music.data.navidrome.NavidromeRepository? = null) {
+    private val navidrome: io.github.currencortex.music.data.navidrome.NavidromeRepository? = null,
+    private val lx: io.github.currencortex.music.data.lx.LxSourceStore? = null) {
     suspend fun previewClip(song: Song): SongPreviewClip {
         val id = NeteaseSongActionsRepository.songId(song)
         val raw = if (song.navidrome == null && id != null) {
@@ -30,8 +31,17 @@ class MusicRepository(private val api: ApiClient,
         else -> detail(song.id)
     }
     suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.NAVIDROME) appResult { requireNotNull(navidrome).lyrics(song) } else lyricsDocument(song.id)
-    suspend fun source(song: Song, quality: AudioQuality, session: RequestSession? = null): AudioSource =
-        if (song.musicSource == MusicSource.NAVIDROME) requireNotNull(navidrome).source(song, quality) else source(song.id, quality, session)
+    suspend fun source(song: Song, quality: AudioQuality, session: RequestSession? = null): AudioSource {
+        if (song.musicSource == MusicSource.NAVIDROME) return requireNotNull(navidrome).source(song, quality)
+        val access = audioAccess()
+        return if (access.provider == AudioProvider.LX) lxSource(song, quality, access) else source(song.id, quality, session)
+    }
+    private suspend fun lxSource(song: Song, quality: AudioQuality, access: AudioSourceAccess): AudioSource {
+        val result = try { requireNotNull(lx) { "落雪音源尚未初始化" }.source(song, quality, access.lxSourceId) }
+            catch (e: io.github.currencortex.music.data.lx.LxSourceException) { throw ApiException(ErrorKind.Server, userMessage = e.message) }
+        if (audioAccess().identity != access.identity) throw ApiException(ErrorKind.AudioSourceChanged)
+        return result
+    }
     private fun parseDocument(raw: JsonObject): io.github.currencortex.music.feature.lyrics.model.LyricsDocument {
         val code = raw["code"]?.jsonPrimitive?.intOrNull
         if (code != null && code != 200) throw ApiException(ErrorKind.Server, code)
@@ -141,6 +151,7 @@ class MusicRepository(private val api: ApiClient,
     }
     suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null): AudioSource {
         val access = audioAccess()
+        if (access.provider == AudioProvider.LX) return lxSource(Song(id, ""), quality, access)
         if (access.provider == AudioProvider.LEIZ) {
             val source = leiz.source(id, quality, access.key)
             if (audioAccess().identity != access.identity) throw ApiException(ErrorKind.AudioSourceChanged)

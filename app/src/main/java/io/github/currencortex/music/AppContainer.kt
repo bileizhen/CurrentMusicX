@@ -98,6 +98,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     }
     val audioSettings = io.github.currencortex.music.data.settings.AudioSourceSettings(settingsStore,
         SecureTokenStore(context, ".leiz$storageSuffix"), appScope)
+    val lxSources = io.github.currencortex.music.data.lx.LxSourceStore(context,
+        SecureTokenStore(context, ".lx-sources$storageSuffix"), appScope)
     val accountVault = EncryptedAccountVault.create(context, storageSuffix, settingsStore, appScope)
     val accountRepository = AccountRepository(SecureTokenStore(context, storageSuffix), appScope, accountVault)
     val neteaseSessions = NeteaseSessionStore(SecureTokenStore(context, ".netease$storageSuffix"), appScope)
@@ -141,7 +143,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         persistServer = musicSettings::setServer, persistAccount = musicSettings::setAccount)
     val navidrome = io.github.currencortex.music.data.navidrome.NavidromeRepository(SecureTokenStore(context, ".navidrome$storageSuffix"), appScope)
     val navidromeMedia = okhttp3.OkHttpClient.Builder().addInterceptor(navidrome.client.mediaInterceptor()).build()
-    val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome)
+    val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome, lx = lxSources)
     fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality): AudioRequest {
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
             return AudioRequest(song.id, quality, 0L, navidrome.session(), "navidrome:" + navidrome.state.value.identity, song)
@@ -548,6 +550,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         logger = logger,
     )
     override fun close() {
+        lxSources.close()
         originalAiMasterEffects.close()
         originalSpeakerEffects.close()
         originalMoodEffects.close()

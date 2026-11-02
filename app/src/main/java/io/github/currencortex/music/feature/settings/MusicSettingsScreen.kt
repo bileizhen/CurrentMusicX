@@ -37,6 +37,7 @@ import top.yukonga.miuix.kmp.basic.TextField
             footer = when (provider.provider) {
                 AudioProvider.NETEASE -> "手机直连网易云，音质与可播放范围取决于本机网易云账号权限。"
                 AudioProvider.LEIZ -> "LeiZ 自动请求超清母带，实际音质以接口返回为准。"
+                AudioProvider.LX -> "使用导入的落雪 JavaScript 音源解析网易云歌曲的播放链接，搜索与歌单保持原有来源。"
                 else -> "使用 CurrentMusic 服务器提供的音乐服务。"
             }) {
             SettingsOptionsRow("音源", provider.provider.label, AudioProvider.entries.map { entry ->
@@ -59,8 +60,9 @@ import top.yukonga.miuix.kmp.basic.TextField
                     }
                 }
             }
-            audioState.message?.let { SettingsHint(it, error = !audioState.busy) }
+            if (provider.provider != AudioProvider.LX) audioState.message?.let { SettingsHint(it, error = !audioState.busy) }
         } }
+        if (provider.provider == AudioProvider.LX) item("lx_sources") { LxSourceSettings(vm) }
         item("lyrics") { SettingsSection("歌词来源", MusicIcons.File,
             footer = "独立于音乐音源。单曲手动导入或匹配优先，本地歌曲优先读取内嵌歌词。切换后重新获取歌词。") {
             SettingsOptionsRow("默认来源", when (settings.lyricsSource) {
