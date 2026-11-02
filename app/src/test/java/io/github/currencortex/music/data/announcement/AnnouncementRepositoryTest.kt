@@ -5,11 +5,120 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
+import okhttp3.Call
+import okhttp3.EventListener
+import okhttp3.OkHttpClient
 import org.junit.Assert.*
 import org.junit.Test
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 class AnnouncementRepositoryTest {
+    @Test fun automaticDismissalSurvivesNewCollectorsButNotANewProcessRepository() {
+        val server = "https://example.com/cm/"
+        val api = ApiClient({ server }, { null }, {})
+        val first = Announcement(id = 1, title = "First")
+        val fresh = Announcement(id = 2, title = "New")
+        val unchecked = AnnouncementReadState(suppressRead = false)
+        val repository = AnnouncementRepository(api)
+        assertEquals(listOf(first), repository.pendingAutomatic(server, listOf(first), unchecked))
+        repository.dismissAutomatic(server, listOf(first))
+        repeat(3) { assertTrue(repository.pendingAutomatic(server, listOf(first), unchecked).isEmpty()) }
+        assertEquals(listOf(fresh), repository.pendingAutomatic(server, listOf(first, fresh), unchecked))
+        assertEquals(listOf(first), repository.pendingAutomatic("https://other.example/cm/", listOf(first), unchecked))
+        val nextProcess = AnnouncementRepository(api)
+        assertEquals(listOf(first), nextProcess.pendingAutomatic(server, listOf(first), unchecked))
+        val checked = AnnouncementReadState(true, setOf(announcementKey(server, first)))
+        assertEquals(listOf(fresh), nextProcess.pendingAutomatic(server, listOf(first, fresh), checked))
+        // Manual archive browsing is deliberately not filtered by dismissAutomatic.
+    }
+
+    @Test fun permanentFailuresAreNotRetriedEvenWhenAutomaticRetryIsEnabled() = runBlocking {
+        for ((code, body) in listOf(401 to "{}", 403 to "{}", 404 to "{}", 200 to "not-json")) {
+            MockWebServer().use { server ->
+                val base = server.url("/cm/").toString()
+                repeat(4) { server.enqueue(MockResponse().setResponseCode(code).setBody(body)) }
+                val repository = AnnouncementRepository(ApiClient({ base }, { null }, {}))
+                assertTrue(repository.observe(flowOf(base), retryCount = 3).last().isEmpty())
+                assertEquals("HTTP $code must not retry", 1, server.requestCount)
+            }
+        }
+    }
+
+    @Test fun cooldownRequestAndPayloadByteComparisonUsesTheSameMockScenario() = runBlocking {
+        suspend fun scenario(cooldownMillis: Long): Pair<Int, Long> {
+            MockWebServer().use { server ->
+                val base = server.url("/cm/").toString()
+                var clock = 0L
+                val bodyBytes = AtomicLong()
+                val client = OkHttpClient.Builder().eventListener(object : EventListener() {
+                    override fun responseBodyEnd(call: Call, byteCount: Long) { bodyBytes.addAndGet(byteCount) }
+                }).build()
+                val repository = AnnouncementRepository(ApiClient({ base }, { null }, {}, client = client), nowMillis = { clock })
+                repeat(12) { server.enqueue(MockResponse().setBody(fixture)) }
+                // Identical resource, 12 foreground collector recreations, one per virtual minute.
+                repeat(12) {
+                    clock = it * 60_000L
+                    assertEquals(2, repository.observe(flowOf(base), minimumRefreshMillis = cooldownMillis).last().size)
+                }
+                return server.requestCount to bodyBytes.get()
+            }
+        }
+        val control = scenario(0)
+        val cached = scenario(15 * 60_000L)
+        val payloadBytes = fixture.toByteArray(Charsets.UTF_8).size.toLong()
+        assertEquals(12 to payloadBytes * 12, control)
+        assertEquals(1 to payloadBytes, cached)
+        // Counts body bytes only, not HTTP/TLS overhead, device traffic or energy consumption.
+    }
+
+    @Test fun automaticChecksShareCooldownAcrossCollectorsAndManualRefreshBypassesIt() = runBlocking {
+        MockWebServer().use { server ->
+            val base = server.url("/cm/").toString()
+            var clock = 0L
+            val repository = AnnouncementRepository(ApiClient({ base }, { null }, {}), nowMillis = { clock })
+            suspend fun check() = repository.observe(flowOf(base), minimumRefreshMillis = 15 * 60_000).last()
+            server.enqueue(MockResponse().setBody(fixture))
+            val a = async { check() }; val b = async { check() }
+            assertEquals(a.await(), b.await()); assertEquals(1, server.requestCount)
+            clock = 15 * 60_000L - 1
+            repeat(5) { assertEquals(2, check().size) }
+            assertEquals(1, server.requestCount)
+            server.enqueue(MockResponse().setBody(fixture))
+            repository.fetchAll(base)
+            assertEquals(2, server.requestCount)
+            clock++
+            server.enqueue(MockResponse().setBody("""{"items":[{"id":9,"title":"New"}]}"""))
+            assertEquals(9L, check().single().id); assertEquals(3, server.requestCount)
+        }
+    }
+    @Test fun failedAutomaticChecksAlsoHaveACooldownButCanRetryAfterIt() = runBlocking {
+        MockWebServer().use { server ->
+            val base = server.url("/cm/").toString()
+            var clock = 0L
+            val repository = AnnouncementRepository(ApiClient({ base }, { null }, {}), nowMillis = { clock })
+            suspend fun check() = repository.observe(flowOf(base), minimumRefreshMillis = 1000).last()
+            server.enqueue(MockResponse().setResponseCode(502))
+            assertTrue(check().isEmpty()); repeat(5) { assertTrue(check().isEmpty()) }
+            assertEquals(1, server.requestCount)
+            clock = 1000
+            server.enqueue(MockResponse().setBody(fixture))
+            assertEquals(2, check().size); assertEquals(2, server.requestCount)
+        }
+    }
+    @Test fun automaticCooldownIsScopedToTheSelectedServer() = runBlocking {
+        MockWebServer().use { first -> MockWebServer().use { second ->
+            var base = first.url("/cm/").toString()
+            val repository = AnnouncementRepository(ApiClient({ base }, { null }, {}))
+            first.enqueue(MockResponse().setBody(fixture)); second.enqueue(MockResponse().setBody(fixture))
+            repository.observe(flowOf(base), minimumRefreshMillis = 900000).last()
+            base = second.url("/cm/").toString()
+            repository.observe(flowOf(base), minimumRefreshMillis = 900000).last()
+            base = first.url("/cm/").toString()
+            repository.observe(flowOf(base), minimumRefreshMillis = 900000).last()
+            assertEquals(1, first.requestCount); assertEquals(1, second.requestCount)
+        } }
+    }
     @Test fun manualArchiveIsNotTruncatedToTheStartupBatchAndRemainsPublic() = runBlocking {
         MockWebServer().use { server ->
             val base = server.url("/cm/").toString()
