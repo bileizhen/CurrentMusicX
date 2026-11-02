@@ -37,6 +37,9 @@ import androidx.compose.ui.unit.Velocity
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.MusicCover
 import io.github.currencortex.music.ui.component.MusicDestinationRow
+import io.github.currencortex.music.ui.component.nativeui.LocalGlassBackdrop
+import io.github.currencortex.music.ui.component.nativeui.rememberGlassBackdrop
+import top.yukonga.miuix.kmp.blur.layerBackdrop
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
@@ -116,6 +119,7 @@ internal class PlayerSidePageState(private val scope: CoroutineScope) {
     val allowedDirection by rememberUpdatedState(openingDirection)
     val scrolling by rememberUpdatedState(pagerScrolling)
     val excluded by rememberUpdatedState(excludedArea)
+    val backdrop = rememberGlassBackdrop()
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val fling = with(LocalDensity.current) { 600.dp.toPx() }
     val flingThreshold by rememberUpdatedState(fling)
@@ -156,7 +160,7 @@ internal class PlayerSidePageState(private val scope: CoroutineScope) {
             }
         }
     }
-    Box(Modifier.fillMaxSize().background(Color(0xFF19191B)).testTag("player_side_host")
+    Box(Modifier.fillMaxSize().testTag("player_side_host")
         .semantics { this[PlayerSideProgress] = state.progress }
         .onGloballyPositioned { coordinates = it }
         .nestedScroll(edgeScroll)
@@ -208,13 +212,20 @@ internal class PlayerSidePageState(private val scope: CoroutineScope) {
                 }
             }
         }) {
+        // Side-page controls must sample an inert sibling, never the root capture
+        // that also contains those controls (a recursive RenderNode graph).
+        Box(Modifier.matchParentSize()
+            .then(if (backdrop != null) Modifier.layerBackdrop(backdrop) else Modifier)
+            .background(Color(0xFF19191B)))
         if (state.active) Box(Modifier.fillMaxSize().graphicsLayer {
             val p = state.progress
             scaleX = .86f + .14f * p
             scaleY = scaleX
             translationX = -state.direction * size.width * .04f * (1f - p)
             alpha = .65f + .35f * p
-        }.testTag("player_side_page")) { side() }
+        }.testTag("player_side_page")) {
+            CompositionLocalProvider(LocalGlassBackdrop provides backdrop) { side() }
+        }
         Box(Modifier.fillMaxSize().graphicsLayer {
             val p = state.progress
             transformOrigin = TransformOrigin(if (state.direction > 0f) 0f else 1f, .5f)
