@@ -32,7 +32,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlin.math.roundToInt
 import java.util.Locale
 
-@Composable fun EqualizerScreen(vm: EqualizerViewModel) {
+@Composable fun EqualizerScreen(vm: EqualizerViewModel, onBack: (() -> Unit)? = null) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val runtime by vm.runtime.collectAsStateWithLifecycle()
     val playback by vm.playback.collectAsStateWithLifecycle()
@@ -50,7 +50,7 @@ import java.util.Locale
         else -> "开始本机播放后自动生效"
     }
     SettingsUiScope {
-        SettingsPage("均衡器","equalizer_screen") {
+        SettingsPage("均衡器","equalizer_screen", onBack = onBack) {
             item { Card {
                 SettingsSwitch("开启均衡器", settings.enabled, vm::enabled, summary = status,
                     enabled = runtime.supported, modifier = Modifier.testTag("equalizer_enabled"))
