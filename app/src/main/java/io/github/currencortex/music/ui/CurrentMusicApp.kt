@@ -63,6 +63,8 @@ import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
+import androidx.navigationevent.compose.rememberNavigationEventDispatcherOwner
 import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import io.github.currencortex.music.AppContainer
@@ -468,7 +470,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 }
             }
         }
-        val page: @Composable () -> Unit = {
+        // Retained container scenes still own back callbacks. Keep their dispatcher alive,
+        // but stop it receiving gestures while the player above them owns navigation.
+        val pageBackOwner = rememberNavigationEventDispatcherOwner(enabled = !playerPresented)
+        val pageContent: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize().then(if (launchBrand.active || launchPreview != null || playerPresented || miniQueueOpen || updateDialogVisible) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
         Column(Modifier.fillMaxSize().then(if (searchPresented) Modifier else Modifier.imePadding())) {
         NavDisplay(
@@ -736,6 +741,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         )
         }
         }
+        }
+        val page: @Composable () -> Unit = {
+            CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides pageBackOwner) { pageContent() }
         }
         val dockVisible by remember(keyboardOpen, sceneStack, settings.playlistRecordShelf, hideDockForChat) { derivedStateOf {
             !hideDockForChat && sceneStack.last() !in setOf("lib/video", "appearance-font") && playerExpansion.value < .9999f &&

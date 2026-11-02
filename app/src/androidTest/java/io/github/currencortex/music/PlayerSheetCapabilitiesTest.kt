@@ -38,6 +38,7 @@ class PlayerSheetCapabilitiesTest {
     private lateinit var dispatcher: androidx.activity.OnBackPressedDispatcher
     private lateinit var activity: androidx.activity.ComponentActivity
     private var coverFixture: java.io.File? = null
+    @Volatile private var likedPlaybackFixture = false
     @Volatile private var lyricFixtureEnabled = true
     @Volatile private var lyricResponseGate: java.util.concurrent.CountDownLatch? = null
 
@@ -52,7 +53,8 @@ class PlayerSheetCapabilitiesTest {
                     val body = when (request.requestUrl!!.encodedPath) {
                         "/cm/daily" -> """{"daily":[],"forYou":[],"artists":[]}"""
                         "/cm/plays/recent" -> """{"songs":[]}"""
-                        "/cm/likes/mine" -> """{"songs":[]}"""
+                        "/cm/likes/mine" -> if (likedPlaybackFixture) """{"songs":[{"ncm_id":88,"name":"Liked playback fixture","artists":"Fixture artist","duration":180000}]}"""
+                            else """{"songs":[]}"""
                         "/cm/playlists" -> """{"playlists":[]}"""
                         "/cm/ncm/lyric" -> if (lyricFixtureEnabled) """{"lines":[{"t":0,"txt":"星光陪着你"},{"t":5000,"txt":"一起听音乐"}]}"""
                             else """{"lines":[]}"""
@@ -1406,6 +1408,55 @@ class PlayerSheetCapabilitiesTest {
         compose.waitForIdle()
         compose.onNodeWithTag("mini_cover").assertIsDisplayed()
         assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun playingFromLikesKeepsPredictiveBackOnThePlayerAndReturnsToTheSamePlaylist() = verifyLikedPlaybackBack(false)
+    @Test fun playingFromMyLikesKeepsPredictiveBackOnThePlayerAndReturnsToTheSamePlaylist() = verifyLikedPlaybackBack(true)
+
+    @Test fun systemEdgeGestureReturnsFromMyLikesPlayerAndRestoresPlaylistBack() = verifyLikedPlaybackBack(true, true)
+
+    private fun verifyLikedPlaybackBack(fromMy: Boolean, systemGesture: Boolean = false): Unit = runBlocking {
+        likedPlaybackFixture = true
+        container.musicSettings.setNeteaseMainLibrary(false)
+        start()
+        if (fromMy) { compose.onNodeWithTag("tab_2").performClick(); compose.mainClock.advanceTimeBy(800) }
+        compose.onNodeWithTag("open_likes").performScrollTo().performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("playlist_song_88").fetchSemanticsNodes().isNotEmpty() }
+        val likedRowIdentity = compose.onNodeWithTag("playlist_song_88").fetchSemanticsNode().id
+        compose.onNodeWithTag("playlist_song_88").performClick()
+        compose.waitUntil(10_000) { container.playerController.queue.state.value.current?.id == 88L }
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        compose.waitForIdle()
+        compose.runOnUiThread { dispatcher.dispatchOnBackStarted(BackEventCompat(0f, 500f, 0f, BackEventCompat.EDGE_LEFT)) }
+        compose.runOnUiThread { dispatcher.dispatchOnBackProgressed(BackEventCompat(250f, 500f, .6f, BackEventCompat.EDGE_LEFT)) }
+        compose.waitForIdle()
+        assertTrue("The player must follow back from the likes playlist", frame().progress < .8f)
+        compose.runOnUiThread { dispatcher.dispatchOnBackCancelled() }
+        compose.waitForIdle()
+        assertEquals(1f, frame().progress, .001f)
+        if (systemGesture) {
+            val metrics = activity.resources.displayMetrics
+            val y = metrics.heightPixels / 2
+            val command = "input swipe 1 $y ${metrics.widthPixels / 3} $y 350"
+            android.os.ParcelFileDescriptor.AutoCloseInputStream(
+                androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+            ).use { it.readBytes() }
+            compose.waitUntil(5_000) { compose.onAllNodesWithTag("player_sheet").fetchSemanticsNodes().isEmpty() }
+        } else {
+            compose.runOnUiThread { dispatcher.dispatchOnBackStarted(BackEventCompat(0f, 500f, 0f, BackEventCompat.EDGE_LEFT)) }
+            compose.runOnUiThread { dispatcher.dispatchOnBackProgressed(BackEventCompat(250f, 500f, .6f, BackEventCompat.EDGE_LEFT)) }
+            compose.runOnUiThread { dispatcher.onBackPressed() }
+        }
+        compose.waitForIdle()
+        compose.onNodeWithTag("player_sheet").assertDoesNotExist()
+        compose.onNodeWithTag("playlist_song_88").assertIsDisplayed()
+        assertEquals(likedRowIdentity, compose.onNodeWithTag("playlist_song_88").fetchSemanticsNode().id)
+        assertEquals(88L, container.playerController.queue.state.value.current?.id)
+        compose.runOnUiThread { dispatcher.onBackPressed() }
+        compose.waitForIdle()
+        compose.onNodeWithTag("playlist_song_88").assertDoesNotExist()
+        compose.onNodeWithTag("music_scene_0").assertIsDisplayed()
     }
 
     @Test fun predictiveCollapseReversesCancelsAndCommitsWhileDialogsTakePriority() {
