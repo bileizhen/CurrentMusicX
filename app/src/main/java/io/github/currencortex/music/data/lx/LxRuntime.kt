@@ -42,7 +42,7 @@ class LxRuntime(context: Context, private val http: LxHttpClient = LxHttpClient(
             if (answer["ok"]?.jsonPrimitive?.booleanOrNull != true) {
                 // Test-only diagnostics, never include arbitrary script errors in UI or logs.
                 runCatching { failureObserver?.invoke(answer["message"]?.jsonPrimitive?.contentOrNull.orEmpty().take(256)) }
-                throw LxSourceException("音源未能解析这首歌曲，请重试或切换音源")
+                throw LxSourceException("音源未能解析这首歌曲，请重试或切换音源", qualityUnavailable = true)
             }
             val value = answer["value"] as? JsonPrimitive
             if (value?.isString != true || value.content.length > 8192) throw LxSourceException("音源没有返回有效的播放链接")

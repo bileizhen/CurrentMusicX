@@ -110,8 +110,9 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
         ready.await()
         val source = lock.withLock { entries.firstOrNull { it.info.id == id } }
             ?: throw LxSourceException("请先在音源与网络中导入并选择落雪音源")
-        val request = lxTrackRequest(song, quality, source.info.capabilities)
-        val url = runtime.resolve(source.info, source.script, request.data)
+        val (request, url) = lxResolveTrack(song, quality, source.info.capabilities) { data ->
+            runtime.resolve(source.info, source.script, data)
+        }
         val level = when (request.quality) { "flac24bit" -> "hires"; "flac" -> "lossless"; "320k" -> "exhigh"; else -> "standard" }
         return AudioSource(url, level, 0, 0, if (request.quality.startsWith("flac")) "flac" else "mp3", validForSeconds = 30)
     }
