@@ -1,9 +1,9 @@
 package io.github.currencortex.music.feature.player
 
 import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -20,9 +20,11 @@ import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.SemanticsPropertyKey
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextLayoutResult
@@ -59,6 +61,7 @@ internal fun playerElementArc(start: Rect, end: Rect, progress: Float, bend: Flo
 }
 
 internal class PlayerPagerArtworkTransition(val progress: () -> Float, val queueProgress: () -> Float = { 0f }) {
+    var immersive by mutableStateOf(false)
     var root by mutableStateOf<LayoutCoordinates?>(null)
     var mainPage by mutableStateOf<LayoutCoordinates?>(null)
     var queuePage by mutableStateOf<LayoutCoordinates?>(null)
@@ -104,7 +107,9 @@ internal class PlayerPagerArtworkTransition(val progress: () -> Float, val queue
             val end = bounds(lyricsPage, nodes[PlayerPagerArtworkRole.LYRICS]) ?: return null
             return start to end
         }
-        endpoints = bounds(coverPage, cover)!! to bounds(lyricsPage, lyrics)!!
+        val coverBounds = if (immersive) Rect(-paneOffset, Size(root!!.size.width.toFloat(), root!!.size.height.toFloat()))
+            else bounds(coverPage, cover)!!
+        endpoints = coverBounds to bounds(lyricsPage, lyrics)!!
         titleEndpoints = pair(titles)
         subtitleEndpoints = pair(subtitles)
         // Queue coordinates are relative to its full-size translating layer, not the window.
@@ -128,6 +133,12 @@ internal class PlayerPagerArtworkTransition(val progress: () -> Float, val queue
     }
     fun textFrame(subtitle: Boolean, bend: Float): Rect? = if (subtitle)
         element(subtitleEndpoints, queueSubtitle, bend) else element(titleEndpoints, queueTitle, bend)
+    fun immersion(): Float = if (immersive) (1 - progress().coerceIn(0f, 1f)) *
+        (1 - queueProgress().coerceIn(0f, 1f)) else 0f
+    fun cornerRadius(bounds: Rect, queueRadius: Float): Float {
+        val q = if (queueReady) queueProgress().coerceIn(0f, 1f) else 0f
+        return bounds.size.minDimension / 2 * (1 - immersion()) * (1 - q) + queueRadius * q
+    }
 }
 internal val LocalPlayerPagerArtwork = staticCompositionLocalOf<PlayerPagerArtworkTransition?> { null }
 
@@ -163,7 +174,7 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
 }
 
 /** One artwork and one pair of text layers bridge cover, lyrics and queue, including reversed drags. */
-@Composable internal fun PlayerPagerArtwork(transfer: PlayerPagerArtworkTransition, song: Song?) {
+@Composable internal fun PlayerPagerArtwork(transfer: PlayerPagerArtworkTransition, song: Song?, drawText: Boolean = true) {
     val sheet = LocalPlayerArtworkTransition.current
     val sheetText = LocalPlayerSheetText.current
     SideEffect { sheetText?.target = transfer }
@@ -178,17 +189,44 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
         {
             val root = sheet?.sheet?.takeIf { it.isAttached }
             val pane = transfer.root?.takeIf { it.isAttached }
-            if (root == null || pane == null) null
+            if (root == null || pane == null || root.findRootCoordinates() !== pane.findRootCoordinates()) null
             else transfer.frame(bend, 0f)?.bounds?.translate(transfer.paneOffset + root.localPositionOf(pane, Offset.Zero))
         }
     }
     SideEffect {
         if (transfer.ready) { sheet?.target = transfer.root; sheet?.destination = destination }
+        sheet?.immersiveArtwork = transfer.takeIf { it.immersive }
     }
     DisposableEffect(transfer, sheet) { onDispose {
-        if (sheet?.destination === destination) { sheet?.destination = null; sheet?.target = null }
+        if (sheet?.destination === destination) { sheet?.destination = null; sheet?.target = null; sheet?.immersiveArtwork = null }
     } }
     if (!ready) return
+    if (transfer.immersive) {
+        val queueRadius = with(density) { 8.dp.toPx() }
+        val sheetOffset = LocalPlayerSheetOffset.current
+        val moving = sheet?.moving == true
+        val visual = remember(transfer, sheet, sheetOffset, geometry) { derivedStateOf {
+            val destinationBounds = geometry.value?.bounds?.translate(transfer.paneOffset) ?: return@derivedStateOf null
+            val p = sheetProgress().coerceIn(0f, 1f)
+            val source = sheet?.origin
+            val viewport = sheet?.viewport
+            if (sheet?.moving == true && source != null && viewport != null) {
+                val start = source.bounds.translate(-viewport.topLeft)
+                PlayerArtworkFrame(p, playerSheetElementArc(start, destinationBounds, p).translate(-sheetOffset()), 0f)
+            } else PlayerArtworkFrame(1f, destinationBounds, 0f)
+        } }
+        PlayerImmersiveCover(song?.cover.orEmpty(), Modifier.fillMaxSize().testTag(if (moving) "player_artwork_flight" else "player_pager_artwork")
+            .semantics { contentDescription = "歌曲封面" }.semantics {
+                geometry.value?.let { this[PlayerPagerArtworkGeometry] = it }
+                visual.value?.let { this[PlayerArtworkGeometry] = it }
+                this[CoverRotation] = 0f
+            }, bounds = { visual.value?.bounds },
+            radius = { visual.value?.let { f -> f.bounds.size.minDimension / 2 * (1 - f.progress) +
+                transfer.cornerRadius(f.bounds, queueRadius) * f.progress } ?: 0f },
+            immersion = { transfer.immersion() * (visual.value?.progress ?: 1f) })
+        if (drawText) PlayerPagerSongText(transfer)
+        return
+    }
     val width = transfer.cover!!.size.width
     if (width <= 0) return
     MusicCover(song?.cover.orEmpty(), Modifier.requiredSize(with(density) { width.toDp() }).testTag("player_pager_artwork")
@@ -213,6 +251,11 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
             shape = RoundedCornerShape(with(density) { (radius / scale.coerceAtLeast(.001f)).toDp() })
             clip = true
         }, pixels = 800, cornerRadius = 0.dp)
+    if (drawText) PlayerPagerSongText(transfer)
+}
+
+@Composable internal fun PlayerPagerSongText(transfer: PlayerPagerArtworkTransition) {
+    val bend = with(LocalDensity.current) { 20.dp.toPx() }
     PlayerSharedSongText(transfer, false, bend)
     PlayerSharedSongText(transfer, true, bend)
 }
@@ -250,8 +293,7 @@ internal fun playerTextDrawMetrics(layouts: List<TextLayoutResult?>): PlayerText
         return listOf((1 - p) * (1 - q), p * (1 - q), q)
     }
     Canvas(Modifier.fillMaxSize().testTag(if (subtitle) "player_shared_subtitle" else "player_shared_title")
-        .semantics {
-            hideFromAccessibility()
+        .semantics { hideFromAccessibility() }.semantics {
             transfer.textFrame(subtitle, bend)?.let {
                 if (subtitle) this[PlayerSharedSubtitleGeometry] = it else this[PlayerSharedTitleGeometry] = it
             }

@@ -12,6 +12,7 @@ class AppearanceThemeSettingsTest {
         assertEquals(ThemeMode.DARK, s.themeMode); assertTrue(s.monet); assertEquals(1.1f, s.uiScale)
         assertFalse(s.liquidGlass); assertFalse(s.pureBlack); assertFalse(s.customTextScale)
         assertEquals(DefaultThemeColors, s.primaryColors)
+        assertEquals(PlayerCoverStyle.CIRCLE, s.playerCoverStyle)
     }
     @Test fun themePaletteAndTextScaleRoundTripWithoutChangingPlaybackAppearance() {
         val p = mutablePreferencesOf()
@@ -19,7 +20,8 @@ class AppearanceThemeSettingsTest {
             playerBackground = "art.jpg", playerDynamicBackground = false, launchStyle = LaunchStyle.HALO,
             playlistRecordShelf = true, refreshRate = RefreshRatePreference(144), pureBlack = true,
             primaryColor = 0xFF123456, primaryColors = DefaultThemeColors + 0xFF123456,
-            colorStyle = ThemeColorStyle.TINTED, customTextScale = true, textScale = 1.25f, tabAnimation = RootTabAnimation.FADE)
+            colorStyle = ThemeColorStyle.TINTED, customTextScale = true, textScale = 1.25f, tabAnimation = RootTabAnimation.FADE,
+            playerCoverStyle = PlayerCoverStyle.IMMERSIVE)
         SettingsPreferences.write(p, settings)
         assertEquals(settings, SettingsPreferences.read(p))
         SettingsPreferences.write(p, SettingsPreferences.read(p).copy(monet = true, pureBlack = false))
@@ -31,6 +33,8 @@ class AppearanceThemeSettingsTest {
         assertEquals(1f, SettingsPreferences.read(p).textScale)
         assertEquals(DefaultThemeColors, SettingsPreferences.read(p).primaryColors)
         assertEquals(ThemeColorStyle.VIVID, SettingsPreferences.read(p).colorStyle)
+        p[stringPreferencesKey("player_cover_style")] = "unknown-future-style"
+        assertEquals(PlayerCoverStyle.CIRCLE, SettingsPreferences.read(p).playerCoverStyle)
         val normalized = AppearanceSettings(primaryColor = 0x123456, primaryColors = listOf(0x123456, 0xFF123456), textScale = 100f).normalized()
         assertEquals(0xFF123456, normalized.primaryColor); assertEquals(listOf(0xFF123456), normalized.primaryColors)
         assertEquals(1.4f, normalized.textScale)
