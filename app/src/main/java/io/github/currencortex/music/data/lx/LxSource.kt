@@ -2,6 +2,7 @@ package io.github.currencortex.music.data.lx
 
 import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.data.song.*
+import kotlinx.coroutines.ensureActive
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.security.MessageDigest
@@ -27,7 +28,7 @@ internal fun lxNeteaseCapabilities(sources: List<LxCapability>): List<LxCapabili
 @Serializable internal class LxStoredSource(val info: LxSourceInfo, val script: String) {
     override fun toString() = "LxStoredSource(${info.id}, script=[private])"
 }
-class LxSourceException(message: String) : java.io.IOException(message)
+class LxSourceException(message: String, val qualityUnavailable: Boolean = false) : java.io.IOException(message)
 
 internal fun lxScriptInfo(script: String, origin: String = ""): LxSourceInfo {
     require(script.toByteArray(Charsets.UTF_8).size in 1..LX_MAX_SCRIPT_BYTES) { "音源脚本为空或超过 1 MB" }
@@ -63,7 +64,7 @@ internal fun lxTrackRequest(song: Song, quality: AudioQuality, sources: List<LxC
     val platform = "wy"
     val supported = lxNeteaseCapabilities(sources).firstOrNull()?.qualities
         ?: throw LxSourceException("此音源没有声明网易云播放接口，请切换音源")
-    val desired = when (quality) { AudioQuality.STANDARD -> 0; AudioQuality.EXHIGH -> 1; AudioQuality.LOSSLESS -> 2; else -> 3 }
+    val desired = when (quality) { AudioQuality.STANDARD -> 0; AudioQuality.EXHIGH -> 1; AudioQuality.LOSSLESS -> 2; AudioQuality.AUTO -> lxQualities.lastIndex; else -> 3 }
     val selected = lxQualities.take(desired + 1).lastOrNull { it in supported }
         ?: lxQualities.first { it in supported }
     return LxTrackRequest(platform, selected, buildJsonObject {
@@ -80,4 +81,29 @@ internal fun lxTrackRequest(song: Song, quality: AudioQuality, sources: List<LxC
             })
         })
     })
+}
+
+/** Only an explicit per-track rejection permits AUTO to try the next declared quality. */
+internal suspend fun lxResolveTrack(song: Song, quality: AudioQuality, sources: List<LxCapability>,
+    resolve: suspend (JsonObject) -> String): Pair<LxTrackRequest, String> {
+    val first = lxTrackRequest(song, quality, sources)
+    val requests = if (quality == AudioQuality.AUTO) {
+        val supported = lxNeteaseCapabilities(sources).single().qualities
+        listOf(first) + supported.asReversed().drop(1).map { level ->
+            val fallback = when (level) {
+                "flac" -> AudioQuality.LOSSLESS
+                "320k" -> AudioQuality.EXHIGH
+                else -> AudioQuality.STANDARD
+            }
+            lxTrackRequest(song, fallback, sources)
+        }
+    } else listOf(first)
+    for ((index, request) in requests.withIndex()) {
+        kotlinx.coroutines.currentCoroutineContext().ensureActive()
+        try { return request to resolve(request.data) }
+        catch (error: LxSourceException) {
+            if (!error.qualityUnavailable || index == requests.lastIndex) throw error
+        }
+    }
+    error("No declared LX quality")
 }
