@@ -32,6 +32,7 @@ import io.github.currencortex.music.core.media.engine.*
 @androidx.annotation.OptIn(UnstableApi::class)
 class MusicService : MediaSessionService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private val queueCheckpoints = QueueCheckpoints()
     private val container get() = (application as CurrentMusicApplication).container
     private lateinit var transitions: PlaybackTransitions
     private lateinit var engine: AudioEngineManager
@@ -265,10 +266,22 @@ class MusicService : MediaSessionService() {
                         state.mode == PlayerMode.LOCAL && !state.resolving)
                         container.playerController.state.value = state.copy(audioFullyCached = complete)
                 }
-                persistQueue()
+                requestQueueCheckpoint()
             }
         }
-        scope.launch { container.playbackQueue.state.collectLatest { persistQueue() } }
+        scope.launch {
+            container.ready.await()
+            container.playbackQueue.state.collect { requestQueueCheckpoint() }
+        }
+        scope.launch(Dispatchers.Default) {
+            queueCheckpoints.writeTo(
+                save = { snapshot ->
+                    val payload = ApiJson.encodeToString(snapshot)
+                    container.database.music().saveQueue(QueueSnapshotEntity(payload = payload))
+                },
+                onFailure = { error -> container.logger.warn("Player", "Queue checkpoint failed: ${error.javaClass.simpleName}") },
+            )
+        }
         scope.launch {
             val preloadBudget = AudioPreloadBudget()
             combine(container.playbackQueue.state, container.musicSettings.state, container.accountRepository.state) { _, settings, account ->
@@ -548,8 +561,9 @@ class MusicService : MediaSessionService() {
         refreshSession = { forwarding.remoteChanged() }
         return forwarding
     }
-    private suspend fun persistQueue() {
-        container.database.music().saveQueue(QueueSnapshotEntity(payload = ApiJson.encodeToString(container.playerController.queueForPersistence())))
+    private fun requestQueueCheckpoint() {
+        // Capture the controller's local queue on Main, after startup has restored it.
+        if (container.ready.isCompleted) queueCheckpoints.offer(container.playerController.queueForPersistence())
     }
     private fun nextSong() {
         if (container.playbackQueue.next()) prepareSong(true, 0)

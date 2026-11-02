@@ -50,12 +50,13 @@ class MiniPlayerInteractionTest {
         container.playerController.queue.replace(listOf(Song(1, "First song", "Artist"), Song(2, "Second song", "Artist"), Song(3, "Third song", "Artist")), 1)
     }
     @After fun finish() = runBlocking { container.close(); server.shutdown() }
-    private fun component(member: Boolean = false) {
+    private fun component(member: Boolean = false, motionDiagnostics: Boolean = false) {
         container.playerController.state.value = PlayerState(mode = if (member) PlayerMode.ROOM else PlayerMode.LOCAL, canControlPlayback = !member)
         val vm = PlayerViewModel(container)
-        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { MiniPlayer(vm, { opens++ }, { toggles++ },
+        compose.setContent { androidx.compose.runtime.CompositionLocalProvider(LocalPlayerMotionDiagnostics provides motionDiagnostics) {
+            LeiTheme(AppearanceSettings(blur = false)) { MiniPlayer(vm, { opens++ }, { toggles++ },
             onNext = { next++; container.playerController.queue.next() },
-            onPrevious = { previous++; container.playerController.queue.previous() }, onQueue = { queues++ }) } }
+            onPrevious = { previous++; container.playerController.queue.previous() }, onQueue = { queues++ }) } } }
     }
     @Test fun titleSwipesDispatchOnceAndShortOrCancelledDragsDoNotClickOrSkip() {
         component()
@@ -107,9 +108,20 @@ class MiniPlayerInteractionTest {
         compose.onNodeWithTag("mini_song_gesture").performTouchInput { swipeLeft(durationMillis = 300) }
         assertEquals(1, next)
     }
-    @Test fun coverRotatesOnlyWhilePlayingResumesItsAngleAndResetsOnTrackChange() {
+    @Test fun playbackDoesNotPublishAnimationDiagnosticsByDefault() {
         compose.mainClock.autoAdvance = false
         component()
+        compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(playing = true) }
+        compose.mainClock.advanceTimeBy(1000)
+        compose.waitForIdle()
+        assertFalse(compose.onNodeWithTag("mini_cover").fetchSemanticsNode().config.contains(CoverRotation))
+        compose.onNodeWithTag("mini_cover").performClick()
+        assertEquals(1, opens)
+        compose.onNodeWithTag("mini_toggle").assertIsEnabled()
+    }
+    @Test fun coverRotatesOnlyWhilePlayingResumesItsAngleAndResetsOnTrackChange() {
+        compose.mainClock.autoAdvance = false
+        component(motionDiagnostics = true)
         fun angle() = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().config[CoverRotation]
         fun playing(value: Boolean) {
             compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(playing = value) }

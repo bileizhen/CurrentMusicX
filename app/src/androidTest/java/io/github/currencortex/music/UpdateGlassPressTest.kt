@@ -27,7 +27,7 @@ class UpdateGlassPressTest {
 
     private fun show() {
         compose.mainClock.autoAdvance = false
-        compose.setContent { LeiTheme(AppearanceSettings()) { Scaffold {
+        compose.setContentWithPressDiagnostics { LeiTheme(AppearanceSettings()) { Scaffold {
             Box(Modifier.fillMaxSize().background(Color(0xFF100D29)), contentAlignment = Alignment.Center) {
                 UpdateGlassButton(null, "press_button", "更多", { clicks++ }) { Text("⋮", color = Color.White) }
             }

@@ -58,7 +58,7 @@ class UpdateDialogMotionTest {
     @Test fun pressSwellsAndReleaseRecoversWithoutFiringOnCancelledDrag() {
         var clicks = 0
         compose.mainClock.autoAdvance = false
-        compose.setContent { LeiTheme(AppearanceSettings()) { Scaffold {
+        compose.setContentWithPressDiagnostics { LeiTheme(AppearanceSettings()) { Scaffold {
             UpdateOptionsDialog("按压反馈", onDismiss = {}, actions = {
                 UpdateDialogAction("保存", { clicks++ }, Modifier.weight(1f).testTag("motion_action"))
             }) { Text("按钮按下时膨胀，拖动时拉伸。") }
