@@ -24,12 +24,14 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
-import io.github.currencortex.music.feature.lyrics.ui.rememberLyricsPosition
+import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.media.PlayerMode
+import io.github.currencortex.music.core.media.PlayerState
+import io.github.currencortex.music.core.media.ListenTogetherPair
+import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -42,6 +44,14 @@ import androidx.compose.animation.core.*
 internal val CoverRotation = SemanticsPropertyKey<Float>("CoverRotation")
 
 internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?> { null }
+
+private data class MiniTransport(
+    val song: Song?, val mode: PlayerMode, val canControlPlayback: Boolean,
+    val playing: Boolean, val loading: Boolean, val showPause: Boolean, val listenTogether: ListenTogetherPair?,
+)
+
+private fun PlayerState.miniTransport() =
+    MiniTransport(song, mode, canControlPlayback, playing, loading || resolving, showPause, listenTogether)
 
 /** One low-frequency playback subscription and one angle for mini, full and moving artwork. */
 @Composable internal fun rememberPlayerArtworkRotation(vm: PlayerViewModel): State<Float> {
@@ -74,29 +84,35 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
     onSurfaceCoordinates: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {},
     onArtworkOrigin: (() -> PlayerArtworkOrigin?) -> Unit = {}, artworkVisible: () -> Boolean = { true },
     onOpenBounds: (Rect) -> Unit = {}) {
-    val state by vm.state.collectAsStateWithLifecycle()
-    val queue by vm.queue.collectAsStateWithLifecycle()
-    val lyrics by vm.lyrics.collectAsStateWithLifecycle()
-    val settings by vm.settings.collectAsStateWithLifecycle()
-    val song = queue.current
+    val playback = vm.state.collectAsStateWithLifecycle()
+    val queue = vm.queue.collectAsStateWithLifecycle()
+    val state by remember(playback) { derivedStateOf(structuralEqualityPolicy()) { playback.value.miniTransport() } }
+    val song by remember(queue) { derivedStateOf(structuralEqualityPolicy()) { queue.value.current } }
     if (song == null && state.mode == PlayerMode.LOCAL) return
     val enabled = state.canControlPlayback && song != null
     val next by rememberUpdatedState(onNext)
     val previous by rememberUpdatedState(onPrevious)
     val allowed by rememberUpdatedState(enabled)
     val threshold = with(LocalDensity.current) { 48.dp.toPx() }
-    val currentMatches = song != null && state.song?.let {
-        io.github.currencortex.music.feature.lyrics.data.SongLyricsStore.identity(it)
-    } == io.github.currencortex.music.feature.lyrics.data.SongLyricsStore.identity(song)
-    val duration = (if (currentMatches) state.durationMs.takeIf { it > 0 } else null) ?: song?.durationMs ?: 0L
-    val position = if (currentMatches) state.positionMs else queue.positionMs
-    val progress = if (duration > 0) (position.toDouble() / duration).toFloat().coerceIn(0f, 1f) else 0f
+    val songKey = remember(song) { song?.let(SongLyricsStore::identity) }
+    val currentMatches = songKey != null && remember(state.song) { state.song?.let(SongLyricsStore::identity) } == songKey
+    // Keep transport ticks out of the row's composition. Only the ring and its
+    // accessible progress read these values, in drawing and semantics respectively.
+    val duration by remember(playback, currentMatches, song) {
+        derivedStateOf { (if (currentMatches) playback.value.durationMs.takeIf { it > 0 } else null) ?: song?.durationMs ?: 0L }
+    }
+    val progress by remember(playback, queue, currentMatches, song) {
+        derivedStateOf(structuralEqualityPolicy()) {
+            val position = if (currentMatches) playback.value.positionMs else queue.value.positionMs
+            if (duration > 0) (position.toDouble() / duration).toFloat().coerceIn(0f, 1f) else 0f
+        }
+    }
     val pair = state.listenTogether
     val rotation = LocalPlayerArtworkRotation.current ?: rememberCoverRotation(song?.id, active && pair == null && state.playing && song?.video != true)
     val coverAngle by rememberUpdatedState(rotation)
     val coverBorder = MiuixTheme.colorScheme.onSurface.copy(alpha = .85f)
     val borderColor by rememberUpdatedState(coverBorder)
-    val loading = state.loading || state.resolving
+    val loading = state.loading
     val openAreas = remember { arrayOfNulls<Rect>(2) }
     val reportOpenBounds by rememberUpdatedState(onOpenBounds)
     fun reportOpenArea(index: Int, coordinates: androidx.compose.ui.layout.LayoutCoordinates) {
@@ -115,21 +131,6 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
         PlayerMode.ROOM -> if (pair != null) "双人一起听" else if (state.canControlPlayback) "房间控制" else "跟随房间"
         PlayerMode.CAST -> "正在投屏"
         else -> song?.artists.orEmpty()
-    }
-    val lyricPosition = rememberLyricsPosition(if (active) state else state.copy(playing = false))
-    val timeline = remember(lyrics.document) { LyricsSynchronizer(lyrics.document) }
-    val totalOffset = settings.lyricsOffsetMs - lyrics.songOffsetMs
-    val lyricsMatch = lyrics.matches(song)
-    val lyric by remember(timeline, lyricPosition, lyrics.songKey, song?.id, currentMatches, lyricsMatch, totalOffset) {
-        derivedStateOf {
-            if (!currentMatches || !lyricsMatch) ""
-            else {
-                val now = LyricsSynchronizer.lyricPosition(lyricPosition.value, totalOffset)
-                val line = lyrics.document.lines.getOrNull(timeline.findCurrentLine(now))
-                line?.text?.takeIf { it.isNotBlank() }
-                    ?: line?.backgroundVocals?.firstOrNull { now in it.startTimeMs until it.endTimeMs }?.text.orEmpty()
-            }
-        }
     }
     val surface = LocalMusicGlassSurface.current
     surface(modifier.fillMaxWidth().testTag("mini_player")) {
@@ -169,6 +170,7 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
                     .then(if (active) Modifier else Modifier.clearAndSetSemantics {}).graphicsLayer {
                     translationX = dragged.coerceIn(-threshold * 2, threshold * 2) * .15f
                 }, color = MiuixTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                val lyric = if (currentMatches) miniPlayerLyric(vm, songKey, song?.id, state.mode, active) else ""
                 MiniPlayerSongText(lyric.ifBlank { subtitle }, Modifier.fillMaxWidth().testTag("mini_lyric")
                     .then(if (active) Modifier else Modifier.clearAndSetSemantics {}).graphicsLayer {
                     translationX = dragged.coerceIn(-threshold * 2, threshold * 2) * .15f
@@ -180,7 +182,7 @@ internal val LocalPlayerArtworkRotation = staticCompositionLocalOf<State<Float>?
             }, enabled) { ink ->
                 val stroke = Stroke(1.6.dp.toPx())
                 drawCircle(ink.copy(alpha = .2f), radius = size.minDimension * .45f, style = stroke)
-                val buffered = if (currentMatches) state.bufferedProgress(duration) else 0f
+                val buffered = if (currentMatches) playback.value.bufferedProgress(duration) else 0f
                 if (buffered > 0f) drawArc(ink.copy(alpha = .42f), startAngle = -90f,
                     sweepAngle = 360f * buffered, useCenter = false,
                     topLeft = Offset(size.width * .05f, size.height * .05f), size = Size(size.width * .9f, size.height * .9f),

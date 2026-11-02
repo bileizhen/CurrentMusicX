@@ -204,11 +204,16 @@ class LyricsDisplayCapabilitiesTest {
             compose.waitUntil(10000) { compose.onAllNodesWithTag("mini_lyric", useUnmergedTree = true).fetchSemanticsNodes().any { it.config[androidx.compose.ui.semantics.SemanticsProperties.Text].any { text -> text.text == "循着星光" } } }
             compose.onNodeWithTag("mini_title", useUnmergedTree = true).assertTextEquals("星光与远方")
             save("mini_player", "mini-lyrics-preview.png")
-            compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(positionMs = 4500) }
-            compose.onNodeWithTag("mini_lyric", useUnmergedTree = true).assertTextEquals("让音乐陪着你")
-            compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(positionMs = 6500) }
-            compose.onNodeWithTag("mini_lyric", useUnmergedTree = true).assertTextEquals("歌词显示预览") // Real end-time gap, not a stale lyric.
-            compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(positionMs = 4500) }
+            fun assertCaptionAt(positionMs: Long, caption: String) {
+                compose.runOnIdle { container.playerController.state.value = container.playerController.state.value.copy(positionMs = positionMs) }
+                compose.onNodeWithTag("mini_lyric", useUnmergedTree = true).assertTextEquals(caption)
+            }
+            assertCaptionAt(4500, "让音乐陪着你")
+            assertCaptionAt(6500, "让音乐陪着你")
+            assertCaptionAt(14_500, "明天有光")
+            assertCaptionAt(6500, "让音乐陪着你")
+            assertCaptionAt(500, song.artists)
+            assertCaptionAt(4500, "让音乐陪着你")
             compose.onNodeWithTag("mini_cover").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
             compose.onNodeWithTag("lyrics_options").performClick()
             compose.onNodeWithTag("open_lyrics").performClick()
@@ -255,12 +260,12 @@ class LyricsDisplayCapabilitiesTest {
             compose.onNodeWithTag("player_transport").assertDoesNotExist()
             compose.onNodeWithTag("navigate_back").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("mini_lyric", useUnmergedTree = true).fetchSemanticsNodes().isNotEmpty() }
-            val next = song.copy(id = 124, name = "新歌")
+            val next = song.copy(id = 124, name = "新歌", artists = "新歌的歌手")
             compose.runOnIdle {
                 container.playerController.queue.replace(listOf(next), 0)
                 container.playerController.state.value = PlayerState(song = next, positionMs = 1500, durationMs = 15000)
             }
-            compose.onNodeWithTag("mini_lyric", useUnmergedTree = true).assertTextEquals("歌词显示预览")
+            compose.onNodeWithTag("mini_lyric", useUnmergedTree = true).assertTextEquals(next.artists)
             compose.waitUntil(10000) { compose.onAllNodesWithText("新的星光").fetchSemanticsNodes().isNotEmpty() }
             compose.onNodeWithTag("mini_lyric", useUnmergedTree = true).assertTextEquals("新的星光")
             assertFalse(container.playerController.state.value.playing)
