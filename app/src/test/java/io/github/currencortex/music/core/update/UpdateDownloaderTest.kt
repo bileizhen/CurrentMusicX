@@ -49,6 +49,26 @@ class UpdateDownloaderTest {
         assertEquals(saved, cached)
         assertEquals(1, server.requestCount)
     }
+    @Test fun managedCachePrunesOldArtifactsButNeverActiveProgressOrReturnedTarget() = secureServer { server, client, directory ->
+        val old = (1..3).map { index -> File(directory, "update-${index.toString().padStart(64, '0')}.apk").apply {
+            writeBytes(ByteArray(10)); setLastModified(index * 1000L)
+        } }
+        val foreign = File(directory, "user-file.apk").apply { writeText("keep") }
+        val cache = UpdateArtifactCache(directory)
+        server.enqueue(MockResponse().setBody(Buffer().write(bytes)))
+        val release = release()
+        val downloader = UpdateDownloader(client, directory, cache = cache) { _, _ -> server.url("/asset").toString() }
+        val saved = runBlocking { downloader.download(release, UpdateSource.GITHUB) { _, _ ->
+            cache.prune()
+            assertTrue("Progress callbacks cannot prune the active .part", File(directory, "update-${release.sha256}.apk.part").isFile)
+        } }
+        assertTrue(UpdateDownloader.matches(saved, release))
+        cache.prune(); assertTrue(saved.isFile)
+        assertFalse(old[0].exists()); assertFalse(old[1].exists()); assertTrue(old[2].isFile)
+        assertTrue(foreign.isFile)
+        val cached = runBlocking { downloader.download(release, UpdateSource.GITHUB) { _, _ -> } }
+        assertEquals(saved, cached); assertEquals(1, server.requestCount)
+    }
     @Test fun dedicatedMirrorTriesAnotherDnsAddressAfterConnectionFailure() = secureServer { server, client, directory ->
         server.enqueue(MockResponse().setBody(Buffer().write(bytes)))
         var failures = 0
