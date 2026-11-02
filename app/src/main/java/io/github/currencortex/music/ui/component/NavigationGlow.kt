@@ -4,15 +4,18 @@ import android.util.LruCache
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.withInfiniteAnimationFrameNanos
-import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -100,41 +103,45 @@ private val glowPalettes = LruCache<String, ArtworkGlowPalette>(16)
         energy.floatValue = 0f
         bass.floatValue = 0f
     }
-    Canvas(modifier.clipToBounds().testTag("navigation_glow")) {
-        if (!active || !resumed) return@Canvas
-        val amplitude = energy.floatValue
-        val beat = bass.floatValue
-        val audio = (amplitude * .72f + beat * .28f).coerceIn(0f, 1f)
-        val travel = sin(phase.floatValue) * audio
-        val swell = sin(phase.floatValue * 1.37f) * audio
+    Spacer(modifier.clipToBounds().testTag("navigation_glow").drawWithCache {
+        val left = glowBrush(primary.value)
+        val right = glowBrush(secondary.value)
+        val middle = glowBrush(lerp(primary.value, secondary.value, .5f))
         val restingRise = minOf(46.dp.toPx(), size.height * .55f)
-        val rise = restingRise + (size.height * 1.12f - restingRise) * audio
-        val strength = .68f + audio * .22f
+        onDrawBehind {
+            if (!active || !resumed) return@onDrawBehind
+            val beat = bass.floatValue
+            val audio = (energy.floatValue * .72f + beat * .28f).coerceIn(0f, 1f)
+            val angle = if (audio > 0f) phase.floatValue else 0f
+            val travel = sin(angle) * audio
+            val swell = sin(angle * 1.37f) * audio
+            val rise = restingRise + (size.height * 1.12f - restingRise) * audio
+            val strength = .68f + audio * .22f
 
-        // Elliptical colour pools have their brightest point below the visible edge.
-        // Several soft stops avoid a visible oval outline or a bright white bottom rim.
-        fun pool(colour: Color, x: Float, width: Float, height: Float, opacity: Float) {
-            val centre = Offset(size.width * x, size.height + height * .12f)
-            scale(size.width * width, height, pivot = centre) {
-                drawCircle(Brush.radialGradient(
-                    0f to colour.copy(alpha = opacity),
-                    .22f to colour.copy(alpha = opacity * .90f),
-                    .46f to colour.copy(alpha = opacity * .56f),
-                    .68f to colour.copy(alpha = opacity * .22f),
-                    .86f to colour.copy(alpha = opacity * .045f),
-                    1f to colour.copy(alpha = 0f),
-                    center = centre, radius = 1f), radius = 1f, center = centre)
-            }
+            glowPool(middle, .5f, .86f, restingRise * .66f, strength * .26f)
+            glowPool(left, .18f + travel * .07f, .55f, rise * (1f + swell * .16f), strength * .70f)
+            glowPool(right, .82f + travel * .06f, .55f, rise * (1f - swell * .16f), strength * .70f)
+            glowPool(middle, .5f - travel * .12f, .40f, rise * (.48f + beat * .18f), strength * (.18f + beat * .10f))
         }
-        // A low continuous base joins the pools; the darker valley above it remains free
-        // to drift, instead of lifting the entire colour field as a single flat band.
-        pool(androidx.compose.ui.graphics.lerp(primary.value, secondary.value, .5f),
-            .5f, .86f, restingRise * .66f, strength * .26f)
-        pool(primary.value, .18f + travel * .07f, .55f,
-            rise * (1f + swell * .16f), strength * .70f)
-        pool(secondary.value, .82f + travel * .06f, .55f,
-            rise * (1f - swell * .16f), strength * .70f)
-        pool(androidx.compose.ui.graphics.lerp(primary.value, secondary.value, .5f),
-            .5f - travel * .12f, .40f, rise * (.48f + beat * .18f), strength * (.18f + beat * .10f))
+    })
+}
+
+// Geometry and opacity follow the audio every frame. The gradient itself follows only the palette.
+private fun glowBrush(colour: Color) = Brush.radialGradient(
+    0f to colour.copy(alpha = 1f),
+    .22f to colour.copy(alpha = .90f),
+    .46f to colour.copy(alpha = .56f),
+    .68f to colour.copy(alpha = .22f),
+    .86f to colour.copy(alpha = .045f),
+    1f to colour.copy(alpha = 0f),
+    center = Offset.Zero, radius = 1f,
+)
+
+private fun DrawScope.glowPool(brush: Brush, x: Float, width: Float, height: Float, opacity: Float) {
+    withTransform({
+        translate(size.width * x, size.height + height * .12f)
+        scale(size.width * width, height, pivot = Offset.Zero)
+    }) {
+        drawCircle(brush, radius = 1f, center = Offset.Zero, alpha = opacity)
     }
 }
