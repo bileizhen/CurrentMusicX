@@ -65,14 +65,23 @@ internal class AndroidBitPerfectStream private constructor(private val manager: 
         private val ownership = Any()
         private var owner: AndroidBitPerfectStream? = null
         fun open(context: Context, format: Format, settings: AudioOutputSettings, mediaAttributes: AudioAttributes,
-            clock: Clock, report: (String) -> Unit): BitPerfectStream = synchronized(ownership) {
+            clock: Clock, report: (String) -> Unit,
+            diagnostics: io.github.currencortex.music.core.media.engine.AudioDiagnostics? = null,
+            primary: () -> Boolean = { true }): BitPerfectStream = synchronized(ownership) {
             check(owner == null) { "已有 Bit-perfect 输出占用设备，请先停止另一段播放" }
             val manager = context.getSystemService(AudioManager::class.java)
             val native = AndroidBitPerfectPlatform(manager, mediaAttributes, format, clock)
             val mask = if (format.channelMask != Format.NO_VALUE) format.channelMask else Util.getAudioTrackChannelConfig(format.channelCount)
             val decoded = BitPerfectPcm(format.sampleRate, format.pcmEncoding, format.channelCount, mask)
             val session = BitPerfectSession.open(native, decoded, settings.deviceKey,
-                { android.os.SystemClock.elapsedRealtime() }, CurrentMusicAudioDiagnostics::record, report)
+                { android.os.SystemClock.elapsedRealtime() }, CurrentMusicAudioDiagnostics::record, report) { actual ->
+                runCatching { if (primary()) diagnostics?.update { it.copy(
+                    output = io.github.currencortex.music.core.media.engine.AudioPcmFormat(actual.rate, actual.encoding, actual.channels),
+                    backend = "AudioTrack / Android Bit-perfect",
+                    bitPerfect = io.github.currencortex.music.core.media.engine.BitPerfectEvidence.ANDROID_CONFIGURATION_VERIFIED,
+                    formatEvidence = "Android API 已确认逐位配置和实际 USB 路由；最终 DAC 逐位透明度未验证",
+                    device = sessionDeviceLabel(native, settings.deviceKey)) } }
+            }
             val result = AndroidBitPerfectStream(manager, session, native, native.createdTrack!!.output)
             owner = result
             try {
@@ -80,7 +89,19 @@ internal class AndroidBitPerfectStream private constructor(private val manager: 
                 manager.addOnPreferredMixerAttributesChangedListener(context.mainExecutor, result.changed)
                 manager.registerAudioDeviceCallback(result.devices, result.handler)
                 CurrentMusicAudioDiagnostics.record("callbacks=registered; no ordinary-mixer fallback")
-                result
+                if (diagnostics == null) result else {
+                    val config = AudioOutputProvider.OutputConfig.Builder().setEncoding(format.pcmEncoding)
+                        .setSampleRate(format.sampleRate).setChannelMask(mask).setBufferSize(0)
+                        .setAudioAttributes(mediaAttributes).build()
+                    object : BitPerfectStream {
+                        override val output = io.github.currencortex.music.core.media.engine.DiagnosticAudioOutput(result.output,
+                            config, diagnostics, primary, "AudioTrack / Android Bit-perfect") { id ->
+                            manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).firstOrNull { it.id == id }?.productName?.toString()
+                        }
+                        override fun verify() = result.verify()
+                        override fun close() = result.close()
+                    }
+                }
             } catch (e: Exception) {
                 session.invalidate(BitPerfectFailureCode.PLATFORM_ERROR, "注册音频路由监听失败（${e.javaClass.simpleName}）")
                 result.close()
@@ -89,6 +110,9 @@ internal class AndroidBitPerfectStream private constructor(private val manager: 
         }
     }
 }
+
+private fun sessionDeviceLabel(platform: BitPerfectPlatform, key: String): String? =
+    platform.devices().firstOrNull { it.key == key || key.isEmpty() && (it.type == 11 || it.type == 22) }?.label
 
 @androidx.annotation.RequiresApi(34)
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)

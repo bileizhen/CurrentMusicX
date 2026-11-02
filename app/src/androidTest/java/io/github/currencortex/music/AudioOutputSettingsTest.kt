@@ -92,7 +92,8 @@ class AudioOutputSettingsTest {
             .putShort(4).putShort(16).put("data".toByteArray()).putInt(frames * 4)
         wav.writeBytes(data.array())
         try {
-            for (mode in io.github.currencortex.music.data.settings.AudioOutputMode.entries.filter { it != io.github.currencortex.music.data.settings.AudioOutputMode.BIT_PERFECT }) {
+            // Raw USB paths require permission and a real DAC; they are covered separately.
+            for (mode in io.github.currencortex.music.data.settings.AudioOutputMode.entries.filter { !it.rawPcm }) {
                 val ended = java.util.concurrent.CountDownLatch(1)
                 val failure = java.util.concurrent.atomic.AtomicReference<androidx.media3.common.PlaybackException?>()
                 val position = java.util.concurrent.atomic.AtomicLong()

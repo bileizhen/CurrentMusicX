@@ -63,6 +63,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val updateSourceCheck = io.github.currencortex.music.core.update.UpdateSourceProbe(urlFor = ::updateAssetUrl)
 
     val audioOutput = io.github.currencortex.music.data.settings.AudioOutputSettingsRepository(settingsStore, appScope)
+    val audioDiagnostics = io.github.currencortex.music.core.media.engine.AudioDiagnostics()
+    val audioDevices by lazy { io.github.currencortex.music.core.media.engine.AudioDeviceMonitor(context, appScope) }
+    val audioOutputRetry = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val soundEffectNotices = io.github.currencortex.music.core.media.SoundEffectNoticeCenter(playerScope)
     val errorNotices = io.github.currencortex.music.core.media.IslandErrorNoticeCenter(playerScope)
     val desktopLyrics = io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsPreferences(settingsStore, appScope)

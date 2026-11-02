@@ -4,7 +4,9 @@ import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.core.media.*
 import io.github.currencortex.music.data.settings.MusicTransitionMode
+import io.github.currencortex.music.data.settings.LyricsSource
 import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.first
 import okhttp3.mockwebserver.*
 import okio.Buffer
 import org.junit.Assert.*
@@ -25,6 +27,7 @@ class PlaybackTransitionServiceTest {
         check(!container.navidrome.state.value.configured && !container.playerController.state.value.playing)
         val settings = container.musicSettings.snapshot()
         val reports = CopyOnWriteArrayList<String>()
+        val lyricRequests = CopyOnWriteArrayList<String>()
         val bytes = 8000 * 30 * 2
         val wav = ByteBuffer.allocate(44 + bytes).order(ByteOrder.LITTLE_ENDIAN).apply {
             put("RIFF".toByteArray()); putInt(36 + bytes); put("WAVEfmt ".toByteArray()); putInt(16)
@@ -38,6 +41,7 @@ class PlaybackTransitionServiceTest {
                     if (path == "stream.view") return MockResponse().setHeader("Content-Type", "audio/wav").setBody(Buffer().write(wav))
                     if (path == "scrobble.view" && request.requestUrl!!.queryParameter("submission") == "false")
                         reports += request.requestUrl!!.queryParameter("id")!!
+                    if (path == "getLyricsBySongId.view") lyricRequests += request.requestUrl!!.queryParameter("id")!!
                     val data = when (path) {
                         "ping.view" -> "\"serverVersion\":\"transition-test\""
                         "getUser.view" -> "\"user\":{\"downloadRole\":false}"
@@ -52,21 +56,32 @@ class PlaybackTransitionServiceTest {
         }
         suspend fun await(label: String, condition: () -> Boolean) {
             try { withTimeout(15000) { while (!condition()) delay(50) } }
-            catch (e: TimeoutCancellationException) { throw AssertionError("$label: ${container.playerController.state.value}", e) }
+            catch (e: TimeoutCancellationException) { throw AssertionError("$label: ${container.playerController.state.value}; lyrics=${container.playbackLyrics.state.value}; lyricsRequests=$lyricRequests", e) }
         }
         try {
             container.musicSettings.setConcurrentPlayback(false)
             container.musicSettings.setTransitionMode(MusicTransitionMode.CROSSFADE)
             container.musicSettings.setCrossfadeSeconds(5)
+            // AUTO performs online cross-provider matching, which this local Navidrome server
+            // deliberately does not implement. Select the native source explicitly rather than
+            // inheriting the verification package's previous/default lyrics preference.
+            container.musicSettings.setLyricsSource(LyricsSource.NETEASE)
+            withTimeout(3000) { container.musicSettings.state.first { it.lyricsSource == LyricsSource.NETEASE } }
             container.navidrome.connect(server.url("/").toString(), "fixture", "fixture-password")
             val songs = container.navidrome.album("album")
             withContext(Dispatchers.Main) { container.playerController.playList(songs, 0) }
             await("first playing") { container.playerController.state.value.playing && "fade-1" in reports }
+            await("first native lyrics") { container.playbackLyrics.state.value.let {
+                it.matches(songs[0]) && it.origin?.provider == "navidrome" && it.document.lines.firstOrNull()?.text == "fade-1"
+            } }
             val controller = withContext(Dispatchers.Main) { container.playerController.connect() }
             val boundaries = container.playerController.completedTracks.value
             withContext(Dispatchers.Main) { controller.seekTo(23_000) }
             await("automatic handoff") { container.playbackQueue.state.value.current?.id == songs[1].id && container.playerController.state.value.playing }
-            await("new lyrics") { container.playbackLyrics.state.value.document.lines.firstOrNull()?.text == "fade-2" }
+            await("new lyrics") { container.playbackLyrics.state.value.let {
+                it.matches(songs[1]) && it.origin?.provider == "navidrome" && it.document.lines.firstOrNull()?.text == "fade-2"
+            } }
+            assertTrue("Both tracks must actually fetch their native lyrics", lyricRequests.containsAll(listOf("fade-1", "fade-2")))
             await("new listening report") { "fade-2" in reports }
             withContext(Dispatchers.Main) {
                 assertEquals(songs[1].id.toString(), controller.currentMediaItem?.mediaId)
@@ -112,6 +127,7 @@ class PlaybackTransitionServiceTest {
             container.musicSettings.setTransitionMode(settings.transitionMode)
             container.musicSettings.setCrossfadeSeconds(settings.crossfadeSeconds)
             container.musicSettings.setConcurrentPlayback(settings.allowConcurrentPlayback)
+            container.musicSettings.setLyricsSource(settings.lyricsSource)
             container.navidrome.disconnect(); server.shutdown()
         }
     }

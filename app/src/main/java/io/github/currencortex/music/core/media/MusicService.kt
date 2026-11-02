@@ -27,12 +27,16 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.guava.future
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
+import io.github.currencortex.music.core.media.engine.*
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class MusicService : MediaSessionService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val container get() = (application as CurrentMusicApplication).container
     private lateinit var transitions: PlaybackTransitions
+    private lateinit var engine: AudioEngineManager
+    private val outputRouter by lazy { AudioOutputRouter(container.audioDiagnostics) }
+    private val outputBuffers = AudioBufferController()
     private val player get() = transitions.player
     private fun directOutput() = container.audioOutput.state.value.mode.bypassProcessing
     private lateinit var audioFocus: PlaybackAudioFocus
@@ -63,18 +67,74 @@ class MusicService : MediaSessionService() {
         deckVolumes[source] = gain
         source.volume = if (userMuted) 0f else gain * userVolume * transportGain
     }
-    private data class PlayerSlot(val meter: DockAudioLevel, val equalizer: PlaybackEqualizer,
+    private data class PlayerSlot(val meter: DockAudioLevel, val equalizer: PlaybackEqualizer, val formats: AudioFormatState,
         var originalProcessed: NeteaseOriginalPreset? = null,
         var originalFailed: Pair<NeteaseOriginalPreset, String>? = null)
     private val playerSlots = mutableMapOf<ExoPlayer, PlayerSlot>()
     private val outputManager by lazy { getSystemService(android.media.AudioManager::class.java) }
-    private val outputDevicesCallback = object : android.media.AudioDeviceCallback() {
-        override fun onAudioDevicesAdded(addedDevices: Array<out android.media.AudioDeviceInfo>) { applyOutputDevice() }
-        override fun onAudioDevicesRemoved(removedDevices: Array<out android.media.AudioDeviceInfo>) { applyOutputDevice() }
-    }
     private fun applyOutputDevice() {
-        val device = outputManager.preferredOutput(container.audioOutput.state.value.deviceKey)
+        val requested = container.audioOutput.state.value
+        val device = outputManager.preferredOutput(requested.deviceKey)
         playerSlots.keys.toList().forEach { it.setPreferredAudioDevice(device) }
+        if (requested.deviceKey.isNotBlank() && device == null && !requested.mode.rawPcm) {
+            val reason = "首选音频设备未连接，使用系统默认输出"
+            if (outputRouter.fallback(reason)) reconfigureOutput()
+            else if (requested.mode == io.github.currencortex.music.data.settings.AudioOutputMode.AUDIO_TRACK)
+                container.audioDiagnostics.update { it.copy(fallbackReason = reason) }
+        }
+    }
+    private fun reportOutput(message: String) {
+        val fallback = outputRouter.fallbackReason()
+        container.audioOutput.status.value = if (fallback == null) message else "$message · 已回退 AudioTrack：$fallback"
+    }
+    private fun reconfigureOutput() {
+        if (container.playerController.state.value.mode == PlayerMode.CAST ||
+            container.playerController.state.value.resolving || player.currentMediaItem == null) return
+        transitions.cancel(); resetPauseFade()
+        if (directOutput()) player.setPlaybackSpeed(1f)
+        val position = player.currentPosition
+        val playing = player.playWhenReady
+        engine.stop(); engine.seek(position); player.prepare(); player.playWhenReady = playing
+    }
+    private fun updateEffectDiagnostics() {
+        val requested = buildList {
+            if (container.smartTuning.effective.value.enabled) add("Android EQ / 智能调音")
+            if (container.originalProcessingPreset.value != null) add("网易云原版 PCM 音效")
+            if (container.originalAiMasterEffects.state.value.requestedEnabled) add("MNN / AI 调音")
+            if (container.originalSpeakerEffects.state.value.requestedEnabled) add("网易云扬声器音效")
+        }
+        val plan = AudioEffectPipeline.plan(container.audioOutput.state.value.mode, requested)
+        val applied = if (plan.bypass) emptyList() else buildList {
+            if (container.equalizer.state.value.active) add("Android EQ")
+            if (playerSlots[player]?.originalProcessed != null) add("网易云原版 PCM 音效（已观察处理回调）")
+        }
+        container.audioDiagnostics.update { it.copy(requestedEffects = plan.requested, appliedEffects = applied, processingBypass = plan.reason) }
+    }
+    private fun recoverOutput(error: PlaybackException): Boolean {
+        val requested = container.audioOutput.state.value.mode
+        if (requested == io.github.currencortex.music.data.settings.AudioOutputMode.AUDIO_TRACK) return false
+        val outputFailure = error.errorCode in setOf(PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
+            PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED, PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED) ||
+            generateSequence<Throwable>(error) { it.cause }.take(12).any { it is BitPerfectFailure ||
+                it is androidx.media3.exoplayer.audio.AudioSink.ConfigurationException }
+        // Only expose our bounded hardware errors, never arbitrary decoder/network messages or URLs.
+        val hardwareReason = generateSequence<Throwable>(error) { it.cause }.take(12).firstOrNull {
+            it is BitPerfectFailure || it.message.orEmpty().startsWith("[USB_")
+        }?.message?.lineSequence()?.firstOrNull()?.take(220)
+        if (!outputFailure || !outputRouter.fallback("${requested.label} 不可用：${hardwareReason ?: "输出错误 ${error.errorCode}"}")) return false
+        val item = player.currentMediaItem ?: return false
+        val position = player.currentPosition.coerceAtLeast(0)
+        reportOutput("标准音频路径")
+        container.playerController.state.value = container.playerController.state.value.copy(error = null, loading = true)
+        scope.launch {
+            yield()
+            if (player.currentMediaItem != item) return@launch
+            // Respect a pause/duck received after the error rather than replaying a stale intent.
+            val play = player.playWhenReady && !pauseFade.pausedIntent
+            transitions.cancel(); resetPauseFade()
+            engine.stop(); engine.seek(position); player.prepare(); player.playWhenReady = play
+        }
+        return true
     }
     private var desktopLyrics: AutoCloseable? = null
     private var session: MediaSession? = null
@@ -132,28 +192,23 @@ class MusicService : MediaSessionService() {
             }, promote = ::promoteTransition, discard = { playerSlots.remove(it)?.equalizer?.close(); deckVolumes.remove(it) },
             currentSong = { container.playbackQueue.state.value.current },
             readVolume = { deckVolumes[it] ?: 1f }, writeVolume = ::deckVolume)
+        engine = AudioEngineManager({ player }, container.audioDevices, outputRouter, outputBuffers, container.audioDiagnostics,
+            reconfigure = ::reconfigureOutput, releaseOwner = {
+                transitions.close()
+                playerSlots.remove(player)?.equalizer?.close()
+                player.release()
+            }).also { it.initialize() }
         audioFocus = PlaybackAudioFocus(player, container.musicSettings.concurrentPlaybackEnabled, scope)
         audioFocusReady = audioFocus.ready
-        outputManager.registerAudioDeviceCallback(outputDevicesCallback, android.os.Handler(mainLooper))
+        scope.launch { container.audioDevices.devices.collect { applyOutputDevice() } }
+        scope.launch { container.audioOutputRetry.collect { outputRouter.retry(); reconfigureOutput() } }
+        scope.launch { container.equalizer.state.collect { updateEffectDiagnostics() } }
         scope.launch {
             var previous: io.github.currencortex.music.data.settings.AudioOutputSettings? = null
             container.audioOutput.state.collect { output ->
+                engine.configureOutput(output, restart = previous != null)
                 applyOutputDevice()
-                if (previous != null && (previous?.sampleRate != output.sampleRate || previous?.mode != output.mode || previous?.deviceKey != output.deviceKey) &&
-                    container.playerController.state.value.mode != PlayerMode.CAST &&
-                    !container.playerController.state.value.resolving && player.currentMediaItem != null) {
-                    // Reconfigure the sink at the same position. Cancel the prepared companion
-                    // so a crossfade cannot promote an old output configuration afterward.
-                    transitions.cancel()
-                    resetPauseFade()
-                    if (directOutput()) player.setPlaybackSpeed(1f)
-                    val position = player.currentPosition
-                    val playing = player.playWhenReady
-                    player.stop()
-                    player.seekTo(position)
-                    player.prepare()
-                    player.playWhenReady = playing
-                }
+                updateEffectDiagnostics()
                 previous = output
             }
         }
@@ -248,7 +303,10 @@ class MusicService : MediaSessionService() {
         }
     }
     private fun createPlaybackPlayer(probe: TrackEnergyProbe): ExoPlayer {
+        var created: ExoPlayer? = null
+        fun primary() = created != null && ::transitions.isInitialized && created === player
         val meter = DockAudioLevel()
+        val formats = AudioFormatState()
         val secondaryEqualizer = PlaybackEqualizer().apply {
             val settings = container.smartTuning.effective.value
             configure(if (container.audioOutput.state.value.mode == io.github.currencortex.music.data.settings.AudioOutputMode.AUDIO_TRACK &&
@@ -274,15 +332,18 @@ class MusicService : MediaSessionService() {
                         acknowledgeOriginalProcessing(processedPreset)
                 }
             } }, outputSampleRate = { container.audioOutput.state.value.sampleRate },
-            outputSettings = { container.audioOutput.state.value }, outputStatus = { container.audioOutput.status.value = it }))
-            .setLoadControl(playbackLoadControl())
+            outputSettings = { outputRouter.effective(container.audioOutput.state.value) }, outputStatus = { if (primary()) reportOutput(it) },
+            diagnostics = container.audioDiagnostics, primary = ::primary, router = outputRouter,
+            processingSettings = { container.audioOutput.state.value }, formatState = formats))
+            .setLoadControl(outputBuffers.createLoadControl())
             .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory)).build().apply {
                 setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
                 setHandleAudioBecomingNoisy(true)
                 setWakeMode(C.WAKE_MODE_LOCAL)
                 setPreferredAudioDevice(outputManager.preferredOutput(container.audioOutput.state.value.deviceKey))
             }
-        playerSlots[source] = PlayerSlot(meter, secondaryEqualizer)
+        created = source
+        playerSlots[source] = PlayerSlot(meter, secondaryEqualizer, formats)
         deckVolume(source, 1f)
         source.addListener(object : Player.Listener {
             private fun primary() = ::transitions.isInitialized && source === player
@@ -291,6 +352,8 @@ class MusicService : MediaSessionService() {
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (!primary()) return
+                container.audioDiagnostics.update { it.copy(playing = isPlaying) }
+                updateEffectDiagnostics()
                 if (!isPlaying) transitions.pauseCompanion()
                 if (!isPlaying && source.playbackSuppressionReason != Player.PLAYBACK_SUPPRESSION_REASON_NONE)
                     pauseFade.finishPause()
@@ -315,6 +378,7 @@ class MusicService : MediaSessionService() {
                 }
             }
             override fun onPlayerError(error: PlaybackException) {
+                if (primary() && recoverOutput(error)) return
                 if (!::transitions.isInitialized || transitions.failed(source)) return
                 if (container.audioOutput.state.value.mode.rawPcm)
                     CurrentMusicAudioDiagnostics.record("player.finalState=ERROR errorCode=${error.errorCode}")
@@ -342,6 +406,7 @@ class MusicService : MediaSessionService() {
             container.originalSmartEffects.selection.value === preset -> container.originalSmartEffects.reportProcessing(preset.id)
             container.originalSoundEffects.selection.value === preset -> container.originalSoundEffects.reportProcessing(preset.id)
         }
+        updateEffectDiagnostics()
     }
     private fun reportOriginalFailure(preset: NeteaseOriginalPreset, message: String) {
         if (container.originalProcessingPreset.value !== preset) return
@@ -363,6 +428,8 @@ class MusicService : MediaSessionService() {
         return TransitionOffer(from, next, audioRequest(next, container.musicSettings.state.value.quality))
     }
     private fun promoteTransition(song: Song, outgoing: ExoPlayer, incoming: ExoPlayer) {
+        container.audioDiagnostics.resetTrack()
+        playerSlots[incoming]?.formats?.publish(container.audioDiagnostics)
         flushListening()
         trackedSong = song; trackedSession = currentSession(song); recorded = false
         container.playbackQueue.next(automatic = true)
@@ -384,6 +451,8 @@ class MusicService : MediaSessionService() {
             slot.originalFailed?.let { (preset, message) -> reportOriginalFailure(preset, message) }
             slot.originalProcessed?.let(::acknowledgeOriginalProcessing)
         }
+        container.audioDiagnostics.update { it.copy(playing = incoming.isPlaying) }
+        updateEffectDiagnostics()
         // Media3 publishes this timeline handoff as AUTO; PlayerController counts that event once.
         updateListening(incoming.isPlaying)
     }
@@ -513,8 +582,7 @@ class MusicService : MediaSessionService() {
                     val source = result.value.source
                     container.playerController.state.value = container.playerController.state.value.copy(resolving = false, error = null,
                         audioFullyCached = source.url.startsWith("cache://audio/"))
-                    player.setMediaItem(MediaItemFactory.create(song, source.url, result.value.key.takeIf(String::isNotBlank)), position)
-                    player.prepare(); player.playWhenReady = play
+                    engine.prepare(MediaItemFactory.create(song, source.url, result.value.key.takeIf(String::isNotBlank)), position, play)
                 }
             }
         }
@@ -538,7 +606,7 @@ class MusicService : MediaSessionService() {
                     val song = ApiJson.decodeFromString<Song>(args.getString("song") ?: return@future SessionResult(SessionError.ERROR_BAD_VALUE))
                     val url = args.getString("url") ?: return@future SessionResult(SessionError.ERROR_BAD_VALUE)
                     loading?.cancel(); transitions.cancel(); player.pause(); resetPauseFade(); flushListening(); trackedSong = song; trackedSession = currentSession(song); recorded = false
-                    player.setPlaybackSpeed(1f); player.setMediaItem(MediaItemFactory.create(song, url), args.getLong("position")); player.prepare()
+                    player.setPlaybackSpeed(1f); engine.prepare(MediaItemFactory.create(song, url), args.getLong("position"), args.getBoolean("play"))
                     container.playerController.state.value = container.playerController.state.value.copy(resolving = false)
                     player.playWhenReady = args.getBoolean("play")
                 }
@@ -566,16 +634,14 @@ class MusicService : MediaSessionService() {
         if (container.playerController.state.value.mode == PlayerMode.LOCAL && !player.playWhenReady) { container.playerController.disconnect(); stopSelf() }
     }
     override fun onDestroy() {
-        outputManager.unregisterAudioDeviceCallback(outputDevicesCallback)
         desktopLyrics?.close(); desktopLyrics = null
         listening.update(SystemClock.elapsedRealtime(), false)
         flushListening(); trackedSong = null; videoView?.player = null; videoView = null
         loading?.cancel()
         scope.cancel()
         resetPauseFade()
-        transitions.close()
-        playerSlots.remove(player)?.equalizer?.close()
-        session?.release(); player.release(); session = null
+        session?.release(); session = null
+        engine.release()
         container.equalizer.close()
         container.dockAudioLevel.reset()
         super.onDestroy()

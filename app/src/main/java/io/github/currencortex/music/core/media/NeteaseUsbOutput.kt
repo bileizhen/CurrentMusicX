@@ -60,7 +60,7 @@ internal object NeteaseUsbBridge {
 private object OriginalUsbDriver : NeteaseUsbDriver {
     private inline fun <T> native(action: () -> T): T {
         try { return action() }
-        finally { NeteaseUsbBridge.diagnostics().lineSequence().filter(String::isNotBlank).forEach(CurrentMusicAudioDiagnostics::record) }
+        finally { runCatching { NeteaseUsbBridge.diagnostics().lineSequence().filter(String::isNotBlank).forEach(CurrentMusicAudioDiagnostics::record) } }
     }
     override fun open(fd: Int, pcm: NeteaseUsbPcm): Long {
         return native { NeteaseUsbBridge.open(fd, pcm.rate, pcm.channels, pcm.encoding, pcm.validBits) }
@@ -75,11 +75,28 @@ private object OriginalUsbDriver : NeteaseUsbDriver {
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal class NeteaseUsbStream private constructor(
     private val context: Context, private val session: NeteaseUsbSession,
-    private val deviceId: Int, report: (String) -> Unit,
+    private val deviceId: Int, private val deviceLabel: String,
+    private val declared: UsbAudioDescriptorReport, report: (String) -> Unit,
 ) : BitPerfectStream {
     private val closed = AtomicBoolean(false)
-    private val outputImpl = OriginalUsbOutput(session, report)
+    private val outputImpl = OriginalUsbOutput(session, report, ::close)
     override val output: AudioOutput get() = outputImpl
+    fun snapshot(): io.github.currencortex.music.core.media.engine.UsbOutputSnapshot {
+        val wire = session.pcm.wireFormat
+        val capability = if (!declared.valid) "系统未提供有效 USB 描述符；DAC 能力未验证" else {
+            val entries = declared.formats.take(8).joinToString("；") { value ->
+                val rates = when {
+                    value.discreteRates.isNotEmpty() -> value.discreteRates.joinToString("/") + " Hz"
+                    value.continuousRateRange != null -> "${value.continuousRateRange.first}–${value.continuousRateRange.last} Hz"
+                    else -> "时钟范围未查询"
+                }
+                "UAC${value.uacVersion} ${value.channels}ch/${value.validBits}bit/${value.subslotBytes}B $rates"
+            }
+            "描述符声明 ${declared.formats.size} 个 PCM alternate：${entries.ifBlank { "无可解析声明" }}；实际接受能力未验证"
+        }
+        return io.github.currencortex.music.core.media.engine.UsbOutputSnapshot(deviceLabel,
+            io.github.currencortex.music.core.media.engine.AudioPcmFormat(wire.rate, wire.encoding, wire.channels), capability)
+    }
     private val detached = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             @Suppress("DEPRECATION") val device = intent.getParcelableExtra<android.hardware.usb.UsbDevice>(UsbManager.EXTRA_DEVICE)
@@ -117,9 +134,14 @@ internal class NeteaseUsbStream private constructor(
             if (pcm.encoding == 21) CurrentMusicAudioDiagnostics.record("usbHost.pcmAdaptation=packed24_to_signed32_left_aligned exact_integer_expansion=true resample=false bitPerfect=not_claimed")
             check(permitted) { "[USB_PERMISSION] 请在音频输出设置中授权访问 USB DAC" }
             val connection = manager.openDevice(device) ?: error("[USB_OPEN] Android 无法打开已授权的 USB DAC")
+            val declared = try { UsbAudioDescriptorParser.parse(connection.rawDescriptors) }
+                catch (_: Exception) { UsbAudioDescriptorReport(emptyList(), "系统未提供描述符") }
+            CurrentMusicAudioDiagnostics.record("usbHost.descriptorFormats=${declared.formats.size} " +
+                "descriptorRead=${if (declared.valid) "OK" else "INVALID"} " +
+                "rates=descriptor_declarations UAC2_clock_ranges=not_queried hardwareAcceptance=unverified")
             val session = NeteaseUsbSession.open(pcm, permitted, connection.fileDescriptor, AutoCloseable { connection.close() },
                 { manager.deviceList.values.any { it.deviceId == device.deviceId } && manager.hasPermission(device) }, OriginalUsbDriver)
-            val stream = NeteaseUsbStream(app, session, device.deviceId, report)
+            val stream = NeteaseUsbStream(app, session, device.deviceId, NeteaseUsbDevices.label(device), declared, report)
             try { stream.register() } catch (e: Exception) { stream.close(); throw e }
             CurrentMusicAudioDiagnostics.record("usbHost.finalState=OPENED bitPerfect=not_claimed positionClock=engine_queue_estimate")
             report("USB 独占（网易云）· 已打开 ${NeteaseUsbDevices.label(device)} · ${pcm.rate} Hz / ${if (pcm.encoding == 21) "PCM 24-bit 无损扩展至 32-bit" else "PCM ${if (pcm.encoding == 2) 16 else 32}-bit"} / ${pcm.channels} 声道 · 等待传输")
@@ -129,12 +151,14 @@ internal class NeteaseUsbStream private constructor(
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-private class OriginalUsbOutput(private val session: NeteaseUsbSession, private val report: (String) -> Unit) : AudioOutput {
+private class OriginalUsbOutput(private val session: NeteaseUsbSession, private val report: (String) -> Unit,
+    private val releaseStream: () -> Unit) : AudioOutput {
     private val listeners = mutableSetOf<AudioOutput.Listener>()
     private var playing = false
     private var draining = false
     private var bytes = 0L
     private var announced = false
+    private var released = false
     private var lastPosition = 0L
     private var lastAdvance = SystemClock.elapsedRealtime()
     fun verify() {
@@ -169,7 +193,11 @@ private class OriginalUsbOutput(private val session: NeteaseUsbSession, private 
     // reset the engine ring while Media3 still accounts those bytes as submitted.
     override fun flush() { release() }
     override fun stop() { draining = true }
-    override fun release() { session.close(); listeners.toList().forEach { it.onReleased() } }
+    override fun release() {
+        if (released) return
+        released = true
+        try { releaseStream() } finally { listeners.toList().forEach { it.onReleased() } }
+    }
     override fun setVolume(volume: Float) = Unit // Raw sink pauses on ducking instead of changing PCM.
     override fun isOffloadedPlayback() = false
     override fun getAudioSessionId() = C.AUDIO_SESSION_ID_UNSET
