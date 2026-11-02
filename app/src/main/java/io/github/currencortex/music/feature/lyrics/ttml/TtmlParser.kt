@@ -80,9 +80,11 @@ object TtmlParser {
                             val from = begin?.let(TtmlTimeParser::parse) ?: throw LyricsException(LyricsErrorCode.INVALID_TIMELINE, "Timed word is missing begin")
                             val to = end?.let(TtmlTimeParser::parse) ?: part.attr("dur")?.let { from + TtmlTimeParser.parse(it) }
                                 ?: throw LyricsException(LyricsErrorCode.INVALID_TIMELINE, "Timed word is missing end")
-                            if (to <= from) throw LyricsException(LyricsErrorCode.INVALID_TIMELINE, "Word end must follow begin")
+                            if (to < from) throw LyricsException(LyricsErrorCode.INVALID_TIMELINE, "Word end must not precede begin")
+                            // Zero-duration markers have no singable interval. Preserve their text; the
+                            // coverage check below falls this line back to line timing without inventing duration.
                             // A timed wrapper around several timed spans must not duplicate their glyphs.
-                            if (words.size == wordCount && text.length > offset) words.add(LyricWord(text.substring(offset), from, to, offset, text.length,
+                            if (to > from && words.size == wordCount && text.length > offset) words.add(LyricWord(text.substring(offset), from, to, offset, text.length,
                                 part.attr("agent"), part.attr("role").orEmpty().split(' ').filter { it.isNotEmpty() }))
                         }
                     }

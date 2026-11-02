@@ -69,6 +69,22 @@ class TtmlParserTest {
         failure(xml("""<p begin="0" end="2"><span begin="0" end="3">越界</span></p>"""), LyricsErrorCode.INVALID_TIMELINE)
         failure("""<!DOCTYPE tt [<!ENTITY x SYSTEM "file:///secret">]><tt>&x;</tt>""", LyricsErrorCode.UNSUPPORTED_FORMAT)
     }
+    @Test fun zeroDurationWordPreservesTextAndFallsBackOnlyItsOwnLine() {
+        // Minimal synthetic reproduction of the zero-duration marker in AMLL Follow (L61).
+        val document = TtmlParser.parse(xml("""<p begin="02:46.616" end="02:47.930"><span begin="02:46.616" end="02:47.930">A</span><span begin="02:47.930" end="02:47.930">B</span></p><p begin="02:48" end="02:49"><span begin="02:48" end="02:49">C</span></p>"""))
+        assertEquals("AB", document.lines[0].text)
+        assertEquals(166616L, document.lines[0].startTimeMs)
+        assertEquals(167930L, document.lines[0].endTimeMs)
+        assertTrue(document.lines[0].words.isEmpty())
+        assertEquals("C", document.lines[1].words.single().text)
+        assertTrue(document.hasWordTiming)
+    }
+    @Test fun reversedWordTimingStillFails() {
+        try {
+            TtmlParser.parse(xml("""<p begin="1" end="4"><span begin="3" end="2">A</span></p>"""))
+            fail("Reversed word bounds must be rejected")
+        } catch (error: LyricsException) { assertEquals(LyricsErrorCode.INVALID_TIMELINE, error.code) }
+    }
     @Test fun aSingleUpstreamFileParsesWithoutBundlingTheDatabase() {
         val raw = javaClass.getResource("/ttml/nod-krai.ttml")!!.readText()
         val doc = TtmlParser.parse(raw)
