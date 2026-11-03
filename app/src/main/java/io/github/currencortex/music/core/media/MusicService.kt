@@ -149,7 +149,7 @@ class MusicService : MediaSessionService() {
     private val readyForPreload = MutableStateFlow(false)
     private data class PreloadPlan(val request: AudioRequest, val metered: Boolean)
     private fun currentSession(song: Song? = container.playbackQueue.state.value.current) =
-        if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.session() else container.musicSession()
+        if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.session() else if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY) container.emby.session() else container.musicSession()
     private fun audioRequest(song: Song, quality: AudioQuality) = container.audioRequest(song, quality)
     private fun flushListening() {
         val ms = listening.drain(SystemClock.elapsedRealtime())
@@ -289,8 +289,9 @@ class MusicService : MediaSessionService() {
             }.combine(container.audioSettings.state) { data, _ -> data }
             .combine(container.neteaseSessions.state) { data, _ -> data }
             .combine(container.navidrome.state) { data, _ -> data }
+            .combine(container.emby.state) { data, _ -> data }
             .combine(container.playerController.state) { (settings, account), state ->
-                val next = if (settings.preloadAudio && state.song?.video != true && (account != null || container.nativeNetease != null || container.navidrome.state.value.configured) && state.mode == PlayerMode.LOCAL && state.playing &&
+                val next = if (settings.preloadAudio && state.song?.video != true && (account != null || container.nativeNetease != null || container.navidrome.state.value.configured || container.emby.state.value.configured) && state.mode == PlayerMode.LOCAL && state.playing &&
                     !state.loading && !state.resolving &&
                     player.currentMediaItem?.mediaId == container.playbackQueue.state.value.current?.id?.toString()) container.playbackQueue.previewNext() else null
                 if (next == null || next.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL) { preloadBudget.reset(); null } else {

@@ -15,15 +15,15 @@ class CurrentMusicLyricsProvider(private val music: MusicRepository, private val
     private val server: () -> String = { "" },
     private val log: (String) -> Unit = {}) : LyricsProvider {
     override suspend fun findLyrics(song: Song): LyricsProviderResult {
-        val id = if (song.musicSource == MusicSource.NAVIDROME) song.id else LyricsMatcher.candidates(song).firstOrNull { it.source == MusicSource.NETEASE }?.songId?.toLongOrNull()
+        val id = if (song.privateLibrary) song.id else LyricsMatcher.candidates(song).firstOrNull { it.source == MusicSource.NETEASE }?.songId?.toLongOrNull()
             ?: return LyricsProviderResult.Failure(LyricsErrorCode.NO_LYRICS, "CurrentMusic requires an NCM id")
         val targetServer = server()
         val scope = when {
-            song.musicSource == MusicSource.NAVIDROME -> SongLyricsStore.identity(song)
+            song.privateLibrary -> SongLyricsStore.identity(song)
             source == LyricsSource.NETEASE -> "netease"
             else -> "currentmusic:$targetServer"
         }
-        val result = if (song.musicSource == MusicSource.NAVIDROME) music.lyricsDocument(song)
+        val result = if (song.privateLibrary) music.lyricsDocument(song)
             else music.lyricsDocument(id, source, targetServer.takeIf { it.isNotBlank() })
         if (result is AppResult.Success && result.value.lines.isNotEmpty()) {
             try { cache.cacheLyrics(CachedLyrics(id, ApiJson.encodeToString(result.value), scope)) }
