@@ -26,10 +26,10 @@ CurrentMusicX 是 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic) 
 
 <p align="center">
   <img src=".github/img/home.jpg" width="320" alt="首页：每日推荐、音乐库入口与悬浮播放器">
-  <img src=".github/img/player.jpg" width="320" alt="播放器：圆形封面、动态取色背景与歌词">
+  <img src=".github/img/player.jpg" width="320" alt="播放器：沉浸式封面、动态取色背景与歌词">
 </p>
 
-<p align="center"><sub>首页与播放器 · RMX5060 真机截图，2026-10-21。界面以实际安装版本为准；点击图片可查看原图。</sub></p>
+<p align="center"><sub>RMX5060 真机 · 正式版 1.3.1 · 2026-11-03 拍摄。界面以实际安装版本为准；点击图片可查看原图。</sub></p>
 
 <details>
 <summary>更多界面：歌词、搜索、艺人主页与发现</summary>
