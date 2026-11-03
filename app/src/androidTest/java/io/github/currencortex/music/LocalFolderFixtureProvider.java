@@ -46,6 +46,7 @@ public final class LocalFolderFixtureProvider extends ContentProvider {
     }
     @Override public synchronized ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
         String id = DocumentsContract.getDocumentId(uri);
+        if (id.equals("denied")) throw new SecurityException("Fixture read permission revoked");
         if (!mode.equals("r") || !(id.equals("track") || id.equals("nestedTrack") || id.equals("outsideTrack")))
             throw new FileNotFoundException();
         File file = new File(getContext().getCacheDir(), "local-folder-fixture.mp3");
