@@ -58,8 +58,12 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
     val word = query.trim()
     val hit = if (word.isEmpty()) -1 else text.indexOf(word, ignoreCase = true)
     if (hit < 0) return text.take(limit) + "…"
-    val start = (hit - 4).coerceIn(0, (text.length - limit).coerceAtLeast(0))
-    val end = (start + limit).coerceAtMost(text.length)
+    // Keep the entire query so searchMatchText can still highlight it. Longer queries
+    // use a larger window; shorter ones reserve only the available leading context.
+    val width = maxOf(limit, word.length)
+    val leading = minOf(4, width - word.length)
+    val start = (hit - leading).coerceIn(0, (text.length - width).coerceAtLeast(0))
+    val end = (start + width).coerceAtMost(text.length)
     return (if (start > 0) "…" else "") + text.substring(start, end) + (if (end < text.length) "…" else "")
 }
 
