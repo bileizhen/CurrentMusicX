@@ -43,7 +43,8 @@ internal val BarSearchPanesKey = SemanticsPropertyKey<BarSearchPanes>("BarSearch
 @Composable internal fun GlassSearchToolbar(title: String, titleOpacity: Float, onBack: () -> Unit,
     active: Boolean, onActiveChange: (Boolean) -> Unit, value: String, onValueChange: (String) -> Unit,
     action: GlassToolbarAction, trailing: GlassToolbarAction, modifier: Modifier = Modifier,
-    inputTag: String = "bar_query", searchTag: String = "bar_search_toggle", placeholder: String = "搜索") {
+    inputTag: String = "bar_query", searchTag: String = "bar_search_toggle", placeholder: String = "搜索",
+    onSubmit: (() -> Unit)? = null) {
     val colors = MiuixTheme.colorScheme
     val density = LocalDensity.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -169,7 +170,7 @@ internal val BarSearchPanesKey = SemanticsPropertyKey<BarSearchPanes>("BarSearch
                             Modifier.wrapContentSize(Alignment.CenterStart, unbounded = true).width(with(density) { slot.width.toDp() })
                                 .height(44.dp).barSearchFade(frame.content)
                                 .then(if (!active) Modifier.clearAndSetSemantics {} else Modifier),
-                            requester, inputTag, placeholder, onSubmit = { focus.clearFocus(); keyboard?.hide() }, enabled = active)
+                            requester, inputTag, placeholder, onSubmit = { onSubmit?.invoke(); focus.clearFocus(); keyboard?.hide() }, enabled = active)
                     }
                 }
             }

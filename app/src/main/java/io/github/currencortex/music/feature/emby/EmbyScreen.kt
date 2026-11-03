@@ -30,7 +30,16 @@ import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.flow.distinctUntilChanged
 
-@Composable fun EmbyScreen(vm: EmbyViewModel, play: (List<Song>, Int) -> Unit, onBack: () -> Unit) {
+data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
+    companion object {
+        val kinds = listOf("songs", "artists", "playlists", "likes")
+        val labels = listOf("歌曲", "艺术家", "歌单", "我喜欢")
+        val icons = listOf(MusicIcons.Headphones, MusicIcons.Account, MusicIcons.List, MusicIcons.Heart)
+    }
+}
+
+@Composable fun EmbyScreen(vm: EmbyViewModel, play: (List<Song>, Int) -> Unit, onBack: () -> Unit,
+    onNavigationChange: ((EmbyNavigation?) -> Unit)? = null) {
     val account by vm.account.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
@@ -39,13 +48,29 @@ import kotlinx.coroutines.flow.distinctUntilChanged
     val queue by vm.container.playbackQueue.state.collectAsStateWithLifecycle()
     var settings by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
+    var searching by rememberSaveable { mutableStateOf(false) }
     val configuration = settings || !account.configured
+    val selectTab: (Int) -> Unit = remember(vm) { { index ->
+        searching = false; query = ""; vm.tab(EmbyNavigation.kinds[index])
+    } }
+    val navigation = remember(vm.selectedTab, selectTab) { EmbyNavigation(vm.selectedTab, selectTab) }
+    val navigationChanged by rememberUpdatedState(onNavigationChange)
+    LaunchedEffect(navigation, configuration) { navigationChanged?.invoke(navigation.takeUnless { configuration }) }
+    DisposableEffect(Unit) { onDispose { navigationChanged?.invoke(null) } }
     fun back() { if (settings && account.configured) settings = false else if (!vm.back()) onBack() }
     BackHandler(settings || vm.nested) { back() }
-    MusicSubpage(if (configuration) "Emby 账号" else state.route.title, "emby_screen", ::back, actions = {
-        if (!configuration) GlassIconButton({ vm.refresh() }, "刷新曲库", Modifier.testTag("emby_refresh"), enabled = !state.loading) {
-            Icon(Icons.Outlined.Refresh, null, Modifier.size(22.dp))
-        }
+    Box(Modifier.fillMaxSize()) {
+    MusicSubpage(if (configuration) "Emby 账号" else state.route.title, "emby_screen", ::back,
+        toolbar = if (configuration) null else ({
+            GlassSearchToolbar(state.route.title, 1f, ::back, searching, {
+                searching = it
+                if (!it && state.route.kind == "search") vm.back()
+            }, query, { query = it },
+                action = GlassToolbarAction(Icons.Outlined.Refresh, "刷新曲库", { vm.refresh() }, "emby_refresh"),
+                trailing = GlassToolbarAction(MusicIcons.Account, "账号设置", { settings = true }, "emby_account"),
+                modifier = Modifier.testTag("emby_screen_toolbar"), inputTag = "emby_query", searchTag = "emby_search",
+                placeholder = "搜索 Emby 歌曲", onSubmit = { vm.search(query) })
+        }), actions = {
         if (account.configured) GlassIconButton({ settings = !configuration }, if (configuration) "返回曲库" else "账号设置",
             Modifier.testTag("emby_account")) {
             Icon(if (configuration) MusicIcons.List else MusicIcons.Account, null, Modifier.size(22.dp))
@@ -53,10 +78,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
     }) { topInset ->
         if (configuration) EmbyAccountPage(vm, topInset) { settings = false }
         else Column(Modifier.fillMaxSize().padding(top = topInset)) {
-            MusicSearchBar(query, { vm.search(query) }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                onInput = { query = it }, placeholder = "搜索 Emby 歌曲", inputTag = "emby_query", submitTag = "emby_search")
-            MusicCategoryTabs(listOf("albums" to "专辑", "songs" to "歌曲", "artists" to "艺术家", "playlists" to "歌单", "likes" to "我喜欢"),
-                state.route.kind, { query = ""; vm.tab(it) }, "emby_tab", Modifier.padding(horizontal = 16.dp))
             Text("${account.username} · Emby", Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp),
                 fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             error?.let { Text(it, Modifier.padding(16.dp), color = MiuixTheme.colorScheme.error) }
@@ -72,7 +93,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
                 }.distinctUntilChanged().collect { if (it) vm.refresh(true) }
             }
             LazyColumn(Modifier.fillMaxSize().testTag("emby_list"), state = list,
-                contentPadding = musicScrollPadding(PaddingValues(horizontal = 16.dp, vertical = 12.dp))) {
+                contentPadding = musicScrollPadding(PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 104.dp))) {
                 items(state.page.entries, key = { "${it.type}:${it.id}" }) { entry ->
                     val cover by produceState(entry.cover, entry, account.revision) {
                         val result = appResult { vm.repository.entryCover(entry, account.revision) }
@@ -105,6 +126,11 @@ import kotlinx.coroutines.flow.distinctUntilChanged
                 if (state.page.more && !state.loading) item("more") { MusicTextAction("加载更多", { vm.refresh(true) }) }
             }
         }
+    }
+    if (!configuration && onNavigationChange == null) PlainFloatingBar(navigation.selected,
+        EmbyNavigation.labels, EmbyNavigation.icons, navigation.onSelect,
+        Modifier.align(Alignment.BottomCenter).navigationBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp)
+            .testTag("emby_bottom_bar"))
     }
 }
 
