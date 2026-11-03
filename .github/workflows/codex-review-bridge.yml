@@ -1,0 +1,45 @@
+name: Request Codex review for fork PRs
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, ready_for_review, synchronize, closed]
+  issue_comment:
+    types: [created, edited]
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/codex-review-bridge.yml
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 需要请求 Codex 审查的外部 PR 编号
+        required: true
+        type: number
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+concurrency:
+  group: codex-review-bridge
+  cancel-in-progress: false
+jobs:
+  request-and-clean:
+    if: github.repository == 'bileizhen/CurrentMusicX'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # Trusted main only. Never check out, execute, or interpolate fork PR code.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        with:
+          # Optional maintainer PAT: bot-authored comments may not trigger Codex.
+          github-token: ${{ secrets.CODEX_REVIEW_TOKEN || github.token }}
+          script: |
+            await require('./.github/scripts/codex-review-bridge.cjs')
+              .run({github,context,core});
