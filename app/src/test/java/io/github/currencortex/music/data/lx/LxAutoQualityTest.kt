@@ -12,6 +12,15 @@ class LxAutoQualityTest {
     private val song = Song(123, "Track")
     private fun requested(data: JsonObject) = data.getValue("info").jsonObject.getValue("type").jsonPrimitive.content
 
+    @Test fun addedQualityOptionsOnlyRequestDeclaredLxFormats() {
+        val caps = listOf(LxCapability("wy", lxQualities))
+        assertEquals("128k", lxTrackRequest(song, AudioQuality.HIGHER, caps).quality)
+        assertEquals("flac24bit", lxTrackRequest(song, AudioQuality.HIRES, caps).quality)
+        listOf(AudioQuality.VIVID, AudioQuality.DOLBY, AudioQuality.JYEFFECT).forEach {
+            assertEquals("flac", lxTrackRequest(song, it, listOf(LxCapability("wy", listOf("flac")))).quality)
+        }
+    }
+
     @Test fun autoUsesHighestNeteaseQualityForEveryNonemptyDeclaration() = runBlocking {
         for (mask in 1 until (1 shl lxQualities.size)) {
             val declared = lxQualities.filterIndexed { index, _ -> mask and (1 shl index) != 0 }
