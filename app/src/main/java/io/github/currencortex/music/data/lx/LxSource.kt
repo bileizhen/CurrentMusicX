@@ -64,7 +64,7 @@ internal fun lxTrackRequest(song: Song, quality: AudioQuality, sources: List<LxC
     val platform = "wy"
     val supported = lxNeteaseCapabilities(sources).firstOrNull()?.qualities
         ?: throw LxSourceException("此音源没有声明网易云播放接口，请切换音源")
-    val desired = when (quality) { AudioQuality.STANDARD -> 0; AudioQuality.EXHIGH -> 1; AudioQuality.LOSSLESS -> 2; AudioQuality.AUTO -> lxQualities.lastIndex; else -> 3 }
+    val desired = when (quality) { AudioQuality.STANDARD, AudioQuality.HIGHER -> 0; AudioQuality.EXHIGH -> 1; AudioQuality.LOSSLESS -> 2; AudioQuality.AUTO -> lxQualities.lastIndex; else -> 3 }
     val selected = lxQualities.take(desired + 1).lastOrNull { it in supported }
         ?: lxQualities.first { it in supported }
     return LxTrackRequest(platform, selected, buildJsonObject {

@@ -139,6 +139,18 @@ class NeteaseGatewayTest {
         assertNull(request.getHeader("Authorization")); assertEquals(0, current.requestCount)
     }
 
+    @Test fun manualQualityLevelsReachUpstreamWithoutAliasOrAssumedResponseQuality(): Unit = runBlocking {
+        val repository = MusicRepository(nativeApi(), { io.github.currencortex.music.data.settings.AudioSourceAccess(io.github.currencortex.music.data.settings.AudioProvider.NETEASE) })
+        for (quality in io.github.currencortex.music.core.media.AudioQuality.entries.filter { it != io.github.currencortex.music.core.media.AudioQuality.AUTO }) {
+            enqueue("""{"code":200,"data":[{"id":11,"url":"https://example.com/song.flac","level":"lossless"}]}""")
+            val source = repository.source(11, quality,
+                RequestSession("https://music.163.com/", null, sessions.state.value.revision))
+            assertEquals(quality.value, payload(upstream.takeRequest())["level"]!!.jsonPrimitive.content)
+            assertEquals("lossless", source.level)
+        }
+        assertEquals(0, current.requestCount)
+    }
+
     @Test fun nativeModeReadsLyricsAndMvAnonymouslyWithoutProjectFallback(): Unit = runBlocking {
         val native = nativeApi()
         enqueue("""{"code":200,"yrc":{"lyric":"[1000,1000](1000,500,0)Hel(1500,500,0)lo"}}""")
