@@ -35,16 +35,21 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         put("album", album.text("name")); put("pic", album.text("picUrl").ifBlank { raw.text("picUrl") }.replace("http:", "https:"))
         put("duration", raw["dt"] ?: raw["duration"] ?: JsonPrimitive(0)); put("mv", raw["mv"] ?: raw["mvid"] ?: JsonPrimitive(0))
     }
+    /** Keeps one line of context around the hits, newline-separated, markers preserved for the UI split. */
     private fun searchLyric(raw: JsonObject): String {
         val value = raw["lyrics"]
         val lines = when (value) {
             is JsonArray -> value.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
-            is JsonObject -> listOf(value.text("txt"))
-            is JsonPrimitive -> listOfNotNull(value.contentOrNull)
+            is JsonObject -> value.text("txt").split('\n')
+            is JsonPrimitive -> value.contentOrNull?.split('\n') ?: emptyList()
             else -> listOf(raw.text("lyric"))
         }.filter(String::isNotBlank)
-        val matches = lines.filter { it.contains("<b>", true) || it.contains("<em>", true) }.ifEmpty { lines }
-        return matches.distinct().take(2).joinToString(" · ")
+        val hits = lines.filter { it.contains("<b>", true) || it.contains("<em>", true) }
+        if (hits.isEmpty()) return lines.distinct().take(2).joinToString(" · ")
+        val matched = hits.distinct().take(2).joinToString(" · ")
+        val before = lines.getOrNull(lines.indexOf(hits.first()) - 1)
+        val after = lines.getOrNull(lines.lastIndexOf(hits.last()) + 1)
+        return listOfNotNull(before, matched, after).joinToString("\n")
     }
     private fun songs(raw: JsonArray) = JsonArray(raw.mapNotNull { (it as? JsonObject)?.let(::song) }.filter { it.long("ncm_id") > 0 })
     private fun artist(raw: JsonObject) = buildJsonObject {

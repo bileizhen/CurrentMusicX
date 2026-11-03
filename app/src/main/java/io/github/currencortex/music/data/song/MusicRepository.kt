@@ -106,9 +106,11 @@ class MusicRepository(private val api: ApiClient,
         } ?: throw ApiException(ErrorKind.Timeout)
     }
     suspend fun searchLyrics(keyword: String, offset: Int = 0): AppResult<SearchPage> = appResult {
+        // Native only: the project endpoint answers too slowly for search. Missing neighbours
+        // are backfilled per song from the full lyric document in the search view model.
         val result = api.get<SearchDto>("ncm/search", mapOf("keywords" to keyword, "offset" to "$offset", "limit" to "30", "type" to "lyric"))
         SearchPage(result.songs.map(SongDto::toDomain), result.totals.song, result.hasMore.song,
-            result.songs.mapNotNull { song -> cleanSearchLyric(song.lyric).takeIf(String::isNotBlank)?.let { song.id to it } }.toMap())
+            result.songs.mapNotNull { song -> searchLyricContextOf(song)?.let { song.id to it } }.toMap())
     }
     suspend fun searchSuggestions(keyword: String): AppResult<List<String>> = appResult {
         val raw = api.request("GET", "ncm/search/suggest", mapOf("keywords" to keyword, "type" to "mobile"),
@@ -181,3 +183,31 @@ internal fun cleanSearchLyric(value: String): String = value.replace(Regex("<[^>
     .replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
     .replace("&quot;", "\"").replace("&#39;", "'").replace("&nbsp;", " ")
     .replace(Regex("\\s+"), " ").trim().take(240)
+
+/** Gateway joins the hit with one neighbour line on each side; markers survive until this split. */
+internal fun parseSearchLyricContext(value: String): SearchLyricContext? {
+    val parts = value.split('\n').mapNotNull { raw ->
+        val hit = raw.contains("<b>", true) || raw.contains("<em>", true)
+        cleanSearchLyric(raw).takeIf(String::isNotBlank)?.let { it to hit }
+    }
+    if (parts.isEmpty()) return null
+    val hitIndex = parts.indexOfLast { it.second }
+    if (hitIndex < 0) return SearchLyricContext(null, parts.joinToString(" · ") { it.first }, null)
+    return SearchLyricContext(parts.take(hitIndex).lastOrNull()?.first,
+        parts.filter { it.second }.joinToString(" · ") { it.first },
+        parts.drop(hitIndex + 1).firstOrNull()?.first)
+}
+
+/** CurrentMusic servers now ship structured context rows; older deployments only carry the joined string. */
+internal fun searchLyricContextOf(dto: SongDto): SearchLyricContext? {
+    val context = dto.lyricContext
+    if (context.isEmpty()) return parseSearchLyricContext(dto.lyric)
+    val firstHit = context.indexOfFirst { it.matched }
+    val lastHit = context.indexOfLast { it.matched }
+    val matched = (if (firstHit >= 0) context.filter { it.matched }.joinToString(" · ") { it.txt }
+        else context.joinToString(" · ") { it.txt }).let(::cleanSearchLyric)
+    if (matched.isBlank()) return null
+    val before = if (firstHit > 0) cleanSearchLyric(context[firstHit - 1].txt).takeIf(String::isNotBlank) else null
+    val after = if (lastHit >= 0 && lastHit < context.lastIndex) cleanSearchLyric(context[lastHit + 1].txt).takeIf(String::isNotBlank) else null
+    return SearchLyricContext(before, matched, after)
+}
