@@ -107,3 +107,7 @@ test('PR review automation changes remain lightweight', () => {
     '.github/scripts/android-ci-scope.test.cjs',
   ]), true);
 });
+
+test('Codex language instructions do not require APK compilation', () => {
+  assert.equal(isLightweightOnly(['AGENTS.md', '.github/REVIEW_POLICY.md']), true);
+});
