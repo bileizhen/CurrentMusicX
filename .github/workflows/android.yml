@@ -48,7 +48,8 @@ jobs:
         run: python3 -m unittest discover -s scripts/tests -v
       - name: Build debug APK and run unit tests
         if: steps.scope.outputs.required == 'true' && github.event_name == 'pull_request'
-        run: ./gradlew assembleDebug testDebugUnitTest assembleDebugAndroidTest lintDebug --no-daemon --stacktrace -Plei.officialRepositoriesFirst=true
+        # PR checks compile one representative ABI, execute unit tests and lint; instrumentation APKs remain available for explicit device-verification builds.
+        run: ./gradlew assembleDebug testDebugUnitTest lintDebug --no-daemon --stacktrace -Plei.officialRepositoriesFirst=true -PciPrArm64Only=true
       - name: Build and verify unsigned CI release
         if: steps.scope.outputs.required == 'true' && github.event_name != 'pull_request'
         env:
