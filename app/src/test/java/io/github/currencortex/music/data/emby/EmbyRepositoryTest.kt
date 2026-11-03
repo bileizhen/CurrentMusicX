@@ -152,6 +152,24 @@ class EmbyRepositoryTest {
         delay(100)
         withTimeout(2000) { job.cancelAndJoin() }
     }
+    private suspend fun cancelMedia(body: Boolean, redirect: Boolean = false) = coroutineScope {
+        login(); val song = song(); server.takeRequest(); server.takeRequest()
+        if (redirect) server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", server.url("/cdn/audio")))
+        server.enqueue(if (body) MockResponse().setBody("audio").setBodyDelay(3, TimeUnit.SECONDS)
+            else MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
+        val call = OkHttpClient.Builder().addInterceptor(repo.client.mediaInterceptor()).build()
+            .newCall(Request.Builder().url(repo.source(song).url).build())
+        val headers = CompletableDeferred<Unit>()
+        val result = async(Dispatchers.IO) { runCatching { call.execute().use { headers.complete(Unit); it.body!!.string() } } }
+        assertNotNull(server.takeRequest(5, TimeUnit.SECONDS))
+        if (redirect) assertNotNull(server.takeRequest(5, TimeUnit.SECONDS))
+        if (body) withTimeout(2000) { headers.await() }
+        call.cancel()
+        assertTrue(withTimeout(2000) { result.await() }.isFailure)
+    }
+    @Test fun cancelMediaBeforeHeadersInterruptsWire() = runBlocking { cancelMedia(body = false) }
+    @Test fun cancelMediaInterruptsResponseBody() = runBlocking { cancelMedia(body = true) }
+    @Test fun cancelMediaAfterRedirectInterruptsResponseBody() = runBlocking { cancelMedia(body = true, redirect = true) }
     @Test fun zeroTotalWithFullPageStillAllowsLoadingMore() = runBlocking {
         login()
         server.enqueue(MockResponse().setBody("""{"Items":[${List(40) { track }.joinToString(",")}],"TotalRecordCount":0}"""))
