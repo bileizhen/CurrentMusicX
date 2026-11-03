@@ -37,7 +37,8 @@ internal data class GlassOpticalGeometry(val pane: Rect, val radius: Float,
 @Composable fun Modifier.glassSurface(backdrop: Backdrop?, shape: Shape, menu: Boolean = false,
     tint: Color? = null, glow: () -> Float = { 0f }, lens: Boolean = false,
     menuProgress: () -> Float = { if(menu)1f else 0f }, frost:()->Float = {if(menu)12f else 2.5f},
-    clipToShape:Boolean=true,strength:()->Float={1f},materialStrength:()->Float=strength): Modifier {
+    clipToShape:Boolean=true,strength:()->Float={1f},materialStrength:()->Float=strength,
+    alert: Boolean = false): Modifier {
     val dark = MiuixTheme.colorScheme.onBackground.luminance() > .5f
     val glass = LocalLiquidGlassEnabled.current && Build.VERSION.SDK_INT >= 33
     val frosted = LocalGlassBlurEnabled.current
@@ -77,14 +78,14 @@ internal data class GlassOpticalGeometry(val pane: Rect, val radius: Float,
                         is Outline.Rounded -> outline.roundRect.let { GlassOpticalGeometry(Rect(it.left,it.top,it.right,it.bottom),it.topLeftCornerRadius.x) }
                         else -> GlassOpticalGeometry(Rect(Offset.Zero,size),size.minDimension/2)
                     }
-                applyLiquidGlass(shader,geometry,fill,menuProgress().coerceIn(0f,1f),dark,tint!=null,glow(),lens,amount,material)
+                applyLiquidGlass(shader,geometry,fill,menuProgress().coerceIn(0f,1f),dark,tint!=null,glow(),lens,amount,material,alert)
             }
         },onDrawSurface={ if(!glass)drawOutline(shape.createOutline(size,layoutDirection,this),fill.copy(alpha=(if(menu).92f else .82f)*strength().coerceIn(0f,1f))) })
     else clipped.drawBehind {drawOutline(shape.createOutline(size,layoutDirection,this),fill.copy(alpha=.97f*strength().coerceIn(0f,1f)))}
 }
 
 private fun BackdropEffectScope.applyLiquidGlass(source:String,g:GlassOpticalGeometry,tint:Color,
-    menu:Float,dark:Boolean,tinted:Boolean,glow:Float,lens:Boolean,amount:Float,material:Float) {
+    menu:Float,dark:Boolean,tinted:Boolean,glow:Float,lens:Boolean,amount:Float,material:Float,alert:Boolean) {
     val pad=padding
     val sf=downscaleFactor.coerceAtLeast(1).toFloat()
     val d=density
@@ -101,7 +102,7 @@ private fun BackdropEffectScope.applyLiquidGlass(source:String,g:GlassOpticalGeo
     val opacity=if(lens)0f else if(tinted).82f else glassLerp(if(dark).62f else .54f,if(dark).63f else .55f,menu)
     val rim=if(lens){if(dark).3f else .6f}else glassLerp(if(tinted){if(dark).14f else .2f}else .28f,0f,menu)
     // LiquidGlassStyle.tinted has its own hairline gains; regular glass uses .25/.75.
-    val hairline=if(lens).42f else if(dark)0f else if(tinted).34f else .25f
+    val hairline=if(alert)0f else if(lens).42f else if(dark)0f else if(tinted).34f else .25f
     val sideHairline=if(lens).42f else if(tinted){if(dark).73f else .5f}else .75f
     val halfWidth=pane.width/2/d;val halfHeight=pane.height/2/d;val round=r/d
     var lastTurn=0f
