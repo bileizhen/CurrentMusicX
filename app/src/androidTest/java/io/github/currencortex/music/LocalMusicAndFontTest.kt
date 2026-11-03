@@ -30,6 +30,22 @@ import java.util.UUID
 class LocalMusicAndFontTest {
     private val context get() = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
 
+    @Test fun folderScanReadsOnlyGrantedTreeAndNestedAudio() = runBlocking {
+        val tree = android.provider.DocumentsContract.buildTreeDocumentUri(
+            "io.github.currencortex.music.test.localfolders", "selected")
+        val songs = io.github.currencortex.music.feature.library.scanLocalFolder(context, tree)
+        assertEquals(2, songs.size)
+        assertEquals(setOf("track", "nestedTrack"), songs.map {
+            android.provider.DocumentsContract.getDocumentId(Uri.parse(it.localUri))
+        }.toSet())
+        songs.forEach { song ->
+            assertEquals(MusicSource.LOCAL, song.musicSource)
+            assertTrue(song.durationMs > 0)
+            context.contentResolver.openInputStream(Uri.parse(song.localUri))!!.use { assertTrue(it.read() >= 0) }
+        }
+        assertEquals(songs.map { it.id }, io.github.currencortex.music.feature.library.scanLocalFolder(context, tree).map { it.id })
+    }
+
     @Test fun embeddedLyricsReadThroughMediaStoreDescriptor() = runBlocking {
         for ((extension, mime) in listOf("mp3" to "audio/mpeg", "flac" to "audio/flac",
             "m4a" to "audio/mp4", "wav" to "audio/wav")) {
