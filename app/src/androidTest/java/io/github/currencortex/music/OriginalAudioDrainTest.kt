@@ -20,6 +20,15 @@ import androidx.media3.exoplayer.ExoPlayer
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 class OriginalAudioDrainTest {
     @Test fun realAudioTrackFinishesWithNativeEffectAndCanReplayAfterSeek() {
+        playAndReplay(48000, NeteaseOriginalPreset(0, "Playback fixture", 1,
+            """{"eq":{"on":false}}""".toByteArray()))
+    }
+
+    @Test fun realAudioTrackFinishesHighRateMoodEffectAndCanReplayAfterSeek() {
+        playAndReplay(192000, moodSpatialPreset())
+    }
+
+    private fun playAndReplay(sampleRate: Int, preset: NeteaseOriginalPreset) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         check(context.packageName.endsWith(".verification"))
@@ -28,13 +37,11 @@ class OriginalAudioDrainTest {
         val processed = java.util.concurrent.atomic.AtomicInteger()
         val failure = java.util.concurrent.atomic.AtomicReference<String?>()
         val diagnostics = io.github.currencortex.music.core.media.engine.AudioDiagnostics()
-        val preset = NeteaseOriginalPreset(0, "Playback fixture", 1,
-            """{"eq":{"on":false}}""".toByteArray())
         val file = File.createTempFile("native-drain-", ".wav", context.cacheDir)
-        val pcmBytes = 48000 * 4
+        val pcmBytes = sampleRate * 4
         val data = ByteBuffer.allocate(44 + pcmBytes).order(ByteOrder.LITTLE_ENDIAN).apply {
             put("RIFF".toByteArray()).putInt(36 + pcmBytes).put("WAVEfmt ".toByteArray())
-            putInt(16).putShort(1).putShort(2).putInt(48000).putInt(48000 * 4)
+            putInt(16).putShort(1).putShort(2).putInt(sampleRate).putInt(sampleRate * 4)
             putShort(4).putShort(16).put("data".toByteArray()).putInt(pcmBytes)
         }
         file.writeBytes(data.array())
