@@ -33,7 +33,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     actions: (@Composable (Song) -> Unit)? = null, roomName: String? = null, onBack: (() -> Unit)? = null,
     navigate: (String) -> Unit = {}, sheet: SearchSheetState? = null, autoFocus: Boolean = false, onFocused: () -> Unit = {},
     recommendations: List<Song> = emptyList(), recent: List<Song> = emptyList(),
-    quickActions: (@Composable (Song) -> Unit)? = null, onResults: (List<Song>) -> Unit = {},
+    quickActions: (@Composable (Song, Boolean) -> Unit)? = null, onResults: (List<Song>) -> Unit = {},
     onPlayAll: ((List<Song>) -> Unit)? = null,
     onPlay: (Song) -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -176,8 +176,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 SearchResultSongRow(song, state.submitted, playing.first == song.id && playing.second,
                     { onPlay(song) }, { player.add(song, true) }, { player.add(song) },
                     lyric = page.matchedLyrics[song.id].takeIf { category == SearchCategory.LYRIC },
-                    quickActions = { quickActions?.invoke(song) },
-                    extraActions = { actions?.invoke(song) })
+                    quickActions = { quickActions?.invoke(song, category != SearchCategory.LYRIC) },
+                    extraActions = { actions?.invoke(song) },
+                    compactActions = category == SearchCategory.LYRIC)
             }
         }
         if (page.loading && page.count > 0) item { LoadingSongList(2, searchActions = quickActions != null) }
