@@ -147,13 +147,13 @@ class NativeUiComponentsTest {
         capture("nativeui-popup-settings-channel.png")
         val node=compose.onNodeWithTag("update_overflow_panel").fetchSemanticsNode()
         assertEquals("Path: ${node.config[GlassMenuPathKey]}, unfold=${node.config[GlassMenuUnfoldKey]}",2,node.config[GlassMenuDepthKey])
-        compose.onNodeWithTag("update_channel_prerelease").performClick();advance()
-        assertEquals(listOf(UpdateChannel.PRERELEASE),channels)
+        compose.onNodeWithTag("update_channel_ci").performClick();advance()
+        assertEquals(listOf(UpdateChannel.CI),channels)
         compose.onNodeWithTag("update_settings_save").assertDoesNotExist()
         compose.onNodeWithTag("update_settings_cancel").assertDoesNotExist()
         capture("nativeui-popup-nested-settings.png")
         compose.onNodeWithTag("update_channel").performClick();advance()
-        compose.onNodeWithTag("update_channel_prerelease").performClick();advance()
+        compose.onNodeWithTag("update_channel_ci").performClick();advance()
         assertEquals("Selecting the current value must not dispatch again",1,channels.size)
     }
     @Test fun genericMenuWorksOutsideUpdateAndDwellOpensItsSubmenuWithoutSelecting() {
