@@ -18,6 +18,7 @@ function isLightweightOnly(paths) {
     '.github/workflows/pr-review-summary.yml',
     '.github/scripts/pr-review-summary.cjs',
     '.github/scripts/pr-review-summary.test.cjs',
+    '.github/REVIEW_POLICY.md',
   ]);
   return paths.length > 0 && paths.every(path =>
     checkedAutomation.has(path) ||
