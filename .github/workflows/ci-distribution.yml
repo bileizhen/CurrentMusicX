@@ -1,0 +1,125 @@
+name: Publish CI build
+on:
+  workflow_run:
+    workflows: [Android CI]
+    types: [completed]
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ci-distribution
+  cancel-in-progress: false
+jobs:
+  gate:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      contains(fromJSON('["push","workflow_dispatch"]'), github.event.workflow_run.event)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      required: ${{ steps.scope.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        id: scope
+        with:
+          script: |
+            const {trustedRun, hasSuccessfulAndroidBuild} = require('./.github/scripts/ci-release.cjs');
+            const run = context.payload.workflow_run;
+            if (!trustedRun(run, `${context.repo.owner}/${context.repo.repo}`)) throw new Error('Untrusted upstream run');
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun,
+              {...context.repo, run_id: run.id, filter: 'latest', per_page: 100});
+            const required = hasSuccessfulAndroidBuild(jobs);
+            if (!required) core.info('Upstream skipped Android compilation; no CI APK distribution is needed');
+            return required;
+  build:
+    needs: gate
+    if: needs.gate.outputs.required == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.metadata.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - run: sdkmanager "platforms;android-37.0" "build-tools;35.0.0" "ndk;30.0.16248370" "cmake;4.1.2"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build and verify CI release without signing secrets
+        env:
+          CI_BUILD_NUMBER: ${{ github.event.workflow_run.run_number }}
+        run: ./gradlew :app:assembleRelease :app:testReleaseUnitTest :app:lintRelease -PciBuildNumber="$CI_BUILD_NUMBER" -Plei.officialRepositoriesFirst=true --no-daemon --stacktrace
+      - name: Prepare exact build artifact
+        id: metadata
+        env:
+          CI_BUILD_NUMBER: ${{ github.event.workflow_run.run_number }}
+        run: node .github/scripts/ci-release.cjs prepare
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ci-unsigned
+          path: ci-dist/
+          if-no-files-found: error
+          retention-days: 7
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: ci-signing
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      # The only secret-bearing job runs trusted main scripts, never a PR head.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: ci-unsigned
+          path: ci-dist
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - run: sdkmanager "build-tools;35.0.0"
+      - name: Sign with the existing release certificate
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          : "${SIGNING_KEYSTORE_BASE64:?Missing CI signing keystore}"
+          keyfile="$RUNNER_TEMP/ci-signing.jks"
+          trap 'rm -f "$keyfile"' EXIT
+          printf '%s' "$SIGNING_KEYSTORE_BASE64" | base64 --decode > "$keyfile"
+          chmod 600 "$keyfile"
+          apk=(ci-dist/*.apk)
+          test "${#apk[@]}" -eq 1
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$keyfile" --ks-key-alias "$SIGNING_KEY_ALIAS" --ks-pass env:SIGNING_STORE_PASSWORD --key-pass env:SIGNING_KEY_PASSWORD "${apk[0]}"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --min-sdk-version 26 "${apk[0]}"
+      - uses: actions/github-script@v7
+        env:
+          CI_TAG: ${{ needs.build.outputs.tag }}
+        with:
+          script: |
+            await require('./.github/scripts/ci-release.cjs').publish({github,context,core});

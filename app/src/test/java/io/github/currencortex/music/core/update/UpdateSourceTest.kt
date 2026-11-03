@@ -13,6 +13,17 @@ class UpdateSourceTest {
         assertEquals(release.apkUrl, UpdateSource.GITHUB.url(release))
     }
 
+    @Test fun ciHidesOnlyTheStableMirrorAndOtherSourcesKeepExactBuildUrls() {
+        val ci = release.copy(version = "1.0.0-ci.1", prerelease = true,
+            apkUrl = release.apkUrl!!.replace("v1.0.0", "v1.0.0-ci.1"))
+        assertEquals(UpdateSource.available.filter { it != UpdateSource.CURRENTMUSIC }, UpdateSource.forChannel(UpdateChannel.CI))
+        UpdateSource.forChannel(UpdateChannel.CI).forEach {
+            assertEquals(it.prefix + ci.apkUrl, it.url(ci))
+        }
+        org.junit.Assert.assertThrows(IllegalArgumentException::class.java) { UpdateSource.CURRENTMUSIC.url(ci) }
+        assertEquals(UpdateSource.available, UpdateSource.forChannel(UpdateChannel.STABLE))
+    }
+
     @Test fun mirrorsPrefixTheOfficialUrlOverHttps() {
         assertEquals("https://github.tbap.top/" + release.apkUrl, UpdateSource.TBAP.url(release))
         assertEquals("https://gh-proxy.com/" + release.apkUrl, UpdateSource.GH_PROXY.url(release))

@@ -28,10 +28,27 @@ class GitHubUpdateCheckerTest {
         assertEquals("1.2.0", checker.parseResponse(release("v1.2.0").toString(), UpdateChannel.STABLE)?.version)
     }
 
-    @Test fun prereleaseSelectsHighestVersionRegardlessOfApiOrdering() {
-        val json = JSONArray().put(release("v1.1.0")).put(release("v1.3.0-beta.2", true))
-            .put(release("v1.3.0", draft = true)).put(release("v1.2.0"))
-        assertEquals("1.3.0-beta.2", checker.parseResponse(json.toString(), UpdateChannel.PRERELEASE)?.version)
+    private fun ci(tag: String) = release(tag, prerelease = true).apply {
+        getJSONArray("assets").getJSONObject(0)
+            .put("name", "CurrentMusic-Android-$tag.apk")
+            .put("browser_download_url", "https://github.com/example/app/releases/download/$tag/CurrentMusic-Android-$tag.apk")
+            .put("size", 123).put("digest", "sha256:" + "a".repeat(64))
+    }
+
+    @Test fun ciOnlySelectsNewestVerifiedCiArtifactNotBetaOrStable() {
+        val json = JSONArray().put(ci("v1.0.0-ci.9")).put(release("v9.0.0"))
+            .put(ci("v1.0.0-ci.12")).put(release("v9.0.0-beta.1", true))
+        assertEquals("1.0.0-ci.12", checker.parseResponse(json.toString(), UpdateChannel.CI)?.version)
+        assertNull(GitHubUpdateChecker("example", "app", "1.0.0-ci.12", "Test")
+            .parseResponse(json.toString(), UpdateChannel.CI))
+        assertEquals("9.0.0", checker.parseResponse(json.toString(), UpdateChannel.STABLE)?.version)
+    }
+
+    @Test fun ciRejectsDraftMissingDigestAndWrongArtifact() {
+        val draft = ci("v1.1.0-ci.1").put("draft", true)
+        val noDigest = ci("v1.1.0-ci.2").apply { getJSONArray("assets").getJSONObject(0).remove("digest") }
+        val wrongApk = ci("v1.1.0-ci.3").apply { getJSONArray("assets").getJSONObject(0).put("name", "app-debug.apk") }
+        assertNull(checker.parseResponse(JSONArray().put(draft).put(noDigest).put(wrongApk).toString(), UpdateChannel.CI))
     }
 
     @Test fun assetSizeAndOfficialDigestArePreservedForDownloadValidation() {
