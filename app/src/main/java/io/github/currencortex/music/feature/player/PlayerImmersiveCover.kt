@@ -17,7 +17,7 @@ import kotlin.math.min
 /** Crops at draw time, so the tall cover can morph into a square without stretching its pixels. */
 @Composable internal fun PlayerImmersiveCover(url: String, modifier: Modifier,
     bounds: () -> Rect?, radius: () -> Float, immersion: () -> Float,
-    alpha: () -> Float = { 1f }) {
+    alpha: () -> Float = { 1f }, wideViewport: Boolean = false) {
     val context = LocalContext.current
     val painter = rememberAsyncImagePainter(remember(context, url) {
         ImageRequest.Builder(context).data(coverRequestUrl(url, 1200)).size(1200).build()
@@ -26,7 +26,7 @@ import kotlin.math.min
     val base = lerp(Color(palette.primary), Color(0xFF101114), .7f)
     val path = remember { Path() }
     Canvas(modifier) {
-        val rect = bounds() ?: return@Canvas
+        val rect = if (wideViewport) Rect(Offset.Zero, size) else bounds() ?: return@Canvas
         if (rect.isEmpty || !rect.width.isFinite() || !rect.height.isFinite()) return@Canvas
         val amount = immersion().coerceIn(0f, 1f)
         val opacity = alpha().coerceIn(0f, 1f)
@@ -50,6 +50,11 @@ import kotlin.math.min
                 drawRect(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .18f * amount),
                     Color.Transparent), rect.top, rect.top + imageHeight * .4f), rect.topLeft, rect.size,
                     alpha = opacity)
+                if (wideViewport) {
+                    // The right pane contains lyrics/transport in both landscape pages.
+                    drawRect(Brush.horizontalGradient(listOf(Color.Transparent, base.copy(alpha = .92f)),
+                        rect.left + rect.width * .3f, rect.right), rect.topLeft, rect.size, alpha = opacity)
+                }
                 drawRect(Brush.verticalGradient(listOf(Color.Transparent, base.copy(alpha = .2f), base),
                     rect.top + imageHeight * (1 - .52f * amount), rect.top + imageHeight), rect.topLeft, rect.size,
                     alpha = opacity)
