@@ -3,4 +3,5 @@
     <cache-path name="diagnostics" path="diagnostics/" />
     <cache-path name="updates" path="updates/" />
     <cache-path name="song_shares" path="song-shares/" />
+    <cache-path name="support_codes" path="support-codes/" />
 </paths>
