@@ -27,7 +27,7 @@ import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-/** Uses the existing full player. Browsing a mode never replaces the playing queue. */
+/** The dialog previews choices; the embedded listening page applies them on tap. */
 @Composable internal fun PersonalRoamingDialog(container: AppContainer, onDismiss: () -> Unit, onBinding: () -> Unit) {
     PersonalRoamingContent(container, onDismiss, onBinding)
 }
@@ -48,9 +48,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var draftKey by rememberSaveable { mutableStateOf<String?>(null) }
     var submitted by remember { mutableStateOf<String?>(null) }
     var settings by remember { mutableStateOf(false) }
-    val choice = state.catalog.choices.find { it.key == draftKey } ?: state.choice
+    val choice = if (embedded) state.choice else state.catalog.choices.find { it.key == draftKey } ?: state.choice
     val loggedIn = account.loggedIn && !account.stale
     val changed = !state.active || choice.key != state.choice.key
+    val selectChoice: (io.github.currencortex.music.data.roaming.RoamingChoice) -> Unit = { selected ->
+        if (!embedded) draftKey = selected.key
+        else if (state.ready && !state.loading) {
+            when {
+                !loggedIn -> { onDismiss(); onBinding() }
+                state.active && selected.key == state.choice.key && state.error == null -> onDismiss()
+                else -> { submitted = selected.key; station.start(selected) }
+            }
+        }
+    }
     val colors = if (embedded) MiuixTheme.colorScheme else musicDialogColors()
     val bodyHeight = (LocalConfiguration.current.screenHeightDp * .48f).dp
     LaunchedEffect(Unit) { station.loadCatalog() }
@@ -106,7 +116,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             .testTag("roaming_choices"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             SettingsGroup {
                 state.catalog.modes.forEachIndexed { index, mode ->
-                    SettingsChoiceRow(mode.title, choice.key == mode.key, { draftKey = mode.key },
+                    SettingsChoiceRow(mode.title, choice.key == mode.key, { selectChoice(mode) },
                         Modifier.testTag("roaming_mode_${mode.code}"), summary = mode.subtitle,
                         enabled = state.ready && !state.loading)
                     if (index < state.catalog.modes.lastIndex) SettingsDivider()
@@ -120,7 +130,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         Column(Modifier.weight(1f).clip(RoundedCornerShape(14.dp))
                             .background(if (selected) colors.primary.copy(alpha = .1f) else Color.Transparent)
                             .selectable(selected, enabled = state.ready && !state.loading, role = Role.RadioButton,
-                                onClick = { draftKey = scene.key }).testTag("roaming_scene_${scene.code}")
+                                onClick = { selectChoice(scene) }).testTag("roaming_scene_${scene.code}")
                             .padding(horizontal = 2.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (scene.icon.isNotBlank()) AsyncImage(scene.icon, null, Modifier.size(24.dp),
