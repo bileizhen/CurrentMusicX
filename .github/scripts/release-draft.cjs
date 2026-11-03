@@ -27,7 +27,9 @@ async function prepare({ github, context, core }) {
   const releases = await github.paginate(github.rest.repos.listReleases,{...repo,per_page:100});
   if (releases.some(release => release.tag_name === tag)) throw new Error('该版本已有 Release，不覆盖现有说明与附件');
   const runs = await github.paginate(github.rest.actions.listWorkflowRuns,{...repo,workflow_id:'android.yml',head_sha:target,per_page:100});
-  if (!runs.some(run => run.conclusion === 'success' && run.head_branch === 'main' && ['push','workflow_dispatch'].includes(run.event))) throw new Error('目标提交尚未通过 main 的 Android CI');
+  const latest = runs.filter(run => run.head_branch === 'main' && ['push','workflow_dispatch'].includes(run.event))
+    .sort((a,b) => b.id - a.id)[0];
+  if (latest?.conclusion !== 'success') throw new Error('目标提交最新一次 main Android CI 尚未通过');
   const notes = (await github.rest.repos.generateReleaseNotes({ ...repo,tag_name:tag,previous_tag_name:previous,target_commitish:target,configuration_file_path:'.github/release.yml' })).data;
   // Preserve GitHub's author, PR, new contributor and full changelog links verbatim.
   const body = `## 更新说明\n\n${process.env.RELEASE_SUMMARY.trim()}\n\n${notes.body}\n\n## Installation & Verification\n\n- 此草稿基于 ${target}，Android CI 已通过。\n- 待上传同一提交构建的正式签名 APK 与 SHA-256 校验文件。\n- 真机验收、签名和下载校验尚待维护者填写；CI 不代表真机验收。\n`;
