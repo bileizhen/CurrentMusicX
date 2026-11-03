@@ -1,7 +1,6 @@
 package io.github.currencortex.music.data.settings
 
 enum class ThemeMode { SYSTEM, LIGHT, DARK }
-enum class RootTabAnimation { SLIDE, FADE }
 enum class PlayerCoverStyle(val label: String) { CIRCLE("圆形封面"), IMMERSIVE("沉浸式封面") }
 enum class ThemeColorStyle(val label: String) { VIVID("鲜明"), TINTED("染色"), SOFT("柔和"), MONOCHROME("单色") }
 val DefaultThemeColors = listOf(0xFF007AFF, 0xFFCB30E0, 0xFFFF2D55, 0xFFFF383C, 0xFFFF8D28, 0xFFFFCC00, 0xFF34C759, 0xFF8E8E93)
@@ -58,7 +57,6 @@ data class AppearanceSettings(
     val colorStyle: ThemeColorStyle = ThemeColorStyle.VIVID,
     val customTextScale: Boolean = false,
     val textScale: Float = 1f,
-    val tabAnimation: RootTabAnimation = RootTabAnimation.SLIDE,
     val playerCoverStyle: PlayerCoverStyle = PlayerCoverStyle.CIRCLE,
 ) {
     fun normalized() = copy(floatingBar = true,
