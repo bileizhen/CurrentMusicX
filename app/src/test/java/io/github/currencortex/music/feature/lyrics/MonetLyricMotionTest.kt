@@ -99,4 +99,23 @@ class MonetLyricMotionTest {
         assertEquals(150f / .78f, MONET_SCALE_STIFFNESS, .001f)
         assertTrue(MONET_SCROLL_DAMPING > 1f)
     }
+
+    @Test fun railToneAgreesWithDiscreteToneAtIntegersAndGlidesBetween() {
+        val atOne = monetRailTone(1f)
+        assertEquals(monetTone(false, 1).opacity, atOne.opacity, 1e-4f)
+        assertEquals(monetTone(false, 1).scale, atOne.scale, 1e-4f)
+        assertEquals(monetTone(false, 1).blur, atOne.blur, 1e-4f)
+        assertEquals(monetTone(false, 1).baseAlpha, atOne.baseAlpha, 1e-4f)
+        val atMinusOne = monetRailTone(-1f)
+        assertEquals(monetTone(false, -1).opacity, atMinusOne.opacity, 1e-4f)
+        assertEquals(monetTone(false, -1).baseAlpha, atMinusOne.baseAlpha, 1e-4f)
+        val atZero = monetRailTone(0f)
+        assertEquals(monetTone(false, 1).opacity, atZero.opacity, 1e-4f)
+        // The rail lift raises the centred row slightly above the curve without reaching the
+        // sung line's active treatment; scale stays on the curve so stacked gaps never shift.
+        val lifted = monetRailTone(0f, lift = MONET_RAIL_LIFT)
+        assertTrue(lifted.opacity > atZero.opacity && lifted.opacity < 1f)
+        assertEquals(atZero.scale, lifted.scale, 0f)
+        assertEquals(1f, monetRailTone(0f, emphasis = 1f).scale, 0f)
+    }
 }

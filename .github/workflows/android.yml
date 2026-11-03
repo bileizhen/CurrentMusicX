@@ -12,7 +12,7 @@ permissions:
 
 concurrency:
   group: android-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -47,24 +47,42 @@ jobs:
         if: steps.scope.outputs.required == 'true'
         run: python3 -m unittest discover -s scripts/tests -v
       - name: Build debug APK and run unit tests
-        if: steps.scope.outputs.required == 'true'
+        if: steps.scope.outputs.required == 'true' && github.event_name == 'pull_request'
         run: ./gradlew assembleDebug testDebugUnitTest assembleDebugAndroidTest lintDebug --no-daemon --stacktrace -Plei.officialRepositoriesFirst=true
+      - name: Build and verify unsigned CI release
+        if: steps.scope.outputs.required == 'true' && github.event_name != 'pull_request'
+        env:
+          CI_BUILD_NUMBER: ${{ github.run_number }}
+        run: ./gradlew :app:assembleRelease :app:testReleaseUnitTest :app:lintRelease -PciBuildNumber="$CI_BUILD_NUMBER" -Plei.officialRepositoriesFirst=true --no-daemon --stacktrace
+      - name: Prepare CI artifact
+        if: steps.scope.outputs.required == 'true' && github.event_name != 'pull_request'
+        env:
+          CI_BUILD_NUMBER: ${{ github.run_number }}
+        run: node .github/scripts/ci-release.cjs prepare
       - name: Upload debug APK
-        if: steps.scope.outputs.required == 'true'
+        if: steps.scope.outputs.required == 'true' && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+      - name: Upload unsigned CI APK
+        if: steps.scope.outputs.required == 'true' && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-unsigned
+          path: ci-dist/
+          if-no-files-found: error
+          retention-days: 7
       - name: Upload test reports
         if: always() && steps.scope.outputs.required == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-reports
-          path: app/build/reports/tests/testDebugUnitTest/
+          path: app/build/reports/tests/test*UnitTest/
       - name: Upload lint report
         if: always() && steps.scope.outputs.required == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: lint-report
-          path: app/build/reports/lint-results-debug.*
+          path: app/build/reports/lint-results-*

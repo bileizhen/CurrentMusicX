@@ -21,6 +21,7 @@ import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 class MonetLyricsRailTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
@@ -31,7 +32,7 @@ class MonetLyricsRailTest {
         compose.setContent {
             MonetLyricsRail(document, 50, setOf(50), Modifier.width(340.dp).height(height.value),
                 30f, centered = false, minimal = false, perspective = false, effects = false,
-                followRequest = 0, onBrowsing = {}, expandWindow = true) { index, _, _ ->
+                followRequest = 0, onBrowse = {}, expandWindow = true) { index, _, _, _, _ ->
                 Canvas(Modifier.fillMaxWidth().height(30.dp).testTag("live_focus_$index")) { drawRect(Color.White) }
             }
         }
@@ -56,7 +57,7 @@ class MonetLyricsRailTest {
             MonetLyricsRail(document, 50, setOf(50),
                 Modifier.width(340.dp).height(if (expanded.value) 600.dp else 300.dp).background(Color.Black),
                 30f, centered = false, minimal = false, perspective = false, effects = false,
-                followRequest = 0, onBrowsing = {}, expandWindow = true) { index, _, _ ->
+                followRequest = 0, onBrowse = {}, expandWindow = true) { index, _, _, _, _ ->
                 Canvas(Modifier.fillMaxWidth().height(30.dp).testTag("viewport_line_$index")) { drawRect(Color.White) }
             }
         }
@@ -114,7 +115,7 @@ class MonetLyricsRailTest {
             MonetLyricsRail(document, 1, setOf(1),
                 Modifier.width(340.dp).height(600.dp).background(Color.Black), 30f,
                 centered = false, minimal = false, perspective = false, effects = true,
-                followRequest = 0, onBrowsing = {}) { index, _, _ ->
+                followRequest = 0, onBrowse = {}) { index, _, _, _, _ ->
                 Canvas(Modifier.fillMaxWidth().height(60.dp).testTag("edge_probe_$index")) {
                     if (index == 0) drawCircle(Color.White, 20.dp.toPx(), androidx.compose.ui.geometry.Offset(0f, size.height / 2))
                 }
@@ -204,6 +205,44 @@ class MonetLyricsRailTest {
         compose.onNodeWithTag("lyric_line_50").assertIsDisplayed()
         compose.onNodeWithTag("lyrics_follow").assertDoesNotExist()
         compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun manualAnchorKeepsTheHighlightOnTheFingeredLine() {
+        val position = mutableLongStateOf(50500)
+        val lines = (0..99).map { i -> LyricLine(i * 1000L, (i + 1) * 1000L, "音乐与星光 $i") }
+        compose.setContent { LyricsScreen(LyricsDocument(lines), position, {},
+            Modifier.width(340.dp).height(600.dp).background(Color.Black), effects = false) }
+        compose.waitForIdle()
+        compose.onNodeWithTag("lyric_line_50").assertIsSelected()
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("lyrics_list").performScrollToIndex(57)
+        compose.mainClock.advanceTimeBy(300)
+        compose.onNodeWithTag("lyric_line_57").assertIsSelected().assertIsDisplayed()
+        compose.onNodeWithTag("lyric_line_50").assertDoesNotExist()
+        // The emphasis lands the moment the finger rests and stays through the longer idle window.
+        compose.mainClock.advanceTimeBy(1900)
+        compose.onNodeWithTag("lyric_line_57").assertIsSelected()
+        // At t≈3300 the 3000ms idle has started the continuous glide back; focus ≈ 54.4.
+        compose.mainClock.advanceTimeBy(1100)
+        compose.onNodeWithTag("lyric_line_54").assertIsDisplayed()
+        compose.mainClock.advanceTimeBy(900)
+        compose.onNodeWithTag("lyric_line_50").assertIsSelected()
+        compose.mainClock.autoAdvance = true
+    }
+
+    @Test fun fastDragKeepsTheHighlightOnTheFingeredLine() {
+        val position = mutableLongStateOf(50500)
+        val lines = (0..99).map { i -> LyricLine(i * 1000L, (i + 1) * 1000L, "音乐与星光 $i") }
+        compose.setContent { LyricsScreen(LyricsDocument(lines), position, {},
+            Modifier.width(340.dp).height(600.dp).background(Color.Black), effects = false) }
+        compose.waitForIdle()
+        compose.onNodeWithTag("lyrics_list").performTouchInput { swipeUp() }
+        compose.waitForIdle()
+        val anchor = compose.onNodeWithTag("lyrics_list").fetchSemanticsNode()
+            .config[androidx.compose.ui.semantics.SemanticsProperties.VerticalScrollAxisRange].value().roundToInt()
+        assertTrue("the swipe must move the anchor off the sung line: anchor=$anchor", anchor > 50)
+        // The invariant under any drag speed: the highlighted row is exactly the anchor row.
+        compose.onNodeWithTag("lyric_line_$anchor").assertIsSelected()
     }
 
     @Test fun nativeSweepAndGlowRenderMixedWidthWordsAndRewind() {

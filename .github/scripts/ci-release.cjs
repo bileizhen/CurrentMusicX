@@ -23,7 +23,8 @@ function trustedRun(run, repo) {
 
 function hasSuccessfulAndroidBuild(jobs) {
   return jobs.some(job => job.name === 'build' && job.conclusion === 'success' &&
-    job.steps?.some(step => step.name === 'Build debug APK and run unit tests' && step.conclusion === 'success'));
+    ['Build and verify unsigned CI release', 'Upload unsigned CI APK'].every(name =>
+      job.steps?.some(step => step.name === name && step.conclusion === 'success')));
 }
 
 function prepare() {

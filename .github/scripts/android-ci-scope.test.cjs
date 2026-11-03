@@ -12,6 +12,8 @@ test('documentation and independently checked CI files may skip Android', () => 
   assert.equal(isLightweightOnly(['README.md', '.github/workflows/android.yml',
     '.github/workflows/collaboration-checks.yml', '.github/scripts/android-ci-scope.cjs',
     '.github/scripts/android-ci-scope.test.cjs']), true);
+  assert.equal(isLightweightOnly(['.github/workflows/ci-distribution.yml',
+    '.github/scripts/ci-release.cjs', '.github/scripts/ci-release.test.cjs']), true);
   for (const files of [[], ['app/src/main/assets/legal/PRIVACY.md'], ['PRIVACY.md'],
     ['app/src/main/cpp/oboe/UPSTREAM.md'], ['app/src/main/res/raw/cover.png'],
     ['README.md', 'app/build.gradle.kts'], ['.github/workflows/release-draft.yml'],
