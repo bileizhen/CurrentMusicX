@@ -111,3 +111,13 @@ test('PR review automation changes remain lightweight', () => {
 test('Codex language instructions do not require APK compilation', () => {
   assert.equal(isLightweightOnly(['AGENTS.md', '.github/REVIEW_POLICY.md']), true);
 });
+
+test('PR risk classifier changes skip Android build but not independent checks', () => {
+  assert.equal(isLightweightOnly([
+    '.github/scripts/pr-risk.cjs',
+    '.github/scripts/pr-risk.test.cjs',
+    '.github/scripts/android-ci-scope.cjs',
+    '.github/scripts/android-ci-scope.test.cjs',
+  ]), true);
+  assert.equal(isLightweightOnly(['.github/scripts/pr-risk.cjs', 'app/src/main/AndroidManifest.xml']), false);
+});
