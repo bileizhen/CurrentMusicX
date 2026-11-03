@@ -145,3 +145,15 @@ test('Fork Codex review bridge is lightweight-only',()=>{
   ]),true);
   assert.equal(isLightweightOnly(['.github/workflows/codex-review-bridge.yml','app/src/main/AndroidManifest.xml']),false);
 });
+
+test('CI Release retention rules are lightweight automation changes', () => {
+  assert.equal(isLightweightOnly([
+    '.github/workflows/ci-prune.yml',
+    '.github/scripts/ci-prune.cjs',
+    '.github/scripts/ci-prune.test.cjs',
+    '.github/CI_RELEASE_POLICY.md',
+    '.github/scripts/android-ci-scope.cjs',
+    '.github/scripts/android-ci-scope.test.cjs'
+  ]), true);
+  assert.equal(isLightweightOnly(['.github/scripts/ci-prune.cjs','app/build.gradle.kts']),false);
+});
