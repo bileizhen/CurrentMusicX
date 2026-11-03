@@ -14,7 +14,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import io.github.currencortex.music.ui.util.collectAsPageState
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import io.github.currencortex.music.data.library.*
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
@@ -129,7 +132,11 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     val editable = vm.editable(state.playlist, account.account?.id ?: 0)
     LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
     LaunchedEffect(state.refreshError) { state.refreshError?.let { library.container.errorNotices.show("刷新失败，已保留原列表：$it") } }
-    PreloadMusicCovers(state.songs.take(12).map { it.cover })
+    // NavDisplay resumes the destination after the transition. Visible rows request their own art.
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    if (LocalMusicPageActive.current && LocalPageContainerSettled.current && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) {
+        PreloadMusicCovers(remember(state.songs) { state.songs.take(12).map { it.cover } })
+    }
     if (vm.route.startsWith("lib/mv/")) {
         io.github.currencortex.music.feature.mv.MvDetailScreen(state, vm.container, onBack, playMv,
             onArtist = { navigate("lib/artist/$it") }, onRefresh = { vm.reload(force = true) }, onDialogActive = onDialogActive)

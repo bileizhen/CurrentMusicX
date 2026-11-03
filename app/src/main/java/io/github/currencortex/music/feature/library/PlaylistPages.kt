@@ -120,8 +120,13 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val neteaseLikes by vm.container.neteaseSongActions.likedState.collectAsStateWithLifecycle()
     val navidromeLikes by vm.container.navidrome.likes.collectAsStateWithLifecycle()
     val likeBusy by library.primaryLikeBusy.collectAsStateWithLifecycle()
-    val playback by vm.container.playerController.state.collectAsStateWithLifecycle()
-    val queue by vm.container.playbackQueue.state.collectAsStateWithLifecycle()
+    val playback = vm.container.playerController.state.collectAsStateWithLifecycle()
+    val queue = vm.container.playbackQueue.state.collectAsStateWithLifecycle()
+    val playbackMode by remember(playback) { derivedStateOf(structuralEqualityPolicy()) { playback.value.mode } }
+    val currentSong by remember(queue) { derivedStateOf(structuralEqualityPolicy()) { queue.value.current } }
+    val pausedWithProgress by remember(playback, queue) { derivedStateOf(structuralEqualityPolicy()) {
+        !playback.value.showPause && (queue.value.positionMs > 0 || playback.value.positionMs > 0)
+    } }
     val busy by library.busy.collectAsStateWithLifecycle()
     val importState by vm.container.playlistLikeImporter.state.collectAsStateWithLifecycle()
     var importOpen by rememberSaveable(vm.route) { mutableStateOf(false) }
@@ -129,7 +134,9 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val room = LocalRoomSongRequest.current
     val editable = vm.editable(state.playlist, account.account?.id ?: 0)
     val removable = vm.removable(state.playlist, account.account?.id ?: 0)
-    val cover = state.cover.ifBlank { state.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() }
+    val cover = remember(state.cover, state.songs) {
+        state.cover.ifBlank { state.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() }
+    }
     val tint = rememberStyleTint(cover)
     val surface = MiuixTheme.colorScheme.background
     val list = rememberLazyListState()
@@ -145,19 +152,21 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     // Reserve result scroll range without inserting an editor into the song list.
     val searchClearance = with(LocalDensity.current) { if (searching && query.isNotBlank()) heroHeightPx.toDp() else 0.dp }
     val songs = remember(state.songs, query, order) {
-        val needle = MusicSearchQuery(query)
-        val filtered = state.songs.filter { needle.matches(it.name, it.artists, it.album) }
-        val collator = java.text.Collator.getInstance(java.util.Locale.SIMPLIFIED_CHINESE).apply {
-            strength = java.text.Collator.PRIMARY
+        val filtered = if (query.isBlank()) state.songs else {
+            val needle = MusicSearchQuery(query)
+            state.songs.filter { needle.matches(it.name, it.artists, it.album) }
         }
-        when (order) {
-            1 -> filtered.sortedWith { left, right -> collator.compare(left.name, right.name) }
-            2 -> filtered.sortedWith { left, right -> collator.compare(left.artists, right.artists) }
-            else -> filtered
+        if (order == 1 || order == 2) {
+            val collator = java.text.Collator.getInstance(java.util.Locale.SIMPLIFIED_CHINESE).apply {
+                strength = java.text.Collator.PRIMARY
+            }
+            if (order == 1) filtered.sortedWith { left, right -> collator.compare(left.name, right.name) }
+            else filtered.sortedWith { left, right -> collator.compare(left.artists, right.artists) }
+        } else {
+            filtered
         }
     }
-    val songKeys = remember(songs) { playlistSongKeys(songs) }
-    val canPlay = room == null && playback.mode == PlayerMode.LOCAL
+    val canPlay = room == null && playbackMode == PlayerMode.LOCAL
     if (appearance.playlistRecordShelf && state.songs.isNotEmpty()) {
         val previewContext = androidx.compose.ui.platform.LocalContext.current
         val previewLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -201,6 +210,10 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
             onClose = { scope.launch { vm.container.settings.edit { it.copy(playlistDepthRibbon = false) } } })
         return
     }
+    val songKeys = remember(songs) { playlistSongKeys(songs) }
+    val resume = if (canPlay && pausedWithProgress) remember(state.songs, currentSong) {
+        currentSong?.takeIf { current -> state.songs.any { it.id == current.id && it.musicSource == current.musicSource } }
+    } else null
     val albumPage = vm.route.startsWith("lib/album/")
     val collectionKind = if (albumPage) "专辑" else "歌单"
     val title = state.title.ifBlank { if (state.loading) "正在加载$collectionKind" else collectionKind }
@@ -250,6 +263,9 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                 modifier = Modifier.testTag("playlist_top_bar"), inputTag = "playlist_query", searchTag = "playlist_search_toggle",
                 placeholder = "搜索$collectionKind")
         }) { topInset ->
+        // Track rows start below the artwork even while the hero itself is visible.
+        // The hero and toolbar keep their own live sources.
+        val trackBackdrop = rememberSolidGlassBackdrop(LocalGlassBackdrop.current, surface)
         Box(Modifier.fillMaxSize().testTag("playlist_refresh")) {
             LazyColumn(Modifier.fillMaxSize().clipToBounds().nestedScroll(pullMotion).testTag("playlist_tracks"),
                 state = list, overscrollEffect = null,
@@ -288,7 +304,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                             Column(Modifier.weight(1f).clickable(enabled = songs.isNotEmpty() && canPlay, role = Role.Button) { start(false) }
                                 .padding(horizontal = 14.dp)) {
                                 Text("播放全部", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                                Text(if (query.isBlank()) playlistDurationLabel(songs) else "找到 ${songs.size} 首 / 共 ${state.songs.size} 首",
+                                Text(if (query.isBlank()) remember(songs) { playlistDurationLabel(songs) } else "找到 ${songs.size} 首 / 共 ${state.songs.size} 首",
                                     Modifier.padding(top = 3.dp), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
                             }
                             PlaylistIconAction(MusicIcons.Sort, "歌曲排序", { sortOpen = true }, Modifier.testTag("playlist_sort"),
@@ -297,8 +313,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
 
                     }
                 }
-                val resume = queue.current?.takeIf { current -> state.songs.any { it.id == current.id && it.musicSource == current.musicSource } }
-                if (resume != null && !playback.showPause && queue.positionMs.coerceAtLeast(playback.positionMs) > 0 && canPlay) item(key = "resume") {
+                if (resume != null) item(key = "resume") {
                     Row(Modifier.fillMaxWidth().playlistPullSurface(pullMotion).background(surface).clickable(role = Role.Button) { vm.container.playerController.toggle() }
                         .padding(horizontal = 20.dp, vertical = 12.dp).testTag("playlist_resume"), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.PlayArrow, null, Modifier.size(16.dp), tint = MiuixTheme.colorScheme.primary)
@@ -321,17 +336,19 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                     Text(if (query.isNotBlank()) "没有找到匹配的歌曲" else if (localMusic != null) "未找到音乐文件，下拉重新扫描" else "这里还没有歌曲，可在搜索结果中加入歌单",
                         Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(24.dp), fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
                 }
-                itemsIndexed(songs, key = { index, _ -> songKeys[index] }) { index, song ->
+                itemsIndexed(songs, key = { index, _ -> songKeys[index] }, contentType = { _, _ -> "track" }) { index, song ->
                     Box(Modifier.fillMaxWidth().animateItem(fadeInSpec = tween(280), placementSpec = tween(300), fadeOutSpec = tween(160))
                         .playlistPullSurface(pullMotion).background(surface).padding(horizontal = 16.dp)) {
-                        PlaylistTrack(song, selected = queue.current?.id == song.id && queue.current?.musicSource == song.musicSource,
-                            liked = localMusic == null && (if (neteaseMain) song.id in neteaseLikes else statuses[song.id]?.liked == true), play = { play(songs, index) },
-                            next = { vm.container.playerController.add(song, true) }, enqueue = { vm.container.playerController.add(song) }) {
-                            LibrarySongActions(library, song, navigate)
-                            val dismiss = LocalDismissSongMenu.current
-                            if (editable) MusicDestinationRow("移出歌单", {
-                                dismiss(); library.action("已移出歌单") { vm.remove(song) }
-                            }, enabled = !busy, chevron = false)
+                        CompositionLocalProvider(LocalGlassBackdrop provides trackBackdrop) {
+                            PlaylistTrack(song, selected = currentSong?.id == song.id && currentSong?.musicSource == song.musicSource,
+                                liked = localMusic == null && (if (neteaseMain) song.id in neteaseLikes else statuses[song.id]?.liked == true), play = { play(songs, index) },
+                                next = { vm.container.playerController.add(song, true) }, enqueue = { vm.container.playerController.add(song) }) {
+                                LibrarySongActions(library, song, navigate)
+                                val dismiss = LocalDismissSongMenu.current
+                                if (editable) MusicDestinationRow("移出歌单", {
+                                    dismiss(); library.action("已移出歌单") { vm.remove(song) }
+                                }, enabled = !busy, chevron = false)
+                            }
                         }
                     }
                 }
