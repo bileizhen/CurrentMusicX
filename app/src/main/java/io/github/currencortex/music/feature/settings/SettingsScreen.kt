@@ -30,7 +30,7 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
                    onPlayback: () -> Unit = {}, onEffects: () -> Unit = {},
                    updateTransfer: io.github.currencortex.music.core.update.UpdateTransferState = io.github.currencortex.music.core.update.UpdateTransferState(),
                    onNavigateFrom: ((PageContainerOrigin, () -> Unit) -> Unit)? = null,
-                   onBack: (() -> Unit)? = null) {
+                   onBack: (() -> Unit)? = null, onSupport: () -> Unit = {}) {
     CompositionLocalProvider(LocalPageContainerSource provides (onNavigateFrom ?: LocalPageContainerSource.current)) {
     SettingsUiScope {
     SettingsScrollLayout(Modifier.fillMaxSize(), topBar = {
@@ -86,6 +86,8 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
                 SettingsPreference("导出日志", "保存或分享脱敏诊断文件", Modifier.testTag("open_logs"),
                     leading = { SettingIcon(MusicIcons.File) }, onClick = onLogs,
                     trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp)) })
+                SettingsDivider(52.dp)
+                SettingsPagePreference("支持开发者", "自愿赞助项目开发与维护", MusicIcons.Heart,"open_support",onSupport)
                 SettingsDivider(52.dp)
                 SettingsPagePreference("关于", "版本、开源许可与隐私", MusicIcons.Info,"open_about",onAbout)
             }

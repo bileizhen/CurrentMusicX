@@ -26,7 +26,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable
 fun AboutScreen(onBack: () -> Unit, onOpenDocument: (LegalDocument) -> Unit, enableBlur: Boolean,
-    onOpenMember: (AboutMember, String) -> Unit) {
+    onOpenMember: (AboutMember, String) -> Unit, onSupport: () -> Unit = {}) {
     val context = LocalContext.current
     val state = remember { AboutUiState() }
     AboutScreenMiuix(state, AboutScreenActions(onBack) { link ->
@@ -40,7 +40,7 @@ fun AboutScreen(onBack: () -> Unit, onOpenDocument: (LegalDocument) -> Unit, ena
             link.startsWith("currentmusic:") -> onOpenDocument(LegalDocument.valueOf(link.substringAfter(':')))
             else -> openExternalLink(context, link)
         }
-    }, enableBlur, onOpenMember)
+    }, enableBlur, onOpenMember, onSupport)
 }
 
 @Immutable
@@ -69,7 +69,7 @@ data class AboutScreenActions(val onBack: () -> Unit, val onOpenLink: (String) -
 
 @Composable
 fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlur: Boolean,
-    onOpenMember: (AboutMember, String) -> Unit) {
+    onOpenMember: (AboutMember, String) -> Unit, onSupport: () -> Unit = {}) {
     val colors = MiuixTheme.colorScheme
     SettingsPage(state.title, "about_screen", actions.onBack) {
         item("brand") {
@@ -83,6 +83,9 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
             }
         }
         item("project") { SettingsSection("项目", MusicIcons.Info) {
+            PageNavigationPreference("支持开发者", "自愿赞助项目开发与维护",
+                Modifier.testTag("about_open_support"), MusicIcons.Heart, onSupport)
+            SettingsDivider()
             state.links.filterNot { it.fullText == "在线隐私政策" }.distinctBy { it.url }.forEachIndexed { index, link ->
                 if (index > 0) SettingsDivider()
                 PageNavigationPreference(link.fullText, onClick = { actions.onOpenLink(link.url) })

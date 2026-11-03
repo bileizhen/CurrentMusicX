@@ -69,6 +69,8 @@ import androidx.navigationevent.compose.NavigationBackHandler
 import androidx.navigationevent.compose.rememberNavigationEventState
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.feature.about.AboutScreen
+import io.github.currencortex.music.feature.support.SupportConfig
+import io.github.currencortex.music.feature.support.SupportScreen
 import io.github.currencortex.music.feature.about.LegalDocument
 import io.github.currencortex.music.feature.about.LegalDocumentScreen
 import io.github.currencortex.music.feature.about.MemberFocus
@@ -302,7 +304,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val pageSceneStrategy=remember(pageNavigation) {PageContainerSceneStrategy(pageNavigation,
             setOf(ROOT.toString(),SETTINGS.toString(),APPEARANCE.toString(),NETWORK.toString(),STORAGE.toString(),ABOUT.toString(),
                 "user/security","user/binding","user/netease-tasks","user/playlist-import","user/decorations",
-                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome")+
+                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome",SupportConfig.route)+
                 LegalDocument.entries.map {it.route().toString()})}
         SideEffect {pageNavigation.onClosed={route->
             if(backStack.lastOrNull()==route)backStack=backStack.dropLast(1)
@@ -535,7 +537,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
                                     onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") },
                                     onPlayback = { navigateLibrary("playback-settings") }, onEffects = { navigateTo(EQUALIZER) },
-                                    updateTransfer = updateTransferState, onNavigateFrom = pageNavigation::from)
+                                    updateTransfer = updateTransferState, onNavigateFrom = pageNavigation::from,
+                                    onSupport = { navigateLibrary(SupportConfig.route) })
                             }
                             }
                         }
@@ -567,7 +570,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
                             onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") },
                             onPlayback = { navigateLibrary("playback-settings") }, onEffects = { navigateTo(EQUALIZER) },
-                            updateTransfer = updateTransferState, onNavigateFrom = pageNavigation::from, onBack = ::navigateBack)
+                            updateTransfer = updateTransferState, onNavigateFrom = pageNavigation::from, onBack = ::navigateBack,
+                            onSupport = { navigateLibrary(SupportConfig.route) })
                     }
                 }
                 entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onNavidrome = { navigateLibrary("navidrome") }) }
@@ -629,8 +633,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 entry(ABOUT.toString()) {
                     AboutScreen(onBack = ::navigateBack, enableBlur = settings.blur,
                         onOpenDocument = { navigateTo(it.route()) },
-                        onOpenMember = { member, group -> memberFocus = MemberFocus(member, group) })
+                        onOpenMember = { member, group -> memberFocus = MemberFocus(member, group) },
+                        onSupport = { navigateLibrary(SupportConfig.route) })
                 }
+                entry(SupportConfig.route) { SupportScreen(onBack = ::navigateBack) }
                 LegalDocument.entries.forEach { document ->
                     entry(document.route().toString()) {
                         Box(Modifier.fillMaxSize().navigationBarsPadding()) {
