@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -41,7 +43,13 @@ import kotlinx.coroutines.flow.distinctUntilChanged
     fun back() { if (settings && account.configured) settings = false else if (!vm.back()) onBack() }
     BackHandler(settings || vm.nested) { back() }
     MusicSubpage(if (configuration) "Emby 账号" else state.route.title, "emby_screen", ::back, actions = {
-        if (account.configured) MusicTextAction(if (configuration) "曲库" else "账号", { settings = !configuration })
+        if (!configuration) GlassIconButton({ vm.refresh() }, "刷新曲库", Modifier.testTag("emby_refresh"), enabled = !state.loading) {
+            Icon(Icons.Outlined.Refresh, null, Modifier.size(22.dp))
+        }
+        if (account.configured) GlassIconButton({ settings = !configuration }, if (configuration) "返回曲库" else "账号设置",
+            Modifier.testTag("emby_account")) {
+            Icon(if (configuration) MusicIcons.List else MusicIcons.Account, null, Modifier.size(22.dp))
+        }
     }) { topInset ->
         if (configuration) EmbyAccountPage(vm, topInset) { settings = false }
         else Column(Modifier.fillMaxSize().padding(top = topInset)) {
@@ -49,10 +57,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
                 onInput = { query = it }, placeholder = "搜索 Emby 歌曲", inputTag = "emby_query", submitTag = "emby_search")
             MusicCategoryTabs(listOf("albums" to "专辑", "songs" to "歌曲", "artists" to "艺术家", "playlists" to "歌单", "likes" to "我喜欢"),
                 state.route.kind, { query = ""; vm.tab(it) }, "emby_tab", Modifier.padding(horizontal = 16.dp))
-            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("${account.username} · Emby", Modifier.weight(1f), fontSize = 12.sp)
-                MusicTextAction("刷新", { vm.refresh() }, enabled = !state.loading)
-            }
+            Text("${account.username} · Emby", Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp),
+                fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             error?.let { Text(it, Modifier.padding(16.dp), color = MiuixTheme.colorScheme.error) }
             val list = remember(state.route, account.revision) { LazyListState(state.index, state.offset) }
             val route = state.route
