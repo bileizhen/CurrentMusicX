@@ -51,7 +51,7 @@ class SearchArtistCapabilitiesTest {
                         "lyric" -> when {
                             url.queryParameter("offset") == "2" && songPageFail -> MockResponse().setResponseCode(503)
                             url.queryParameter("offset") == "2" -> json("""{"songs":[${song(12)},{"ncm_id":13,"name":"Lyric hit 13","lyric":"second matching lyric"}],"totals":{"song":3},"hasMore":{"song":false}}""")
-                            else -> json("""{"songs":[{"ncm_id":11,"name":"Lyric hit 11","lyric":"<b>matching</b> lyric &amp; words"},${song(12)}],"totals":{"song":3},"hasMore":{"song":true}}""")
+                            else -> json("""{"songs":[{"ncm_id":11,"name":"Lyric hit 11","lyric":"before line · matching lyric &amp; words · after line","lyricMatch":"matching lyric &amp; words","lyricContext":[{"t":67700,"txt":"before line"},{"t":74018,"txt":"matching lyric &amp; words","matched":true},{"t":77640,"txt":"after line"}]},${song(12)}],"totals":{"song":3},"hasMore":{"song":true}}""")
                         }
                         "playlist" -> when {
                             url.queryParameter("offset") == "2" && playlistPageFail -> MockResponse().setResponseCode(503)
@@ -255,7 +255,12 @@ class SearchArtistCapabilitiesTest {
         compose.onNodeWithTag("search_input").performTextInput("matching lyric")
         compose.onNodeWithTag("submit_search").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         awaitTag("search_lyric_11", unmerged = true)
+        compose.onNodeWithTag("search_lyric_before_11", useUnmergedTree = true).assertTextEquals("before line")
         compose.onNodeWithTag("search_lyric_11", useUnmergedTree = true).assertTextEquals("matching lyric & words")
+        compose.onNodeWithTag("search_lyric_after_11", useUnmergedTree = true).assertTextEquals("after line")
+        // Lyric rows drop the heart and move the remaining actions onto the title line.
+        compose.onNodeWithTag("search_like_11", useUnmergedTree = true).assertDoesNotExist()
+        compose.onNodeWithTag("search_playlist_11", useUnmergedTree = true).assertIsDisplayed()
         save("search-lyrics.png")
         compose.onNodeWithTag("search_input").performTextReplacement("draft")
         compose.onNodeWithTag("search_category_lyric").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
@@ -263,6 +268,9 @@ class SearchArtistCapabilitiesTest {
         awaitTag("search_retry"); songPageFail = false
         compose.onNodeWithTag("search_retry").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         awaitTag("search_song_13")
+        compose.onNodeWithTag("search_lyric_before_13", useUnmergedTree = true).assertTextEquals("……")
+        compose.onNodeWithTag("search_lyric_13", useUnmergedTree = true).assertTextEquals("second matching lyric")
+        compose.onNodeWithTag("search_lyric_after_13", useUnmergedTree = true).assertTextEquals("……")
         compose.onAllNodesWithTag("search_song_12").assertCountEquals(1)
         assertTrue(requests.filter { it.requestUrl!!.encodedPath == "/cm/ncm/search" }
             .all { it.requestUrl!!.queryParameter("keywords") == "matching lyric" && it.requestUrl!!.queryParameter("type") == "lyric" })
