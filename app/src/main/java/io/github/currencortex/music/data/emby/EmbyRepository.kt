@@ -8,6 +8,8 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.*
 import java.nio.ByteBuffer
 import java.security.MessageDigest
@@ -26,6 +28,10 @@ class EmbyRepository(private val vault: TokenStore, scope: CoroutineScope) {
     val likes = MutableStateFlow<Map<Long, Boolean>>(emptyMap())
     val ready = CompletableDeferred<Unit>()
     private val lock = Mutex()
+    private val artworkSlots = Semaphore(4)
+    private val artwork = object : LinkedHashMap<String, String>(128, .75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, String>?) = size > 128
+    }
     init { scope.launch(Dispatchers.IO) {
         try { vault.read()?.let { raw ->
             val saved = ApiJson.parseToJsonElement(raw).jsonObject
@@ -125,6 +131,25 @@ class EmbyRepository(private val vault: TokenStore, scope: CoroutineScope) {
             EmbyEntry(it.text("Id"), it.text("Name"), it.text("Type"), cover(it, access), artists(it))
         }, items.filter { it.text("Type") == "Audio" }.map { song(it, access) }, next,
             items.isNotEmpty() && (total?.takeIf { it > 0 }?.let { next < it } ?: (items.size == PAGE_SIZE)))
+    }
+    /** Resolve only visible artists without artwork; browsing never waits for per-artist requests. */
+    suspend fun entryCover(entry: EmbyEntry, revision: String = state.value.revision): String {
+        val access = client.current()
+        if (access.revision != revision) throw embyUnauthorized()
+        if (entry.cover.isNotBlank() || entry.type != "MusicArtist") return entry.cover
+        val key = "$revision:${entry.id}"
+        return artworkSlots.withPermit {
+            client.ensure(access)
+            synchronized(artwork) { artwork[key] }?.let { return@withPermit it }
+            val albums = client.request(listOf("Users", access.userId, "Items"), listOf(
+                "Recursive" to "true", "IncludeItemTypes" to "MusicAlbum", "ArtistIds" to entry.id,
+                "Limit" to "8", "EnableTotalRecordCount" to "false", "SortBy" to "SortName", "SortOrder" to "Ascending"
+            ), expected = access)
+            val resolved = albums.objects("Items").firstNotNullOfOrNull { cover(it, access).takeIf(String::isNotBlank) }.orEmpty()
+            client.ensure(access)
+            synchronized(artwork) { artwork[key] = resolved }
+            resolved
+        }
     }
     suspend fun detail(song: Song): Song {
         val ref = track(song); val access = client.current()

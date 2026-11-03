@@ -121,6 +121,24 @@ class EmbyRepositoryTest {
         assertTrue(runCatching { http.newCall(Request.Builder().url(malicious).build()).execute().close() }.isFailure)
         assertNull(server.takeRequest(100, TimeUnit.MILLISECONDS))
     }
+    @Test fun missingArtistArtworkUsesAlbumsAndCacheIsScopedToLogin() = runBlocking {
+        login(); server.takeRequest()
+        val revision = repo.state.value.revision
+        val artist = EmbyEntry("artist-1", "Singer", "MusicArtist")
+        server.enqueue(MockResponse().setBody("""{"Items":[{"Id":"album","PrimaryImageItemId":"track-art","PrimaryImageTag":"tag"}]}"""))
+        val cover = repo.entryCover(artist)
+        assertTrue(cover.contains("/Items/track-art/Images/Primary"))
+        val request = server.takeRequest().requestUrl!!
+        assertEquals("artist-1", request.queryParameter("ArtistIds")); assertEquals("8", request.queryParameter("Limit"))
+        assertEquals(cover, repo.entryCover(artist))
+        assertEquals("own-cover", repo.entryCover(artist.copy(cover = "own-cover")))
+        assertNull(server.takeRequest(100, TimeUnit.MILLISECONDS))
+        login(); server.takeRequest()
+        assertTrue(runCatching { repo.entryCover(artist, revision) }.isFailure)
+        server.enqueue(MockResponse().setBody("""{"Items":[]}"""))
+        assertEquals("", repo.entryCover(artist)); server.takeRequest()
+        assertEquals("", repo.entryCover(artist)); assertNull(server.takeRequest(100, TimeUnit.MILLISECONDS))
+    }
     @Test fun redirectsDoNotForwardAccountHeaders() = runBlocking {
         login(); val song = song(); server.takeRequest(); server.takeRequest()
         server.enqueue(MockResponse().setResponseCode(302).setHeader("Location", server.url("/cdn/audio")))

@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.song.Song
+import io.github.currencortex.music.core.network.AppResult
+import io.github.currencortex.music.core.network.appResult
 import io.github.currencortex.music.feature.library.PlaylistTrack
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
@@ -66,8 +68,12 @@ import kotlinx.coroutines.flow.distinctUntilChanged
             LazyColumn(Modifier.fillMaxSize().testTag("emby_list"), state = list,
                 contentPadding = musicScrollPadding(PaddingValues(horizontal = 16.dp, vertical = 12.dp))) {
                 items(state.page.entries, key = { "${it.type}:${it.id}" }) { entry ->
+                    val cover by produceState(entry.cover, entry, account.revision) {
+                        val result = appResult { vm.repository.entryCover(entry, account.revision) }
+                        if (result is AppResult.Success) value = result.value
+                    }
                     Row(Modifier.fillMaxWidth().clickable { vm.open(entry) }.padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-                        MusicCover(entry.cover, Modifier.size(60.dp), cornerRadius = 12.dp)
+                        MusicCover(cover, Modifier.size(60.dp), cornerRadius = 12.dp)
                         Column(Modifier.weight(1f).padding(start = 14.dp)) {
                             Text(entry.name, maxLines = 2, overflow = TextOverflow.Ellipsis)
                             if (entry.subtitle.isNotBlank()) Text(entry.subtitle, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
