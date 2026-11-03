@@ -215,7 +215,7 @@ class MusicService : MediaSessionService() {
             var lastDeck: ExoPlayer? = null
             var lastPeriod: Any? = null
             while (isActive) {
-                val options = container.adaptiveAudio.state.value
+                val options = container.adaptiveAudio.effective.value
                 val source = player
                 val timeline = source.currentTimeline
                 val period = if (!timeline.isEmpty && source.currentPeriodIndex in 0 until timeline.periodCount)
@@ -382,7 +382,7 @@ class MusicService : MediaSessionService() {
             outputSettings = { outputRouter.effective(container.audioOutput.state.value) }, outputStatus = { if (primary()) reportOutput(it) },
             diagnostics = container.audioDiagnostics, primary = ::primary, router = outputRouter,
             processingSettings = { container.audioOutput.state.value }, formatState = formats,
-            adaptiveSettings = { container.adaptiveAudio.state.value }, hapticTimeline = hapticTimeline,
+            adaptiveSettings = { container.adaptiveAudio.effective.value }, hapticTimeline = hapticTimeline,
             adaptiveReport = { state -> scope.launch { if (primary()) container.adaptiveAudioRuntime.value = state } }))
             .setLoadControl(outputBuffers.createLoadControl())
             .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory)).build().apply {

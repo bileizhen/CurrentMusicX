@@ -54,6 +54,30 @@ class AdaptiveAudioSettingsRepository(private val store: DataStore<Preferences>,
         p[haptics] ?: false, p[hapticStrength] ?: 50,
         MusicHapticMode.entries.firstOrNull { it.name == p[mode] } ?: MusicHapticMode.BASS).normalized()
     val state = store.data.map(::decode).stateIn(scope, SharingStarted.Eagerly, AdaptiveAudioSettings())
+    private class Preview(val transform: (AdaptiveAudioSettings) -> AdaptiveAudioSettings)
+    private val preview = MutableStateFlow<Preview?>(null)
+    /** Drag changes reach the audio thread without writing preferences for every pointer event. */
+    val effective = combine(state, preview) { saved, pending ->
+        pending?.transform?.invoke(saved)?.normalized() ?: saved
+    }.stateIn(scope, SharingStarted.Eagerly, AdaptiveAudioSettings())
+
+    fun preview(transform: (AdaptiveAudioSettings) -> AdaptiveAudioSettings) {
+        preview.value = if (transform(state.value).normalized() == state.value) null else Preview(transform)
+    }
+    fun clearPreview() { preview.value = null }
+    suspend fun commitPreview(transform: (AdaptiveAudioSettings) -> AdaptiveAudioSettings) {
+        val pending = preview.value
+        try {
+            edit(transform)
+            // Keep the audible preview until DataStore's state catches up. An older save must
+            // never clear a new drag (or wait forever if a newer gesture superseded it).
+            combine(state, preview) { saved, current ->
+                current !== pending || transform(saved).normalized() == saved
+            }.first { it }
+        } finally {
+            preview.compareAndSet(pending, null)
+        }
+    }
     suspend fun snapshot() = decode(store.data.first())
     suspend fun edit(transform: (AdaptiveAudioSettings) -> AdaptiveAudioSettings) {
         store.edit { p ->
