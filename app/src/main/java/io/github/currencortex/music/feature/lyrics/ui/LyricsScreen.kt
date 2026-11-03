@@ -28,8 +28,6 @@ import io.github.currencortex.music.feature.lyrics.timeline.*
 import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
 import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
 
-enum class LyricsScrollMode { FOLLOWING, BROWSING }
-
 internal val LyricsPerspectiveAngle = SemanticsPropertyKey<Float>("LyricsPerspectiveAngle")
 
 @Composable fun rememberLyricsPosition(player: PlayerState, sampleDisplayFrames: Boolean = false,
@@ -86,8 +84,16 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     val size = LyricsTypography.normalize(fontSize)
     val timeline = remember(document) { LyricsSynchronizer(document) }
     val effectivePosition = remember(position, lyricsOffsetMs) { derivedStateOf { LyricsSynchronizer.lyricPosition(position.value, lyricsOffsetMs) } }
-    val activeLines by remember(timeline, effectivePosition) { derivedStateOf { timeline.activeLines(effectivePosition.value) } }
-    val target by remember(timeline, effectivePosition) { derivedStateOf { timeline.scrollTarget(effectivePosition.value) } }
+    // While the reader holds a manual anchor, every highlight derives from that line, not the playing position.
+    var browseAnchor by remember(document) { mutableStateOf<Int?>(null) }
+    val visualPosition = remember(document, effectivePosition) { derivedStateOf {
+        val anchor = browseAnchor
+        if (anchor != null && anchor in document.lines.indices) document.lines[anchor].startTimeMs + 1
+        else effectivePosition.value
+    } }
+    val activeLines by remember(timeline, visualPosition) { derivedStateOf { timeline.activeLines(visualPosition.value) } }
+    val target by remember(timeline, visualPosition) { derivedStateOf { timeline.scrollTarget(visualPosition.value) } }
+    val playbackTarget by remember(timeline, effectivePosition) { derivedStateOf { timeline.scrollTarget(effectivePosition.value) } }
     val interlude by remember(timeline, effectivePosition) { derivedStateOf { timeline.interlude(effectivePosition.value) } }
     if (display.smoke || display.particles) {
         SmokeLyricsStage(document, target, effectivePosition, onSeek = {
@@ -98,25 +104,27 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
             particles = display.particles)
         return
     }
-    var mode by remember(document) { mutableStateOf(LyricsScrollMode.FOLLOWING) }
     var followRequest by remember(document) { mutableIntStateOf(0) }
+    val browsingOffStage = remember { mutableLongStateOf(-1L) }
     Box(modifier.testTag("lyrics_panel")) {
         MonetLyricsRail(document, target, activeLines.toSet(), Modifier.fillMaxSize(), size,
             display.centered, minimal, perspective, effects, followRequest,
-            onBrowsing = { mode = if (it) LyricsScrollMode.BROWSING else LyricsScrollMode.FOLLOWING },
-            expandWindow = display.hideControls && !minimal) { index, browsing, tone ->
+            onBrowse = { browseAnchor = it },
+            expandWindow = display.hideControls && !minimal, playbackTarget = playbackTarget) { index, browsing, tone, focused, focusIndex ->
             val line = document.lines[index]
-            LyricsLineView(line, index, effectivePosition, index in activeLines,
-                !browsing && activeLines.isEmpty() && index == target, kotlin.math.abs(index - target),
+            // Browsing rows never self-match: bold, glow, karaoke fill and the translation slot
+            // belong to the sung line alone. The selection reads through the rail tone lift only.
+            LyricsLineView(line, index, if (browsing) browsingOffStage else visualPosition, focused,
+                !browsing && activeLines.isEmpty() && index == target, kotlin.math.abs(index - focusIndex),
                 canSeek, {
                     LyricsSynchronizer.seekPositionOrNull(it, lyricsOffsetMs, mediaDurationMs)?.let { target ->
                         onSeek(target); followRequest++
                     }
                 }, translation, romanization, wordAnimation, effects, size, weightMode, display, monetTone = tone)
         }
-        if (!minimal && interlude != null && mode == LyricsScrollMode.FOLLOWING)
+        if (!minimal && interlude != null && browseAnchor == null)
             LyricsInterludeView(interlude!!, effectivePosition, Modifier.align(Alignment.TopStart).padding(16.dp))
-        if (!minimal && mode == LyricsScrollMode.BROWSING) BasicText("回到当前歌词",
+        if (!minimal && browseAnchor != null) BasicText("回到当前歌词",
             Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp).testTag("lyrics_follow")
                 .background(Color.White.copy(alpha = .14f), RoundedCornerShape(24.dp))
                 .clickable(role = Role.Button) { followRequest++ }.padding(horizontal = 20.dp, vertical = 14.dp),
