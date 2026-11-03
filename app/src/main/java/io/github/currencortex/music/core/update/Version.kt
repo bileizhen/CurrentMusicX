@@ -1,6 +1,6 @@
 package io.github.currencortex.music.core.update
 
-/** SemVer subset used by GitHub release tags: 1.2.3[-alpha.N|-beta.N|-rc.N]. */
+/** SemVer subset used by GitHub release tags: 1.2.3[-alpha.N|-beta.N|-rc.N|-ci.N]. */
 internal data class Version(
     val major: Long,
     val minor: Long,
@@ -21,7 +21,8 @@ internal data class Version(
         private const val BETA = 1
         private const val RC = 2
         private const val FINAL = 3
-        private val regex = Regex("v?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(alpha|beta|rc)\\.(0|[1-9][0-9]*))?")
+        private const val CI = 4 // Main builds follow the stable release of the same base version.
+        private val regex = Regex("v?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-(alpha|beta|rc|ci)\\.(0|[1-9][0-9]*))?")
 
         fun parse(raw: String): Version? {
             val match = regex.matchEntire(raw.trim()) ?: return null
@@ -29,6 +30,7 @@ internal data class Version(
                 "alpha" -> ALPHA
                 "beta" -> BETA
                 "rc" -> RC
+                "ci" -> CI
                 else -> FINAL
             }
             return Version(
