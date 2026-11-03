@@ -1,0 +1,54 @@
+name: 报告问题
+description: 播放、界面、登录或其他功能异常
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: 请先搜索已有问题。不要上传账号密码、Cookie、Token、完整私人歌单或未经检查的日志。
+  - type: input
+    id: version
+    attributes:
+      label: 应用版本
+      description: 设置 → 关于中的版本号；自行构建请附提交号。
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: 设备与 Android 版本
+      placeholder: 手机型号、Android 版本、系统版本
+    validations:
+      required: true
+  - type: dropdown
+    id: build
+    attributes:
+      label: 安装来源
+      options: [GitHub 正式版, 测试版, 自行构建, 其他]
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: 问题模块
+      options: [播放与音效, 歌词, 音源与网络, 界面与外观, 下载与缓存, 其他]
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从哪个页面开始、依次点击什么、是否每次发生。
+    validations:
+      required: true
+  - type: textarea
+    id: result
+    attributes:
+      label: 实际与预期结果
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: 截图与诊断信息
+      description: 可附已脱敏的日志。音频问题请补充音源、输出模式、音效状态及耳机/DAC 型号。
