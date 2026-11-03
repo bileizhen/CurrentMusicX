@@ -9,6 +9,7 @@ import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
@@ -52,10 +53,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         CompositionLocalProvider(LocalMusicPageActive provides open,
             LocalPageContainerSettled provides (open && visibility.isIdle)) {
             Box(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background).testTag("player_effects_overlay").pointerInput(Unit) {
+                // Being a full-size pointer target already excludes the retained player
+                // behind this sibling. Consuming in Final cancels child touch-slop
+                // detection after small moves, preventing normal finger scrolling.
                 awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Final)
                     do {
                         val event = awaitPointerEvent(PointerEventPass.Final)
-                        event.changes.forEach { it.consume() }
                     } while (event.changes.any { it.pressed })
                 }
             }) {
