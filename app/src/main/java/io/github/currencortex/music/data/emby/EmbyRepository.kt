@@ -123,22 +123,26 @@ class EmbyRepository(private val vault: TokenStore, scope: CoroutineScope) {
         val ref = track(song); val access = client.current()
         return song(client.request(listOf("Users", access.userId, "Items", ref.id), expected = access), access)
     }
-    suspend fun setLiked(song: Song, liked: Boolean): Boolean {
-        val ref = track(song); val access = client.current()
+    suspend fun setLiked(song: Song, liked: Boolean, expected: EmbyAccess = client.current()): Boolean {
+        client.ensure(expected)
+        val ref = track(song); val access = expected
         client.request(listOf("Users", access.userId, "FavoriteItems", ref.id), method = if (liked) "POST" else "DELETE", expected = access)
         likes.update { it + (song.id to liked) }; return liked
     }
     suspend fun toggleLike(song: Song): Boolean {
+        val expected = client.current()
         detail(song)
-        return setLiked(song, likes.value[song.id] != true)
+        return setLiked(song, likes.value[song.id] != true, expected)
     }
     fun source(song: Song, download: Boolean = false): AudioSource {
+        val expected = client.current()
         val ref = track(song)
+        client.ensure(expected)
         if (download && !state.value.download) throw ApiException(ErrorKind.Forbidden, userMessage = "此 Emby 账号不允许下载")
         val path = if (download) listOf("Items", ref.id, "Download") else listOf("Audio", ref.id, "stream")
         val params = if (download) emptyList() else listOf("Static" to "true") +
             ref.mediaSourceId.takeIf(String::isNotBlank)?.let { listOf("MediaSourceId" to it) }.orEmpty()
-        return AudioSource(client.media(path, params), "Emby 原音质", ref.sampleRate, ref.channels, ref.format, validForSeconds = 600)
+        return AudioSource(client.media(path, params, expected), "Emby 原音质", ref.sampleRate, ref.channels, ref.format, validForSeconds = 600)
     }
     companion object { const val PAGE_SIZE = 40 }
 }

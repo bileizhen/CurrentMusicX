@@ -48,28 +48,29 @@ class EmbyClient(private val access: () -> EmbyAccess?, private val wire: OkHttp
         if (!provisional) ensure(expected)
         val payload = if (method == "POST") (body?.toString() ?: "{}").toRequestBody("application/json".toMediaType()) else null
         val call = wire.newCall(authenticate(Request.Builder().url(url(expected, path, params)).method(method, payload).build(), expected))
-        val response = suspendCancellableCoroutine<Response> { continuation ->
+        suspendCancellableCoroutine<JsonObject> { continuation ->
             continuation.invokeOnCancellation { call.cancel() }
             call.enqueue(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
                     if (continuation.isActive) continuation.resumeWith(Result.failure(IOException("Emby 连接失败，请检查网络与服务器")))
                 }
                 override fun onResponse(call: Call, response: Response) {
-                    continuation.resume(response) { _, value, _ -> value.close() }
+                    // Keep cancellation attached until the body has been read, not just until headers arrive.
+                    val result = runCatching { response.use {
+                        checkStatus(it)
+                        val source = it.body?.source() ?: throw IOException("Emby 响应为空")
+                        source.request(MAX_BYTES + 1)
+                        if (source.buffer.size > MAX_BYTES) throw IOException("曲库响应过大，请分页读取")
+                        val text = source.readUtf8()
+                        val parsed = if (text.isBlank()) JsonObject(emptyMap()) else
+                            runCatching { ApiJson.parseToJsonElement(text).jsonObject }.getOrNull()
+                                ?: throw IOException("服务器未返回 Emby 接口，请检查地址")
+                        if (!provisional) ensure(expected)
+                        parsed
+                    } }
+                    if (continuation.isActive) continuation.resumeWith(result)
                 }
             })
-        }
-        response.use {
-            checkStatus(it)
-            val source = it.body?.source() ?: throw IOException("Emby 响应为空")
-            source.request(MAX_BYTES + 1)
-            if (source.buffer.size > MAX_BYTES) throw IOException("曲库响应过大，请分页读取")
-            val text = source.readUtf8()
-            val result = if (text.isBlank()) JsonObject(emptyMap()) else
-                runCatching { ApiJson.parseToJsonElement(text).jsonObject }.getOrNull()
-                    ?: throw IOException("服务器未返回 Emby 接口，请检查地址")
-            if (!provisional) ensure(expected)
-            result
         }
     }
 
