@@ -96,3 +96,18 @@ test('exact git trees cover PR merges, pushes, deletions and renames', t => {
     event: { pull_request: { base: { sha: newerBase } } } }).required, false);
   assert.doesNotThrow(() => shallowGit(['cat-file', '-e', `${newerBase}^{commit}`]));
 });
+
+test('PR review automation changes remain lightweight', () => {
+  assert.equal(isLightweightOnly([
+    '.github/workflows/pr-review-summary.yml',
+    '.github/scripts/pr-review-summary.cjs',
+    '.github/scripts/pr-review-summary.test.cjs',
+    '.github/REVIEW_POLICY.md',
+    '.github/scripts/android-ci-scope.cjs',
+    '.github/scripts/android-ci-scope.test.cjs',
+  ]), true);
+});
+
+test('Codex language instructions do not require APK compilation', () => {
+  assert.equal(isLightweightOnly(['AGENTS.md', '.github/REVIEW_POLICY.md']), true);
+});
