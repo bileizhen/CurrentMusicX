@@ -1,0 +1,40 @@
+name: PR review summary
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize, ready_for_review]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pull-requests: read
+concurrency:
+  group: pr-review-summary-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  summarize:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const {summarize,markdown}=require('./.github/scripts/pr-review-summary.cjs');
+            const number=context.issue.number;
+            const files=await github.paginate(github.rest.pulls.listFiles,{...context.repo,pull_number:number,per_page:100});
+            const query=`query($owner:String!,$repo:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100,after:$cursor){nodes{isResolved isOutdated comments(first:20){nodes{body}}}pageInfo{hasNextPage endCursor}}}}}`;
+            let cursor=null,threads=[];
+            do {
+              const data=await github.graphql(query,{owner:context.repo.owner,repo:context.repo.repo,number,cursor});
+              const page=data.repository.pullRequest.reviewThreads;
+              threads.push(...page.nodes);
+              if (!page.pageInfo.hasNextPage) break;
+              cursor=page.pageInfo.endCursor;
+            } while (cursor);
+            const result=summarize(files,threads);
+            await core.summary.addRaw(markdown(result)).write();
