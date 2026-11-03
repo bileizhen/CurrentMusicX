@@ -61,7 +61,7 @@ import top.yukonga.miuix.kmp.basic.Text
         val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
         val status = controller?.isAppearanceLightStatusBars
         val navigation = controller?.isAppearanceLightNavigationBars
-        if (route.isNotEmpty() && active) {
+        if (route.isNotEmpty() && route != "adaptive_audio" && active) {
             controller?.isAppearanceLightStatusBars = false
             controller?.isAppearanceLightNavigationBars = false
         }
@@ -78,6 +78,7 @@ import top.yukonga.miuix.kmp.basic.Text
         holder.SaveableStateProvider(page) {
             CompositionLocalProvider(LocalMusicPageActive provides (active && page == route)) {
                 when (page) {
+                    "adaptive_audio" -> AdaptiveAudioScreen(vm, ::leaveDetail)
                     SoundEffectKind.MOOD.name -> MoodEffectsDetail(mood, song, playback.playing,
                         onBack = ::leaveDetail,
                         onToggle = { if (mood.requestedEnabled) vm.turnOff() else vm.originalMoodEnabled(true) },
@@ -101,7 +102,8 @@ import top.yukonga.miuix.kmp.basic.Text
                             previewProcessed = audition.processed, onPreviewStop = vm::stopPreview)
                     }
                     else -> SoundEffectsMainScreen(vm, onBack, onEqualizer,
-                        onDetails = { kind -> vm.stopPreview(); route = kind.name })
+                        onDetails = { kind -> vm.stopPreview(); route = kind.name },
+                        onAdaptive = { vm.stopPreview(); route = "adaptive_audio" })
                 }
             }
         }

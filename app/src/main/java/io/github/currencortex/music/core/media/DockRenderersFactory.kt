@@ -20,7 +20,10 @@ internal class DockRenderersFactory(context: Context, private val meter: DockAud
     private val primary: () -> Boolean = { true },
     private val router: io.github.currencortex.music.core.media.engine.AudioOutputRouter? = null,
     private val processingSettings: () -> io.github.currencortex.music.data.settings.AudioOutputSettings = outputSettings,
-    private val formatState: io.github.currencortex.music.core.media.engine.AudioFormatState = io.github.currencortex.music.core.media.engine.AudioFormatState()) : DefaultRenderersFactory(context) {
+    private val formatState: io.github.currencortex.music.core.media.engine.AudioFormatState = io.github.currencortex.music.core.media.engine.AudioFormatState(),
+    private val adaptiveSettings: () -> io.github.currencortex.music.data.settings.AdaptiveAudioSettings = { io.github.currencortex.music.data.settings.AdaptiveAudioSettings() },
+    private val hapticTimeline: MusicHapticTimeline = MusicHapticTimeline(),
+    private val adaptiveReport: (AdaptiveAudioRuntime) -> Unit = {}) : DefaultRenderersFactory(context) {
     override fun buildAudioRenderers(context: Context, extensionRendererMode: Int,
         mediaCodecSelector: androidx.media3.exoplayer.mediacodec.MediaCodecSelector, enableDecoderFallback: Boolean,
         audioSink: AudioSink, eventHandler: android.os.Handler,
@@ -79,7 +82,10 @@ internal class DockRenderersFactory(context: Context, private val meter: DockAud
             // playback session can begin using it without recreating the player.
             .setAudioProcessors(arrayOf(NeteaseOriginalAudioProcessor({
                 if (processingSettings().mode.bypassProcessing) null else originalPreset()
-            }, originalFailure, originalProcessing), DockAudioProcessor(meter, probe), OutputSampleRateProcessor(requestedRate = {
+            }, originalFailure, originalProcessing), AdaptiveAudioProcessor({
+                val settings = adaptiveSettings()
+                if (processingSettings().mode.bypassProcessing) settings.copy(enabled = false) else settings
+            }, hapticTimeline, adaptiveReport), DockAudioProcessor(meter, probe), OutputSampleRateProcessor(requestedRate = {
                 if (processingSettings().mode.bypassProcessing) 0 else outputSampleRate()
             }))).build(), outputSettings, outputStatus, diagnostics, primary)
         return diagnostics?.let { io.github.currencortex.music.core.media.engine.DiagnosticAudioSink(sink, it, primary, formatState) } ?: sink
