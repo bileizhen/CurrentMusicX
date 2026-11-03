@@ -5,7 +5,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.data.auth.UserDto
@@ -32,7 +32,7 @@ import java.util.UUID
 
 /** Only this transition: silent queue, isolated account/preferences and local mock requests. */
 class PlayerSheetCapabilitiesTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     private lateinit var container: AppContainer
     private lateinit var server: MockWebServer
     private lateinit var dispatcher: androidx.activity.OnBackPressedDispatcher
@@ -43,6 +43,10 @@ class PlayerSheetCapabilitiesTest {
     @Volatile private var lyricResponseGate: java.util.concurrent.CountDownLatch? = null
 
     @Before fun setup() = runBlocking {
+        compose.runOnUiThread { compose.activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT }
+        compose.waitUntil(10000) {
+            compose.activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT
+        }
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         container = AppContainer(context, "player-sheet-${UUID.randomUUID()}")
         server = MockWebServer().apply {
@@ -788,6 +792,48 @@ class PlayerSheetCapabilitiesTest {
         compose.onNodeWithTag("player_lyrics_deferred", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithTag("player_pager_artwork").assertExists()
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
+    }
+
+    @Test fun landscapeFlightDefersLyricsAndKeepsItsCoverEndpointStable() {
+        compose.runOnUiThread { compose.activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+        compose.waitUntil(10000) {
+            compose.activity.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+        }
+        start()
+        compose.waitUntil(12000) { container.playbackLyrics.state.value.document.lines.isNotEmpty() }
+        val source = compose.onNodeWithTag("mini_cover").fetchSemanticsNode().boundsInRoot
+        compose.mainClock.autoAdvance = false
+        compose.onNodeWithTag("mini_cover").performClick()
+        compose.mainClock.advanceTimeBy(96)
+        compose.onNodeWithTag("player_lyrics_deferred", useUnmergedTree = true).assertExists()
+        compose.onNodeWithTag("lyrics_list", useUnmergedTree = true).assertDoesNotExist()
+        fun artwork() = compose.onNodeWithTag("player_artwork_flight").fetchSemanticsNode()
+            .config[io.github.currencortex.music.feature.player.PlayerArtworkGeometry]
+        val first = artwork()
+        compose.mainClock.advanceTimeBy(96)
+        val middle = artwork()
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("lyrics_list", useUnmergedTree = true).assertIsDisplayed()
+        compose.onNodeWithTag("player_artwork_flight").assertDoesNotExist()
+        val destination = compose.onNodeWithTag("player_cover").fetchSemanticsNode().boundsInRoot
+        fun assertPath(f: io.github.currencortex.music.feature.player.PlayerArtworkFrame) {
+            val expected = io.github.currencortex.music.feature.player.playerSheetElementArc(source, destination, f.progress)
+            assertEquals("Status bar changes must not move the flight endpoint", expected.center.y, f.bounds.center.y, .5f)
+            assertEquals(expected.center.x, f.bounds.center.x, .5f)
+            assertEquals(expected.width, f.bounds.width, .5f)
+        }
+        assertPath(first); assertPath(middle)
+        val lyricsId = compose.onNodeWithTag("lyrics_list", useUnmergedTree = true).fetchSemanticsNode().id
+        compose.runOnUiThread { dispatcher.onBackPressed() }
+        compose.mainClock.advanceTimeBy(96)
+        assertPath(artwork())
+        assertEquals("Keep the existing lyric rail during collapse", lyricsId,
+            compose.onNodeWithTag("lyrics_list", useUnmergedTree = true).fetchSemanticsNode().id)
+        compose.mainClock.advanceTimeBy(1000)
+        compose.onNodeWithTag("player_sheet").assertDoesNotExist()
+        assertEquals(source, compose.onNodeWithTag("mini_cover").fetchSemanticsNode().boundsInRoot)
+        assertEquals(55L, container.playerController.queue.state.value.current?.id)
+        assertFalse(container.playerController.state.value.playing)
     }
 
     @Test fun pagerSharesOneCircularArtworkAlongReversibleArc() {
