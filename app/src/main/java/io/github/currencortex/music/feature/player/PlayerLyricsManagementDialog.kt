@@ -227,7 +227,7 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
     } }
 
     val automatic = musicSettings.lyricsSource == LyricsSource.AUTO
-    val defaultLabel = if (!automatic && song.musicSource == MusicSource.NAVIDROME) "Navidrome" else musicSettings.lyricsSource.label
+    val defaultLabel = if (!automatic && song.privateLibrary) (if (song.emby != null) "Emby" else "Navidrome") else musicSettings.lyricsSource.label
     val restoredMessage = if (automatic) "已恢复自动择优，按来源顺序查找，逐字优先、逐行兜底；单曲偏移保留" else "已恢复默认歌词来源，单曲偏移保留"
     val chosenLabel = options.activeOrigin?.label ?: defaultLabel
     val displayedLabel = if (playback.matches(song) && !playback.loading) playback.origin?.label ?: chosenLabel else chosenLabel
