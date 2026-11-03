@@ -103,7 +103,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: () -> Unit,
-    val requestPermission: () -> Unit, val openSettings: () -> Unit, val permissionMessage: String? = null)
+    val requestPermission: () -> Unit, val openSettings: () -> Unit, val permissionMessage: String? = null,
+    val chooseScope: () -> Unit = requestPermission)
 
 @Composable internal fun PlaylistDetailBody(state: LibraryDetailState, vm: LibraryDetailViewModel,
     library: LibraryViewModel, onBack: () -> Unit, navigate: (String) -> Unit,
@@ -186,7 +187,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
             preview.setMode(appearance.recordShelfPreviewMode)
         }
         LaunchedEffect(state.songs, likesUseNetease) {
-            library.refreshSearchLikes(state.songs.filter { it.navidrome == null })
+            library.refreshSearchLikes(state.songs.filter { !it.privateLibrary })
         }
         PlaylistRecordShelf(state.songs, canPlay, onPlay = { index -> preview.commit { play(state.songs, index) } },
             onPreview = preview::select,
@@ -286,9 +287,11 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                             }
                         }
                         Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            PlaylistPill("分享", Icons.Default.Share, ::share, Modifier.weight(1f).testTag("playlist_share"), enabled = state.title.isNotBlank())
+                            if (localMusic != null) PlaylistPill("扫描范围", Icons.Default.Search,
+                                localMusic.chooseScope, Modifier.weight(1f).testTag("local_music_scope"))
+                            else PlaylistPill("分享", Icons.Default.Share, ::share, Modifier.weight(1f).testTag("playlist_share"), enabled = state.title.isNotBlank())
                             PlaylistPill("随机播放", Icons.Default.PlayArrow, { start(true) }, Modifier.weight(1f).testTag("playlist_shuffle"), enabled = canPlay && songs.isNotEmpty(), emphasized = true)
-                            if (localMusic != null) PlaylistPill(if (localMusic.allowed) "扫描音乐" else "授权扫描", Icons.Default.Refresh,
+                            if (localMusic != null) PlaylistPill(if (localMusic.allowed) "扫描音乐" else "选择范围", Icons.Default.Refresh,
                                 ::refresh, Modifier.weight(1f).testTag(if (localMusic.allowed) "local_music_refresh" else "local_music_permission"),
                                 enabled = !state.loading && !state.refreshing)
                             else PlaylistPill("${collectionKind}信息", Icons.Default.Info, { infoOpen = true }, Modifier.weight(1f).testTag("playlist_info"))
@@ -324,8 +327,8 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                 if (localMusic != null && !localMusic.allowed) item {
                     Column(Modifier.fillMaxWidth().playlistPullSurface(pullMotion).background(surface).padding(24.dp),
                         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text(localMusic.permissionMessage ?: "允许读取音频后扫描手机里的音乐", fontSize = 14.sp)
-                        TextButton("允许读取音乐", onClick = localMusic.requestPermission, modifier = Modifier.testTag("local_music_grant"))
+                        Text(localMusic.permissionMessage ?: "选择音乐文件夹，只导入该目录及子目录中的歌曲；也可选择扫描全机音乐。", fontSize = 14.sp)
+                        TextButton("选择扫描范围", onClick = localMusic.requestPermission, modifier = Modifier.testTag("local_music_grant"))
                         if (localMusic.permissionMessage != null) TextButton("打开系统设置", onClick = localMusic.openSettings,
                             modifier = Modifier.testTag("local_music_open_app_settings"))
                     }
@@ -413,7 +416,7 @@ internal fun playlistDurationLabel(songs: List<Song>): String {
     next: () -> Unit, enqueue: () -> Unit, extra: @Composable () -> Unit) {
     val host = LocalSongMenu.current
     var menu by remember(song.id) { mutableStateOf<SongMenu?>(null) }
-    val room = LocalRoomSongRequest.current.takeUnless { song.navidrome != null || song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL }
+    val room = LocalRoomSongRequest.current.takeUnless { song.privateLibrary || song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL }
     val pending = room?.pending?.invoke(song.id) == true
     val primary = { if (room != null) room.request(song) else play() }
     Row(Modifier.fillMaxWidth().testTag("playlist_song_${song.id}").clickable(enabled = !pending, role = Role.Button, onClick = primary)

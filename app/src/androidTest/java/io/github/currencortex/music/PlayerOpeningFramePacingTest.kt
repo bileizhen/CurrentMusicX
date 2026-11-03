@@ -27,7 +27,10 @@ class PlayerOpeningFramePacingTest {
     @Test fun profileMiniToFullPlayer() = runBlocking {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         assumeTrue(InstrumentationRegistry.getArguments().getString("playerOpeningProfile") == "true")
-        val traceMethods = InstrumentationRegistry.getArguments().getString("playerOpeningMethods") == "true"
+        val args = InstrumentationRegistry.getArguments()
+        val traceMethods = args.getString("playerOpeningMethods") == "true"
+        val landscape = args.getString("playerOpeningLandscape") == "true"
+        val cycles = args.getString("playerOpeningCycles")?.toIntOrNull()?.coerceIn(1, 12) ?: 1
         var tracing = false
         val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         val container = AppContainer(context, "player-opening-${UUID.randomUUID()}")
@@ -76,6 +79,16 @@ class PlayerOpeningFramePacingTest {
             return null
         }
         try {
+            if (landscape) {
+                scenario.onActivity { it.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
+                withTimeout(10000) {
+                    var ready = false
+                    while (!ready) {
+                        scenario.onActivity { ready = it.resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE }
+                        if (!ready) delay(100)
+                    }
+                }
+            }
             container.ready.await(); container.sessionRestored.await()
             container.desktopLyrics.markRecommendationSeen()
             container.updateSettings.setAutoCheck(false)
@@ -106,13 +119,14 @@ class PlayerOpeningFramePacingTest {
                     if (mini == null) delay(100)
                 }
             }
-            val rect = checkNotNull(mini)
-            repeat(1) { index ->
+            repeat(cycles) { index ->
+                if (android.os.Build.VERSION.SDK_INT >= 33) automation.clearCache()
+                val rect = checkNotNull(find(automation.rootInActiveWindow, song.name)) { "Mini player did not return" }
                 if (traceMethods) {
                     Debug.startMethodTracingSampling(java.io.File(context.externalCacheDir, "opening-methods.trace").absolutePath, 32 * 1024 * 1024, 1000)
                     tracing = true
                 }
-                started.set(System.nanoTime()); cycle.set(index)
+                started.set(System.nanoTime()); cycle.set(index * 2)
                 val down = SystemClock.uptimeMillis()
                 for (action in listOf(MotionEvent.ACTION_DOWN, MotionEvent.ACTION_UP)) {
                     MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, rect.exactCenterX(), rect.exactCenterY(), 0).let {
@@ -122,7 +136,7 @@ class PlayerOpeningFramePacingTest {
                 }
                 delay(1300)
                 if (android.os.Build.VERSION.SDK_INT >= 33) automation.clearCache()
-                check(find(automation.rootInActiveWindow, "收起播放器") != null) { "Tap did not open the actual player" }
+                check(find(automation.rootInActiveWindow, if (landscape) "播放与歌词设置" else "收起播放器") != null) { "Tap did not open the actual player" }
                 cycle.set(-1)
                 if (tracing) { Debug.stopMethodTracing(); tracing = false }
                 if (index == 0) automation.takeScreenshot().let { image ->
@@ -130,6 +144,9 @@ class PlayerOpeningFramePacingTest {
                         image.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
                     }; image.recycle()
                 }
+                started.set(System.nanoTime()); cycle.set(index * 2 + 1)
+                instrumentation.sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+                delay(1000); cycle.set(-1)
             }
             val captured = synchronized(frames) { frames.toList() }
             fun report(label: String, values: List<List<Long>>) {
@@ -141,7 +158,9 @@ class PlayerOpeningFramePacingTest {
                     "callbacksDropped=${values.sumOf { it[2] }}\n") })
             }
             check(captured.isNotEmpty()) { "No native frames captured" }
-            report("first", captured.filter { it[0] == 0L })
+            report("first-open", captured.filter { it[0] == 0L && it[1] in 0..650 })
+            if (cycles > 1) report("warm-open", captured.filter { it[0] > 0L && it[0] % 2 == 0L && it[1] in 0..650 })
+            report("close", captured.filter { it[0] % 2 == 1L && it[1] in 0..650 })
             instrumentation.sendStatus(0, Bundle().apply { putString("stream", "\nOPENING_CSV_BEGIN\ncycle,elapsedMs,dropped,totalNs,layoutNs,drawNs,gpuNs,unknownNs\n" +
                 captured.joinToString("\n") { it.joinToString(",") } + "\nOPENING_CSV_END\n") })
         } finally {

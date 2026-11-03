@@ -14,7 +14,8 @@ class MusicRepository(private val api: ApiClient,
     private val audioAccess: () -> AudioSourceAccess = { AudioSourceAccess(AudioProvider.CURRENT_MUSIC) },
     private val leiz: LeizAudioClient = LeizAudioClient(),
     private val navidrome: io.github.currencortex.music.data.navidrome.NavidromeRepository? = null,
-    private val lx: io.github.currencortex.music.data.lx.LxSourceStore? = null) {
+    private val lx: io.github.currencortex.music.data.lx.LxSourceStore? = null,
+    private val emby: io.github.currencortex.music.data.emby.EmbyRepository? = null) {
     suspend fun previewClip(song: Song): SongPreviewClip {
         val id = NeteaseSongActionsRepository.songId(song)
         val raw = if (song.navidrome == null && id != null) {
@@ -26,13 +27,17 @@ class MusicRepository(private val api: ApiClient,
         return songPreviewClip(raw, id ?: song.id, song.durationMs)
     }
     suspend fun detail(song: Song): Song = when (song.musicSource) {
+        MusicSource.EMBY -> requireNotNull(emby).detail(song)
         MusicSource.LOCAL -> song
         MusicSource.NAVIDROME -> requireNotNull(navidrome).detail(song)
         else -> detail(song.id)
     }
-    suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.NAVIDROME) appResult { requireNotNull(navidrome).lyrics(song) } else lyricsDocument(song.id)
+    suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.EMBY) appResult {
+        io.github.currencortex.music.feature.lyrics.model.LyricsDocument(metadata = io.github.currencortex.music.feature.lyrics.model.LyricsMetadata(source = "Emby"))
+    } else if (song.musicSource == MusicSource.NAVIDROME) appResult { requireNotNull(navidrome).lyrics(song) } else lyricsDocument(song.id)
     suspend fun source(song: Song, quality: AudioQuality, session: RequestSession? = null): AudioSource {
         if (song.musicSource == MusicSource.NAVIDROME) return requireNotNull(navidrome).source(song, quality)
+        if (song.musicSource == MusicSource.EMBY) return requireNotNull(emby).source(song)
         val access = audioAccess()
         return if (access.provider == AudioProvider.LX) lxSource(song, quality, access) else source(song.id, quality, session)
     }

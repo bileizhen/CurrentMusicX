@@ -44,7 +44,8 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
         }
         val keys = LyricsMatcher.candidates(song)
         val selected = selection?.invoke()
-        val selectedOrigin = if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
+        val selectedOrigin = if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY)
+            LyricsOrigin("Emby", "emby") else if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
             LyricsOrigin("Navidrome", "navidrome") else selected?.origin
         val memoryKey = (selected?.identity.orEmpty() + listOf(selected?.automatic == true, SongLyricsStore.identity(song))) to keys
         val issues = mutableListOf<LyricsIssue>()

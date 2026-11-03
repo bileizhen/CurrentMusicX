@@ -52,6 +52,12 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 
 @Composable fun LibrarySongActions(vm: LibraryViewModel, song: Song, navigate: (String) -> Unit) {
     if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL) return
+    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY) {
+        val dismiss = LocalDismissSongMenu.current
+        MusicDestinationRow("喜欢 / 取消喜欢", { dismiss(); vm.togglePrimaryLike(song) })
+        MusicDestinationRow("打开 Emby 曲库", { dismiss(); navigate("emby") })
+        return
+    }
     val statuses by vm.statuses.collectAsStateWithLifecycle()
     val status = statuses[song.id] ?: SongStatus()
     val dismiss = LocalDismissSongMenu.current
