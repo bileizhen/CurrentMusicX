@@ -124,12 +124,15 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     val currentTransfer by rememberUpdatedState(transferState)
     val sourceHealth = rememberUpdateSourceHealth(release, settings.channel,
         { menu && activeMenuPath.contains("update_menu_action_1") }, sourceCheck)
-    var orderedMenuSources by remember { mutableStateOf(UpdateSource.available) }
-    LaunchedEffect(sourceHealth.toMap(), menuDragging) {
-        if (!menuDragging) orderedMenuSources = UpdateSource.available.sortedByHealth(sourceHealth)
+    var orderedMenuSources by remember(settings.channel) { mutableStateOf(UpdateSource.forChannel(settings.channel)) }
+    LaunchedEffect(sourceHealth.toMap(), menuDragging, settings.channel) {
+        if (!menuDragging) orderedMenuSources = UpdateSource.forChannel(settings.channel).sortedByHealth(sourceHealth)
     }
     var confirmCancel by remember { mutableStateOf(false) }
     var source by rememberSaveable { mutableStateOf(UpdateSource.default) }
+    LaunchedEffect(settings.channel) {
+        if (source !in UpdateSource.forChannel(settings.channel)) source = UpdateSource.GITHUB
+    }
     LaunchedEffect(transferState.activeSource) { transferState.activeSource?.let { source = it } }
     val settled by animateFloatAsState(if (checking) 0f else 1f, tween(680, easing = FastOutSlowInEasing), label = "update_check_result")
     val detail by animateFloatAsState(if (expanded) 1f else 0f, tween(600, easing = FastOutSlowInEasing), label = "update_details_morph")
@@ -195,7 +198,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                         fontSize = if (width < 360.dp) 66.sp else 78.sp, color = pageWhite,
                         modifier = Modifier.testTag("update_hero_version"))
                     Text("CurrentMusic", color = pageWhite, fontSize = 25.sp, fontWeight = FontWeight.Light)
-                    Text(if (release?.prerelease == true || settings.channel == UpdateChannel.PRERELEASE) "预发布版" else "正式版",
+                    Text(if (release?.isCi == true || settings.channel == UpdateChannel.CI) "CI 版" else "正式版",
                         color = pageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
                 }
                 val statusShape = RoundedCornerShape((36f - 10f * settled).dp)
@@ -251,6 +254,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                                         checking -> "正在检查更新"
                                         state is UpdateState.Failed -> "暂时无法检查更新"
                                         release != null -> if (downloadExperience) "下载体验" else "发现新版本"
+                                        settings.channel == UpdateChannel.CI -> "暂无更新的 CI 构建"
                                         else -> "已是最新版本"
                                     }, color = pageWhite, fontSize = if (checking) 16.sp else 18.sp,
                                         fontWeight = if (checking) FontWeight.Normal else FontWeight.Medium,
@@ -259,6 +263,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                                 }
                                 if (!checking) Text(release?.let { "v${it.version} · ${updateSize(it.size)}" }
                                     ?: "当前版本 ${BuildConfig.VERSION_NAME}", color = pageMuted, fontSize = 12.sp)
+                                if (settings.channel == UpdateChannel.CI) Text("主线自动构建，未经正式版验收；切回正式版需等待后续更高版本。", color = pageMuted, fontSize = 12.sp)
                                 if (state is UpdateState.Failed) Text(state.reason, color = pageMuted, fontSize = 13.sp,
                                     maxLines = 3, overflow = TextOverflow.Ellipsis)
                             }
@@ -301,15 +306,15 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 contentTag = "update_options_sheet", onEnter = {
                     menuAutoCheck = settings.autoCheckOnLaunch; menuChannel = settings.channel
                 }, children = listOf(
-                    GlassMenuItem("update_channel", "更新渠道", subtitle = if(menuChannel == UpdateChannel.STABLE) "正式版" else "预发布版",
+                    GlassMenuItem("update_channel", "更新渠道", subtitle = if(menuChannel == UpdateChannel.STABLE) "正式版" else "CI 版",
                         children = listOf(
                             GlassMenuItem("update_channel_stable", "正式版", checked = menuChannel == UpdateChannel.STABLE,
                                 keepOpen = true, popOnSelect = true, onClick = {
                                     if(menuChannel!=UpdateChannel.STABLE) {menuChannel=UpdateChannel.STABLE;onChannel(menuChannel)}
                                 }),
-                            GlassMenuItem("update_channel_prerelease", "预发布版", checked = menuChannel == UpdateChannel.PRERELEASE,
+                            GlassMenuItem("update_channel_ci", "CI 版", checked = menuChannel == UpdateChannel.CI,
                                 keepOpen = true, popOnSelect = true, onClick = {
-                                    if(menuChannel!=UpdateChannel.PRERELEASE) {menuChannel=UpdateChannel.PRERELEASE;onChannel(menuChannel)}
+                                    if(menuChannel!=UpdateChannel.CI) {menuChannel=UpdateChannel.CI;onChannel(menuChannel)}
                                 })
                         )),
                     GlassMenuItem("update_auto_check", "启动时自动检查", checked = menuAutoCheck,
