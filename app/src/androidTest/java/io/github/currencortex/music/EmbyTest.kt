@@ -57,11 +57,11 @@ class EmbyTest {
         try {
             container.ready.await()
             vm = withContext(Dispatchers.Main) { EmbyViewModel(container) }
-            compose.setContent { LeiTheme(AppearanceSettings()) { EmbyScreen(vm!!, { _, _ -> }, {}) } }
+            compose.setContent { LeiTheme(AppearanceSettings()) { top.yukonga.miuix.kmp.basic.Scaffold { EmbyScreen(vm!!, { _, _ -> }, {}) } } }
             compose.onNodeWithTag("emby_server").performTextInput(server.url("/").toString())
             compose.onNodeWithTag("emby_username").performTextInput("fixture")
             compose.onNodeWithTag("emby_password").performTextInput("fixture-password")
-            compose.onNodeWithTag("emby_connect").performScrollTo().performClick()
+            compose.onNodeWithTag("emby_password").performImeAction()
             compose.waitUntil(15000) { container.emby.state.value.configured && vm!!.state.value.loaded }
             compose.onNodeWithText("测试专辑").performClick()
             compose.waitUntil(15000) { vm!!.state.value.page.songs.isNotEmpty() }

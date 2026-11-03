@@ -5,11 +5,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.*
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -100,6 +103,14 @@ import kotlinx.coroutines.flow.distinctUntilChanged
     var server by rememberSaveable(account.server) { mutableStateOf(account.server) }
     var username by rememberSaveable(account.username) { mutableStateOf(account.username) }
     var password by remember { mutableStateOf("") }
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    val canConnect = !busy && server.isNotBlank() && username.isNotBlank()
+    fun connect() {
+        if (!canConnect) return
+        focus.clearFocus(); keyboard?.hide()
+        vm.connect(server, username, password) { password = ""; connected() }
+    }
     SettingsUiScope {
         LazyColumn(Modifier.fillMaxSize().imePadding(), contentPadding = musicScrollPadding(PaddingValues(16.dp, inset + 8.dp, 16.dp, 32.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -114,14 +125,14 @@ import kotlinx.coroutines.flow.distinctUntilChanged
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri), modifier = Modifier.testTag("emby_server"))
                     TextField(username, { username = it; vm.error.value = null }, label = "用户名", singleLine = true, enabled = !busy, modifier = Modifier.testTag("emby_username"))
                     TextField(password, { password = it; vm.error.value = null }, label = "密码", singleLine = true, enabled = !busy,
-                        visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                        keyboardActions = KeyboardActions(onDone = { connect() }),
                         modifier = Modifier.testTag("emby_password"))
                     error?.let { Text(it, color = MiuixTheme.colorScheme.error) }
                 }
             } }
-            item { GlassActionButton(if (busy) "正在连接…" else if (account.configured) "更换连接" else "连接服务器", {
-                vm.connect(server, username, password) { password = ""; connected() }
-            }, primary = true, enabled = !busy && server.isNotBlank() && username.isNotBlank(), modifier = Modifier.fillMaxWidth().testTag("emby_connect")) }
+            item { GlassActionButton(if (busy) "正在连接…" else if (account.configured) "更换连接" else "连接服务器", ::connect,
+                primary = true, enabled = canConnect, modifier = Modifier.fillMaxWidth().testTag("emby_connect")) }
             if (account.configured) item { MusicTextAction("断开连接", { password = ""; vm.disconnect() }, enabled = !busy) }
         }
     }
