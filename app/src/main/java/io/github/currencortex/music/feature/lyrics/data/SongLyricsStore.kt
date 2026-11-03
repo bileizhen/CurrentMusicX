@@ -250,6 +250,7 @@ class SongLyricsStore(private val directory: File) {
         private val FILE_NAME = Regex("[0-9a-f-]{36}\\.json")
         private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
         fun identity(song: Song): String {
+            if (song.musicSource == MusicSource.EMBY) return "emby:${song.emby?.identity}:${song.emby?.id ?: song.id}"
             if (song.musicSource == MusicSource.NAVIDROME) {
                 val reference = song.navidrome
                 val raw = "${reference?.identity.orEmpty()}\n${reference?.id ?: song.id}"
@@ -261,7 +262,7 @@ class SongLyricsStore(private val directory: File) {
                 MusicSource.QQ_MUSIC -> song.externalIds.qqMusicId
                 MusicSource.APPLE_MUSIC -> song.externalIds.appleMusicId
                 MusicSource.SPOTIFY -> song.externalIds.spotifyId
-                MusicSource.NAVIDROME, MusicSource.LOCAL -> null
+                MusicSource.EMBY, MusicSource.NAVIDROME, MusicSource.LOCAL -> null
             }
             return "${song.musicSource.name.lowercase(Locale.ROOT)}:${external?.takeIf { it.isNotBlank() } ?: song.id}"
         }

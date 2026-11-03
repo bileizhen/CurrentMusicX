@@ -13,13 +13,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 /** Shared page chrome for account forms, grids and music lists with their own scroll state. */
 @Composable internal fun MusicSubpage(title: String, tag: String, onBack: (() -> Unit)? = null,
     backTag: String = "navigate_back", toolbarTag: String = "${tag}_toolbar", modifier: Modifier = Modifier,
-    actions: @Composable RowScope.() -> Unit = {}, content: @Composable (Dp) -> Unit) {
+    actions: @Composable RowScope.() -> Unit = {}, toolbar: (@Composable () -> Unit)? = null,
+    content: @Composable (Dp) -> Unit) {
     SettingsUiScope {
         CompositionLocalProvider(LocalContentColor provides MiuixTheme.colorScheme.onSurface) {
             Box(modifier.fillMaxSize().navigationBarsPadding()) {
                 SettingsScrollLayout(Modifier.widthIn(max = 840.dp).fillMaxSize().align(androidx.compose.ui.Alignment.TopCenter)
                     .testTag(tag), topBar = {
-                    SettingsTopBar(title, onBack, tag = toolbarTag, backTag = backTag, actions = actions)
+                    if (toolbar != null) Box(Modifier.statusBarsPadding()) { toolbar() }
+                    else SettingsTopBar(title, onBack, tag = toolbarTag, backTag = backTag, actions = actions)
                 }, content = content)
             }
         }

@@ -142,6 +142,7 @@ private fun LegalDocument.route() = 3 + ordinal
 
 @Composable
 fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, launchWindowReady: Boolean = true, openDesktopRequest: Int = 0, openRecognitionRequest: Int = 0) {
+    var embyNavigation by remember { mutableStateOf<io.github.currencortex.music.feature.emby.EmbyNavigation?>(null) }
     var launchFinished by rememberSaveable { mutableStateOf(!animateLaunch) }
     val launchBrand = remember { LaunchBrandState() }
     val avatarFlight = remember { AvatarFlightState() }
@@ -304,7 +305,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val pageSceneStrategy=remember(pageNavigation) {PageContainerSceneStrategy(pageNavigation,
             setOf(ROOT.toString(),SETTINGS.toString(),APPEARANCE.toString(),NETWORK.toString(),STORAGE.toString(),ABOUT.toString(),
                 "user/security","user/binding","user/netease-tasks","user/playlist-import","user/decorations",
-                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome",SupportConfig.route)+
+                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome","emby",SupportConfig.route)+
                 LegalDocument.entries.map {it.route().toString()})}
         SideEffect {pageNavigation.onClosed={route->
             if(backStack.lastOrNull()==route)backStack=backStack.dropLast(1)
@@ -384,7 +385,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             else action()
         }
         fun requestSong(song: Song) {
-            if (song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME, io.github.currencortex.music.data.song.MusicSource.LOCAL)) { libraryVm.message.value = "本地或私有曲库歌曲不能提交到一起听房间"; return }
+            if (song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME, io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.LOCAL)) { libraryVm.message.value = "本地或私有曲库歌曲不能提交到一起听房间"; return }
             if (nativeTogether.active) { container.listenTogether.request(song); return }
             if (!container.roomSession.active || song.id in roomPending) return
             val revision = container.accountRepository.sessionRevision.value
@@ -447,13 +448,19 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val wideLayout = maxWidth >= 700.dp
         val rootWide = rootPage && wideLayout
         val showRootNavigation = rootPage && !playerPresented && (!hideDockForChat || wideLayout)
-        val dockPage = selected * 4 + if (selected == DISCOVER_TAB) discoverPager.targetPage else 0
+        val embyDock = embyNavigation.takeIf { backStack.lastOrNull { it != PLAYER.toString() } == "emby" }
+        val hasEmbyDock = embyDock != null
+        val dockSelected = embyDock?.selected ?: selected
+        val dockLabels = if (hasEmbyDock) io.github.currencortex.music.feature.emby.EmbyNavigation.labels else labels
+        val dockIcons = if (hasEmbyDock) io.github.currencortex.music.feature.emby.EmbyNavigation.icons else icons
+        val dockSelect: (Int) -> Unit = embyDock?.onSelect ?: ::selectTab
+        val dockPage = if (hasEmbyDock) 100 + dockSelected else selected * 4 + if (selected == DISCOVER_TAB) discoverPager.targetPage else 0
         val dockScroll = rememberRootDockScrollBehavior(dockPage, miniRetainedAvailable,
-            enabled = rootPage && !hideDockForChat && !playerPresented && !miniQueueOpen && miniAvailable && !wideLayout)
+            enabled = (rootPage || hasEmbyDock) && !hideDockForChat && !playerPresented && !miniQueueOpen && miniAvailable && !wideLayout)
         val dockCollapsed = miniRetainedAvailable && !wideLayout && dockScroll.collapsed
         // Reserve page space once. Animate only the overlay's GPU translation, never the page height.
         val miniRoot = backStack.lastOrNull { it != PLAYER.toString() } == ROOT.toString()
-        val navigationSpace = if (miniRoot && !wideLayout && !keyboardOpen && !dockCollapsed) 92.dp else 0.dp
+        val navigationSpace = if ((miniRoot && !wideLayout || hasEmbyDock) && !keyboardOpen && !dockCollapsed) 92.dp else 0.dp
         val miniLift = animateDpAsState(navigationSpace, tween(if (settings.floatingBar) 180 else 320), label = "mini player lift")
         // A scene's insets must not depend on which route is currently on top. Predictive back
         // renders both scenes before committing; changing the shared viewport makes them jump.
@@ -573,10 +580,20 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onSupport = { navigateLibrary(SupportConfig.route) })
                     }
                 }
-                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onNavidrome = { navigateLibrary("navidrome") }) }
+                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onNavidrome = { navigateLibrary("navidrome") }, onEmby = { navigateLibrary("emby") }) }
                 entry("playback-settings") { io.github.currencortex.music.feature.settings.PlaybackSettingsScreen(musicSettingsVm) }
                 entry("audio-output") { io.github.currencortex.music.feature.settings.AudioOutputScreen(container) }
                 entry("desktop-lyrics") { io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsSettingsScreen(container) }
+                entry("emby") {
+                    val vm: io.github.currencortex.music.feature.emby.EmbyViewModel = viewModel(factory = viewModelFactory {
+                        io.github.currencortex.music.feature.emby.EmbyViewModel(container)
+                    })
+                    Box(Modifier.fillMaxSize().nestedScroll(dockScroll)) {
+                        io.github.currencortex.music.feature.emby.EmbyScreen(vm,
+                            { songs, index -> playWithPermission { container.playerController.playList(songs, index) } }, ::navigateBack,
+                            onNavigationChange = { embyNavigation = it })
+                    }
+                }
                 entry("navidrome") {
                     io.github.currencortex.music.feature.navidrome.NavidromeScreen(navidromeVm, libraryVm, ::navigateLibrary,
                         { songs, index -> playWithPermission { container.playerController.playList(songs, index) } }, onBack = ::navigateBack)
@@ -730,7 +747,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             route == "lib/video" -> if (currentSong?.video == true) io.github.currencortex.music.feature.mv.MvPlayerScreen(container, ::navigateBack,
                                 onDialogActive = { playerDialogOpen = it })
                                 else PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
-                                    onLike = { currentSong?.let(libraryVm::choosePlaylist) })
+                                    onLike = if (currentSong?.emby == null) ({ currentSong?.let(libraryVm::choosePlaylist); Unit }) else null)
                             route.startsWith("lib/browse/") -> {
                                 val parts = route.split('/')
                                 val catalogVm: CatalogViewModel = viewModel(key = route, factory = viewModelFactory {
@@ -788,14 +805,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         if (unifiedDock) {
             val glassNavigation = LocalMusicDockNavigation.current
-            UnifiedMusicDock(expanded = miniRoot && !keyboardOpen && !dockCollapsed,
+            UnifiedMusicDock(expanded = (miniRoot || hasEmbyDock) && !keyboardOpen && !dockCollapsed,
                 visible = dockVisible,
-                miniPresent = miniRetainedAvailable, navigationInteractive = showRootNavigation && !keyboardOpen && !dockCollapsed,
+                miniPresent = miniRetainedAvailable, navigationInteractive = (showRootNavigation || hasEmbyDock) && !keyboardOpen && !dockCollapsed,
                 modifier = Modifier.align(Alignment.BottomCenter)
                     .then(if (playerPresented || miniQueueOpen) Modifier.clearAndSetSemantics {} else Modifier)
                     .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) },
                 onOrigin = { dockOrigin = it }, mini = miniBody,
-                navigation = glassNavigation ?: { mod -> PlainFloatingBar(selected, labels, icons, ::selectTab, mod, embedded = true) },
+                navigation = glassNavigation ?: { mod -> PlainFloatingBar(dockSelected, dockLabels, dockIcons, dockSelect, mod, embedded = true) },
                 glow = {
                     if (settings.navigationGlow && currentSong != null) io.github.currencortex.music.ui.component.NavigationGlow(
                         currentSong?.cover.orEmpty(), playerVm.state, container.dockAudioLevel,
@@ -807,9 +824,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) }) {
             miniBody()
         }
-        if (showRootNavigation && !rootWide && !keyboardOpen && !settings.floatingBar) ScrollCollapsingNavigation(
+        if ((showRootNavigation && !rootWide || hasEmbyDock && !playerPresented) && !keyboardOpen && (!settings.floatingBar || wideLayout)) ScrollCollapsingNavigation(
             expanded = !dockCollapsed, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
-            StandardNavigationBar(selected, labels, icons, ::selectTab)
+            StandardNavigationBar(dockSelected, dockLabels, dockIcons, dockSelect)
             if (settings.navigationGlow && currentSong != null) io.github.currencortex.music.ui.component.NavigationGlow(
                 currentSong?.cover.orEmpty(), playerVm.state, container.dockAudioLevel,
                 Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(48.dp), active = dockVisible && !playerPresented && !miniQueueOpen)
@@ -819,7 +836,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         }
         if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated) {
-            HighApiFloatingNavigation(selected, labels, icons, ::selectTab, settings.blur, settings.liquidGlass,
+            HighApiFloatingNavigation(dockSelected, dockLabels, dockIcons, dockSelect, settings.blur, settings.liquidGlass,
                 content = page, overlay = miniOverlay)
         } else {
             Box(Modifier.fillMaxSize()) {
@@ -844,7 +861,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
                     onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") },
                     onDialogActive = { playerDialogOpen = it }, onNetwork = { navigateTo(NETWORK) },
-                    onLike = { currentSong?.let(libraryVm::choosePlaylist) }, onEqualizer = { playerEffectsOpen = true },
+                    onLike = if (currentSong?.emby == null) ({ currentSong?.let(libraryVm::choosePlaylist); Unit }) else null, onEqualizer = { playerEffectsOpen = true },
                     onAiNavigate = ::navigateLibrary, roamingRequest = roamingRequest,
                     onRoamingRequestConsumed = { roamingRequest = 0 })
             }

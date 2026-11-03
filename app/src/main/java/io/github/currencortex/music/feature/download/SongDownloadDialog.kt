@@ -52,7 +52,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val saved = info?.state == WorkInfo.State.SUCCEEDED
     fun start() {
         try {
-            if (song.navidrome != null) {
+            if (song.emby != null) {
+                val account = container.emby.state.value
+                if (!account.download) { context.showMusicError("此 Emby 账号不允许下载"); return }
+                manager.start(song, AudioQuality.from(quality), 0, account.server, "emby:" + account.identity,
+                    navidromeRevision = account.revision)
+            } else if (song.navidrome != null) {
                 val account = container.navidrome.state.value
                 manager.start(song, AudioQuality.from(quality), 0, account.server, "navidrome:" + account.identity,
                     navidromeRevision = account.revision)
@@ -98,7 +103,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(song.name, fontSize = 18.sp)
             Text(song.artists, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-            if (song.navidrome != null) Text("Navidrome 原音质") else MusicDestinationRow("下载音质", { choosingQuality = true }, summary = AudioQuality.from(quality).label,
+            if (song.privateLibrary) Text(song.originalQualityLabel) else MusicDestinationRow("下载音质", { choosingQuality = true }, summary = AudioQuality.from(quality).label,
                 enabled = !active && !deleting, modifier = Modifier.testTag("song_download_quality"))
             val location = directory?.let { Uri.decode(it.lastPathSegment.orEmpty()).substringAfter(':') }
                 ?: if (Build.VERSION.SDK_INT >= 29) "Download/CurrentMusic" else "请选择文件夹"
