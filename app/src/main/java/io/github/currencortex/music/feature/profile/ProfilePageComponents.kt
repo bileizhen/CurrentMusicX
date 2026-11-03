@@ -82,7 +82,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Native and CurrentMusic accounts share destinations and the same list geometry. */
 @Composable internal fun ProfileServicesSection(navigate: (String) -> Unit, tasks: Boolean,
-    native: Boolean = false, bound: Boolean = true) {
+    native: Boolean = false, bound: Boolean = true,
+    navidromeConfigured: Boolean = false, embyConfigured: Boolean = false) {
     SettingsListSection("音乐服务") {
         ProfileDestination(if (native && !bound) "登录网易云" else "网易云账号",
             if (native && !bound) "需先注册并登录 CurrentMusic" else "绑定账号、同步歌单", MusicIcons.Account, "open_binding") { navigate("user/binding") }
@@ -92,8 +93,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         }
         SettingsDivider(52.dp)
         ProfileDestination("导入歌单", "链接、文字、图片与本地歌曲", MusicIcons.Transfer, "profile_playlist_import") { navigate("user/playlist-import") }
-        SettingsDivider(52.dp)
-        ProfileDestination("Navidrome 曲库", "自己的音乐服务器", MusicIcons.Storage, "profile_navidrome") { navigate("navidrome") }
+        if (navidromeConfigured) {
+            SettingsDivider(52.dp)
+            ProfileDestination("Navidrome 曲库", "自己的音乐服务器", MusicIcons.Storage, "profile_navidrome") { navigate("navidrome") }
+        }
+        if (embyConfigured) {
+            SettingsDivider(52.dp)
+            ProfileDestination("Emby 曲库", "自己的音乐服务器", MusicIcons.Storage, "profile_emby") { navigate("emby") }
+        }
     }
 }
 

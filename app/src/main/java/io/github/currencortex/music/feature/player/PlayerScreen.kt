@@ -51,6 +51,7 @@ private enum class PlayerContent { COVER, LYRICS }
 private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, SHARE, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI, ROAMING, BACKGROUND, LYRICS_MANAGEMENT }
 internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePosition")
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
     actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null,
     onCast: (() -> Unit)? = null, onRoom: (() -> Unit)? = null, onDialogActive: (Boolean) -> Unit = {},
@@ -115,6 +116,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     var controlsCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val sheetProgress = LocalPlayerSheetProgress.current
     val expanded by remember(sheetProgress) { derivedStateOf { sheetProgress() >= .995f } }
+    val sheetSettled by remember(sheetProgress) { derivedStateOf { sheetProgress() >= 1f } }
     val sheetDrag = LocalPlayerSheetDrag.current
     val colors = remember { darkColorScheme(primary = Color.White, onPrimary = Color(0xFF282629),
         background = Color(0xFF262428), surface = Color(0xFF262428)) }
@@ -166,10 +168,12 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         PlayerSystemBars(immersive = widePlayer)
         val density = LocalDensity.current
         val layoutDirection = LocalLayoutDirection.current
-        val wideSafeInset = with(density) { maxOf(WindowInsets.safeDrawing.getLeft(density, layoutDirection),
-            WindowInsets.safeDrawing.getRight(density, layoutDirection)).toDp() }
-        val wideVerticalInset = with(density) { maxOf(WindowInsets.safeDrawing.getTop(density),
-            WindowInsets.safeDrawing.getBottom(density)).toDp() }
+        // Hiding the status bar must not resize the cover midway through its flight.
+        // Landscape still avoids the cutout and navigation bar, including transient bars.
+        val wideInsets = WindowInsets.displayCutout.union(WindowInsets.navigationBarsIgnoringVisibility)
+        val wideSafeInset = with(density) { maxOf(wideInsets.getLeft(density, layoutDirection),
+            wideInsets.getRight(density, layoutDirection)).toDp() }
+        val wideVerticalInset = with(density) { maxOf(wideInsets.getTop(density), wideInsets.getBottom(density)).toDp() }
         LaunchedEffect(widePlayer) {
             if (widePlayer) {
                 sidePage.close()
@@ -213,8 +217,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         onBinding = { sidePage.close(); onAiNavigate("user/binding") },
                         onDialogActive = { sideDialog = it })
                     else PlayerSidePageContent(queue.current,
-                        quality = if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label,
-                        qualityEnabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null,
+                        quality = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else settings.quality.label,
+                        qualityEnabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true,
                         onQuality = { overlay = PlayerOverlay.QUALITY },
                         onEffects = onEqualizer?.let { action -> { sidePage.close(); action() } },
                         onShare = { overlay = PlayerOverlay.SHARE },
@@ -267,7 +271,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                     if (page == 0) WideControlsContent(vm, onToggle, functions)
                                     else LyricsPanel(vm, Modifier.fillMaxSize()
                                         .onGloballyPositioned { lyricsCoordinates = it },
-                                        active = pager.currentPage == 1 || pager.isScrollInProgress, minimal = true)
+                                        // Rasterizing the lyric rail competes with the mini-cover flight.
+                                        // Reveal it after expansion; LyricsPanel retains it while collapsing.
+                                        active = sheetSettled && (pager.currentPage == 1 || pager.isScrollInProgress), minimal = true)
                                 }
                             }
                         }
@@ -314,9 +320,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         PlayerControlsRegion(controlsVisibility) { functions() }
                         PlayerControlsRegion(controlsVisibility, Modifier.testTag("player_transport_transition")) {
                             PlayerTransport(vm, onToggle, quality = {
-                                if (!roaming.active) Text(if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label,
+                                if (!roaming.active) Text(if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else settings.quality.label,
                                     Modifier.testTag("open_quality_sheet")
-                                        .clickable(enabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null, role = Role.Button) {
+                                        .clickable(enabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true, role = Role.Button) {
                                             overlay = PlayerOverlay.QUALITY
                                         }.padding(horizontal = 8.dp), color = Color.White.copy(alpha = .65f),
                                     fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -382,7 +388,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         scope.launch { pager.animateScrollToPage(if (pager.targetPage == 0) 1 else 0,
                             animationSpec = tween(260, easing = LinearOutSlowInEasing)) }
                     })
-                if (onCast != null && state.song?.navidrome == null) MusicDestinationRow(if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏",
+                if (onCast != null && state.song?.privateLibrary != true) MusicDestinationRow(if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏",
                     modifier = Modifier.testTag("open_player_cast"), onClick = { dismiss(); onCast() })
                 if (controlsRevealed && settings.lyricsDisplay.hideControls && content == PlayerContent.LYRICS)
                     MusicDestinationRow("隐藏控制面板", modifier = Modifier.testTag("lyrics_conceal_controls"), onClick = { controlsRevealed = false; dismiss() })
@@ -391,7 +397,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     if (menuHost == null) overlay = PlayerOverlay.ACTIONS
                     else { dismiss(); menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false)) }
                 })
-                MusicDestinationRow("播放音质", summary = if (state.song?.navidrome != null) "Navidrome 原音质" else settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL && state.song?.navidrome == null)
+                MusicDestinationRow("播放音质", summary = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true)
                 MusicDestinationRow("播放背景", summary = if (backgroundImage == null) "跟随歌曲封面" else "自定义图片 · 模糊 ${appearance.playerBackgroundBlur.toInt()}%",
                     modifier = Modifier.testTag("open_player_background"), onClick = { overlay = PlayerOverlay.BACKGROUND })
                 MusicDestinationRow("私人漫游", summary = if (roaming.active) roaming.choice.title else "按你的喜好连续推荐",
@@ -406,7 +412,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 if (queue.current != null && queue.current?.video != true)
                     MusicDestinationRow("歌词管理", summary = "来源 · 在线匹配 · 单曲偏移 · 导入导出",
                         modifier = Modifier.testTag("open_lyrics_management"), onClick = { overlay = PlayerOverlay.LYRICS_MANAGEMENT })
-                if (onRoom != null && state.song?.navidrome == null) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
+                if (onRoom != null && state.song?.privateLibrary != true) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
                 }
             }
             PlayerOverlay.AI -> PlayerAiDialog(vm.ai, dismiss) { card ->
