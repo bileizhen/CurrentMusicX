@@ -15,16 +15,28 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.theme.isInDarkTheme
+import io.github.currencortex.music.ui.component.nativeui.LocalLiquidGlassEnabled
+import io.github.currencortex.music.ui.component.nativeui.LocalGlassBlurEnabled
+import io.github.currencortex.music.ui.component.nativeui.LiquidGlassOpticsKey
+import io.github.currencortex.music.ui.component.nativeui.glassSurface
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.*
 import top.yukonga.miuix.kmp.theme.*
@@ -54,9 +66,33 @@ else lightColorScheme(primary = Color(0xFF3485FF), background = Color(0xFFF2F3F5
 @Composable internal fun Modifier.musicDialogMaterial(backdrop: Backdrop? = LocalMusicDialogBackdrop.current,
     shape: Shape = MusicDialogShape, drawFallback: Boolean = true): Modifier {
     val dark = isInDarkTheme()
-    val material = if (Build.VERSION.SDK_INT >= 33 && backdrop != null) Modifier.frostedMusicDialog(backdrop, dark, shape)
+    val glass = LocalLiquidGlassEnabled.current && backdrop != null && Build.VERSION.SDK_INT >= 33
+    if (glass) return then(Modifier
+        .dropShadow(shape, Shadow(radius = 29.dp, offset = DpOffset(0.dp, 8.dp),
+            color = Color.Black, alpha = if (dark) .177f else .118f))
+        .glassSurface(backdrop, shape, menu = true, frost = { 16f }, alert = true)
+        .alertGlassRim(shape, dark))
+    val material = if (LocalGlassBlurEnabled.current && Build.VERSION.SDK_INT >= 33 && backdrop != null)
+        Modifier.frostedMusicDialog(backdrop, dark, shape)
     else if (drawFallback) Modifier.background(musicDialogFallbackColor(), shape) else Modifier
-    return then(material).border(.7.dp, Color.White.copy(alpha = if (dark) .12f else .65f), shape)
+    return then(material).semantics { this[LiquidGlassOpticsKey] = false }
+        .border(.7.dp, Color.White.copy(alpha = if (dark) .12f else .65f), shape)
+}
+
+/** LiquidGlassRim.alert from FlClash: stronger sides, a quiet flat edge and a separate optical shine. */
+private fun Modifier.alertGlassRim(shape: Shape, dark: Boolean): Modifier = drawWithCache {
+    val outline = shape.createOutline(size, layoutDirection, this)
+    val radius = (outline as? Outline.Rounded)?.roundRect?.topLeftCornerRadius?.x ?: 32.dp.toPx()
+    val across = (radius / size.width.coerceAtLeast(1f)).coerceIn(0f, .4f)
+    val side = if (dark) .75f else .35f
+    val corner = if (dark) .1f else .22f
+    val flat = if (dark) .03f else .12f
+    val rim = Brush.horizontalGradient(
+        0f to Color.Black.copy(alpha = side), across / 4f to Color.Black.copy(alpha = corner),
+        across to Color.Black.copy(alpha = flat), 1f - across to Color.Black.copy(alpha = flat),
+        1f - across / 4f to Color.Black.copy(alpha = corner), 1f to Color.Black.copy(alpha = side))
+    val stroke = Stroke(.67.dp.toPx())
+    onDrawWithContent { drawContent(); drawOutline(outline, rim, style = stroke) }
 }
 
 @RequiresApi(33)

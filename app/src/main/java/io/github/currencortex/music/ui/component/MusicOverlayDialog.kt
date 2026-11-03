@@ -51,6 +51,8 @@ fun MusicOverlayDialog(
     val styled = backgroundColor == null
     val colors = rememberUpdatedState(if (styled) musicDialogColors() else MiuixTheme.colorScheme)
     val backdrop = rememberUpdatedState(LocalMusicDialogBackdrop.current)
+    val liquidGlass = rememberUpdatedState(io.github.currencortex.music.ui.component.nativeui.LocalLiquidGlassEnabled.current)
+    val blur = rememberUpdatedState(io.github.currencortex.music.ui.component.nativeui.LocalGlassBlurEnabled.current)
     val commonStyle = rememberUpdatedState(styled)
     val edgeContent = rememberUpdatedState(edgeToEdgeContent)
     val styles = rememberUpdatedState(MiuixTheme.textStyles)
@@ -71,32 +73,36 @@ fun MusicOverlayDialog(
     // updating caller content cannot feed back into registering the same root overlay.
     val retainedContent: @Composable () -> Unit = remember {
         {
-            MiuixTheme(colors = colors.value, textStyles = styles.value) {
-                // A local host keeps native presentation inside the root's animated layer.
-                Scaffold(containerColor = Color.Transparent, contentWindowInsets = WindowInsets(0, 0, 0, 0)) {
-                    OverlayDialog(show = true, modifier = currentModifier.value.then(if (panelMotion.value)
-                        Modifier.onSizeChanged { panelHeight.intValue = it.height } else Modifier),
-                        insideMargin = DpSize(0.dp, 0.dp), outsideMargin = currentOutsideMargin.value,
-                        backgroundColor = currentBackground.value ?: Color.Transparent,
-                        enableWindowDim = false, renderInRootScaffold = false,
-                        onDismissRequest = { if (visible.value) dismiss.value?.invoke() }) {
-                        // Paint the entire material inside the native animated layer, together with the text.
-                        Box(Modifier.fillMaxWidth().testTag("music_dialog_surface")
-                            .then(if (commonStyle.value) Modifier.musicDialogMaterial(backdrop.value) else Modifier)) {
-                            val inset = currentInsideMargin.value
-                            CompositionLocalProvider(LocalMusicDialogContent provides true,
-                                LocalMusicDialogEdgeToEdge provides edgeContent.value,
-                                LocalContentColor provides colors.value.onBackground) {
-                                Column(Modifier.fillMaxWidth().padding(top = inset.height, bottom = if (edgeContent.value) 16.dp else inset.height)) {
-                                    currentTitle.value?.let { Text(it, Modifier.fillMaxWidth().padding(horizontal = inset.width)
-                                        .testTag("music_dialog_title"), fontSize = 20.sp, lineHeight = 27.sp,
-                                        fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-                                        color = colors.value.onBackground) }
-                                    currentSummary.value?.let { Text(it,
-                                        Modifier.fillMaxWidth().padding(horizontal = inset.width).padding(top = 12.dp),
-                                        fontSize = 14.sp, lineHeight = 22.sp, color = colors.value.onSurfaceVariantSummary) }
-                                    Box(Modifier.fillMaxWidth().padding(top = if (currentTitle.value != null || currentSummary.value != null) (if (edgeContent.value) 8.dp else 16.dp) else 0.dp)
-                                        .padding(horizontal = if (edgeContent.value) 0.dp else inset.width)) { body.value() }
+            CompositionLocalProvider(
+                io.github.currencortex.music.ui.component.nativeui.LocalLiquidGlassEnabled provides liquidGlass.value,
+                io.github.currencortex.music.ui.component.nativeui.LocalGlassBlurEnabled provides blur.value) {
+                MiuixTheme(colors = colors.value, textStyles = styles.value) {
+                    // A local host keeps native presentation inside the root's animated layer.
+                    Scaffold(containerColor = Color.Transparent, contentWindowInsets = WindowInsets(0, 0, 0, 0)) {
+                        OverlayDialog(show = true, modifier = currentModifier.value.then(if (panelMotion.value)
+                            Modifier.onSizeChanged { panelHeight.intValue = it.height } else Modifier),
+                            insideMargin = DpSize(0.dp, 0.dp), outsideMargin = currentOutsideMargin.value,
+                            backgroundColor = currentBackground.value ?: Color.Transparent,
+                            enableWindowDim = false, renderInRootScaffold = false,
+                            onDismissRequest = { if (visible.value) dismiss.value?.invoke() }) {
+                            // Paint the entire material inside the native animated layer, together with the text.
+                            Box(Modifier.fillMaxWidth().testTag("music_dialog_surface")
+                                .then(if (commonStyle.value) Modifier.musicDialogMaterial(backdrop.value) else Modifier)) {
+                                val inset = currentInsideMargin.value
+                                CompositionLocalProvider(LocalMusicDialogContent provides true,
+                                    LocalMusicDialogEdgeToEdge provides edgeContent.value,
+                                    LocalContentColor provides colors.value.onBackground) {
+                                    Column(Modifier.fillMaxWidth().padding(top = inset.height, bottom = if (edgeContent.value) 16.dp else inset.height)) {
+                                        currentTitle.value?.let { Text(it, Modifier.fillMaxWidth().padding(horizontal = inset.width)
+                                            .testTag("music_dialog_title"), fontSize = 20.sp, lineHeight = 27.sp,
+                                            fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
+                                            color = colors.value.onBackground) }
+                                        currentSummary.value?.let { Text(it,
+                                            Modifier.fillMaxWidth().padding(horizontal = inset.width).padding(top = 12.dp),
+                                            fontSize = 14.sp, lineHeight = 22.sp, color = colors.value.onSurfaceVariantSummary) }
+                                        Box(Modifier.fillMaxWidth().padding(top = if (currentTitle.value != null || currentSummary.value != null) (if (edgeContent.value) 8.dp else 16.dp) else 0.dp)
+                                            .padding(horizontal = if (edgeContent.value) 0.dp else inset.width)) { body.value() }
+                                    }
                                 }
                             }
                         }
