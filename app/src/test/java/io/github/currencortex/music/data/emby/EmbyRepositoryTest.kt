@@ -91,6 +91,19 @@ class EmbyRepositoryTest {
             if (kind == "artist") assertEquals("parent", url.queryParameter("ArtistIds"))
         }
     }
+    @Test fun albumAndArtistArtworkUsesTheInheritedImageOwner() = runBlocking {
+        login()
+        for (type in listOf("MusicAlbum", "MusicArtist")) {
+            server.enqueue(MockResponse().setBody("""{"Items":[{"Id":"parent","Name":"Album","Type":"$type","ImageTags":{},"PrimaryImageItemId":"image-owner","PrimaryImageTag":"inherited-tag"}],"TotalRecordCount":1}"""))
+            val cover = repo.browse(if (type == "MusicAlbum") "albums" else "artists").entries.single().cover
+            assertTrue(cover.contains("/Items/image-owner/Images/Primary"))
+            assertTrue(cover.contains("Tag=inherited-tag"))
+            assertFalse(cover.contains("fixture-token"))
+        }
+        server.enqueue(MockResponse().setBody("""{"Items":[{"Id":"own","Name":"Album","Type":"MusicAlbum","ImageTags":{"Primary":"own-tag"},"PrimaryImageItemId":"child","PrimaryImageTag":"fallback"}],"TotalRecordCount":1}"""))
+        val own = repo.browse().entries.single().cover
+        assertTrue(own.contains("/Items/own/Images/Primary")); assertTrue(own.contains("Tag=own-tag"))
+    }
     @Test fun mediaAuthenticationPreservesRangeAndReturnsSafeRequest() = runBlocking {
         login(); val song = song(); server.takeRequest(); server.takeRequest()
         val safe = repo.source(song).url

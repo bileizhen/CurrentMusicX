@@ -75,8 +75,15 @@ class EmbyRepository(private val vault: TokenStore, scope: CoroutineScope) {
     }
     private fun cover(raw: JsonObject, access: EmbyAccess): String {
         val own = raw.obj("ImageTags").text("Primary")
-        val id = if (own.isNotBlank()) raw.text("Id") else raw.text("AlbumId")
-        val tag = own.ifBlank { raw.text("AlbumPrimaryImageTag") }
+        val inherited = raw.text("PrimaryImageTag")
+        val album = raw.text("AlbumPrimaryImageTag")
+        // Albums/artists can inherit artwork from a child item. Their own image endpoint returns 404.
+        val (id, tag) = when {
+            own.isNotBlank() -> raw.text("Id") to own
+            inherited.isNotBlank() -> raw.text("PrimaryImageItemId").ifBlank { raw.text("Id") } to inherited
+            album.isNotBlank() -> raw.text("AlbumId") to album
+            else -> return ""
+        }
         if (id.isBlank() || tag.isBlank()) return ""
         return client.media(listOf("Items", id, "Images", "Primary"), listOf("MaxWidth" to "600", "Tag" to tag), access)
     }
