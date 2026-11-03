@@ -3,7 +3,6 @@
 package io.github.currencortex.music.ui
 
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.distinctUntilChanged
 
 import android.os.Build
 import io.github.currencortex.music.BuildConfig
@@ -35,6 +34,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
@@ -223,8 +223,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     // Position and loading updates belong to the player, not the entire navigation tree.
     val playerState by playerVm.navigation.collectAsStateWithLifecycle()
     val currentSong by playerVm.currentSong.collectAsStateWithLifecycle()
-    val searchQuery by remember(searchVm) { searchVm.state.map { it.query }.distinctUntilChanged() }
-        .collectAsStateWithLifecycle(initialValue = searchVm.state.value.query)
+    val searchState = searchVm.state.collectAsStateWithLifecycle()
+    val searchQuery by remember(searchState) {
+        derivedStateOf(structuralEqualityPolicy()) { searchState.value.query }
+    }
     val searchKeyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val searchFocusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val roomLive by container.roomSession.state.collectAsStateWithLifecycle()
