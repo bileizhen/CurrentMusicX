@@ -20,7 +20,8 @@ on:
 permissions:
   contents: read
   issues: write
-  pull-requests: read
+  # Creating and deleting PR conversation comments requires write access.
+  pull-requests: write
 concurrency:
   group: codex-review-bridge
   cancel-in-progress: false
