@@ -22,7 +22,10 @@ enum class UpdateSource(val label: String, val prefix: String) {
     fun url(release: AppRelease, proxy: UpdateProxy = UpdateProxy.current): String {
         val official = requireNotNull(release.apkUrl) { "此发布没有 APK" }
         require(official.startsWith("${AppMetadata.RELEASES_PROJECT_URL}/releases/download/")) { "更新来源不匹配" }
-        if (this == CURRENTMUSIC) return proxy.assetUrl(official.toHttpUrl())
+        if (this == CURRENTMUSIC) {
+            require(!release.isCi) { "CurrentMusic 专用镜像仅提供正式版" }
+            return proxy.assetUrl(official.toHttpUrl())
+        }
         if (prefix.isNotEmpty()) require(prefix.startsWith("https://")) { "下载源必须使用 HTTPS" }
         val result = prefix + official
         val uri = URI(result)
@@ -33,5 +36,6 @@ enum class UpdateSource(val label: String, val prefix: String) {
     companion object {
         val available: List<UpdateSource> get() = entries.filter { it != CURRENTMUSIC || UpdateProxy.current.configured }
         val default: UpdateSource get() = if (UpdateProxy.current.configured) CURRENTMUSIC else GITHUB
+        fun forChannel(channel: UpdateChannel) = available.filter { channel != UpdateChannel.CI || it != CURRENTMUSIC }
     }
 }

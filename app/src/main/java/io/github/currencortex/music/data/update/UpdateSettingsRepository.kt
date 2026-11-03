@@ -20,14 +20,13 @@ class UpdateSettingsRepository(
     private val autoCheck = booleanPreferencesKey("update_auto_check")
     private val channel = stringPreferencesKey("update_channel")
     private val ignoredStable = stringPreferencesKey("update_ignored_stable")
-    private val ignoredPrerelease = stringPreferencesKey("update_ignored_prerelease")
+    private val ignoredCi = stringPreferencesKey("update_ignored_ci")
 
     private fun read(preferences: Preferences) = UpdateSettings(
             autoCheckOnLaunch = preferences[autoCheck] ?: true,
-            channel = runCatching { UpdateChannel.valueOf(preferences[channel] ?: UpdateChannel.STABLE.name) }
-                .getOrDefault(UpdateChannel.STABLE),
+            channel = UpdateChannel.fromStored(preferences[channel]),
             ignoredVersions = mapOf(UpdateChannel.STABLE to preferences[ignoredStable].orEmpty(),
-                UpdateChannel.PRERELEASE to preferences[ignoredPrerelease].orEmpty()),
+                UpdateChannel.CI to preferences[ignoredCi].orEmpty()),
         )
 
     val state: StateFlow<UpdateSettings> = dataStore.data.map(::read)
@@ -44,6 +43,6 @@ class UpdateSettingsRepository(
     }
 
     suspend fun ignoreRelease(channel: UpdateChannel, version: String) {
-        dataStore.edit { it[if (channel == UpdateChannel.STABLE) ignoredStable else ignoredPrerelease] = version }
+        dataStore.edit { it[if (channel == UpdateChannel.STABLE) ignoredStable else ignoredCi] = version }
     }
 }
