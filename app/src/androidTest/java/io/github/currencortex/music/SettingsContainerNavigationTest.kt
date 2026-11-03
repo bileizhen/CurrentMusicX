@@ -106,6 +106,43 @@ class SettingsContainerNavigationTest {
         }
     }
 
+    @Test fun supportRoutesKeepMiniPlayerAndReturnThroughTheirOwnEntry() {
+        start()
+        compose.runOnIdle {
+            val song = io.github.currencortex.music.data.song.Song(903, "Support retained song", durationMs = 10000)
+            container.playbackQueue.restore(io.github.currencortex.music.core.media.QueueSnapshot(listOf(song), 0))
+            container.playerController.state.value = io.github.currencortex.music.core.media.PlayerState(song = song, durationMs = 10000)
+        }
+        advance()
+        scroll("settings_screen", "open_support")
+        val origin = compose.onNodeWithTag("open_support").fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("open_support").performClick(); advance(160)
+        val pane = compose.onNodeWithTag("page_container_support-developer")
+        assertTrue(pane.fetchSemanticsNode().config[PageContainerGeometry].progress in .01f.. .99f)
+        advance()
+        compose.onNodeWithTag("support_screen").assertIsDisplayed()
+        compose.onNodeWithTag("mini_player").assertIsDisplayed()
+        capture("support-page-light.png")
+        scroll("support_screen", "support_ALIPAY")
+        compose.onNodeWithTag("support_ALIPAY").performClick(); advance()
+        compose.onNodeWithTag("support_qr_ALIPAY").assertIsDisplayed()
+        capture("support-qr-alipay.png")
+        back(); advance()
+        compose.onNodeWithTag("support_qr_ALIPAY").assertDoesNotExist()
+        compose.onNodeWithTag("support_screen").assertIsDisplayed()
+        back(); advance()
+        assertEquals(origin.top, compose.onNodeWithTag("open_support").fetchSemanticsNode().boundsInRoot.top, 1f)
+        scroll("settings_screen", "open_about")
+        compose.onNodeWithTag("open_about").performClick(); advance()
+        scroll("about_screen", "about_open_support")
+        compose.onNodeWithTag("about_open_support").performClick(); advance()
+        compose.onNodeWithTag("support_screen").assertIsDisplayed()
+        compose.onNodeWithTag("mini_player").assertIsDisplayed()
+        back(); advance()
+        compose.onNodeWithTag("about_screen").assertIsDisplayed()
+        assertEquals(903L, container.playerController.state.value.song?.id)
+    }
+
     @Test fun appearanceFontPageUsesNestedContainerAndReturnsToItsSource() {
         start()
         compose.runOnIdle {
