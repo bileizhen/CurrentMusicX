@@ -42,3 +42,4 @@ keystore.properties
 !/app/src/main/assets/legal/PRIVACY.md
 !/app/src/main/cpp/oboe/UPSTREAM.md
 !/app/src/test/resources/ttml/SOURCE.md
+!/.github/pull_request_template.md
