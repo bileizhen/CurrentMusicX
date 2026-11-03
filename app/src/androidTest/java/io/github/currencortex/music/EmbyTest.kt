@@ -42,6 +42,8 @@ class EmbyTest {
                     if (path.endsWith("stream")) return MockResponse().setHeader("Content-Type", "audio/flac").setBody(Buffer().write(audio))
                     if (path.endsWith("Items")) {
                         reads.incrementAndGet()
+                        if (request.requestUrl!!.queryParameter("IncludeItemTypes") == "MusicArtist")
+                            return MockResponse().setBody("""{"Items":[{"Id":"artist-1","Name":"测试艺术家","Type":"MusicArtist"}],"TotalRecordCount":1}""")
                         return if (request.requestUrl!!.queryParameter("IncludeItemTypes") == "MusicAlbum")
                             MockResponse().setBody("""{"Items":[{"Id":"album-1","Name":"测试专辑","Type":"MusicAlbum"}],"TotalRecordCount":1}""")
                         else MockResponse().setBody("""{"Items":[$track],"TotalRecordCount":1}""")
@@ -63,6 +65,12 @@ class EmbyTest {
             compose.onNodeWithTag("emby_password").performTextInput("fixture-password")
             compose.onNodeWithTag("emby_password").performImeAction()
             compose.waitUntil(15000) { container.emby.state.value.configured && vm!!.state.value.loaded }
+            compose.onNodeWithTag("emby_query").assertDoesNotExist()
+            compose.onNodeWithText("Emby 测试歌曲").assertIsDisplayed()
+            compose.onNodeWithTag("tab_1").performClick()
+            compose.waitUntil(15000) { vm!!.state.value.loaded && vm!!.state.value.route.kind == "artists" }
+            compose.onNodeWithText("测试艺术家").performClick()
+            compose.waitUntil(15000) { vm!!.state.value.loaded && vm!!.state.value.route.kind == "artist" }
             compose.onNodeWithText("测试专辑").performClick()
             compose.waitUntil(15000) { vm!!.state.value.page.songs.isNotEmpty() }
             compose.onNodeWithText("Emby 测试歌曲").assertIsDisplayed()
@@ -72,7 +80,7 @@ class EmbyTest {
             }
             val before = reads.get()
             withContext(Dispatchers.Main) { assertTrue(vm!!.back()) }
-            compose.waitUntil(5000) { vm!!.state.value.route.kind == "albums" }
+            compose.waitUntil(5000) { vm!!.state.value.route.kind == "artist" }
             assertEquals(before, reads.get())
             val song = container.emby.browse("songs").songs.single()
             val request = container.audioRequest(song, AudioQuality.AUTO)

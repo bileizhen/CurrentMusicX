@@ -9,7 +9,7 @@ import io.github.currencortex.music.data.song.Song
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
-data class EmbyRoute(val kind: String = "albums", val id: String = "", val title: String = "Emby", val query: String = "")
+data class EmbyRoute(val kind: String = "songs", val id: String = "", val title: String = "Emby", val query: String = "")
 data class EmbyUi(val route: EmbyRoute = EmbyRoute(), val page: EmbyPage = EmbyPage(),
     val loading: Boolean = false, val loaded: Boolean = false, val error: String? = null, val index: Int = 0, val offset: Int = 0)
 
@@ -24,6 +24,8 @@ class EmbyViewModel(val container: AppContainer) : ViewModel() {
     private var load: Job? = null
     private var generation = 0L
     val nested get() = history.isNotEmpty()
+    val selectedTab get() = EmbyNavigation.kinds.indexOf(
+        history.firstOrNull()?.kind ?: state.value.route.kind).coerceAtLeast(0)
     init { viewModelScope.launch {
         repository.ready.await()
         account.map { it.revision }.distinctUntilChanged().collect {
