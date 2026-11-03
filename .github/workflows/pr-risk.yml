@@ -30,7 +30,8 @@ jobs:
             });
             const {level, reason} = classify(files);
             const labels = ['risk: low','risk: medium','risk: high'];
-            const current = pr.labels.map(x => x.name);
+            const live = await github.rest.issues.get({...context.repo,issue_number:pr.number});
+            const current = live.data.labels.map(x => x.name);
             for (const label of labels) {
               if (label !== 'risk: ' + level && current.includes(label)) {
                 await github.rest.issues.removeLabel({...context.repo,issue_number:pr.number,name:label});
