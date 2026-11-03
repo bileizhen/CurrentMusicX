@@ -19,6 +19,7 @@ function isLightweightOnly(paths) {
     '.github/scripts/pr-review-summary.cjs',
     '.github/scripts/pr-review-summary.test.cjs',
     '.github/REVIEW_POLICY.md',
+    'AGENTS.md',
   ]);
   return paths.length > 0 && paths.every(path =>
     checkedAutomation.has(path) ||
