@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.data.settings.*
 import io.github.currencortex.music.feature.settings.*
+import io.github.currencortex.music.feature.player.PlayerEffectsOverlay
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -41,7 +42,9 @@ class AdaptiveAudioUiTest {
     @After fun cleanup() { container.close(); server.shutdown() }
     @Test fun controlsPersistAndBypassRemainsVisibleWithoutDiscardingTheCurve() {
         val vm = SoundEffectsViewModel(container)
-        compose.setContent { AdaptiveAudioScreen(vm, {}) }
+        compose.setContent {
+            PlayerEffectsOverlay(true, {}, {}, effects = { _, _ -> AdaptiveAudioScreen(vm, {}) }, equalizer = {})
+        }
         fun scroll(tag: String): SemanticsNodeInteraction {
             compose.onNodeWithTag("adaptive_audio_list").performScrollToNode(hasTestTag(tag))
             return compose.onNodeWithTag(tag)
