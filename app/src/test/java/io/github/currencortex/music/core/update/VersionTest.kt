@@ -16,4 +16,17 @@ class VersionTest {
         listOf("", "1.2", "01.2.3", "1.2.3-nightly", "999999999999999999999.2.3",
             "1.2.3-rc.999999999999999999999").forEach { assertNull(Version.parse(it)) }
     }
+
+    @Test fun ciUpdatesFollowTheBaseReleaseAndYieldToTheNextStableRelease() {
+        assertTrue(Version.parse("1.3.2-ci.10")!! > Version.parse("1.3.2")!!)
+        assertTrue(Version.parse("1.3.2-ci.11")!! > Version.parse("1.3.2-ci.10")!!)
+        assertTrue(Version.parse("1.3.3")!! > Version.parse("1.3.2-ci.99999")!!)
+    }
+
+    @Test fun persistedPreviewChannelMigratesToCiWithoutChangingStableDefaults() {
+        org.junit.Assert.assertEquals(UpdateChannel.CI, UpdateChannel.fromStored("PRERELEASE"))
+        org.junit.Assert.assertEquals(UpdateChannel.CI, UpdateChannel.fromStored("CI"))
+        org.junit.Assert.assertEquals(UpdateChannel.STABLE, UpdateChannel.fromStored(null))
+        org.junit.Assert.assertEquals(UpdateChannel.STABLE, UpdateChannel.fromStored("unknown"))
+    }
 }

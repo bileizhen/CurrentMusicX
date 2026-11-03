@@ -58,11 +58,11 @@ class UpdateTransfer(private val downloader: UpdateDownload, private val install
         if (job?.isActive == true || mutable.value.installing || mutable.value.download is UpdateDownloadState.Ready ||
             mutable.value.download is UpdateDownloadState.Downloading) return
         val request = ++generation
-        val sources = source.fallbacks()
+        val sources = source.fallbacks().filter { !value.isCi || it != UpdateSource.CURRENTMUSIC }
         mutable.value = UpdateTransferState(UpdateDownloadState.Downloading(0, value.size),
             activeSource = sources.first(), attempt = 1, totalSources = sources.size)
         if (background != null) {
-            try { backgroundId = background.start(value, source) }
+            try { backgroundId = background.start(value, sources.first()) }
             catch (error: Exception) { mutable.update { it.copy(download = UpdateDownloadState.Failed(error.message ?: "无法开始后台下载")) } }
             return
         }

@@ -31,6 +31,12 @@ require(!updateDownloadExperience || providers.gradleProperty("isolatedDebug").o
 }
 val originalEffectsLibs = file("src/main/jniLibs/arm64-v8a")
 
+// Reserve 100,000 codes per release; CI builds of that release use its trailing slots.
+// A later stable release must increment the base versionCode below, as before.
+val ciBuildNumber = providers.gradleProperty("ciBuildNumber").orNull?.toIntOrNull() ?: 0
+require(ciBuildNumber in 0..99_999) { "CI build number must fit the reserved version-code range" }
+require(!providers.gradleProperty("ciBuildNumber").isPresent || ciBuildNumber > 0) { "Invalid CI build number" }
+
 ksp { arg("room.schemaLocation", "$projectDir/schemas") }
 
 android {
@@ -47,6 +53,8 @@ android {
         targetSdk = 36
         versionCode = 35
         versionName = "1.3.2"
+        versionCode = requireNotNull(versionCode) * 100_000 + ciBuildNumber
+        if (ciBuildNumber > 0) versionName = "$versionName-ci.$ciBuildNumber"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "NETEASE_ORIGINAL_EFFECTS", originalEffectsBundled.toString())
         buildConfigField("boolean", "UPDATE_DOWNLOAD_EXPERIENCE", "false")

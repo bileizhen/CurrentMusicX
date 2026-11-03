@@ -13,7 +13,7 @@ class GitHubUpdateChecker(
     private val nativeAssetsOnly: Boolean = false,
 ) : ReleaseChecker {
     override fun check(channel: UpdateChannel): AppRelease? {
-        val endpoint = if (channel == UpdateChannel.PRERELEASE || nativeAssetsOnly) {
+        val endpoint = if (channel == UpdateChannel.CI) {
             "https://api.github.com/repos/$owner/$repository/releases?per_page=100"
         } else {
             "https://api.github.com/repos/$owner/$repository/releases/latest"
@@ -46,7 +46,8 @@ class GitHubUpdateChecker(
     }
 
     internal fun parseResponse(json: String, channel: UpdateChannel): AppRelease? =
-        if (channel == UpdateChannel.PRERELEASE || nativeAssetsOnly) newestFromList(json, channel == UpdateChannel.PRERELEASE) else newestStable(json)
+        if (json.trimStart().startsWith("[")) newestFromList(json, channel == UpdateChannel.CI)
+        else if (channel == UpdateChannel.STABLE) newestStable(json) else null
 
     private fun newestStable(json: String): AppRelease? {
         val current = Version.parse(installedVersion) ?: return null
@@ -63,7 +64,11 @@ class GitHubUpdateChecker(
         for (index in 0 until releases.length()) {
             val jsonRelease = releases.optJSONObject(index) ?: continue
             if (jsonRelease.optBoolean("draft")) continue
+            if (allowPrerelease && (!CI_TAG.matches(jsonRelease.optString("tag_name")) ||
+                    !jsonRelease.optBoolean("prerelease"))) continue
             val candidate = parseEligible(jsonRelease, current, allowPrerelease = allowPrerelease) ?: continue
+            if (allowPrerelease && (candidate.apkUrl == null || candidate.size !in 1..UpdateDownloader.MAX_APK_BYTES ||
+                    !Regex("[a-f0-9]{64}").matches(candidate.sha256))) continue
             val candidateVersion = Version.parse(candidate.version) ?: continue
             if (bestVersion == null || candidateVersion > bestVersion) {
                 best = candidate
@@ -96,7 +101,8 @@ class GitHubUpdateChecker(
                 val name = asset.optString("name")
                 val url = asset.optString("browser_download_url")
                 if (name.endsWith(".apk", ignoreCase = true) && url.startsWith(expectedDownloadPrefix) &&
-                    (!nativeAssetsOnly || name.startsWith("CurrentMusic-Android-v"))) {
+                    (!nativeAssetsOnly || name.startsWith("CurrentMusic-Android-v")) &&
+                    (!CI_TAG.matches(tag) || name == "CurrentMusic-Android-$tag.apk")) {
                     apkUrl = url
                     assetName = name
                     size = asset.optLong("size", 0L)
@@ -119,6 +125,8 @@ class GitHubUpdateChecker(
     }
 
     companion object {
-        private const val MAX_RESPONSE_BYTES = 512 * 1024
+        private val CI_TAG = Regex("v[0-9]+\\.[0-9]+\\.[0-9]+-ci\\.[1-9][0-9]*")
+        // CI releases include generated PR notes; a page of 100 builds can exceed 512 KiB.
+        private const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
     }
 }
