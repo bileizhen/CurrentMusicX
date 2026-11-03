@@ -10,11 +10,14 @@ import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.data.settings.*
 import io.github.currencortex.music.feature.settings.*
 import io.github.currencortex.music.feature.player.PlayerEffectsOverlay
+import io.github.currencortex.music.core.media.AdaptiveAudioRuntime
+import io.github.currencortex.music.core.media.PlayerMode
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.MockResponse
 import okhttp3.mockwebserver.MockWebServer
@@ -145,5 +148,81 @@ class AdaptiveAudioUiTest {
         val first = compose.onNodeWithTag("adaptive_band_0").fetchSemanticsNode().boundsInRoot
         val sixth = compose.onNodeWithTag("adaptive_band_5").fetchSemanticsNode().boundsInRoot
         assertTrue(sixth.top > first.top)
+    }
+
+    @Test fun liveDspGainsDriveNumbersAndKnobsWithoutChangingManualSettings() {
+        runBlocking { container.adaptiveAudio.edit { it.copy(enabled = true) } }
+        container.playerController.state.value = container.playerController.state.value.copy(playing = true)
+        val gains = listOf(7.3f, -8.1f, 1.2f, -.5f, 0f, 2.1f, -1.2f, 3f, -3f, .8f)
+        container.adaptiveAudioRuntime.value = AdaptiveAudioRuntime(processing = true, gains = gains)
+        val vm = SoundEffectsViewModel(container)
+        compose.setContent {
+            PlayerEffectsOverlay(true, {}, {}, effects = { _, _ -> AdaptiveAudioScreen(vm, {}) }, equalizer = {})
+        }
+        fun displayed(index: Int) = compose.onNodeWithTag("adaptive_band_$index").fetchSemanticsNode()
+            .config[SemanticsProperties.ProgressBarRangeInfo].current
+        compose.waitUntil { displayed(0) == 7.3f }
+        gains.forEachIndexed { index, value ->
+            assertEquals(value, displayed(index), .01f)
+            compose.onNodeWithTag("adaptive_band_value_$index").assertTextEquals(java.lang.String.format(java.util.Locale.ROOT, "%+.1f", value))
+        }
+        assertEquals(-9f..9f, compose.onNodeWithTag("adaptive_band_0").fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].range)
+        assertEquals(List(10) { 0f }, runBlocking { container.adaptiveAudio.snapshot() }.gains)
+        container.adaptiveAudioRuntime.value = AdaptiveAudioRuntime(processing = true, gains = List(10) { -1.5f })
+        compose.waitUntil { displayed(0) == -1.5f }
+        compose.onNodeWithTag("adaptive_band_value_0").assertTextEquals("-1.5")
+        container.playerController.state.value = container.playerController.state.value.copy(playing = false)
+        compose.waitUntil { displayed(0) == 0f }
+        container.playerController.state.value = container.playerController.state.value.copy(playing = true, mode = PlayerMode.CAST)
+        compose.waitForIdle()
+        assertEquals(0f, displayed(0), 0f)
+        container.playerController.state.value = container.playerController.state.value.copy(mode = PlayerMode.LOCAL)
+        compose.waitUntil { displayed(0) == -1.5f }
+        runBlocking { container.audioOutput.setMode(AudioOutputMode.BIT_PERFECT) }
+        compose.waitUntil { displayed(0) == 0f }
+        runBlocking { container.audioOutput.setMode(AudioOutputMode.AUDIO_TRACK); container.adaptiveAudio.edit { it.copy(dynamicEq = false) } }
+        compose.waitForIdle()
+        assertEquals(0f, displayed(0), 0f)
+        assertEquals(List(10) { 0f }, runBlocking { container.adaptiveAudio.snapshot() }.gains)
+    }
+
+    @Test fun grabbingLiveKnobFreezesItsAnchorAndSavesOnlyTheManualDelta() {
+        runBlocking { container.adaptiveAudio.edit { it.copy(enabled = true) } }
+        container.playerController.state.value = container.playerController.state.value.copy(playing = true)
+        container.adaptiveAudioRuntime.value = AdaptiveAudioRuntime(processing = true, gains = List(10) { 2f })
+        val vm = SoundEffectsViewModel(container)
+        compose.setContent {
+            PlayerEffectsOverlay(true, {}, {}, effects = { _, _ -> AdaptiveAudioScreen(vm, {}) }, equalizer = {})
+        }
+        val knob = compose.onNodeWithTag("adaptive_band_0")
+        fun displayed() = knob.fetchSemanticsNode().config[SemanticsProperties.ProgressBarRangeInfo].current
+        compose.waitUntil { displayed() == 2f }
+        val inset = with(compose.density) { 12.dp.toPx() }
+        knob.performTouchInput {
+            val travel = height - inset * 2
+            down(Offset(centerX, inset + 7f / 18f * travel))
+            moveBy(Offset(0f, -travel / 18f), delayMillis = 240)
+        }
+        compose.waitUntil { container.adaptiveAudio.effective.value.gains[0] == 1f }
+        compose.onNodeWithTag("adaptive_band_value_0").assertTextEquals("+3.0")
+        assertEquals(0f, runBlocking { container.adaptiveAudio.snapshot() }.gains[0], 0f)
+        // A new audio report must not move the knob out from under the user's finger.
+        container.adaptiveAudioRuntime.value = AdaptiveAudioRuntime(processing = true, gains = List(10) { -2f })
+        compose.waitForIdle()
+        assertEquals(3f, displayed(), 0f)
+        knob.performTouchInput { up() }
+        compose.waitUntil { container.adaptiveAudio.state.value.gains[0] == 1f && displayed() == -2f }
+        knob.performSemanticsAction(SemanticsActions.SetProgress) { it(-2f) }
+        compose.waitForIdle()
+        assertEquals(1f, runBlocking { container.adaptiveAudio.snapshot() }.gains[0], 0f)
+        knob.performTouchInput {
+            val travel = height - inset * 2
+            down(Offset(centerX, inset + 11f / 18f * travel))
+            moveBy(Offset(0f, -travel / 18f), delayMillis = 240)
+        }
+        compose.waitUntil { container.adaptiveAudio.effective.value.gains[0] == 2f }
+        knob.performTouchInput { cancel() }
+        compose.waitUntil { container.adaptiveAudio.effective.value.gains[0] == 1f }
+        assertEquals(-2f, displayed(), 0f)
     }
 }
