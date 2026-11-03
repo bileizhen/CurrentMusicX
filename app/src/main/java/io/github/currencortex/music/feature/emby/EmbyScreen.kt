@@ -77,10 +77,7 @@ data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
         }
     }) { topInset ->
         if (configuration) EmbyAccountPage(vm, topInset) { settings = false }
-        else Column(Modifier.fillMaxSize().padding(top = topInset)) {
-            Text("${account.username} · Emby", Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp),
-                fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            error?.let { Text(it, Modifier.padding(16.dp), color = MiuixTheme.colorScheme.error) }
+        else Box(Modifier.fillMaxSize()) {
             val list = remember(state.route, account.revision) { LazyListState(state.index, state.offset) }
             val route = state.route
             DisposableEffect(list) { onDispose { vm.position(route, list.firstVisibleItemIndex, list.firstVisibleItemScrollOffset) } }
@@ -93,7 +90,10 @@ data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
                 }.distinctUntilChanged().collect { if (it) vm.refresh(true) }
             }
             LazyColumn(Modifier.fillMaxSize().testTag("emby_list"), state = list,
-                contentPadding = musicScrollPadding(PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 104.dp))) {
+                contentPadding = musicScrollPadding(PaddingValues(start = 16.dp, end = 16.dp, top = topInset + 12.dp, bottom = 104.dp))) {
+                error?.let { message -> item("action_error") {
+                    Text(message, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error)
+                } }
                 items(state.page.entries, key = { "${it.type}:${it.id}" }) { entry ->
                     val cover by produceState(entry.cover, entry, account.revision) {
                         val result = appResult { vm.repository.entryCover(entry, account.revision) }
