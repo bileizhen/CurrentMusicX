@@ -43,6 +43,7 @@ import kotlin.math.roundToInt
     }
     val bypass = output.mode.bypassProcessing || playback.mode == PlayerMode.CAST
     val live = settings.enabled && playback.playing && runtime.processing && !bypass
+    val liveEq = live && settings.dynamicEq
     val status = when {
         !settings.enabled -> "已关闭 · 调节参数已保留"
         playback.mode == PlayerMode.CAST -> "投屏由接收设备处理，本机设置暂不生效"
@@ -74,7 +75,8 @@ import kotlin.math.roundToInt
                         Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                             Column(Modifier.weight(1f)) {
                                 Text("十段均衡器", fontSize = 17.sp)
-                                Text("手动调节 · ±6 dB", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                Text(if (liveEq) "实时增益 · 含动态 EQ · ±9 dB" else "手动调节 · ±6 dB",
+                                    Modifier.testTag("adaptive_band_mode"), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                             }
                             GlassIconButton({ vm.editAdaptive { it.copy(gains = List(10) { 0f }) } }, "重置十段均衡器",
                                 Modifier.testTag("adaptive_reset"), enabled = enabled && settings.gains.any { it != 0f }, surface = false) {
@@ -84,12 +86,12 @@ import kotlin.math.roundToInt
                         AdaptiveEqBands(settings.gains, selectedBand, enabled, onSelect = { selectedBand = it },
                             onPreview = { index, value -> vm.previewAdaptive { it.copy(gains = it.gains.toMutableList().apply { set(index, value) }) } },
                             onSave = { index, value -> vm.commitAdaptive { it.copy(gains = it.gains.toMutableList().apply { set(index, value) }) } },
-                            onCancel = vm::clearAdaptivePreview)
-                        AudioAdjustment("${AdaptiveAudioSettings.FREQUENCIES[selectedBand]} Hz", settings.gains[selectedBand], -6f..6f,
+                            onCancel = vm::clearAdaptivePreview, liveGains = runtime.gains.takeIf { liveEq })
+                        AudioAdjustment("${AdaptiveAudioSettings.FREQUENCIES[selectedBand]} Hz · 手动增益", settings.gains[selectedBand], -6f..6f,
                             ::gainLabel, enabled, "adaptive_band_fine", key = selectedBand,
                             onPreview = { vm.previewAdaptive(band(it)) }, onCancel = vm::clearAdaptivePreview,
                             onSave = { vm.commitAdaptive(band(it)) })
-                        SettingsHint("拖动圆点调节，空白处滑动页面；滑条可精调。")
+                        SettingsHint(if (liveEq) "数字与圆点跟随动态 EQ；拖动可叠加手动调节。" else "拖动圆点调节，空白处滑动页面；滑条可精调。")
                     }
                 }
                 item("dynamic") {
