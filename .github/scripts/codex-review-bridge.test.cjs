@@ -87,3 +87,15 @@ test('new fork PR is requested, Codex completion deletes request',async()=>{
   await run({github,core,context});
   assert.deepEqual(calls,['post','delete:12']);
 });
+
+test('review bridge has PR write permissions to post and remove comments',()=>{
+  const fs=require('node:fs');
+  const path=require('node:path');
+  const workflow=fs.readFileSync(path.join(__dirname,'../workflows/codex-review-bridge.yml'),'utf8');
+  const permissions=workflow.match(/^permissions:\n((?:  [^\n]+\n|  #[^\n]+\n)+)/m)?.[1];
+  assert.ok(permissions,'workflow must define explicit permissions');
+  assert.match(permissions,/^  issues: write$/m);
+  assert.match(permissions,/^  pull-requests: write$/m);
+  assert.match(workflow,/ref: \$\{\{ github\.event\.repository\.default_branch \}\}/);
+  assert.match(workflow,/persist-credentials: false/);
+});
