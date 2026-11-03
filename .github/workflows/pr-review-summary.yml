@@ -4,6 +4,11 @@ on:
     branches: [main]
     types: [opened, reopened, synchronize, ready_for_review]
   workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 要刷新审查摘要的 PR 编号
+        required: true
+        type: number
 permissions:
   contents: read
   pull-requests: read
@@ -12,20 +17,38 @@ concurrency:
   cancel-in-progress: true
 jobs:
   summarize:
-    if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.base.sha || github.event.repository.default_branch }}
           sparse-checkout: .github/scripts
           persist-credentials: false
       - uses: actions/github-script@v7
         with:
           script: |
-            const {summarize,markdown}=require('./.github/scripts/pr-review-summary.cjs');
-            const number=context.issue.number;
+            const number=context.eventName === 'workflow_dispatch' ? Number(context.payload.inputs.pr_number) : context.issue.number;
+            if (!Number.isSafeInteger(number) || number < 1) throw new Error('无效 PR 编号');
+            const {data:pr}=await github.rest.pulls.get({...context.repo,pull_number:number});
+            if (pr.base.ref !== 'main') throw new Error('仅支持目标分支为 main 的 PR');
+            // Bootstrap: on the first PR, trusted base does not yet contain the helper.
+            // Keep this fallback inline; never check out or execute PR-head code.
+            let summarize,markdown;
+            try { ({summarize,markdown}=require('./.github/scripts/pr-review-summary.cjs')); }
+            catch (error) {
+              if (error.code !== 'MODULE_NOT_FOUND') throw error;
+              const high=/^(\\.github\\/workflows\\/|\\.github\\/scripts\\/(?:ci-release|release-draft|pr-risk)\\.)|(?:^|\\/)(?:audio|player|playback|security|auth|database|signing|release)(?:\\/|\\.|$)/i;
+              const medium=/^app\\/src\\/|\\.gradle(?:\\.kts)?$/;
+              summarize=(files,threads)=>{
+                const paths=files.flatMap(f=>[f.filename,...(f.previous_filename?[f.previous_filename]:[])]);
+                const level=files.length===0||files.length>100||paths.some(p=>high.test(p))?'high':paths.some(p=>medium.test(p))?'medium':'low';
+                const open=threads.filter(t=>!t.isResolved&&!t.isOutdated);
+                const severe=open.filter(t=>t.comments.nodes.some(c=>/\\bP[01]\\b/.test(c.body||'')));
+                return {risk:{level},open:open.length,high:severe.length,needsHuman:level==='high'||open.length>0};
+              };
+              markdown=r=>`## PR 审查概览\\n\\n- 风险：${r.risk.level}\\n- 未解决讨论：${r.open}\\n- P0/P1：${r.high}\\n- 建议：${r.needsHuman?'人工复核':'遵循现有合并规则'}\\n\\n> 仅汇总现有审查，不代表 Codex 已完成本次审查。`;
+            }
             const files=await github.paginate(github.rest.pulls.listFiles,{...context.repo,pull_number:number,per_page:100});
             const query=`query($owner:String!,$repo:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100,after:$cursor){nodes{isResolved isOutdated comments(first:20){nodes{body}}}pageInfo{hasNextPage endCursor}}}}}`;
             let cursor=null,threads=[];
