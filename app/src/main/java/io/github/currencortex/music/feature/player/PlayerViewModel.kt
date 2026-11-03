@@ -106,7 +106,10 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
                 actionsOwner = nextOwner
                 if (id == null) return@collectLatest
                 if (queue.value.current?.musicSource == MusicSource.EMBY) {
-                    _actions.value = PlayerSongActions(songId = id, liked = container.emby.likes.value[id] == true)
+                    val song = queue.value.current!!
+                    val result = if (id !in container.emby.likes.value) appResult { container.emby.detail(song) } else null
+                    if (nextOwner == likeOwner()) _actions.value = PlayerSongActions(songId = id,
+                        liked = container.emby.likes.value[id], error = (result as? AppResult.Failure)?.message)
                     return@collectLatest
                 }
                 if (queue.value.current?.musicSource == MusicSource.NAVIDROME) {
@@ -152,6 +155,7 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
             return
         }
         val actionId = if (song.privateLibrary) song.id else NeteaseSongActionsRepository.songId(song)
+        if (song.musicSource == MusicSource.EMBY && _actions.value.takeIf { it.songId == actionId }?.liked == null) return
         val before = if (song.privateLibrary || usesNeteaseLibrary.value)
             _actions.value.takeIf { it.songId == actionId }?.liked == true else libraryStatuses.value[song.id]?.liked == true
         val write = LikeWrite(song, owner, if (song.emby != null) container.emby.session() else container.musicSession(), settings.value.likeMode, before, !before)
