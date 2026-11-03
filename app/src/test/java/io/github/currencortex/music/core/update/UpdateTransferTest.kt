@@ -7,6 +7,20 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UpdateTransferTest {
+    @Test fun ciDownloadAndFallbackNeverTryTheStableOnlyMirror() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val visited = mutableListOf<UpdateSource>()
+        val transfer = UpdateTransfer(UpdateDownload { _, source, _ ->
+            visited += source; throw IOException("offline")
+        }, Installer(), scope)
+        try {
+            transfer.selectRelease(release.copy(version = "1.2.0-ci.42", prerelease = true))
+            transfer.download(UpdateSource.CURRENTMUSIC) // Also cover stale persisted selections.
+            assertEquals(UpdateSource.GITHUB, visited.first())
+            assertEquals(UpdateSource.forChannel(UpdateChannel.CI).toSet(), visited.toSet())
+            assertFalse(visited.contains(UpdateSource.CURRENTMUSIC))
+        } finally { scope.cancel() }
+    }
     private val release = AppRelease("1.2.0", "notes", "https://github.com/example/app", null, null, false, 10, "0".repeat(64))
     private class Installer : UpdateInstall {
         var permission = false

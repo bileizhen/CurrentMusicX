@@ -153,8 +153,8 @@ class UpdatePageTest {
         compose.onNodeWithTag("update_channel").performClick(); settle()
         compose.onNodeWithTag("update_channel_stable").assertIsSelected()
         capture("update-settings-channel.png")
-        compose.onNodeWithTag("update_channel_prerelease").performClick(); settle()
-        compose.runOnIdle { assertEquals(UpdateChannel.PRERELEASE,channel);state.value = UpdateTransferState() }
+        compose.onNodeWithTag("update_channel_ci").performClick(); settle()
+        compose.runOnIdle { assertEquals(UpdateChannel.CI,channel);state.value = UpdateTransferState() }
         compose.onNodeWithTag("update_menu_action_back").performClick(); settle()
         compose.onNodeWithTag("update_menu_action_3").performClick(); settle()
         compose.waitUntil(3000){ignored}
@@ -191,18 +191,31 @@ class UpdatePageTest {
         compose.onNodeWithTag("update_menu_action_0").performClick();settle()
         compose.onNodeWithTag("update_auto_check").assertIsOff()
         compose.onNodeWithTag("update_channel").performClick();settle()
-        compose.onNodeWithTag("update_channel_prerelease").performClick();settle()
+        compose.onNodeWithTag("update_channel_ci").performClick();settle()
         compose.onNodeWithTag("update_settings_cancel").assertDoesNotExist()
         compose.onNodeWithTag("update_settings_save").assertDoesNotExist()
         compose.onNodeWithTag("update_back").performClick();settle()
         compose.onNodeWithTag("update_menu").performClick();settle()
         compose.onNodeWithTag("update_menu_action_0").performClick();settle()
         compose.onNodeWithTag("update_auto_check").assertIsOff()
-        compose.onNodeWithTag("update_channel").assertTextContains("预发布版",substring=true)
+        compose.onNodeWithTag("update_channel").assertTextContains("CI 版",substring=true)
         compose.runOnIdle {assertEquals(0,sourceChanges);assertEquals(1,channelChanges);assertEquals(1,checkChanges)}
         compose.onNodeWithTag("update_auto_check").performClick();settle()
         compose.onNodeWithTag("update_overflow_panel").assertDoesNotExist()
         compose.runOnIdle {assertTrue(preferences.value.autoCheckOnLaunch);assertEquals(2,checkChanges)}
+    }
+
+    @Test fun ciDownloadSourcesExcludeOnlyCurrentMusicMirror() {
+        compose.setContent { TestTheme {
+            UpdatePageContent(UpdateState.Available(release.copy(version = "1.2.0-ci.42", prerelease = true)),
+                settings = UpdateSettings(channel = UpdateChannel.CI), sourceCheck = fixtureSourceCheck)
+        } }
+        compose.onNodeWithTag("update_menu").performClick(); settle()
+        compose.onNodeWithTag("update_menu_action_1").performClick(); settle()
+        compose.onNodeWithTag("update_source_CURRENTMUSIC").assertDoesNotExist()
+        UpdateSource.forChannel(UpdateChannel.CI).forEach {
+            compose.onNodeWithTag("update_source_${it.name}").assertExists()
+        }
     }
 
     @Test fun settingsMenuHasConsistentRowWidthsAndHeaderReturnsToParent() {
