@@ -43,7 +43,6 @@ internal object SettingsPreferences {
         colorStyle = runCatching { ThemeColorStyle.valueOf(p[COLOR_STYLE].orEmpty()) }.getOrDefault(ThemeColorStyle.VIVID),
         customTextScale = p[CUSTOM_TEXT_SCALE] ?: false,
         textScale = p[TEXT_SCALE] ?: 1f,
-        tabAnimation = runCatching { RootTabAnimation.valueOf(p[TAB_ANIMATION].orEmpty()) }.getOrDefault(RootTabAnimation.SLIDE),
         launchStyle = runCatching { LaunchStyle.valueOf(p[LAUNCH_STYLE].orEmpty()) }.getOrDefault(LaunchStyle.CLASSIC),
         themeMode = runCatching { ThemeMode.valueOf(p[THEME] ?: ThemeMode.SYSTEM.name) }.getOrDefault(ThemeMode.SYSTEM),
         monet = p[MONET] ?: false,
@@ -73,7 +72,7 @@ internal object SettingsPreferences {
         p[COLOR_STYLE] = v.colorStyle.name
         p[CUSTOM_TEXT_SCALE] = v.customTextScale
         p[TEXT_SCALE] = v.textScale
-        p[TAB_ANIMATION] = v.tabAnimation.name
+        p.remove(TAB_ANIMATION) // Retire the legacy fade preference; navigation always slides.
         p[LAUNCH_STYLE] = v.launchStyle.name
         p[THEME] = v.themeMode.name
         p[MONET] = v.monet
