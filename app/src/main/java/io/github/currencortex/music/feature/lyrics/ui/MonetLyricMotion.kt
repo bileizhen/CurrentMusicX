@@ -20,7 +20,9 @@ internal val MONET_SCALE_DAMPING = 30f / (2f * sqrt(150f * .78f))
 // Keep subpixel scale motion continuous while the independent position spring finishes.
 internal fun monetScaleSpring(): SpringSpec<Float> =
     spring(MONET_SCALE_DAMPING, MONET_SCALE_STIFFNESS, visibilityThreshold = .0001f)
-internal const val MONET_IDLE_RESET_MS = 1800L
+internal const val MONET_IDLE_RESET_MS = 3000L
+// The highlight must ride the rolling list back to the sung line instead of snapping to it.
+internal const val MONET_BOUNCE_TOTAL_MS = 800L
 
 /** Extra tracks fill a taller lyric viewport without mounting the entire song. */
 internal fun monetViewportRadius(height: Float, fontPx: Float): Int =
@@ -39,6 +41,28 @@ internal fun monetTone(active: Boolean, offset: Int): MonetTone {
         if (waiting) { if (distance == 1) .7f else 1.8f + (distance - 2) * .8f }
         else 1.1f + (distance - 1) * .7f,
         if (waiting) .46f else .36f)
+}
+
+// The rail selection stays subtle: a gentle brightness lift only, never the sung line's
+// full active treatment (scale rise, bold, glow and translation belong to playback alone).
+internal const val MONET_RAIL_LIFT = .3f
+
+/**
+ * Continuous curve for scrubbing: signed fractional distance from the gliding focus point.
+ * With the default zero emphasis/lift it agrees with the discrete distance curve everywhere,
+ * including the integer rows; lift raises brightness toward the active tone without ever
+ * reaching it, emphasis raises scale, and both keep the crossing at d=0 continuous.
+ */
+internal fun monetRailTone(distance: Float, emphasis: Float = 0f, lift: Float = 0f): MonetTone {
+    val ad = abs(distance)
+    val waiting = distance >= 0f
+    val baseOpacity = if (waiting) (.72f - (ad - 1f) * .18f).coerceIn(.36f, .72f)
+        else (.52f - (ad - 1f) * .12f).coerceIn(.28f, .52f)
+    val baseScale = (.72f * .9f.pow((ad - 1f).coerceAtLeast(0f))).coerceIn(.68f, .92f)
+    val baseBlur = if (waiting) { if (ad <= 1f) .7f else 1.8f + (ad - 2f) * .8f } else 1.1f + (ad - 1f) * .7f
+    val curveAlpha = if (waiting) .46f else .36f
+    return MonetTone(baseOpacity + (1f - baseOpacity) * lift, baseScale + (1f - baseScale) * emphasis,
+        baseBlur * (1f - lift), curveAlpha + (.34f - curveAlpha) * lift)
 }
 
 /** Fixed transform tracks: position is calculated from target heights, never animated layout. */

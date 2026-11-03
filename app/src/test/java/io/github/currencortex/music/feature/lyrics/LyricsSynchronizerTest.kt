@@ -51,6 +51,16 @@ class LyricsSynchronizerTest {
         assertEquals("尾奏", sync.interlude(15000)!!.label)
         assertEquals(0, sync.scrollTarget(6000))
     }
+    @Test fun anchorAtLineStartPlusOneMillisHighlightsExactlyThatLine() {
+        val lines = (0..9).map { i -> LyricLine(i * 1000L, (i + 1) * 1000L, "行 $i") }
+        val sync = LyricsSynchronizer(LyricsDocument(lines))
+        for (index in lines.indices) {
+            val anchorTime = lines[index].startTimeMs + 1
+            assertEquals(listOf(index), sync.activeLines(anchorTime))
+            assertEquals(index, sync.scrollTarget(anchorTime))
+        }
+    }
+
     @Test fun offsetsInvertSeekAndSaturate() {
         assertEquals(1200L, LyricsSynchronizer.effectivePosition(1000, 200))
         assertEquals(800L, LyricsSynchronizer.seekPosition(1000, 200))
