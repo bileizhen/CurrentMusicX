@@ -41,7 +41,7 @@ class SearchSuggestionsLiveTest {
             assertTrue("Lyric request: $lyrics", lyrics is AppResult.Success)
             val page = (lyrics as AppResult.Success).value
             assertTrue(page.songs.isNotEmpty())
-            assertTrue(page.matchedLyrics.values.any(String::isNotBlank))
+            assertTrue(page.matchedLyrics.values.any { it.matched.isNotBlank() })
         }
     }
 }

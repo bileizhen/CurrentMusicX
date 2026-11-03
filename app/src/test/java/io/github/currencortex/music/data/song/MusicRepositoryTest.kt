@@ -110,4 +110,32 @@ class MusicRepositoryTest {
             }
         }
     }
+    @Test fun lyricSearchContextKeepsOneNeighbourLineAroundTheHit() {
+        val full = parseSearchLyricContext("上一句\n<b>命中 歌词</b>\n下一句")!!
+        assertEquals("上一句", full.before)
+        assertEquals("命中 歌词", full.matched)
+        assertEquals("下一句", full.after)
+        val single = parseSearchLyricContext("<b>仅命中</b>")!!
+        assertNull(single.before); assertEquals("仅命中", single.matched); assertNull(single.after)
+        val plain = parseSearchLyricContext("服务器单句 &amp; 无标记")!!
+        assertNull(plain.before); assertEquals("服务器单句 & 无标记", plain.matched); assertNull(plain.after)
+        assertNull(parseSearchLyricContext("<b>   </b>"))
+    }
+    @Test fun structuredLyricContextRowsBecomeBeforeMatchedAfter() {
+        val dto = SongDto(id = 7, name = "S", lyric = "所有的光汇成河 · 抬头看着星星在唱歌 · 她的呼吸好似对我说",
+            lyricContext = listOf(LyricContextDto(67_700, "所有的光汇成河"),
+                LyricContextDto(74_018, "抬头看着星星在唱歌", matched = true),
+                LyricContextDto(77_640, "她的呼吸好似对我说")))
+        val parsed = searchLyricContextOf(dto)!!
+        assertEquals("所有的光汇成河", parsed.before)
+        assertEquals("抬头看着星星在唱歌", parsed.matched)
+        assertEquals("她的呼吸好似对我说", parsed.after)
+        val legacy = searchLyricContextOf(SongDto(id = 8, name = "L", lyric = "上一句\n<b>命中</b>\n下一句"))!!
+        assertEquals("上一句", legacy.before); assertEquals("命中", legacy.matched); assertEquals("下一句", legacy.after)
+        val single = searchLyricContextOf(SongDto(id = 9, name = "X", lyric = "仅一句"))!!
+        assertNull(single.before); assertEquals("仅一句", single.matched); assertNull(single.after)
+        val noFlag = searchLyricContextOf(SongDto(id = 10, name = "N",
+            lyricContext = listOf(LyricContextDto(0, "只有一行"))))!!
+        assertEquals("只有一行", noFlag.matched); assertNull(noFlag.before); assertNull(noFlag.after)
+    }
 }
