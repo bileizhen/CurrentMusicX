@@ -1,4 +1,5 @@
 // Repository metadata only. Never load or execute files from a pull request head.
+const {labelColor}=require('./label-palette.cjs');
 const types = {
   feat: 'enhancement', fix: 'bug', perf: 'performance', docs: 'documentation',
   deps: 'dependencies', chore: 'maintenance', ci: 'maintenance', build: 'maintenance',
@@ -83,7 +84,7 @@ async function run({ github, context, core }, mode = 'event') {
   const mutate = async (description, call) => { core.info(description); if (!dry) await call(); };
   const ensureLabel = async name => {
     try { await github.rest.issues.getLabel({ ...repo, name }); }
-    catch (error) { if (error.status !== 404) throw error; await mutate(`Create label ${name}`, () => github.rest.issues.createLabel({ ...repo, name, color: 'bfdadc', description: managedLabels[name] ?? name })); }
+    catch (error) { if (error.status !== 404) throw error; await mutate(`Create label ${name}`, () => github.rest.issues.createLabel({ ...repo, name, color: labelColor(name), description: managedLabels[name] ?? name })); }
   };
   const add = async (number, labels) => {
     if (!labels.length) return;

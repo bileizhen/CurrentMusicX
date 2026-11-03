@@ -121,3 +121,16 @@ test('PR risk classifier changes skip Android build but not independent checks',
   ]), true);
   assert.equal(isLightweightOnly(['.github/scripts/pr-risk.cjs', 'app/src/main/AndroidManifest.xml']), false);
 });
+
+test('Label palette automation is a lightweight CI change', () => {
+  assert.equal(isLightweightOnly([
+    '.github/workflows/label-palette.yml',
+    '.github/workflows/pr-risk.yml',
+    '.github/scripts/label-palette.cjs',
+    '.github/scripts/label-palette.test.cjs',
+    '.github/scripts/collaboration.cjs',
+    '.github/scripts/android-ci-scope.cjs',
+    '.github/scripts/android-ci-scope.test.cjs',
+  ]), true);
+  assert.equal(isLightweightOnly(['.github/scripts/label-palette.cjs','app/src/main/AndroidManifest.xml']), false);
+});

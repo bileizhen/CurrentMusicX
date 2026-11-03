@@ -24,6 +24,7 @@ jobs:
         with:
           script: |
             const {classify} = require('./.github/scripts/pr-risk.cjs');
+            const {labelColor}=require('./.github/scripts/label-palette.cjs');
             const pr = context.payload.pull_request;
             const files = await github.paginate(github.rest.pulls.listFiles, {
               ...context.repo, pull_number: pr.number, per_page: 100
@@ -44,7 +45,7 @@ jobs:
               if (error.status !== 404) throw error;
               await github.rest.issues.createLabel({
                 ...context.repo,name,
-                color: level === 'high' ? 'd73a4a' : level === 'medium' ? 'fbca04' : '0e8a16',
+                color: labelColor(name),
                 description: 'Automated PR change risk classification'
               });
             }
