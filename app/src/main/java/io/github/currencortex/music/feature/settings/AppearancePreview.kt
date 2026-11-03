@@ -21,7 +21,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.data.settings.AppearanceSettings
-import io.github.currencortex.music.data.settings.RootTabAnimation
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.theme.Colors
@@ -44,7 +43,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             val primary by animateColorAsState(colors.primary, tween(300), label = "preview accent")
             Canvas(Modifier.fillMaxSize()) {
                 renderer.draw(this, colors, config.floatingBar, config.liquidGlass, selected, previous, progress.value,
-                    paper = paper, card = card, primary = primary, fade = config.tabAnimation == RootTabAnimation.FADE)
+                    paper = paper, card = card, primary = primary, fade = false)
             }
             val unit = 168.dp / CurrentMusicPreviewRenderer.Width
             Row(Modifier.align(Alignment.BottomCenter)
@@ -59,9 +58,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                 transition?.cancel()
                                 transition = scope.launch {
                                     previous = selected; progress.snapTo(0f); selected = index
-                                    progress.animateTo(1f, if (config.tabAnimation == RootTabAnimation.FADE)
-                                        tween(220, easing = CubicBezierEasing(.42f, 0f, .58f, 1f))
-                                        else tween(300, easing = CubicBezierEasing(0f, 0f, .58f, 1f)))
+                                    progress.animateTo(1f, tween(300, easing = CubicBezierEasing(0f, 0f, .58f, 1f)))
                                     previous = null
                                 }
                             }
@@ -73,14 +70,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable internal fun AppearanceMiniThumb(colors: Colors, floating: Boolean, glass: Boolean,
-    split: Colors? = null, modifier: Modifier = Modifier, motion: RootTabAnimation? = null, selected: Int = 0) {
+    split: Colors? = null, modifier: Modifier = Modifier, selected: Int = 0) {
     val renderer = rememberCurrentMusicPreviewRenderer()
     Canvas(modifier.width((30f * 96 / 66).dp).height(30.dp).clip(RoundedCornerShape(8.dp))) {
         fun paint(palette: Colors) = withTransform({
             scale(size.width / 96, size.width / 96, pivot = Offset.Zero)
             translate(0f, -142f)
-        }) { renderer.draw(this, palette, floating, glass, if (motion == null) selected else 1, if (motion == null) null else 0,
-            if (motion == null) 1f else .55f, Size(96f, 208f), fade = motion == RootTabAnimation.FADE) }
+        }) { renderer.draw(this, palette, floating, glass, selected, null,
+            1f, Size(96f, 208f), fade = false) }
         paint(colors)
         split?.let { dark ->
             val cut = Path().apply {

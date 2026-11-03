@@ -20,12 +20,19 @@ class AppearanceThemeSettingsTest {
             playerBackground = "art.jpg", playerDynamicBackground = false, launchStyle = LaunchStyle.HALO,
             playlistRecordShelf = true, refreshRate = RefreshRatePreference(144), pureBlack = true,
             primaryColor = 0xFF123456, primaryColors = DefaultThemeColors + 0xFF123456,
-            colorStyle = ThemeColorStyle.TINTED, customTextScale = true, textScale = 1.25f, tabAnimation = RootTabAnimation.FADE,
+            colorStyle = ThemeColorStyle.TINTED, customTextScale = true, textScale = 1.25f,
             playerCoverStyle = PlayerCoverStyle.IMMERSIVE)
         SettingsPreferences.write(p, settings)
         assertEquals(settings, SettingsPreferences.read(p))
         SettingsPreferences.write(p, SettingsPreferences.read(p).copy(monet = true, pureBlack = false))
         assertEquals(settings.copy(monet = true, pureBlack = false), SettingsPreferences.read(p))
+    }
+    @Test fun legacyFadePreferenceIsIgnoredAndRemovedOnWrite() {
+        val key = stringPreferencesKey("tab_animation")
+        val p = mutablePreferencesOf(key to "FADE")
+        assertEquals(AppearanceSettings(), SettingsPreferences.read(p))
+        SettingsPreferences.write(p, SettingsPreferences.read(p))
+        assertNull(p[key])
     }
     @Test fun invalidScaleAndPaletteCannotBreakThemeRendering() {
         val p = mutablePreferencesOf(floatPreferencesKey("text_scale") to Float.NaN,
