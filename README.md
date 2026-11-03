@@ -180,6 +180,22 @@ CurrentMusicX 是 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic) 
 
 欢迎提交 Issue 或 Pull Request。请说明解决的问题、实际验证结果，并按独立功能或修复拆分提交。
 
+## 支持开发者
+
+从「设置 → 应用 → 支持开发者」或「关于 → 项目 → 支持开发者」进入同一个原生页面。支持页面不要求登录，沿用外观主题、容器转场及迷你播放器避让，不影响正在播放的音乐。
+
+所有赞助均为自愿行为，不影响正常使用，也不解锁额外软件功能或会员权益。第一版不需要 API 或服务器，不读取支付凭据、支付记录或支付结果，返回应用不代表支付成功。
+
+- 爱发电：`app/src/main/java/io/github/currencortex/music/feature/support/SupportConfig.kt` 的 `afdianUrl` 已配置开发者提供的 [bileizhen 主页](https://afdian.com/a/bi1eizhen)。修改后重新构建即可；留空时页面显示「暂未开放」，非 HTTPS、带账号凭据或无主机的链接不会打开。
+- 支付宝收款码：`app/src/main/res/raw/support_alipay_payment.png`。
+- 微信赞赏码：`app/src/main/res/raw/support_wechat_appreciation.png`。开发者确认原始合成图右侧属于微信，不能标为支付宝赞赏码。
+- 两张图片由开发者于 2026-11-03 提供并确认允许公开打包和提交；只裁剪原始码区域并保留／补充白色静区，没有重新生成或重采样码内容。替换时使用获得收款信息所有者公开授权的真实图片，保持正方形、完整码区域及充足白色静区，不使用有损压缩、滤镜或重新生成的二维码。
+- 预览使用白底等比例图片，不参与玻璃折射。可以通过系统文件选择器「保存图片」（Android 8.0+，无需新增存储权限），也可通过系统分享面板分享原始 PNG。同机扫码时先保存，再从对应支付应用的扫一扫相册中选择。分享缓存最多保留两张公开图片。
+
+支持功能测试：`SupportConfigTest` 验证 HTTPS 校验和重复点击限制；`SupportScreenTest` 验证入口、返回、预览、状态恢复及主题／大字体；`SupportPlatformTest` 验证浏览器缺失处理、离线图片静区和保存／分享文件字节一致；`SupportLayoutTest` 覆盖横屏大字体及关闭动画；`SettingsContainerNavigationTest.supportRoutesKeepMiniPlayerAndReturnThroughTheirOwnEntry` 覆盖实际主导航与迷你播放器状态保留。连接设备后可在下述独立测试命令后追加 `-Pandroid.testInstrumentationRunnerArguments.class=io.github.currencortex.music.SupportScreenTest,io.github.currencortex.music.SupportPlatformTest`。测试中的浏览器调用会被拦截，不会打开支付网站。图片扫描与收款对象仍须通过真实支付宝、微信核对；UI 测试不能证明实际支付成功。
+
+后续鸣谢名单仅可基于赞助者自愿公开的信息另行设计；本版不含赞助者数据模型、支付历史或查询接口。支付宝与微信付款也不能通过爱发电 API 查询。
+
 ## 从源码构建与设备测试
 
 准备 JDK 17 及以上、Android SDK Platform 37.0 和 Build Tools 35.0.0。通过 `ANDROID_HOME` 或本机 `local.properties` 的 `sdk.dir` 指定 SDK 路径。
