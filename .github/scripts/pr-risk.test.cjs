@@ -7,3 +7,4 @@ test('app changes medium',()=>assert.equal(classify(['app/src/main/java/example/
 test('audio changes high',()=>assert.equal(classify(['app/src/main/java/example/audio/Engine.kt']).level,'high'));
 test('workflows high',()=>assert.equal(classify(['.github/workflows/android.yml']).level,'high'));
 test('missing or huge diffs fail closed',()=>{assert.equal(classify([]).level,'high');assert.equal(classify(Array(101).fill('README.md')).level,'high');});
+test('renamed sensitive source remains high risk',()=>assert.equal(classify([{filename:'docs/old-policy.md',previous_filename:'.github/workflows/android.yml',status:'renamed'}]).level,'high'));
