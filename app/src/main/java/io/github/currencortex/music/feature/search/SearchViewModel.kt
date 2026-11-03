@@ -197,16 +197,10 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
             ensureActive()
             if (requestGeneration != generation) return@launch
             state.update { current ->
-                val page = when (result) {
-                    is AppResult.Success -> {
-                        val songs = (old.songs + result.value.songs).distinctBy(Song::id)
-                        val entries = (old.entries + result.value.entries).distinctBy(CatalogEntry::id)
-                        val count = songs.size + entries.size
-                        result.value.copy(songs = songs, entries = entries, matchedLyrics = old.matchedLyrics + result.value.matchedLyrics, total = maxOf(result.value.total, count),
-                            more = result.value.more && result.value.count > 0 && (!append || count > old.count), loaded = true)
-                    }
-                    is AppResult.Failure -> old.copy(loading = false, error = result.kind.message)
-                }
+                // Backfills may finish while fetch is suspended. Merge against the latest page,
+                // including on failure, rather than restoring the pre-request snapshot.
+                val latest = current.pages[category] ?: old
+                val page = completeSearchPage(latest, result, append)
                 current.copy(pages = current.pages + (category to page))
             }
             if (category == SearchCategory.LYRIC && result is AppResult.Success)
@@ -247,6 +241,27 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
     fun deleteHistory(value: String) = viewModelScope.launch { container.database.music().deleteHistory(value) }
     fun clearHistory() = viewModelScope.launch { container.database.music().clearHistory() }
 }
+
+internal fun completeSearchPage(current: SearchCategoryPage, result: AppResult<SearchCategoryPage>, append: Boolean): SearchCategoryPage =
+    when (result) {
+        is AppResult.Failure -> current.copy(loading = false, error = result.kind.message)
+        is AppResult.Success -> {
+            val previous = if (append) current else SearchCategoryPage()
+            val incoming = result.value
+            val songs = (previous.songs + incoming.songs).distinctBy(Song::id)
+            val entries = (previous.entries + incoming.entries).distinctBy(CatalogEntry::id)
+            val lyrics = previous.matchedLyrics.toMutableMap()
+            incoming.matchedLyrics.forEach { (id, context) ->
+                val existing = lyrics[id]?.takeIf { it.matched == context.matched }
+                lyrics[id] = context.copy(before = context.before ?: existing?.before,
+                    after = context.after ?: existing?.after)
+            }
+            val count = songs.size + entries.size
+            incoming.copy(songs = songs, entries = entries, matchedLyrics = lyrics,
+                total = maxOf(incoming.total, count), loading = false, loaded = true,
+                more = incoming.more && incoming.count > 0 && (!append || count > previous.count))
+        }
+    }
 
 /** Locate the matched line inside a full lyric document and take its immediate neighbours. */
 internal fun lyricContextFromDocument(document: LyricsDocument, matched: String): SearchLyricContext? {
