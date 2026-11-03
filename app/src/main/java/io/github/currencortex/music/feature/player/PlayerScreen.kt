@@ -51,6 +51,7 @@ private enum class PlayerContent { COVER, LYRICS }
 private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, SHARE, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI, ROAMING, BACKGROUND, LYRICS_MANAGEMENT }
 internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePosition")
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
     actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null,
     onCast: (() -> Unit)? = null, onRoom: (() -> Unit)? = null, onDialogActive: (Boolean) -> Unit = {},
@@ -115,6 +116,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     var controlsCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val sheetProgress = LocalPlayerSheetProgress.current
     val expanded by remember(sheetProgress) { derivedStateOf { sheetProgress() >= .995f } }
+    val sheetSettled by remember(sheetProgress) { derivedStateOf { sheetProgress() >= 1f } }
     val sheetDrag = LocalPlayerSheetDrag.current
     val colors = remember { darkColorScheme(primary = Color.White, onPrimary = Color(0xFF282629),
         background = Color(0xFF262428), surface = Color(0xFF262428)) }
@@ -166,10 +168,12 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         PlayerSystemBars(immersive = widePlayer)
         val density = LocalDensity.current
         val layoutDirection = LocalLayoutDirection.current
-        val wideSafeInset = with(density) { maxOf(WindowInsets.safeDrawing.getLeft(density, layoutDirection),
-            WindowInsets.safeDrawing.getRight(density, layoutDirection)).toDp() }
-        val wideVerticalInset = with(density) { maxOf(WindowInsets.safeDrawing.getTop(density),
-            WindowInsets.safeDrawing.getBottom(density)).toDp() }
+        // Hiding the status bar must not resize the cover midway through its flight.
+        // Landscape still avoids the cutout and navigation bar, including transient bars.
+        val wideInsets = WindowInsets.displayCutout.union(WindowInsets.navigationBarsIgnoringVisibility)
+        val wideSafeInset = with(density) { maxOf(wideInsets.getLeft(density, layoutDirection),
+            wideInsets.getRight(density, layoutDirection)).toDp() }
+        val wideVerticalInset = with(density) { maxOf(wideInsets.getTop(density), wideInsets.getBottom(density)).toDp() }
         LaunchedEffect(widePlayer) {
             if (widePlayer) {
                 sidePage.close()
@@ -267,7 +271,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                     if (page == 0) WideControlsContent(vm, onToggle, functions)
                                     else LyricsPanel(vm, Modifier.fillMaxSize()
                                         .onGloballyPositioned { lyricsCoordinates = it },
-                                        active = pager.currentPage == 1 || pager.isScrollInProgress, minimal = true)
+                                        // Rasterizing the lyric rail competes with the mini-cover flight.
+                                        // Reveal it after expansion; LyricsPanel retains it while collapsing.
+                                        active = sheetSettled && (pager.currentPage == 1 || pager.isScrollInProgress), minimal = true)
                                 }
                             }
                         }
