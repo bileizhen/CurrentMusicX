@@ -99,8 +99,7 @@ class AppearancePageTest {
         compose.waitUntil(5000) { container.settings.state.value.pureBlack }
         compose.onNodeWithTag("appearance_navigation").assertDoesNotExist()
         assertTrue(container.settings.snapshot().floatingBar)
-        click("appearance_tab_animation_1")
-        compose.waitUntil(5000) { container.settings.state.value.tabAnimation == RootTabAnimation.FADE }
+        compose.onNodeWithTag("appearance_tab_animation").assertDoesNotExist()
         click("setting_liquid_0")
         compose.waitUntil(5000) { !container.settings.state.value.liquidGlass }
         compose.onNodeWithTag("setting_liquid_0").assertIsSelected()
