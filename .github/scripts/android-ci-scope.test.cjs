@@ -5,15 +5,19 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
-const { isReadmeOnly, detectScope } = require('./android-ci-scope.cjs');
+const { isLightweightOnly, detectScope } = require('./android-ci-scope.cjs');
 
-test('only root README files and showcase images may skip Android', () => {
-  assert.equal(isReadmeOnly(['README.md', 'README-en.md', '.github/img/home.jpg', '.github/img/新截图.png']), true);
+test('documentation and independently checked CI files may skip Android', () => {
+  assert.equal(isLightweightOnly(['README.md', 'README-en.md', '.github/img/home.jpg', '.github/img/新截图.png']), true);
+  assert.equal(isLightweightOnly(['README.md', '.github/workflows/android.yml',
+    '.github/workflows/collaboration-checks.yml', '.github/scripts/android-ci-scope.cjs',
+    '.github/scripts/android-ci-scope.test.cjs']), true);
   for (const files of [[], ['app/src/main/assets/legal/PRIVACY.md'], ['PRIVACY.md'],
     ['app/src/main/cpp/oboe/UPSTREAM.md'], ['app/src/main/res/raw/cover.png'],
-    ['README.md', 'app/build.gradle.kts'], ['.github/workflows/android.yml'],
-    ['.github/scripts/android-ci-scope.cjs'], ['.github/img/script.sh'], ['README.md\napp/code.kt']]) {
-    assert.equal(isReadmeOnly(files), false, JSON.stringify(files));
+    ['README.md', 'app/build.gradle.kts'], ['.github/workflows/release-draft.yml'],
+    ['.github/scripts/android-ci-scope.cjs', 'app/src/main/AndroidManifest.xml'],
+    ['.github/img/script.sh'], ['README.md\napp/code.kt']]) {
+    assert.equal(isLightweightOnly(files), false, JSON.stringify(files));
   }
 });
 
