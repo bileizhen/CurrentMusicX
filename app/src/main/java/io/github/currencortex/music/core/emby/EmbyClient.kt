@@ -11,6 +11,9 @@ import java.io.IOException
 import java.security.MessageDigest
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ScheduledThreadPoolExecutor
+import okio.ForwardingSource
+import okio.buffer
 
 class EmbyAccess(val server: String, val username: String, val userId: String,
     internal val token: String, val deviceId: String, val revision: String = UUID.randomUUID().toString()) {
@@ -95,7 +98,7 @@ class EmbyClient(private val access: () -> EmbyAccess?, private val wire: OkHttp
             // Remote-backed Emby libraries commonly redirect. Never forward account headers to the destination.
             for (hop in 0..5) {
                 ensure(account)
-                val next = try { mediaWire.newCall(request).execute() }
+                val next = try { executeMedia(request, chain.call()) }
                 catch (_: IOException) { throw IOException("Emby 媒体读取失败，请检查网络或重试其他歌曲") }
                 if (next.code !in 300..399) { response = next; break }
                 val target = next.header("Location")?.let(next.request.url::resolve)
@@ -112,12 +115,42 @@ class EmbyClient(private val access: () -> EmbyAccess?, private val wire: OkHttp
             result.newBuilder().request(safe).build()
         }
     }
+    private fun executeMedia(request: Request, outer: Call): Response {
+        if (outer.isCanceled()) throw IOException("Canceled")
+        val call = mediaWire.newCall(request)
+        // Interceptor calls have no cancellation callback. A shared lightweight watcher bridges
+        // the outer call until this hop's response body is consumed or closed, including redirects.
+        val cancellation = mediaCancellation.scheduleAtFixedRate({
+            if (outer.isCanceled()) call.cancel()
+        }, 0, 50, TimeUnit.MILLISECONDS)
+        try {
+            val response = call.execute()
+            val body = response.body ?: run { cancellation.cancel(false); return response }
+            val source = object : ForwardingSource(body.source()) {
+                override fun read(sink: okio.Buffer, byteCount: Long): Long = try {
+                    super.read(sink, byteCount).also { if (it == -1L) cancellation.cancel(false) }
+                } catch (e: Exception) { cancellation.cancel(false); throw e }
+                override fun close() { try { super.close() } finally { cancellation.cancel(false) } }
+            }.buffer()
+            return response.newBuilder().body(object : ResponseBody() {
+                override fun contentType() = body.contentType()
+                override fun contentLength() = body.contentLength()
+                override fun source() = source
+            }).build()
+        } catch (e: Exception) { cancellation.cancel(false); call.cancel(); throw e }
+    }
     private fun checkStatus(response: Response) {
         if (response.code == 401) throw embyUnauthorized()
         if (response.code == 403) throw ApiException(ErrorKind.Forbidden, 403, "Emby 账号没有此操作权限")
         if (!response.isSuccessful) throw ApiException(ErrorKind.Server, response.code, "Emby 请求失败（${response.code}）")
     }
-    companion object { const val MARKER = "_cm_emby"; private const val MAX_BYTES = 4L * 1024 * 1024 }
+    companion object {
+        const val MARKER = "_cm_emby"
+        private const val MAX_BYTES = 4L * 1024 * 1024
+        private val mediaCancellation = ScheduledThreadPoolExecutor(1) { task ->
+            Thread(task, "Emby media cancellation").apply { isDaemon = true }
+        }.apply { removeOnCancelPolicy = true }
+    }
 }
 
 internal fun embyUnauthorized() = ApiException(ErrorKind.Unauthorized, 401, "Emby 登录已失效，请重新连接")
