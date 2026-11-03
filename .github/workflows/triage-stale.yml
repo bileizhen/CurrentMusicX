@@ -1,0 +1,34 @@
+name: Stale issue review
+on:
+  schedule:
+    - cron: '0 19 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 仅预览，不修改 Issue 或 PR
+        type: boolean
+        default: true
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: stale-issue-review
+  cancel-in-progress: false
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        env:
+          # Start with previews; enable live separately after reviewing the log.
+          TRIAGE_MODE: ${{ vars.STALE_MODE || 'dry-run' }}
+          TRIAGE_DRY_RUN: ${{ inputs.dry_run }}
+        with:
+          script: |
+            await require('./.github/scripts/collaboration.cjs').run({github, context, core}, 'stale');
