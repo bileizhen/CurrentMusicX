@@ -70,7 +70,14 @@ internal class NeteaseOriginalAudioProcessor(
         failure(preset, "原版音效处理失败，已恢复本机音效")
     }
 
-    override fun onQueueEndOfStream() { draining = engine != null; drained = !draining }
+    override fun onQueueEndOfStream() {
+        // Media3 repeats EOS while an upstream processor remains ended. Preserve
+        // native drain completion until flush, or the pipeline can never finish
+        // a timestamp-discontinuity drain and resume feeding decoded audio.
+        if (draining) return
+        draining = engine != null
+        drained = !draining
+    }
     override fun getOutput(): ByteBuffer {
         val ready = super.getOutput()
         if (ready.hasRemaining() || !draining || drained) return ready
