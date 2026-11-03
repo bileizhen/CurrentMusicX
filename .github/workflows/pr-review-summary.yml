@@ -38,16 +38,16 @@ jobs:
             try { ({summarize,markdown}=require('./.github/scripts/pr-review-summary.cjs')); }
             catch (error) {
               if (error.code !== 'MODULE_NOT_FOUND') throw error;
-              const high=/^(\\.github\\/workflows\\/|\\.github\\/scripts\\/(?:ci-release|release-draft|pr-risk)\\.)|(?:^|\\/)(?:audio|player|playback|security|auth|database|signing|release)(?:\\/|\\.|$)/i;
-              const medium=/^app\\/src\\/|\\.gradle(?:\\.kts)?$/;
+              const high=/^(\.github\/workflows\/|\.github\/scripts\/(?:ci-release|release-draft|pr-risk)\.)|(?:^|\/)(?:audio|player|playback|security|auth|database|signing|release)(?:\/|\.|$)/i;
+              const medium=/^app\/src\/|\.gradle(?:\.kts)?$/;
               summarize=(files,threads)=>{
                 const paths=files.flatMap(f=>[f.filename,...(f.previous_filename?[f.previous_filename]:[])]);
                 const level=files.length===0||files.length>100||paths.some(p=>high.test(p))?'high':paths.some(p=>medium.test(p))?'medium':'low';
                 const open=threads.filter(t=>!t.isResolved&&!t.isOutdated);
-                const severe=open.filter(t=>t.comments.nodes.some(c=>/\\bP[01]\\b/.test(c.body||'')));
+                const severe=open.filter(t=>t.comments.nodes.some(c=>/\bP[01]\b/.test(c.body||'')));
                 return {risk:{level},open:open.length,high:severe.length,needsHuman:level==='high'||open.length>0};
               };
-              markdown=r=>`## PR 审查概览\\n\\n- 风险：${r.risk.level}\\n- 未解决讨论：${r.open}\\n- P0/P1：${r.high}\\n- 建议：${r.needsHuman?'人工复核':'遵循现有合并规则'}\\n\\n> 仅汇总现有审查，不代表 Codex 已完成本次审查。`;
+              markdown=r=>`## PR 审查概览\n\n- 风险：${r.risk.level}\n- 未解决讨论：${r.open}\n- P0/P1：${r.high}\n- 建议：${r.needsHuman?'人工复核':'遵循现有合并规则'}\n\n> 仅汇总现有审查，不代表 Codex 已完成本次审查。`;
             }
             const files=await github.paginate(github.rest.pulls.listFiles,{...context.repo,pull_number:number,per_page:100});
             const query=`query($owner:String!,$repo:String!,$number:Int!,$cursor:String){repository(owner:$owner,name:$repo){pullRequest(number:$number){reviewThreads(first:100,after:$cursor){nodes{isResolved isOutdated comments(first:20){nodes{body}}}pageInfo{hasNextPage endCursor}}}}}`;
