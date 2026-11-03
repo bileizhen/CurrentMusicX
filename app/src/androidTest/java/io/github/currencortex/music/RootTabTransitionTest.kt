@@ -18,6 +18,8 @@ import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.currencortex.music.ui.util.collectAsPageState
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -184,6 +186,52 @@ class RootTabTransitionTest {
         compose.onNodeWithTag("root_swipe_header").performTouchInput { up() }
         compose.mainClock.advanceTimeBy(800)
         assertEquals(Color.RED, pixel())
+    }
+
+    @Test fun rootWaitsForSceneResumeToWarmTabsAndKeepsThemWhenScenePauses() {
+        val scene = object : LifecycleOwner {
+            override val lifecycle = LifecycleRegistry(this)
+        }
+        val entries = IntArray(4)
+        val disposals = IntArray(4)
+        compose.mainClock.autoAdvance = false
+        compose.runOnUiThread { scene.lifecycle.currentState = Lifecycle.State.STARTED }
+        compose.setContent {
+            CompositionLocalProvider(LocalLifecycleOwner provides scene) {
+                RootTabTransition(0, rememberSaveableStateHolder(), onSelected = {}) { tab ->
+                    DisposableEffect(tab) {
+                        entries[tab]++
+                        onDispose { disposals[tab]++ }
+                    }
+                    Box(Modifier.fillMaxSize())
+                }
+            }
+        }
+        compose.mainClock.advanceTimeBy(160)
+        compose.runOnIdle {
+            assertArrayEquals("Only the visible tab should be attached during scene entry",
+                intArrayOf(1, 0, 0, 0), entries)
+            scene.lifecycle.currentState = Lifecycle.State.RESUMED
+        }
+
+        var previous = 1
+        repeat(8) {
+            compose.mainClock.advanceTimeByFrame()
+            compose.runOnIdle {
+                val attached = entries.sum()
+                assertTrue("At most one neighbor should warm per frame", attached in previous..(previous + 1))
+                previous = attached
+            }
+        }
+        compose.runOnIdle {
+            assertArrayEquals(intArrayOf(1, 1, 1, 1), entries)
+            scene.lifecycle.currentState = Lifecycle.State.STARTED
+        }
+        compose.mainClock.advanceTimeBy(160)
+        compose.runOnIdle {
+            assertArrayEquals("Pausing the scene must keep the warmed tabs attached", IntArray(4), disposals)
+            assertArrayEquals(intArrayOf(1, 1, 1, 1), entries)
+        }
     }
 
     @Test fun settingsToMeRetainsPagesAndResumesDatasetUpdatesOnlyAfterTheSlide() {

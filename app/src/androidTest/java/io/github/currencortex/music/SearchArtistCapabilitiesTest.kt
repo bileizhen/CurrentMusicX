@@ -3,12 +3,19 @@ package io.github.currencortex.music
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.toPixelMap
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.test.core.app.ApplicationProvider
+import androidx.test.filters.SdkSuppress
+import androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry
+import androidx.test.runner.lifecycle.Stage
 import io.github.currencortex.music.data.auth.UserDto
 import io.github.currencortex.music.data.settings.AppearanceSettings
+import io.github.currencortex.music.data.settings.ThemeMode
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.ui.CurrentMusicApp
+import io.github.currencortex.music.ui.component.nativeui.LiquidGlassOpticsKey
 import kotlinx.coroutines.runBlocking
 import okhttp3.mockwebserver.*
 import org.junit.*
@@ -28,8 +35,9 @@ class SearchArtistCapabilitiesTest {
     @Volatile private var playlistFixture = false
     @Volatile private var projectLiked = false
     @Volatile private var longSearchPage = false
+    @Volatile private var fixtureCover = ""
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
-    private fun song(id: Int) = """{"ncm_id":$id,"name":"Fixture song $id","artists":"Fixture Artist","artist_ids":[31]}"""
+    private fun song(id: Int) = """{"ncm_id":$id,"name":"Fixture song $id","artists":"Fixture Artist","artist_ids":[31],"pic":"$fixtureCover"}"""
     private fun album(id: Int) = """{"id":$id,"name":"Fixture Album $id","artist":"Fixture Artist","size":2,"publishTime":1790870400000}"""
 
     @Before fun prepare() = runBlocking {
@@ -150,6 +158,58 @@ class SearchArtistCapabilitiesTest {
         awaitTag("search_artist_31")
         assertEquals(listOf(900L), container.playbackQueue.state.value.songs.map { it.id })
         assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test @SdkSuppress(minSdkVersion = 33)
+    fun resultActionsKeepTheirGlassWhileTheFixedFieldSamplesScrollingArtwork() {
+        val cache = ApplicationProvider.getApplicationContext<CurrentMusicApplication>().cacheDir
+        val cover = java.io.File.createTempFile("search-cover-", ".png", cache)
+        try {
+            val bitmap = android.graphics.Bitmap.createBitmap(32, 32, android.graphics.Bitmap.Config.ARGB_8888)
+            bitmap.eraseColor(android.graphics.Color.RED)
+            cover.outputStream().use { check(bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)) }
+            bitmap.recycle()
+            fixtureCover = cover.toURI().toString()
+            longSearchPage = true
+            runBlocking { container.settings.edit { it.copy(themeMode = ThemeMode.LIGHT, blur = true, liquidGlass = true) } }
+            openResults()
+            Assume.assumeTrue(compose.runOnUiThread {
+                ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED)
+                    .any { it.window.decorView.isHardwareAccelerated }
+            })
+            fun actionInk(id: Int): androidx.compose.ui.graphics.Color {
+                for (tag in listOf("song_menu_$id", "search_quick_actions_$id")) {
+                    val button = hasTestTag(tag)
+                    compose.onNode(SemanticsMatcher.expectValue(LiquidGlassOpticsKey, true) and
+                        (button or hasAnyAncestor(button)), useUnmergedTree = true).assertExists()
+                }
+                val pixels = compose.onNodeWithTag("song_menu_$id", useUnmergedTree = true).captureToImage().toPixelMap()
+                return pixels[pixels.width / 2, pixels.height / 4]
+            }
+            val before = actionInk(11)
+            val list = compose.onNodeWithTag("search_screen")
+            val field = compose.onNodeWithTag("search_header_field")
+            val bounds = field.fetchSemanticsNode().boundsInRoot
+            list.performScrollToNode(hasTestTag("search_song_24"))
+            val art = compose.onNodeWithTag("search_result_cover_24", useUnmergedTree = true)
+            val center = art.fetchSemanticsNode().boundsInRoot.center
+            list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, center.y - bounds.center.y) }
+            compose.waitForIdle()
+            assertEquals(bounds, field.fetchSemanticsNode().boundsInRoot)
+            // A red cover behind the fixed field must supply actual red ink, even though
+            // the more buttons beside it still sample the neutral page surface.
+            val x = (center.x - bounds.left).toInt()
+            compose.waitUntil(10_000) {
+                val p = field.captureToImage().toPixelMap()
+                (p.height / 4 until p.height * 3 / 4).any { y -> p[x, y].let { it.red - it.blue > .12f } }
+            }
+            val after = actionInk(25)
+            assertEquals(before.red, after.red, .04f)
+            assertEquals(before.green, after.green, .04f)
+            assertEquals(before.blue, after.blue, .04f)
+        } finally {
+            cover.delete()
+        }
     }
 
     @Test fun resultActionsKeepPlaybackAndTextDoesNotOverlapInEitherTheme() {

@@ -55,7 +55,7 @@ internal val SettingsToolbarHeight=72.dp
 @Composable internal fun SettingsFloatingHeader(modifier:Modifier=Modifier,
     background:Color=MiuixTheme.colorScheme.background,
     toolbarHeight:Dp=SettingsToolbarHeight,
-    opacity:Float=.9f,
+    opacity:()->Float={ .9f },
     content:@Composable ()->Unit) {
     val status=WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
     Box(modifier.fillMaxWidth().testTag("settings_floating_header")
@@ -77,14 +77,14 @@ internal val SettingsToolbarHeight=72.dp
                 val fadeStart=status.toPx()/(status.toPx()+toolbarHeight.toPx())
                 val start=(size.height-overhang)*fadeStart/size.height
                 val stops=buildList {
-                    add(0f to background.copy(alpha=opacity.coerceIn(0f,1f)))
+                    add(0f to background.copy(alpha=1f))
                     for(i in 0..8) {
                         val t=i/8f
-                        add(start+(1-start)*t to background.copy(alpha=opacity.coerceIn(0f,1f)*(1-headerFade.transform(t))))
+                        add(start+(1-start)*t to background.copy(alpha=1-headerFade.transform(t)))
                     }
                 }
                 val scrim=Brush.verticalGradient(*stops.toTypedArray())
-                onDrawBehind {drawRect(scrim)}
+                onDrawBehind {drawRect(scrim, alpha=opacity().coerceIn(0f,1f))}
             })
         content()
     }
@@ -95,14 +95,16 @@ internal val SettingsToolbarHeight=72.dp
     background:Color=MiuixTheme.colorScheme.background,topBar:@Composable ()->Unit,
     toolbarHeight:Dp=SettingsToolbarHeight,
     footer:@Composable androidx.compose.foundation.layout.BoxScope.()->Unit={},
+    glassOverContent:Boolean=true,
     content:@Composable (topInset:Dp)->Unit) {
     val base=rememberGlassBackdrop()
-    val body=rememberGlassBackdrop()
+    val body=if(glassOverContent) rememberGlassBackdrop() else null
     val combined=if(base!=null&&body!=null)rememberCombinedBackdrop(base,body)else base
     val inset=WindowInsets.statusBars.asPaddingValues().calculateTopPadding()+toolbarHeight
     Box(modifier) {
         Box(Modifier.matchParentSize().then(if(base!=null)Modifier.layerBackdrop(base)else Modifier).background(background))
-        CompositionLocalProvider(LocalGlassBackdrop provides base) {
+        // Rows only sample the flat fill. The floating bars below still sample the real list.
+        CompositionLocalProvider(LocalGlassBackdrop provides rememberSolidGlassBackdrop(base, background)) {
             Box(Modifier.fillMaxSize().then(if(body!=null)Modifier.layerBackdrop(body)else Modifier)){content(inset)}
         }
         CompositionLocalProvider(LocalGlassBackdrop provides combined) {
