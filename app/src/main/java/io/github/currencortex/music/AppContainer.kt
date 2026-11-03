@@ -82,6 +82,18 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val equalizerSettings = io.github.currencortex.music.data.settings.EqualizerSettingsRepository(settingsStore, appScope)
     val equalizer = PlaybackEqualizer { logger.warn("Equalizer", it) }
     val soundEffectsSettings = io.github.currencortex.music.data.settings.SoundEffectsSettingsRepository(settingsStore, appScope)
+    val adaptiveAudio = io.github.currencortex.music.data.settings.AdaptiveAudioSettingsRepository(settingsStore, appScope)
+    val adaptiveAudioRuntime = kotlinx.coroutines.flow.MutableStateFlow(io.github.currencortex.music.core.media.AdaptiveAudioRuntime())
+    val musicHapticsSupported by lazy {
+        @Suppress("DEPRECATION")
+        val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+        vibrator?.hasVibrator() == true
+    }
+    val musicHapticsAmplitudeControl by lazy {
+        @Suppress("DEPRECATION")
+        val vibrator = context.getSystemService(android.content.Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+        vibrator?.hasAmplitudeControl() == true
+    }
     val originalEffectsSettings = io.github.currencortex.music.data.settings.OriginalSoundEffectsSettingsRepository(settingsStore, appScope)
     val originalSmartSettings = io.github.currencortex.music.data.settings.OriginalSmartSettingsRepository(settingsStore, appScope)
     val originalMoodSettings = io.github.currencortex.music.data.settings.OriginalMoodSettingsRepository(settingsStore, appScope)
