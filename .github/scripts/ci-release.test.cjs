@@ -29,10 +29,13 @@ test('publishing requires successful main Android CI in the same repository', ()
 });
 
 test('documentation-only upstream success does not build or publish an APK', () => {
-  const job = {name:'build',conclusion:'success',steps:[{name:'Build debug APK and run unit tests',conclusion:'success'}]};
+  const job = {name:'build',conclusion:'success',steps:[
+    {name:'Build and verify unsigned CI release',conclusion:'success'},
+    {name:'Upload unsigned CI APK',conclusion:'success'}]};
   assert.equal(hasSuccessfulAndroidBuild([job]), true);
   for (const conclusion of ['skipped','failure','cancelled']) {
-    assert.equal(hasSuccessfulAndroidBuild([{...job,steps:[{...job.steps[0],conclusion}]}]), false);
+    for (const index of [0,1]) assert.equal(hasSuccessfulAndroidBuild([
+      {...job,steps:job.steps.map((step,i)=>i===index ? {...step,conclusion} : step)}]), false);
   }
   assert.equal(hasSuccessfulAndroidBuild([]), false);
   assert.equal(hasSuccessfulAndroidBuild([{...job,conclusion:'failure'}]), false);
