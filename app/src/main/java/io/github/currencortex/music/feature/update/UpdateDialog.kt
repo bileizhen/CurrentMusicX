@@ -92,7 +92,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
     val release = (state as? UpdateState.Available)?.release
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    var source by remember(release?.version) { mutableStateOf(UpdateSource.default) }
+    var source by remember(release?.version) { mutableStateOf(if (release?.isCi == true) UpdateSource.GITHUB else UpdateSource.default) }
     var showSources by remember { mutableStateOf(false) }
     var previewProgress by remember { mutableFloatStateOf(-1f) }
     val previewDownloading = previewProgress in 0f..<1f
@@ -116,7 +116,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                 fontWeight = FontWeight.Medium, color = MiuixTheme.colorScheme.primary,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (release != null) Text("${if (release.prerelease) "预发布版" else "正式版"} · 安装包 ${formatSize(release.size)}",
+        if (release != null) Text("${if (release.isCi) "CI 版" else "正式版"} · 安装包 ${formatSize(release.size)}",
             fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(14.dp))
@@ -215,6 +215,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
         }
     }
     if (showSources && release != null) UpdateSourceDialog(release, source,
+        channel = if (release.isCi) UpdateChannel.CI else UpdateChannel.STABLE,
         downloading = downloading, onDismiss = { showSources = false }, onSelect = { next ->
             if (next != source) { source = next; if (downloading) onChangeSource?.invoke(next) }
             showSources = false

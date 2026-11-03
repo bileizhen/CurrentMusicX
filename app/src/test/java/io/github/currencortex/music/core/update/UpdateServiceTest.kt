@@ -46,8 +46,8 @@ class UpdateServiceTest {
 
     @Test fun explicitlySelectedPrereleaseChannelIsPreserved() = runBlocking {
         scenario { settings ->
-            settings.setChannel(UpdateChannel.PRERELEASE)
-            assertEquals(UpdateChannel.PRERELEASE, settings.snapshot().channel)
+            settings.setChannel(UpdateChannel.CI)
+            assertEquals(UpdateChannel.CI, settings.snapshot().channel)
         }
     }
 
@@ -63,9 +63,9 @@ class UpdateServiceTest {
             service.check()
             assertFalse(service.dialogVisible.value)
             assertNull(service.prompt.value)
-            settings.ignoreRelease(UpdateChannel.PRERELEASE, "2.0.0-rc.1")
+            settings.ignoreRelease(UpdateChannel.CI, "2.0.0-rc.1")
             assertEquals("1.2.0", settings.snapshot().ignoredVersions[UpdateChannel.STABLE])
-            assertEquals("2.0.0-rc.1", settings.snapshot().ignoredVersions[UpdateChannel.PRERELEASE])
+            assertEquals("2.0.0-rc.1", settings.snapshot().ignoredVersions[UpdateChannel.CI])
             service.check(manual = true)
             assertTrue(service.dialogVisible.value)
             assertNull(service.prompt.value)
