@@ -38,6 +38,9 @@ class ProfilePageLayoutTest {
         check(app.packageName.endsWith(".verification"))
         server = MockWebServer().apply { dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
+                "/rest/ping.view", "/rest/getUser.view" -> json("""{"subsonic-response":{"status":"ok","version":"1.16.1","user":{"username":"fixture"}}}""")
+                "/emby/Users/AuthenticateByName" -> json("""{"User":{"Id":"fixture-user"},"AccessToken":"fixture-token"}""")
+                "/emby/Sessions/Logout" -> json("{}")
                 "/cm/auth/me" -> json("""{"id":7,"nickname":"音乐爱好者","bio":"把喜欢的旋律留在这里","isAdmin":true,"title":"创作者","stat":{"likes":127,"favs":38,"playlists":12,"playDays":236,"listenMs":91800000}}""")
                 "/cm/users/9/profile" -> json("""{"user":{"id":9,"nickname":"公开主页","bio":"分享听过的音乐"},"stat":{"likes":42,"playDays":18,"listenMs":7200000},"playlists":[{"id":73,"name":"夜晚的歌","count":16}]}""")
                 "/cm/decorations/scales" -> json("""{"scales":{}}""")
@@ -81,6 +84,25 @@ class ProfilePageLayoutTest {
         if (delta != 0f) list.performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, delta) }
         compose.waitForIdle()
     }
+    private fun connectLibraries() {
+        scroll("profile_playlist_import")
+        compose.onNodeWithTag("profile_navidrome").assertDoesNotExist()
+        compose.onNodeWithTag("profile_emby").assertDoesNotExist()
+        runBlocking { container.navidrome.connect(server.url("/").toString(), "fixture", "fixture") }
+        scroll("profile_navidrome")
+        compose.onNodeWithTag("profile_navidrome").assertIsDisplayed()
+        compose.onNodeWithTag("profile_emby").assertDoesNotExist()
+        runBlocking { container.emby.connect(server.url("/").toString(), "fixture", "fixture") }
+    }
+    private fun disconnectLibraries() {
+        runBlocking { container.navidrome.disconnect() }
+        scroll("profile_emby")
+        compose.onNodeWithTag("profile_navidrome").assertDoesNotExist()
+        compose.onNodeWithTag("profile_emby").assertIsDisplayed()
+        runBlocking { container.emby.disconnect() }
+        compose.onNodeWithTag("profile_navidrome").assertDoesNotExist()
+        compose.onNodeWithTag("profile_emby").assertDoesNotExist()
+    }
     private fun capture(name: String) {
         val bitmap = compose.onRoot().captureToImage().asAndroidBitmap()
         File(InstrumentationRegistry.getInstrumentation().targetContext.externalCacheDir, name).outputStream().use {
@@ -101,14 +123,16 @@ class ProfilePageLayoutTest {
         assertEquals("user/announcements", destination)
         compose.onNodeWithTag("me_settings").performClick()
         assertEquals("settings", destination)
+        connectLibraries()
         for ((tag, route) in listOf("open_likes" to "lib/likes", "open_playlists" to "lib/playlists",
             "open_recent" to "lib/recent", "open_local_music" to "lib/local", "open_binding" to "user/binding",
-            "profile_playlist_import" to "user/playlist-import", "profile_navidrome" to "navidrome",
+            "profile_playlist_import" to "user/playlist-import", "profile_navidrome" to "navidrome", "profile_emby" to "emby",
             "open_decorations" to "user/decorations", "open_security" to "user/security", "profile_playlist_71" to "lib/playlist/71")) {
             scroll(tag)
             compose.onNodeWithTag(tag).assertIsDisplayed().performClick()
             assertEquals(route, destination)
         }
+        disconnectLibraries()
         scroll("open_binding")
         capture("profile-redesign-services.png")
         compose.runOnIdle { appearance.value = AppearanceSettings(themeMode = ThemeMode.DARK,
@@ -143,12 +167,14 @@ class ProfilePageLayoutTest {
         } } }
         compose.onNodeWithText("本机听友").assertIsDisplayed()
         capture("profile-redesign-native.png")
+        connectLibraries()
         for ((tag, route) in listOf("open_likes" to "lib/likes", "open_netease_tasks" to "user/netease-tasks",
-            "profile_navidrome" to "navidrome", "open_currentmusic_login" to "user/login")) {
+            "profile_navidrome" to "navidrome", "profile_emby" to "emby", "open_currentmusic_login" to "user/login")) {
             scroll(tag)
             compose.onNodeWithTag(tag).performClick()
             assertEquals(route, destination)
         }
+        disconnectLibraries()
         assertNull(container.accountRepository.state.value.account)
         runBlocking { container.neteaseSessions.clear() }
         compose.onNodeWithTag("profile_screen").performScrollToIndex(0)

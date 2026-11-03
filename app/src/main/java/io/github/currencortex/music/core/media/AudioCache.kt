@@ -48,6 +48,7 @@ class AudioCache(context: Context, directory: File,
     private val cacheDelegate = lazy { SimpleCache(directory, evictor, StandaloneDatabaseProvider(context.applicationContext)) }
     private val cache get() = cacheDelegate.value
     private val upstream = OkHttpDataSource.Factory(client)
+    private val appContext = context.applicationContext
     private val localAware = DefaultDataSource.Factory(context.applicationContext, upstream)
     private val writers = ConcurrentHashMap.newKeySet<CacheWriter>()
     private val writeLock = Mutex()
@@ -60,6 +61,15 @@ class AudioCache(context: Context, directory: File,
     val clearing = MutableStateFlow(false)
     private fun cachedFactory(block: Boolean = false) = CacheDataSource.Factory().setCache(cache)
         .setUpstreamDataSourceFactory(upstream).setFlags(if (block) CacheDataSource.FLAG_BLOCK_ON_CACHE else CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+
+    /** Called on the resolver's IO dispatcher; the provider enforces current URI read access. */
+    internal fun validateLocalUri(uri: Uri) {
+        require(uri.scheme == "content" && !uri.authority.isNullOrBlank()) { "本地音频地址无效" }
+        if (uri.authority == "media") return
+        require(android.provider.DocumentsContract.isDocumentUri(appContext, uri)) { "本地音频地址无效" }
+        appContext.contentResolver.openAssetFileDescriptor(uri, "r")?.use { }
+            ?: throw java.io.FileNotFoundException("无法读取本地音频，请重新选择文件夹")
+    }
 
     // MV and room URLs have no custom key and bypass the audio cache entirely.
     val dataSourceFactory = DataSource.Factory { object : DataSource {

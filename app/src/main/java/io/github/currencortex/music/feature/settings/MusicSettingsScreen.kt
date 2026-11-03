@@ -21,7 +21,7 @@ import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.TextField
 
 /** Sources and connections only; playback and other settings each have one owner. */
-@Composable fun MusicSettingsScreen(vm: MusicSettingsViewModel, onNavidrome: () -> Unit = {}) {
+@Composable fun MusicSettingsScreen(vm: MusicSettingsViewModel, onNavidrome: () -> Unit = {}, onEmby: () -> Unit = {}) {
     SettingsUiScope {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -95,6 +95,8 @@ import top.yukonga.miuix.kmp.basic.TextField
         item("library") { SettingsSection("自建曲库", MusicIcons.List) {
             MusicDestinationRow("Navidrome", onNavidrome, Modifier.testTag("open_navidrome"),
                 summary = "连接自己的音乐服务器 · Subsonic")
+            SettingsDivider()
+            MusicDestinationRow("Emby", onEmby, Modifier.testTag("open_emby"), summary = "专辑、歌曲、艺术家与歌单 · 原音质播放")
         } }
     }
     if (serverDialogOpen) CurrentMusicServerDialog(vm, onDismiss = { serverDialogOpen = false }, onCustom = {

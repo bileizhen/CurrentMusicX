@@ -91,6 +91,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         }
     }
     fun choosePlaylist(song: Song) {
+        if (song.emby != null) { message.value = "Emby 歌单当前仅支持浏览"; return }
         if (busy.value) return
         likes.dismiss()
         selectedSong.value = song
@@ -135,7 +136,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
             if (playlist.source == "navidrome") container.navidrome.add(playlist.remoteId, song)
             else if (playlist.source == "netease") container.neteaseLibrary.add(playlist.id, song)
             else container.libraryRepository.add(playlist.id, listOf(song))
-            if (song.navidrome == null) container.libraryRepository.invalidate(); selectedSong.value = null
+            if (!song.privateLibrary) container.libraryRepository.invalidate(); selectedSong.value = null
         }
     }
     private var likeUndoNotice: Long? = null
@@ -148,6 +149,14 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         viewModelScope.launch {
             try {
                 when (val result = appResult {
+                    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY) {
+                        val embySession = container.emby.session()
+                        restore = {
+                            if (embySession != container.emby.session()) throw ApiException(ErrorKind.Unauthorized)
+                            container.emby.setLiked(song, true); Unit
+                        }
+                        return@appResult container.emby.toggleLike(song)
+                    }
                     if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) {
                         val navSession = container.navidrome.session()
                         restore = {
@@ -176,7 +185,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                     }
                 }) {
                     is AppResult.Success -> if (expected == container.musicSession()) {
-                        if (song.navidrome == null) container.libraryRepository.invalidate()
+                        if (!song.privateLibrary) container.libraryRepository.invalidate()
                         if (undoable && !result.value) {
                             val restoreLike = requireNotNull(restore)
                             likeUndoNotice = container.errorNotices.showUndo("已取消喜欢") {
@@ -189,7 +198,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                                                 restoreLike()
                                             }) {
                                                 is AppResult.Success -> if (expected == container.musicSession()) {
-                                                    if (song.navidrome == null) container.libraryRepository.invalidate()
+                                                    if (!song.privateLibrary) container.libraryRepository.invalidate()
                                                     container.errorNotices.showMessage("已恢复喜欢")
                                                 }
                                                 is AppResult.Failure -> if (expected == container.musicSession()) container.errorNotices.show(undone.kind.message)
@@ -227,13 +236,13 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         }
     }
     fun refreshSearchLikes(songs: List<Song>) = viewModelScope.launch { appResult {
-        val online = songs.filter { it.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL }
+        val online = songs.filter { !it.privateLibrary && it.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL }
         if (online.isEmpty()) return@appResult
         if (container.primaryLibrary.resolveLikeNetease()) container.neteaseSongActions.likedIds()
         else container.libraryRepository.refreshStatus(online.filterNot { it.video }.map { it.id })
     } }
     fun refreshStatuses(songs: List<Song>) = viewModelScope.launch { appResult {
-        val legacySongs = songs.filterNot { it.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME,
+        val legacySongs = songs.filterNot { it.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.NAVIDROME,
             io.github.currencortex.music.data.song.MusicSource.LOCAL) }
         if (legacySongs.isEmpty()) return@appResult
         if (container.primaryLibrary.resolveNetease()) container.neteaseSongActions.likedIds()

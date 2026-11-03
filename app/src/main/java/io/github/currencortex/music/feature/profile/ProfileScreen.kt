@@ -90,6 +90,8 @@ import kotlinx.coroutines.launch
 
 @Composable private fun NativeMeScreen(container: AppContainer, navigate: (String) -> Unit, onSettings: () -> Unit) {
     val tasksEnabled by container.neteaseTasksEnabled.collectAsStateWithLifecycle()
+    val navidromeAccount by container.navidrome.state.collectAsStateWithLifecycle()
+    val embyAccount by container.emby.state.collectAsStateWithLifecycle()
     val account by container.neteaseSessions.state.collectAsStateWithLifecycle()
     val bottomInset = LocalMusicBottomInset.current
     val avatarFlight = LocalAvatarFlight.current
@@ -132,7 +134,8 @@ import kotlinx.coroutines.launch
                 "open_currentmusic_login") { navigate("user/login") }
         } }
         item("library") { ProfileLibrarySection(navigate) }
-        item("services") { ProfileServicesSection(navigate, tasksEnabled == true, native = true, bound = account.loggedIn) }
+        item("services") { ProfileServicesSection(navigate, tasksEnabled == true, native = true, bound = account.loggedIn,
+            navidromeConfigured = navidromeAccount.configured, embyConfigured = embyAccount.configured) }
         if (account.profile != null) item("account") { ProfileAccountSection(navigate, native = true) }
     }
     }
@@ -148,6 +151,8 @@ import kotlinx.coroutines.launch
     val state = vm.state.collectAsPageState().value
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val tasksEnabled by vm.container.neteaseTasksEnabled.collectAsStateWithLifecycle()
+    val navidromeAccount by vm.container.navidrome.state.collectAsStateWithLifecycle()
+    val embyAccount by vm.container.emby.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     var avatarPreview by rememberSaveable(vm.container.accountRepository.server, account.account?.id) { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
@@ -218,7 +223,8 @@ import kotlinx.coroutines.launch
             if (state.loading && state.profile == null) item { LoadingProfileCard() }
             if (own) {
                 item("library") { ProfileLibrarySection(navigate) }
-                item("services") { ProfileServicesSection(navigate, tasksEnabled == true) }
+                item("services") { ProfileServicesSection(navigate, tasksEnabled == true,
+                    navidromeConfigured = navidromeAccount.configured, embyConfigured = embyAccount.configured) }
                 item("account") { ProfileAccountSection(navigate) }
             }
             state.profile?.current?.let { song -> item { SettingsListHeader("当前在听")

@@ -34,7 +34,7 @@ open class CurrentMusicApplication : Application(), SingletonImageLoader.Factory
         // This client has no account interceptor, so images never receive the Token.
         val images = OkHttpClient.Builder().connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(75, TimeUnit.SECONDS).callTimeout(90, TimeUnit.SECONDS)
-            .addInterceptor(container.navidrome.client.mediaInterceptor()).build()
+            .addInterceptor(container.navidrome.client.mediaInterceptor()).addInterceptor(container.emby.client.mediaInterceptor()).build()
         // Cover art is worth caching across sessions, but it must stay bounded: the storage page
         // reports it as part of the data cache and clearing it must not touch the audio cache.
         val covers = coil3.disk.DiskCache.Builder()

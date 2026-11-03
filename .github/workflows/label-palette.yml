@@ -1,0 +1,46 @@
+name: Synchronize label colors
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/label-palette.yml
+      - .github/scripts/label-palette.cjs
+  workflow_dispatch:
+permissions:
+  contents: read
+  issues: write
+concurrency:
+  group: label-palette
+  cancel-in-progress: false
+jobs:
+  apply:
+    if: github.repository == 'bileizhen/CurrentMusicX'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test palette before applying
+        run: node --test .github/scripts/label-palette.test.cjs
+      - name: Update existing label colors
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const {colorChanges}=require('./.github/scripts/label-palette.cjs');
+            const labels=await github.paginate(github.rest.issues.listLabelsForRepo,{
+              ...context.repo,per_page:100
+            });
+            const changes=colorChanges(labels);
+            for (const item of changes) {
+              await github.rest.issues.updateLabel({...context.repo,name:item.name,color:item.after});
+              core.info(`Label ${item.name}: ${item.before} -> ${item.after}`);
+            }
+            await core.summary.addHeading('CurrentMusicX · 标签配色已同步')
+              .addRaw(`已检查 ${labels.length} 个标签，更新 ${changes.length} 个颜色；名称与描述均未更改。`)
+              .write();

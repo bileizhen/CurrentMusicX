@@ -21,6 +21,11 @@ function isLightweightOnly(paths) {
     '.github/scripts/pr-risk.cjs',
     '.github/scripts/pr-risk.test.cjs',
     '.github/REVIEW_POLICY.md',
+    '.github/workflows/label-palette.yml',
+    '.github/workflows/pr-risk.yml',
+    '.github/scripts/label-palette.cjs',
+    '.github/scripts/label-palette.test.cjs',
+    '.github/scripts/collaboration.cjs',
     'AGENTS.md',
   ]);
   return paths.length > 0 && paths.every(path =>
