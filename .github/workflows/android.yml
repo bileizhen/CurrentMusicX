@@ -25,9 +25,9 @@ jobs:
       - name: Determine Android build scope
         id: scope
         run: node .github/scripts/android-ci-scope.cjs
-      - name: README-only change
+      - name: Documentation or CI-only change
         if: steps.scope.outputs.required == 'false'
-        run: echo 'README / showcase images only; skipped Android toolchains, APK build and artifact uploads.' >> "$GITHUB_STEP_SUMMARY"
+        run: echo 'Documentation or checked CI automation only; skipped Android toolchains, APK build and artifact uploads. Script tests and workflow validation run in Collaboration checks.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-java@v4
         if: steps.scope.outputs.required == 'true'
         with:

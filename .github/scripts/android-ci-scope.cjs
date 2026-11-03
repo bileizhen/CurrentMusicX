@@ -3,8 +3,15 @@ const { execFileSync } = require('node:child_process');
 
 // Keep the allowlist outside runtime assets: legal Markdown and app images can
 // affect the APK and must still exercise the normal Android checks.
-function isReadmeOnly(paths) {
+function isLightweightOnly(paths) {
+  const checkedAutomation = new Set([
+    '.github/workflows/android.yml',
+    '.github/workflows/collaboration-checks.yml',
+    '.github/scripts/android-ci-scope.cjs',
+    '.github/scripts/android-ci-scope.test.cjs',
+  ]);
   return paths.length > 0 && paths.every(path =>
+    checkedAutomation.has(path) ||
     /^README(?:-[^/]+)?\.md$/.test(path) ||
     /^\.github\/img\/.+\.(?:svg|png|jpe?g|webp|gif)$/.test(path));
 }
@@ -26,8 +33,8 @@ function detectScope({ eventName, event, sha, git = args =>
     // Disable rename detection so moving app code into a README is not skipped.
     const paths = git(['diff', '--name-only', '--no-renames', '-z', base, sha, '--'])
       .split('\0').filter(Boolean);
-    return isReadmeOnly(paths)
-      ? { required: false, reason: `README / showcase images only (${paths.length} files)` }
+    return isLightweightOnly(paths)
+      ? { required: false, reason: `Documentation / showcase / checked CI automation (${paths.length} files)` }
       : full('Changes include Android inputs, automation, or an empty diff');
   } catch {
     return full('Could not establish the complete diff');
@@ -42,4 +49,4 @@ if (require.main === module) {
   console.log(`Android build required: ${result.required}. ${result.reason}`);
 }
 
-module.exports = { isReadmeOnly, detectScope };
+module.exports = { isLightweightOnly, detectScope };
