@@ -26,5 +26,7 @@
 - 对外部 Fork 的非草稿 PR，`codex-review-bridge.yml` 会自动发送一次以 `@codex review` 开头的触发评论；同仓库 PR 继续使用 Codex 原生自动审查，不重复请求。
 - 仅识别和删除自动化创建且带特定 SHA 标记的触发评论；收到同一提交的 Codex Review Summary（已完成）后自动删除，超出六小时无确认也会清理，但这**不代表审查成功**。
 - 新工作流首次合入 `main` 时会为最多 10 个现有的待审外部 Fork PR 请求一次；之后可手动运行并填写 PR 编号，计划任务仅负责清理，不自动反复请求。
-- GitHub Actions 的 `GITHUB_TOKEN` 以机器人身份发表评论，Codex 未保证接受此类触发。若实际测试没有 Codex 回应，可考虑在 Actions Secrets 配置 `CODEX_REVIEW_TOKEN`（由仓库维护者创建的细粒度 GitHub PAT，限本仓库 Issues: Read/Write、Pull requests: Read），以维护者身份发送。请勿直接把 Token 写入 PR、仓库文件或日志。
+- GitHub Actions 的 `GITHUB_TOKEN` 以机器人身份发表评论，Codex 未保证接受此类触发。若实际测试没有 Codex 回应，可考虑在 Actions Secrets 配置 `CODEX_REVIEW_TOKEN`（由仓库维护者创建的细粒度 GitHub PAT，仅授权本仓库所需的 Issues: Read/Write、Pull requests: Read/Write），以维护者身份发送。请勿直接把 Token 写入 PR、仓库文件或日志。
 - 整套机制不执行 Fork 代码，不共享签名凭据，不自动批准或合并，且不能修复 Codex 服务端的 Fork 审查限制。
+
+- GitHub Actions 对 PR Conversation 评论的创建可能同时要求 `issues: write` 与 `pull-requests: write`；该工作流已明确声明二者，修复了 #26 评论接口返回的 HTTP 403。评论能成功发布不等于 Codex 一定接受机器人 @ 提及，仍需通过真实外部 PR 验证。
