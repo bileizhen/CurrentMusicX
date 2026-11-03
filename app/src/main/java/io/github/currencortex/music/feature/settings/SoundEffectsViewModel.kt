@@ -36,6 +36,14 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
     internal val originalPageApi by lazy { OriginalEffectsPageApi(container, this) }
     internal val originalPageAccount = container.neteaseSessions.state
     val preferences = container.soundEffectsSettings.state
+    val adaptive = container.adaptiveAudio.state
+    val adaptiveRuntime = container.adaptiveAudioRuntime
+    val audioOutput = container.audioOutput.state
+    val hapticsSupported get() = container.musicHapticsSupported
+    val hapticsAmplitudeControl get() = container.musicHapticsAmplitudeControl
+    fun editAdaptive(transform: (io.github.currencortex.music.data.settings.AdaptiveAudioSettings) -> io.github.currencortex.music.data.settings.AdaptiveAudioSettings) {
+        viewModelScope.launch { container.adaptiveAudio.edit(transform) }
+    }
     val tuning = container.smartTuning.state
     val manual = container.equalizerSettings.state
     val runtime = container.equalizer.state

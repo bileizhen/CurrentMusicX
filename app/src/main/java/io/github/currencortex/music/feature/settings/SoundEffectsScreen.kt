@@ -62,7 +62,9 @@ import kotlin.math.abs
 import kotlinx.serialization.json.*
 
 /** Original presets and local EQ share one visible selection, with independent verified apply paths. */
-@Composable internal fun SoundEffectsMainScreen(vm: SoundEffectsViewModel, onBack: () -> Unit, onEqualizer: () -> Unit, onDetails: (SoundEffectKind) -> Unit) {
+@Composable internal fun SoundEffectsMainScreen(vm: SoundEffectsViewModel, onBack: () -> Unit, onEqualizer: () -> Unit, onDetails: (SoundEffectKind) -> Unit,
+    onAdaptive: () -> Unit = {}) {
+    val adaptive by vm.adaptive.collectAsStateWithLifecycle()
     val options by vm.preferences.collectAsStateWithLifecycle()
     val tuning by vm.tuning.collectAsStateWithLifecycle()
     val manual by vm.manual.collectAsStateWithLifecycle()
@@ -149,6 +151,12 @@ import kotlinx.serialization.json.*
             contentPadding = musicScrollPadding(PaddingValues(top=topInset,bottom = 20.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (!expandedCatalog) {
+            item {
+                Card(Modifier.padding(horizontal = 16.dp)) {
+                    SettingsPreference("音频处理系统", if (adaptive.enabled) "已开启 · 动态 EQ / 虚拟低频 / 马达驱动" else "动态 EQ · 虚拟低频 · 马达驱动",
+                        Modifier.testTag("open_adaptive_audio"), onClick = onAdaptive)
+                }
+            }
             item { SettingsInfoHeader("大师音效", MusicIcons.Headphones) }
             item(key = "masters") {
                 val visible by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == "masters" } } }
