@@ -1,6 +1,7 @@
 package io.github.currencortex.music
 
 import androidx.compose.ui.test.*
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.lifecycle.viewModelScope
 import androidx.test.core.app.ApplicationProvider
@@ -65,6 +66,10 @@ class EmbyTest {
             compose.onNodeWithText("测试专辑").performClick()
             compose.waitUntil(15000) { vm!!.state.value.page.songs.isNotEmpty() }
             compose.onNodeWithText("Emby 测试歌曲").assertIsDisplayed()
+            val screenshot = compose.onRoot().captureToImage().asAndroidBitmap()
+            java.io.File(context.getExternalFilesDir(null), "emby-verification.png").outputStream().use {
+                screenshot.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
             val before = reads.get()
             withContext(Dispatchers.Main) { assertTrue(vm!!.back()) }
             compose.waitUntil(5000) { vm!!.state.value.route.kind == "albums" }

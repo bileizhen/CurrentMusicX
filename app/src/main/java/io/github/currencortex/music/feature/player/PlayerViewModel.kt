@@ -66,6 +66,7 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
     private var actionsOwner: List<Any?>? = null
     private fun likeOwner(): List<Any?> = listOf(queue.value.current?.id, queue.value.current?.musicSource,
         queue.value.current?.privateIdentity, container.musicSession(), settings.value.likeMode,
+        container.emby.state.value.revision.takeIf { queue.value.current?.emby != null },
         usesNeteaseLibrary.value, container.primaryLibrary.identity.value.second)
     private var actionEpoch = 0L
     private var commentsJob: Job? = null
@@ -153,7 +154,7 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
         val actionId = if (song.privateLibrary) song.id else NeteaseSongActionsRepository.songId(song)
         val before = if (song.privateLibrary || usesNeteaseLibrary.value)
             _actions.value.takeIf { it.songId == actionId }?.liked == true else libraryStatuses.value[song.id]?.liked == true
-        val write = LikeWrite(song, owner, container.musicSession(), settings.value.likeMode, before, !before)
+        val write = LikeWrite(song, owner, if (song.emby != null) container.emby.session() else container.musicSession(), settings.value.likeMode, before, !before)
         likeWrite = write
         _likePreview.value = PlayerLikePreview(song, write.desired)
         _actions.update { it.copy(liked = write.desired, liking = true, error = null) }
@@ -164,12 +165,12 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
                         val desired = write.desired
                         val revision = write.revision
                         val result = appResult {
-                            if (write.session != container.musicSession() || write.likeMode != settings.value.likeMode)
+                            if (write.session != (if (song.emby != null) container.emby.session() else container.musicSession()) || write.likeMode != settings.value.likeMode)
                                 throw ApiException(ErrorKind.Unauthorized)
                             if (song.musicSource == MusicSource.EMBY) return@appResult container.emby.setLiked(song, desired)
                             if (song.musicSource == MusicSource.NAVIDROME) return@appResult container.navidrome.setLiked(song, desired)
                             val native = container.primaryLibrary.resolveLikeNetease()
-                            if (write.session != container.musicSession() || write.likeMode != settings.value.likeMode)
+                            if (write.session != (if (song.emby != null) container.emby.session() else container.musicSession()) || write.likeMode != settings.value.likeMode)
                                 throw ApiException(ErrorKind.Unauthorized)
                             if (native) {
                                 val id = NeteaseSongActionsRepository.songId(song) ?: throw ApiException(ErrorKind.NotFound)

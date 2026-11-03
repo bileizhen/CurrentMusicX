@@ -131,6 +131,19 @@ class EmbyRepositoryTest {
         server.enqueue(MockResponse().setResponseCode(204))
         repo.disconnect(); assertNull(vault.value); assertFalse(repo.state.value.configured)
     }
+    @Test fun cancellationAlsoInterruptsSlowResponseBody() = runBlocking {
+        login(); server.takeRequest()
+        server.enqueue(MockResponse().setBody("{\"Items\":[]}").setBodyDelay(3, TimeUnit.SECONDS))
+        val job = launch(Dispatchers.Default) { repo.browse() }
+        assertNotNull(server.takeRequest(5, TimeUnit.SECONDS))
+        delay(100)
+        withTimeout(2000) { job.cancelAndJoin() }
+    }
+    @Test fun zeroTotalWithFullPageStillAllowsLoadingMore() = runBlocking {
+        login()
+        server.enqueue(MockResponse().setBody("""{"Items":[${List(40) { track }.joinToString(",")}],"TotalRecordCount":0}"""))
+        assertTrue(repo.browse("search", query = "song").more)
+    }
     @Test fun canceledPaginationCancelsWireRequest() = runBlocking {
         login(); server.takeRequest()
         server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE))
