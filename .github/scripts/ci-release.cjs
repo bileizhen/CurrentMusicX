@@ -21,6 +21,11 @@ function trustedRun(run, repo) {
     run.path === '.github/workflows/android.yml';
 }
 
+function hasSuccessfulAndroidBuild(jobs) {
+  return jobs.some(job => job.name === 'build' && job.conclusion === 'success' &&
+    job.steps?.some(step => step.name === 'Build debug APK and run unit tests' && step.conclusion === 'success'));
+}
+
 function prepare() {
   const directory = 'app/build/outputs/apk/release';
   const metadata = JSON.parse(fs.readFileSync(`${directory}/output-metadata.json`, 'utf8'));
@@ -64,4 +69,4 @@ async function publish({github, context, core}) {
 }
 
 if (require.main === module && process.argv[2] === 'prepare') prepare();
-module.exports = {validateMetadata,trustedRun,publish};
+module.exports = {validateMetadata,trustedRun,hasSuccessfulAndroidBuild,publish};

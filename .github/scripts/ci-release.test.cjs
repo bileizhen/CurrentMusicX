@@ -1,6 +1,6 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {validateMetadata,trustedRun} = require('./ci-release.cjs');
+const {validateMetadata,trustedRun,hasSuccessfulAndroidBuild} = require('./ci-release.cjs');
 const {publish} = require('./ci-release.cjs');
 const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), crypto = require('node:crypto');
 const metadata = () => ({applicationId:'com.bileizhen.currentmusic',elements:[{versionName:'1.3.2-ci.42',versionCode:3500042,outputFile:'app-release-unsigned.apk'}]});
@@ -26,6 +26,16 @@ test('publishing requires successful main Android CI in the same repository', ()
   for (const patch of [{event:'pull_request'},{conclusion:'failure'},{status:'in_progress'},{head_branch:'feature'},
     {head_repository:{full_name:'fork/app'}},{path:'.github/workflows/other.yml'},{head_sha:'invalid'}])
     assert.equal(trustedRun({...run,...patch},'owner/app'),false);
+});
+
+test('documentation-only upstream success does not build or publish an APK', () => {
+  const job = {name:'build',conclusion:'success',steps:[{name:'Build debug APK and run unit tests',conclusion:'success'}]};
+  assert.equal(hasSuccessfulAndroidBuild([job]), true);
+  for (const conclusion of ['skipped','failure','cancelled']) {
+    assert.equal(hasSuccessfulAndroidBuild([{...job,steps:[{...job.steps[0],conclusion}]}]), false);
+  }
+  assert.equal(hasSuccessfulAndroidBuild([]), false);
+  assert.equal(hasSuccessfulAndroidBuild([{...job,conclusion:'failure'}]), false);
 });
 
 async function publicationScenario(options, check) {

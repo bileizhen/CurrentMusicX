@@ -251,7 +251,7 @@ Release 启用 R8 与资源压缩，仍发布一个包含现有 ABI 的通用 AP
 - 仓库允许对已审查的具体 PR 启用 Auto-merge，仅使用 Merge commit 保留原子提交。`main` 要求分支与主线同步、解决审查讨论，并通过 Android CI 的 `build` 和 Collaboration checks 的 `test`，管理员同样受约束；独立维护者不强制第二人批准。前一个 PR 合并后，后续 PR 若落后于主线，需更新分支并重新检查。
 - PR 合并后由 GitHub 自动删除远端功能分支，PR 记录和提交历史保留。本地分支及 worktree 不自动删除，清理前确认没有未提交或未合并的工作。
 - 更新设置提供「正式版 / CI 版」。旧「预发布版」选择自动迁移为 CI；CI 只接收 `vX.Y.Z-ci.N` 的完整签名构建，不接收普通 beta/rc 或 PR Debug 产物。CI 渠道隐藏只返回正式包的 CurrentMusic 专用源，保留 GitHub 和其他代理源，并沿用 SHA-256、大小、包名、版本及签名校验。
-- `Publish CI build` 在 **main 的 Android CI 成功**后构建 Release、运行 Release 单元测试和 Lint，再通过 `ci-signing` GitHub Environment 中的 `SIGNING_KEYSTORE_BASE64`、`SIGNING_STORE_PASSWORD`、`SIGNING_KEY_ALIAS`、`SIGNING_KEY_PASSWORD` 使用现有正式签名。该 Environment 限制 main；签名 job 不向 PR 开放，密钥不入库、不作为产物上传。缺少签名则失败，不发布未签名包。
+- `Publish CI build` 在 **main 的 Android CI 实际完成 Android 构建并成功**后构建 Release、运行 Release 单元测试和 Lint，再通过 `ci-signing` GitHub Environment 中的 `SIGNING_KEYSTORE_BASE64`、`SIGNING_STORE_PASSWORD`、`SIGNING_KEY_ALIAS`、`SIGNING_KEY_PASSWORD` 使用现有正式签名。该 Environment 限制 main；签名 job 不向 PR 开放，密钥不入库、不作为产物上传。纯文档或轻量 CI 调整跳过安装包分发；缺少签名则失败，不发布未签名包。
 - CI 通过公开的 GitHub prerelease 附件分发，无需用户提供 Token。版本为 `X.Y.Z-ci.N`，N 来自主线 Android CI 的运行编号；每次使用独立 tag，不覆盖已有附件，不修改最新正式 Release。分发时若主线已前进则跳过过时构建。自动说明标注检查范围，不代替真机验收。
 - Android 安装版本码使用 `基础 versionCode × 100000 + N`，正式版的 N 为 0；后续正式发布必须递增基础 versionCode 和版本号，使它高于上一版本所有 CI。CI 可保留数据覆盖原正式版，但切回正式版须等待后续更高版本，不通过卸载或绕过系统降级检查处理。单个 CI 编号范围 1–99999，超出时构建失败并由维护者迁移编号规则。
 
