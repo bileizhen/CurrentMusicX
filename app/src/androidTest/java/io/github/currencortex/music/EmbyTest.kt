@@ -95,6 +95,54 @@ class EmbyTest {
             container.close(); server.shutdown()
         }
     }
+    @Test fun restoredQueueReadsFavoriteBeforeAllowingToggle(): Unit = runBlocking {
+        val detailReads = AtomicInteger()
+        val writes = java.util.concurrent.CopyOnWriteArrayList<String>()
+        val favorite = track.dropLast(1) + ",\"UserData\":{\"IsFavorite\":true}}"
+        val server = MockWebServer().apply {
+            dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+                override fun dispatch(request: RecordedRequest): MockResponse {
+                    val path = request.requestUrl!!.encodedPath
+                    if (path.endsWith("AuthenticateByName")) return MockResponse().setBody("""{"User":{"Id":"user-1"},"AccessToken":"fixture-token"}""")
+                    if (path.endsWith("FavoriteItems/track-1")) {
+                        writes.add(request.method!!); return MockResponse().setResponseCode(204)
+                    }
+                    if (path.endsWith("Items/track-1")) {
+                        detailReads.incrementAndGet()
+                        return MockResponse().setBody(favorite).setBodyDelay(300, java.util.concurrent.TimeUnit.MILLISECONDS)
+                    }
+                    if (path.endsWith("Items")) return MockResponse().setBody("""{"Items":[$favorite],"TotalRecordCount":1}""")
+                    return MockResponse().setResponseCode(404)
+                }
+            }
+            start()
+        }
+        val suffix = "emby-restored-${UUID.randomUUID()}"
+        var container = AppContainer(context, suffix, useNativeNetease = false)
+        var vm: io.github.currencortex.music.feature.player.PlayerViewModel? = null
+        try {
+            container.ready.await(); container.emby.connect(server.url("/").toString(), "fixture", "fixture")
+            val song = container.emby.browse("songs").songs.single()
+            container.close()
+            container = AppContainer(context, suffix, useNativeNetease = false)
+            container.ready.await(); container.emby.ready.await(); container.sessionRestored.await()
+            assertTrue(container.emby.likes.value.isEmpty())
+            withContext(Dispatchers.Main) {
+                container.playbackQueue.replace(listOf(song), 0)
+                vm = io.github.currencortex.music.feature.player.PlayerViewModel(container)
+                vm!!.togglePrimaryLike()
+            }
+            withTimeout(10000) { while (vm!!.actions.value.liked != true) delay(20) }
+            assertEquals(1, detailReads.get()); assertTrue(writes.isEmpty())
+            withContext(Dispatchers.Main) { vm!!.togglePrimaryLike() }
+            withTimeout(10000) { while (writes.isEmpty() || vm!!.actions.value.liking) delay(20) }
+            assertEquals(listOf("DELETE"), writes.toList())
+            assertEquals(false, vm!!.actions.value.liked)
+        } finally {
+            withContext(Dispatchers.Main) { vm?.viewModelScope?.cancel() }
+            container.close(); server.shutdown()
+        }
+    }
     @Test fun providedRealServerReadOnlyDecodeAndSeek(): Unit = runBlocking {
         val args = InstrumentationRegistry.getArguments()
         val server = args.getString("emby_server")
