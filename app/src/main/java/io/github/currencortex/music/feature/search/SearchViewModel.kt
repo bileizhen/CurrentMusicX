@@ -6,9 +6,14 @@ import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.library.CatalogEntry
 import io.github.currencortex.music.data.local.SearchHistoryEntity
+import io.github.currencortex.music.data.song.SearchLyricContext
 import io.github.currencortex.music.data.song.Song
+import io.github.currencortex.music.data.settings.LyricsSource
+import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.*
 
 enum class SearchCategory(val label: String, val route: String) {
@@ -16,7 +21,7 @@ enum class SearchCategory(val label: String, val route: String) {
 }
 data class SearchCategoryPage(val songs: List<Song> = emptyList(), val entries: List<CatalogEntry> = emptyList(),
     val total: Int = 0, val nextOffset: Int = 0, val more: Boolean = false, val loading: Boolean = false,
-    val loaded: Boolean = false, val error: String? = null, val matchedLyrics: Map<Long, String> = emptyMap()) {
+    val loaded: Boolean = false, val error: String? = null, val matchedLyrics: Map<Long, SearchLyricContext> = emptyMap()) {
     val count get() = songs.size + entries.size
 }
 data class SearchUiState(val query: String = "", val submitted: String = "", val category: SearchCategory = SearchCategory.SONG,
@@ -46,6 +51,7 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
     private var landingJob: Job? = null
     val history = container.database.music().history().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val requests = mutableMapOf<SearchCategory, Job>()
+    private val backfills = mutableListOf<Job>()
     private var generation = 0
     init { viewModelScope.launch {
         container.ready.await()
@@ -61,6 +67,8 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
         ++generation
         requests.values.forEach(Job::cancel)
         requests.clear()
+        backfills.forEach(Job::cancel)
+        backfills.clear()
     }
     fun input(value: String) {
         if (value.isEmpty()) { cancelRequests(); state.value = SearchUiState(category = state.value.category) }
@@ -201,8 +209,57 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
                 }
                 current.copy(pages = current.pages + (category to page))
             }
+            if (category == SearchCategory.LYRIC && result is AppResult.Success)
+                backfillLyricContexts(before.submitted, requestGeneration, result.value.songs, result.value.matchedLyrics)
+        }
+    }
+    /** The native search never ships a preceding line; read the full lyric and take its neighbours. */
+    private fun backfillLyricContexts(query: String, requestGeneration: Int, songs: List<Song>, contexts: Map<Long, SearchLyricContext>) {
+        val targets = songs.filter { song -> contexts[song.id]?.let { it.before == null || it.after == null } == true }
+        if (targets.isEmpty()) return
+        backfills += viewModelScope.launch {
+            val limiter = Semaphore(4)
+            coroutineScope {
+                targets.forEach { song ->
+                    launch {
+                        limiter.withPermit {
+                            if (requestGeneration != generation) return@launch
+                            val matched = state.value.pages[SearchCategory.LYRIC]?.matchedLyrics?.get(song.id)?.matched ?: return@launch
+                            val document = (container.musicRepository.lyricsForMatching(song.id, LyricsSource.NETEASE)
+                                as? AppResult.Success)?.value ?: return@launch
+                            val extracted = lyricContextFromDocument(document, matched) ?: return@launch
+                            if (requestGeneration != generation || state.value.submitted != query) return@launch
+                            state.update { current ->
+                                val page = current.pages[SearchCategory.LYRIC]
+                                val existing = page?.matchedLyrics?.get(song.id)
+                                if (page == null || existing == null) return@update current
+                                current.copy(pages = current.pages + (SearchCategory.LYRIC to page.copy(
+                                    matchedLyrics = page.matchedLyrics + (song.id to existing.copy(
+                                        before = existing.before ?: extracted.before,
+                                        after = existing.after ?: extracted.after)))))
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     fun deleteHistory(value: String) = viewModelScope.launch { container.database.music().deleteHistory(value) }
     fun clearHistory() = viewModelScope.launch { container.database.music().clearHistory() }
+}
+
+/** Locate the matched line inside a full lyric document and take its immediate neighbours. */
+internal fun lyricContextFromDocument(document: LyricsDocument, matched: String): SearchLyricContext? {
+    fun normalize(value: String) = value.trim().replace(Regex("\\s+"), " ")
+    val segments = matched.split(" · ").map(::normalize).filter(String::isNotBlank)
+    if (segments.isEmpty() || document.lines.isEmpty()) return null
+    val hitStart = document.lines.indexOfFirst { line -> segments.any { normalize(line.text).contains(it) } }
+    if (hitStart < 0) return null
+    // A joined two-hit match spans consecutive rows; the neighbour follows the whole span.
+    var hitEnd = hitStart
+    while (hitEnd + 1 < document.lines.size && segments.any { normalize(document.lines[hitEnd + 1].text).contains(it) }) hitEnd++
+    return SearchLyricContext(
+        document.lines.getOrNull(hitStart - 1)?.text?.let(::normalize)?.takeIf(String::isNotBlank),
+        matched,
+        document.lines.getOrNull(hitEnd + 1)?.text?.let(::normalize)?.takeIf(String::isNotBlank))
 }
