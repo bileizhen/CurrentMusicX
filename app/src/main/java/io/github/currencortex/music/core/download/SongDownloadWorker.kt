@@ -40,7 +40,16 @@ open class SongDownloadWorker(context: Context, params: WorkerParameters) : Coro
         container.ready.await(); container.sessionRestored.await()
         val song = ApiJson.decodeFromString<Song>(requireNotNull(inputData.getString("song")))
         val nav = song.navidrome != null
+        val emby = song.emby != null
         fun verifySession() {
+            if (emby) {
+                val account = container.emby.state.value
+                check(container.emby.accepts(song) && inputData.getString("server") == account.server &&
+                    inputData.getString("provider") == "emby:" + account.identity && inputData.getString("navidrome_revision") == account.revision) {
+                    "Emby 账号已变化，请重新开始下载"
+                }
+                return
+            }
             if (nav) {
                 val account = container.navidrome.state.value
                 check(container.navidrome.accepts(song) && inputData.getString("server") == account.server &&
@@ -58,13 +67,13 @@ open class SongDownloadWorker(context: Context, params: WorkerParameters) : Coro
             }
         }
         verifySession()
-        val session = if (nav) container.navidrome.session() else container.musicSession()
+        val session = if (emby) container.emby.session() else if (nav) container.navidrome.session() else container.musicSession()
         return SongDownloadEngine(File(applicationContext.cacheDir, "song-downloads"),
-            resolve = { track, quality -> if (nav) container.navidrome.source(track, quality, download = true) else container.musicRepository.source(track, quality, container.audioSession()) },
+            resolve = { track, quality -> if (emby) container.emby.source(track, download = true) else if (nav) container.navidrome.source(track, quality, download = true) else container.musicRepository.source(track, quality, container.audioSession()) },
             detail = { track -> container.musicRepository.detail(track) },
             lyrics = { track -> container.lyricsRepository.load(track).document },
             store = SongDownloadStore(applicationContext),
-            guard = { verifySession(); check(session == if (nav) container.navidrome.session() else container.musicSession()) { "账号已变化，请重新开始下载" } },
+            guard = { verifySession(); check(session == if (emby) container.emby.session() else if (nav) container.navidrome.session() else container.musicSession()) { "账号已变化，请重新开始下载" } },
             http = container.navidromeMedia)
     }
     private fun notification(song: Song, progress: SongDownloadProgress): ForegroundInfo {

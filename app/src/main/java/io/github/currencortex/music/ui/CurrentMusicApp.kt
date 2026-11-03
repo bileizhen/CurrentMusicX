@@ -304,7 +304,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val pageSceneStrategy=remember(pageNavigation) {PageContainerSceneStrategy(pageNavigation,
             setOf(ROOT.toString(),SETTINGS.toString(),APPEARANCE.toString(),NETWORK.toString(),STORAGE.toString(),ABOUT.toString(),
                 "user/security","user/binding","user/netease-tasks","user/playlist-import","user/decorations",
-                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome",SupportConfig.route)+
+                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome","emby",SupportConfig.route)+
                 LegalDocument.entries.map {it.route().toString()})}
         SideEffect {pageNavigation.onClosed={route->
             if(backStack.lastOrNull()==route)backStack=backStack.dropLast(1)
@@ -384,7 +384,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             else action()
         }
         fun requestSong(song: Song) {
-            if (song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME, io.github.currencortex.music.data.song.MusicSource.LOCAL)) { libraryVm.message.value = "本地或私有曲库歌曲不能提交到一起听房间"; return }
+            if (song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME, io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.LOCAL)) { libraryVm.message.value = "本地或私有曲库歌曲不能提交到一起听房间"; return }
             if (nativeTogether.active) { container.listenTogether.request(song); return }
             if (!container.roomSession.active || song.id in roomPending) return
             val revision = container.accountRepository.sessionRevision.value
@@ -573,10 +573,17 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onSupport = { navigateLibrary(SupportConfig.route) })
                     }
                 }
-                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onNavidrome = { navigateLibrary("navidrome") }) }
+                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onNavidrome = { navigateLibrary("navidrome") }, onEmby = { navigateLibrary("emby") }) }
                 entry("playback-settings") { io.github.currencortex.music.feature.settings.PlaybackSettingsScreen(musicSettingsVm) }
                 entry("audio-output") { io.github.currencortex.music.feature.settings.AudioOutputScreen(container) }
                 entry("desktop-lyrics") { io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsSettingsScreen(container) }
+                entry("emby") {
+                    val vm: io.github.currencortex.music.feature.emby.EmbyViewModel = viewModel(factory = viewModelFactory {
+                        io.github.currencortex.music.feature.emby.EmbyViewModel(container)
+                    })
+                    io.github.currencortex.music.feature.emby.EmbyScreen(vm,
+                        { songs, index -> playWithPermission { container.playerController.playList(songs, index) } }, ::navigateBack)
+                }
                 entry("navidrome") {
                     io.github.currencortex.music.feature.navidrome.NavidromeScreen(navidromeVm, libraryVm, ::navigateLibrary,
                         { songs, index -> playWithPermission { container.playerController.playList(songs, index) } }, onBack = ::navigateBack)
@@ -730,7 +737,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             route == "lib/video" -> if (currentSong?.video == true) io.github.currencortex.music.feature.mv.MvPlayerScreen(container, ::navigateBack,
                                 onDialogActive = { playerDialogOpen = it })
                                 else PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
-                                    onLike = { currentSong?.let(libraryVm::choosePlaylist) })
+                                    onLike = if (currentSong?.emby == null) ({ currentSong?.let(libraryVm::choosePlaylist); Unit }) else null)
                             route.startsWith("lib/browse/") -> {
                                 val parts = route.split('/')
                                 val catalogVm: CatalogViewModel = viewModel(key = route, factory = viewModelFactory {
@@ -844,7 +851,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
                     onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") },
                     onDialogActive = { playerDialogOpen = it }, onNetwork = { navigateTo(NETWORK) },
-                    onLike = { currentSong?.let(libraryVm::choosePlaylist) }, onEqualizer = { playerEffectsOpen = true },
+                    onLike = if (currentSong?.emby == null) ({ currentSong?.let(libraryVm::choosePlaylist); Unit }) else null, onEqualizer = { playerEffectsOpen = true },
                     onAiNavigate = ::navigateLibrary, roamingRequest = roamingRequest,
                     onRoamingRequestConsumed = { roamingRequest = 0 })
             }

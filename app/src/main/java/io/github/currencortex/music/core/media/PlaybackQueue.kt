@@ -86,7 +86,7 @@ class PlaybackQueue {
     fun playSong(song: Song) {
         val current = state.value
         val existing = current.songs.indexOfFirst { it.id == song.id && it.musicSource == song.musicSource && it.video == song.video &&
-            it.navidrome?.identity == song.navidrome?.identity }
+            it.privateIdentity == song.privateIdentity }
         val index = if (existing >= 0) existing else (current.index + 1).coerceIn(0, current.songs.size)
         val songs = if (existing >= 0) current.songs else current.songs.toMutableList().apply { add(index, song) }
         state.value = resetHistory(current.copy(songs = songs, index = index, positionMs = 0, radioSession = null))

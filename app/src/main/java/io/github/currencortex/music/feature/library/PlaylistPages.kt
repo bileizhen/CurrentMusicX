@@ -178,7 +178,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
             preview.setMode(appearance.recordShelfPreviewMode)
         }
         LaunchedEffect(state.songs, likesUseNetease) {
-            library.refreshSearchLikes(state.songs.filter { it.navidrome == null })
+            library.refreshSearchLikes(state.songs.filter { !it.privateLibrary })
         }
         PlaylistRecordShelf(state.songs, canPlay, onPlay = { index -> preview.commit { play(state.songs, index) } },
             onPreview = preview::select,
@@ -399,7 +399,7 @@ internal fun playlistDurationLabel(songs: List<Song>): String {
     next: () -> Unit, enqueue: () -> Unit, extra: @Composable () -> Unit) {
     val host = LocalSongMenu.current
     var menu by remember(song.id) { mutableStateOf<SongMenu?>(null) }
-    val room = LocalRoomSongRequest.current.takeUnless { song.navidrome != null || song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL }
+    val room = LocalRoomSongRequest.current.takeUnless { song.privateLibrary || song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL }
     val pending = room?.pending?.invoke(song.id) == true
     val primary = { if (room != null) room.request(song) else play() }
     Row(Modifier.fillMaxWidth().testTag("playlist_song_${song.id}").clickable(enabled = !pending, role = Role.Button, onClick = primary)
