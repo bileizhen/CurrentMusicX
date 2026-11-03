@@ -47,7 +47,9 @@ internal class NeteaseOriginalAudioProcessor(
         val native = engine
         if (native == null) { replaceOutputBuffer(inputBuffer.remaining()).put(inputBuffer).flip(); return }
         try {
-            val output = replaceOutputBuffer(inputBuffer.remaining() + 8192)
+            // Native buffering is measured at the processing rate. Allow its
+            // 8 KiB headroom to expand when spatial PCM is converted back.
+            val output = replaceOutputBuffer(inputBuffer.remaining() + native.outputHeadroom)
             val count = native.process(inputBuffer, output)
             check(count >= 0 && count % inputAudioFormat.bytesPerFrame == 0)
             inputBuffer.position(inputBuffer.limit())
@@ -70,7 +72,14 @@ internal class NeteaseOriginalAudioProcessor(
         failure(preset, "原版音效处理失败，已恢复本机音效")
     }
 
-    override fun onQueueEndOfStream() { draining = engine != null; drained = !draining }
+    override fun onQueueEndOfStream() {
+        // Media3 repeats EOS while an upstream processor remains ended. Preserve
+        // native drain completion until flush, or the pipeline can never finish
+        // a timestamp-discontinuity drain and resume feeding decoded audio.
+        if (draining) return
+        draining = engine != null
+        drained = !draining
+    }
     override fun getOutput(): ByteBuffer {
         val ready = super.getOutput()
         if (ready.hasRemaining() || !draining || drained) return ready
