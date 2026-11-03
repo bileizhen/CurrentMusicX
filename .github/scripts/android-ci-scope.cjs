@@ -9,6 +9,9 @@ function isLightweightOnly(paths) {
     '.github/workflows/collaboration-checks.yml',
     '.github/scripts/android-ci-scope.cjs',
     '.github/scripts/android-ci-scope.test.cjs',
+    '.github/workflows/ci-distribution.yml',
+    '.github/scripts/ci-release.cjs',
+    '.github/scripts/ci-release.test.cjs',
   ]);
   return paths.length > 0 && paths.every(path =>
     checkedAutomation.has(path) ||
