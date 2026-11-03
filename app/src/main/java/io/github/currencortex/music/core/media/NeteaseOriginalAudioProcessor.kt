@@ -47,7 +47,9 @@ internal class NeteaseOriginalAudioProcessor(
         val native = engine
         if (native == null) { replaceOutputBuffer(inputBuffer.remaining()).put(inputBuffer).flip(); return }
         try {
-            val output = replaceOutputBuffer(inputBuffer.remaining() + 8192)
+            // Native buffering is measured at the processing rate. Allow its
+            // 8 KiB headroom to expand when spatial PCM is converted back.
+            val output = replaceOutputBuffer(inputBuffer.remaining() + native.outputHeadroom)
             val count = native.process(inputBuffer, output)
             check(count >= 0 && count % inputAudioFormat.bytesPerFrame == 0)
             inputBuffer.position(inputBuffer.limit())
