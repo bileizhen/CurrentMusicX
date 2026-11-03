@@ -13,6 +13,7 @@ import io.github.currencortex.music.data.roaming.RoamingCatalog
 import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.home.HomeLibraryShortcuts
+import io.github.currencortex.music.feature.roaming.PersonalRoamingPage
 import io.github.currencortex.music.feature.roaming.PersonalRoamingDialog
 import io.github.currencortex.music.feature.player.PlayerScreen
 import io.github.currencortex.music.feature.player.PlayerViewModel
@@ -137,6 +138,26 @@ class PersonalRoamingUiTest {
         compose.waitUntil(3_000) { c.errorNotices.state.value?.message == "推荐暂不可用" }
         compose.onNodeWithText("推荐暂不可用").assertDoesNotExist()
     }
+    @Test fun sidePageAppliesModesAndScenesOnTapAndPreservesQueueOnFailure() {
+        val song = seed()
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { Scaffold {
+            PersonalRoamingPage(c, onPlay = { back++ }, onBinding = {}, onDialogActive = {}, header = {})
+        } } }
+        compose.waitUntil(8_000) { c.personalRoaming.state.value.catalog.scenes.size == 2 }
+        click("roaming_mode_FAMILIAR")
+        compose.waitUntil(5_000) { recommendationRequests.get() == 1 && !c.personalRoaming.state.value.loading }
+        assertNotNull(c.personalRoaming.state.value.error)
+        assertEquals(song, c.playbackQueue.state.value.current)
+        assertEquals("DEFAULT", c.personalRoaming.state.value.choice.code)
+        assertEquals(0, back)
+        compose.onNodeWithTag("roaming_scene_RAINY").performScrollTo()
+        click("roaming_scene_RAINY")
+        compose.waitUntil(5_000) { recommendationRequests.get() == 2 && !c.personalRoaming.state.value.loading }
+        assertEquals(song, c.playbackQueue.state.value.current)
+        assertEquals("DEFAULT", c.personalRoaming.state.value.choice.code)
+        assertEquals(0, back)
+    }
+
     @Test fun activePlayerHeaderOpensModeDialogAndQualityRemainsInOptions() {
         val song = seed()
         showPlayer()
