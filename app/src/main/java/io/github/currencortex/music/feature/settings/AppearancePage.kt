@@ -66,12 +66,6 @@ import kotlin.math.roundToInt
                 }
             }
             item("primary_color") { AppearancePalette(config, viewModel) }
-            item("tab_animation") {
-                SettingsPreviewChoiceGroup("切换动画", MusicIcons.Update, listOf("滑动", "淡入淡出"),
-                    config.tabAnimation.ordinal, { index -> viewModel.edit { it.copy(tabAnimation = RootTabAnimation.entries[index]) } }, "appearance_tab_animation") { index ->
-                    AppearanceMiniThumb(colors, config.floatingBar, glass, motion = RootTabAnimation.entries[index])
-                }
-            }
             item("liquid_glass") {
                 SettingsPreviewChoiceGroup("液态玻璃", MusicIcons.Drop, listOf("标准", "液态"),
                     if (config.liquidGlass) 1 else 0, { index -> viewModel.edit { it.copy(liquidGlass = index == 1) } },
