@@ -44,7 +44,8 @@ test('release notes preserve native attribution and explicit tag range', async t
 });
 test('release preparation refuses existing release, failed CI and divergent history',async()=>{
   await withEnv(async()=>{
-    for(const options of [{releases:[{tag_name:'v1.3.3'}]},{runs:[]},{ancestry:'diverged'}]) {
+    for(const options of [{releases:[{tag_name:'v1.3.3'}]},{runs:[]},{ancestry:'diverged'},
+      {runs:[{id:1,conclusion:'success',head_branch:'main',event:'push'},{id:2,conclusion:'failure',head_branch:'main',event:'push'}]}]) {
       const client=fake(options); await assert.rejects(()=>prepare(client)); assert.equal(client.calls.length,0);
     }
   });
