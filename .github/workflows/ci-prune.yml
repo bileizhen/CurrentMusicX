@@ -1,0 +1,44 @@
+name: Retain latest CI release
+on:
+  # One-time migration when this rule is merged, and later rule updates.
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/ci-prune.yml
+      - .github/scripts/ci-prune.cjs
+  # Clean only after Publish CI build completed successfully.
+  workflow_run:
+    workflows: [Publish CI build]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: retain-latest-ci-release
+  cancel-in-progress: false
+jobs:
+  prune:
+    if: github.repository == 'bileizhen/CurrentMusicX' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      # Only use the trusted default branch. Never execute any PR-head code.
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate retention policy
+        run: node --test .github/scripts/ci-prune.test.cjs
+      - name: Remove old CI releases and their tags
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await require('./.github/scripts/ci-prune.cjs')
+              .prune({github,context,core});
