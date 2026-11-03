@@ -5,6 +5,10 @@
             android:name="io.github.currencortex.music.LocalFolderFixtureProvider"
             android:authorities="io.github.currencortex.music.test.localfolders"
             android:exported="true"
-            android:grantUriPermissions="true" />
+            android:grantUriPermissions="true">
+            <intent-filter>
+                <action android:name="android.content.action.DOCUMENTS_PROVIDER" />
+            </intent-filter>
+        </provider>
     </application>
 </manifest>
