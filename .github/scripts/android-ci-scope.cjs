@@ -18,6 +18,8 @@ function isLightweightOnly(paths) {
     '.github/workflows/pr-review-summary.yml',
     '.github/scripts/pr-review-summary.cjs',
     '.github/scripts/pr-review-summary.test.cjs',
+    '.github/scripts/pr-risk.cjs',
+    '.github/scripts/pr-risk.test.cjs',
     '.github/REVIEW_POLICY.md',
     'AGENTS.md',
   ]);

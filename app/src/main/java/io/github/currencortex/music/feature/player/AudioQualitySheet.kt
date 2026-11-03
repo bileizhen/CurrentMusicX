@@ -76,7 +76,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 FeaturedQuality(AudioQuality.JYMASTER, selected, enabled, onSelect, Modifier.weight(1f))
             }
         }
-        listOf(AudioQuality.JYEFFECT, AudioQuality.HIRES, AudioQuality.LOSSLESS, AudioQuality.EXHIGH, AudioQuality.STANDARD).forEach { quality ->
+        AudioQuality.entries.filter { it !in setOf(AudioQuality.AUTO, AudioQuality.SKY, AudioQuality.JYMASTER) }.forEach { quality ->
             QualityRow(quality, selected, enabled, onSelect)
         }
         QualityRow(AudioQuality.AUTO, selected, enabled, onSelect)
@@ -144,18 +144,24 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 private fun AudioQuality.shortName() = when (this) {
-    AudioQuality.JYEFFECT -> "全景"
+    AudioQuality.VIVID -> "全景"
+    AudioQuality.DOLBY -> "杜比"
+    AudioQuality.JYEFFECT -> "臻音"
     AudioQuality.HIRES -> "HR"
     AudioQuality.LOSSLESS -> "SQ"
     AudioQuality.EXHIGH -> "HQ"
+    AudioQuality.HIGHER -> "高"
     AudioQuality.STANDARD -> "标"
     else -> "自动"
 }
 private fun AudioQuality.description() = when (this) {
-    AudioQuality.JYEFFECT -> "空间音频，沉浸聆听"
-    AudioQuality.HIRES -> "高解析度，保留更多声音细节"
+    AudioQuality.VIVID -> "臻音全景声档位，需歌曲与账号支持"
+    AudioQuality.DOLBY -> "杜比全景声档位，需音源、账号与设备支持"
+    AudioQuality.JYEFFECT -> "网易云高清臻音档位，与 Hi-Res 分开选择"
+    AudioQuality.HIRES -> "请求高解析度音源，不代表设备已高解析输出"
     AudioQuality.LOSSLESS -> "无损音源，还原原始细节"
     AudioQuality.EXHIGH -> "清晰细腻，兼顾音质与流量"
+    AudioQuality.HIGHER -> "较高码率，兼顾清晰度与流量"
     AudioQuality.STANDARD -> "均衡音质，更省流量"
     else -> "优先请求可用的最高音质"
 }
