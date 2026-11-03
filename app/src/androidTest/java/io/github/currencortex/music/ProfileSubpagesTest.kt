@@ -33,6 +33,10 @@ class ProfileSubpagesTest {
         server = MockWebServer().apply {
             dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
+                    "/rest/ping.view", "/rest/getUser.view" -> json("""{"subsonic-response":{"status":"ok","version":"1.16.1","user":{"username":"fixture"}}}""")
+                    "/rest/getAlbumList2.view" -> json("""{"subsonic-response":{"status":"ok","albumList2":{"album":[]}}}""")
+                    "/emby/Users/AuthenticateByName" -> json("""{"User":{"Id":"fixture-user"},"AccessToken":"fixture-token"}""")
+                    "/emby/Users/fixture-user/Items" -> json("""{"Items":[],"TotalRecordCount":0}""")
                     "/cm/auth/me" -> json("""{"id":7,"nickname":"页面测试","stat":{"likes":1,"playlists":1}}""")
                     "/cm/playlists" -> json("""{"playlists":[{"id":71,"name":"测试歌单","count":1}]}""")
                     "/cm/plays/recent", "/cm/likes/mine" -> json("""{"songs":[{"ncm_id":101,"name":"星夜","artists":"测试歌手","duration":180000}]}""")
@@ -49,6 +53,8 @@ class ProfileSubpagesTest {
         container.musicSettings.setServer(base); container.accountRepository.server = base
         container.musicSettings.setNeteaseMainLibrary(false)
         container.accountRepository.save("isolated-profile-subpages", UserDto(7, nickname = "页面测试"))
+        container.navidrome.connect(server.url("/").toString(), "fixture", "fixture")
+        container.emby.connect(server.url("/").toString(), "fixture", "fixture")
         container.updateSettings.setAutoCheck(false)
         container.desktopLyrics.markRecommendationSeen()
         container.neteaseTaskPreferences.enable(true)
@@ -121,6 +127,7 @@ class ProfileSubpagesTest {
             Triple("open_netease_tasks", "user/netease-tasks", "netease_tasks_toolbar"),
             Triple("profile_playlist_import", "user/playlist-import", "playlist_import_toolbar"),
             Triple("profile_navidrome", "navidrome", "navidrome_screen_toolbar"),
+            Triple("profile_emby", "emby", "emby_screen_toolbar"),
             Triple("open_decorations", "user/decorations", "decoration_screen_toolbar"),
             Triple("open_security", "user/security", "security_page_toolbar")
         ).forEach { (entry, route, header) -> visit(entry, route, header) }

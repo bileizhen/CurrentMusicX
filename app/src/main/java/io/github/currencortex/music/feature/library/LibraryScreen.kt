@@ -38,7 +38,6 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
                 }
             }
         }
-        MusicDestinationRow("Emby 曲库", { navigate("emby") }, Modifier.testTag("library_open_emby"))
         Card(Modifier.fillMaxWidth().testTag("open_local_music"), onClick = { navigate("lib/local") }, showIndication = true) {
             Column(Modifier.padding(14.dp)) {
                 Text("本地音乐", fontSize = 15.sp, fontWeight = FontWeight.Medium)
