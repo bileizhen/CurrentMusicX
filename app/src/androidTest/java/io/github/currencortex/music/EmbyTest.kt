@@ -162,7 +162,17 @@ class EmbyTest {
                     assertTrue(it.isSuccessful); assertTrue(it.body!!.bytes().size > 100)
                 }
             }
-            assertTrue(container.emby.browse("artists").entries.isNotEmpty())
+            val artists = container.emby.browse("artists").entries
+            assertTrue(artists.isNotEmpty())
+            for (artist in artists.take(3)) {
+                val artistCover = container.emby.entryCover(artist)
+                assertTrue("Artist artwork must resolve: ${artist.name}", artistCover.isNotBlank())
+                withContext(Dispatchers.IO) {
+                    container.navidromeMedia.newCall(Request.Builder().url(artistCover).build()).execute().use {
+                        assertTrue(it.isSuccessful); assertTrue(it.body!!.bytes().size > 100)
+                    }
+                }
+            }
             container.emby.browse("playlists")
             val result = container.emby.browse("search", query = args.getString("emby_query") ?: "晴天")
             assertTrue(result.songs.isNotEmpty())
