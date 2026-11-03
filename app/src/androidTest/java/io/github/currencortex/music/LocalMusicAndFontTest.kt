@@ -30,6 +30,67 @@ import java.util.UUID
 class LocalMusicAndFontTest {
     private val context get() = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
 
+    @Test fun folderScanReadsOnlyGrantedTreeAndNestedAudio() = runBlocking {
+        val tree = fixtureTree()
+        val songs = io.github.currencortex.music.feature.library.scanLocalFolder(context, tree)
+        assertEquals(2, songs.size)
+        assertEquals(setOf("track", "nestedTrack"), songs.map {
+            android.provider.DocumentsContract.getDocumentId(Uri.parse(it.localUri))
+        }.toSet())
+        val cacheDir = File(context.cacheDir, "folder-resolver-${UUID.randomUUID()}")
+        val cache = AudioCache(context, cacheDir)
+        var loads = 0
+        val session = RequestSession("https://fixture.invalid", null)
+        val resolver = AudioSourceResolver(cache, { session }, currentProvider = { "changed" }) { _, _, _ ->
+            loads++; error("Folder music must not request an online source")
+        }
+        try {
+            songs.forEach { song ->
+                assertEquals(MusicSource.LOCAL, song.musicSource)
+                assertTrue(song.durationMs > 0)
+                val result = resolver.resolve(AudioRequest(song.id, AudioQuality.STANDARD, 0, session, "old", song))
+                assertEquals(song.localUri, result.source.url)
+                assertEquals("", result.key)
+                val source = cache.dataSourceFactory.createDataSource()
+                try {
+                    source.open(DataSpec.Builder().setUri(result.source.url).build())
+                    assertTrue(source.read(ByteArray(64), 0, 64) > 0)
+                } finally { source.close() }
+                assertPreparesLocally(cache, result.source.url)
+            }
+            assertEquals(0, loads)
+        } finally { cache.close(); cacheDir.deleteRecursively() }
+        assertEquals(songs.map { it.id }, io.github.currencortex.music.feature.library.scanLocalFolder(context, tree).map { it.id })
+    }
+
+    @Test fun localResolverRejectsInvalidAndUnreadableDocumentUrisWithoutNetworkFallback() = runBlocking {
+        val cacheDir = File(context.cacheDir, "folder-denied-${UUID.randomUUID()}")
+        val cache = AudioCache(context, cacheDir)
+        var loads = 0
+        val session = RequestSession("https://fixture.invalid", null)
+        val resolver = AudioSourceResolver(cache, { session }) { _, _, _ -> loads++; error("No network fallback") }
+        val tree = fixtureTree()
+        suspend fun resolve(uri: String) = resolver.resolve(AudioRequest(-1, AudioQuality.STANDARD, 0, session,
+            song = Song(-1, "Invalid", musicSource = MusicSource.LOCAL, localUri = uri)))
+        try {
+            for (uri in listOf("file:///sdcard/test.mp3", "https://fixture.invalid/audio.mp3",
+                "content://", "content://io.github.currencortex.music.test.localfolders/arbitrary",
+                tree.toString())) {
+                try { resolve(uri); fail("Accepted invalid local URI: $uri") }
+                catch (_: IllegalArgumentException) { }
+            }
+            try {
+                resolve(android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, "denied").toString())
+                fail("Read denial must propagate")
+            } catch (_: SecurityException) { }
+            try {
+                resolve(android.provider.DocumentsContract.buildDocumentUriUsingTree(tree, "missing").toString())
+                fail("Missing document must fail")
+            } catch (_: java.io.FileNotFoundException) { }
+            assertEquals(0, loads)
+        } finally { cache.close(); cacheDir.deleteRecursively() }
+    }
+
     @Test fun embeddedLyricsReadThroughMediaStoreDescriptor() = runBlocking {
         for ((extension, mime) in listOf("mp3" to "audio/mpeg", "flac" to "audio/flac",
             "m4a" to "audio/mp4", "wav" to "audio/wav")) {
@@ -120,27 +181,7 @@ class LocalMusicAndFontTest {
                 }
                 assertEquals(wave.size, read); assertArrayEquals(wave, actual)
             } finally { source.close() }
-            val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
-            val ready = java.util.concurrent.CountDownLatch(1)
-            var player: androidx.media3.exoplayer.ExoPlayer? = null
-            var playerError: androidx.media3.common.PlaybackException? = null
-            try {
-                instrumentation.runOnMainSync {
-                    player = androidx.media3.exoplayer.ExoPlayer.Builder(context)
-                        .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(cache.dataSourceFactory))
-                        .build().apply {
-                            volume = 0f
-                            addListener(object : androidx.media3.common.Player.Listener {
-                                override fun onPlaybackStateChanged(state: Int) { if (state == androidx.media3.common.Player.STATE_READY) ready.countDown() }
-                                override fun onPlayerError(error: androidx.media3.common.PlaybackException) { playerError = error; ready.countDown() }
-                            })
-                            setMediaItem(androidx.media3.common.MediaItem.fromUri(result.source.url))
-                            prepare()
-                        }
-                }
-                assertTrue("Local audio did not prepare", ready.await(8, java.util.concurrent.TimeUnit.SECONDS))
-                assertNull(playerError)
-            } finally { instrumentation.runOnMainSync { player?.release() } }
+            assertPreparesLocally(cache, result.source.url)
             assertEquals(song.localUri, kotlinx.serialization.json.Json.decodeFromString(Song.serializer(),
                 kotlinx.serialization.json.Json.encodeToString(Song.serializer(), song)).localUri)
         } finally {
@@ -148,5 +189,42 @@ class LocalMusicAndFontTest {
             check(cacheDir.parentFile == context.cacheDir && cacheDir.name.startsWith("local-audio-test-"))
             cacheDir.deleteRecursively()
         }
+    }
+
+    private fun fixtureTree(): Uri {
+        val tree = android.provider.DocumentsContract.buildTreeDocumentUri(
+            "io.github.currencortex.music.test.localfolders", "selected")
+        // Some OEMs block a cold test-APK provider launch from the target app. Start only
+        // this read-only fixture as shell, then exercise all reads with the app identity.
+        val children = android.provider.DocumentsContract.buildChildDocumentsUriUsingTree(tree, "selected")
+        val automation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation
+        android.os.ParcelFileDescriptor.AutoCloseInputStream(
+            automation.executeShellCommand("content query --uri $children")
+        ).bufferedReader().use { assertTrue(it.readText().contains("document_id=track")) }
+        return tree
+    }
+
+    private fun assertPreparesLocally(cache: AudioCache, url: String) {
+        val instrumentation = androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+        val ready = java.util.concurrent.CountDownLatch(1)
+        var player: androidx.media3.exoplayer.ExoPlayer? = null
+        var playerError: androidx.media3.common.PlaybackException? = null
+        try {
+            instrumentation.runOnMainSync {
+                player = androidx.media3.exoplayer.ExoPlayer.Builder(context)
+                    .setMediaSourceFactory(androidx.media3.exoplayer.source.DefaultMediaSourceFactory(cache.dataSourceFactory))
+                    .build().apply {
+                        volume = 0f
+                        addListener(object : androidx.media3.common.Player.Listener {
+                            override fun onPlaybackStateChanged(state: Int) { if (state == androidx.media3.common.Player.STATE_READY) ready.countDown() }
+                            override fun onPlayerError(error: androidx.media3.common.PlaybackException) { playerError = error; ready.countDown() }
+                        })
+                        setMediaItem(androidx.media3.common.MediaItem.fromUri(url))
+                        prepare()
+                    }
+            }
+            assertTrue("Local audio did not prepare", ready.await(8, java.util.concurrent.TimeUnit.SECONDS))
+            assertNull(playerError)
+        } finally { instrumentation.runOnMainSync { player?.release() } }
     }
 }
