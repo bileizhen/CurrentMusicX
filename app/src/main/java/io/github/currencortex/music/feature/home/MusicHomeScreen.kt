@@ -63,7 +63,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     SettingsUiScope {
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val artworkCardWidth = (maxWidth.coerceAtMost(840.dp) - 64.dp) / 2.5f
-    SettingsScrollLayout(Modifier.widthIn(max = 840.dp).fillMaxSize().align(Alignment.TopCenter), topBar = {
+    SettingsScrollLayout(Modifier.widthIn(max = 840.dp).fillMaxSize().align(Alignment.TopCenter), glassOverContent = false, topBar = {
         SettingsRootTopBar("Current Music", Modifier.testTag("home_root_toolbar"), titleContent = { HomeBrandTitle() }) {
             HomeProfileAvatar(avatarUrl, (!account.loading || direct) && home.loaded, onProfile,
                 decorationUrl = decorationUrl, decorationScale = scales[decoration] ?: 1.0)

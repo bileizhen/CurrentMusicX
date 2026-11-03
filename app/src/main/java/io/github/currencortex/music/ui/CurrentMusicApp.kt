@@ -34,6 +34,7 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.structuralEqualityPolicy
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
@@ -223,7 +224,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     // Position and loading updates belong to the player, not the entire navigation tree.
     val playerState by playerVm.navigation.collectAsStateWithLifecycle()
     val currentSong by playerVm.currentSong.collectAsStateWithLifecycle()
-    val searchState by searchVm.state.collectAsStateWithLifecycle()
+    val searchState = searchVm.state.collectAsStateWithLifecycle()
+    val searchQuery by remember(searchState) {
+        derivedStateOf(structuralEqualityPolicy()) { searchState.value.query }
+    }
     val searchKeyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val searchFocusManager = androidx.compose.ui.platform.LocalFocusManager.current
     val roomLive by container.roomSession.state.collectAsStateWithLifecycle()
@@ -496,7 +500,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         Column(Modifier.fillMaxSize().then(if (searchPresented) Modifier else Modifier.imePadding())) {
         NavDisplay(
             backStack = sceneStack,
-            modifier = Modifier.weight(1f).fillMaxSize().testTag("music_navigation").background(MiuixTheme.colorScheme.background),
+            modifier = Modifier.weight(1f).fillMaxSize().then(pageSceneStrategy.blur.viewport)
+                .testTag("music_navigation").background(MiuixTheme.colorScheme.background),
             entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), sceneInsets),
             sceneStrategies = listOf(pageSceneStrategy),
             onBack = ::navigateBack,
@@ -526,9 +531,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                 else MusicHomeScreen(libraryVm, onSearch = { navigateTo(SEARCH) }, onProfile = { _, _ -> selectTab(ME_TAB) },
                                     navigate = ::navigateLibrary, play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
                                     profile = myProfile.profile?.user, onSearchBounds = { searchBounds = it }, hideSearch = searchPresented,
-                                    searchQuery = searchState.query, onSearchSubmit = {
+                                    searchQuery = searchQuery, onSearchSubmit = {
                                         navigateTo(SEARCH)
-                                        if (searchState.query.isNotBlank()) { searchVm.search(); searchFocus = false }
+                                        val query = searchVm.state.value.query
+                                        if (query.isNotBlank()) { searchVm.search(query); searchFocus = false }
                                     })
                                 DISCOVER_TAB -> CompositionLocalProvider(
                                     LocalMusicBottomInset provides if (discoverPager.targetPage == 3) 0.dp else scrollBottom,

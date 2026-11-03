@@ -20,3 +20,11 @@
 3. 安全：Token、下载校验、网络请求、数据迁移。
 4. 发布：签名环境、构建来源、APK 摘要、版本号。
 5. 验证：CI 结果、复现步骤、真机覆盖范围及未验证内容。
+
+## Fork PR 自动请求 Codex Review
+
+- 对外部 Fork 的非草稿 PR，`codex-review-bridge.yml` 会自动发送一次以 `@codex review` 开头的触发评论；同仓库 PR 继续使用 Codex 原生自动审查，不重复请求。
+- 仅识别和删除自动化创建且带特定 SHA 标记的触发评论；收到同一提交的 Codex Review Summary（已完成）后自动删除，超出六小时无确认也会清理，但这**不代表审查成功**。
+- 新工作流首次合入 `main` 时会为最多 10 个现有的待审外部 Fork PR 请求一次；之后可手动运行并填写 PR 编号，计划任务仅负责清理，不自动反复请求。
+- GitHub Actions 的 `GITHUB_TOKEN` 以机器人身份发表评论，Codex 未保证接受此类触发。若实际测试没有 Codex 回应，可考虑在 Actions Secrets 配置 `CODEX_REVIEW_TOKEN`（由仓库维护者创建的细粒度 GitHub PAT，限本仓库 Issues: Read/Write、Pull requests: Read），以维护者身份发送。请勿直接把 Token 写入 PR、仓库文件或日志。
+- 整套机制不执行 Fork 代码，不共享签名凭据，不自动批准或合并，且不能修复 Codex 服务端的 Fork 审查限制。

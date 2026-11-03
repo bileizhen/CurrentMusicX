@@ -69,16 +69,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         if (autoFocus) { withFrameNanos { }; requester.requestFocus(); keyboard?.show(); onFocused() }
     }
     LaunchedEffect(state.submitted) { lyricScroll.scrollToItem(0); songScroll.scrollToItem(0); artistScroll.scrollToItem(0); albumScroll.scrollToItem(0); playlistScroll.scrollToItem(0) }
-    val covers = remember(page.songs, page.entries) {
-        (page.songs.take(8).map { it.cover } + page.entries.take(8).map { it.cover }).distinct()
-    }
     val categoryTabs = remember(categories) { categories.map { it.route to it.label } }
     val categoryStrip: @Composable () -> Unit = {
         MusicCategoryTabs(categoryTabs, category.route,
             { key -> focus.clearFocus(); keyboard?.hide(); vm.select(SearchCategory.entries.first { it.route == key }) },
             "search_category", Modifier.padding(vertical = 4.dp))
     }
-    PreloadMusicCovers(covers)
+    // Visible song and lyric rows request their own covers at the same size.
+    if (category != SearchCategory.SONG && category != SearchCategory.LYRIC)
+        PreloadMusicCovers(remember(page.entries) { page.entries.take(8).map { it.cover }.distinct() })
     LaunchedEffect(page.songs) { if (page.songs.isNotEmpty()) onResults(page.songs) }
     fun submit(keyword: String = state.query) { focus.clearFocus(); keyboard?.hide(); vm.search(keyword) }
     fun back() { focus.clearFocus(); keyboard?.hide(); onBack?.invoke() }
@@ -154,7 +153,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         if (state.searched && page.loaded && !page.loading && page.error == null && page.count == 0) item {
             Text("没有找到${category.label}，试试其他关键词", fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
         }
-        itemsIndexed(page.entries, key = { _, entry -> "${category.route}-${entry.id}" }) { _, entry ->
+        itemsIndexed(page.entries, key = { _, entry -> "${category.route}-${entry.id}" }, contentType = { _, _ -> "catalog" }) { _, entry ->
             Row(Modifier.fillMaxWidth().clickable(enabled = entry.id > 0, role = Role.Button) {
                 navigate("lib/${if (category == SearchCategory.PLAYLIST) "ncmplaylist" else category.route}/${entry.id}")
             }.padding(vertical = 8.dp).testTag("search_${category.route}_${entry.id}"), verticalAlignment = Alignment.CenterVertically) {
@@ -171,12 +170,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 Text("›", fontSize = 22.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .35f))
             }
         }
-        itemsIndexed(page.songs, key = { _, song -> song.id }) { _, song ->
+        itemsIndexed(page.songs, key = { _, song -> song.id }, contentType = { _, _ -> category }) { _, song ->
             Column(Modifier.testTag("search_song_${song.id}")) {
                 SearchResultSongRow(song, state.submitted, playing.first == song.id && playing.second,
                     { onPlay(song) }, { player.add(song, true) }, { player.add(song) },
                     lyric = page.matchedLyrics[song.id].takeIf { category == SearchCategory.LYRIC },
-                    quickActions = { quickActions?.invoke(song, category != SearchCategory.LYRIC) },
+                    quickActions = quickActions?.let { render -> { render(song, category != SearchCategory.LYRIC) } },
                     extraActions = { actions?.invoke(song) },
                     compactActions = category == SearchCategory.LYRIC)
             }
