@@ -1,0 +1,94 @@
+name: Prepare release draft
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 已验证并推送的本次 tag（vX.Y.Z）
+        required: true
+        type: string
+      previous_tag:
+        description: 上次已发布正式版本 tag
+        required: true
+        type: string
+      summary:
+        description: 中文更新摘要（不得把未验证的内容写成已验证）
+        required: true
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: release-draft-${{ inputs.tag }}
+  cancel-in-progress: false
+jobs:
+  notes:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    outputs:
+      target: ${{ steps.notes.outputs.target }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        id: notes
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          PREVIOUS_TAG: ${{ inputs.previous_tag }}
+          RELEASE_SUMMARY: ${{ inputs.summary }}
+        with:
+          script: |
+            await require('./.github/scripts/release-draft.cjs').prepare({github, context, core});
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-draft.txt
+          if-no-files-found: error
+  verify-release-build:
+    needs: notes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.notes.outputs.target }}
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      - run: sdkmanager "platforms;android-37.0" "build-tools;35.0.0" "ndk;30.0.16248370" "cmake;4.1.2"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify Release build without signing credentials
+        run: ./gradlew :app:assembleRelease :app:testReleaseUnitTest :app:lintRelease --no-daemon --stacktrace -Plei.officialRepositoriesFirst=true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-verification-reports
+          path: |
+            app/build/reports/tests/testReleaseUnitTest/
+            app/build/reports/lint-results-release.*
+  draft:
+    needs: [notes, verify-release-build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+      - uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TARGET: ${{ needs.notes.outputs.target }}
+        with:
+          script: |
+            await require('./.github/scripts/release-draft.cjs').create({github, context, core});
