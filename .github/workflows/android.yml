@@ -4,45 +4,66 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: android-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Determine Android build scope
+        id: scope
+        run: node .github/scripts/android-ci-scope.cjs
+      - name: Documentation or CI-only change
+        if: steps.scope.outputs.required == 'false'
+        run: echo 'Documentation or checked CI automation only; skipped Android toolchains, APK build and artifact uploads. Script tests and workflow validation run in Collaboration checks.' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/setup-java@v4
+        if: steps.scope.outputs.required == 'true'
         with:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        if: steps.scope.outputs.required == 'true'
         with:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
       - name: Install Android SDK
+        if: steps.scope.outputs.required == 'true'
         run: sdkmanager "platforms;android-37.0" "build-tools;35.0.0" "ndk;30.0.16248370" "cmake;4.1.2"
       - uses: gradle/actions/setup-gradle@v4
+        if: steps.scope.outputs.required == 'true'
       - name: Test native source contract and legal assets
+        if: steps.scope.outputs.required == 'true'
         run: python3 -m unittest discover -s scripts/tests -v
       - name: Build debug APK and run unit tests
+        if: steps.scope.outputs.required == 'true'
         run: ./gradlew assembleDebug testDebugUnitTest assembleDebugAndroidTest lintDebug --no-daemon --stacktrace -Plei.officialRepositoriesFirst=true
       - name: Upload debug APK
+        if: steps.scope.outputs.required == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Upload test reports
-        if: always()
+        if: always() && steps.scope.outputs.required == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: unit-test-reports
           path: app/build/reports/tests/testDebugUnitTest/
       - name: Upload lint report
-        if: always()
+        if: always() && steps.scope.outputs.required == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: lint-report

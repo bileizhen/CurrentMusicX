@@ -508,8 +508,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             LocalMusicComposerBottomInset provides composerBottom) {
                         Box(Modifier.fillMaxSize().nestedScroll(dockScroll)
                             .then(if (searchPresented) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
-                        RootTabTransition(selected, tabsState, onSelected = ::selectTab,
-                            fade = settings.tabAnimation == io.github.currencortex.music.data.settings.RootTabAnimation.FADE) { tab ->
+                        RootTabTransition(selected, tabsState, onSelected = ::selectTab) { tab ->
                             // Each main page owns its floating header and status inset. The alternate library keeps its own layout.
                             Box(Modifier.fillMaxSize().then(if (tab == HOME_TAB && navidromeAccount.configured && navidromeAccount.home)
                                 Modifier.statusBarsPadding() else Modifier)) {
