@@ -105,7 +105,15 @@ class EmbyTest {
         var player: ExoPlayer? = null
         try {
             container.ready.await(); container.emby.connect(server!!, user, password)
-            assertTrue(container.emby.browse("albums").entries.isNotEmpty())
+            val albums = container.emby.browse("albums").entries
+            assertTrue(albums.isNotEmpty())
+            val albumCover = albums.first().cover
+            assertTrue("The actual album artwork must resolve, including inherited covers", albumCover.isNotBlank())
+            withContext(Dispatchers.IO) {
+                container.navidromeMedia.newCall(Request.Builder().url(albumCover).build()).execute().use {
+                    assertTrue(it.isSuccessful); assertTrue(it.body!!.bytes().size > 100)
+                }
+            }
             assertTrue(container.emby.browse("artists").entries.isNotEmpty())
             container.emby.browse("playlists")
             val result = container.emby.browse("search", query = args.getString("emby_query") ?: "晴天")
