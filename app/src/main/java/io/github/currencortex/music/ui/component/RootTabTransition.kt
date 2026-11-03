@@ -27,6 +27,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.rememberLifecycleOwner
 import kotlinx.coroutines.flow.first
@@ -114,11 +115,23 @@ val LocalRootTabSwipe = compositionLocalOf<Modifier> { Modifier }
             }
         }
     }
+    val sceneLifecycle = LocalLifecycleOwner.current.lifecycle
+    var cachedNeighbors by remember { mutableIntStateOf(0) }
+    LaunchedEffect(sceneLifecycle) {
+        sceneLifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            // Returning to the root should first measure the visible tab. Keep the other
+            // tabs warm for subsequent swipes once the containing scene is stationary.
+            while (cachedNeighbors < 3) {
+                withFrameNanos { }
+                cachedNeighbors++
+            }
+        }
+    }
     HorizontalPager(pager, modifier = Modifier.fillMaxSize().testTag("root_tab_transition")
         .onGloballyPositioned { viewport = it },
         // Four fixed root pages fit in a bounded cache. Retaining them avoids composing and
         // discarding the nested Discover pager in the middle of every Settings -> Me slide.
-        beyondViewportPageCount = 3, key = { it },
+        beyondViewportPageCount = cachedNeighbors, key = { it },
         userScrollEnabled = false, flingBehavior = fling) { tab ->
         states.SaveableStateProvider(tab) {
             var page by remember { mutableStateOf<LayoutCoordinates?>(null) }

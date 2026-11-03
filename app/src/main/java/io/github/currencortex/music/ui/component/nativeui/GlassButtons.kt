@@ -44,8 +44,16 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.blur.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-@Composable fun rememberGlassBackdrop() = if (Build.VERSION.SDK_INT >= 33 && LocalView.current.isHardwareAccelerated &&
-    isRuntimeShaderSupported()) rememberLayerBackdrop() else null
+@Composable fun rememberGlassBackdrop(): LayerBackdrop? {
+    if (Build.VERSION.SDK_INT < 33 || !LocalView.current.isHardwareAccelerated || !isRuntimeShaderSupported()) return null
+    val source = rememberLayerBackdrop()
+    val scene = LocalPageGlassScene.current
+    if (scene != null) DisposableEffect(scene, source) {
+        scene.sources.add(source)
+        onDispose { scene.sources.remove(source) }
+    }
+    return source
+}
 
 /** CommonPopupBox for a setting's value. The row can call open too; only the
  * selected anchor owns the captured glyph and the carried opening pointer. */
@@ -95,59 +103,69 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 /** Circular toolbar control. The opening press is carried into its popup without lifting a finger. */
 @Composable fun GlassIconButton(onClick: () -> Unit, description: String, modifier: Modifier = Modifier,
     backdrop: Backdrop? = LocalGlassBackdrop.current, size: Dp = 44.dp, enabled: Boolean = true, opensMenu: Boolean = false,
-    onBoundsChanged: (Rect) -> Unit = {}, surface: Boolean = true, content: @Composable () -> Unit) {
+    onBoundsChanged: ((Rect) -> Unit)? = null, surface: Boolean = true, content: @Composable () -> Unit) {
     val press = rememberElasticPressState()
-    val trigger = LocalGlassMenuTrigger.current.takeIf { opensMenu }
-    var windowOrigin by remember { mutableStateOf(Offset.Zero) }
-    val sourceLayer = rememberGraphicsLayer()
-    val click by rememberUpdatedState(onClick)
-    val currentEnabled by rememberUpdatedState(enabled)
-    val pointer = if (trigger == null) Modifier else Modifier.pointerInput(trigger) {
-        awaitEachGesture {
-            val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-            if (!currentEnabled || down.isConsumed) return@awaitEachGesture
-            down.consume()
-            val startedOpen = trigger.open
-            trigger.layer = sourceLayer
-            click()
-            var moved = false
-            var cancelled = false
-            try {
-                do {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    val change = event.changes.firstOrNull { it.id == down.id }
-                    val released = change?.changedToUp() == true
-                    if (change == null || event.changes.count { it.pressed } > 1 || change.isConsumed) cancelled = true
-                    if (change != null) {
-                        if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
-                        if (moved && !startedOpen && !cancelled) trigger.move?.invoke(change.position + windowOrigin)
-                        event.changes.forEach { it.consume() }
-                        if (!change.pressed) {
-                            if (!startedOpen && moved && !cancelled && released) trigger.release?.invoke(change.position + windowOrigin)
-                            else trigger.cancel?.invoke()
-                            break
-                        }
-                    } else break
-                } while (!cancelled)
-            } finally { trigger.cancel?.invoke() }
+    val trigger = if (opensMenu) LocalGlassMenuTrigger.current else null
+    val sourceLayer = if (trigger != null) rememberGraphicsLayer() else null
+    val anchor = if (trigger == null) {
+        if (onBoundsChanged == null) Modifier else Modifier.onGloballyPositioned { onBoundsChanged(it.boundsInWindow()) }
+    } else {
+        var windowOrigin by remember { mutableStateOf(Offset.Zero) }
+        val click by rememberUpdatedState(onClick)
+        val currentEnabled by rememberUpdatedState(enabled)
+        Modifier.pointerInput(trigger) {
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                if (!currentEnabled || down.isConsumed) return@awaitEachGesture
+                down.consume()
+                val startedOpen = trigger.open
+                trigger.layer = sourceLayer
+                click()
+                var moved = false
+                var cancelled = false
+                try {
+                    do {
+                        val event = awaitPointerEvent(PointerEventPass.Initial)
+                        val change = event.changes.firstOrNull { it.id == down.id }
+                        val released = change?.changedToUp() == true
+                        if (change == null || event.changes.count { it.pressed } > 1 || change.isConsumed) cancelled = true
+                        if (change != null) {
+                            if ((change.position - down.position).getDistance() > viewConfiguration.touchSlop) moved = true
+                            if (moved && !startedOpen && !cancelled) trigger.move?.invoke(change.position + windowOrigin)
+                            event.changes.forEach { it.consume() }
+                            if (!change.pressed) {
+                                if (!startedOpen && moved && !cancelled && released) trigger.release?.invoke(change.position + windowOrigin)
+                                else trigger.cancel?.invoke()
+                                break
+                            }
+                        } else break
+                    } while (!cancelled)
+                } finally { trigger.cancel?.invoke() }
+            }
+        }.onGloballyPositioned {
+            val bounds = it.boundsInWindow()
+            windowOrigin = bounds.topLeft
+            onBoundsChanged?.invoke(bounds)
         }
     }
-    ElasticPress(modifier.size(size).then(pointer).onGloballyPositioned {
-        val bounds = it.boundsInWindow(); windowOrigin = bounds.topLeft; onBoundsChanged(bounds)
-    }.semantics { contentDescription = description }
+    ElasticPress(modifier.size(size).then(anchor).semantics { contentDescription = description }
         .clickable(enabled=enabled,role=Role.Button,interactionSource=remember{MutableInteractionSource()},indication=null,onClick={
             if (trigger != null) trigger.layer = sourceLayer
             onClick()
         }), enabled, press) {
-        Box(Modifier.size(size).graphicsLayer { alpha = if(trigger?.hidden == true && trigger.layer === sourceLayer) 0f else 1f }
+        val visibility = if (trigger == null) Modifier else Modifier.graphicsLayer {
+            alpha = if (trigger.hidden && trigger.layer === sourceLayer) 0f else 1f
+        }
+        Box(Modifier.size(size).then(visibility)
             .then(if (surface) Modifier.glassSurface(backdrop, CircleShape, glow={press.amount}) else Modifier)
             .drawBehind { if (press.amount > 0f) drawCircle(Color.White.copy(alpha = .06f * press.amount.coerceIn(0f, 1f))) }
             , contentAlignment = Alignment.Center) {
-            Box(Modifier.drawWithContent {
+            val capture = if (sourceLayer == null) Modifier else Modifier.drawWithContent {
                 sourceLayer.record { this@drawWithContent.drawContent() }
                 sourceLayer.alpha = 1f
                 drawLayer(sourceLayer)
-            }) { content() }
+            }
+            Box(capture) { content() }
         }
     }
 }
