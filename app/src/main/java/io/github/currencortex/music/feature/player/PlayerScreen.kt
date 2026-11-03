@@ -160,9 +160,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 listOfNotNull(lyricsCoordinates, previewCoordinates)
             } else Modifier)) {
         val widePlayer = maxWidth > maxHeight
-        val immersiveCover = !widePlayer && appearance.playerCoverStyle == io.github.currencortex.music.data.settings.PlayerCoverStyle.IMMERSIVE &&
+        val immersiveCover = appearance.playerCoverStyle == io.github.currencortex.music.data.settings.PlayerCoverStyle.IMMERSIVE &&
             !(roaming.active && roaming.choice.code == "PUZZLE_MODE_RCMD")
-        SideEffect { pagerArtwork.immersive = immersiveCover; pagerArtwork.updateBounds() }
+        SideEffect { pagerArtwork.immersive = immersiveCover && !widePlayer; pagerArtwork.updateBounds() }
         PlayerSystemBars(immersive = widePlayer)
         val density = LocalDensity.current
         val layoutDirection = LocalLayoutDirection.current
@@ -234,9 +234,12 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         CompositionLocalProvider(LocalIndication provides indication) {
         CompositionLocalProvider(LocalPlayerPagerArtwork provides pagerArtwork) {
         Box(Modifier.fillMaxSize().onGloballyPositioned { pagerArtwork.root = it; pagerArtwork.updateBounds() }) {
-        if (immersiveCover) PlayerPagerArtwork(pagerArtwork, queue.current, drawText = false)
+        if (immersiveCover && !widePlayer) PlayerPagerArtwork(pagerArtwork, queue.current, drawText = false)
         Box(Modifier.fillMaxSize().graphicsLayer { translationY = -size.height * queueMotion.progress }
             .onGloballyPositioned { pagerArtwork.mainPage = it; pagerArtwork.updateBounds() }) {
+        if (widePlayer && immersiveCover) PlayerImmersiveCover(queue.current?.cover.orEmpty(),
+            Modifier.fillMaxSize().testTag("player_wide_immersive_cover"), bounds = { null }, radius = { 0f },
+            immersion = { 1f }, alpha = { playerSheetContentAlpha(sheetProgress()) }, wideViewport = true)
         Column(Modifier.fillMaxSize()
             .then(if (overlay == PlayerOverlay.QUEUE || queueGesture) Modifier.semantics { hideFromAccessibility() } else Modifier)
             .then(if (widePlayer) Modifier.padding(horizontal = wideSafeInset, vertical = wideVerticalInset)
@@ -252,7 +255,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     Box(Modifier.fillMaxSize().padding(vertical = 12.dp), contentAlignment = Alignment.Center) {
                         Row(Modifier.size(stageWidth, stageHeight).testTag("player_wide_stage"),
                             horizontalArrangement = Arrangement.spacedBy(40.dp), verticalAlignment = Alignment.CenterVertically) {
-                            WideCoverContent(vm, Modifier.weight(1f).fillMaxHeight())
+                            WideCoverContent(vm, Modifier.weight(1f).fillMaxHeight(), immersiveCover)
                             HorizontalPager(pager, Modifier.weight(1f).fillMaxHeight().testTag("player_wide_pager")
                                 .semantics { this[PlayerPagePosition] = pager.currentPage + pager.currentPageOffsetFraction },
                                 beyondViewportPageCount = 1,
@@ -479,7 +482,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 }
 
 /** Artwork stays at the center of its pane while controls and lyrics slide beside it. */
-@Composable private fun WideCoverContent(vm: PlayerViewModel, modifier: Modifier) {
+@Composable private fun WideCoverContent(vm: PlayerViewModel, modifier: Modifier, immersive: Boolean) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     val roaming by vm.container.personalRoaming.state.collectAsStateWithLifecycle()
     BoxWithConstraints(modifier.fillMaxWidth().testTag("player_wide_cover_content")) {
@@ -490,7 +493,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.fillMaxSize().testTag("player_cover")
                     .graphicsLayer { alpha = 0f })
                 io.github.currencortex.music.feature.roaming.RoamingCoverPuzzle(queue.current?.cover.orEmpty(), queue.current?.id, showCaption = false)
-            } else PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"))
+            } else if (!immersive) PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"))
         }
     }
 }

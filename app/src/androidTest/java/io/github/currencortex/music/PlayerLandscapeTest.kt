@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.*
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
@@ -30,6 +30,7 @@ class PlayerLandscapeTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private lateinit var container: AppContainer
     private lateinit var server: MockWebServer
+    private var coverFixture: java.io.File? = null
 
     @Before fun prepare() = runBlocking {
         compose.runOnUiThread { compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE }
@@ -53,15 +54,21 @@ class PlayerLandscapeTest {
         }
         val base = server.url("/cm/").toString()
         container.musicSettings.setServer(base); container.accountRepository.server = base
+        container.musicSettings.setLyricsSource(io.github.currencortex.music.data.settings.LyricsSource.CURRENT_MUSIC)
         container.accountRepository.save("isolated-landscape-token", UserDto(7, nickname = "Landscape fixture"))
         container.updateSettings.setAutoCheck(false)
+        container.desktopLyrics.markRecommendationSeen()
         val song = Song(55, "Landscape title", artists = "Landscape artist", durationMs = 180000)
+        container.songLyrics.saveImported(song, io.github.currencortex.music.feature.lyrics.data.SavedLyrics(
+            io.github.currencortex.music.feature.lyrics.parser.LyricsParser.lrc("[00:00.00]Landscape lyric fixture\n[00:30.00]Second fixture"),
+            io.github.currencortex.music.feature.lyrics.data.LyricsOrigin("landscape.lrc", "imported")))
         container.playerController.queue.replace(listOf(song), 0)
         container.playerController.state.value = PlayerState(song = song, durationMs = 180000)
     }
     @After fun finish() {
         if (::container.isInitialized) container.close()
         if (::server.isInitialized) server.shutdown()
+        coverFixture?.delete()
         compose.runOnUiThread { compose.activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     }
 
@@ -140,7 +147,7 @@ class PlayerLandscapeTest {
                 io.github.currencortex.music.feature.player.LocalPlayerMotionDiagnostics provides true) { CurrentMusicApp(container) } }
         compose.waitUntil(10000) { compose.onAllNodesWithTag("mini_cover").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("mini_cover").performClick()
-        compose.waitUntil(10000) { compose.onAllNodesWithTag("lyrics_list").fetchSemanticsNodes().isNotEmpty() }
+        waitForLyrics()
         compose.onNodeWithTag("player_cover").assertIsDisplayed()
         compose.onNodeWithTag("lyrics_panel").assertIsDisplayed()
         compose.onNodeWithTag("lyrics_options").assertIsDisplayed()
@@ -200,6 +207,58 @@ class PlayerLandscapeTest {
         compose.waitUntil(5000) { statusBarVisible() }
         assertEquals(55L, container.playerController.queue.state.value.current?.id)
         assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun landscapeHonorsImmersiveCoverOnBothPagerPages() {
+        runBlocking { container.settings.edit { it.copy(playerCoverStyle =
+            io.github.currencortex.music.data.settings.PlayerCoverStyle.IMMERSIVE) } }
+        val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        val file = java.io.File(context.cacheDir, "wide-immersive-${UUID.randomUUID()}.png")
+        coverFixture = file
+        android.graphics.Bitmap.createBitmap(100, 100, android.graphics.Bitmap.Config.ARGB_8888).apply {
+            eraseColor(0xFFFF8000.toInt())
+            file.outputStream().use { compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+            recycle()
+        }
+        val song = container.playerController.queue.state.value.current!!.copy(cover = file.toURI().toString())
+        container.playerController.queue.replace(listOf(song), 0)
+        container.playerController.state.value = container.playerController.state.value.copy(song = song)
+        compose.setContent { CurrentMusicApp(container) }
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("mini_cover").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("mini_cover").performClick()
+        waitForLyrics()
+        val art = compose.onNodeWithTag("player_wide_immersive_cover")
+        art.assertIsDisplayed()
+        compose.onNodeWithTag("player_cover").assertDoesNotExist()
+        val bounds = art.fetchSemanticsNode().boundsInRoot
+        val viewport = compose.onNodeWithTag("player_screen").fetchSemanticsNode().boundsInRoot
+        assertEquals(viewport.width, bounds.width, 2f)
+        assertEquals(viewport.height, bounds.height, 2f)
+        compose.waitUntil(5000) {
+            val bitmap = art.captureToImage().asAndroidBitmap()
+            val pixel = bitmap.getPixel(bitmap.width / 5, bitmap.height / 3)
+            android.graphics.Color.red(pixel) > android.graphics.Color.green(pixel) + 30 &&
+                android.graphics.Color.green(pixel) > android.graphics.Color.blue(pixel) + 20
+        }
+        compose.onNodeWithTag("player_screen").captureToImage().asAndroidBitmap().let { bitmap ->
+            java.io.File(context.externalCacheDir, "player-landscape-cover-style.png").outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
+        compose.onNodeWithTag("player_wide_pager").performTouchInput { swipeRight() }
+        compose.onNodeWithTag("player_transport").assertIsDisplayed()
+        assertEquals(bounds, art.fetchSemanticsNode().boundsInRoot)
+        compose.runOnUiThread { compose.activity.onBackPressedDispatcher.onBackPressed() }
+        compose.onNodeWithTag("mini_cover").assertIsDisplayed()
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+    private fun waitForLyrics() {
+        try { compose.waitUntil(10000) { compose.onAllNodesWithTag("lyrics_list").fetchSemanticsNodes().isNotEmpty() } }
+        catch (e: Throwable) {
+            compose.onRoot().printToLog("LandscapeFixture")
+            throw e
+        }
     }
 
     private fun statusBarVisible() = androidx.core.view.ViewCompat.getRootWindowInsets(compose.activity.window.decorView)
