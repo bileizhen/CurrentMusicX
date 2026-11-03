@@ -145,11 +145,14 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val authRepository = AuthRepository(apiClient, accountRepository, "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}",
         persistServer = musicSettings::setServer, persistAccount = musicSettings::setAccount)
     val navidrome = io.github.currencortex.music.data.navidrome.NavidromeRepository(SecureTokenStore(context, ".navidrome$storageSuffix"), appScope)
-    val navidromeMedia = okhttp3.OkHttpClient.Builder().addInterceptor(navidrome.client.mediaInterceptor()).build()
-    val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome, lx = lxSources)
+    val emby = io.github.currencortex.music.data.emby.EmbyRepository(SecureTokenStore(context, ".emby$storageSuffix"), appScope)
+    val navidromeMedia = okhttp3.OkHttpClient.Builder().addInterceptor(navidrome.client.mediaInterceptor()).addInterceptor(emby.client.mediaInterceptor()).build()
+    val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome, lx = lxSources, emby = emby)
     fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality): AudioRequest {
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
             return AudioRequest(song.id, quality, 0L, navidrome.session(), "navidrome:" + navidrome.state.value.identity, song)
+        if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY)
+            return AudioRequest(song.id, quality, 0L, emby.session(), "emby:" + emby.state.value.identity, song)
         val access = audioSettings.access()
         if (access.provider == AudioProvider.NETEASE) {
             // Snapshot UID and revision together so a concurrent account switch cannot mix cache owners.
@@ -193,6 +196,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         currentProvider = { audioSettings.access().identity },
         validateRequest = { request -> request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME }?.let {
             navidrome.accepts(it) && request.session == navidrome.session() && request.providerIdentity == "navidrome:" + navidrome.state.value.identity
+        } ?: request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY }?.let {
+            emby.accepts(it) && request.session == emby.session() && request.providerIdentity == "emby:" + emby.state.value.identity
         } },
         loadTrack = { request -> request.song?.let { musicRepository.source(it, request.quality, request.session) }
             ?: musicRepository.source(request.songId, request.quality, request.session) }, load = musicRepository::source)
@@ -461,6 +466,16 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 }
             }
         }
+        playerScope.launch {
+            var previous = emby.state.value.revision
+            emby.state.collect { account ->
+                if (previous != account.revision) {
+                    audioSources.invalidate()
+                    if (playbackQueue.state.value.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY) playerController.pause()
+                    previous = account.revision
+                }
+            }
+        }
         if (nativeNetease != null) appScope.launch {
             sessionRestored.await()
             neteaseSessions.ready.await()
@@ -510,6 +525,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 val initial = musicSettings.snapshot()
                 audioSettings.ready.await()
                 navidrome.ready.await()
+                emby.ready.await()
                 if (nativeNetease != null) neteaseSessions.ready.await()
                 accountRepository.server = initial.server
                 serverRouter.configure(initial.serverMode, initial.server)
