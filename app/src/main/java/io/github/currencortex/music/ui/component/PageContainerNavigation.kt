@@ -19,6 +19,9 @@ import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.scene.SceneStrategy
 import androidx.navigation3.scene.SceneStrategyScope
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
+import io.github.currencortex.music.ui.component.nativeui.LocalPageGlassScene
+import io.github.currencortex.music.ui.component.nativeui.PageGlassScene
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Scoped to settings pages, so unrelated navigation keeps its existing transition. */
@@ -95,24 +98,30 @@ internal class PageNavigationSource(val modifier: Modifier, val open: (() -> Uni
  */
 internal class PageContainerSceneStrategy(private val navigation:PageContainerNavigation,
     private val sourceRoutes:Set<String>):SceneStrategy<String> {
+    val blur = PageSceneBlur()
+
     override fun SceneStrategyScope<String>.calculateScene(entries:List<NavEntry<String>>):Scene<String> {
         val base=entries.indexOfLast {it.contentKey.toString() !in navigation.origins}.coerceAtLeast(0)
-        return PageContainerScene(entries[base].contentKey,entries.drop(base),entries.dropLast(1),navigation,sourceRoutes)
+        return PageContainerScene(entries[base].contentKey,entries.drop(base),entries.dropLast(1),navigation,sourceRoutes,base,blur)
     }
 }
 
 private data class PageContainerScene(override val key:Any,override val entries:List<NavEntry<String>>,
     override val previousEntries:List<NavEntry<String>>,val navigation:PageContainerNavigation,
-    val sourceRoutes:Set<String>):Scene<String> {
+    val sourceRoutes:Set<String>, val depth: Int, val blur: PageSceneBlur):Scene<String> {
     override val metadata get()=entries.first().metadata
     override val content:@Composable ()->Unit = {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().then(blur.layer(depth))) {
             entries.forEachIndexed {index,entry->key(entry.contentKey) {
                 val route=entry.contentKey.toString()
                 val capture=if(route in sourceRoutes||route in navigation.origins)navigation::from else null
                 @Composable fun page() {
-                    Box(Modifier.fillMaxSize().then(if(index<entries.lastIndex)Modifier.clearAndSetSemantics{}else Modifier)) {
-                        CompositionLocalProvider(LocalPageContainerSource provides capture) {entry.Content()}
+                    val motion = LocalNavAnimatedContentScope.current.transition
+                    val glass = remember(motion) { PageGlassScene(motion) }
+                    Box(Modifier.fillMaxSize().onGloballyPositioned { glass.origin = it }
+                        .then(if(index<entries.lastIndex)Modifier.clearAndSetSemantics{}else Modifier)) {
+                        CompositionLocalProvider(LocalPageContainerSource provides capture,
+                            LocalPageGlassScene provides glass) {entry.Content()}
                     }
                 }
                 if(index==0)page()

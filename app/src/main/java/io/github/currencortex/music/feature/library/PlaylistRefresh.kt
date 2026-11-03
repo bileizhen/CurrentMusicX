@@ -16,6 +16,7 @@ internal fun playlistSongKeys(songs: List<Song>): List<String> {
 /** Keep unchanged rows (and an unchanged list) while accepting server additions, edits and removals. */
 internal fun LibraryDetailState.mergeFetched(fetched: LibraryDetailState): LibraryDetailState {
     if (songs == fetched.songs) return fetched.copy(songs = songs, playlist = fetched.playlist?.copy(songs = songs))
+    if (songs.isEmpty()) return fetched.copy(playlist = fetched.playlist?.copy(songs = fetched.songs))
     val old = playlistSongKeys(songs).zip(songs).toMap()
     val merged = playlistSongKeys(fetched.songs).zip(fetched.songs).map { (key, song) ->
         old[key]?.takeIf { it == song } ?: song
