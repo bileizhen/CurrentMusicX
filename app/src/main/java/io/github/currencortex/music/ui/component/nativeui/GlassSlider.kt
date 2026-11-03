@@ -50,7 +50,7 @@ val GlassSliderGeometry=SemanticsPropertyKey<GlassSliderFrame>("GlassSliderGeome
     onValueChangeFinished:(()->Unit)?=null,reverseDirection:Boolean=false,
     showKeyPoints:Boolean=false,keyPoints:List<Float>?=null,magnetThreshold:Float=.02f,
     hapticEffect:SliderDefaults.SliderHapticEffect=SliderDefaults.DefaultHapticEffect,
-    backdrop:Backdrop?=LocalGlassBackdrop.current) {
+    backdrop:Backdrop?=LocalGlassBackdrop.current,onValueChangeCancelled:(()->Unit)?=null) {
     require(valueRange.start.isFinite()&&valueRange.endInclusive.isFinite()&&valueRange.start<valueRange.endInclusive)
     require(steps>=0)
     val colors=MiuixTheme.colorScheme
@@ -64,6 +64,7 @@ val GlassSliderGeometry=SemanticsPropertyKey<GlassSliderFrame>("GlassSliderGeome
     val coerced=if(value.isFinite())value.coerceIn(valueRange)else valueRange.start
     val change by rememberUpdatedState(onValueChange)
     val finish by rememberUpdatedState(onValueChangeFinished)
+    val cancel by rememberUpdatedState(onValueChangeCancelled)
     val current by rememberUpdatedState(coerced)
     var width by remember {mutableFloatStateOf(0f)}
     var held by remember {mutableStateOf(false)}
@@ -166,6 +167,7 @@ val GlassSliderGeometry=SemanticsPropertyKey<GlassSliderFrame>("GlassSliderGeome
                     }
                 }finally {
                     if(!committed&&lastValue!=start)change(start)
+                    if(!committed)cancel?.invoke()
                     preview=null;held=false;press.release()
                 }
             }

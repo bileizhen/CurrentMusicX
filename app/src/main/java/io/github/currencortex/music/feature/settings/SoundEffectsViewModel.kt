@@ -36,6 +36,22 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
     internal val originalPageApi by lazy { OriginalEffectsPageApi(container, this) }
     internal val originalPageAccount = container.neteaseSessions.state
     val preferences = container.soundEffectsSettings.state
+    val adaptive = container.adaptiveAudio.state
+    val adaptiveEffective = container.adaptiveAudio.effective
+    val adaptiveRuntime = container.adaptiveAudioRuntime
+    val audioOutput = container.audioOutput.state
+    val hapticsSupported get() = container.musicHapticsSupported
+    val hapticsAmplitudeControl get() = container.musicHapticsAmplitudeControl
+    fun editAdaptive(transform: (io.github.currencortex.music.data.settings.AdaptiveAudioSettings) -> io.github.currencortex.music.data.settings.AdaptiveAudioSettings) {
+        clearAdaptivePreview()
+        viewModelScope.launch { container.adaptiveAudio.edit(transform) }
+    }
+    fun previewAdaptive(transform: (io.github.currencortex.music.data.settings.AdaptiveAudioSettings) -> io.github.currencortex.music.data.settings.AdaptiveAudioSettings) =
+        container.adaptiveAudio.preview(transform)
+    fun clearAdaptivePreview() = container.adaptiveAudio.clearPreview()
+    fun commitAdaptive(transform: (io.github.currencortex.music.data.settings.AdaptiveAudioSettings) -> io.github.currencortex.music.data.settings.AdaptiveAudioSettings) {
+        viewModelScope.launch { container.adaptiveAudio.commitPreview(transform) }
+    }
     val tuning = container.smartTuning.state
     val manual = container.equalizerSettings.state
     val runtime = container.equalizer.state
@@ -454,6 +470,7 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
     override fun onCleared() {
+        clearAdaptivePreview()
         if (feedbackRequest?.isActive == true) clearFeedback()
         auditionController.close()
         detailRequest?.cancel()

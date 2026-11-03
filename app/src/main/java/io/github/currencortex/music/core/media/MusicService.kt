@@ -68,7 +68,9 @@ class MusicService : MediaSessionService() {
         deckVolumes[source] = gain
         source.volume = if (userMuted) 0f else gain * userVolume * transportGain
     }
+    private val musicHaptics by lazy { MusicHapticDriver(this) }
     private data class PlayerSlot(val meter: DockAudioLevel, val equalizer: PlaybackEqualizer, val formats: AudioFormatState,
+        val haptics: MusicHapticTimeline,
         var originalProcessed: NeteaseOriginalPreset? = null,
         var originalFailed: Pair<NeteaseOriginalPreset, String>? = null)
     private val playerSlots = mutableMapOf<ExoPlayer, PlayerSlot>()
@@ -99,6 +101,7 @@ class MusicService : MediaSessionService() {
     }
     private fun updateEffectDiagnostics() {
         val requested = buildList {
+            if (container.adaptiveAudio.state.value.enabled) add("动态音频处理系统")
             if (container.smartTuning.effective.value.enabled) add("Android EQ / 智能调音")
             if (container.originalProcessingPreset.value != null) add("网易云原版 PCM 音效")
             if (container.originalAiMasterEffects.state.value.requestedEnabled) add("MNN / AI 调音")
@@ -106,6 +109,7 @@ class MusicService : MediaSessionService() {
         }
         val plan = AudioEffectPipeline.plan(container.audioOutput.state.value.mode, requested)
         val applied = if (plan.bypass) emptyList() else buildList {
+            if (container.adaptiveAudioRuntime.value.processing) add("动态音频处理系统（PCM）")
             if (container.equalizer.state.value.active) add("Android EQ")
             if (playerSlots[player]?.originalProcessed != null) add("网易云原版 PCM 音效（已观察处理回调）")
         }
@@ -204,6 +208,34 @@ class MusicService : MediaSessionService() {
         scope.launch { container.audioDevices.devices.collect { applyOutputDevice() } }
         scope.launch { container.audioOutputRetry.collect { outputRouter.retry(); reconfigureOutput() } }
         scope.launch { container.equalizer.state.collect { updateEffectDiagnostics() } }
+        scope.launch { container.adaptiveAudioRuntime.collect { updateEffectDiagnostics() } }
+        scope.launch { container.adaptiveAudio.state.collect { updateEffectDiagnostics() } }
+        scope.launch {
+            var lastFrameAt = 0L
+            var lastDeck: ExoPlayer? = null
+            var lastPeriod: Any? = null
+            while (isActive) {
+                val options = container.adaptiveAudio.effective.value
+                val source = player
+                val timeline = source.currentTimeline
+                val period = if (!timeline.isEmpty && source.currentPeriodIndex in 0 until timeline.periodCount)
+                    timeline.getUidOfPeriod(source.currentPeriodIndex) else null
+                if (source !== lastDeck || period != lastPeriod) {
+                    musicHaptics.stop(); lastFrameAt = 0; lastDeck = source; lastPeriod = period
+                }
+                val allowed = options.enabled && options.haptics && !directOutput() && source.isPlaying &&
+                    !pauseFade.pausedIntent && source.volume > 0f &&
+                    container.playerController.state.value.mode != PlayerMode.CAST &&
+                    outputManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) > 0
+                if (allowed) {
+                    val frame = playerSlots[source]?.haptics?.poll(source.currentPosition * 1000, period)
+                    if (frame != null) {
+                        musicHaptics.play(frame, options, source.volume); lastFrameAt = SystemClock.elapsedRealtime()
+                    } else if (SystemClock.elapsedRealtime() - lastFrameAt > 100) musicHaptics.stop()
+                } else musicHaptics.stop()
+                delay(if (!options.enabled || !options.haptics) 500 else if (allowed) 20 else 80)
+            }
+        }
         scope.launch {
             var previous: io.github.currencortex.music.data.settings.AudioOutputSettings? = null
             container.audioOutput.state.collect { output ->
@@ -321,6 +353,7 @@ class MusicService : MediaSessionService() {
         fun primary() = created != null && ::transitions.isInitialized && created === player
         val meter = DockAudioLevel()
         val formats = AudioFormatState()
+        val hapticTimeline = MusicHapticTimeline()
         val secondaryEqualizer = PlaybackEqualizer().apply {
             val settings = container.smartTuning.effective.value
             configure(if (container.audioOutput.state.value.mode == io.github.currencortex.music.data.settings.AudioOutputMode.AUDIO_TRACK &&
@@ -348,7 +381,9 @@ class MusicService : MediaSessionService() {
             } }, outputSampleRate = { container.audioOutput.state.value.sampleRate },
             outputSettings = { outputRouter.effective(container.audioOutput.state.value) }, outputStatus = { if (primary()) reportOutput(it) },
             diagnostics = container.audioDiagnostics, primary = ::primary, router = outputRouter,
-            processingSettings = { container.audioOutput.state.value }, formatState = formats))
+            processingSettings = { container.audioOutput.state.value }, formatState = formats,
+            adaptiveSettings = { container.adaptiveAudio.effective.value }, hapticTimeline = hapticTimeline,
+            adaptiveReport = { state -> scope.launch { if (primary()) container.adaptiveAudioRuntime.value = state } }))
             .setLoadControl(outputBuffers.createLoadControl())
             .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory)).build().apply {
                 setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
@@ -357,15 +392,21 @@ class MusicService : MediaSessionService() {
                 setPreferredAudioDevice(outputManager.preferredOutput(container.audioOutput.state.value.deviceKey))
             }
         created = source
-        playerSlots[source] = PlayerSlot(meter, secondaryEqualizer, formats)
+        playerSlots[source] = PlayerSlot(meter, secondaryEqualizer, formats, hapticTimeline)
         deckVolume(source, 1f)
         source.addListener(object : Player.Listener {
             private fun primary() = ::transitions.isInitialized && source === player
+            override fun onPositionDiscontinuity(oldPosition: Player.PositionInfo, newPosition: Player.PositionInfo, reason: Int) {
+                if (!primary()) return
+                musicHaptics.stop()
+                if (reason == Player.DISCONTINUITY_REASON_SEEK) hapticTimeline.clear()
+            }
             override fun onAudioSessionIdChanged(audioSessionId: Int) {
                 if (primary()) container.equalizer.attach(audioSessionId) else secondaryEqualizer.attach(audioSessionId)
             }
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (!primary()) return
+                if (!isPlaying) musicHaptics.stop()
                 container.audioDiagnostics.update { it.copy(playing = isPlaying) }
                 updateEffectDiagnostics()
                 if (!isPlaying) transitions.pauseCompanion()
@@ -574,6 +615,8 @@ class MusicService : MediaSessionService() {
     private fun prepareSong(play: Boolean, position: Long, newPlayback: Boolean = false) {
         if (container.playerController.state.value.mode != PlayerMode.LOCAL) return
         loading?.cancel()
+        musicHaptics.close()
+        container.adaptiveAudioRuntime.value = AdaptiveAudioRuntime()
         transitions.cancel()
         player.pause()
         resetPauseFade()
@@ -649,6 +692,8 @@ class MusicService : MediaSessionService() {
         if (container.playerController.state.value.mode == PlayerMode.LOCAL && !player.playWhenReady) { container.playerController.disconnect(); stopSelf() }
     }
     override fun onDestroy() {
+        musicHaptics.close()
+        container.adaptiveAudioRuntime.value = AdaptiveAudioRuntime()
         desktopLyrics?.close(); desktopLyrics = null
         listening.update(SystemClock.elapsedRealtime(), false)
         flushListening(); trackedSong = null; videoView?.player = null; videoView = null
