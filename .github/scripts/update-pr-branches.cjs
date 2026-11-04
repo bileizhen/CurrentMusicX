@@ -27,7 +27,7 @@ async function run({github, context, core}) {
     if (reason) { core.info(`#${item.number}: skipped (${reason})`); continue; }
     try {
       const comparison = (await github.rest.repos.compareCommitsWithBasehead({
-        ...repo, basehead: `${pr.base.sha}...${pr.head.sha}`, per_page: 1,
+        ...repo, basehead: `${pr.base.ref}...${pr.head.sha}`, per_page: 1,
       })).data;
       if (!(comparison.behind_by > 0)) {
         core.info(`#${item.number}: already includes main`);
@@ -39,7 +39,7 @@ async function run({github, context, core}) {
     } catch (error) {
       // Conflicts, branch protection, revoked fork consent and concurrent pushes require human follow-up.
       if (![403, 404, 409, 422].includes(error.status)) throw error;
-      core.warning(`#${item.number}: update not performed (HTTP ${error.status}); inspect branch permissions/conflicts`);
+      core.warning(`#${item.number}: update not performed (HTTP ${error.status}): ${error.message}`);
     }
   }
 }
