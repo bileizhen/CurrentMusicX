@@ -78,7 +78,8 @@ class RootTabFramePacingTest {
                 val auth: AuthViewModel = viewModel(factory = viewModelFactory { AuthViewModel(container) })
                 val discover: DiscoverViewModel = viewModel(factory = viewModelFactory { DiscoverViewModel(container) })
                 LeiTheme(AppearanceSettings()) {
-                    RootTabTransition(selected.intValue, rememberSaveableStateHolder(), { selected.intValue = it }) { tab ->
+                    RootTabTransition(selected.intValue, rememberSaveableStateHolder(), { selected.intValue = it },
+                        elastic = args.getString("rootElastic") != "false") { tab ->
                         DisposableEffect(tab) {
                             compositions += "$phase,enter,$tab"
                             onDispose { compositions += "$phase,exit,$tab" }
