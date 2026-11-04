@@ -23,8 +23,6 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
@@ -92,13 +90,14 @@ private fun curve(start: Offset, control: Offset, end: Offset, progress: Float):
     val latestReady by rememberUpdatedState(ready)
     val latestCanLand by rememberUpdatedState(canLandOnHome)
     val latestWindowReady by rememberUpdatedState(windowReady)
-    val finish by rememberUpdatedState(onFinished)
+    val finish = rememberLaunchCompletion(onFinished)
     var destination by remember { mutableStateOf<Rect?>(null) }
     var departing by remember { mutableStateOf(false) }
     var departureAvatar by remember { mutableStateOf<AvatarFlightOrigin?>(null) }
     var origin by remember { mutableStateOf(Offset.Zero) }
     var reducedMotion by remember { mutableStateOf(false) }
-    LaunchedEffect(state) {
+    LaunchedEffect(state, finish.finished) {
+        if (finish.finished) return@LaunchedEffect
         val reduced = (coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) == 0f
         reducedMotion = reduced
         // Reserve the landing animation inside the five-second budget. Slow home requests
@@ -139,7 +138,7 @@ private fun curve(start: Offset, control: Offset, end: Offset, progress: Float):
     BoxWithConstraints(Modifier.fillMaxSize().testTag("launch_animation")
         .clearAndSetSemantics { contentDescription = "Current Music 正在打开" }
         .onGloballyPositioned { origin = it.boundsInRoot().topLeft }
-        .pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } } }) {
+        .skipLaunchOnDoubleTap(finish)) {
         BgEffectBackground(dynamicBackground = effectBackground && !reducedMotion,
             modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f - smooth(state.flight.value) }
                 .background(colors.surface),
