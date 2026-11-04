@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.offset
 import kotlin.math.ceil
 import kotlin.math.max
+import io.github.currencortex.music.ui.component.rootMotionItems
 
 internal val LocalElasticRowPaint = staticCompositionLocalOf<MutableMap<ElasticPressState, Unit>?> { null }
 
@@ -67,6 +68,6 @@ private class ElasticRowPadding(presses: Map<ElasticPressState, Unit>, private v
             layout((child.width - sidePx * 2).coerceAtLeast(0), (child.height - overflow).coerceAtLeast(0)) {
                 child.place(-sidePx, -topPx)
             }
-        }, contentPadding = padding, horizontalArrangement = horizontalArrangement, content = content)
+        }, contentPadding = padding, horizontalArrangement = horizontalArrangement) { rootMotionItems(content = content) }
     }
 }

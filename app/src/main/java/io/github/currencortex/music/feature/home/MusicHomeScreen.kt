@@ -118,6 +118,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
         LazyColumn(Modifier.fillMaxSize().testTag("music_home"), state = listState,
             contentPadding = PaddingValues(start = 16.dp, top = topInset + 8.dp, end = 16.dp, bottom = 24.dp + bottomInset),
             verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        rootMotionItems(skipKeys = setOf("for-you", "playlists")) {
             item(key = "search") { MusicSearchBar(searchQuery, onSearchSubmit,
                 Modifier.testTag("open_home_search").onGloballyPositioned { onSearchBounds(it.boundsInRoot()) }
                     .graphicsLayer { alpha = if (hideSearch) 0f else 1f }, onActivate = onSearch, inputTag = "home_search_field") }
@@ -185,6 +186,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
                 Modifier.fillMaxWidth().testTag("refresh_home"), !home.loading) }
             account.error?.let { item { Text(it, fontSize = 13.sp) } }
         }
+    }
     }
     }
     }

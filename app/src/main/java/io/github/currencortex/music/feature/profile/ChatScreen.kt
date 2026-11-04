@@ -116,6 +116,7 @@ import java.util.Locale
                 .testTag("chat_messages"), state = list, reverseLayout = true,
                 contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = headerHeight + 16.dp, bottom = composerHeight + 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        rootMotionItems {
                 items(state.messages.asReversed(), key = { it.id }) { message ->
                     ChatMessageRow(message, mine = message.userId == account.account?.id, vm,
                         onProfile = { id -> keyboard?.hide(); navigate("user/profile/$id") },
@@ -135,6 +136,7 @@ import java.util.Locale
                     }
                 }
             }
+    }
         }
         CompositionLocalProvider(LocalGlassBackdrop provides controlsBackdrop) {
         if (!state.loading && state.loaded && state.messages.isEmpty()) ChatEmptyState(Modifier.align(Alignment.Center))
@@ -146,7 +148,7 @@ import java.util.Locale
             Modifier.align(Alignment.TopCenter).fillMaxWidth().height(headerHeight + 24.dp).testTag("chat_header_fade"))
         ChatEdgeFade(atTop = false,
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(composerHeight + 24.dp).testTag("chat_composer_fade"))
-        Column(Modifier.align(Alignment.TopCenter).fillMaxWidth().pointerInput(Unit) { detectTapGestures {} }.onSizeChanged {
+        Column(Modifier.align(Alignment.TopCenter).elasticRootComponent().fillMaxWidth().pointerInput(Unit) { detectTapGestures {} }.onSizeChanged {
             headerHeight = with(density) { it.height.toDp() }
         }) {
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp).testTag("chat_header"),
@@ -169,7 +171,7 @@ import java.util.Locale
                 MusicTextAction("重试", vm::retry, Modifier.testTag("chat_retry"))
             }
         }
-        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().pointerInput(Unit) { detectTapGestures {} }.onSizeChanged {
+        Column(Modifier.align(Alignment.BottomCenter).elasticRootComponent().fillMaxWidth().pointerInput(Unit) { detectTapGestures {} }.onSizeChanged {
             composerHeight = with(density) { it.height.toDp() }
         }) {
             state.actionError?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), fontSize = 12.sp,

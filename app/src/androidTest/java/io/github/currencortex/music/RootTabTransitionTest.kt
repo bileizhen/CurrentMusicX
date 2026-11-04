@@ -13,6 +13,7 @@ import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.Color as ComposeColor
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -25,6 +26,9 @@ import io.github.currencortex.music.ui.util.collectAsPageState
 import kotlinx.coroutines.flow.MutableStateFlow
 import io.github.currencortex.music.ui.component.RootTabTransition
 import io.github.currencortex.music.ui.component.LocalRootTabSwipe
+import io.github.currencortex.music.ui.component.RootElasticStrainKey
+import io.github.currencortex.music.ui.component.RootMotionItem
+import io.github.currencortex.music.ui.component.LocalRootTabPlacement
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -37,6 +41,7 @@ class RootTabTransitionTest {
         override val scaleFactor: Float get() = if (reduced) 0f else 1f
     })
     private lateinit var select: (Int) -> Unit
+    private var heroLanding: (() -> androidx.compose.ui.geometry.Rect?)? = null
     @Composable private fun Fixture() {
         var selected by rememberSaveable { mutableIntStateOf(0) }
         select = { selected = it }
@@ -49,6 +54,18 @@ class RootTabTransitionTest {
                         Box(Modifier.fillMaxWidth().height(80.dp).then(LocalRootTabSwipe.current)) {
                             BasicText("page$tab:$count", Modifier.padding(20.dp).clickable { count++ })
                         }
+                        Box(Modifier.align(androidx.compose.ui.Alignment.TopStart).padding(top = 160.dp)) {
+                            RootMotionItem {
+                                val placement = LocalRootTabPlacement.current
+                                Box(Modifier.size(64.dp, 32.dp).background(ComposeColor.Yellow)
+                                    .testTag("upper_$tab").clickable { count++ }.onGloballyPositioned { coordinates ->
+                                        if (tab == 1) heroLanding = { placement?.landingBounds(coordinates) }
+                                    })
+                            }
+                        }
+                        Box(Modifier.align(androidx.compose.ui.Alignment.BottomStart).padding(bottom = 160.dp)) {
+                            RootMotionItem { Box(Modifier.size(64.dp, 32.dp).background(ComposeColor.Yellow).testTag("lower_$tab")) }
+                        }
                     }
                 }
             }
@@ -60,6 +77,60 @@ class RootTabTransitionTest {
         return bitmap.getPixel(bitmap.width/2, bitmap.height/2)
     }
     private fun change(tab: Int) = compose.runOnUiThread { select(tab) }
+
+    private fun strain() = compose.onNodeWithTag("root_tab_transition").fetchSemanticsNode().config[RootElasticStrainKey]
+
+    @Test fun componentsTrailIndependentlyWithRigidShapesAndStraightPageEdges() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { Fixture() }
+        val dock = compose.onNodeWithTag("stationary_dock").fetchSemanticsNode().boundsInRoot
+        change(1)
+        compose.mainClock.advanceTimeBy(144)
+        assertTrue("Moving components should trail", strain() > .001f)
+        val upper = compose.onNodeWithTag("upper_1").fetchSemanticsNode().boundsInRoot
+        val lower = compose.onNodeWithTag("lower_1").fetchSemanticsNode().boundsInRoot
+        assertTrue("Lower components should trail independently", lower.left > upper.left + 2f)
+        assertEquals("Hero landing excludes both the pager and temporary component motion", 0f, heroLanding?.invoke()?.left ?: -1f, 1f)
+        val bitmap = compose.onNodeWithTag("root_tab_transition").captureToImage().asAndroidBitmap()
+        fun seam(y: Int) = (0 until bitmap.width).first { x ->
+            val color = bitmap.getPixel(x, y)
+            Color.red(color) > 200 && Color.blue(color) < 50
+        }
+        assertEquals("The page itself must not bend", seam(bitmap.height / 2), seam(bitmap.height - 2))
+        compose.onNodeWithTag("upper_1").performTouchInput { click() }
+        var rebounded = false
+        repeat(40) {
+            compose.mainClock.advanceTimeBy(16)
+            if (strain() < -.0001f) rebounded = true
+        }
+        assertTrue("The spring should return through a small opposite bend", rebounded)
+        compose.mainClock.advanceTimeBy(600)
+        assertEquals(0f, strain(), .0001f)
+        assertEquals(Color.RED, pixel())
+        compose.onNodeWithText("page1:1").assertExists()
+        val restingUpper = compose.onNodeWithTag("upper_1").fetchSemanticsNode().boundsInRoot
+        val restingLower = compose.onNodeWithTag("lower_1").fetchSemanticsNode().boundsInRoot
+        assertEquals(restingUpper.left, restingLower.left, .1f)
+        assertEquals("Components must not stretch", upper.width, restingUpper.width, .1f)
+        assertEquals(upper.height, restingUpper.height, .1f)
+        assertEquals(dock, compose.onNodeWithTag("stationary_dock").fetchSemanticsNode().boundsInRoot)
+    }
+
+    @Test fun elasticMotionReversesContinuouslyAndHandlesRtl() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
+                Fixture()
+            }
+        }
+        change(1); compose.mainClock.advanceTimeBy(112)
+        assertTrue("RTL must mirror the deformation", strain() < 0f)
+        change(0); compose.mainClock.advanceTimeBy(64)
+        assertTrue(strain().isFinite() && kotlin.math.abs(strain()) <= .12f)
+        compose.mainClock.advanceTimeBy(1200)
+        assertEquals(0f, strain(), .0001f)
+        assertEquals(Color.BLUE, pixel())
+    }
 
     @Test fun fadeChoiceCrossfadesOnlyTheEndpointsAndSwitchingStylesKeepsPageState() {
         fade = true
@@ -128,6 +199,7 @@ class RootTabTransitionTest {
         compose.onNodeWithText("page0:0").assertDoesNotExist()
         compose.onNodeWithText("page3:0").assertExists()
         assertEquals(Color.MAGENTA, pixel())
+        assertEquals(0f, strain(), 0f)
     }
 
     @Test fun longJumpPassesThroughIntermediatePagesWithoutTeleporting() {
