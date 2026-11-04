@@ -53,7 +53,7 @@ test('release preparation refuses existing release, failed CI and divergent hist
     for(const options of [{releases:[{tag_name:'v1.3.3'}]},{runs:[]},{ancestry:'diverged'},
       {runs:[{id:1,status:'completed',head_sha:'target',conclusion:'success',head_branch:'main',event:'push'},{id:2,conclusion:'failure',head_branch:'main',event:'push'}]},
       {jobs:[]},{artifacts:[]},{artifacts:[{name:'ci-unsigned',expired:true,size_in_bytes:123}]},
-      {runs:[{id:1,status:'completed',head_sha:'wrong',conclusion:'success',head_branch:'main',event:'push'}]}) {
+      {runs:[{id:1,status:'completed',head_sha:'wrong',conclusion:'success',head_branch:'main',event:'push'}]}]) {
       const client=fake(options); await assert.rejects(()=>prepare(client)); assert.equal(client.calls.length,0);
     }
   });
