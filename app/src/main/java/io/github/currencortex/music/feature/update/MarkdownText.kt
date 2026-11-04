@@ -69,7 +69,29 @@ private fun imageBlock(match: MatchResult): MarkdownBlock {
 internal fun markdownBlocks(markdown: String): List<MarkdownBlock> {
     val blocks = mutableListOf<MarkdownBlock>()
     var fence: String? = null
+    var inComment = false
     val code = mutableListOf<String>()
+    fun visibleLine(raw: String): String = buildString {
+        var index = 0
+        while (index < raw.length) {
+            when {
+                inComment -> {
+                    val end = raw.indexOf("-->", index)
+                    if (end < 0) break
+                    inComment = false
+                    index = end + 3
+                }
+                raw.startsWith("<!--", index) -> { inComment = true; index += 4 }
+                raw[index] == '`' -> {
+                    val ticks = raw.substring(index).takeWhile { it == '`' }
+                    val end = raw.indexOf(ticks, index + ticks.length)
+                    val next = if (end < 0) index + ticks.length else end + ticks.length
+                    append(raw.substring(index, next)); index = next
+                }
+                else -> append(raw[index++])
+            }
+        }
+    }
     fun appendText(line: String) {
         val title = heading.matchEntire(line)
         val ordered = orderedItem.matchEntire(line)
@@ -85,13 +107,14 @@ internal fun markdownBlocks(markdown: String): List<MarkdownBlock> {
         blocks += block
     }
     for (raw in markdown.replace("\r\n", "\n").lines()) {
-        val line = raw.trim()
         if (fence != null) {
+            val line = raw.trim()
             if (line.startsWith(fence) && line.removePrefix(fence).isBlank()) {
                 blocks += MarkdownBlock(MarkdownKind.CODE, code.joinToString("\n")); code.clear(); fence = null
             } else code += raw
             continue
         }
+        val line = visibleLine(raw).trim()
         if (line.startsWith("```") || line.startsWith("~~~")) { fence = line.take(3); continue }
         var cursor = 0
         for (image in imageSyntax.findAll(line)) {
@@ -136,7 +159,8 @@ internal fun MarkdownText(markdown: String, modifier: Modifier = Modifier, onLin
                 MarkdownKind.RULE ->
                     HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
                 MarkdownKind.HEADING -> Text(inlineMarkdown(block.text, linkStyle, onLink),
-                    fontSize = if (compact) when (block.level) { 1 -> 18.sp; 2 -> 17.sp; else -> 15.sp }
+                    modifier = Modifier.padding(top = 6.dp, bottom = 2.dp),
+                    fontSize = if (compact) when (block.level) { 1 -> 20.sp; 2 -> 18.sp; else -> 16.sp }
                         else when (block.level) { 1 -> 22.sp; 2 -> 19.sp; 3 -> 16.sp; else -> 15.sp }, fontWeight = FontWeight.SemiBold)
                 MarkdownKind.BULLET -> Row {
                     Text("•  ", fontSize = if (compact) 15.sp else 17.sp)
@@ -185,7 +209,27 @@ private fun ReleaseNoteImage(url: String, alt: String, compact: Boolean = false)
     }
 }
 
-private val inlineSyntax = Regex("""\*\*(.+?)\*\*|\[([^]]+)]\(([^)]+)\)|`([^`]+)`|(?<!\*)\*([^*]+)\*(?!\*)|(?<!_)_([^_]+)_(?!_)""")
+private val inlineSyntax = Regex("""\*\*(.+?)\*\*|\[([^]]+)]\(([^)]+)\)|`([^`]+)`|(?<!\*)\*([^*]+)\*(?!\*)|(?<!_)_([^_]+)_(?!_)|<(https?://[^\s<>]+)>|(https?://[^\s<>]+)""")
+
+/** GitHub-generated notes use bare PR URLs; retain their targets with compact readable labels. */
+private fun webLinkLabel(url: String): String {
+    val parsed = url.toHttpUrlOrNull() ?: return url
+    if (parsed.host != "github.com") return url
+    val parts = parsed.pathSegments
+    if (parts.size == 4 && parts[2] == "pull" && parts[3].all { it.isDigit() } && parts[3].isNotEmpty()) {
+        val repo = "${parts[0]}/${parts[1]}"
+        return if (repo == "${io.github.currencortex.music.core.config.AppMetadata.RELEASES_OWNER}/${io.github.currencortex.music.core.config.AppMetadata.RELEASES_REPO}")
+            "#${parts[3]}" else "$repo#${parts[3]}"
+    }
+    if (parts.size == 4 && parts[2] == "compare") return "完整改动"
+    return url
+}
+
+private fun bareUrlEnd(value: String): String {
+    var url = value.trimEnd('.', ',', ';', ':', '!', '，', '。', '；', '！', '、')
+    while (url.endsWith(')') && url.count { it == ')' } > url.count { it == '(' }) url = url.dropLast(1)
+    return url
+}
 
 /** Inline parser kept free of composition so the supported subset can be unit tested. */
 internal fun inlineMarkdown(text: String, linkStyle: SpanStyle, onLinkClick: (String) -> Unit): AnnotatedString {
@@ -197,6 +241,7 @@ internal fun inlineMarkdown(text: String, linkStyle: SpanStyle, onLinkClick: (St
         val bold = match.groups[1]
         val code = match.groups[4]
         val italic = match.groups[5] ?: match.groups[6]
+        val autoLink = match.groups[7] ?: match.groups[8]
         when {
             bold != null -> {
                 val start = builder.length
@@ -215,13 +260,17 @@ internal fun inlineMarkdown(text: String, linkStyle: SpanStyle, onLinkClick: (St
             }
             else -> {
                 val start = builder.length
-                builder.append(match.groupValues[2])
-                val url = match.groupValues[3]
+                val url = if (autoLink != null) {
+                    if (match.groups[8] != null) bareUrlEnd(autoLink.value) else autoLink.value
+                } else match.groupValues[3]
+                builder.append(if (autoLink != null && isWebLink(url)) webLinkLabel(url)
+                    else if (autoLink != null) url else match.groupValues[2])
                 if (isWebLink(url)) {
                     builder.addStyle(linkStyle, start, builder.length)
                     builder.addLink(LinkAnnotation.Clickable(tag = url, styles = TextLinkStyles(linkStyle),
                         linkInteractionListener = { onLinkClick(url) }), start, builder.length)
                 }
+                if (match.groups[8] != null) builder.append(autoLink!!.value.removePrefix(url))
             }
         }
         cursor = match.range.last + 1
