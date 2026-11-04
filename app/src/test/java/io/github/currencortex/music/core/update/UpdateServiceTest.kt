@@ -170,6 +170,60 @@ class UpdateServiceTest {
         }
     }
 
+    @Test fun bundledInstalledNotesRemainAvailableOfflineAfterRemoteReleaseIsDeleted() = runBlocking {
+        scenario { settings ->
+            val service = UpdateService(object : ReleaseChecker {
+                override fun check(channel: UpdateChannel): AppRelease? = null
+                override fun installedRelease(): AppRelease? = error("must not need the remote release")
+            }, settings, logger, bundledRelease = { release })
+            service.loadInstalledNotes()
+            assertEquals(InstalledNotesState.Loaded(release), service.installedNotes.value)
+            assertEquals(UpdateState.Idle, service.state.value)
+        }
+    }
+
+    @Test fun installedNotesRetryAndCacheWithoutCreatingAnUpdateOffer() = runBlocking {
+        scenario { settings ->
+            var calls = 0
+            val service = UpdateService(object : ReleaseChecker {
+                override fun check(channel: UpdateChannel): AppRelease? = null
+                override fun installedRelease(): AppRelease {
+                    calls++
+                    if (calls == 1) throw java.io.IOException("offline")
+                    return release
+                }
+            }, settings, logger)
+            service.check(manual = true)
+            service.loadInstalledNotes()
+            assertEquals(InstalledNotesState.Failed, service.installedNotes.value)
+            service.loadInstalledNotes()
+            assertEquals(InstalledNotesState.Loaded(release), service.installedNotes.value)
+            settings.setChannel(UpdateChannel.CI)
+            service.loadInstalledNotes()
+            assertEquals(2, calls)
+            assertEquals(UpdateState.UpToDate, service.state.value)
+            assertNull(service.prompt.value)
+        }
+    }
+
+    @Test fun installedNotesCancellationCanRetryAndMissingReleaseIsExplicit() = runBlocking {
+        scenario { settings ->
+            var cancel = true
+            val service = UpdateService(object : ReleaseChecker {
+                override fun check(channel: UpdateChannel): AppRelease? = null
+                override fun installedRelease(): AppRelease? {
+                    if (cancel) throw CancellationException("fixture")
+                    return null
+                }
+            }, settings, logger)
+            assertTrue(runCatching { service.loadInstalledNotes() }.exceptionOrNull() is CancellationException)
+            assertEquals(InstalledNotesState.Idle, service.installedNotes.value)
+            cancel = false
+            service.loadInstalledNotes()
+            assertEquals(InstalledNotesState.Loaded(null), service.installedNotes.value)
+        }
+    }
+
     @Test fun concurrentChecksAreDeduplicatedAndClosingTheDialogStaysClosed() = runBlocking {
         scenario { settings ->
             val started = CompletableDeferred<Unit>()

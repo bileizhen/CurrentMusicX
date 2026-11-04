@@ -67,7 +67,8 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
     downloadExperience: Boolean, settings: UpdateSettings, onAutoCheck: (Boolean) -> Unit,
     onChannel: (UpdateChannel) -> Unit, cover: String, origin: UpdatePageOrigin? = null,
     onPresentedChanged: (Boolean) -> Unit = {}, versionPreview: String = BuildConfig.UPDATE_ANIMATION_PREVIEW_VERSION,
-    sourceCheck: UpdateSourceCheck = remember { UpdateSourceProbe() }) {
+    sourceCheck: UpdateSourceCheck = remember { UpdateSourceProbe() },
+    installedNotesState: InstalledNotesState = InstalledNotesState.Idle, onRetryInstalledNotes: () -> Unit = {}) {
     var entryCheckFinished by remember(visible) { mutableStateOf(false) }
     LaunchedEffect(visible) {
         if (visible) { delay(2000); entryCheckFinished = true }
@@ -76,12 +77,19 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
     SideEffect { if (visible) exitCheckFinished = entryCheckFinished }
     val showResult = if (visible) entryCheckFinished else exitCheckFinished
     UpdateContainerTransform(visible, origin, onPresentedChanged) {
-        val notes = "此版本的更新说明请从右上角查看完整发布记录。"
+        val notes = when (installedNotesState) {
+            InstalledNotesState.Idle, InstalledNotesState.Loading -> "正在加载当前版本的更新说明…"
+            InstalledNotesState.Failed -> "更新说明加载失败，请重试。"
+            is InstalledNotesState.Loaded -> installedNotesState.release?.let {
+                stripVersionHeadings(it.version, it.notes).ifBlank { "此版本未附带更新说明。" }
+            } ?: "未找到当前版本的发布记录，可能尚未发布或已被清理。"
+        }
         UpdatePageContent(if (showResult) state else UpdateState.Checking,
             if (showResult) transferState else UpdateTransferState(), notes, onDismiss, onRetry, onIgnore, onOpenRelease,
             onDownload, onInstall, onCancel, onChangeSource, downloadExperience, settings, onAutoCheck, onChannel,
             cover = cover, backgroundActive = visible,
-            versionPreview = if (showResult) versionPreview else "", sourceCheck = sourceCheck)
+            versionPreview = if (showResult) versionPreview else "", sourceCheck = sourceCheck,
+            onRetryInstalledNotes = onRetryInstalledNotes.takeIf { installedNotesState == InstalledNotesState.Failed })
     }
 }
 
@@ -95,7 +103,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     settings: UpdateSettings = UpdateSettings(), onAutoCheck: (Boolean) -> Unit = {},
     onChannel: (UpdateChannel) -> Unit = {}, cover: String = "", backgroundActive: Boolean = true,
     versionPreview: String = "", sourceCheck: UpdateSourceCheck = remember { UpdateSourceProbe() },
-    installedVersionName: String = BuildConfig.VERSION_NAME) {
+    installedVersionName: String = BuildConfig.VERSION_NAME, onRetryInstalledNotes: (() -> Unit)? = null) {
     val release = (state as? UpdateState.Available)?.release
     val installedVersion = installedVersionName.substringBefore('-')
     val displayedVersion = release?.version ?: installedVersionName
@@ -248,6 +256,9 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                                     if (release.version == installedVersionName) installedNotes else ""
                                 }?.let { stripVersionHeadings(release.version, it) }
                                     ?.ifBlank { "新版本已发布。" } ?: installedNotes.ifBlank { "此版本未附带更新说明。" }, compact = true)
+                                if (release == null && onRetryInstalledNotes != null) {
+                                    PageButton("重试加载说明", "update_notes_retry", primary = false, onClick = onRetryInstalledNotes)
+                                }
                                 Spacer(Modifier.height(8.dp))
                             }
                         } else {

@@ -28,6 +28,22 @@ class GitHubUpdateCheckerTest {
         assertEquals("1.2.0", checker.parseResponse(release("v1.2.0").toString(), UpdateChannel.STABLE)?.version)
     }
 
+    @Test fun installedNotesAcceptExactVersionEvenWithoutAnInstallableAsset() {
+        val installed = GitHubUpdateChecker("example", "app", "1.0.0-ci.119", "Test", nativeAssetsOnly = true)
+        val json = release("v1.0.0-ci.119", prerelease = true).put("assets", JSONArray()).toString()
+        assertEquals("Release notes", installed.parseInstalledResponse(json)?.notes)
+        assertNull(installed.parseResponse(json, UpdateChannel.CI))
+        assertNull(installed.parseInstalledResponse(release("v1.0.0").toString()))
+        assertNull(installed.parseInstalledResponse(release("v1.0.0-ci.120", prerelease = true).toString()))
+        assertEquals("1.0.0", checker.parseInstalledResponse(release("v1.0.0").toString())?.version)
+    }
+
+    @Test fun installedNotesRejectDraftsAndForeignReleasePages() {
+        assertNull(checker.parseInstalledResponse(release("v1.0.0", draft = true).toString()))
+        assertNull(checker.parseInstalledResponse(release("v1.0.0")
+            .put("html_url", "https://example.org/release").toString()))
+    }
+
     private fun ci(tag: String) = release(tag, prerelease = true).apply {
         getJSONArray("assets").getJSONObject(0)
             .put("name", "CurrentMusic-Android-$tag.apk")

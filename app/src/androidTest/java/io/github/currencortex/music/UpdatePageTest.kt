@@ -136,6 +136,40 @@ class UpdatePageTest {
         compose.onNodeWithTag("update_version_type").assertTextEquals("正式版")
     }
 
+    @Test fun hostShowsInstalledReleaseNotesAndRetryWithoutAnUpdateOffer() {
+        val notes = mutableStateOf<InstalledNotesState>(InstalledNotesState.Loading)
+        var retries = 0
+        compose.setContent { TestTheme {
+            UpdatePageHost(true, UpdateState.UpToDate, {}, {}, {}, {}, UpdateTransferState(), {}, {}, {}, {},
+                false, UpdateSettings(), {}, {}, "", installedNotesState = notes.value,
+                onRetryInstalledNotes = { retries++ })
+        } }
+        compose.mainClock.advanceTimeBy(3000)
+        compose.onNodeWithTag("update_details").performClick()
+        compose.onNodeWithText("正在加载当前版本的更新说明…").assertIsDisplayed()
+        compose.runOnIdle { notes.value = InstalledNotesState.Failed }
+        compose.onNodeWithTag("update_notes_retry").performClick()
+        compose.runOnIdle {
+            assertEquals(1, retries)
+            notes.value = InstalledNotesState.Loaded(release.copy(notes = "- 当前构建的实际更新记录"))
+        }
+        compose.onNodeWithText("当前构建的实际更新记录", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("update_notes_retry").assertDoesNotExist()
+        compose.onNodeWithTag("update_download").assertDoesNotExist()
+        compose.runOnIdle { notes.value = InstalledNotesState.Loaded(null) }
+        compose.onNodeWithText("未找到当前版本的发布记录，可能尚未发布或已被清理。").assertIsDisplayed()
+    }
+
+    @Test fun availableVersionNeverUsesNotesFromAnotherCiBuild() {
+        compose.setContent { TestTheme {
+            UpdatePageContent(UpdateState.Available(release.copy(version = "1.3.3-ci.120", notes = "")),
+                installedVersionName = "1.3.3-ci.119", installedNotes = "旧构建独有的说明")
+        } }
+        compose.onNodeWithTag("update_details").performClick()
+        compose.onNodeWithText("新版本已发布。").assertIsDisplayed()
+        compose.onNodeWithText("旧构建独有的说明").assertDoesNotExist()
+    }
+
     @Test fun upToDateShowsBundledNotesAndFailedCheckCanRetry() {
         val state = mutableStateOf<UpdateState>(UpdateState.UpToDate)
         var retries = 0
