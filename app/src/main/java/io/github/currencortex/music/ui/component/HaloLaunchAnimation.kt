@@ -47,10 +47,11 @@ internal const val HALO_INTRO_MS = 8500
     val exit = remember { Animatable(0f) }
     val currentReady by rememberUpdatedState(ready)
     val currentWindowReady by rememberUpdatedState(windowReady)
-    val finish by rememberUpdatedState(onFinished)
+    val finish = rememberLaunchCompletion(onFinished)
     var prepared by remember { mutableStateOf(false) }
     var reduced by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(finish.finished) {
+        if (finish.finished) return@LaunchedEffect
         snapshotFlow { prepared }.first { it }
         withTimeoutOrNull(600) { snapshotFlow { currentWindowReady }.first { it } }
         reduced = (coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) == 0f
@@ -62,9 +63,7 @@ internal const val HALO_INTRO_MS = 8500
     }
     BackHandler { if (preview) finish() }
     Box(Modifier.fillMaxSize().testTag("launch_animation").graphicsLayer { alpha = 1f - exit.value }
-        .pointerInput(Unit) { awaitPointerEventScope {
-            while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
-        } }) {
+        .skipLaunchOnDoubleTap(finish)) {
         HaloLaunchFrame(username, { time.value }, reduced, onPrepared = { prepared = true })
     }
 }
