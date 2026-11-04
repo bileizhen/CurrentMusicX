@@ -12,6 +12,7 @@ import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Density
@@ -60,7 +61,11 @@ internal data class GlassOpticalGeometry(val pane: Rect, val radius: Float,
                 }
                 clipPath(path){this@drawWithContent.drawContent()}
             }else Modifier)
-    return if(backdrop!=null && Build.VERSION.SDK_INT>=33) clipped.drawBackdrop(backdrop,
+    val scene = LocalPageGlassScene.current
+    val sample = if (backdrop != null && scene != null && scene.owns(backdrop))
+        remember(scene, backdrop) { PageGlassSample(backdrop, scene) } else null
+    val positioned = if (sample == null) clipped else clipped.onGloballyPositioned(sample::place)
+    return if(backdrop!=null && Build.VERSION.SDK_INT>=33) positioned.drawBackdrop(sample ?: backdrop,
         shape={RectangleShape},effects={
             val amount=strength().coerceIn(0f,1f)
             val material=materialStrength().coerceIn(0f,1f)
