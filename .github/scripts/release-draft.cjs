@@ -47,7 +47,7 @@ async function prepare({ github, context, core }) {
     throw new Error('目标提交的 CI Release 产物不存在或已过期');
   const notes = (await github.rest.repos.generateReleaseNotes({ ...repo,tag_name:tag,previous_tag_name:previous,target_commitish:target,configuration_file_path:'.github/release.yml' })).data;
   // Preserve GitHub's author, PR, new contributor and full changelog links verbatim.
-  const body = `## 更新说明\n\n${process.env.RELEASE_SUMMARY.trim()}\n\n${notes.body}\n\n## Installation & Verification\n\n- 此草稿基于 ${target}，Android CI 的 Release 编译、单元测试、Lint 及 CI 产物已核验（运行 #\${latest.run_number}）。\n- 待上传同一提交构建的正式签名 APK 与 SHA-256 校验文件。\n- 真机验收、签名和下载校验尚待维护者填写；CI 不代表真机验收。\n`;
+  const body = `## 更新说明\n\n${process.env.RELEASE_SUMMARY.trim()}\n\n${notes.body}\n\n## Installation & Verification\n\n- 此草稿基于 ${target}，Android CI 的 Release 编译、单元测试、Lint 及 CI 产物已核验（运行 #${latest.run_number}）。\n- 待上传同一提交构建的正式签名 APK 与 SHA-256 校验文件。\n- 真机验收、签名和下载校验尚待维护者填写；CI 不代表真机验收。\n`;
   fs.writeFileSync('release-draft.txt',body);
   core.setOutput('target',target);
   core.setOutput('tag',tag);
