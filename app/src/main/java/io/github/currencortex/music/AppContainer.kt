@@ -579,6 +579,12 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         ),
         settings = updateSettings,
         logger = logger,
+        bundledRelease = {
+            val json = try {
+                context.assets.open("installed-release-notes.json").bufferedReader().use { it.readText() }
+            } catch (_: java.io.FileNotFoundException) { "" }
+            io.github.currencortex.music.core.update.parseBundledReleaseNotes(json, BuildConfig.VERSION_NAME)
+        },
     )
     override fun close() {
         lxSources.close()
