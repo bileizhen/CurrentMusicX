@@ -67,6 +67,9 @@ android {
     }
 
     buildFeatures { compose = true; buildConfig = true }
+    providers.gradleProperty("installedReleaseNotesDir").orNull?.let {
+        sourceSets.getByName("main").assets.srcDir(it)
+    }
     sourceSets.getByName("main").jniLibs.setSrcDirs(if (originalEffectsBundled) listOf(file("src/main/jniLibs")) else emptyList<File>())
     if (originalEffectsBundled) {
         val pinned = mapOf(

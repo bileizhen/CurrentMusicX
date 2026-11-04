@@ -73,11 +73,19 @@ jobs:
         if: github.event_name == 'pull_request'
         # PR checks compile one representative ABI, execute unit tests and lint; instrumentation APKs remain available for explicit device-verification builds.
         run: ./gradlew assembleDebug testDebugUnitTest lintDebug --build-cache --no-daemon --stacktrace -Plei.officialRepositoriesFirst=true -PciPrArm64Only=true
+      - name: Bundle installed CI release notes
+        if: github.event_name != 'pull_request'
+        env:
+          CI_BUILD_NUMBER: ${{ github.run_number }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await require('./.github/scripts/bundled-release-notes.cjs').bundle({github, context});
       - name: Build and verify unsigned CI release
         if: github.event_name != 'pull_request'
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
-        run: ./gradlew :app:assembleRelease :app:testReleaseUnitTest :app:lintRelease -PciBuildNumber="$CI_BUILD_NUMBER" -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace
+        run: ./gradlew :app:assembleRelease :app:testReleaseUnitTest :app:lintRelease -PciBuildNumber="$CI_BUILD_NUMBER" -PinstalledReleaseNotesDir="$GITHUB_WORKSPACE/app/build/generated/installedReleaseNotes" -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace
       - name: Prepare CI artifact
         if: github.event_name != 'pull_request'
         env:
