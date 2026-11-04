@@ -116,6 +116,26 @@ class UpdatePageTest {
         capture("update-page-completed.png")
     }
 
+    @Test fun installedCiLabelDoesNotFollowSelectedUpdateChannel() {
+        val state = mutableStateOf<UpdateState>(UpdateState.UpToDate)
+        compose.setContent { TestTheme {
+            UpdatePageContent(state.value, installedVersionName = "1.3.3-ci.119",
+                settings = UpdateSettings(channel = UpdateChannel.STABLE))
+        } }
+        compose.onNodeWithTag("update_version_type").assertTextEquals("CI 版")
+        compose.onNodeWithText("当前版本 1.3.3-ci.119").assertIsDisplayed()
+        compose.runOnIdle { state.value = UpdateState.Available(release) }
+        compose.onNodeWithTag("update_version_type").assertTextEquals("正式版")
+    }
+
+    @Test fun installedStableLabelDoesNotBecomeCiWhenCheckingCiChannel() {
+        compose.setContent { TestTheme {
+            UpdatePageContent(UpdateState.UpToDate, installedVersionName = "1.3.3",
+                settings = UpdateSettings(channel = UpdateChannel.CI))
+        } }
+        compose.onNodeWithTag("update_version_type").assertTextEquals("正式版")
+    }
+
     @Test fun upToDateShowsBundledNotesAndFailedCheckCanRetry() {
         val state = mutableStateOf<UpdateState>(UpdateState.UpToDate)
         var retries = 0

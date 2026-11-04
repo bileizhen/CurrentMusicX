@@ -94,9 +94,16 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     onChangeSource: (UpdateSource) -> Unit = {}, downloadExperience: Boolean = false,
     settings: UpdateSettings = UpdateSettings(), onAutoCheck: (Boolean) -> Unit = {},
     onChannel: (UpdateChannel) -> Unit = {}, cover: String = "", backgroundActive: Boolean = true,
-    versionPreview: String = "", sourceCheck: UpdateSourceCheck = remember { UpdateSourceProbe() }) {
+    versionPreview: String = "", sourceCheck: UpdateSourceCheck = remember { UpdateSourceProbe() },
+    installedVersionName: String = BuildConfig.VERSION_NAME) {
     val release = (state as? UpdateState.Available)?.release
-    val installedVersion = BuildConfig.VERSION_NAME.substringBefore('-')
+    val installedVersion = installedVersionName.substringBefore('-')
+    val displayedVersion = release?.version ?: installedVersionName
+    val versionLabel = when {
+        Regex("[0-9]+\\.[0-9]+\\.[0-9]+-ci\\.[1-9][0-9]*").matches(displayedVersion) -> "CI 版"
+        displayedVersion.contains('-') -> "预发布版"
+        else -> "正式版"
+    }
     var heroVersion by remember { mutableStateOf(installedVersion) }
     LaunchedEffect(state, versionPreview) {
         // Isolated visual preview only; release/download metadata continues to identify the real APK.
@@ -198,8 +205,8 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                         fontSize = if (width < 360.dp) 66.sp else 78.sp, color = pageWhite,
                         modifier = Modifier.testTag("update_hero_version"))
                     Text("CurrentMusic", color = pageWhite, fontSize = 25.sp, fontWeight = FontWeight.Light)
-                    Text(if (release?.isCi == true || settings.channel == UpdateChannel.CI) "CI 版" else "正式版",
-                        color = pageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp))
+                    Text(versionLabel,
+                        color = pageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp).testTag("update_version_type"))
                 }
                 val statusShape = RoundedCornerShape((36f - 10f * settled).dp)
                 val bottomSpace = (32f - 12f * settled).dp
@@ -220,7 +227,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                                 .verticalScroll(notesScroll).testTag("update_message"),
                                 verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                 Text("软件版本", fontSize = 16.sp, color = pageWhite, fontWeight = FontWeight.Medium)
-                                Text("CurrentMusic ${release?.version ?: BuildConfig.VERSION_NAME}" +
+                                Text("CurrentMusic $displayedVersion" +
                                     (release?.let { " · ${updateSize(it.size)}" } ?: ""), fontSize = 12.sp, color = pageMuted)
                                 HorizontalDivider(color = Color.White.copy(alpha = .12f))
                                 Row(Modifier.fillMaxWidth().padding(vertical = 4.dp),
@@ -238,7 +245,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                                     }
                                 }
                                 MarkdownText(release?.notes?.ifBlank {
-                                    if (release.version.substringBefore('-') == BuildConfig.VERSION_NAME.substringBefore('-')) installedNotes else ""
+                                    if (release.version == installedVersionName) installedNotes else ""
                                 }?.let { stripVersionHeadings(release.version, it) }
                                     ?.ifBlank { "新版本已发布。" } ?: installedNotes.ifBlank { "此版本未附带更新说明。" }, compact = true)
                                 Spacer(Modifier.height(8.dp))
@@ -262,8 +269,8 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                                     if (checking) UpdateCheckingSpinner()
                                 }
                                 if (!checking) Text(release?.let { "v${it.version} · ${updateSize(it.size)}" }
-                                    ?: "当前版本 ${BuildConfig.VERSION_NAME}", color = pageMuted, fontSize = 12.sp)
-                                if (settings.channel == UpdateChannel.CI) Text("主线自动构建，未经正式版验收；切回正式版需等待后续更高版本。", color = pageMuted, fontSize = 12.sp)
+                                    ?: "当前版本 $installedVersionName", color = pageMuted, fontSize = 12.sp)
+                                if (versionLabel == "CI 版") Text("主线自动构建，未经正式版验收；切回正式版需等待后续更高版本。", color = pageMuted, fontSize = 12.sp)
                                 if (state is UpdateState.Failed) Text(state.reason, color = pageMuted, fontSize = 13.sp,
                                     maxLines = 3, overflow = TextOverflow.Ellipsis)
                             }
