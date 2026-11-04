@@ -10,8 +10,6 @@ import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.input.pointer.PointerEventPass
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
@@ -35,8 +33,9 @@ internal const val SIGNATURE_DURATION_MS = 2100L
     var prepared by remember { mutableStateOf(false) }
     var reduced by remember { mutableStateOf(false) }
     val currentWindowReady by rememberUpdatedState(windowReady)
-    val finish by rememberUpdatedState(onFinished)
-    LaunchedEffect(Unit) {
+    val finish = rememberLaunchCompletion(onFinished)
+    LaunchedEffect(finish.finished) {
+        if (finish.finished) return@LaunchedEffect
         reduced = (coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) == 0f
         // Covers native splash gating AND asset preparation, including an unexpected resource failure.
         withTimeoutOrNull(2600L) {
@@ -59,9 +58,7 @@ internal const val SIGNATURE_DURATION_MS = 2100L
             val exit = ((elapsed - 1800f) / 300f).coerceIn(0f, 1f)
             alpha = 1f - exit * exit * (3f - 2f * exit)
         }
-        .pointerInput(Unit) { awaitPointerEventScope {
-            while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() }
-        } }) {
+        .skipLaunchOnDoubleTap(finish)) {
         SignatureLaunchFrame(name, { if (reduced) 1600f else elapsed }, onPrepared = { prepared = true })
     }
 }
