@@ -23,14 +23,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
-import androidx.compose.ui.graphics.shadow.Shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.theme.isInDarkTheme
 import io.github.currencortex.music.ui.component.nativeui.LocalLiquidGlassEnabled
@@ -64,18 +63,28 @@ else lightColorScheme(primary = Color(0xFF3485FF), background = Color(0xFFF2F3F5
 }
 
 @Composable internal fun Modifier.musicDialogMaterial(backdrop: Backdrop? = LocalMusicDialogBackdrop.current,
-    shape: Shape = MusicDialogShape, drawFallback: Boolean = true): Modifier {
+    shape: Shape = MusicDialogShape, drawFallback: Boolean = true, visibility: (() -> Float)? = null): Modifier {
     val dark = isInDarkTheme()
     val glass = LocalLiquidGlassEnabled.current && backdrop != null && Build.VERSION.SDK_INT >= 33
+    val fadeContent = if (visibility != null) Modifier.graphicsLayer {
+        alpha = visibility().coerceIn(0f, 1f)
+    } else Modifier
     if (glass) return then(Modifier
-        .dropShadow(shape, Shadow(radius = 29.dp, offset = DpOffset(0.dp, 8.dp),
-            color = Color.Black, alpha = if (dark) .177f else .118f))
+        // Keep the shadow outside the content's alpha layer: that offscreen layer clips
+        // overflow while alpha < 1, making a shadow inside it pop in after the entrance.
+        .dropShadow(shape) {
+            radius = 29.dp.toPx()
+            offset = Offset(0f, 8.dp.toPx())
+            color = Color.Black
+            alpha = (if (dark) .177f else .118f) * (visibility?.invoke()?.coerceIn(0f, 1f) ?: 1f)
+        }
+        .then(fadeContent)
         .glassSurface(backdrop, shape, menu = true, frost = { 16f }, alert = true)
         .alertGlassRim(shape, dark))
     val material = if (LocalGlassBlurEnabled.current && Build.VERSION.SDK_INT >= 33 && backdrop != null)
         Modifier.frostedMusicDialog(backdrop, dark, shape)
     else if (drawFallback) Modifier.background(musicDialogFallbackColor(), shape) else Modifier
-    return then(material).semantics { this[LiquidGlassOpticsKey] = false }
+    return then(fadeContent).then(material).semantics { this[LiquidGlassOpticsKey] = false }
         .border(.7.dp, Color.White.copy(alpha = if (dark) .12f else .65f), shape)
 }
 

@@ -37,7 +37,7 @@ class RecordShelfPreviewTest {
         server = MockWebServer().apply {
             dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
-                    "/cm/ncm/song/chorus" -> MockResponse().setBody("""{"chorus":[{"id":${request.requestUrl!!.queryParameter("id")},"startTime":2000,"endTime":5500}]}""")
+                    "/cm/song/chorus" -> MockResponse().setBody("""{"id":${request.requestUrl!!.queryParameter("id")},"segments":[{"startMs":2000,"endMs":5500}]}""")
                     "/cm/ncm/song/url" -> MockResponse().setBody("""{"url":"${url("/tone.wav")}","type":"wav","sr":8000,"ch":1}""")
                     "/tone.wav" -> MockResponse().setHeader("Content-Type", "audio/wav").setBody(Buffer().write(audio))
                     else -> MockResponse().setResponseCode(404)

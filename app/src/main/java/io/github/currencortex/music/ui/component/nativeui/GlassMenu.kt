@@ -66,6 +66,7 @@ import io.github.currencortex.music.ui.theme.LocalCustomFont
     val onEnter: () -> Unit = {}, val onClick: () -> Unit = {},
     val leadingContent: (@Composable () -> Unit)? = null, val subMenuMinWidth: Dp? = null,
     val animateSubItems:Boolean=false, val checkable:Boolean=false,
+    val onExit: () -> Unit = {},
 )
 @Immutable data class GlassMenuTags(val panel: String = "glass_menu_panel", val dismiss: String = "glass_menu_dismiss",
     val actionPrefix: String = "glass_menu_action")
@@ -87,7 +88,7 @@ internal class GlassMenuTrigger {
     var cancel: (() -> Unit)? = null
 }
 internal val LocalGlassMenuTrigger = staticCompositionLocalOf<GlassMenuTrigger?> { null }
-private data class MenuStep(val id: String, val top: Float, val itemHeight: Float, val width: Float)
+private data class MenuStep(val id: String, val top: Float, val itemHeight: Float, val width: Float, val rightOffset: Float = 0f)
 private data class MenuLevel(val items: List<GlassMenuItem>, val owner: GlassMenuItem?, val step: MenuStep?, val top: Float,
     val width: Float, val reservedWidth:Float=width)
 private data class MenuHit(val index: Int, val bounds: Rect, val action: () -> Unit, val subMenu: Boolean)
@@ -230,7 +231,10 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
 @Composable fun BoxScope.GlassMenu(expanded: Boolean, onExpandedChange: (Boolean) -> Unit,
     items: List<GlassMenuItem>, anchor: Rect?, backdrop: Backdrop?, tags: GlassMenuTags = GlassMenuTags(),
     onDepthChanged: (Int) -> Unit = {}, onPathChanged: (List<String>) -> Unit = {},
-    onInteractionChanged: (Boolean) -> Unit = {}, menuWidth: Dp? = 192.dp, bottomInset:Dp=0.dp,
+    onInteractionChanged: (Boolean) -> Unit = {}, menuWidth: Dp? = 192.dp, bottomInset:Dp=0.dp, topInset:Dp=0.dp,
+    rootOwner: GlassMenuItem? = null, showDividers: Boolean = true, pullPastEdges: Boolean = true,
+    flipRootAtEdges: Boolean = false,
+    parentWidth: Dp? = null, onParentTransition: (Float) -> Unit = {},
     content:@Composable ()->Unit={}, toolbar: @Composable () -> Unit) {
     val scope=rememberCoroutineScope()
     val trigger=remember { GlassMenuTrigger() }
@@ -247,7 +251,7 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
     val path=remember { mutableStateListOf<MenuStep>() }
     val retainedPath=remember {mutableStateListOf<MenuStep>()}
     var hasShown by remember {mutableStateOf(false)}
-    val unfold=remember { Animatable(1f) }
+    val unfold=remember { Animatable(if(rootOwner!=null)0f else 1f) }
     val widthProgress=remember {derivedStateOf{(unfold.value/.3f).coerceIn(0f,1f)}}
     var folding by remember { mutableStateOf(false) }
     val reorderingEnabled=remember {derivedStateOf{!folding&&unfold.value==1f&&motion.opening&&motion.clock.value>=1f}}
@@ -277,13 +281,13 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
         }?:0f
     }
     val menuWidthPx=menuWidth?.let{with(density){it.toPx()}}?:measuredWidth.coerceIn(with(density){160.dp.toPx()},maxWidth)
-    val safeTop=WindowInsets.safeDrawing.getTop(density).toFloat()
+    val safeTop=max(WindowInsets.safeDrawing.getTop(density).toFloat(),with(density){topInset.toPx()})
     val safeBottom=max(WindowInsets.safeDrawing.getBottom(density).toFloat(),with(density){bottomInset.toPx()})
     val a=anchor?.translate(-rootOrigin) ?: Rect((rootSize.width-60*frameDensity).coerceAtLeast(0f),
         safeTop+8*frameDensity,(rootSize.width-16*frameDensity).coerceAtLeast(44*frameDensity),safeTop+52*frameDensity)
     val rootWidth=menuWidthPx.coerceAtMost((rootSize.width-32*frameDensity).coerceAtLeast(1f))
     fun resolve(steps:List<MenuStep>)=buildList {
-        add(MenuLevel(items,null,null,0f,rootWidth))
+        add(MenuLevel(items,rootOwner,null,0f,rootWidth))
         for(step in steps) {
             val owner=last().items.firstOrNull{it.id==step.id} ?: break
             if(owner.children.isEmpty())break
@@ -313,28 +317,77 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
         // Predict only the first layout. Real text/switch metrics own the resting height;
         // multiplying an estimated line height across many rows leaves a large empty tail.
         val content=contentHeights[contentKey(level)]?.toFloat() ?: (
-            (if(level.owner!=null)rowHeight(level.owner,level.width)+17*frameDensity else 0f)+
-            level.items.sumOf { (rowHeight(it,level.width)+(if(it.separated)17*frameDensity else 0f)).toDouble() }.toFloat())
+            (if(level.owner!=null)rowHeight(level.owner,level.width)+(if(showDividers)17*frameDensity else 0f) else 0f)+
+            level.items.sumOf { (rowHeight(it,level.width)+(if(showDividers&&it.separated)17*frameDensity else 0f)).toDouble() }.toFloat())
         val rootLimit=with(density){16.dp.toPx()+7.5f*(24.dp.toPx()+20.sp.toPx())}
         return (inset*2+content).coerceAtMost(if(level.owner==null)min(heightLimit,rootLimit)else heightLimit)
     }
-    val rootHeight=levelHeight(levels.first())
-    val rootTop=(a.top-inset).coerceAtLeast(safeTop).coerceAtMost((rootSize.height-safeBottom-16*frameDensity-rootHeight).coerceAtLeast(safeTop))
+    val requestedRootHeight=levelHeight(levels.first())
+    val bottomEdge=rootSize.height-safeBottom-16*frameDensity
+    val spaceBelow=bottomEdge-(a.top-inset)
+    val spaceAbove=a.bottom+inset-safeTop
+    // Keep the owner row next to its trigger. Clamping a downward menu alone
+    // would move that row away from the user's finger when the bottom runs out.
+    val rootAbove=flipRootAtEdges&&rootOwner!=null&&requestedRootHeight>spaceBelow&&spaceAbove>spaceBelow
+    val rootHeight=if(flipRootAtEdges&&rootOwner!=null)
+        min(requestedRootHeight,(if(rootAbove)spaceAbove else spaceBelow).coerceAtLeast(1f))else requestedRootHeight
+    val rootTop=(if(rootAbove)a.bottom+inset-rootHeight else a.top-inset)
+        .coerceIn(safeTop,(bottomEdge-rootHeight).coerceAtLeast(safeTop))
     val rootRight=a.right.coerceIn(rootWidth+16*frameDensity,(rootSize.width-16*frameDensity).coerceAtLeast(rootWidth+16*frameDensity))
     val rootCard=Rect(rootRight-rootWidth,rootTop,rootRight,rootTop+rootHeight)
+    fun opensAbove(level: MenuLevel): Boolean {
+        val step=level.step ?: return rootAbove
+        val triggerTop=rootTop+step.top
+        return flipRootAtEdges&&levelHeight(level)>bottomEdge-(triggerTop-inset)&&
+            triggerTop+step.itemHeight+inset-safeTop>bottomEdge-(triggerTop-inset)
+    }
     fun cardOf(level: MenuLevel): Rect {
-        val top=(rootTop+level.top).coerceAtMost((rootSize.height-safeBottom-16*frameDensity-levelHeight(level)).coerceAtLeast(safeTop))
-        return Rect(rootRight-level.width,top,rootRight,top+levelHeight(level))
+        val step=level.step
+        if(step==null)return rootCard
+        val triggerTop=rootTop+step.top
+        val triggerBottom=triggerTop+step.itemHeight
+        val above=opensAbove(level)
+        val available=if(above)triggerBottom+inset-safeTop else bottomEdge-triggerTop+inset
+        val height=if(flipRootAtEdges)min(levelHeight(level),available.coerceAtLeast(1f))else levelHeight(level)
+        val top=(if(above)triggerBottom+inset-height else rootTop+level.top)
+            .coerceIn(safeTop,(bottomEdge-height).coerceAtLeast(safeTop))
+        val right=rootRight.coerceAtLeast(level.width+16*frameDensity)
+            .coerceAtMost(rootSize.width-16*frameDensity)
+        return Rect(right-level.width,top,right,top+height)
+    }
+    fun stepOf(level: MenuLevel): MenuStep? = level.step ?: rootOwner?.let {
+        MenuStep(it.id,a.top-rootTop,a.height,parentWidth?.let{with(density){it.toPx()}}?:a.width+2*inset)
     }
     val activeCard=cardOf(topLevel)
     val actualCard=if(depth==0)rootCard else activeCard
     val currentCard by rememberUpdatedState(actualCard)
     val currentAnchor by rememberUpdatedState(a)
     val visible=expanded||motion.shown
-    LaunchedEffect(expanded) {
+    // Async child content belongs to its active branch, not the retained closing layers.
+    levels.forEach { level ->
+        if (expanded && level.owner != null) key(level.owner.id) {
+            val exit by rememberUpdatedState(level.owner.onExit)
+            DisposableEffect(level.owner.id) { onDispose { exit() } }
+        }
+    }
+    LaunchedEffect(expanded,rootSize.width>0) {
+        if(rootSize.width==0)return@LaunchedEffect
         if(expanded)hasShown=true
-        if(expanded||motion.shown) motion.animate(expanded,currentAnchor,currentCard,frameDensity)
+        if(rootOwner!=null) {
+            if(expanded) {
+                motion.settle(true)
+                unfold.animateTo(1f,spring(.85f,223.8f));unfold.snapTo(1f)
+            } else if(motion.shown) {
+                unfold.animateTo(0f,spring(1f,341.5f))
+                motion.settle(false)
+            }
+        } else if(expanded||motion.shown) motion.animate(expanded,currentAnchor,currentCard,frameDensity)
         if(!expanded) { path.clear(); selected=Int.MIN_VALUE; rows.clear() }
+    }
+    val parentTransition by rememberUpdatedState(onParentTransition)
+    LaunchedEffect(rootOwner!=null) {
+        if(rootOwner!=null) snapshotFlow { if(path.isEmpty())unfold.value.coerceIn(0f,1f) else 1f }
+            .collect { parentTransition(it) }
     }
     SideEffect { trigger.open=expanded; trigger.hidden=visible; onDepthChanged(depth)
         onPathChanged(path.map { it.id }); onInteractionChanged(pointerHeld) }
@@ -342,7 +395,8 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
         dwell?.cancel(); dwell=null;selected=Int.MIN_VALUE;landed=false;pointerHeld=false;press.release()
     }
     fun pop() {
-        if(path.isEmpty()||folding)return
+        if(path.isEmpty()) { if(rootOwner!=null)changeOpen(false); return }
+        if(folding)return
         folding=true
         scope.launch {
             unfold.animateTo(0f,spring(1f,341.5f))
@@ -358,7 +412,7 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
     fun push(item: GlassMenuItem,index: Int) {
         item.onEnter()
         val rect=rows[depth to index] ?: Rect(inset,inset,topLevel.width-inset,inset+44*frameDensity)
-        val step=MenuStep(item.id,topLevel.top+rect.top,rect.height,topLevel.width)
+        val step=MenuStep(item.id,activeCard.top-rootTop+rect.top,rect.height,topLevel.width,activeCard.right-rootRight)
         scope.launch {
             // Initialize before publishing the new level: never paint one full-size frame
             // and then jump back to its collapsed header on the following frame.
@@ -385,13 +439,16 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
         // would move selection away from a stretching panel.
         val painted=coords.windowToLocal(position)
         val live=liveLevels.last()
-        val clip=if(live.step!=null) {
-            val width=glassLerp(live.step.width,live.width,widthProgress.value)
+        val liveStep=stepOf(live)
+        val clip=if(liveStep!=null) {
+            val width=glassLerp(liveStep.width,live.width,widthProgress.value)
             val left=live.width-width
-            val bounds=Rect(left,0f,live.width,levelHeight(live))
-            glassLerp(Rect(left+inset,live.step.top-live.top,live.width-inset,
-                live.step.top-live.top+live.step.itemHeight),bounds,unfold.value)
-        }else Rect(0f,0f,live.width,levelHeight(live))
+            val bounds=Rect(left,0f,live.width,cardOf(live).height)
+            val originTop=rootTop+liveStep.top-cardOf(live).top
+            val shift=rootRight+liveStep.rightOffset-cardOf(live).right
+            glassLerp(Rect(left+inset+shift,originTop,live.width-inset+shift,
+                originTop+liveStep.itemHeight),bounds,unfold.value)
+        }else Rect(0f,0f,live.width,cardOf(live).height)
         if(!clip.contains(painted))return null
         val row=rows.entries.firstOrNull{it.key.first==depth&&it.value.contains(painted)} ?: return null
         val i=row.key.second
@@ -402,7 +459,7 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
     fun track(position: Offset, start: Boolean=false) {
         val coords=activeCoordinates?.takeIf{it.isAttached} ?:return
         val rest=activeRestCoordinates?.takeIf{it.isAttached}?.windowToLocal(position) ?: return
-        if(start||!pointerHeld){pointerHeld=true;press.press(rest)} else press.drag(rest,pastEdges=true)
+        if(start||!pointerHeld){pointerHeld=true;press.press(rest)} else press.drag(rest,pastEdges=pullPastEdges)
         val row=hit(position)
         val i=row?.index ?:Int.MIN_VALUE
         if(i==selected)return
@@ -443,9 +500,9 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
     if((!visible&&!hasShown)||rootSize.width==0)return
     val frame=remember(motion,a,actualCard,frameDensity){derivedStateOf{motion.frame(a,actualCard,frameDensity)}}
     // Hold the envelope at rest; the animated outline and content only change paint/layers.
-    val envelope=Rect(floor(min(a.left,renderedLevels.minOf{rootRight-it.reservedWidth})-20*frameDensity),
+    val envelope=Rect(floor(min(a.left,renderedLevels.minOf{cardOf(it).right-it.reservedWidth})-20*frameDensity),
         floor(min(a.top,renderedLevels.minOf{cardOf(it).top})-20*frameDensity),
-        ceil(max(a.right,rootRight)+20*frameDensity),
+        ceil(max(a.right,renderedLevels.maxOf{cardOf(it).right})+20*frameDensity),
         ceil(max(a.bottom,renderedLevels.maxOf{cardOf(it).bottom})+20*frameDensity))
     // The optical shader owns its SDF mask. Read the motion in paint instead of recomposing
     // every row (and rebuilding their modifier nodes) for every frame of a return.
@@ -469,7 +526,12 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
             val card=cardOf(level);val active=index==depth
             val retired=index>depth
             val covered=depth-index
-            val step=level.step
+            val step=stepOf(level)
+            val stepTop=step?.let{rootTop+it.top-card.top}?:0f
+            val stepShift=step?.let{rootRight+it.rightOffset-card.right}?:0f
+            LaunchedEffect(expanded,active,opensAbove(level),card.height,scroll.maxValue) {
+                if(expanded&&active&&opensAbove(level))scroll.scrollTo(scroll.maxValue)
+            }
             LaunchedEffect(expanded,active,level.items.map{it.id to it.checked},card.height) {
                 if(expanded&&active&&level.owner==null) {
                     val checked=level.items.indexOfFirst{it.checked==true}
@@ -485,13 +547,13 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
             val paintedWidth=remember(active,step,level.width){derivedStateOf {
                 if(active&&step!=null)glassLerp(step.width,level.width,widthProgress.value)else level.width
             }}
-            val cardShape=remember(active,step,level.top,level.width,frameDensity){object:Shape{
+            val cardShape=remember(active,step,stepTop,stepShift,level.width,frameDensity){object:Shape{
                 override fun createOutline(size:Size,layoutDirection:LayoutDirection,density:Density):Outline {
                     val grow=if(active&&step!=null)unfold.value else 1f
                     val left=size.width-paintedWidth.value
                     val bounds=Rect(left,0f,size.width,size.height)
                     val origin=if(step==null)bounds else
-                        Rect(left+inset,step.top-level.top,size.width-inset,step.top-level.top+step.itemHeight)
+                        Rect(left+inset+stepShift,stepTop,size.width-inset+stepShift,stepTop+step.itemHeight)
                     return Outline.Rounded(RoundRect(glassLerp(origin,bounds,grow),
                         CornerRadius(glassLerp(16*frameDensity,24*frameDensity,grow))))
                 }
@@ -499,14 +561,14 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
             run {
                 // The capture stays at the full card width. Shrinking the capture itself
                 // reallocates blurred layers and rebuilds Gaussian pipelines on every frame.
-                val materialShape=remember(active,step,level.top,level.reservedWidth,frameDensity){object:GlassOpticalShape {
+                val materialShape=remember(active,step,stepTop,stepShift,level.reservedWidth,frameDensity){object:GlassOpticalShape {
                     override fun opticalGeometry(size:Size,density:Density,direction:LayoutDirection):GlassOpticalGeometry {
                         val width=if(active&&step!=null)glassLerp(step.width,level.reservedWidth,widthProgress.value)else level.reservedWidth
                         val left=size.width-width
                         val bounds=Rect(left,0f,size.width,size.height)
                         val grow=if(active&&step!=null)unfold.value else 1f
-                        val origin=if(step==null)bounds else Rect(left+inset,step.top-level.top,
-                            size.width-inset,step.top-level.top+step.itemHeight)
+                        val origin=if(step==null)bounds else Rect(left+inset+stepShift,stepTop,
+                            size.width-inset+stepShift,stepTop+step.itemHeight)
                         return GlassOpticalGeometry(glassLerp(origin,bounds,grow),glassLerp(16*frameDensity,24*frameDensity,grow))
                     }
                     override fun createOutline(size:Size,layoutDirection:LayoutDirection,density:Density):Outline {
@@ -514,7 +576,7 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
                         return Outline.Rounded(RoundRect(g.pane,CornerRadius(g.radius)))
                     }
                 }}
-                Box(Modifier.offset{IntOffset((rootRight-level.reservedWidth-envelope.left).roundToInt(),(card.top-envelope.top).roundToInt())}
+                Box(Modifier.offset{IntOffset((card.right-level.reservedWidth-envelope.left).roundToInt(),(card.top-envelope.top).roundToInt())}
                     .requiredSize(with(density){level.reservedWidth.toDp()},with(density){card.height.toDp()})
                     .graphicsLayer {
                         alpha=if(!retired&&motion.opening&&motion.clock.value>=1f)1f else 0f
@@ -617,10 +679,12 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
                     val currentOwner=rememberUpdatedState(level.owner)
                     val currentActive=rememberUpdatedState(active)
                     val currentExpanded=rememberUpdatedState(expanded)
+                    val currentStepShift=rememberUpdatedState(stepShift)
+                    val headerAtBottom=opensAbove(level)
                     // Navigation changes paint/input ownership, not the mounted row tree.
                     // Keep active/expanded reads inside callbacks and draw phases so returning
                     // to the parent does not rebuild every source row in the handoff frame.
-                    val content: @Composable ()->Unit = remember(key,ink,frameDensity,density.fontScale,contentHeights,tags.actionPrefix) { {
+                    val content: @Composable ()->Unit = remember(key,ink,frameDensity,density.fontScale,contentHeights,tags.actionPrefix,showDividers,headerAtBottom) { {
                     val owner=currentOwner.value
                     LookaheadScope {
                     Column(Modifier.fillMaxWidth().padding(8.dp)
@@ -629,7 +693,7 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
                             if(contentHeights[key]!=it.height)contentHeights[key]=it.height
                         }) {
                         @Composable fun row(item:GlassMenuItem,i:Int,isHeader:Boolean=false) {
-                            if(item.separated&&!isHeader)Box(Modifier.fillMaxWidth().padding(vertical=8.dp).height(1.dp).background(ink.copy(alpha=.1f)))
+                            if(showDividers&&item.separated&&!isHeader)Box(Modifier.fillMaxWidth().padding(vertical=8.dp).height(1.dp).background(ink.copy(alpha=.1f)))
                             Row(Modifier.fillMaxWidth().onGloballyPositioned {
                                 val parent=activeCoordinates
                                 if(currentActive.value&&parent?.isAttached==true)rows[currentIndex to i]=parent.localBoundingBoxOf(it,false)
@@ -647,9 +711,11 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
                                 .padding(start=12.dp,end=if(item.checked==true||item.children.isNotEmpty()||isHeader)8.dp else 12.dp,
                                     top=12.dp,bottom=12.dp),verticalAlignment=Alignment.CenterVertically) {
                                 Row(Modifier.weight(1f).graphicsLayer {
-                                    translationX=if(currentActive.value&&step!=null)level.width-paintedWidth.value else 0f
+                                    translationX=if(currentActive.value&&step!=null)level.width-paintedWidth.value+
+                                        currentStepShift.value*(1f-unfold.value.coerceIn(0f,1f)) else 0f
                                 }.drawWithContent {
-                                    val shift=if(currentActive.value&&step!=null)level.width-paintedWidth.value else 0f
+                                    val shift=if(currentActive.value&&step!=null)level.width-paintedWidth.value+
+                                        currentStepShift.value*(1f-unfold.value.coerceIn(0f,1f)) else 0f
                                     clipRect(right=(size.width-shift).coerceAtLeast(0f)){this@drawWithContent.drawContent()}
                                 },verticalAlignment=Alignment.CenterVertically) {
                                 item.leadingContent?.let {it();Spacer(Modifier.width(10.dp))}
@@ -665,7 +731,7 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
                                     Spacer(Modifier.width(8.dp));GlassSwitch(item.checked==true,null,pressed=currentActive.value&&selected==i)
                                 }else if(item.children.isNotEmpty()||isHeader) {
                                     Spacer(Modifier.width(8.dp));Canvas(Modifier.size(16.dp).graphicsLayer {
-                                        rotationZ=if(isHeader){if(currentActive.value)90f*unfold.value else 90f}else 0f
+                                        rotationZ=if(isHeader)(if(headerAtBottom)-90f else 90f)*(if(currentActive.value)unfold.value else 1f)else 0f
                                     }){drawLine(ink.copy(alpha=.7f),Offset(size.width*.4f,size.height*.25f),Offset(size.width*.65f,size.height*.5f),1.3.dp.toPx(),StrokeCap.Round)
                                         drawLine(ink.copy(alpha=.7f),Offset(size.width*.65f,size.height*.5f),Offset(size.width*.4f,size.height*.75f),1.3.dp.toPx(),StrokeCap.Round)}
                                 }else if(item.checked==true) {
@@ -676,9 +742,9 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
                                 }
                             }
                         }
-                        if(owner!=null) {
+                        if(owner!=null&&!headerAtBottom) {
                             row(owner,-1,true)
-                            Box(Modifier.fillMaxWidth().padding(vertical=8.dp).height(1.dp).background(ink.copy(alpha=.1f)))
+                            if(showDividers)Box(Modifier.fillMaxWidth().padding(vertical=8.dp).height(1.dp).background(ink.copy(alpha=.1f)))
                         }
                         currentRows.value.forEachIndexed {i,item -> key(item.id){
                             Box(Modifier.then(if(owner?.animateSubItems==true)
@@ -688,6 +754,10 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
                                     else if(!currentActive.value||owner==null)1f else ((unfold.value-.05f)/.35f).coerceIn(0f,1f)
                             }){row(item,i)}
                         }}
+                        if(owner!=null&&headerAtBottom) {
+                            if(showDividers)Box(Modifier.fillMaxWidth().padding(vertical=8.dp).height(1.dp).background(ink.copy(alpha=.1f)))
+                            row(owner,-1,true)
+                        }
                     }
                     }
                     }}

@@ -439,7 +439,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         CompositionLocalProvider(LocalMusicDialogBackdrop provides dialogBackdrop) {
         top.yukonga.miuix.kmp.basic.Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0),
             containerColor = MiuixTheme.colorScheme.background) {
-        CompositionLocalProvider(LocalSongMenu provides { songMenu = it }, LocalRoomSongRequest provides roomRequest,
+        CompositionLocalProvider(LocalSongMenu provides { songMenu = it },
+            LocalSongDownload provides { song -> downloadSongJson = io.github.currencortex.music.core.network.ApiJson.encodeToString(Song.serializer(), song) },
+            LocalRoomSongRequest provides roomRequest,
             LocalPlayerSheetDrag provides playerDrag, LocalPlayerArtworkRotation provides artworkRotation,
             LocalPlayerSheetText provides artworkTransition.text, LocalMiniQueueTransition provides miniQueueTransition,
             LocalRecordFlightTarget provides { miniArtworkOrigin?.invoke()?.bounds }) {
@@ -882,9 +884,19 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             onDismiss = { miniQueueOpen = false }, actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) })
         }
         }
-        songMenu?.let { SongActionsSheet(it, onDismiss = { songMenu = null }, onDownload = { song ->
-            downloadSongJson = io.github.currencortex.music.core.network.ApiJson.encodeToString(Song.serializer(), song)
-        }) }
+        songMenu?.let { menu ->
+            val download: (Song) -> Unit = { song ->
+                downloadSongJson = io.github.currencortex.music.core.network.ApiJson.encodeToString(Song.serializer(), song)
+            }
+            if (menu.previewAnchor != null) SongArtworkPreview(libraryVm, menu.song, menu.previewAnchor,
+                play = menu.play, queue = menu.queue, roomRequest = menu.roomRequest,
+                playEnabled = roomRequest?.pending?.invoke(menu.song.id) != true,
+                playVersion = { song -> if (menu.roomRequest) requestSong(song)
+                    else playWithPermission { container.playerController.playSong(song) } },
+                navigate = ::navigateLibrary, share = { songMenu = menu.copy(previewAnchor = null, shareInitially = true) },
+                download = download, onDismiss = { songMenu = null })
+            else SongActionsSheet(menu, onDismiss = { songMenu = null }, onDownload = download)
+        }
         downloadSongJson?.let { raw ->
             val song = remember(raw) { io.github.currencortex.music.core.network.ApiJson.decodeFromString(Song.serializer(), raw) }
             io.github.currencortex.music.feature.download.SongDownloadDialog(song, container) { downloadSongJson = null }

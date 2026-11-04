@@ -6,6 +6,15 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class SongPreviewClipTest {
+    @Test fun normalizedSegmentsSkipShortOrInvalidRangesAndClampToDuration() {
+        assertEquals(SongPreviewClip(5000, 8000, true), songPreviewClip(listOf(
+            ChorusSegment(20_000, 40_000), ChorusSegment(0, 300), ChorusSegment(-1, 4000),
+            ChorusSegment(5000, 10000)), 8000))
+        assertEquals(SongPreviewClip(0, 700, false), songPreviewClip(emptyList(), 700))
+        assertFalse(songPreviewClip(listOf(ChorusSegment(9000, 10000)), 8000).chorus)
+        assertEquals(SongPreviewClip(Long.MAX_VALUE - 2000, Long.MAX_VALUE, true),
+            songPreviewClip(listOf(ChorusSegment(Long.MAX_VALUE - 2000, Long.MAX_VALUE)), 0))
+    }
     private fun raw(value: String) = Json.parseToJsonElement(value).jsonObject
     @Test fun chorusUsesMillisecondsMatchesTheSongAndCapsTheAudition() {
         val clip = songPreviewClip(raw("""{"chorus":[{"id":8,"startTime":2000,"endTime":4000},{"id":9,"startTime":47500,"endTime":88500}]}"""), 9, 180000)
