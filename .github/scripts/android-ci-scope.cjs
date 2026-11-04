@@ -32,9 +32,6 @@ function isLightweightOnly(paths) {
     '.github/scripts/label-palette.cjs',
     '.github/scripts/label-palette.test.cjs',
     '.github/scripts/collaboration.cjs',
-    '.github/workflows/codex-review-bridge.yml',
-    '.github/scripts/codex-review-bridge.cjs',
-    '.github/scripts/codex-review-bridge.test.cjs',
     'AGENTS.md',
   ]);
   return paths.length > 0 && paths.every(path =>

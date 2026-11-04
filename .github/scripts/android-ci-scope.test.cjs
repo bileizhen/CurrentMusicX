@@ -179,17 +179,6 @@ test('Label palette automation is a lightweight CI change', () => {
   assert.equal(isLightweightOnly(['.github/scripts/label-palette.cjs','app/src/main/AndroidManifest.xml']), false);
 });
 
-test('Fork Codex review bridge is lightweight-only',()=>{
-  assert.equal(isLightweightOnly([
-    '.github/workflows/codex-review-bridge.yml',
-    '.github/scripts/codex-review-bridge.cjs',
-    '.github/scripts/codex-review-bridge.test.cjs',
-    '.github/scripts/android-ci-scope.cjs',
-    '.github/scripts/android-ci-scope.test.cjs'
-  ]),true);
-  assert.equal(isLightweightOnly(['.github/workflows/codex-review-bridge.yml','app/src/main/AndroidManifest.xml']),false);
-});
-
 test('CI Release retention rules are lightweight automation changes', () => {
   assert.equal(isLightweightOnly([
     '.github/workflows/ci-prune.yml',
