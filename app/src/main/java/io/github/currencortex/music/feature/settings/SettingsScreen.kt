@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.settings
 
+import io.github.currencortex.music.ui.component.rootMotionItems
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -39,6 +40,7 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
     }) { topInset ->
     LazyColumn(Modifier.fillMaxSize().testTag("settings_screen"),
         contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 24.dp, 16.dp, 20.dp))) {
+        rootMotionItems {
         item {
             var origin by remember { mutableStateOf<LayoutCoordinates?>(null) }
             val sourceLayer = rememberGraphicsLayer()
@@ -92,6 +94,7 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
                 SettingsPagePreference("关于", "版本、开源许可与隐私", MusicIcons.Info,"open_about",onAbout)
             }
         }
+    }
     }
     }
     }

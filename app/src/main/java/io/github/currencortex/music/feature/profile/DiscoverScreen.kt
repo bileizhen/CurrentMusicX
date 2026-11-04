@@ -34,7 +34,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         ScrollingPageHeader(topInset, pager.settledPage, header = {
             SettingsSegmentedControl(listOf("音乐", "用户", "帖子", "Chat"), pager.targetPage,
                 { index -> scope.launch { pager.animateScrollToPage(index) } },
-                Modifier.padding(horizontal = 16.dp).padding(bottom = 12.dp), tag = "discover_tabs", role = Role.Tab)
+                Modifier.elasticRootComponent().padding(horizontal = 16.dp).padding(bottom = 12.dp), tag = "discover_tabs", role = Role.Tab)
         }) { headerSpace ->
             HorizontalPager(pager, Modifier.fillMaxSize().testTag("discover_pager")) { page ->
                 when (page) {
@@ -58,11 +58,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     LazyColumn(Modifier.fillMaxSize().testTag("discover_music"),
         contentPadding = PaddingValues(start = 16.dp, top = topInset + 24.dp, end = 16.dp, bottom = 20.dp + bottom),
         verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        rootMotionItems(skipKeys = setOf("styles")) {
         item { SettingsGroup {
             ProfileDestination("每日推荐", "今天的专属歌单", MusicIcons.Play, "discover_daily") { navigate("lib/daily") }
             SettingsDivider(52.dp)
             ProfileDestination("猜你喜欢", "沿着喜欢的旋律继续探索", MusicIcons.Heart, "discover_foryou") { navigate("lib/foryou") }
         } }
-        item { io.github.currencortex.music.feature.style.MusicStyleCategories(styles, vm::loadStyles, navigate, vm::loadStyleCover, listHeader = true) }
+        item(key = "styles") { io.github.currencortex.music.feature.style.MusicStyleCategories(styles, vm::loadStyles, navigate, vm::loadStyleCover, listHeader = true) }
+    }
     }
 }

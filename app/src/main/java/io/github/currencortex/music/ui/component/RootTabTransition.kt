@@ -18,6 +18,7 @@ import androidx.compose.runtime.saveable.SaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.MotionDurationScale
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.boundsInRoot
@@ -26,6 +27,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -36,11 +38,14 @@ import kotlin.math.abs
 import kotlin.math.ceil
 
 /** Project a hero destination onto the stationary viewport while its page is still sliding in. */
-class RootTabPlacement(private val viewport: () -> LayoutCoordinates?, private val page: () -> LayoutCoordinates?) {
+class RootTabPlacement(private val viewport: () -> LayoutCoordinates?, private val page: () -> LayoutCoordinates?,
+    private val componentOffset: () -> Float = { 0f }) {
+    internal fun forComponent(offset: () -> Float) = RootTabPlacement(viewport, page) { componentOffset() + offset() }
     fun landingBounds(child: LayoutCoordinates): Rect? {
         val root = viewport()?.takeIf { it.isAttached } ?: return null
         val page = page()?.takeIf { it.isAttached } ?: return null
-        return page.localBoundingBoxOf(child, clipBounds = false).translate(root.boundsInRoot().topLeft)
+        return page.localBoundingBoxOf(child, clipBounds = false)
+            .translate(root.boundsInRoot().topLeft - Offset(componentOffset(), 0f))
     }
     fun visible(bounds: Rect): Boolean {
         val root = viewport()?.takeIf { it.isAttached }?.boundsInRoot() ?: return false
@@ -51,14 +56,14 @@ val LocalRootTabPlacement = staticCompositionLocalOf<RootTabPlacement?> { null }
 /** Only root-page title containers opt into moving the root pager. */
 val LocalRootTabSwipe = compositionLocalOf<Modifier> { Modifier }
 
-/** Retained root pages: continuous movement with elastic trailing content, or the upstream crossfade. */
+/** Retained root pages with individually trailing components, or the upstream crossfade. */
 @Composable fun RootTabTransition(selected: Int, states: SaveableStateHolder,
     onSelected: (Int) -> Unit, fade: Boolean = false, elastic: Boolean = true, content: @Composable (Int) -> Unit) {
     val pager = rememberPagerState(initialPage = selected, pageCount = { 4 })
-    val strain = rememberPageStrain(pager, enabled = elastic && !fade)
-    val settling by remember(strain) { derivedStateOf { abs(strain.value) > .002f } }
     val easing = remember { CubicBezierEasing(.2f, 0f, .2f, 1f) }
     var viewport by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val motion = rememberRootComponentMotion(pager, enabled = elastic && !fade, viewport = { viewport })
+    val settling by remember(motion) { derivedStateOf { motion.settling } }
     var gesturePending by remember { mutableStateOf(false) }
     var previousSelection by remember { mutableIntStateOf(selected) }
     var fadeFrom by remember { mutableStateOf<Int?>(null) }
@@ -130,7 +135,7 @@ val LocalRootTabSwipe = compositionLocalOf<Modifier> { Modifier }
         }
     }
     HorizontalPager(pager, modifier = Modifier.fillMaxSize().testTag("root_tab_transition")
-        .elasticPageSurface(strain)
+        .semantics { this[RootElasticStrainKey] = motion.strain }
         .onGloballyPositioned { viewport = it },
         // Four fixed root pages fit in a bounded cache. Retaining them avoids composing and
         // discarding the nested Discover pager in the middle of every Settings -> Me slide.
@@ -147,6 +152,7 @@ val LocalRootTabSwipe = compositionLocalOf<Modifier> { Modifier }
                 else -> Lifecycle.State.CREATED
             })
             CompositionLocalProvider(LocalRootTabPlacement provides placement, LocalRootTabSwipe provides swipe,
+                LocalRootComponentMotion provides if (elastic && !fade) motion else null,
                 LocalLifecycleOwner provides lifecycle, LocalMusicPageActive provides active) {
                 Box(Modifier.fillMaxSize().onGloballyPositioned { page = it }
                     .graphicsLayer {
