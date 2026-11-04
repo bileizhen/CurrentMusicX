@@ -99,12 +99,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         }
         (if (expanded) state.styles else state.styles.take(6)).chunked(2).forEach { pair ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                pair.forEach { style -> key(style.tagId) {
+                pair.forEachIndexed { index, style -> key(style.tagId) {
                     val cover = state.covers[style.tagId]
                     LaunchedEffect(style.tagId, cover == null, state.loading) {
                         if (cover == null && !state.loading) loadCover(style.tagId)
                     }
-                    StyleCard(style, cover, Modifier.weight(1f), navigate)
+                    StyleCard(style, cover, Modifier.weight(1f).elasticRootComponent(index), navigate)
                 } }
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             }

@@ -238,7 +238,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     Text(text, modifier, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f), maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
 @Composable private fun NavEntryRow(entry: NavidromeEntry, open: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button, onClick = open).testTag("navidrome_entry_${entry.id}").padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.elasticRootComponent().fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button, onClick = open).testTag("navidrome_entry_${entry.id}").padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         if (entry.cover.isNotBlank()) MusicCover(entry.cover, Modifier.size(52.dp), cornerRadius = 12.dp)
         else Box(Modifier.size(52.dp).background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Text(entry.name.take(1), fontSize = 22.sp, color = MiuixTheme.colorScheme.primary) }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -250,7 +250,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
 }
 @Composable private fun NavAlbumCard(entry: NavidromeEntry, open: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button, onClick = open).testTag("navidrome_entry_${entry.id}"), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+    Column(Modifier.elasticRootComponent().fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button, onClick = open).testTag("navidrome_entry_${entry.id}"), verticalArrangement = Arrangement.spacedBy(7.dp)) {
         MusicCover(entry.cover, Modifier.fillMaxWidth().aspectRatio(1f), pixels = 480, cornerRadius = 14.dp)
         Text(entry.name, Modifier.heightIn(min = 40.dp), maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
         NavHint(entry.subtitle, Modifier.padding(bottom = 8.dp))

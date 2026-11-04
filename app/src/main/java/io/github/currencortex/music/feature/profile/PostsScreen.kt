@@ -49,6 +49,7 @@ private fun postTime(seconds: Long) = if (seconds <= 0) "" else
     LazyColumn(Modifier.fillMaxSize().testTag("discover_posts"),
         contentPadding = PaddingValues(start = 16.dp, top = contentTopInset + 8.dp, end = 16.dp, bottom = 20.dp + bottom),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        rootMotionItems {
         item { Row(verticalAlignment = Alignment.CenterVertically) {
             Text(if (state.loaded) "${state.total} 条帖子" else "音乐与生活", Modifier.weight(1f), fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
@@ -113,6 +114,7 @@ private fun postTime(seconds: Long) = if (seconds <= 0) "" else
         }
         if (state.posts.isNotEmpty() && !state.done) item { MusicTextAction(if (state.loading) "加载中…" else "加载更多", { vm.reload(true) },
             Modifier.testTag("posts_more"), enabled = !state.loading) }
+    }
     }
     }
     if (state.editor) {

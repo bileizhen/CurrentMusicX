@@ -104,6 +104,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             LazyColumn(Modifier.fillMaxSize().testTag("discover_users_list"), state = list,
                 contentPadding = PaddingValues(start = 20.dp, top = 8.dp, end = 20.dp, bottom = 20.dp + bottom),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        rootMotionItems {
                 item(key = "summary") {
                     Text(when {
                         !state.loaded && state.loading -> "正在查找用户…"
@@ -142,6 +143,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     }
                 }
             }
+    }
         }
     }
     if (sorting) MusicChoiceDialog("用户排序", { sorting = false }) {
