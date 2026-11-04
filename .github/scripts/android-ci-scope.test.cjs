@@ -5,45 +5,12 @@ const os = require('node:os');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const { execFileSync } = require('node:child_process');
-const { isLightweightOnly, detectScope, determineBuildScope } = require('./android-ci-scope.cjs');
-
-test('a lightweight main push that replaces a pending app build must cover unpublished changes', async () => {
-  const published = 'a'.repeat(40), before = 'b'.repeat(40), sha = 'c'.repeat(40);
-  const release = { id: 119, name: 'CurrentMusic CI #119', tag_name: 'v1.3.3-ci.119',
-    draft: false, prerelease: true, target_commitish: published,
-    assets: [{ name: 'CurrentMusic-Android-v1.3.3-ci.119.apk' }, { name: 'SHA256SUMS.txt' }] };
-  let releaseList = [release], cumulativePaths = 'app/build.gradle.kts\0README.md\0', queries = 0;
-  const github = { rest: { repos: { listReleases() {} } }, paginate: async () => {
-    queries++;
-    if (releaseList instanceof Error) throw releaseList;
-    return releaseList;
-  } };
-  const git = args => {
-    if (args[0] === 'rev-parse') return sha;
-    if (args[0] === 'cat-file') return '';
-    if (args[0] === 'diff') return args[4] === published ? cumulativePaths : 'README.md\0';
-    throw new Error('unexpected git command');
-  };
-  const run = eventName => determineBuildScope({ github, git, context: {
-    eventName, sha, repo: { owner: 'owner', repo: 'app' },
-    payload: { before, pull_request: { base: { sha: before } } },
-  } });
-  assert.equal((await run('pull_request')).required, false);
-  assert.equal((await run('workflow_dispatch')).required, true);
-  assert.equal(queries, 0);
-  assert.equal((await run('push')).required, true);
-  cumulativePaths = 'README.md\0.github/img/cover.jpg\0';
-  assert.equal((await run('push')).required, false);
-  for (releaseList of [[], [{ ...release, draft: true }], [{ ...release, assets: [] }],
-    [{ ...release, target_commitish: 'main' }], new Error('API unavailable')]) {
-    assert.equal((await run('push')).required, true);
-  }
-});
+const { isLightweightOnly, detectScope } = require('./android-ci-scope.cjs');
 
 test('documentation and independently checked CI files may skip Android', () => {
   assert.equal(isLightweightOnly(['README.md', 'README-en.md', '.github/img/home.jpg', '.github/img/新截图.png']), true);
   assert.equal(isLightweightOnly(['README.md',
-    '.github/workflows/collaboration-checks.yml', '.github/scripts/android-ci-scope.cjs',
+    '.github/workflows/android.yml', '.github/release.yml', '.github/workflows/collaboration-checks.yml', '.github/scripts/android-ci-scope.cjs',
     '.github/scripts/android-ci-scope.test.cjs']), true);
   assert.equal(isLightweightOnly(['.github/workflows/ci-distribution.yml',
     '.github/scripts/ci-release.cjs', '.github/scripts/ci-release.test.cjs']), true);
@@ -51,7 +18,7 @@ test('documentation and independently checked CI files may skip Android', () => 
     '.github/scripts/update-pr-branches.cjs', '.github/scripts/update-pr-branches.test.cjs']), true);
   for (const files of [[], ['app/src/main/assets/legal/PRIVACY.md'], ['PRIVACY.md'],
     ['app/src/main/cpp/oboe/UPSTREAM.md'], ['app/src/main/res/raw/cover.png'],
-    ['README.md', 'app/build.gradle.kts'], ['.github/workflows/android.yml'],
+    ['README.md', 'app/build.gradle.kts'],
     ['.github/scripts/android-ci-scope.cjs', 'app/src/main/AndroidManifest.xml'],
     ['.github/img/script.sh'], ['README.md\napp/code.kt']]) {
     assert.equal(isLightweightOnly(files), false, JSON.stringify(files));

@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const { isLightweightOnly } = require('./android-ci-scope.cjs');
 
 function validateMetadata(metadata, number) {
   if (!Number.isInteger(number) || number < 1 || number > 99999) throw new Error('Invalid CI build number');
@@ -27,6 +28,25 @@ function hasSuccessfulAndroidBuild(jobs) {
       job.steps?.some(step => step.name === name && step.conclusion === 'success')));
 }
 
+function onlyLightweightChangesSince(comparison, builtSha) {
+  // GitHub returns at most 300 changed files. A full page could be truncated.
+  const files = comparison.files;
+  if (comparison.status !== 'ahead' || comparison.base_commit?.sha !== builtSha ||
+      comparison.merge_base_commit?.sha !== builtSha || !Array.isArray(files) ||
+      files.length === 0 || files.length >= 300) return false;
+  const paths = [];
+  for (const file of files) {
+    if (!file || typeof file.filename !== 'string' ||
+        !['added','removed','modified','renamed'].includes(file.status)) return false;
+    if (file.status === 'renamed') {
+      if (typeof file.previous_filename !== 'string') return false;
+      paths.push(file.previous_filename);
+    }
+    paths.push(file.filename);
+  }
+  return isLightweightOnly(paths);
+}
+
 function prepare() {
   const directory = 'app/build/outputs/apk/release';
   const metadata = JSON.parse(fs.readFileSync(`${directory}/output-metadata.json`, 'utf8'));
@@ -44,7 +64,15 @@ async function publish({github, context, core}) {
   const run = (await github.rest.actions.getWorkflowRun({...repo, run_id:eventRun.id})).data;
   if (!trustedRun(run, fullName) || run.head_sha !== eventRun.head_sha || run.run_attempt !== eventRun.run_attempt) throw new Error('CI run changed');
   const main = (await github.rest.repos.getBranch({...repo,branch:'main'})).data.commit.sha;
-  if (main !== run.head_sha) { core.info('A newer main commit exists; skip this superseded build'); return; }
+  if (main !== run.head_sha) {
+    const comparison = (await github.rest.repos.compareCommitsWithBasehead({
+      ...repo, basehead: `${run.head_sha}...${main}`, per_page: 1,
+    })).data;
+    if (!onlyLightweightChangesSince(comparison, run.head_sha)) {
+      core.info('Main has different or unverified Android inputs; skip this superseded build');
+      return;
+    }
+  }
   const metadata = JSON.parse(fs.readFileSync('ci-dist/output-metadata.json', 'utf8'));
   const {tag,file} = validateMetadata(metadata, run.run_number);
   if (tag !== process.env.CI_TAG) throw new Error('Unexpected CI tag');
