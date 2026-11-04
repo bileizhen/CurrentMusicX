@@ -48,6 +48,11 @@ async function publicationScenario(options, check) {
   const calls=[];
   const api={actions:{getWorkflowRun:async()=>({data:run})},repos:{
     getBranch:async()=>({data:{commit:{sha:options.superseded ? 'b'.repeat(40) : run.head_sha}}}),
+    compareCommitsWithBasehead:async({basehead})=>{
+      assert.equal(basehead,`${run.head_sha}...${'b'.repeat(40)}`);
+      return {data:{status:'ahead',base_commit:{sha:run.head_sha},merge_base_commit:{sha:run.head_sha},
+        files:[{filename:'app/build.gradle.kts',status:'modified'}],...options.comparison}};
+    },
     getReleaseByTag:async()=>{if(options.existing)return {data:{}};throw Object.assign(new Error('missing'),{status:404});},
     getLatestRelease:async()=>({data:{tag_name:'v1.3.2'}}),
     generateReleaseNotes:async()=>({data:{body:'* Feature by @author in #10'}}),
@@ -80,6 +85,29 @@ test('bad uploaded digest leaves a draft rather than exposing a broken update',a
 });
 test('reruns and superseded main builds never overwrite published assets',async()=>{
   for(const options of [{existing:true},{superseded:true}]) await publicationScenario(options,async(run,calls)=>{
+    await run(); assert.equal(calls.length,0);
+  });
+});
+
+test('a lightweight successor preserves the originally built SHA and APK',async()=>{
+  const files=[{filename:'README-en.md',previous_filename:'README.md',status:'renamed'}];
+  await publicationScenario({superseded:true,comparison:{files}},async(run,calls)=>{
+    await run();
+    assert.deepEqual(calls.map(c=>c[0]),['create','upload','upload','publish']);
+    assert.equal(calls[0][1].target_commitish,'a'.repeat(40));
+    assert.match(calls[0][1].body,new RegExp('提交 '+'a'.repeat(40)));
+  });
+});
+
+test('unverified comparisons and app changes cannot publish a superseded APK',async()=>{
+  const doc={filename:'README.md',status:'modified'};
+  for (const comparison of [
+    {status:'diverged',files:[doc]}, {base_commit:{sha:'x'},files:[doc]},
+    {merge_base_commit:{sha:'x'},files:[doc]}, {files:undefined}, {files:[]},
+    {files:Array(300).fill(doc)}, {files:[{...doc,status:'renamed'}]},
+    {files:[{...doc,status:'renamed',previous_filename:'app/build.gradle.kts'}]},
+    {files:[{...doc,status:'unknown'}]},
+  ]) await publicationScenario({superseded:true,comparison},async(run,calls)=>{
     await run(); assert.equal(calls.length,0);
   });
 });

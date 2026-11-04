@@ -2,6 +2,7 @@ changelog:
   exclude:
     labels:
       - ignore-for-release
+      - ci-internal
   categories:
     - title: Breaking Changes
       labels:
