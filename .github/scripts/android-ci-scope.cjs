@@ -1,41 +1,14 @@
 const { execFileSync } = require('node:child_process');
-const { planCiPrune } = require('./ci-prune.cjs');
 
 // Keep the allowlist outside runtime assets: legal Markdown and app images can
 // affect the APK and must still exercise the normal Android checks.
+function isInternalCiPath(path) {
+  return typeof path === 'string' && (/^\.github\/(?:scripts|workflows)\//.test(path) ||
+    ['.github/release.yml', '.github/CI_RELEASE_POLICY.md', '.github/REVIEW_POLICY.md', 'AGENTS.md'].includes(path));
+}
+
 function isLightweightOnly(paths) {
-  const checkedAutomation = new Set([
-    '.github/workflows/collaboration-checks.yml',
-    '.github/scripts/android-ci-scope.cjs',
-    '.github/scripts/android-ci-scope.test.cjs',
-    '.github/workflows/ci-distribution.yml',
-    '.github/scripts/ci-release.cjs',
-    '.github/scripts/ci-release.test.cjs',
-    '.github/workflows/ci-prune.yml',
-    '.github/scripts/ci-prune.cjs',
-    '.github/scripts/ci-prune.test.cjs',
-    '.github/CI_RELEASE_POLICY.md',
-    '.github/workflows/release-draft.yml',
-    '.github/scripts/release-draft.cjs',
-    '.github/scripts/release-draft.test.cjs',
-    '.github/workflows/update-pr-branches.yml',
-    '.github/scripts/update-pr-branches.cjs',
-    '.github/scripts/update-pr-branches.test.cjs',
-    '.github/workflows/pr-review-summary.yml',
-    '.github/scripts/pr-review-summary.cjs',
-    '.github/scripts/pr-review-summary.test.cjs',
-    '.github/scripts/pr-risk.cjs',
-    '.github/scripts/pr-risk.test.cjs',
-    '.github/REVIEW_POLICY.md',
-    '.github/workflows/label-palette.yml',
-    '.github/workflows/pr-risk.yml',
-    '.github/scripts/label-palette.cjs',
-    '.github/scripts/label-palette.test.cjs',
-    '.github/scripts/collaboration.cjs',
-    'AGENTS.md',
-  ]);
-  return paths.length > 0 && paths.every(path =>
-    checkedAutomation.has(path) ||
+  return paths.length > 0 && paths.every(path => isInternalCiPath(path) ||
     /^README(?:-[^/]+)?\.md$/.test(path) ||
     /^\.github\/img\/.+\.(?:svg|png|jpe?g|webp|gif)$/.test(path));
 }
@@ -65,22 +38,4 @@ function detectScope({ eventName, event, sha, git = args =>
   }
 }
 
-async function determineBuildScope({ github, context, git }) {
-  const { eventName, payload: event, sha } = context;
-  const scope = detectScope({ eventName, event, sha, git });
-  if (eventName !== 'push' || scope.required) return scope;
-
-  // A lightweight push can cancel the main build that contained the app change.
-  // Only skip if the latest published CI APK already covers all Android inputs.
-  try {
-    const releases = await github.paginate(github.rest.repos.listReleases, { ...context.repo, per_page: 100 });
-    const { keep } = planCiPrune(releases);
-    const baseline = keep && releases.find(release => release.id === keep.id).target_commitish;
-    if (baseline) return detectScope({ eventName, event: { before: baseline }, sha, git });
-  } catch {
-    // A missing, ambiguous or unreadable release must not suppress compilation.
-  }
-  return { required: true, reason: 'No reliable published CI build to compare' };
-}
-
-module.exports = { isLightweightOnly, detectScope, determineBuildScope };
+module.exports = { isInternalCiPath, isLightweightOnly, detectScope };

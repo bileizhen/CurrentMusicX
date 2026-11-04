@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {classify}=require('./pr-risk.cjs');
+const {classify,isInternalCiOnly}=require('./pr-risk.cjs');
 const prefix='app/src/main/java/io/github/currencortex/music/';
 test('documentation is low',()=>assert.equal(classify(['README.md','.github/img/home.png']).level,'low'));
 test('ordinary app UI is medium',()=>assert.equal(classify([prefix+'feature/player/PlayerScreen.kt']).level,'medium'));
@@ -11,6 +11,16 @@ test('production manifest high, test manifest medium',()=>{
   assert.equal(classify(['app/src/androidTest/AndroidManifest.xml']).level,'medium');
 });
 test('release workflow high',()=>assert.equal(classify(['.github/workflows/ci-distribution.yml']).level,'high'));
+test('only complete, internal CI changes are excluded from release notes', () => {
+  const script = {filename: '.github/scripts/release-draft.cjs', status: 'modified'};
+  assert.equal(isInternalCiOnly([script, {filename: '.github/workflows/android.yml'}], 2), true);
+  assert.equal(isInternalCiOnly([script, {filename: 'app/build.gradle.kts'}], 2), false);
+  assert.equal(isInternalCiOnly([script], 2), false);
+  assert.equal(isInternalCiOnly([], 0), false);
+  assert.equal(isInternalCiOnly([{...script, status: 'renamed'}], 1), false);
+  assert.equal(isInternalCiOnly([{...script, status: 'renamed', previous_filename: 'app/src/config.cjs'}], 1), false);
+  assert.equal(isInternalCiOnly([{...script, status: 'renamed', previous_filename: '.github/scripts/old.cjs'}], 1), true);
+});
 test('unknown automation medium',()=>assert.equal(classify(['.github/workflows/pr-review-summary.yml']).level,'medium'));
 test('missing or huge changes fail closed',()=>{
   assert.equal(classify([]).level,'high');
