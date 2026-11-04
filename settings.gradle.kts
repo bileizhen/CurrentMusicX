@@ -1,4 +1,18 @@
 pluginManagement {
+    buildscript {
+        repositories {
+            val officialFirst = providers.gradleProperty("lei.officialRepositoriesFirst").orNull == "true"
+            if (officialFirst) { google(); mavenCentral() }
+            maven("https://maven.aliyun.com/repository/google")
+            if (!officialFirst) { google(); mavenCentral() }
+        }
+        dependencies {
+            // Kotlin 2.4 requires R8 >= 9.1.29; AGP 8.13.2 embeds R8 8.13.19.
+            // Remove this override when AGP bundles a compatible version.
+            // https://developer.android.com/build/kotlin-support
+            classpath("com.android.tools:r8:9.1.57")
+        }
+    }
     resolutionStrategy {
         eachPlugin {
             if (requested.id.id == "com.google.devtools.ksp") {
