@@ -21,7 +21,13 @@ function fake(options = {}) {
     listReleases: 'releases',
     generateReleaseNotes: async args => {calls.push(args);return {data:{body:'## Bug Fixes\n* Fix by @author in https://github.com/example/repo/pull/2\n\n**Full Changelog**: compare'}};},
     createRelease: async args => {calls.push(args);return {data:{html_url:'draft'}};},
-  }, actions:{listWorkflowRuns:'runs'} }, paginate: async endpoint => endpoint === 'releases' ? (options.releases ?? []) : (options.runs ?? [{conclusion:'success',head_branch:'main',event:'push'}]) };
+  }, actions:{listWorkflowRuns:'runs',listJobsForWorkflowRun:'jobs',listWorkflowRunArtifacts:'artifacts'} },
+    paginate: async endpoint => endpoint === 'releases' ? (options.releases ?? []) :
+      endpoint === 'runs' ? (options.runs ?? [{id:1,run_number:15,status:'completed',head_sha:'target',conclusion:'success',head_branch:'main',event:'push'}]) :
+      endpoint === 'jobs' ? (options.jobs ?? [{name:'build',conclusion:'success',steps:[
+        {name:'Build and verify unsigned CI release',conclusion:'success'},
+        {name:'Upload unsigned CI APK',conclusion:'success'}]}]) :
+      (options.artifacts ?? [{name:'ci-unsigned',expired:false,size_in_bytes:123}]) };
   return {github,context:{repo:{owner:'example',repo:'repo'}},core:{setOutput:()=>{},info:()=>{}},calls};
 }
 async function withEnv(task) {
@@ -45,7 +51,9 @@ test('release notes preserve native attribution and explicit tag range', async t
 test('release preparation refuses existing release, failed CI and divergent history',async()=>{
   await withEnv(async()=>{
     for(const options of [{releases:[{tag_name:'v1.3.3'}]},{runs:[]},{ancestry:'diverged'},
-      {runs:[{id:1,conclusion:'success',head_branch:'main',event:'push'},{id:2,conclusion:'failure',head_branch:'main',event:'push'}]}]) {
+      {runs:[{id:1,status:'completed',head_sha:'target',conclusion:'success',head_branch:'main',event:'push'},{id:2,conclusion:'failure',head_branch:'main',event:'push'}]},
+      {jobs:[]},{artifacts:[]},{artifacts:[{name:'ci-unsigned',expired:true,size_in_bytes:123}]},
+      {runs:[{id:1,status:'completed',head_sha:'wrong',conclusion:'success',head_branch:'main',event:'push'}]}) {
       const client=fake(options); await assert.rejects(()=>prepare(client)); assert.equal(client.calls.length,0);
     }
   });
