@@ -19,10 +19,13 @@ concurrency:
   cancel-in-progress: false
 jobs:
   prune:
-    if: github.repository == 'bileizhen/CurrentMusicX' && github.ref == 'refs/heads/main'
+    if: >-
+      github.repository == 'bileizhen/CurrentMusicX' && github.ref == 'refs/heads/main' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      actions: read
       contents: write
     steps:
       # Only use the trusted default branch. Never execute any PR-head code.

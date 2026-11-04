@@ -45,8 +45,16 @@ async function prune({github,context,core}) {
   const repo=context.repo;
   const fullName=repo.owner+'/'+repo.repo;
   if (fullName!==REPO) throw new Error('Unexpected repository');
-  if (context.eventName==='workflow_run' && !trustedUpstream(context.payload.workflow_run,fullName))
-    throw new Error('Ignoring untrusted upstream publication run');
+  if (context.eventName==='workflow_run') {
+    const run=context.payload.workflow_run;
+    if (!trustedUpstream(run,fullName)) throw new Error('Ignoring untrusted upstream publication run');
+    const jobs=await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
+      {...repo,run_id:run.id,attempt_number:run.run_attempt,per_page:100});
+    if (!jobs.some(job=>job.name==='publish' && job.conclusion==='success')) {
+      core.info('Upstream publish job did not succeed; skipping CI release cleanup');
+      return;
+    }
+  }
   if (!['workflow_run','push','workflow_dispatch'].includes(context.eventName))
     throw new Error('Unsupported trigger');
 

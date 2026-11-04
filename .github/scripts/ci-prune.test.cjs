@@ -96,3 +96,30 @@ test('failed tag deletion is reported after successful release removal',async()=
   await assert.rejects(prune(args),/tag deletion failed/);
   assert.deepEqual(args.calls,[['release',100094],['tag','tags/v1.3.2-ci.94']]);
 });
+test('automatic cleanup requires the publish job to succeed in the triggering attempt',async()=>{
+  for (const conclusion of ['skipped','success']) {
+    const releases=[ci(109),ci(94)], args=harness(releases);
+    const run={id:10,run_attempt:2,status:'completed',conclusion:'success',
+      head_branch:'main',head_repository:{full_name:'bileizhen/CurrentMusicX'},
+      event:'workflow_run',path:'.github/workflows/ci-distribution.yml'};
+    args.context.eventName='workflow_run';
+    args.context.payload={workflow_run:run};
+    args.github.rest.actions={listJobsForWorkflowRunAttempt(){}};
+    const reads=[];
+    args.github.paginate=async(method,params)=>{
+      if (method===args.github.rest.actions.listJobsForWorkflowRunAttempt) {
+        reads.push('jobs');
+        assert.equal(params.run_id,10);
+        assert.equal(params.attempt_number,2);
+        return [{name:'gate',conclusion:'success'},{name:'publish',conclusion}];
+      }
+      assert.equal(method,args.github.rest.repos.listReleases);
+      reads.push('releases');
+      return releases;
+    };
+    await prune(args);
+    assert.deepEqual(reads,conclusion==='success'?['jobs','releases']:['jobs']);
+    assert.deepEqual(args.calls,conclusion==='success'?
+      [['release',100094],['tag','tags/v1.3.2-ci.94']]:[]);
+  }
+});
