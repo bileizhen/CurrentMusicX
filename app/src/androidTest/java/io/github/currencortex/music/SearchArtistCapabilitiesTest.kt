@@ -161,12 +161,11 @@ class SearchArtistCapabilitiesTest {
             val subtitle = compose.onNodeWithTag("search_result_subtitle_11", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
             val like = compose.onNodeWithTag("search_like_11").fetchSemanticsNode().boundsInRoot
             val playlist = compose.onNodeWithTag("search_playlist_11").fetchSemanticsNode().boundsInRoot
-            val more = compose.onNodeWithTag("song_menu_11").fetchSemanticsNode().boundsInRoot
-            assertTrue("Text must leave room for all three actions", title.right <= like.left && subtitle.right <= like.left)
-            assertTrue(like.right <= playlist.left && playlist.right < more.left)
+            compose.onNodeWithTag("song_menu_11").assertDoesNotExist()
+            assertTrue("Text must leave room for the retained actions", title.right <= like.left && subtitle.right <= like.left)
+            assertTrue(like.right <= playlist.left)
             val capsule = compose.onNodeWithTag("search_quick_actions_11", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
             assertTrue(capsule.left <= like.left && capsule.right >= playlist.right)
-            assertTrue("More must remain outside the two-action capsule", capsule.right < more.left)
             save("search-results-${mode.name.lowercase()}.png")
         }
         compose.onNodeWithTag("search_like_11").performClick()
@@ -182,11 +181,23 @@ class SearchArtistCapabilitiesTest {
         compose.waitUntil(10000) { compose.onAllNodesWithText("没有可编辑的歌单，请先创建歌单").fetchSemanticsNodes().isNotEmpty() }
         androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
         compose.waitUntil(5000) { compose.onAllNodesWithText("收藏到歌单").fetchSemanticsNodes().isEmpty() }
-        compose.onNodeWithTag("song_menu_11").performClick()
-        awaitTag("song_actions_sheet")
+        val cover = compose.onNodeWithTag("search_result_cover_11", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithTag("search_result_row_11").performTouchInput { longClick(androidx.compose.ui.geometry.Offset(20f, centerY)) }
+        awaitTag("artwork_preview_menu")
+        compose.onNodeWithTag("song_actions_sheet").assertDoesNotExist()
+        compose.onNodeWithTag("artwork_preview_like").assertIsDisplayed()
+        compose.onNodeWithTag("artwork_preview_next").assertDoesNotExist()
         assertEquals(listOf(900L), container.playbackQueue.state.value.songs.map { it.id })
         assertEquals(900L, container.playbackQueue.state.value.current?.id)
         assertFalse(container.playerController.state.value.playing)
+        compose.onNodeWithTag("artwork_preview_more").performClick()
+        awaitTag("artwork_preview_submenu")
+        compose.onNodeWithTag("song_versions").assertExists()
+        compose.onNodeWithTag("artwork_preview_submenu_back").performClick()
+        compose.waitForIdle()
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("artwork_preview").fetchSemanticsNodes().isEmpty() }
+        assertEquals(cover, compose.onNodeWithTag("search_result_cover_11", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot)
     }
 
     @Test fun bulkActionsUseOnlyLoadedResultsAndQueueAllPreservesTheCurrentSong() {
@@ -262,6 +273,13 @@ class SearchArtistCapabilitiesTest {
         compose.onNodeWithTag("search_like_11", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithTag("search_playlist_11", useUnmergedTree = true).assertIsDisplayed()
         save("search-lyrics.png")
+        compose.onNodeWithTag("song_menu_11").assertDoesNotExist()
+        compose.onNodeWithTag("search_result_row_11").performTouchInput { longClick(androidx.compose.ui.geometry.Offset(20f, centerY)) }
+        awaitTag("artwork_preview_menu")
+        compose.onNodeWithTag("artwork_preview_queue").assertIsDisplayed()
+        assertEquals(900L, container.playbackQueue.state.value.current?.id)
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("artwork_preview").fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithTag("search_input").performTextReplacement("draft")
         compose.onNodeWithTag("search_category_lyric").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) { it() }
         clickFooter("search_screen", "search_load_more")

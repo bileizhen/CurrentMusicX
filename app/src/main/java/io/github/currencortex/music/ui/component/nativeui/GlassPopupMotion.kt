@@ -86,6 +86,12 @@ internal fun glassReturning(anchor: Rect, start: GlassPopupFrame, time: Float, d
     private var from by mutableStateOf<GlassPopupFrame?>(null)
     var shown by mutableStateOf(false)
         private set
+    suspend fun settle(open: Boolean) {
+        clock.snapTo(1f)
+        from = null
+        opening = open
+        shown = open
+    }
     fun frame(anchor: Rect, card: Rect, density: Float): GlassPopupFrame {
         val settled = GlassPopupFrame(card,24*density,rectAt(anchor.center*.75f+card.center*.25f,
             anchor.width*.25f,anchor.height*.25f),1f,0f,1f,28*density,12f)

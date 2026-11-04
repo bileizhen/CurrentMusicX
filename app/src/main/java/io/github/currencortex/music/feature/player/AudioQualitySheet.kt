@@ -28,6 +28,14 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
+import io.github.currencortex.music.core.network.AppResult
+import io.github.currencortex.music.core.network.appResult
+import io.github.currencortex.music.data.song.*
+import io.github.currencortex.music.ui.component.MusicTextAction
+import io.github.currencortex.music.ui.component.qualityFileSummary
 import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.ui.component.MusicBottomSheet
 import top.yukonga.miuix.kmp.basic.Text
@@ -35,7 +43,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Quality is a requested level, never a claim about the stream returned by the provider. */
 @Composable internal fun AudioQualitySheet(selected: AudioQuality, onSelect: (AudioQuality) -> Unit,
-    onDismiss: () -> Unit, enabled: Boolean = true, title: String = "当前歌曲音质", onNetwork: (() -> Unit)? = null) {
+    onDismiss: () -> Unit, enabled: Boolean = true, title: String = "当前歌曲音质", onNetwork: (() -> Unit)? = null,
+    song: Song? = null, insights: SongInsightsRepository? = null) {
     var visible by remember { mutableStateOf(true) }
     var afterDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
     val dismiss by rememberUpdatedState(onDismiss)
@@ -48,12 +57,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 if (quality != selected) onSelect(quality)
                 visible = false
             }
-        }, enabled, onNetwork?.let { action -> { afterDismiss = action; visible = false } })
+        }, enabled, onNetwork?.let { action -> { afterDismiss = action; visible = false } }, extraContent = {
+            if (visible && song != null && insights != null && NeteaseSongActionsRepository.songId(song) != null)
+                SongQualityFileDetails(song, insights)
+        })
     }
 }
 
 @Composable internal fun AudioQualityChoices(selected: AudioQuality, onSelect: (AudioQuality) -> Unit,
-    enabled: Boolean = true, onNetwork: (() -> Unit)? = null, modifier: Modifier = Modifier) {
+    enabled: Boolean = true, onNetwork: (() -> Unit)? = null, modifier: Modifier = Modifier,
+    extraContent: @Composable () -> Unit = {}) {
     val colors = MiuixTheme.colorScheme
     // This is a fixed, short list. Compose it before the native entrance starts instead of
     // subcomposing every text row during the first animated layout pass.
@@ -85,6 +98,38 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 else "请先退出一起听或结束投屏，再切换音质。",
                 Modifier.padding(horizontal = 4.dp, vertical = 8.dp).testTag("quality_note"),
                 fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+        }
+        extraContent()
+    }
+}
+
+@Composable private fun SongQualityFileDetails(song: Song, repository: SongInsightsRepository) {
+    val owner = song to repository.session()
+    var response by remember(owner) { mutableStateOf<AppResult<List<SongQualityInfo>>?>(null) }
+    var retry by remember(owner) { mutableIntStateOf(0) }
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(owner, retry, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            response = null
+            response = appResult { repository.qualities(song) }
+        }
+    }
+    Column(Modifier.fillMaxWidth().padding(4.dp).testTag("song_quality_files"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("歌曲文件资料", fontSize = 15.sp, fontWeight = FontWeight.Medium)
+        when (val result = response) {
+            null -> Text("正在加载…", fontSize = 13.sp)
+            is AppResult.Failure -> MusicTextAction("${if (result.status == 404) "当前服务器暂不支持" else result.message} · 重试",
+                { retry++ }, Modifier.testTag("song_quality_files_retry"))
+            is AppResult.Success -> {
+                if (result.value.isEmpty()) Text("暂无文件资料", fontSize = 13.sp)
+                result.value.forEach { file ->
+                    Text(file.label.ifBlank { file.level }, fontSize = 14.sp)
+                    Text(qualityFileSummary(file.br, file.size, file.sr), fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    file.variants.forEach { variant -> Text("${variant.immerseType.ifBlank { "音质变体" }} · ${qualityFileSummary(variant.br, variant.size, variant.sr)}",
+                        fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }
+                }
+            }
         }
     }
 }
