@@ -1,4 +1,5 @@
 'use strict';
+const { isInternalCiPath } = require('./android-ci-scope.cjs');
 
 // Path-based triage is a review priority hint, not a security verdict.
 const HIGH = [
@@ -28,4 +29,9 @@ function classify(files) {
   if (medium.length) return {level:'medium',reason:'应用或自动化逻辑：'+medium.slice(0,5).join('、')};
   return {level:'low',reason:'仅包含文档或非运行时代码等低风险路径'};
 }
-module.exports={classify};
+function isInternalCiOnly(files, changedFiles) {
+  return Array.isArray(files) && files.length > 0 && files.length === changedFiles &&
+    files.every(file => isInternalCiPath(file?.filename) &&
+      (file.previous_filename === undefined ? file.status !== 'renamed' : isInternalCiPath(file.previous_filename)));
+}
+module.exports={classify,isInternalCiOnly};
