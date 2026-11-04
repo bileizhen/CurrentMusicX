@@ -16,15 +16,16 @@ class MusicRepository(private val api: ApiClient,
     private val navidrome: io.github.currencortex.music.data.navidrome.NavidromeRepository? = null,
     private val lx: io.github.currencortex.music.data.lx.LxSourceStore? = null,
     private val emby: io.github.currencortex.music.data.emby.EmbyRepository? = null) {
+    val insights = SongInsightsRepository(api)
     suspend fun previewClip(song: Song): SongPreviewClip {
         val id = NeteaseSongActionsRepository.songId(song)
-        val raw = if (song.navidrome == null && id != null) {
-            when (val response = appResult { api.get<JsonObject>("ncm/song/chorus", mapOf("id" to "$id")) }) {
+        val segments = if (song.navidrome == null && id != null) {
+            when (val response = appResult { insights.chorus(song) }) {
                 is AppResult.Success -> response.value
-                is AppResult.Failure -> null
+                is AppResult.Failure -> emptyList()
             }
-        } else null
-        return songPreviewClip(raw, id ?: song.id, song.durationMs)
+        } else emptyList()
+        return songPreviewClip(segments, song.durationMs)
     }
     suspend fun detail(song: Song): Song = when (song.musicSource) {
         MusicSource.EMBY -> requireNotNull(emby).detail(song)

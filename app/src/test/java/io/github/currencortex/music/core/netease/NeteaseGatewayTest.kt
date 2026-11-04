@@ -14,12 +14,14 @@ import java.net.URLDecoder
 import java.util.concurrent.TimeUnit
 
 class NeteaseGatewayTest {
-    @Test fun chorusUsesNativeSongRangeWithoutTouchingTheProjectServer() = runBlocking {
-        enqueue("""{"code":200,"chorus":[{"id":33894312,"startTime":47500,"endTime":88500}]}""")
+    @Test fun chorusUsesPublicNormalizedProjectMetadataEvenWithNativeGateway() = runBlocking {
+        current.enqueue(response("""{"id":33894312,"segments":[{"startMs":47500,"endMs":88500}]}"""))
         val clip = MusicRepository(api).previewClip(Song(33894312, "Sample", durationMs = 180000))
         assertEquals(SongPreviewClip(47500, 67500, true), clip)
-        assertEquals("/eapi/song/chorus", upstream.takeRequest().path)
-        assertNull(current.takeRequest(50, TimeUnit.MILLISECONDS))
+        val request = current.takeRequest()
+        assertEquals("/cm/song/chorus?id=33894312", request.path)
+        assertNull(request.getHeader("Authorization"))
+        assertNull(upstream.takeRequest(50, TimeUnit.MILLISECONDS))
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val vault = object : TokenStore {

@@ -192,6 +192,12 @@ object MusicIcons {
     val More = icon("More") { repeat(3) { val y = 5f + it * 7f; moveTo(12f, y); lineTo(12f, y + .2f) } }
     val Pause = icon("Pause") { moveTo(8f, 5f); lineTo(8f, 19f); moveTo(16f, 5f); lineTo(16f, 19f) }
     val Play = icon("Play") { moveTo(7f, 4f); lineTo(20f, 12f); lineTo(7f, 20f); close() }
+    val Shuffle = icon("Shuffle") {
+        moveTo(3f, 6f); lineTo(6f, 6f); lineTo(17f, 18f); lineTo(21f, 18f)
+        moveTo(17f, 14f); lineTo(21f, 18f); lineTo(17f, 22f)
+        moveTo(3f, 18f); lineTo(6f, 18f); lineTo(17f, 6f); lineTo(21f, 6f)
+        moveTo(17f, 2f); lineTo(21f, 6f); lineTo(17f, 10f)
+    }
     val PreviousTrack = icon("PreviousTrack") {
         moveTo(5f, 5f); lineTo(5f, 19f)
         moveTo(19f, 5f); lineTo(8f, 12f); lineTo(19f, 19f); close()

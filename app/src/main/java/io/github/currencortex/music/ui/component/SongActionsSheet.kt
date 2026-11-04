@@ -13,14 +13,16 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 data class SongMenu(val song: Song, val play: () -> Unit, val next: () -> Unit, val queue: () -> Unit,
-    val roomRequest: Boolean = false, val extra: (@Composable () -> Unit)? = null, val transport: Boolean = true)
+    val roomRequest: Boolean = false, val extra: (@Composable () -> Unit)? = null, val transport: Boolean = true,
+    val previewAnchor: androidx.compose.ui.geometry.Rect? = null, val shareInitially: Boolean = false)
 data class RoomSongRequest(val request: (Song) -> Unit, val pending: (Long) -> Boolean)
 val LocalSongMenu = staticCompositionLocalOf<((SongMenu) -> Unit)?> { null }
+val LocalSongDownload = staticCompositionLocalOf<((Song) -> Unit)?> { null }
 val LocalDismissSongMenu = staticCompositionLocalOf<() -> Unit> { {} }
 val LocalRoomSongRequest = staticCompositionLocalOf<RoomSongRequest?> { null }
 
 @Composable fun SongActionsSheet(menu: SongMenu, onDownload: ((Song) -> Unit)? = null, onDismiss: () -> Unit) {
-    var sharing by remember(menu.song) { mutableStateOf(false) }
+    var sharing by remember(menu.song) { mutableStateOf(menu.shareInitially) }
     if (sharing) {
         io.github.currencortex.music.feature.share.SongShareDialog(menu.song, onDismiss)
         return
