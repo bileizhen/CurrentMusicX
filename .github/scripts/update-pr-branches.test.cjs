@@ -2,7 +2,7 @@ const {test} = require('node:test');
 const assert = require('node:assert/strict');
 const {skipReason, run} = require('./update-pr-branches.cjs');
 const pr = () => ({number: 13, state: 'open', draft: false, merged: false, mergeable: true,
-  maintainer_can_modify: true, labels: [], base: {ref: 'main', sha: 'base', repo: {full_name: 'owner/app'}},
+  maintainer_can_modify: true, labels: [], base: {ref: 'main', sha: 'previous-main-tip', repo: {full_name: 'owner/app'}},
   head: {sha: 'head', repo: {full_name: 'contributor/app'}}});
 
 test('only open, non-draft, mergeable and writable PRs targeting main qualify', () => {
@@ -35,7 +35,7 @@ test('updates behind PR with an exact head guard on PR events and main pushes', 
     const f = fixture({event}); await run(f.args);
     assert.equal(f.updates.length, 1);
     assert.equal(f.updates[0].expected_head_sha, 'head');
-    assert.equal(f.comparisons[0].basehead, 'base...head');
+    assert.equal(f.comparisons[0].basehead, 'main...head');
   }
 });
 test('up-to-date branches never produce an update or another CI run', async () => {
