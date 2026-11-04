@@ -105,7 +105,11 @@ import kotlin.math.roundToInt
             item("interface_effects") {
                 AppearanceSection("界面效果", MusicIcons.Blur) {
                     SettingsSwitch("模糊", config.blur, { value -> viewModel.edit { it.copy(blur = value) } },
-                        enabled = Build.VERSION.SDK_INT >= 33, summary = if (Build.VERSION.SDK_INT >= 33) "模糊悬浮底栏背景" else "需要 Android 13 或更高版本",
+                        enabled = Build.VERSION.SDK_INT >= 31, summary = when {
+                            Build.VERSION.SDK_INT >= 33 -> "模糊悬浮底栏背景和转场中被盖住的页面"
+                            Build.VERSION.SDK_INT >= 31 -> "模糊转场中被盖住的页面"
+                            else -> "需要 Android 12 或更高版本"
+                        },
                         modifier = Modifier.testTag("setting_blur"))
                     SettingsSwitch("底栏律动光效", config.navigationGlow, { value -> viewModel.edit { it.copy(navigationGlow = value) } },
                         summary = "封面色雾随音乐缓缓起伏", modifier = Modifier.testTag("setting_navigation_glow"))

@@ -1,17 +1,23 @@
-const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
+const { planCiPrune } = require('./ci-prune.cjs');
 
 // Keep the allowlist outside runtime assets: legal Markdown and app images can
 // affect the APK and must still exercise the normal Android checks.
 function isLightweightOnly(paths) {
   const checkedAutomation = new Set([
-    '.github/workflows/android.yml',
     '.github/workflows/collaboration-checks.yml',
     '.github/scripts/android-ci-scope.cjs',
     '.github/scripts/android-ci-scope.test.cjs',
     '.github/workflows/ci-distribution.yml',
     '.github/scripts/ci-release.cjs',
     '.github/scripts/ci-release.test.cjs',
+    '.github/workflows/ci-prune.yml',
+    '.github/scripts/ci-prune.cjs',
+    '.github/scripts/ci-prune.test.cjs',
+    '.github/CI_RELEASE_POLICY.md',
+    '.github/workflows/release-draft.yml',
+    '.github/scripts/release-draft.cjs',
+    '.github/scripts/release-draft.test.cjs',
     '.github/workflows/update-pr-branches.yml',
     '.github/scripts/update-pr-branches.cjs',
     '.github/scripts/update-pr-branches.test.cjs',
@@ -59,12 +65,22 @@ function detectScope({ eventName, event, sha, git = args =>
   }
 }
 
-if (require.main === module) {
-  const result = detectScope({ eventName: process.env.GITHUB_EVENT_NAME,
-    event: JSON.parse(fs.readFileSync(process.env.GITHUB_EVENT_PATH, 'utf8')),
-    sha: process.env.GITHUB_SHA });
-  fs.appendFileSync(process.env.GITHUB_OUTPUT, `required=${result.required}\n`);
-  console.log(`Android build required: ${result.required}. ${result.reason}`);
+async function determineBuildScope({ github, context, git }) {
+  const { eventName, payload: event, sha } = context;
+  const scope = detectScope({ eventName, event, sha, git });
+  if (eventName !== 'push' || scope.required) return scope;
+
+  // A lightweight push can cancel the main build that contained the app change.
+  // Only skip if the latest published CI APK already covers all Android inputs.
+  try {
+    const releases = await github.paginate(github.rest.repos.listReleases, { ...context.repo, per_page: 100 });
+    const { keep } = planCiPrune(releases);
+    const baseline = keep && releases.find(release => release.id === keep.id).target_commitish;
+    if (baseline) return detectScope({ eventName, event: { before: baseline }, sha, git });
+  } catch {
+    // A missing, ambiguous or unreadable release must not suppress compilation.
+  }
+  return { required: true, reason: 'No reliable published CI build to compare' };
 }
 
-module.exports = { isLightweightOnly, detectScope };
+module.exports = { isLightweightOnly, detectScope, determineBuildScope };

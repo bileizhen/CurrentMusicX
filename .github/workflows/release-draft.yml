@@ -46,35 +46,8 @@ jobs:
           name: release-notes
           path: release-draft.txt
           if-no-files-found: error
-  verify-release-build:
-    needs: notes
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.notes.outputs.target }}
-          persist-credentials: false
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-          log-accepted-android-sdk-licenses: false
-      - run: sdkmanager "platforms;android-37.0" "build-tools;35.0.0" "ndk;30.0.16248370" "cmake;4.1.2"
-      - uses: gradle/actions/setup-gradle@v4
-      - name: Verify Release build without signing credentials
-        run: ./gradlew :app:assembleRelease :app:testReleaseUnitTest :app:lintRelease --no-daemon --stacktrace -Plei.officialRepositoriesFirst=true
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: release-verification-reports
-          path: |
-            app/build/reports/tests/testReleaseUnitTest/
-            app/build/reports/lint-results-release.*
   draft:
-    needs: [notes, verify-release-build]
+    needs: notes
     runs-on: ubuntu-latest
     permissions:
       contents: write

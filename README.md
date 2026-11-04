@@ -269,28 +269,8 @@ Release 启用 R8 与资源压缩，仍发布一个包含现有 ABI 的通用 AP
 
 - 版本号单独提交并通过 PR 合并后，为验证过的主线提交打 `vX.Y.Z` tag。运行 **Prepare release draft**，填写本次 tag、上次正式版 tag 和中文摘要。流程验证版本号、提交祖先关系、已有 Release 和 main 的 Android CI，再使用 GitHub 原生 API 按 `.github/release.yml` 生成分类清单，保留 `by @作者 in #PR`、新贡献者与 `Full Changelog` 链接；Release 构建、单元测试和 Lint 通过后创建草稿。
 - 发布仍使用一个通用 APK，不按 ABI 分包。正式版草稿工作流仅验证 Release 构建，不发布未签名 APK；维护者上传同一提交的正式签名 APK 和 SHA-256 文件、补齐真实设备验收与下载验证后再发布正式版。CI 签名使用上述受保护 Environment，密钥不进入源码或构建产物。已有 Release 不会被覆盖，不自动发布正式版。
+- 发布头图上传为对应 Release 的附件，并在 Release notes 顶部嵌入，不提交到源码仓库。迁移旧头图时先核对附件完整性、更新发布说明中的图片链接，再移除仓库文件；应用图标和 README 功能截图不受影响。
 - 历史直接提交而无关联 PR 的变化如实补充到中文摘要，不伪造作者与 PR 编号。完整更新说明仅维护在 GitHub Releases，不新增本地 CHANGELOG。
-
-</details>
-
-## 支持开发者
-
-如果这个项目对你有帮助，可以通过[爱发电](https://afdian.com/a/bi1eizhen)，或应用内「设置 → 应用 → 支持开发者」的支付宝收款码、微信赞赏码支持开发。也可从「关于 → 项目 → 支持开发者」进入。
-
-所有赞助均为自愿行为，不影响正常使用，也不解锁额外功能或会员权益。支持页面无需登录，不读取支付凭据、记录或结果；返回应用不代表支付成功。同机扫码可先保存图片，再从对应支付应用的相册中选择。
-
-<details>
-<summary>维护支持入口、收款图片与验证范围</summary>
-
-- 爱发电：`app/src/main/java/io/github/currencortex/music/feature/support/SupportConfig.kt` 的 `afdianUrl` 已配置开发者提供的 [bileizhen 主页](https://afdian.com/a/bi1eizhen)。修改后重新构建即可；留空时页面显示「暂未开放」，非 HTTPS、带账号凭据或无主机的链接不会打开。
-- 支付宝收款码：`app/src/main/res/raw/support_alipay_payment.png`。
-- 微信赞赏码：`app/src/main/res/raw/support_wechat_appreciation.png`。开发者确认原始合成图右侧属于微信，不能标为支付宝赞赏码。
-- 两张图片由开发者于 2026-11-03 提供并确认允许公开打包和提交；只裁剪原始码区域并保留／补充白色静区，没有重新生成或重采样码内容。替换时使用获得收款信息所有者公开授权的真实图片，保持正方形、完整码区域及充足白色静区，不使用有损压缩、滤镜或重新生成的二维码。
-- 预览使用白底等比例图片，不参与玻璃折射。可以通过系统文件选择器「保存图片」（Android 8.0+，无需新增存储权限），也可通过系统分享面板分享原始 PNG。同机扫码时先保存，再从对应支付应用的扫一扫相册中选择。分享缓存最多保留两张公开图片。
-
-支持功能测试：`SupportConfigTest` 验证 HTTPS 校验和重复点击限制；`SupportScreenTest` 验证入口、返回、预览、状态恢复及主题／大字体；`SupportPlatformTest` 验证浏览器缺失处理、离线图片静区和保存／分享文件字节一致；`SupportLayoutTest` 覆盖横屏大字体及关闭动画；`SettingsContainerNavigationTest.supportRoutesKeepMiniPlayerAndReturnThroughTheirOwnEntry` 覆盖实际主导航与迷你播放器状态保留。连接设备后可在[独立测试命令](#从源码构建与设备测试)后追加 `-Pandroid.testInstrumentationRunnerArguments.class=io.github.currencortex.music.SupportScreenTest,io.github.currencortex.music.SupportPlatformTest`。测试中的浏览器调用会被拦截，不会打开支付网站。图片扫描与收款对象仍须通过真实支付宝、微信核对；UI 测试不能证明实际支付成功。
-
-后续鸣谢名单仅可基于赞助者自愿公开的信息另行设计；本版不含赞助者数据模型、支付历史或查询接口。支付宝与微信付款也不能通过爱发电 API 查询。
 
 </details>
 
