@@ -1,16 +1,20 @@
 name: Update PR branches
-# Explicitly run when branch synchronization is needed; auto-updates cause extra Android CI runs.
 on:
+  push:
+    branches: [main]
+  pull_request_target:
+    branches: [main]
+    types: [opened, reopened, ready_for_review, synchronize]
   workflow_dispatch:
 permissions:
   contents: write
   pull-requests: write
 concurrency:
-  group: update-pr-branches
+  group: update-pr-branches-${{ github.event.pull_request.number || 'all' }}
   cancel-in-progress: false
 jobs:
   update:
-    if: github.repository == 'bileizhen/CurrentMusicX'
+    if: github.repository == 'bileizhen/CurrentMusicX' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
