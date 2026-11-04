@@ -18,6 +18,24 @@ class GitHubUpdateChecker(
         } else {
             "https://api.github.com/repos/$owner/$repository/releases/latest"
         }
+        return request(endpoint)?.let { parseResponse(it, channel) }
+    }
+
+    override fun installedRelease(): AppRelease? {
+        if (Version.parse(installedVersion) == null) return null
+        val tag = "v${installedVersion.removePrefix("v")}"
+        return request("https://api.github.com/repos/$owner/$repository/releases/tags/$tag")
+            ?.let(::parseInstalledResponse)
+    }
+
+    internal fun parseInstalledResponse(json: String): AppRelease? {
+        val release = JSONObject(json)
+        if (Version.parse(installedVersion) == null || release.optBoolean("draft") ||
+            release.optString("tag_name") != "v${installedVersion.removePrefix("v")}") return null
+        return parseRelease(release, requireNativeAsset = false)
+    }
+
+    private fun request(endpoint: String): String? {
         val connection = URI(endpoint).toURL().openConnection() as HttpURLConnection
         return try {
             connection.connectTimeout = 10_000
@@ -38,8 +56,7 @@ class GitHubUpdateChecker(
                 output.toByteArray()
             }
             check(bytes.size <= MAX_RESPONSE_BYTES) { "Release response is too large" }
-            val json = bytes.toString(Charsets.UTF_8)
-            parseResponse(json, channel)
+            bytes.toString(Charsets.UTF_8)
         } finally {
             connection.disconnect()
         }
@@ -85,6 +102,13 @@ class GitHubUpdateChecker(
         val prerelease = release.optBoolean("prerelease") || tag.contains('-')
         if (!allowPrerelease && prerelease) return null
 
+        return parseRelease(release, requireNativeAsset = nativeAssetsOnly)
+    }
+
+    private fun parseRelease(release: JSONObject, requireNativeAsset: Boolean): AppRelease? {
+        val tag = release.optString("tag_name")
+        val prerelease = release.optBoolean("prerelease") || tag.contains('-')
+
         val expectedPageUrl = "https://github.com/$owner/$repository/releases/tag/$tag"
         val expectedDownloadPrefix = "https://github.com/$owner/$repository/releases/download/$tag/"
         val pageUrl = release.optString("html_url")
@@ -111,7 +135,7 @@ class GitHubUpdateChecker(
                 }
             }
         }
-        if (nativeAssetsOnly && apkUrl == null) return null
+        if (requireNativeAsset && apkUrl == null) return null
         return AppRelease(
             version = tag.removePrefix("v"),
             notes = release.optString("body").take(12_000),
