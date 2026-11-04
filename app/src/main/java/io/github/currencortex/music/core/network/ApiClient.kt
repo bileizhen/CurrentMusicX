@@ -35,6 +35,8 @@ class ApiClient(
     private val singleAttemptHttp = http.newBuilder().retryOnConnectionFailure(false).build()
     val hasLocalNeteaseLogin get() = netease?.sessions?.state?.value?.loggedIn == true
     val nativeMediaEnabled get() = nativeMedia() && netease != null
+    /** Public metadata requests belong to a server, never to an account token. */
+    fun publicSession() = RequestSession(server(), null)
     private fun useNative(path: String, authenticated: Boolean, projectToken: String?): Boolean {
         if (netease?.handles(path, nativeMedia()) != true) return false
         // Imported snapshots belong to the project account, even with a local NetEase login.

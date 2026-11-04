@@ -2,6 +2,8 @@ package io.github.currencortex.music.feature.search
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -10,6 +12,11 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
@@ -32,6 +39,7 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.library.LibraryViewModel
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.GlassIconButton
+import io.github.currencortex.music.ui.component.nativeui.ElasticPress
 import io.github.currencortex.music.ui.component.nativeui.GlassButtonGroup
 import io.github.currencortex.music.ui.component.nativeui.GlassGroupIconButton
 import top.yukonga.miuix.kmp.basic.Icon
@@ -76,12 +84,23 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
     val pending = request?.pending?.invoke(song.id) == true
     val primary = { if (request != null) request.request(song) else onPlay() }
     val host = LocalSongMenu.current
+    var coverBounds by remember(song.id) { mutableStateOf(Rect.Zero) }
+    val density = LocalDensity.current
     var localMenu by remember(song.id) { mutableStateOf<SongMenu?>(null) }
     val openMenu = {
-        val menu = SongMenu(song, primary, onNext, onQueue, request != null, extraActions)
+        val menu = SongMenu(song, primary, onNext, onQueue, request != null, extraActions, previewAnchor = coverBounds)
         if (host == null) localMenu = menu else host(menu)
     }
-    Row(Modifier.fillMaxWidth().heightIn(min = 72.dp).clickable(enabled = !pending, role = Role.Button, onClick = primary)
+    ElasticPress(Modifier.fillMaxWidth().testTag("search_result_row_${song.id}")
+        .onGloballyPositioned { coordinates ->
+            val side = with(density) { 52.dp.toPx() }
+            val top = if (compactActions) with(density) { 10.dp.toPx() } else (coordinates.size.height - side) / 2
+            coverBounds = Rect(coordinates.localToWindow(Offset(0f, top)), Size(side, side))
+        }.combinedClickable(enabled = !pending, role = Role.Button,
+            interactionSource = remember { MutableInteractionSource() }, indication = null,
+            onClick = primary, onLongClickLabel = "预览歌曲与操作",
+            onLongClick = { if (!coverBounds.isEmpty) openMenu() }), enabled = !pending) {
+    Row(Modifier.fillMaxWidth().heightIn(min = 72.dp)
         .padding(vertical = 10.dp), verticalAlignment = if (compactActions) Alignment.Top else Alignment.CenterVertically) {
         MusicCover(song.cover, Modifier.size(52.dp).testTag("search_result_cover_${song.id}"), cornerRadius = 10.dp)
         Spacer(Modifier.width(12.dp))
@@ -123,8 +142,6 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
                     quickActions?.let { actions ->
                         GlassButtonGroup(Modifier.testTag("search_quick_actions_${song.id}")) { actions() }
                     }
-                    SearchResultIconAction(MusicIcons.More, "更多操作：${song.name}",
-                        Modifier.testTag("song_menu_${song.id}"), enabled = !pending) { openMenu() }
                 }
                 lyricBlock()
             } else {
@@ -138,10 +155,9 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
         if (!compactActions) {
             quickActions?.let { actions ->
                 GlassButtonGroup(Modifier.testTag("search_quick_actions_${song.id}")) { actions() }
-                Spacer(Modifier.width(8.dp))
             }
-            SearchResultIconAction(MusicIcons.More, "更多操作：${song.name}", Modifier.testTag("song_menu_${song.id}"), enabled = !pending) { openMenu() }
         }
+    }
     }
     localMenu?.let { SongActionsSheet(it) { localMenu = null } }
 }

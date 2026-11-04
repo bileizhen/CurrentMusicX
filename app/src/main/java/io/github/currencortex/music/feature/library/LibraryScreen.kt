@@ -51,29 +51,38 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 }
 
 @Composable fun LibrarySongActions(vm: LibraryViewModel, song: Song, navigate: (String) -> Unit) {
-    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL) return
+    val dismiss = LocalDismissSongMenu.current
+    librarySongMenuItems(vm, song, navigate).forEach { item ->
+        MusicDestinationRow(item.label, { dismiss(); item.onClick() }, enabled = item.enabled,
+            modifier = Modifier.testTag(item.id), chevron = item.id !in setOf("song_like_${song.id}", "song_playlist_${song.id}"))
+    }
+}
+
+/** Shared actions for the song sheet and artwork's nested glass menu. */
+@Composable internal fun librarySongMenuItems(vm: LibraryViewModel, song: Song, navigate: (String) -> Unit): List<GlassMenuItem> {
+    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL) return emptyList()
     if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY) {
-        val dismiss = LocalDismissSongMenu.current
-        MusicDestinationRow("喜欢 / 取消喜欢", { dismiss(); vm.togglePrimaryLike(song) })
-        MusicDestinationRow("打开 Emby 曲库", { dismiss(); navigate("emby") })
-        return
+        return listOf(GlassMenuItem("song_like_${song.id}", "喜欢 / 取消喜欢", onClick = { vm.togglePrimaryLike(song) }),
+            GlassMenuItem("song_emby", "打开 Emby 曲库", onClick = { navigate("emby") }))
     }
     val statuses by vm.statuses.collectAsStateWithLifecycle()
     val status = statuses[song.id] ?: SongStatus()
-    val dismiss = LocalDismissSongMenu.current
     LaunchedEffect(song.id) { vm.refreshStatuses(listOf(song)) }
-    MusicDestinationRow("喜欢 / 取消喜欢", onClick = { dismiss(); vm.togglePrimaryLike(song) }, enabled = !status.pending && !song.video,
-        modifier = Modifier.testTag("song_like_${song.id}"), chevron = false)
-    MusicDestinationRow("加入歌单", onClick = { dismiss(); vm.choosePlaylist(song) }, modifier = Modifier.testTag("song_playlist_${song.id}"), chevron = false)
-    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) {
-        MusicDestinationRow("打开 Navidrome 曲库", { dismiss(); navigate("navidrome") })
-        return
+    return buildList {
+        add(GlassMenuItem("song_like_${song.id}", "喜欢 / 取消喜欢", enabled = !status.pending && !song.video,
+            onClick = { vm.togglePrimaryLike(song) }))
+        add(GlassMenuItem("song_playlist_${song.id}", "加入歌单", onClick = { vm.choosePlaylist(song) }))
+        if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) {
+            add(GlassMenuItem("song_navidrome", "打开 Navidrome 曲库", onClick = { navigate("navidrome") }))
+            return@buildList
+        }
+        if (song.artistIds.isNotEmpty()) song.artistIds.forEachIndexed { index, id ->
+            add(GlassMenuItem("song_artist_$id", "歌手 · ${song.artists.split(" / ").getOrNull(index).orEmpty()}",
+                onClick = { navigate("lib/artist/$id") }))
+        } else if (song.artists.isNotBlank()) add(GlassMenuItem("song_artist", "查看歌手", onClick = { navigate(catalogRoute(false, song.artists)) }))
+        if (song.album.isNotBlank()) add(GlassMenuItem("song_album", "查看专辑", onClick = { navigate(catalogRoute(true, song.album)) }))
+        if (song.mv > 0) add(GlassMenuItem("song_mv_${song.id}", "播放 MV", onClick = { navigate("lib/mv/${song.mv}") }))
     }
-    if (song.artistIds.isNotEmpty()) song.artistIds.forEachIndexed { index, id ->
-        MusicDestinationRow("歌手 · ${song.artists.split(" / ").getOrNull(index).orEmpty()}", onClick = { dismiss(); navigate("lib/artist/$id") })
-    } else if (song.artists.isNotBlank()) MusicDestinationRow("查看歌手", onClick = { dismiss(); navigate(catalogRoute(false, song.artists)) })
-    if (song.album.isNotBlank()) MusicDestinationRow("查看专辑", onClick = { dismiss(); navigate(catalogRoute(true, song.album)) })
-    if (song.mv > 0) MusicDestinationRow("播放 MV", onClick = { dismiss(); navigate("lib/mv/${song.mv}") }, modifier = Modifier.testTag("song_mv_${song.id}"))
 }
 
 @Composable fun LibraryDialogs(vm: LibraryViewModel) {

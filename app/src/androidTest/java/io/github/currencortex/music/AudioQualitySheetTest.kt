@@ -27,6 +27,25 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 
 class AudioQualitySheetTest {
     @get:Rule val compose = createComposeRule()
+    @Test fun fileMetadataDoesNotChangeRequestedQualityAndUnknownValuesStayUnknown() {
+        okhttp3.mockwebserver.MockWebServer().use { server ->
+            val address = server.url("/cm/").toString()
+            server.enqueue(okhttp3.mockwebserver.MockResponse().setBody("""{"id":7,"qualities":[{"level":"unknown","label":"新格式"}]}"""))
+            val repository = io.github.currencortex.music.data.song.SongInsightsRepository(
+                io.github.currencortex.music.core.network.ApiClient({ address }, { "unused" }, {}))
+            var changes = 0
+            compose.setContent {
+                LeiTheme(AppearanceSettings()) { Scaffold { AudioQualitySheet(AudioQuality.STANDARD, { changes++ }, {},
+                    song = io.github.currencortex.music.data.song.Song(7, "测试"), insights = repository) } }
+            }
+            compose.waitUntil(5000) { compose.onAllNodesWithText("新格式").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("新格式").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("暂无文件参数").assertExists()
+            compose.onNodeWithTag("quality_STANDARD").performScrollTo().assertIsSelected()
+            assertEquals(0, changes)
+            assertEquals(1, server.requestCount)
+        }
+    }
     @Test fun pickerShowsAllLevelsFollowsAppearanceAndPreventsRedundantSelection() {
         var selected by mutableStateOf(AudioQuality.STANDARD)
         var enabled by mutableStateOf(true)
