@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.LocalRootTabSwipe
+import io.github.currencortex.music.ui.component.RootMotionItem
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
 import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.basic.Text
@@ -38,6 +39,7 @@ internal val SettingsToolbarHeight=72.dp
 @Composable internal fun SettingsRootTopBar(title:String,modifier:Modifier=Modifier,
     titleContent:(@Composable ()->Unit)?=null,actions:@Composable RowScope.()->Unit={}) {
     Box(modifier.fillMaxWidth().statusBarsPadding()) {
+        RootMotionItem {
         Row(Modifier.fillMaxWidth().height(SettingsToolbarHeight).padding(horizontal=16.dp)
             .then(LocalRootTabSwipe.current),verticalAlignment=Alignment.CenterVertically,
             horizontalArrangement=Arrangement.spacedBy(8.dp)) {
@@ -46,6 +48,7 @@ internal val SettingsToolbarHeight=72.dp
                 fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis,
                 color=MiuixTheme.colorScheme.onSurface)
             actions()
+        }
         }
     }
 }

@@ -108,6 +108,7 @@ import kotlinx.coroutines.launch
     LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState,
         contentPadding = PaddingValues(start = 16.dp, top = topInset + 24.dp, end = 16.dp, bottom = 32.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        rootMotionItems {
         account.profile?.let { native -> item("identity") { SettingsGroup {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Box(Modifier.testTag("my_profile_avatar").clickable(role = Role.Button) { avatarPreview = true }
@@ -137,6 +138,7 @@ import kotlinx.coroutines.launch
         item("services") { ProfileServicesSection(navigate, tasksEnabled == true, native = true, bound = account.loggedIn,
             navidromeConfigured = navidromeAccount.configured, embyConfigured = embyAccount.configured) }
         if (account.profile != null) item("account") { ProfileAccountSection(navigate, native = true) }
+    }
     }
     }
     if (avatarPreview) account.profile?.let { native ->
@@ -181,6 +183,7 @@ import kotlinx.coroutines.launch
     MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize(), enabled = onBack != null) {
     LazyColumn(Modifier.fillMaxSize().testTag("profile_screen"), state = listState, contentPadding = PaddingValues(start = 16.dp, top = topInset + 24.dp, end = 16.dp, bottom = 32.dp + bottomInset),
         verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        rootMotionItems {
         if ((state.loading || account.loading) && user == null) item { LoadingProfileCard() }
         state.error?.let { message -> item("error") { SettingsGroup {
             SettingsHint(message, error = true)
@@ -251,6 +254,7 @@ import kotlinx.coroutines.launch
             }
         }
         state.sectionErrors.forEach { item { SettingsHint(it, error = true) } }
+    }
     }
     }
     }
