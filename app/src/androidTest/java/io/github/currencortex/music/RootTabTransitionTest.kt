@@ -25,6 +25,7 @@ import io.github.currencortex.music.ui.util.collectAsPageState
 import kotlinx.coroutines.flow.MutableStateFlow
 import io.github.currencortex.music.ui.component.RootTabTransition
 import io.github.currencortex.music.ui.component.LocalRootTabSwipe
+import io.github.currencortex.music.ui.component.RootElasticStrainKey
 import org.junit.Assert.*
 import org.junit.Rule
 import org.junit.Test
@@ -60,6 +61,51 @@ class RootTabTransitionTest {
         return bitmap.getPixel(bitmap.width/2, bitmap.height/2)
     }
     private fun change(tab: Int) = compose.runOnUiThread { select(tab) }
+
+    private fun strain() = compose.onNodeWithTag("root_tab_transition").fetchSemanticsNode().config[RootElasticStrainKey]
+
+    @Test fun elasticSeamTrailsAtTheBottomThenSpringsBackWithoutMovingDock() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent { Fixture() }
+        val dock = compose.onNodeWithTag("stationary_dock").fetchSemanticsNode().boundsInRoot
+        change(1)
+        compose.mainClock.advanceTimeBy(144)
+        assertTrue("Moving pages should stretch", strain() > .001f)
+        val bitmap = compose.onNodeWithTag("root_tab_transition").captureToImage().asAndroidBitmap()
+        fun seam(y: Int) = (0 until bitmap.width).first { x ->
+            val color = bitmap.getPixel(x, y)
+            Color.red(color) > 200 && Color.blue(color) < 50
+        }
+        if (android.os.Build.VERSION.SDK_INT >= 33) {
+            assertTrue("Lower content should trail the header", seam(bitmap.height * 3 / 4) > seam(bitmap.height / 4) + 2)
+        }
+        var rebounded = false
+        repeat(40) {
+            compose.mainClock.advanceTimeBy(16)
+            if (strain() < -.0001f) rebounded = true
+        }
+        assertTrue("The spring should return through a small opposite bend", rebounded)
+        compose.mainClock.advanceTimeBy(600)
+        assertEquals(0f, strain(), .0001f)
+        assertEquals(Color.RED, pixel())
+        assertEquals(dock, compose.onNodeWithTag("stationary_dock").fetchSemanticsNode().boundsInRoot)
+    }
+
+    @Test fun elasticMotionReversesContinuouslyAndHandlesRtl() {
+        compose.mainClock.autoAdvance = false
+        compose.setContent {
+            CompositionLocalProvider(androidx.compose.ui.platform.LocalLayoutDirection provides androidx.compose.ui.unit.LayoutDirection.Rtl) {
+                Fixture()
+            }
+        }
+        change(1); compose.mainClock.advanceTimeBy(112)
+        assertTrue("RTL must mirror the deformation", strain() < 0f)
+        change(0); compose.mainClock.advanceTimeBy(64)
+        assertTrue(strain().isFinite() && kotlin.math.abs(strain()) <= .075f)
+        compose.mainClock.advanceTimeBy(1200)
+        assertEquals(0f, strain(), .0001f)
+        assertEquals(Color.BLUE, pixel())
+    }
 
     @Test fun fadeChoiceCrossfadesOnlyTheEndpointsAndSwitchingStylesKeepsPageState() {
         fade = true
@@ -128,6 +174,7 @@ class RootTabTransitionTest {
         compose.onNodeWithText("page0:0").assertDoesNotExist()
         compose.onNodeWithText("page3:0").assertExists()
         assertEquals(Color.MAGENTA, pixel())
+        assertEquals(0f, strain(), 0f)
     }
 
     @Test fun longJumpPassesThroughIntermediatePagesWithoutTeleporting() {

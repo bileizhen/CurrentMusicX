@@ -51,10 +51,12 @@ val LocalRootTabPlacement = staticCompositionLocalOf<RootTabPlacement?> { null }
 /** Only root-page title containers opt into moving the root pager. */
 val LocalRootTabSwipe = compositionLocalOf<Modifier> { Modifier }
 
-/** Retained root pages: continuous full-width movement, or the optional upstream crossfade. */
+/** Retained root pages: continuous movement with elastic trailing content, or the upstream crossfade. */
 @Composable fun RootTabTransition(selected: Int, states: SaveableStateHolder,
-    onSelected: (Int) -> Unit, fade: Boolean = false, content: @Composable (Int) -> Unit) {
+    onSelected: (Int) -> Unit, fade: Boolean = false, elastic: Boolean = true, content: @Composable (Int) -> Unit) {
     val pager = rememberPagerState(initialPage = selected, pageCount = { 4 })
+    val strain = rememberPageStrain(pager, enabled = elastic && !fade)
+    val settling by remember(strain) { derivedStateOf { abs(strain.value) > .002f } }
     val easing = remember { CubicBezierEasing(.2f, 0f, .2f, 1f) }
     var viewport by remember { mutableStateOf<LayoutCoordinates?>(null) }
     var gesturePending by remember { mutableStateOf(false) }
@@ -128,6 +130,7 @@ val LocalRootTabSwipe = compositionLocalOf<Modifier> { Modifier }
         }
     }
     HorizontalPager(pager, modifier = Modifier.fillMaxSize().testTag("root_tab_transition")
+        .elasticPageSurface(strain)
         .onGloballyPositioned { viewport = it },
         // Four fixed root pages fit in a bounded cache. Retaining them avoids composing and
         // discarding the nested Discover pager in the middle of every Settings -> Me slide.
@@ -136,7 +139,7 @@ val LocalRootTabSwipe = compositionLocalOf<Modifier> { Modifier }
         states.SaveableStateProvider(tab) {
             var page by remember { mutableStateOf<LayoutCoordinates?>(null) }
             val placement = remember { RootTabPlacement({ viewport }, { page }) }
-            val moving = pager.isScrollInProgress || pager.settledPage != selected || fadeFrom != null
+            val moving = pager.isScrollInProgress || pager.settledPage != selected || fadeFrom != null || settling
             val active = parentActive && tab == selected && !moving
             val lifecycle = rememberLifecycleOwner(maxLifecycle = when {
                 active -> Lifecycle.State.RESUMED
