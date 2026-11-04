@@ -18,11 +18,22 @@ test('documentation and independently checked CI files may skip Android', () => 
     '.github/scripts/update-pr-branches.cjs', '.github/scripts/update-pr-branches.test.cjs']), true);
   for (const files of [[], ['app/src/main/assets/legal/PRIVACY.md'], ['PRIVACY.md'],
     ['app/src/main/cpp/oboe/UPSTREAM.md'], ['app/src/main/res/raw/cover.png'],
-    ['README.md', 'app/build.gradle.kts'], ['.github/workflows/release-draft.yml'],
+    ['README.md', 'app/build.gradle.kts'],
     ['.github/scripts/android-ci-scope.cjs', 'app/src/main/AndroidManifest.xml'],
     ['.github/img/script.sh'], ['README.md\napp/code.kt']]) {
     assert.equal(isLightweightOnly(files), false, JSON.stringify(files));
   }
+});
+
+test('Release draft automation is lightweight but app changes are not', () => {
+  assert.equal(isLightweightOnly([
+    '.github/workflows/release-draft.yml',
+    '.github/scripts/release-draft.cjs',
+    '.github/scripts/release-draft.test.cjs',
+    '.github/scripts/android-ci-scope.cjs',
+    '.github/scripts/android-ci-scope.test.cjs'
+  ]), true);
+  assert.equal(isLightweightOnly(['.github/workflows/release-draft.yml', 'app/build.gradle.kts']), false);
 });
 
 test('manual runs, missing commits and unavailable diffs retain the full build', () => {
