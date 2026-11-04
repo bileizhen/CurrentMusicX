@@ -12,12 +12,41 @@ import kotlinx.coroutines.withContext
 data class UpdatePromptState(val release: AppRelease, val channel: UpdateChannel,
     val saving: Boolean = false, val error: String? = null)
 
+sealed interface InstalledNotesState {
+    data object Idle : InstalledNotesState
+    data object Loading : InstalledNotesState
+    data class Loaded(val release: AppRelease?) : InstalledNotesState
+    data object Failed : InstalledNotesState
+}
+
 class UpdateService(
     private val checker: ReleaseChecker,
     val settings: UpdateSettingsRepository,
     private val logger: LogSink,
+    private val bundledRelease: () -> AppRelease? = { null },
 ) {
     private val mutex = Mutex()
+    private val notesMutex = Mutex()
+    private val mutableInstalledNotes = MutableStateFlow<InstalledNotesState>(InstalledNotesState.Idle)
+    val installedNotes: StateFlow<InstalledNotesState> = mutableInstalledNotes
+
+    suspend fun loadInstalledNotes() {
+        if (!notesMutex.tryLock()) return
+        try {
+            if (mutableInstalledNotes.value is InstalledNotesState.Loaded) return
+            mutableInstalledNotes.value = InstalledNotesState.Loading
+            val release = withContext(Dispatchers.IO) { bundledRelease() ?: checker.installedRelease() }
+            mutableInstalledNotes.value = InstalledNotesState.Loaded(release)
+        } catch (cancelled: CancellationException) {
+            mutableInstalledNotes.value = InstalledNotesState.Idle
+            throw cancelled
+        } catch (error: Exception) {
+            mutableInstalledNotes.value = InstalledNotesState.Failed
+            logger.warn("Update", "Unable to load installed release notes", error)
+        } finally {
+            notesMutex.unlock()
+        }
+    }
     private val mutableState = MutableStateFlow<UpdateState>(UpdateState.Idle)
     val state: StateFlow<UpdateState> = mutableState
     private val mutableDialogVisible = MutableStateFlow(false)

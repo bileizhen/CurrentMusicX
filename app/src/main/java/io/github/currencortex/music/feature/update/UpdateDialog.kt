@@ -63,6 +63,10 @@ fun UpdatePage(service: UpdateService, transfer: UpdateTransfer, cover: String =
     }
     val shownState = if (selectedRelease != null && download.download !is UpdateDownloadState.Idle)
         UpdateState.Available(selectedRelease!!) else state
+    val installedNotes by service.installedNotes.collectAsStateWithLifecycle()
+    LaunchedEffect(visible, shownState is UpdateState.Available) {
+        if (visible && shownState !is UpdateState.Available) service.loadInstalledNotes()
+    }
     val settings by service.settings.state.collectAsStateWithLifecycle()
     UpdatePageHost(visible, shownState, onDismiss = service::dismissDialog,
         onRetry = { scope.launch { service.check(manual = true) } },
@@ -75,7 +79,8 @@ fun UpdatePage(service: UpdateService, transfer: UpdateTransfer, cover: String =
         onChangeSource = transfer::changeSource, downloadExperience = BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE,
         settings = settings, onAutoCheck = { scope.launch { service.settings.setAutoCheck(it) } },
         onChannel = { scope.launch { service.settings.setChannel(it); service.check(manual = true) } }, cover = cover,
-        origin = origin, onPresentedChanged = onPresentedChanged, versionPreview = versionPreview, sourceCheck = sourceCheck)
+        origin = origin, onPresentedChanged = onPresentedChanged, versionPreview = versionPreview, sourceCheck = sourceCheck,
+        installedNotesState = installedNotes, onRetryInstalledNotes = { scope.launch { service.loadInstalledNotes() } })
     if (!visible) prompt?.let { available ->
         UpdateAvailablePrompt(available, onIgnore = { scope.launch { service.ignoreCurrentRelease() } },
             onView = service::viewPrompt, onDismiss = service::dismissPrompt)
