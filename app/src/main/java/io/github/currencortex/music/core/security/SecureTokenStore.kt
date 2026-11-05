@@ -30,7 +30,9 @@ class TokenCipher(private val key: SecretKey) {
 }
 class SecureTokenStore(context: Context, storageSuffix: String = "") : TokenStore {
     private val file = File(context.noBackupFilesDir, "session$storageSuffix.aes")
-    private val cipher by lazy {
+    private val cipher by lazy { synchronized(keyLock) {
+        // All session files share one alias. Concurrent first-time stores must not
+        // generate competing keys and leave one account encrypted with the replaced key.
         val alias = "CurrentMusic.Session"
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         val key = (store.getKey(alias, null) as? SecretKey) ?: KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore").apply {
@@ -38,7 +40,7 @@ class SecureTokenStore(context: Context, storageSuffix: String = "") : TokenStor
                 .setBlockModes(KeyProperties.BLOCK_MODE_GCM).setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE).build())
         }.generateKey()
         TokenCipher(key)
-    }
+    } }
     @Synchronized override fun read(): String? {
         val bytes = try { android.util.AtomicFile(file).readFully() }
         catch (_: java.io.FileNotFoundException) { return null }
@@ -51,4 +53,5 @@ class SecureTokenStore(context: Context, storageSuffix: String = "") : TokenStor
         catch (e: Exception) { atomic.failWrite(out); throw e }
     }
     @Synchronized override fun clear() { android.util.AtomicFile(file).delete() }
+    private companion object { val keyLock = Any() }
 }
