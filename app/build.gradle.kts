@@ -183,6 +183,8 @@ androidComponents.finalizeDsl { extension ->
 }
 
 dependencies {
+    implementation("androidx.credentials:credentials:1.6.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
     implementation("androidx.javascriptengine:javascriptengine:1.1.1")
     implementation("org.mozilla:rhino:1.8.1")
