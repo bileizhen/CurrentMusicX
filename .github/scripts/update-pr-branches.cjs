@@ -1,47 +1,45 @@
-// Only inspect GitHub metadata. Never check out, run, or merge locally a PR head.
-function skipReason(pr, repo) {
-  if (pr.state !== 'open' || pr.merged || pr.draft) return 'closed, merged or draft';
-  if (pr.base?.ref !== 'main' || pr.base.repo?.full_name !== repo) return 'different base';
-  if (!pr.head?.repo || !pr.head.sha) return 'head unavailable';
-  if (pr.labels?.some(label => label.name === 'bot: skip')) return 'bot: skip';
-  if (pr.head.repo.full_name !== repo && !pr.maintainer_can_modify) return 'fork does not permit maintainer updates';
-  if (pr.mergeable !== true) return 'conflicting or mergeability not yet known';
-  return null;
-}
+const {getQueueHead} = require('./pr-ci-queue.cjs');
+const {rerunWaitingBuild} = require('./rerun-waiting-build.cjs');
 
+// All write operations use GitHub metadata and scripts from trusted main.
 async function run({github, context, core}) {
   const repo = context.repo;
-  const fullName = `${repo.owner}/${repo.repo}`;
-  const prs = context.payload.pull_request
-    ? [{number: context.payload.pull_request.number}]
-    : await github.paginate(github.rest.pulls.list, {...repo, state: 'open', base: 'main', per_page: 100});
-  for (const item of prs) {
-    let pr;
-    // GitHub calculates mergeability asynchronously; retry reads, not mutations.
-    for (let attempt = 0; attempt < 3; attempt++) {
-      pr = (await github.rest.pulls.get({...repo, pull_number: item.number})).data;
-      if (pr.mergeable !== null) break;
-      if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-    const reason = skipReason(pr, fullName);
-    if (reason) { core.info(`#${item.number}: skipped (${reason})`); continue; }
-    try {
-      const comparison = (await github.rest.repos.compareCommitsWithBasehead({
-        ...repo, basehead: `${pr.base.ref}...${pr.head.sha}`, per_page: 1,
-      })).data;
-      if (!(comparison.behind_by > 0)) {
-        core.info(`#${item.number}: already includes main`);
-        continue;
-      }
-      // Optimistic concurrency: never update a different head than the inspected one.
-      await github.rest.pulls.updateBranch({...repo, pull_number: item.number, expected_head_sha: pr.head.sha});
-      core.info(`#${item.number}: requested merge of main; new CI may require maintainer approval`);
-    } catch (error) {
-      // Conflicts, branch protection, revoked fork consent and concurrent pushes require human follow-up.
-      if (![403, 404, 409, 422].includes(error.status)) throw error;
-      core.warning(`#${item.number}: update not performed (HTTP ${error.status}): ${error.message}`);
-    }
+  const first = await getQueueHead({github, context});
+  if (!first) { core.info('No PR is waiting for Android CI'); return; }
+
+  // GitHub calculates mergeability asynchronously. Retry reads, never writes.
+  let pr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    pr = (await github.rest.pulls.get({...repo, pull_number: first.number})).data;
+    if (pr.mergeable !== null || attempt === 2) break;
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
+  if (pr.state !== 'open' || pr.draft || pr.base.ref !== 'main' ||
+      pr.labels.some(label => label.name === 'bot: skip') || !pr.head.repo || pr.head.sha !== first.head.sha) {
+    core.info(`#${pr.number} changed while selecting the queue head`); return;
+  }
+  if (pr.mergeable !== true) {
+    core.warning(`#${pr.number} holds the queue; resolve conflicts or move it to draft to continue`); return;
+  }
+  const comparison = (await github.rest.repos.compareCommitsWithBasehead({
+    ...repo, basehead: `${pr.base.sha}...${pr.head.sha}`, per_page: 1,
+  })).data;
+  if (comparison.behind_by === 0) {
+    await rerunWaitingBuild({github, context, core, pr});
+    return;
+  }
+  if (!(comparison.behind_by > 0)) throw new Error(`Unknown ahead/behind result for #${pr.number}`);
+  if (pr.head.repo.full_name !== `${repo.owner}/${repo.repo}` && !pr.maintainer_can_modify) {
+    core.warning(`#${pr.number}: ask the contributor to bring their branch up to date with main`);
+    return;
+  }
+  try {
+    await github.rest.pulls.updateBranch({...repo, pull_number: pr.number, expected_head_sha: pr.head.sha});
+    core.info(`#${pr.number}: requested update to main; GitHub may require approval for the new checks`);
+  } catch (error) {
+    if (![403, 404, 409, 422].includes(error.status)) throw error;
+    core.warning(`#${pr.number}: update not performed (HTTP ${error.status}): ${error.message}`);
   }
 }
 
-module.exports = {skipReason, run};
+module.exports = {run};
