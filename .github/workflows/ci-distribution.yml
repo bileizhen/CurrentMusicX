@@ -21,13 +21,13 @@ jobs:
     outputs:
       required: ${{ steps.scope.outputs.result }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Load the policy from the trusted main revision of this workflow_run.
           ref: ${{ github.sha }}
           sparse-checkout: .github/scripts
           persist-credentials: false
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v8
         id: scope
         with:
           script: |
@@ -55,28 +55,29 @@ jobs:
       pull-requests: read
     steps:
       # The only secret-bearing job runs trusted main scripts, never a PR head.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Load the policy from the trusted main revision of this workflow_run.
           ref: ${{ github.sha }}
           sparse-checkout: .github/scripts
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: ci-unsigned
           path: ci-dist
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ github.token }}
       - name: Verify upstream artifact metadata
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             const {validateMetadata} = require('./.github/scripts/ci-release.cjs');
             const metadata = JSON.parse(require('node:fs').readFileSync('ci-dist/output-metadata.json', 'utf8'));
             const {tag} = validateMetadata(metadata, context.payload.workflow_run.run_number);
             core.exportVariable('CI_TAG', tag);
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
         with:
+          cmdline-tools-version: '12266719'
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
       - run: sdkmanager "build-tools;35.0.0"
@@ -98,7 +99,7 @@ jobs:
           test "${#apk[@]}" -eq 1
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$keyfile" --ks-key-alias "$SIGNING_KEY_ALIAS" --ks-pass env:SIGNING_STORE_PASSWORD --key-pass env:SIGNING_KEY_PASSWORD "${apk[0]}"
           "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --min-sdk-version 26 "${apk[0]}"
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v8
         with:
           script: |
             const {releaseDecision} = require('./.github/scripts/ci-batch.cjs');

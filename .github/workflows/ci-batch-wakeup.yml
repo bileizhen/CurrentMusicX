@@ -23,12 +23,12 @@ jobs:
     timeout-minutes: 5
     steps:
       # This dispatch-capable job only loads policy from the trusted main branch.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: refs/heads/main
           sparse-checkout: .github/scripts
           persist-credentials: false
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v8
         with:
           script: |
             const {releaseDecision} = require('./.github/scripts/ci-batch.cjs');
