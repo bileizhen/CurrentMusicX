@@ -28,12 +28,12 @@ jobs:
     timeout-minutes: 10
     steps:
       # Write token never executes PR-head code, build scripts or downloaded artifacts.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: main
           sparse-checkout: .github/scripts
           persist-credentials: false
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v8
         with:
           script: |
             await require('./.github/scripts/update-pr-branches.cjs').run({github, context, core});
