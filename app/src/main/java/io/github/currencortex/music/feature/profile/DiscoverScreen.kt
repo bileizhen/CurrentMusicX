@@ -31,7 +31,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     LaunchedEffect(pager.settledPage) { if (pager.settledPage == 2) posts.ensureLoaded() }
     SettingsScrollLayout(Modifier.fillMaxSize().testTag("discover_screen"),
         topBar = { SettingsRootTopBar("发现", Modifier.testTag("discover_root_toolbar")) }) { topInset ->
-        ScrollingPageHeader(topInset, pager.settledPage, header = {
+        ScrollingPageHeader(topInset, pager.settledPage, scrollEnabled = pager.targetPage != 3, header = {
             SettingsSegmentedControl(listOf("音乐", "用户", "帖子", "Chat"), pager.targetPage,
                 { index -> scope.launch { pager.animateScrollToPage(index) } },
                 Modifier.elasticRootComponent().padding(horizontal = 16.dp).padding(bottom = 12.dp), tag = "discover_tabs", role = Role.Tab)
