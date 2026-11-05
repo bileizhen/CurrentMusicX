@@ -31,12 +31,12 @@ jobs:
       required: ${{ steps.scope.outputs.required }}
       ready: ${{ steps.scope.outputs.ready }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
       - name: Determine Android build scope
         id: scope
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             if (context.eventName === 'workflow_dispatch') {
@@ -89,24 +89,25 @@ jobs:
           SCOPE_RESULT: ${{ needs.scope.result }}
           BUILD_REQUIRED: ${{ needs.scope.outputs.required }}
         run: test "$SCOPE_RESULT" = success && [[ "$BUILD_REQUIRED" == true || "$BUILD_REQUIRED" == false ]]
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         if: needs.scope.outputs.required == 'true'
         with:
           persist-credentials: false
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         if: needs.scope.outputs.required == 'true'
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
         if: needs.scope.outputs.required == 'true'
         with:
+          cmdline-tools-version: '12266719'
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
       - name: Install Android SDK
         if: needs.scope.outputs.required == 'true'
         run: sdkmanager "platforms;android-37.0" "build-tools;35.0.0" "ndk;30.0.16248370" "cmake;4.1.2"
-      - uses: gradle/actions/setup-gradle@v4
+      - uses: gradle/actions/setup-gradle@v5
         if: needs.scope.outputs.required == 'true'
       - name: Test native source contract and legal assets
         if: needs.scope.outputs.required == 'true'
@@ -119,7 +120,7 @@ jobs:
         if: needs.scope.outputs.required == 'true' && github.event_name != 'pull_request'
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             await require('./.github/scripts/bundled-release-notes.cjs').bundle({github, context});
@@ -135,14 +136,14 @@ jobs:
         run: node .github/scripts/ci-release.cjs prepare
       - name: Upload debug APK
         if: needs.scope.outputs.required == 'true' && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Upload unsigned CI APK
         if: needs.scope.outputs.required == 'true' && github.event_name != 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: ci-unsigned
           path: ci-dist/
@@ -150,13 +151,13 @@ jobs:
           retention-days: 7
       - name: Upload test reports
         if: always() && needs.scope.outputs.required == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: unit-test-reports
           path: app/build/reports/tests/test*UnitTest/
       - name: Upload lint report
         if: always() && needs.scope.outputs.required == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: lint-report
           path: app/build/reports/lint-results-*
