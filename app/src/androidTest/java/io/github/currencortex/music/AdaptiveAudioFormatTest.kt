@@ -10,6 +10,8 @@ import io.github.currencortex.music.core.media.*
 import io.github.currencortex.music.data.settings.AdaptiveAudioSettings
 import org.junit.Assert.*
 import org.junit.Test
+import org.junit.Rule
+import androidx.test.ext.junit.rules.ActivityScenarioRule
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -20,6 +22,8 @@ import kotlin.math.sin
 
 @androidx.annotation.OptIn(UnstableApi::class)
 class AdaptiveAudioFormatTest {
+    // Keep CPU-only PCM regressions visible to OEM background process management.
+    @get:Rule val foreground = ActivityScenarioRule(androidx.activity.ComponentActivity::class.java)
     private fun pcm(rate: Int, channels: Int, floating: Boolean = false): ByteBuffer =
         ByteBuffer.allocateDirect(rate / 5 * channels * if (floating) 4 else 2)
             .order(ByteOrder.LITTLE_ENDIAN).apply {
@@ -129,7 +133,9 @@ class AdaptiveAudioFormatTest {
                     val p = player!!
                     p.playerError?.let { throw it }
                     if (p.isPlaying && !p.currentTimeline.isEmpty) {
+                        // Real songs may start with silence; wait for an audible input window.
                         window = timeline.poll(p.currentPosition * 1000, p.currentTimeline.getUidOfPeriod(p.currentPeriodIndex))
+                            ?.takeIf { it.full > 0f }
                     }
                 }
                 Thread.sleep(20)
@@ -137,12 +143,40 @@ class AdaptiveAudioFormatTest {
             assertTrue(runtime.get().message, runtime.get().processing)
             assertNotNull("Decoded multichannel PCM must reach processing and the playback timeline", window)
             assertTrue(window!!.full > 0f)
+            while (runtime.get().gains.none { kotlin.math.abs(it) > .01f } && System.nanoTime() < deadline) {
+                instrumentation.runOnMainSync { player!!.playerError?.let { throw it } }
+                Thread.sleep(20)
+            }
+            assertTrue("Live spectral analysis must produce a correction", runtime.get().gains.any { kotlin.math.abs(it) > .01f })
             instrumentation.sendStatus(0, android.os.Bundle().apply {
-                putString("stream", "\nADAPTIVE_MULTICHANNEL processing=true timeline_energy=${window!!.full} supplied_file=${supplied != null}\n")
+                putString("stream", "\nADAPTIVE_MULTICHANNEL processing=true timeline_energy=${window!!.full} " +
+                    "gains=${runtime.get().gains} supplied_file=${supplied != null}\n")
             })
         } finally {
             instrumentation.runOnMainSync { player?.release() }
             if (supplied == null) file.delete()
         }
+    }
+
+    @Test fun reopeningAfterSettledBypassDoesNotReplayFilterTailsOrOldAnalysis() {
+        var settings = AdaptiveAudioSettings(enabled = true, virtualBass = true, strength = 4)
+        var runtime = AdaptiveAudioRuntime()
+        val processor = AdaptiveAudioProcessor({ settings }, report = { runtime = it })
+        processor.configure(AudioFormat(44100, 6, C.ENCODING_PCM_16BIT)); processor.flush()
+        repeat(30) { processor.queueInput(pcm(44100, 6)); processor.output }
+        assertTrue(runtime.gains.any { kotlin.math.abs(it) > .1f })
+        settings = settings.copy(enabled = false)
+        repeat(2) { processor.queueInput(pcm(44100, 6)); processor.output }
+        val silence = ByteArray(4410 * 6 * 2)
+        repeat(20) {
+            processor.queueInput(ByteBuffer.allocateDirect(silence.size).apply { put(silence); flip() })
+            assertArrayEquals(silence, bytes(processor.output))
+        }
+        settings = settings.copy(enabled = true)
+        processor.queueInput(ByteBuffer.allocateDirect(silence.size).apply { put(silence); flip() })
+        assertArrayEquals("No old filter tail may appear on silent audio", silence, bytes(processor.output))
+        assertTrue(runtime.processing)
+        assertTrue("No old curve may be restored", runtime.gains.all { it == 0f })
+        processor.reset()
     }
 }
