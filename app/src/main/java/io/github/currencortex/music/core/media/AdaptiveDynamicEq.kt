@@ -171,9 +171,10 @@ internal class AdaptiveDynamicEq(private val sampleRate: Int, private val channe
         // Neighbour blending shapes a curve instead of ten unrelated moving sliders.
         for (band in 0..9) {
             shaped[band] = when {
-                band < 4 -> max(targets[band], max(if (band > 0) targets[band - 1] * .18 else 0.0,
-                    if (band < 3) targets[band + 1] * .22 else 0.0))
-                band == 4 -> targets[band]
+                band < 3 -> max(targets[band], max(if (band > 0) targets[band - 1] * .18 else 0.0,
+                    targets[band + 1] * .22))
+                // Upper bass and low mids can require cuts; boost-only blending would erase them.
+                band <= 4 -> targets[band]
                 else -> .84 * targets[band] + (if (band > 5) .16 * targets[band - 1] else 0.0) +
                     (if (band < 9) .16 * targets[band + 1] else 0.0)
             }
