@@ -57,45 +57,52 @@ jobs:
 
   android-check:
     needs: scope
-    # A skipped job named "build" would satisfy branch protection for an untested PR.
+    # GitHub only expands a needs-dependent check name when the job actually runs.
+    # A waiting PR reports its own check and never executes Android build steps.
     name: >-
       ${{ (github.event.pull_request.draft || (needs.scope.result == 'success' && needs.scope.outputs.ready == 'false'))
           && format('waiting-for-pr-turn / {0} / {1} / {2}', github.event.pull_request.number, github.event.pull_request.base.sha, github.event.pull_request.head.sha)
           || 'build' }}
     # A failed or missing scope result must fail the required build check.
-    if: ${{ !cancelled() && needs.scope.result != 'skipped' && (needs.scope.result != 'success' || needs.scope.outputs.required != 'false') }}
+    if: ${{ !cancelled() && needs.scope.result != 'skipped' && (github.event_name == 'pull_request' || needs.scope.result != 'success' || needs.scope.outputs.required != 'false') }}
     runs-on: ubuntu-latest
     concurrency:
-      group: android-build-${{ github.event_name == 'pull_request' && 'pr' || github.event_name == 'push' && needs.scope.outputs.required == 'true' && github.ref || github.run_id }}
+      group: android-build-${{ github.event_name == 'pull_request' && needs.scope.outputs.required == 'true' && 'pr' || github.event_name == 'push' && needs.scope.outputs.required == 'true' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name != 'pull_request' }}
     steps:
       - name: Validate Android scope
         env:
           SCOPE_RESULT: ${{ needs.scope.result }}
           BUILD_REQUIRED: ${{ needs.scope.outputs.required }}
-        run: test "$SCOPE_RESULT" = success && test "$BUILD_REQUIRED" = true
+        run: test "$SCOPE_RESULT" = success && [[ "$BUILD_REQUIRED" == true || "$BUILD_REQUIRED" == false ]]
       - uses: actions/checkout@v4
+        if: needs.scope.outputs.required == 'true'
         with:
           persist-credentials: false
       - uses: actions/setup-java@v4
+        if: needs.scope.outputs.required == 'true'
         with:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
+        if: needs.scope.outputs.required == 'true'
         with:
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
       - name: Install Android SDK
+        if: needs.scope.outputs.required == 'true'
         run: sdkmanager "platforms;android-37.0" "build-tools;35.0.0" "ndk;30.0.16248370" "cmake;4.1.2"
       - uses: gradle/actions/setup-gradle@v4
+        if: needs.scope.outputs.required == 'true'
       - name: Test native source contract and legal assets
+        if: needs.scope.outputs.required == 'true'
         run: python3 -m unittest discover -s scripts/tests -v
       - name: Build debug APK and run unit tests
-        if: github.event_name == 'pull_request'
+        if: needs.scope.outputs.required == 'true' && github.event_name == 'pull_request'
         # PR checks compile one representative ABI, execute unit tests and lint; instrumentation APKs remain available for explicit device-verification builds.
         run: ./gradlew assembleDebug testDebugUnitTest lintDebug --build-cache --no-daemon --stacktrace -Plei.officialRepositoriesFirst=true -PciPrArm64Only=true
       - name: Bundle installed CI release notes
-        if: github.event_name != 'pull_request'
+        if: needs.scope.outputs.required == 'true' && github.event_name != 'pull_request'
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
         uses: actions/github-script@v7
@@ -103,24 +110,24 @@ jobs:
           script: |
             await require('./.github/scripts/bundled-release-notes.cjs').bundle({github, context});
       - name: Build and verify unsigned CI release
-        if: github.event_name != 'pull_request'
+        if: needs.scope.outputs.required == 'true' && github.event_name != 'pull_request'
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
         run: ./gradlew :app:assembleRelease :app:testReleaseUnitTest :app:lintRelease -PciBuildNumber="$CI_BUILD_NUMBER" -PinstalledReleaseNotesDir="$GITHUB_WORKSPACE/app/build/generated/installedReleaseNotes" -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace
       - name: Prepare CI artifact
-        if: github.event_name != 'pull_request'
+        if: needs.scope.outputs.required == 'true' && github.event_name != 'pull_request'
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
         run: node .github/scripts/ci-release.cjs prepare
       - name: Upload debug APK
-        if: github.event_name == 'pull_request'
+        if: needs.scope.outputs.required == 'true' && github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
       - name: Upload unsigned CI APK
-        if: github.event_name != 'pull_request'
+        if: needs.scope.outputs.required == 'true' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: ci-unsigned
