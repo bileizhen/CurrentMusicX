@@ -38,12 +38,15 @@ import kotlin.math.min
         // Mask only the artwork. Applying DstIn directly to the parent canvas would
         // also erase the animated backdrop that should show through the fading edge.
         val needsLayer = amount > 0f || opacity < 1f
-        if (needsLayer) {
-            layerPaint.alpha = opacity
-            drawContext.canvas.saveLayer(rect, layerPaint)
-        }
-        try {
-            clipPath(path) {
+        clipPath(path) {
+            // Establish the layer AFTER the AA clip so the rounded edge is applied
+            // once, to the composited artwork and mask. Clipping each draw separately
+            // leaves partially covered pixels behind when DstIn clears the lower edge.
+            if (needsLayer) {
+                layerPaint.alpha = opacity
+                drawContext.canvas.saveLayer(rect, layerPaint)
+            }
+            try {
                 drawRect(base, rect.topLeft, rect.size)
                 val imageHeight = rect.height * (1 - amount) + min(rect.height, rect.width * 1.55f) * amount
                 // Keep landscape artwork on the left instead of cropping a square cover
@@ -80,11 +83,13 @@ import kotlin.math.min
                         rect.left + fadeEnd * (1 - .6f * amount), rect.left + fadeEnd)
                     else Brush.verticalGradient(mask,
                         rect.top + fadeEnd * (1 - .52f * amount), rect.top + fadeEnd)
-                    drawRect(brush, rect.topLeft, rect.size, blendMode = BlendMode.DstIn)
+                    // Cover fractional rect edges fully; the outer clip defines the shape.
+                    val maskBounds = rect.inflate(1f)
+                    drawRect(brush, maskBounds.topLeft, maskBounds.size, blendMode = BlendMode.DstIn)
                 }
+            } finally {
+                if (needsLayer) drawContext.canvas.restore()
             }
-        } finally {
-            if (needsLayer) drawContext.canvas.restore()
         }
     }
 }

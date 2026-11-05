@@ -42,10 +42,14 @@ class PlayerImmersiveCoverTest {
     private var compact by mutableStateOf(false)
     private var immersion by mutableFloatStateOf(1f)
     private var viewport by mutableStateOf(Size.Zero)
+    private var morphBounds by mutableStateOf<Rect?>(null)
+    private var artworkAlpha by mutableFloatStateOf(1f)
+    private var roundedMorph by mutableStateOf(false)
 
     @After fun cleanup() { coverFile?.delete() }
 
     private fun coverBounds(): Rect {
+        morphBounds?.let { return it }
         if (!compact) return Rect(Offset.Zero, viewport)
         val side = viewport.minDimension * .45f
         return Rect((viewport.width - side) / 2, (viewport.height - side) / 2,
@@ -75,8 +79,9 @@ class PlayerImmersiveCoverTest {
                     }
                 }
                 PlayerImmersiveCover(file.toURI().toString(), Modifier.fillMaxSize(),
-                    bounds = ::coverBounds, radius = { if (compact) 6f else 0f },
-                    immersion = { immersion }, wideViewport = wide, contentBoundary = contentBoundary)
+                    bounds = ::coverBounds, radius = { if (roundedMorph) 32.5f else if (compact) 6f else 0f },
+                    immersion = { immersion }, alpha = { artworkAlpha },
+                    wideViewport = wide, contentBoundary = contentBoundary)
             }
         }
         compose.waitUntil(10000) {
@@ -225,6 +230,48 @@ class PlayerImmersiveCoverTest {
                     transmission.zipWithNext { before, after -> abs(after - before) }.max() < 32)
                 assertTrue("The fade must not become opaque again below the cropped artwork at $amount",
                     transmission.zipWithNext().all { (before, after) -> after >= before - 4 })
+            }
+        }
+    }
+
+    @Test fun roundedPortraitMorphLeavesNoOutlineBelowTheFade() {
+        show(wide = false, contentBoundary = { .35f })
+        compose.runOnIdle {
+            roundedMorph = true
+            // Moving artwork has fractional pixel bounds and rounded lower corners.
+            morphBounds = Rect(24.25f, 20.75f, viewport.width - 24.5f, viewport.height - 20.25f)
+        }
+        assertClearRoundedTail(wide = false)
+    }
+
+    @Test fun roundedLandscapeMorphLeavesNoOutlineBeyondTheFade() {
+        show(wide = true)
+        compose.runOnIdle { roundedMorph = true }
+        assertClearRoundedTail(wide = true)
+    }
+
+    private fun assertClearRoundedTail(wide: Boolean) {
+        for (amount in listOf(1f, .5f, .25f)) for (opacity in listOf(1f, .6f)) {
+            compose.runOnIdle { immersion = amount; artworkAlpha = 0f }
+            val background = capture()
+            compose.runOnIdle { artworkAlpha = opacity }
+            val actual = capture()
+            try {
+                val bounds = if (wide) Rect(Offset.Zero, viewport) else coverBounds()
+                // The last 8% is beyond the fade for all these morph states. Scan
+                // every pixel, including AA edges/corners and fractional bounds.
+                val startX = if (wide) (bounds.left + bounds.width * .92f).toInt() else 0
+                val startY = if (wide) 0 else (bounds.top + bounds.height * .92f).toInt()
+                var worst = 0
+                var location = ""
+                for (y in startY until actual.height) for (x in startX until actual.width) {
+                    val delta = difference(actual.getPixel(x, y), background.getPixel(x, y))
+                    if (delta > worst) { worst = delta; location = "($x,$y)" }
+                }
+                assertTrue("Transparent rounded tail must match the backdrop: wide=$wide, " +
+                    "immersion=$amount, alpha=$opacity, max difference=$worst at $location", worst <= 2)
+            } finally {
+                background.recycle(); actual.recycle()
             }
         }
     }
