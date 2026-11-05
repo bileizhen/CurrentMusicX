@@ -168,6 +168,8 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         }
     }
     val canPlay = room == null && playbackMode == PlayerMode.LOCAL
+    // A shelf is another view of the current list, including its order and filter.
+    // Keep the empty-result view reachable so its close action can return to that filter.
     if (appearance.playlistRecordShelf && state.songs.isNotEmpty()) {
         val previewContext = androidx.compose.ui.platform.LocalContext.current
         val previewLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -186,10 +188,11 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
             preview.setFullLength(appearance.recordShelfFullPreview)
             preview.setMode(appearance.recordShelfPreviewMode)
         }
-        LaunchedEffect(state.songs, likesUseNetease) {
-            library.refreshSearchLikes(state.songs.filter { !it.privateLibrary })
+        LaunchedEffect(songs, likesUseNetease) {
+            library.refreshSearchLikes(songs.filter { !it.privateLibrary })
         }
-        PlaylistRecordShelf(state.songs, canPlay, onPlay = { index -> preview.commit { play(state.songs, index) } },
+        PlaylistRecordShelf(songs, canPlay, onPlay = { index -> preview.commit { play(songs, index) } },
+            collectionKey = vm.route,
             onPreview = preview::select,
             previewMode = appearance.recordShelfPreviewMode,
             fullPreview = appearance.recordShelfFullPreview,

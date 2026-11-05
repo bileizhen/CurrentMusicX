@@ -55,6 +55,7 @@ internal class RecordShelfView(context: Context) : View(context) {
     }
     private var resultsMotion = emptyList<ResultMotion>()
     internal fun recordQuad(song: Song): FloatArray? = visible.firstOrNull { sameSong(it.song, song) }?.quad?.copyOf()
+    internal val renderedRecordIds get() = visible.map { it.song.id }
     private var target = 0f
     private var extraction = 0f
     private var velocity = 0f
@@ -111,7 +112,7 @@ internal class RecordShelfView(context: Context) : View(context) {
             floatArrayOf(0f, .28f, .6f, 1f), Shader.TileMode.CLAMP)
     }
     private val maskPaint = Paint().apply { xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN) }
-    private var requestedWindow = Int.MIN_VALUE
+    private var requestedWindow = IntRange.EMPTY
     internal var introTime = 0f
         private set
     private var pickTime = -1f
@@ -135,6 +136,10 @@ internal class RecordShelfView(context: Context) : View(context) {
     }
     private val density get() = resources.displayMetrics.density
     private val rulerY get() = height - bottomInset - 10f * density
+    private fun geometry(): ShelfGeometry {
+        val top = topInset + 76f * density
+        return ShelfGeometry(width.toFloat(), top, maxOf(100f * density, rulerY - top - 24f * density), height.toFloat())
+    }
 
     init { isClickable = true; importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO }
 
@@ -177,10 +182,14 @@ internal class RecordShelfView(context: Context) : View(context) {
         val retained = value.indexOfFirst { identity != null && sameSong(it, identity) }
         resultsPosition = (if (retained >= 0) retained.toFloat() else position)
             .coerceIn(0f, maxOf(0, value.lastIndex).toFloat())
-        val destination = shelfWindow(resultsPosition, value.size).map { logical ->
+        val geometry = geometry()
+        val destination = geometry.window(resultsPosition, value.size).map { logical ->
             value[Math.floorMod(logical, value.size)] to logical - resultsPosition
         }
+        // Repeated query edits can interrupt an earlier replacement. Keep its nearest
+        // poses, rather than accumulating another outgoing set on every keystroke.
         val old = visible.filter { sleeve -> sleeve.entryOpacity > .02f && sleeve.quad[0] < width && sleeve.quad[2] > 0f }
+            .sortedBy { abs(it.distance) }.take(29)
         val motions = old.map { sleeve ->
             // A matching record remains on the shelf, even if its new slot is beyond the window.
             val targetDistance = destination.firstOrNull { sameSong(it.first, sleeve.song) }?.second
@@ -190,17 +199,13 @@ internal class RecordShelfView(context: Context) : View(context) {
                 }
             ResultMotion(sleeve.song, sleeve.quad.copyOf(), sleeve.distance, targetDistance, sleeve.entryOpacity)
         }.toMutableList()
-        val stageTop = topInset + 76f * density
-        val stageHeight = maxOf(100f * density, rulerY - stageTop - 24f * density)
-        val stageWidth = minOf(width.toFloat(), stageHeight * 1.12f)
-        val originX = (width - stageWidth) * .5f
         destination.filter { (song, _) -> old.none { sameSong(it.song, song) } }.forEach { (song, distance) ->
             val q = FloatArray(8)
-            shelfQuad(distance, stageWidth, stageTop, stageHeight, 0f, q)
-            val offset = (stageWidth * 1.01f - q[0]).coerceAtLeast(0f)
+            geometry.quad(distance, 0f, q)
+            val offset = geometry.entryOffset(0f, distance, q[0])
             for (corner in 0..3) {
-                q[corner * 2] += originX + offset
-                q[corner * 2 + 1] += shelfEntryOffsetY(offset, stageWidth)
+                q[corner * 2] += offset
+                q[corner * 2 + 1] += geometry.entryRise(offset)
             }
             motions += ResultMotion(song, q, distance, distance, .12f)
         }
@@ -226,7 +231,7 @@ internal class RecordShelfView(context: Context) : View(context) {
         extraction = 0f
         val retained = value.indexOfFirst { it.id == identity?.id && it.musicSource == identity.musicSource }
         position = (if (retained >= 0) retained.toFloat() else position).coerceIn(0f, maxOf(0, songs.lastIndex).toFloat())
-        target = position; velocity = 0f; selected = -1; requestedWindow = Int.MIN_VALUE
+        target = position; velocity = 0f; selected = -1; requestedWindow = IntRange.EMPTY
         requests.values.toList().forEach(Job::cancel); requests.clear(); failed.clear()
         onSongsChanged(value)
         setResultsChanging(animateResults)
@@ -245,6 +250,18 @@ internal class RecordShelfView(context: Context) : View(context) {
 
     fun dispose() { preview(null); disposed = true; running = false; scope.cancel(); requests.clear(); textures.evictAll(); tracker?.recycle(); tracker = null }
     override fun onDetachedFromWindow() { lastFrame = 0L; super.onDetachedFromWindow() }
+
+    /** Restore identity before the first frame; do not animate through or audition index zero. */
+    internal fun restoreSelection(songId: Long, source: String): Int {
+        if (songs.isEmpty()) return -1
+        val index = songs.indexOfFirst { it.id == songId && it.musicSource.name == source }.coerceAtLeast(0)
+        preview(null)
+        cancelPick()
+        position = index.toFloat(); target = position; velocity = 0f
+        selected = -1
+        notifySelection(); invalidate()
+        return index
+    }
 
     fun select(index: Int, immediate: Boolean = false) {
         if (replacingResults || index !in songs.indices) return
@@ -362,12 +379,11 @@ internal class RecordShelfView(context: Context) : View(context) {
             else if (animate) shelfApproach(extraction, extracted, dt, 10.5f) else extracted
         preview(selected.takeIf { running && !replacingResults && it in songs.indices && extracted == 1f && extraction > .12f && !scrubbing })
         if (songs.isEmpty()) return
-        val window = shelfWindow(position, songs.size)
+        val geometry = geometry()
+        val window = geometry.window(position, songs.size)
         visible.clear()
-        val stageTop = topInset + 76f * density
-        val stageHeight = maxOf(100f * density, rulerY - stageTop - 24f * density)
-        val stageWidth = minOf(width.toFloat(), stageHeight * 1.12f)
-        val originX = (width - stageWidth) * .5f
+        val stageTop = geometry.top
+        val stageWidth = geometry.caseScale
         if (pendingSongs != null) {
             val progress = ease(resultsExitTime / .52f)
             for (motion in resultsMotion) {
@@ -375,9 +391,8 @@ internal class RecordShelfView(context: Context) : View(context) {
                 val destination = motion.toDistance
                 sleeve.distance = motion.fromDistance + ((destination ?: motion.fromDistance) - motion.fromDistance) * progress
                 if (destination != null) {
-                    shelfQuad(destination, stageWidth, stageTop, stageHeight, 0f, sleeve.quad)
+                    geometry.quad(destination, 0f, sleeve.quad)
                     for (corner in 0..3) {
-                        sleeve.quad[corner * 2] += originX
                         for (axis in 0..1) {
                             val i = corner * 2 + axis
                             sleeve.quad[i] = motion.from[i] + (sleeve.quad[i] - motion.from[i]) * progress
@@ -385,11 +400,10 @@ internal class RecordShelfView(context: Context) : View(context) {
                     }
                     sleeve.entryOpacity = motion.opacity + (1f - motion.opacity) * progress
                 } else {
-                    val offset = shelfResultsExitOffsetX(resultsExitTime, motion.fromDistance,
-                        stageWidth, motion.from[0] - originX, 0f)
+                    val offset = geometry.exitOffset(resultsExitTime, motion.fromDistance, motion.from[0])
                     for (corner in 0..3) {
                         sleeve.quad[corner * 2] = motion.from[corner * 2] + offset
-                        sleeve.quad[corner * 2 + 1] = motion.from[corner * 2 + 1] + shelfEntryOffsetY(offset, stageWidth)
+                        sleeve.quad[corner * 2 + 1] = motion.from[corner * 2 + 1] + geometry.entryRise(offset)
                     }
                     sleeve.entryOpacity = motion.opacity * (1f - progress)
                 }
@@ -399,17 +413,16 @@ internal class RecordShelfView(context: Context) : View(context) {
         } else for ((slot, logical) in window.reversed().withIndex()) {
             val index = Math.floorMod(logical, songs.size)
             val sleeve = sleeves[slot]; sleeve.index = index; sleeve.song = songs[index]; sleeve.distance = logical - position
-            shelfQuad(sleeve.distance, stageWidth, stageTop, stageHeight,
-                if (index == selected) extraction else 0f, sleeve.quad)
-            fun offsetAt(time: Float): Float = shelfEntryOffsetX(time, sleeve.distance, stageWidth, sleeve.quad[0])
+            geometry.quad(sleeve.distance, if (index == selected) extraction else 0f, sleeve.quad)
+            fun offsetAt(time: Float): Float = geometry.entryOffset(time, sleeve.distance, sleeve.quad[0])
             val motionTime = introTime
             val entranceX = offsetAt(motionTime)
-            val entranceY = shelfEntryOffsetY(entranceX, stageWidth)
+            val entranceY = geometry.entryRise(entranceX)
             val previousX = offsetAt((motionTime - dt).coerceAtLeast(0f))
             sleeve.entryBlur = abs(previousX - entranceX) * .16f
-            sleeve.entryOpacity = (1f - entranceX / stageWidth).coerceIn(.12f, 1f)
+            sleeve.entryOpacity = (1f - entranceX / geometry.viewportWidth).coerceIn(.12f, 1f)
             for (corner in 0..3) {
-                sleeve.quad[corner * 2] += originX + entranceX
+                sleeve.quad[corner * 2] += entranceX
                 sleeve.quad[corner * 2 + 1] += entranceY
             }
             visible.add(sleeve)
@@ -418,10 +431,20 @@ internal class RecordShelfView(context: Context) : View(context) {
         // nearer sleeves still cover its left edge until it clears their right edge.
         val entryMask = ease((introTime - .85f) / .35f)
         val maskBottom = (height - bottomInset * .2f) * (1f - entryMask) + rulerY * entryMask
-        val shelfLayer = canvas.saveLayer(0f, stageTop - 20f * density, width.toFloat(), maskBottom, null)
+        val layerTop = if (geometry.wide) 0f else stageTop - 20f * density
+        val layerBottom = if (geometry.wide) height.toFloat() else maskBottom
+        val shelfLayer = canvas.saveLayer(0f, layerTop, width.toFloat(), layerBottom, null)
+        // Leave room for the 48 px blur and case shadows when rejecting off-screen work.
+        val cullPadding = maxOf(stageWidth * .12f, 144f)
+        fun onScreen(sleeve: Sleeve): Boolean {
+            val q = sleeve.quad
+            return maxOf(q[2], q[4]) + cullPadding > 0f && minOf(q[0], q[6]) - cullPadding < width &&
+                maxOf(q[5], q[7]) + cullPadding > layerTop && minOf(q[1], q[3]) - cullPadding < layerBottom
+        }
         // Shadows lie on the shared supporting plane, below the standing case edges.
         // Drawing them before the cases makes the foreground correctly occlude distant shadows.
         for (sleeve in visible) {
+            if (!onScreen(sleeve)) continue
             val q = sleeve.quad
             val pull = if (sleeve.index == selected) extraction else 0f
             val middleX = (q[4] + q[6]) * .5f
@@ -444,6 +467,7 @@ internal class RecordShelfView(context: Context) : View(context) {
             canvas.restoreToCount(contact)
         }
         for ((slot, sleeve) in visible.withIndex()) {
+            if (!onScreen(sleeve)) continue
             if (!matrix.setPolyToPoly(unit, 0, sleeve.quad, 0, 4)) continue
             val song = sleeve.song
             val logicalDistance = abs(sleeve.distance)
@@ -455,7 +479,7 @@ internal class RecordShelfView(context: Context) : View(context) {
             val blur = maxOf(defocus, motionBlur.coerceAtMost(12f), sleeve.entryBlur).roundToInt().coerceAtMost(48)
             if (Build.VERSION.SDK_INT >= 31 && canvas.isHardwareAccelerated && blur > 0) {
                 val q = sleeve.quad
-                val padding = ceil(stageWidth * .095f).toInt()
+                val padding = ceil(maxOf(stageWidth * .095f, blur * 3f)).toInt()
                 val left = maxOf(-padding, floor(minOf(q[0], q[6]) - padding).toInt())
                 val right = minOf(width + padding, ceil(maxOf(q[2], q[4]) + padding).toInt())
                 val upper = maxOf(-padding, floor(minOf(q[1], q[3]) - padding).toInt())
@@ -476,14 +500,17 @@ internal class RecordShelfView(context: Context) : View(context) {
                 canvas.restoreToCount(save)
             }
         }
-        // Depth fades into the ambient artwork before reaching the title and controls.
-        maskPaint.shader = LinearGradient(0f, stageTop - 20f * density, 0f, maskBottom,
+        // Wide racks extend behind the scene to both edges; portrait retains its depth fade.
+        maskPaint.shader = if (geometry.wide) LinearGradient(0f, 0f, width.toFloat(), 0f,
+            intArrayOf(Color.TRANSPARENT, Color.BLACK, Color.BLACK, Color.TRANSPARENT),
+            floatArrayOf(0f, .02f, .98f, 1f), Shader.TileMode.CLAMP)
+        else LinearGradient(0f, stageTop - 20f * density, 0f, maskBottom,
             intArrayOf(Color.TRANSPARENT, Color.BLACK, Color.BLACK, Color.TRANSPARENT),
             floatArrayOf(0f, .055f, .93f, 1f), Shader.TileMode.CLAMP)
         canvas.drawPaint(maskPaint)
         canvas.restoreToCount(shelfLayer)
         drawRuler(canvas)
-        if (pendingSongs == null && requestedWindow != window.first) { requestedWindow = window.first; requestTextures(window) }
+        if (pendingSongs == null && requestedWindow != window) { requestedWindow = window; requestTextures(window) }
         if (running && animate && (pendingSongs != null || introTime < 1.85f || pickTime >= 0f || position != target || extraction != extracted)) postInvalidateOnAnimation()
     }
 

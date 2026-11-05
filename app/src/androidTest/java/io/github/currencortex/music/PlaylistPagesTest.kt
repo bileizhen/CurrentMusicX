@@ -324,6 +324,75 @@ class PlaylistPagesTest {
         compose.onNodeWithTag("record_shelf_canvas").assertExists()
     }
 
+    @Test fun recordShelfKeepsPlaylistSortAndFilterForDisplayAndPlayback() {
+        open()
+        fun playCurrent(expected: List<Long>) {
+            // A physical tap during the shelf entrance only extracts a record. This
+            // assertion exercises the explicit play action and its visible-list mapping.
+            compose.onNodeWithTag("record_shelf_canvas").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) {
+                assertTrue("The current record must accept explicit playback", it())
+            }
+            // Committing an audition can fade asynchronously before asking for permission.
+            compose.waitUntil(5000) {
+                container.playbackQueue.state.value.songs.map { it.id } == expected ||
+                    compose.onAllNodesWithText("继续播放").fetchSemanticsNodes().isNotEmpty()
+            }
+            if (compose.onAllNodesWithText("继续播放").fetchSemanticsNodes().isNotEmpty())
+                compose.onNodeWithText("继续播放").performClick()
+            compose.waitUntil(5000) { container.playbackQueue.state.value.songs.map { it.id } == expected }
+        }
+        compose.onNodeWithTag("playlist_tracks").performScrollToIndex(0)
+        compose.onNodeWithTag("playlist_sort").performClick()
+        compose.onNodeWithTag("playlist_order_1").performClick()
+        compose.onNodeWithTag("playlist_search_toggle").performClick()
+        compose.onNodeWithTag("playlist_query").performTextInput("night")
+        compose.onNodeWithTag("playlist_record_shelf_toggle").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("record_shelf_canvas").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("record_shelf_title").assertTextEquals("Alpha night")
+        compose.onNodeWithTag("record_shelf_canvas").assert(
+            SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription,
+                "1 / 1，Alpha night，Second artist"))
+        playCurrent(listOf(2L))
+        compose.runOnUiThread { container.playerController.pause() }
+
+        compose.onNodeWithTag("record_shelf_close").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("playlist_query").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("playlist_query").assertTextContains("night")
+        compose.onNodeWithTag("playlist_song_1").assertDoesNotExist()
+        compose.onNodeWithTag("playlist_query_cancel").performClick()
+        compose.onNodeWithTag("playlist_record_shelf_toggle").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("record_shelf_canvas").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("record_shelf_title").assertTextEquals("Alpha night")
+        compose.onNodeWithTag("record_shelf_canvas").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.ScrollToIndex) { it(1) }
+        compose.waitUntil(5000) {
+            compose.onNodeWithTag("record_shelf_title").fetchSemanticsNode().config[
+                androidx.compose.ui.semantics.SemanticsProperties.Text].first().text == "Library track"
+        }
+        playCurrent(listOf(2L, 1L, 3L))
+        assertEquals(1L, container.playbackQueue.state.value.current?.id)
+        compose.runOnUiThread { container.playerController.pause() }
+    }
+
+    @Test fun recordShelfShowsEmptyPlaylistFilterAndCanReturnToClearIt() {
+        open()
+        compose.onNodeWithTag("playlist_search_toggle").performClick()
+        compose.onNodeWithTag("playlist_query").performTextInput("no matching tracks")
+        compose.onNodeWithTag("playlist_record_shelf_toggle").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("record_shelf_canvas").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("record_shelf_title").assertTextEquals("没有匹配的歌曲")
+        compose.onNodeWithTag("record_shelf_canvas").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick) {
+            assertFalse(it())
+        }
+        assertEquals(listOf(99L), container.playbackQueue.state.value.songs.map { it.id })
+        compose.onNodeWithTag("record_shelf_close").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("playlist_query").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("playlist_query").assertTextContains("no matching tracks")
+        compose.onNodeWithTag("playlist_query_cancel").performClick()
+        compose.onNodeWithTag("playlist_record_shelf_toggle").performClick()
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("record_shelf_canvas").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("record_shelf_title").assertTextEquals("Library track")
+    }
+
     @Test fun depthRibbonFocusDoesNotPlayUntilRequestedAndReturnsToTheList() {
         open()
         compose.onNodeWithTag("playlist_more").performClick()
