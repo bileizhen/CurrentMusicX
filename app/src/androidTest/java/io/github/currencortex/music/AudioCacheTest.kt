@@ -66,6 +66,33 @@ class AudioCacheTest {
             bytes.toByteArray()
         } finally { ds.close() }
     }
+    @Test fun matchedCandidatesKeepSeparateByteRangesAndExplicitRefreshReachesLoader() = runBlocking(Dispatchers.IO) {
+        val owner = RequestSession("https://fixture/cm", "fixture-token")
+        val request = AudioRequest(1, AudioQuality.STANDARD, 7, owner)
+        var current = source("/one?signature=matched-a").copy(level = "matched", md5 = "", format = "aac")
+        val refreshes = mutableListOf<Boolean>()
+        val resolver = AudioSourceResolver(cache, { owner }, loadTrack = {
+            refreshes += it.refresh; current
+        }, load = { _, _, _ -> error("unexpected legacy loader") })
+        val first = resolver.resolve(request)
+        assertNotEquals(key, first.key)
+        cache.preload(first.key, first.source, 64 * 1024L)
+        val original = payload.copyOf()
+        payload = ByteArray(payload.size) { 42 }
+        current = current.copy(url = server.url("/one?signature=matched-b").toString())
+        val second = resolver.resolve(request, refresh = true)
+        assertNotEquals(first.key, second.key)
+        assertArrayEquals(payload, read(second.key, second.source))
+        assertArrayEquals(original.copyOfRange(0, 64 * 1024), read(first.key, first.source, length = 64 * 1024L))
+        assertEquals(listOf(false, true), refreshes)
+        assertEquals("匹配音源", cache.cachedSource(second.key)!!.qualityLabel)
+        resolver.invalidate()
+        val offline = AudioSourceResolver(cache, { owner }) { _, _, _ -> throw IOException("offline") }
+        val cached = offline.resolve(request)
+        assertEquals(second.key, cached.key)
+        assertTrue(cached.source.url.startsWith("cache://audio/"))
+        assertArrayEquals(payload, read(cached.key, cached.source))
+    }
     @Test fun openingBytesArePreloadedReusedAcrossSignedUrlsAndRemainingBytesAreCached() = runBlocking(Dispatchers.IO) {
         val source = source()
         cache.rememberSource(key, source)

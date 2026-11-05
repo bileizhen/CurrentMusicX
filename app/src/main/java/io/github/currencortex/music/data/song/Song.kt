@@ -36,9 +36,20 @@ data class SearchPage(val songs: List<Song>, val total: Int, val hasMore: Boolea
 @Serializable data class SongDetailDto(val songs: List<SongDto> = emptyList())
 @Serializable data class SongUrlDto(val url: String? = null, val type: String = "", val level: String = "",
                                   val sr: Int = 0, val ch: Int = 0, val sampleRate: Int = 0, val channelCount: Int = 0, val md5: String = "",
-                                  val expi: Long = 0)
+                                  val expi: Long = 0, val source: String = "", val requestedLevel: String = "",
+    val matchSource: String = "", val br: Long = 0, val bits: Int = 0, val size: Long = 0,
+    val durationMs: Long = 0, val expectedDurationMs: Long = 0)
 @Serializable data class AudioSource(val url: String, val level: String, val sampleRate: Int, val channelCount: Int, val format: String = "", val md5: String = "",
-                                    val validForSeconds: Long = 30) {
+                                    val validForSeconds: Long = 30, val source: String = "", val requestedLevel: String = "",
+    val matchSource: String = "", val bitrate: Long = 0, val bits: Int = 0, val size: Long = 0,
+    val durationMs: Long = 0, val expectedDurationMs: Long = 0) {
+    val matched get() = level == "matched" || source == "netease-match"
+    val qualityLabel get() = if (matched) "匹配音源" else
+        io.github.currencortex.music.core.media.AudioQuality.entries.firstOrNull { it.value == level }?.label ?: "未知音质"
+    // Without a file digest, two signed URLs may point to different recordings.
+    val cacheIdentity: String get() = if (!matched) "" else md5.takeIf { it.matches(Regex("[a-fA-F0-9]{32}")) }
+        ?.lowercase() ?: java.security.MessageDigest.getInstance("SHA-256").digest(url.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
     val highSpec get() = sampleRate > 48000 || channelCount > 2 ||
         // Some audio providers omit numeric specifications for these high-spec levels.
         ((sampleRate <= 0 || channelCount <= 0) && level in setOf("hires", "jymaster", "sky", "jyeffect"))

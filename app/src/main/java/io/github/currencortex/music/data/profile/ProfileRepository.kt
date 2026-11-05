@@ -20,7 +20,7 @@ class ProfileRepository(private val api: ApiClient, private val avatarCache: Ava
     suspend fun me() = own(session())
     suspend fun profile(id: Long) = api.get<ProfileDto>("users/$id/profile")
     suspend fun square(query: String, sort: String, offset: Int, listening: Boolean, limit: Int = 30): SquareDto {
-        require(sort in setOf("reg", "reg_asc", "name", "days", "listen", "likes"))
+        require(sort in setOf("composite", "active", "level", "reg", "reg_asc", "name", "days", "listen", "likes"))
         require(limit > 0)
         return api.get("users/square", mapOf("query" to query, "sort" to sort, "offset" to "$offset", "limit" to "$limit", "listening" to if (listening) "1" else "0"))
     }
@@ -93,5 +93,5 @@ class ProfileRepository(private val api: ApiClient, private val avatarCache: Ava
         // including reserved characters, instead of restricting it to ASCII.
         return ServerUrl.endpoint(api.routeServer(server), "decor", emptyMap()).newBuilder().addPathSegment("$id.gif").build().toString()
     }
-    fun account(user: ProfileUser) = UserDto(user.id, user.username, user.nickname, user.avatar, user.isAdmin, user.isSuper, user.title)
+    fun account(user: ProfileUser) = UserDto(user.id, user.username, user.nickname, user.avatar, user.isAdmin, user.isSuper, user.title, user.level, user.points)
 }

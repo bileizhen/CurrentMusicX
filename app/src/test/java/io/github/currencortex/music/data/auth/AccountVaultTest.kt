@@ -45,6 +45,27 @@ class AccountVaultTest {
             vault.remove(first.key); assertNull(vault.credential(first.key)); assertEquals("secret-token-B", vault.credential(vault.current()!!.key)!!.second)
         } finally { scope.cancel() }
     }
+    @Test fun progressionPersistsForTheOwnerAndCannotOverwriteAnotherAccount() = runBlocking {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        try {
+            val stores = mutableMapOf<String, Store>()
+            val vault = EncryptedAccountVault(MemoryPreferences(), scope) { stores.getOrPut(it) { Store() } }
+            val accounts = AccountRepository(Store(), scope, vault)
+            accounts.server = "https://fixture/cm/"
+            accounts.save("one", UserDto(1, nickname = "One", level = 2, points = 60))
+            val auth = AuthRepository(ApiClient({ accounts.server }, { accounts.token }, accounts::expired), accounts, "fixture") { _, _ -> }
+            val owner = RequestSession(accounts.server, accounts.token)
+            auth.updateProgress(owner, 3, 150)
+            assertEquals(3, vault.current()!!.account().level)
+            assertEquals(150L, vault.current()!!.points)
+            accounts.save("two", UserDto(2, nickname = "Two", level = 1, points = 10))
+            val result = appResult { auth.updateProgress(owner, 7, 1000) }
+            assertEquals(ErrorKind.Unauthorized, (result as AppResult.Failure).kind)
+            assertEquals(2L, accounts.state.value.account!!.id)
+            assertEquals(1, vault.current()!!.level)
+            assertEquals(10L, vault.current()!!.points)
+        } finally { scope.cancel() }
+    }
     @Test fun legacySessionMigratesAndOfflineRestoreRetainsItsCachedAccount() = runBlocking {
         MockWebServer().use { server ->
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

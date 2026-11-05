@@ -25,6 +25,7 @@ class ProfileSubpagesTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
     private lateinit var container: AppContainer
     private lateinit var server: MockWebServer
+    private val currentLevel = java.util.concurrent.atomic.AtomicInteger(6)
     private val context get() = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
     private fun json(body: String) = MockResponse().setHeader("Content-Type", "application/json").setBody(body)
 
@@ -41,6 +42,15 @@ class ProfileSubpagesTest {
                     "/cm/playlists" -> json("""{"playlists":[{"id":71,"name":"测试歌单","count":1}]}""")
                     "/cm/plays/recent", "/cm/likes/mine" -> json("""{"songs":[{"ncm_id":101,"name":"星夜","artists":"测试歌手","duration":180000}]}""")
                     "/cm/ncmbind" -> json("""{"bound":true,"profile":{"uid":42,"nickname":"网易云测试账号"}}""")
+                    "/cm/levels/rules" -> json("""{"maxPoints":2147483647,"timeZone":"Asia/Shanghai","listenSeconds":60,
+                        "pointSources":[{"id":"visit","points":10,"dailyLimit":1}],"levels":[{"level":1,"points":0},{"level":6,"points":1000}],
+                        "trial":{"level":6,"plusLevel":7,"questionCount":3,"passScore":60,"maxScore":100}}""")
+                    "/cm/levels/progress" -> json("""{"level":${currentLevel.get()},"points":1000,"today":{"visit":1}}""")
+                    "/cm/levels/trial" -> if (request.method == "GET") json("""{"questions":[
+                        {"prompt":"第一题","options":["甲","乙","丙","丁"]},
+                        {"prompt":"第二题","options":["甲","乙","丙","丁"]},
+                        {"prompt":"第三题","options":["甲","乙","丙","丁"]}]}""")
+                        else json("""{"score":100,"passed":true,"level":7}""").also { currentLevel.set(7) }
                     "/cm/decorations" -> json("""{"decorations":[{"id":"key-star","name":"星光"}],"current":"","unlocked":true}""")
                     else -> json("""{"code":200,"data":[],"items":[],"songs":[],"scales":{},"playlists":[]}""")
                 }
@@ -115,6 +125,27 @@ class ProfileSubpagesTest {
         assertEquals(row.top, compose.onNodeWithTag(entry).fetchSemanticsNode().boundsInRoot.top, 1f)
         assertEquals(listOf(902L), container.playbackQueue.state.value.songs.map { it.id })
         assertFalse(container.playerController.state.value.playing)
+    }
+    @Test fun levelsProgressAndTrialUseTheProfileRouteWithoutChangingPlayback() {
+        start(); scroll("open_levels"); click("open_levels"); advance()
+        compose.mainClock.autoAdvance = true
+        await("current_user_points")
+        compose.onNodeWithTag("current_user_points").assertTextEquals("累计 1000 积分")
+        compose.onNodeWithTag("levels_list").performScrollToNode(hasTestTag("start_level_trial"))
+        click("start_level_trial"); await("trial_answer_0_0")
+        compose.onNodeWithTag("levels_list").performScrollToNode(hasTestTag("submit_level_trial"))
+        compose.onNodeWithTag("submit_level_trial").assertIsNotEnabled()
+        repeat(3) { index ->
+            val tag = "trial_answer_${index}_0"
+            compose.onNodeWithTag("levels_list").performScrollToNode(hasTestTag(tag)); click(tag)
+        }
+        compose.onNodeWithTag("levels_list").performScrollToNode(hasTestTag("submit_level_trial"))
+        compose.onNodeWithTag("submit_level_trial").assertIsEnabled(); click("submit_level_trial")
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("试炼得分 100 · 已通过").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(listOf(902L), container.playbackQueue.state.value.songs.map { it.id })
+        assertFalse(container.playerController.state.value.playing)
+        compose.onNodeWithTag("current_user_level").assertTextEquals("Lv.6 Plus")
+        capture("user-levels-trial-result.png")
     }
     @Test fun everyMyDestinationUsesTheSharedChromeAndReturnsToItsSourceWithoutChangingPlayback() {
         start()
