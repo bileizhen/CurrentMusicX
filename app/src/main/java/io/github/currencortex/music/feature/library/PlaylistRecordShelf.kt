@@ -27,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
@@ -58,23 +59,28 @@ import top.yukonga.miuix.kmp.basic.TextField
     onPreviewModeChange: (RecordShelfPreviewMode) -> Unit = {},
     fullPreview: Boolean = false,
     onFullPreviewChange: (Boolean) -> Unit = {},
-    nextPreviewRequests: Flow<Song>? = null) {
+    nextPreviewRequests: Flow<Song>? = null,
+    collectionKey: String = "") {
     val context = LocalContext.current
     val owner = LocalLifecycleOwner.current
-    val renderer = remember(context) { RecordShelfView(context) }
+    val renderer = remember(context, collectionKey) { RecordShelfView(context) }
     val customTypeface = io.github.currencortex.music.ui.theme.LocalCustomTypeface.current
     val glassBackdrop = rememberUpdateBackdrop()
     val pageActive by rememberUpdatedState(LocalMusicPageActive.current)
     val refreshRate = LocalRefreshRatePreference.current
-    var selection by remember { mutableIntStateOf(0) }
-    var displayedSongs by remember { mutableStateOf(songs) }
-    var replacingResults by remember { mutableStateOf(false) }
-    var query by rememberSaveable { mutableStateOf("") }
-    var searchOpen by rememberSaveable { mutableStateOf(false) }
-    var picking by remember { mutableStateOf(false) }
-    var optionsOpen by rememberSaveable { mutableStateOf(false) }
-    var appeared by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { appeared = true }
+    var savedSongId by rememberSaveable(collectionKey) { mutableStateOf<Long?>(null) }
+    var savedSongSource by rememberSaveable(collectionKey) { mutableStateOf<String?>(null) }
+    val restoreIdentity = remember(renderer) { savedSongId?.let { id -> savedSongSource?.let { id to it } } }
+    var selectionRestored by remember(renderer) { mutableStateOf(restoreIdentity == null) }
+    var selection by remember(renderer) { mutableIntStateOf(0) }
+    var displayedSongs by remember(renderer) { mutableStateOf(songs) }
+    var replacingResults by remember(renderer) { mutableStateOf(false) }
+    var query by rememberSaveable(collectionKey) { mutableStateOf("") }
+    var searchOpen by rememberSaveable(collectionKey) { mutableStateOf(false) }
+    var picking by remember(renderer) { mutableStateOf(false) }
+    var optionsOpen by rememberSaveable(collectionKey) { mutableStateOf(false) }
+    var appeared by remember(renderer) { mutableStateOf(false) }
+    LaunchedEffect(renderer) { appeared = true }
     val controlsAlpha by animateFloatAsState(if (appeared) 1f else 0f, tween(500), label = "shelf controls")
     val titleAlpha by animateFloatAsState(if (picking) .4f else 1f, tween(200), label = "shelf title")
     val filtered = remember(songs, query) {
@@ -83,13 +89,20 @@ import top.yukonga.miuix.kmp.basic.TextField
     val selected = displayedSongs.getOrNull(selection)
     val density = LocalDensity.current
     val top = WindowInsets.statusBars.getTop(density).toFloat()
-    val bottom = with(density) { 75.dp.toPx() } + WindowInsets.navigationBars.getBottom(density)
     val activate by rememberUpdatedState<(Int) -> Unit>({ index ->
         if (canPlay && !replacingResults) displayedSongs.getOrNull(index)?.let { song ->
             songs.indexOfFirst { it.id == song.id && it.musicSource == song.musicSource }.takeIf { it >= 0 }?.let(onPlay)
         }
     })
-    val currentSelection by rememberUpdatedState<(Int) -> Unit>({ selection = it })
+    val currentSelection by rememberUpdatedState<(Int) -> Unit>({ index ->
+        selection = index
+        // configure() initially selects zero. Do not overwrite the saved identity before
+        // the restored playlist has arrived and the native view can select that record.
+        if (selectionRestored) renderer.displayedSongs.getOrNull(index)?.let { song ->
+            savedSongId = song.id
+            savedSongSource = song.musicSource.name
+        }
+    })
     val currentPreview by rememberUpdatedState<(Int?) -> Unit>({ index -> onPreview(if (canPlay) index?.let(displayedSongs::getOrNull) else null) })
     val currentSongsChanged by rememberUpdatedState<(List<Song>) -> Unit>({ displayedSongs = it })
     val advancePreview by rememberUpdatedState<(Song) -> Unit>({ finished ->
@@ -120,19 +133,38 @@ import top.yukonga.miuix.kmp.basic.TextField
         // Keep result changes independent of AndroidView layout updates. The renderer owns both
         // the outgoing and incoming phases, including updates delivered behind the search overlay.
         renderer.configure(filtered, searching = query.isNotBlank())
+        if (!selectionRestored && songs.isNotEmpty()) {
+            val identity = requireNotNull(restoreIdentity)
+            val index = renderer.restoreSelection(identity.first, identity.second)
+            val restoredSong = renderer.displayedSongs.getOrNull(index)
+            selection = index.coerceAtLeast(0)
+            savedSongId = restoredSong?.id
+            savedSongSource = restoredSong?.musicSource?.name
+            selectionRestored = true
+        }
         displayedSongs = renderer.displayedSongs
         replacingResults = renderer.replacingResults
     }
     BackHandler(enabled = pageActive) { if (searchOpen) searchOpen = false else if (optionsOpen) optionsOpen = false else onClose() }
     BoxWithConstraints(Modifier.fillMaxSize().background(Color(0xFF102132)).testTag("playlist_record_shelf")) {
         val screenWidth = maxWidth
-        val footerSize = screenWidth * .132f
+        val safeInsets = WindowInsets.safeDrawing
+        val direction = LocalLayoutDirection.current
+        val safeWidth = screenWidth - with(density) {
+            (safeInsets.getLeft(density, direction) + safeInsets.getRight(density, direction)).toDp()
+        }
+        // Scale within a compact control group, not the full landscape/tablet width.
+        val footerWidth = safeWidth.coerceAtMost(420.dp)
+        val footerSize = (footerWidth * .132f).coerceIn(48.dp, 56.dp)
+        val footerMargin = 22.dp
+        val footerInset = with(density) { (footerSize + footerMargin).toPx() } + safeInsets.getBottom(density)
         Box(Modifier.matchParentSize().then(if (glassBackdrop != null) Modifier.layerBackdrop(glassBackdrop) else Modifier)) {
             androidx.compose.animation.Crossfade(selected?.cover.orEmpty(), Modifier.matchParentSize(), tween(450), label = "shelf cover background") { cover ->
                 io.github.currencortex.music.feature.player.PlayerBackdrop(cover, Modifier.fillMaxSize())
             }
+            key(renderer) {
             AndroidView(factory = { renderer }, update = {
-                it.topInset = top; it.bottomInset = bottom; applyViewRefreshRate(it, refreshRate); it.invalidate()
+                it.topInset = top; it.bottomInset = footerInset; applyViewRefreshRate(it, refreshRate); it.invalidate()
             }, modifier = Modifier.fillMaxSize().testTag("record_shelf_canvas").semantics {
                 contentDescription = "CD 唱片架，滑动浏览歌曲，点击唱片抽出，再次点击播放，底部刻度可快速定位"
                 stateDescription = if (replacingResults) "正在切换唱片" else selected?.let { "${selection + 1} / ${displayedSongs.size}，${it.name}，${it.artists}" } ?: "没有匹配的歌曲"
@@ -149,8 +181,11 @@ import top.yukonga.miuix.kmp.basic.TextField
                     CustomAccessibilityAction("返回列表") { onClose(); true },
                 )
             })
+            }
         }
-        Row(Modifier.align(Alignment.TopCenter).graphicsLayer { alpha = controlsAlpha }.statusBarsPadding().padding(horizontal = screenWidth * .04f, vertical = 14.dp),
+        Row(Modifier.align(Alignment.TopCenter).graphicsLayer { alpha = controlsAlpha }
+            .windowInsetsPadding(safeInsets.only(WindowInsetsSides.Horizontal)).statusBarsPadding()
+            .padding(horizontal = screenWidth * .04f, vertical = 14.dp),
             verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ShelfCircle(glassBackdrop, "搜索歌曲", "record_shelf_search", { searchOpen = true }) {
                 Icon(Icons.Default.Search, null, Modifier.size(20.dp), tint = Color.White)
@@ -167,8 +202,9 @@ import top.yukonga.miuix.kmp.basic.TextField
                 ShelfGlyph("collection", Modifier.size(21.dp))
             }
         }
-        Row(Modifier.align(Alignment.BottomCenter).graphicsLayer { alpha = controlsAlpha }.navigationBarsPadding()
-            .padding(bottom = 22.dp).fillMaxWidth().padding(horizontal = screenWidth * .05f),
+        Row(Modifier.align(Alignment.BottomCenter).graphicsLayer { alpha = controlsAlpha }
+            .windowInsetsPadding(safeInsets.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom))
+            .padding(bottom = footerMargin).width(footerWidth).padding(horizontal = footerWidth * .05f),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
             ShelfCircle(glassBackdrop, if (selected?.let(isSaved) == true) "取消喜欢" else "喜欢当前歌曲", "record_shelf_save", {
                 selected?.let { onSave?.invoke(it) }
@@ -176,7 +212,7 @@ import top.yukonga.miuix.kmp.basic.TextField
                 Icon(if (selected?.let(isSaved) == true) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     null, Modifier.size(24.dp), tint = Color(0xFFFF4D6D))
             }
-            RecordShelfPickButton(Modifier.width(screenWidth * .432f).height(footerSize),
+            RecordShelfPickButton(Modifier.width(footerWidth * .432f).height(footerSize),
                 enabled = displayedSongs.isNotEmpty() && !picking && !replacingResults, onClick = {
                     val index = if (displayedSongs.size <= 1) 0 else {
                         val choice = (0 until displayedSongs.lastIndex).random()

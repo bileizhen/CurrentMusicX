@@ -4,6 +4,92 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class RecordShelfGeometryTest {
+    @Test fun portraitLayoutRetainsTheOriginalQuadsWindowsAndEntrancePath() {
+        val expected = FloatArray(8)
+        val actual = FloatArray(8)
+        for ((width, height) in listOf(724f to 1200f, 1080f to 1500f)) {
+            val layout = ShelfGeometry(width, 150f, height)
+            assertFalse(layout.wide)
+            assertEquals(shelfWindow(3.25f, 100), layout.window(3.25f, 100))
+            for (distance in -10..18) for (extraction in listOf(0f, .4f, 1f)) {
+                shelfQuad(distance.toFloat(), width, 150f, height, extraction, expected)
+                layout.quad(distance.toFloat(), extraction, actual)
+                assertArrayEquals(expected, actual, .001f)
+                assertEquals(shelfEntryOffsetX(.7f, distance.toFloat(), width, actual[0]),
+                    layout.entryOffset(.7f, distance.toFloat(), actual[0]), .001f)
+            }
+        }
+    }
+
+    @Test fun wideRackCoversBothEdgesWithoutChangingCaseShapeOrExtraction() {
+        for ((width, height, viewportHeight) in listOf(Triple(2400f, 460f, 1080f),
+                Triple(1920f, 350f, 1080f), Triple(2560f, 620f, 1440f))) {
+            val layout = ShelfGeometry(width, 200f, height, viewportHeight)
+            assertTrue(layout.wide)
+            val quads = layout.window(.35f, 10_000).map { logical ->
+                FloatArray(8).also { layout.quad(logical - .35f, 0f, it) }
+            }
+            for (fraction in listOf(0f, .02f, .1f, .25f, .5f, .75f, .9f, .98f, 1f)) {
+                val x = width * fraction
+                assertTrue("A visible case must cross the viewport at $fraction of $width", quads.any {
+                    if (it[0] > x || it[2] < x) false else {
+                        val u = (x - it[0]) / (it[2] - it[0])
+                        val upper = it[1] + (it[3] - it[1]) * u
+                        val lower = it[7] + (it[5] - it[7]) * u
+                        minOf(lower, viewportHeight) - maxOf(upper, 0f) >= layout.caseScale * .1f
+                    }
+                })
+            }
+            for (quad in quads) {
+                assertEquals(layout.caseScale * .435f, quad[2] - quad[0], .001f)
+                assertEquals(layout.caseScale * .45f, quad[7] - quad[1], .001f)
+                assertEquals(layout.caseScale * .132f, quad[3] - quad[1], .001f)
+            }
+            val rest = FloatArray(8); val pulled = FloatArray(8); val near = FloatArray(8)
+            layout.quad(0f, 0f, rest); layout.quad(0f, 1f, pulled); layout.quad(-1f, 0f, near)
+            val slope = (near[1] - rest[1]) / (rest[0] - near[0])
+            assertTrue("The full-width rack must visibly rise toward the right, rather than become horizontal", slope in .36f.. .58f)
+            assertTrue("Steepness must still fit the viewport diagonal", slope <= minOf(.5773503f, .92f * viewportHeight / width) + .00001f)
+            for (corner in 0..3) {
+                assertEquals(layout.caseScale * .367f, pulled[corner * 2] - rest[corner * 2], .001f)
+                assertEquals(layout.caseScale * .095f, pulled[corner * 2 + 1] - rest[corner * 2 + 1], .001f)
+            }
+            assertTrue("The extracted case must clear the foreground neighbour", pulled[0] >= near[2])
+            assertTrue(pulled[5] <= layout.top + height)
+        }
+    }
+
+    @Test fun wideEntranceAndSearchExitReachTheRealScreenEdge() {
+        val layout = ShelfGeometry(2400f, 200f, 460f, 1080f)
+        val quad = FloatArray(8)
+        for (logical in layout.window(.25f, 1000)) {
+            val distance = logical - .25f
+            layout.quad(distance, 0f, quad)
+            val start = layout.entryOffset(0f, distance, quad[0])
+            assertTrue("Incoming artwork must start beyond the full viewport", quad[0] + start >= layout.viewportWidth)
+            assertTrue(layout.entryRise(start).isFinite())
+            assertEquals(0f, layout.entryOffset(1.85f, distance, quad[0]), .001f)
+            assertEquals(0f, layout.exitOffset(0f, distance, quad[0]), .001f)
+            assertTrue("Removed artwork must leave the full viewport", quad[0] + layout.exitOffset(.52f, distance, quad[0]) >= layout.viewportWidth)
+        }
+    }
+
+    @Test fun wideWindowsStayBoundedAndNeverRepeatSmallPlaylists() {
+        for (width in listOf(1080f, 2400f, 3840f)) {
+            val layout = ShelfGeometry(width, 150f, 460f, 1080f)
+            for (count in listOf(0, 1, 2, 7, 28, 29, 30, 10_000)) {
+                for (position in listOf(-5.3f, 0f, 200.6f)) {
+                    val window = layout.window(position, count)
+                    assertEquals(minOf(count, 29), window.count())
+                    if (count > 0) {
+                        val indices = window.map { Math.floorMod(it, count) }
+                        assertEquals(indices.size, indices.distinct().size)
+                    }
+                }
+            }
+        }
+    }
+
     @Test fun windowIsBoundedAndEveryTrackOfALongPlaylistIsReachableWithoutDuplicates() {
         assertTrue(shelfWindow(0f, 0).isEmpty())
         assertEquals(listOf(0), shelfWindow(0f, 1).toList())

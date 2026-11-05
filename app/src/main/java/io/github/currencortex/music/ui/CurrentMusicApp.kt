@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -39,6 +40,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalLayoutDirection
 import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.core.network.AppResult
 import io.github.currencortex.music.ui.component.*
@@ -236,6 +238,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
     var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
     val playlistPage = isPlaylistRoute(backStack.last())
+    val systemBarDensity = LocalDensity.current
+    val systemBarDirection = LocalLayoutDirection.current
+    val navigationInsets = WindowInsets.navigationBars
+    val sideSystemNavigation = navigationInsets.getLeft(systemBarDensity, systemBarDirection) > 0 ||
+        navigationInsets.getRight(systemBarDensity, systemBarDirection) > 0
     var playlistDarkStatus by remember(backStack.last()) { mutableStateOf(true) }
     val playlistStatusStyle = remember(backStack.last()) { { dark: Boolean -> playlistDarkStatus = dark } }
     val darkLaunchStyles = setOf(io.github.currencortex.music.data.settings.LaunchStyle.HALO,
@@ -244,7 +251,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     LeiTheme(settings, darkSystemBars = if (haloVisible || updateDialogVisible || miniQueueOpen || (playlistPage && (settings.playlistDepthRibbon || settings.playlistRecordShelf)) || backStack.last() in setOf(PLAYER.toString(), "lib/video")) true else null,
         darkStatusBars = if (haloVisible || updateDialogVisible || miniQueueOpen ||
             (playlistPage && (settings.playlistDepthRibbon || settings.playlistRecordShelf))) true
-            else if (playlistPage) playlistDarkStatus else null) {
+            else if (playlistPage) playlistDarkStatus else null,
+        // A side system bar can span both dark artwork and the light song list.
+        // Let Android protect its icons without narrowing the full-bleed cover.
+        enforceNavigationBarContrast = playlistPage && sideSystemNavigation &&
+            !settings.playlistDepthRibbon && !settings.playlistRecordShelf) {
         CompositionLocalProvider(io.github.currencortex.music.feature.lyrics.ui.LocalLyricsFont provides lyricsFont,
             io.github.currencortex.music.feature.library.LocalPlaylistStatusBarStyle provides playlistStatusStyle,
             LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight,
@@ -285,6 +296,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         var searchFocus by remember { mutableStateOf(false) }
         val searchPresented by remember(searchOpen) { derivedStateOf { searchOpen || searchSheet.progress > .0001f } }
         val sceneStack = remember(backStack) { backStack.filter { it != PLAYER.toString() && it != SEARCH.toString() } }
+        // Search belongs to the retained root scene. Keep it ready for back navigation,
+        // but it must not pause a detail page that was opened from its results.
+        val searchCoversScene = sceneStack.last() == ROOT.toString() && searchPresented
         val playerSavedState = rememberSaveableStateHolder()
         var navigationBounds by remember { mutableStateOf<Rect?>(null) }
         var playerSheetMotion by remember { mutableStateOf(PlayerSheetMotion.NONE) }
@@ -344,6 +358,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         var roamingRequest by rememberSaveable { mutableIntStateOf(0) }
         fun navigateLibrary(route: String) {
+            if (backStack.last() == SEARCH.toString()) {
+                searchFocus = false
+                searchFocusManager.clearFocus()
+                searchKeyboard?.hide()
+            }
             if (route == "lib/roaming") { roamingRequest++; navigateTo(PLAYER); return }
             if (backStack.last() != route) { pageNavigation.record(route); playerSheetMotion = PlayerSheetMotion.NONE; backStack = backStack + route }
         }
@@ -475,18 +494,19 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val ribbonEnabled = androidx.compose.runtime.rememberUpdatedState(settings.playlistDepthRibbon || settings.playlistRecordShelf)
         val availableMini = androidx.compose.runtime.rememberUpdatedState(miniAvailable)
         val miniInset = androidx.compose.runtime.rememberUpdatedState(miniHeight)
-        val pageInteractive = androidx.compose.runtime.rememberUpdatedState(!playerPresented && !searchPresented)
+        val pageInteractive = androidx.compose.runtime.rememberUpdatedState(!playerPresented && !searchCoversScene)
         val activeScene = androidx.compose.runtime.rememberUpdatedState(sceneStack.last())
         // Update layout values without replacing the decorator that retains each page.
         val sceneInsets = remember {
             NavEntryDecorator<String> { entry ->
-                val ribbonScene = ribbonEnabled.value && isPlaylistRoute(entry.contentKey.toString())
+                val playlistScene = isPlaylistRoute(entry.contentKey.toString())
+                val ribbonScene = ribbonEnabled.value && playlistScene
                 val miniSpace = if (availableMini.value && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video", "appearance-font")) miniInset.value else 0.dp
                 // Each moving scene must cover the outgoing page and its dim scrim, including
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
                 Box(Modifier.fillMaxSize().background(if (ribbonScene) androidx.compose.ui.graphics.Color(0xFF0A0A0A) else MiuixTheme.colorScheme.background)
                     .testTag("music_scene_${entry.contentKey}")
-                    .then(if (ribbonScene || entry.contentKey in setOf(PLAYER.toString(), "lib/video", EQUALIZER.toString())) Modifier else Modifier.navigationBarsPadding())) {
+                    .then(if (playlistScene || entry.contentKey in setOf(PLAYER.toString(), "lib/video", EQUALIZER.toString())) Modifier else Modifier.navigationBarsPadding())) {
                     // Keep the scene viewport full size so the glass samples page content.
                     // Clearance belongs to the end of each scrollable list, not to its bounds.
                     CompositionLocalProvider(LocalMusicBottomInset provides miniSpace,
@@ -499,7 +519,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val pageBackOwner = rememberNavigationEventDispatcherOwner(enabled = !playerPresented)
         val pageContent: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize().then(if (launchBrand.active || launchPreview != null || playerPresented || miniQueueOpen || updateDialogVisible) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
-        Column(Modifier.fillMaxSize().then(if (searchPresented) Modifier else Modifier.imePadding())) {
+        Column(Modifier.fillMaxSize().then(if (searchCoversScene) Modifier else Modifier.imePadding())) {
         NavDisplay(
             backStack = sceneStack,
             modifier = Modifier.weight(1f).fillMaxSize().then(pageSceneStrategy.blur.viewport)
@@ -804,6 +824,13 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
         KeyboardDockOverlay(keyboardOpen) {
         val unifiedDock = settings.floatingBar && !wideLayout
+        val standardNavigation = !unifiedDock && !keyboardOpen && (showRootNavigation && !rootWide || hasEmbyDock && !playerPresented)
+        // When the tabs are absent or collapsed, the mini is the bottommost visible surface.
+        val glowOnStandardBar = standardNavigation && !dockCollapsed
+        val glow: (@Composable (Modifier) -> Unit)? = if (settings.navigationGlow && currentSong != null) {
+            { modifier -> NavigationGlow(currentSong?.cover.orEmpty(), playerVm.state, container.dockAudioLevel, modifier,
+                active = dockVisible && !keyboardOpen && !playerPresented && !miniQueueOpen) }
+        } else null
         val miniBody: @Composable () -> Unit = {
         MiniPlayer(playerVm, { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
             { playWithPermission { container.playerController.toggle() } },
@@ -811,7 +838,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             else Modifier.navigationBarsPadding().graphicsLayer {
                     translationY = -miniLift.value.toPx()
                 }
-                .then(if (miniRoot && wideLayout) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) else Modifier)
+                .then(if (wideLayout) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) else Modifier)
                 .padding(end = if (miniRoot && wideLayout) SideNavigationSpace else 0.dp)
                 .onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp),
             onNext = { container.playerController.next(container.playerController.state.value.showPause) },
@@ -822,7 +849,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             } },
             onSurfaceBounds = { miniBounds = it }, active = showMini, onSurfaceCoordinates = { miniCoordinates = it },
             onArtworkOrigin = { miniArtworkOrigin = it }, artworkVisible = { !artworkTransition.moving && !miniQueueTransition.coverMoving },
-            onOpenBounds = { miniOpenBounds = it })
+            onOpenBounds = { miniOpenBounds = it }, glow = if (!unifiedDock && !glowOnStandardBar) glow else null)
         }
         if (unifiedDock) {
             val glassNavigation = LocalMusicDockNavigation.current
@@ -835,22 +862,17 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 onOrigin = { dockOrigin = it }, mini = miniBody,
                 navigation = glassNavigation ?: { mod -> PlainFloatingBar(dockSelected, dockLabels, dockIcons, dockSelect, mod, embedded = true) },
                 glow = {
-                    if (settings.navigationGlow && currentSong != null) io.github.currencortex.music.ui.component.NavigationGlow(
-                        currentSong?.cover.orEmpty(), playerVm.state, container.dockAudioLevel,
-                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(88.dp),
-                        active = dockVisible && !keyboardOpen && !playerPresented && !miniQueueOpen)
+                    glow?.invoke(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(88.dp))
                 })
         } else if (miniRetainedAvailable) RetainedOverlay(dockVisible, Modifier.align(Alignment.BottomCenter)
             .then(if (playerPresented || miniQueueOpen) Modifier.clearAndSetSemantics {} else Modifier)
             .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) }) {
             miniBody()
         }
-        if ((showRootNavigation && !rootWide || hasEmbyDock && !playerPresented) && !keyboardOpen && (!settings.floatingBar || wideLayout)) ScrollCollapsingNavigation(
+        if (standardNavigation) ScrollCollapsingNavigation(
             expanded = !dockCollapsed, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
             StandardNavigationBar(dockSelected, dockLabels, dockIcons, dockSelect)
-            if (settings.navigationGlow && currentSong != null) io.github.currencortex.music.ui.component.NavigationGlow(
-                currentSong?.cover.orEmpty(), playerVm.state, container.dockAudioLevel,
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(48.dp), active = dockVisible && !playerPresented && !miniQueueOpen)
+            if (glowOnStandardBar) glow?.invoke(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(48.dp))
         }
         if (rootWide && showRootNavigation && !keyboardOpen) FloatingSideBar(selected, labels, icons, ::selectTab,
             Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(end = 12.dp, bottom = 12.dp))
@@ -925,7 +947,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         // navigation, once, and take precedence over returning to the parent page.
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
-            isBackEnabled = backStack.size > 1 && !playerPresented && !searchPresented && !predictiveBack && !showLogs &&
+            isBackEnabled = backStack.size > 1 && !playerPresented && !searchCoversScene && !predictiveBack && !showLogs &&
                 pendingPlay == null && !updateDialogVisible && updatePrompt == null && !announcementVisible && !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
