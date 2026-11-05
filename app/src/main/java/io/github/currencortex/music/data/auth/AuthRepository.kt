@@ -118,23 +118,48 @@ class AuthRepository(private val api: ApiClient, val accounts: AccountRepository
         val response = api.request("POST", "auth/login", body = buildJsonObject {
             put("username", username); put("password", password); put("device", device); put("platform", "app")
         }, expectedSession = RequestSession(owner.server, null), retryConnection = false).jsonObject
+        loginOutcome(response, owner, revision)
+    } }
+    suspend fun sendLoginEmailCode(email: String): AppResult<Unit> = appResult {
+        require(email.isNotBlank())
+        api.request("POST", "auth/login/email/code", body = buildJsonObject { put("email", email.trim()) },
+            expectedSession = api.publicSession(), retryConnection = false)
+        Unit
+    }
+    suspend fun loginWithEmail(email: String, code: String): AppResult<LoginOutcome> = sessionMutex.withLock { appResult {
+        loginChallenge = null
+        require(email.isNotBlank() && code.isNotBlank())
+        val owner = RequestSession(accounts.server, accounts.token)
+        val revision = accounts.sessionRevision.value
+        val response = api.request("POST", "auth/login/email", body = buildJsonObject {
+            put("email", email.trim()); put("code", code.trim()); put("device", device); put("platform", "app")
+        }, expectedSession = RequestSession(owner.server, null), retryConnection = false).jsonObject
+        loginOutcome(response, owner, revision)
+    } }
+    private suspend fun loginOutcome(response: JsonObject, owner: RequestSession, revision: Long): LoginOutcome {
         checkLoginOwner(owner, revision)
-        if (response["requires2FA"]?.jsonPrimitive?.booleanOrNull == true) {
+        val totp = response["requires2FA"]?.jsonPrimitive?.booleanOrNull == true
+        val question = response["requiresSecurityQuestion"]?.jsonPrimitive?.booleanOrNull == true
+        require(!(totp && question))
+        return if (totp || question) {
             val token = response["challengeToken"]?.jsonPrimitive?.contentOrNull.orEmpty()
             val seconds = response["expiresIn"]?.jsonPrimitive?.longOrNull ?: 300L
+            val prompt = if (question) response["securityQuestion"]?.jsonPrimitive?.contentOrNull else null
+            require(!question || (!prompt.isNullOrBlank() && prompt.length <= 100))
             require(token.isNotBlank() && token.length <= 8192 && seconds > 0)
-            val challenge = LoginChallenge(token, owner, revision, clock() + seconds.coerceAtMost(300) * 1000, clock)
+            val challenge = LoginChallenge(token, owner, revision, clock() + seconds.coerceAtMost(300) * 1000, clock, prompt)
             loginChallenge = challenge
             LoginOutcome.VerificationRequired(challenge)
         } else LoginOutcome.SignedIn(acceptLogin(response, owner, revision))
-    } }
+    }
     suspend fun verifyLogin(challenge: LoginChallenge, code: String): AppResult<LoginOutcome.SignedIn> = sessionMutex.withLock { appResult {
         if (loginChallenge !== challenge || challenge.remainingSeconds <= 0)
             throw ApiException(ErrorKind.Unauthorized, userMessage = "登录验证已失效，请重新登录")
         checkLoginOwner(challenge.owner, challenge.revision)
         require(code.isNotBlank() && code.length <= 128)
-        val response = api.request("POST", "auth/2fa/login", body = buildJsonObject {
-            put("challengeToken", challenge.token); put("code", code.trim())
+        val question = challenge.securityQuestion != null
+        val response = api.request("POST", if (question) "auth/security-question/login" else "auth/2fa/login", body = buildJsonObject {
+            put("challengeToken", challenge.token); put(if (question) "answer" else "code", code.trim())
         }, expectedSession = RequestSession(challenge.owner.server, null), retryConnection = false).jsonObject
         if (loginChallenge !== challenge || challenge.remainingSeconds <= 0)
             throw ApiException(ErrorKind.Unauthorized, userMessage = "登录验证已失效，请重新登录")

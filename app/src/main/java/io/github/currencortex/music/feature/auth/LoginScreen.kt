@@ -43,6 +43,7 @@ import io.github.currencortex.music.data.auth.RegistrationInput
     // Password is intentionally not saved in SavedState or a persistent store.
     var password by remember { mutableStateOf("") }
     var register by rememberSaveable { mutableStateOf(false) }
+    var emailLogin by rememberSaveable { mutableStateOf(false) }
     var phone by rememberSaveable { mutableStateOf(false) }
     var nickname by rememberSaveable { mutableStateOf("") }
     var contact by remember { mutableStateOf("") }
@@ -54,8 +55,12 @@ import io.github.currencortex.music.data.auth.RegistrationInput
         if (state.message == "密码已重置，请使用新密码登录") { recovering = false; password = ""; revealPassword = false }
     }
     val deadline by vm.codeUntil.collectAsStateWithLifecycle()
+    val emailDeadline by vm.loginEmailCodeUntil.collectAsStateWithLifecycle()
     var now by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
-    LaunchedEffect(deadline) { while (now < deadline) { delay(1000); now = SystemClock.elapsedRealtime() } }
+    LaunchedEffect(deadline, emailDeadline) {
+        now = SystemClock.elapsedRealtime()
+        while (now < maxOf(deadline, emailDeadline)) { delay(1000); now = SystemClock.elapsedRealtime() }
+    }
     LaunchedEffect(state.message) { if (addingAccount && state.message in listOf("登录成功", "注册成功")) onDone() }
     // Entering the page starts a clean attempt: a stale error must not greet the user.
     LaunchedEffect(Unit) { vm.clearMessage() }
@@ -77,10 +82,14 @@ import io.github.currencortex.music.data.auth.RegistrationInput
             Text(it.nickname, fontSize = 24.sp)
             GlassActionButton("退出登录", onClick = { vm.logout() }, enabled = !state.loading)
         } ?: run {
-            val canLogin = username.isNotBlank() && password.isNotBlank() && !state.loading
+            val canLogin = !state.loading && if (emailLogin) contact.isNotBlank() && code.isNotBlank()
+                else username.isNotBlank() && password.isNotBlank()
             val canRegister = username.isNotBlank() && password.length >= 6 && contact.isNotBlank() &&
                 code.isNotBlank() && !state.loading
-            fun submit() { vm.login(username, password); password = "" }
+            fun submit() {
+                if (emailLogin) vm.loginWithEmail(contact, code) else vm.login(username, password)
+                password = ""; code = ""
+            }
             SettingsGroup(Modifier.fillMaxWidth().testTag(if (register) "register_card" else "login_card")) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     // The mode switch lives in the header so it stays visible without scrolling.
@@ -88,9 +97,27 @@ import io.github.currencortex.music.data.auth.RegistrationInput
                         Text(if (register) "注册 CurrentMusic" else "登录 CurrentMusic", Modifier.weight(1f),
                             fontSize = 20.sp, fontWeight = FontWeight.Medium)
                         GlassActionButton(if (register) "返回登录" else "注册", {
-                            register = !register; password = ""; code = ""; revealPassword = false
+                            register = !register; password = ""; code = ""; contact = ""; revealPassword = false
                         }, Modifier.testTag("login_switch_mode"), enabled = !state.loading, fillWidth = false)
                     }
+                    if (!register) SettingsSegmentedControl(listOf("密码登录", "邮箱验证码"), if (emailLogin) 1 else 0, {
+                        edit { emailLogin = it == 1; password = ""; code = ""; revealPassword = false }
+                    }, enabled = !state.loading, tag = "login_method")
+                    if (!register && emailLogin) {
+                        Text("使用已绑定的邮箱登录。", fontSize = 13.sp, color = secondary)
+                        TextField(contact, { edit { contact = it } }, label = "邮箱", singleLine = true,
+                            enabled = !state.loading,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                            modifier = Modifier.fillMaxWidth().testTag("login_email"))
+                        TextField(code, { edit { code = it.filter { char -> char in '0'..'9' }.take(6) } },
+                            label = "邮箱验证码", singleLine = true, enabled = !state.loading,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done),
+                            keyboardActions = KeyboardActions(onDone = { if (canLogin) submit() }),
+                            modifier = Modifier.fillMaxWidth().testTag("login_email_code"))
+                        GlassActionButton(if (emailDeadline > now) "${(emailDeadline - now + 999) / 1000}s 后重发" else "获取登录验证码",
+                            { vm.loginEmailCode(contact) }, enabled = contact.isNotBlank() && !state.loading && now >= emailDeadline,
+                            modifier = Modifier.testTag("login_email_send_code"))
+                    } else {
                     Text(if (register) "注册后可同步我喜欢与歌单。" else "用户名或手机号均可。", fontSize = 13.sp, color = secondary)
                     // One label per field, keyboard hints and a reveal toggle replace the bare rows.
                     TextField(username, { edit { username = it } }, singleLine = true, label = "用户名",
@@ -111,6 +138,7 @@ import io.github.currencortex.music.data.auth.RegistrationInput
                             }
                         },
                         modifier = Modifier.fillMaxWidth().testTag("login_password"))
+                    }
                     if (!register) GlassActionButton("忘记密码？", onClick = { vm.clearMessage(); recovering = true }, fillWidth = false,
                         enabled = !state.loading, modifier = Modifier.testTag("forgot_password"))
                     // Registration needs a 6-character password; say so instead of only greying the button.

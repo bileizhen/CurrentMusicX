@@ -18,6 +18,7 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
     val errorNotices = container.errorNotices
     val codeUntil = MutableStateFlow(0L)
     val resetCodeUntil = MutableStateFlow(0L)
+    val loginEmailCodeUntil = MutableStateFlow(0L)
     val loginChallenge = MutableStateFlow<LoginChallenge?>(null)
     private var loginJob: Job? = null
     private var loginAttempt = 0L
@@ -87,6 +88,19 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
     fun verifyLogin(code: String) {
         val challenge = loginChallenge.value ?: return
         loginAction { container.authRepository.verifyLogin(challenge, code) }
+    }
+    fun loginWithEmail(email: String, code: String) {
+        if (state.value.loading) return
+        dismissLogin()
+        loginAction { container.authRepository.loginWithEmail(email, code) }
+    }
+    fun loginEmailCode(email: String) {
+        if (SystemClock.elapsedRealtime() < loginEmailCodeUntil.value) return
+        action("登录验证码已发送") {
+            container.authRepository.sendLoginEmailCode(email).also {
+                if (it is AppResult.Success) loginEmailCodeUntil.value = SystemClock.elapsedRealtime() + 60_000
+            }
+        }
     }
     override fun onCleared() {
         loginChallenge.value?.let(container.authRepository::discardLoginChallenge)
