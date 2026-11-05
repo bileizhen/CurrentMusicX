@@ -26,7 +26,7 @@ async function rerunWaitingBuild({github, context, core, pr}) {
   // marker captures the native event's immutable base and head at run time.
   const marker = `waiting-for-pr-turn / ${pr.number} / ${pr.base.sha} / ${pr.head.sha}`;
   if (!jobs.some(job => job.name === 'scope' && job.conclusion === 'success') ||
-      !jobs.some(job => job.name === marker && job.conclusion === 'skipped') ||
+      !jobs.some(job => job.name === marker && job.conclusion === 'success') ||
       jobs.some(job => job.name === 'build')) return;
 
   try {

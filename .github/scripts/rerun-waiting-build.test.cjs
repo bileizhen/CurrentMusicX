@@ -8,7 +8,7 @@ const run = {id: 101, run_number: 10, run_attempt: 2, event: 'pull_request', hea
   head_branch: 'fix', repository: {id: 1}, head_repository: {id: 2}, pull_requests: [],
   status: 'completed', conclusion: 'success'};
 const scope = {name: 'scope', conclusion: 'success'};
-const marker = {name: 'waiting-for-pr-turn / 15 / base / head', conclusion: 'skipped'};
+const marker = {name: 'waiting-for-pr-turn / 15 / base / head', conclusion: 'success'};
 
 function fixture({runs = [run], jobs = [scope, marker], payload = {}, denied, current} = {}) {
   const calls = [];
@@ -57,7 +57,7 @@ test('a pending approval, active build or failure supersedes all older eligible 
 
 test('ordinary CI, missing markers, and stale or unrelated markers are never promoted', async () => {
   for (const jobs of [[scope], [marker], [scope, marker, {name: 'build', conclusion: 'success'}],
-    [scope, {...marker, conclusion: 'success'}], [scope, {...marker, name: 'waiting-for-pr-turn / 15 / old / head'}],
+    [scope, {...marker, conclusion: 'skipped'}], [scope, {...marker, name: 'waiting-for-pr-turn / 15 / old / head'}],
     [scope, {...marker, name: 'waiting-for-pr-turn / 16 / base / head'}]]) {
     const f = fixture({jobs}); await f.start();
     assert.equal(f.calls.length, 0);
