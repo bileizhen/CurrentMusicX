@@ -55,7 +55,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             if (trial != null) {
                 item { SettingsGroup { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("已完成 ${state.answers.count { it >= 0 }} / ${trial.questions.size} 题", fontWeight = FontWeight.SemiBold)
-                    state.rules?.trial?.let { Text("满分 ${it.maxScore} 分，${it.passScore} 分及格。提交后由服务器评分。", fontSize = 13.sp) }
+                    state.rules?.trial?.let { Text("满分 ${it.maxScore} 分，${it.passScore} 分及格。提交后可查看成绩。", fontSize = 13.sp) }
                 } } }
                 itemsIndexed(trial.questions) { index, question -> SettingsGroup {
                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -99,8 +99,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     item { SettingsListHeader("今日成长") }
                     item { SettingsGroup { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("每日最多 ${rules.dailyMaximum} 分", fontWeight = FontWeight.Medium)
-                        Text("按 ${rules.timeZone} 零点换日，同一账号各设备共享额度。", fontSize = 12.sp)
-                        Text("收听同一首歌满 ${rules.listenSeconds} 秒且满足服务端计时后计分；同一歌曲每天计一次。", fontSize = 12.sp)
+                        Text("按 ${if (rules.timeZone == "Asia/Shanghai") "北京时间" else rules.timeZone} 零点换日，同一账号各设备共享额度。", fontSize = 12.sp)
+                        if (rules.pointSources.any { it.id == "listen" })
+                            Text("有效收听满 ${rules.listenSeconds} 秒后计分，同一歌曲每天计一次。积分同步后更新。", fontSize = 12.sp)
                     } } }
                     items(rules.pointSources, key = { "points-${it.id}" }) { source -> SettingsGroup {
                         SettingsPreference(pointSourceLabel(source.id),
