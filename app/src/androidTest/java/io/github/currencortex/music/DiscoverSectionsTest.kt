@@ -584,6 +584,8 @@ class DiscoverSectionsTest {
     @Test fun postMenuShowsNativeCopyActionWithoutDuplicateDismissButtons() {
         postVisualFixture = true
         postCanDelete = false
+        liked = true
+        reply = "测试回复"
         open(); compose.onNodeWithText("帖子").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("post_more_1").performScrollTo().performClick()
