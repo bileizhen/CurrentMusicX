@@ -15,6 +15,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.TextRange
@@ -44,89 +45,100 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val song by songFlow.collectAsStateWithLifecycle(initialValue = null)
     val current = song?.let { s -> NeteaseSongActionsRepository.songId(s)?.let { PostAttachment("song", it, s.name, s.artists, s.cover) } }
     val colors = MiuixTheme.colorScheme
+    val appDensity = LocalDensity.current
     fun close() { if (!state.busy) { if (state.picker) vm.picker(false) else vm.editor(false) } }
     Dialog(::close, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false,
         dismissOnBackPress = !state.busy, dismissOnClickOutside = false)) {
-        // The editor owns its window and insets; the player's bottom dock stays behind it.
-        CompositionLocalProvider(LocalGlassBackdrop provides null) {
-        val focus = LocalFocusManager.current
-        Box(Modifier.fillMaxSize().background(colors.background).safeDrawingPadding().imePadding(), contentAlignment = Alignment.TopCenter) {
-        Column(Modifier.widthIn(max = 760.dp).fillMaxSize().testTag("post_editor")) {
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                GlassIconButton(::close, if (state.picker) "返回编辑" else "关闭编辑并保留草稿", Modifier.testTag("post_editor_close"),
-                    enabled = !state.busy, surface = false) { Icon(MusicIcons.Back, null) }
-                Text(if (state.picker) "添加内容" else "发布帖子", Modifier.weight(1f).padding(start = 8.dp),
-                    fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                if (!state.picker) MusicTextAction(if (preview) "继续编辑" else "预览", {
-                    focus.clearFocus(); preview = !preview
-                }, Modifier.testTag("post_preview_toggle"), enabled = !state.busy)
-            }
-            if (state.picker) {
-                PostAttachmentPicker(vm, state, current, Modifier.weight(1f))
-                GlassActionButton("完成 · ${state.attachments.size}/5", { vm.picker(false) },
-                    Modifier.fillMaxWidth().padding(16.dp).testTag("post_picker_done"), primary = true)
-            } else {
-                if (!preview) Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    PostMarkdownTool.entries.forEach { tool ->
-                        Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).clickable(enabled = !state.busy, role = Role.Button) {
-                            text = applyPostMarkdown(text, tool); vm.draft(text.text); requester.requestFocus()
-                        }.semantics { contentDescription = tool.label }.testTag("post_tool_${tool.name.lowercase()}"), contentAlignment = Alignment.Center) {
-                            Text(tool.glyph, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
+        CompositionLocalProvider(LocalGlassBackdrop provides null, LocalMusicBottomInset provides 0.dp, LocalDensity provides appDensity) {
+            val focus = LocalFocusManager.current
+            MusicSubpage(if (state.picker) "添加音乐" else "发布动态", "post_editor", onBack = ::close,
+                backTag = "post_editor_close", modifier = Modifier.background(colors.background).imePadding(), actions = {
+                    if (state.picker) GlassActionButton("完成", { vm.picker(false) }, Modifier.testTag("post_picker_done"),
+                        primary = true, fillWidth = false)
+                    else GlassActionButton(if (state.busy) "发布中" else "发布", { focus.clearFocus(); vm.publish() },
+                        Modifier.testTag("post_publish"), primary = true, fillWidth = false,
+                        enabled = !state.busy && state.draft.isNotBlank())
+                }) { topInset ->
+                Column(Modifier.fillMaxSize().padding(top = topInset)) {
+                    if (state.picker) {
+                        PostAttachmentPicker(vm, state, current, Modifier.weight(1f))
+                    } else {
+                        SettingsSegmentedControl(listOf("编辑", "预览"), if (preview) 1 else 0, {
+                            focus.clearFocus(); preview = it == 1
+                        }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), tag = "post_editor_mode", enabled = !state.busy)
+                        LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("post_editor_content"),
+                            contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            item {
+                                SettingsGroup {
+                                    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically) {
+                                        Text(if (preview) "正文预览" else "写下此刻", Modifier.weight(1f),
+                                            fontSize = 15.sp, fontWeight = FontWeight.Medium)
+                                        Text("${text.text.length} 字", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                                    }
+                                    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp).heightIn(min = 176.dp)) {
+                                        if (preview) {
+                                            if (text.text.isBlank()) Text("还没有内容", color = colors.onSurfaceVariantSummary)
+                                            else MarkdownText(text.text, Modifier.testTag("post_preview"), compact = true)
+                                        } else BasicTextField(text, { text = it; vm.draft(it.text) },
+                                            Modifier.fillMaxWidth().heightIn(min = 176.dp).focusRequester(requester)
+                                                .semantics { contentDescription = "帖子正文" }.testTag("post_draft"), enabled = !state.busy,
+                                            textStyle = TextStyle(fontSize = 16.sp, lineHeight = 25.sp, color = colors.onSurface),
+                                            cursorBrush = SolidColor(colors.primary), decorationBox = { input ->
+                                                Box { if (text.text.isEmpty()) Text("最近在听什么？", fontSize = 16.sp,
+                                                    lineHeight = 25.sp, color = colors.onSurfaceVariantSummary); input() }
+                                            })
+                                    }
+                                    if (!preview) {
+                                        SettingsDivider()
+                                        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            PostMarkdownTool.entries.forEach { tool ->
+                                                GlassIconButton({ text = applyPostMarkdown(text, tool); vm.draft(text.text); requester.requestFocus() },
+                                                    tool.label, Modifier.testTag("post_tool_${tool.name.lowercase()}"), enabled = !state.busy, surface = false) {
+                                                    Text(tool.glyph, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            item {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                                        Text("分享音乐", Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                                        Text("${state.attachments.size}/5", Modifier.testTag("post_attachment_count"),
+                                            fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                                    }
+                                    SettingsGroup {
+                                        state.attachments.forEach { card ->
+                                            PostAttachmentTile(card, Modifier.padding(horizontal = 12.dp).padding(top = 12.dp)) {
+                                                GlassIconButton({ vm.removeAttachment(card) }, "移除${card.name}",
+                                                    Modifier.testTag("post_remove_${card.type}_${card.id}"), enabled = !state.busy, surface = false) {
+                                                    Icon(MusicIcons.Close, null, Modifier.size(18.dp))
+                                                }
+                                            }
+                                        }
+                                        SettingsPreference("添加音乐", if (state.attachments.isEmpty()) "单曲、专辑、歌手或歌单" else "还可添加 ${5 - state.attachments.size} 项",
+                                            Modifier.testTag("post_add_attachment"), enabled = !state.busy && state.attachments.size < 5,
+                                            onClick = { focus.clearFocus(); vm.picker(true) },
+                                            leading = { Icon(MusicIcons.Add, null, Modifier.size(22.dp), tint = colors.primary) },
+                                            trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = colors.onSurfaceVariantSummary) })
+                                        if (state.attachments.isEmpty() && current != null) {
+                                            SettingsDivider(50.dp)
+                                            SettingsPreference("附带当前歌曲", current.name, Modifier.testTag("post_attach_current"),
+                                                enabled = !state.busy, onClick = { vm.attach(current) },
+                                                leading = { MusicCover(current.pic, Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))) })
+                                        }
+                                    }
+                                    SettingsHint("关闭后保留草稿")
+                                }
+                            }
                         }
+                        state.message?.let { SettingsHint(it, Modifier.testTag("post_editor_message"), error = true) }
                     }
                 }
-                LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("post_editor_content"),
-                    contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    item {
-                        Box(Modifier.fillMaxWidth().heightIn(min = 240.dp).clip(RoundedCornerShape(20.dp))
-                            .background(colors.surface).padding(16.dp)) {
-                            if (preview) {
-                                if (text.text.isBlank()) Text("还没有内容", color = colors.onSurfaceVariantSummary)
-                                else MarkdownText(text.text, Modifier.testTag("post_preview"), compact = true)
-                            } else BasicTextField(text, { text = it; vm.draft(it.text) },
-                                Modifier.fillMaxWidth().heightIn(min = 208.dp).focusRequester(requester)
-                                    .semantics { contentDescription = "帖子正文" }.testTag("post_draft"), enabled = !state.busy,
-                                textStyle = TextStyle(fontSize = 16.sp, lineHeight = 25.sp, color = colors.onSurface),
-                                cursorBrush = SolidColor(colors.primary), decorationBox = { input ->
-                                    Box { if (text.text.isEmpty()) Text("分享最近喜欢的音乐，或写下此刻的心情…", fontSize = 16.sp,
-                                        lineHeight = 25.sp, color = colors.onSurfaceVariantSummary); input() }
-                                })
-                        }
-                    }
-                    item {
-                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Text("附带内容  ${state.attachments.size}/5", fontSize = 16.sp, fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.testTag("post_attachment_count"))
-                                Text("单曲、专辑、歌手或歌单", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-                            }
-                            MusicTextAction("添加", { focus.clearFocus(); vm.picker(true) }, Modifier.testTag("post_add_attachment"),
-                                enabled = !state.busy && state.attachments.size < 5)
-                        }
-                    }
-                    items(state.attachments, key = { "${it.type}:${it.id}" }) { card ->
-                        PostAttachmentTile(card) {
-                            GlassIconButton({ vm.removeAttachment(card) }, "移除${card.name}",
-                                Modifier.testTag("post_remove_${card.type}_${card.id}"), enabled = !state.busy, surface = false) {
-                                Icon(MusicIcons.Close, null, Modifier.size(18.dp))
-                            }
-                        }
-                    }
-                    if (state.attachments.isEmpty() && current != null) item {
-                        MusicTextAction("附带当前歌曲 · ${current.name}", { vm.attach(current) },
-                            Modifier.testTag("post_attach_current"), enabled = !state.busy)
-                    }
-                    item { Text("支持 Markdown，可选中文字后使用上方工具栏排版。关闭编辑后，草稿会保留到本次会话结束。",
-                        fontSize = 12.sp, lineHeight = 18.sp, color = colors.onSurfaceVariantSummary) }
-                }
-                state.message?.let { Text(it, Modifier.padding(horizontal = 20.dp).testTag("post_editor_message"), fontSize = 13.sp, color = colors.primary) }
-                GlassActionButton(if (state.busy) "发布中…" else "发布", { focus.clearFocus(); vm.publish() },
-                    Modifier.fillMaxWidth().padding(16.dp).testTag("post_publish"), primary = true,
-                    enabled = !state.busy && state.draft.isNotBlank())
             }
-        }
-        }
         }
     }
 }
