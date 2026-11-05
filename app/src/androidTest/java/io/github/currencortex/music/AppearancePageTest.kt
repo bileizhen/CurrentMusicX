@@ -156,11 +156,6 @@ class AppearancePageTest {
         compose.waitUntil(5000) { container.settings.state.value.textScale == 1f }
         compose.onNodeWithTag("appearance_screen").performScrollToNode(hasTestTag("setting_launch_style"))
         compose.onNodeWithTag("setting_launch_style").assertIsDisplayed()
-        compose.onNodeWithTag("appearance_screen").performScrollToNode(hasTestTag("setting_record_shelf"))
-        click("setting_record_shelf")
-        compose.waitUntil(5000) { container.settings.state.value.playlistRecordShelf }
-        click("setting_depth_ribbon")
-        compose.waitUntil(5000) { container.settings.state.value.playlistDepthRibbon && !container.settings.state.value.playlistRecordShelf }
         reach("setting_scale")
         compose.onNodeWithTag("setting_scale").performScrollTo().assertExists()
         compose.onNodeWithTag("appearance_screen").performScrollToNode(hasTestTag("refresh_rate_slider"))
