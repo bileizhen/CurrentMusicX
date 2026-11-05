@@ -1,23 +1,28 @@
 name: Android CI
+run-name: >-
+  ${{ github.event_name == 'pull_request' && format('PR #{0} · Android checks', github.event.pull_request.number) || 'Build CI release · main' }}
 on:
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
     types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   workflow_dispatch:
+    inputs:
+      batch_wakeup:
+        description: Apply the automatic release batch policy
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  # PR updates replace earlier PR checks. A docs-only push must never cancel a release build.
+  # Only updates to the same PR replace its earlier checks.
   group: android-${{ github.event.pull_request.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   scope:
-    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && !github.event.pull_request.draft)
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -34,11 +39,20 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            if (context.eventName === 'workflow_dispatch') {
+              const {releaseDecision} = require('./.github/scripts/ci-batch.cjs');
+              const verifyOnly = context.payload.inputs?.batch_wakeup !== 'true';
+              const decision = await releaseDecision({github, context, sha: context.sha, verifyOnly});
+              core.info(decision.reason);
+              await core.summary.addRaw(decision.reason).write();
+              core.setOutput('required', decision.required);
+              return;
+            }
             const {detectScope} = require('./.github/scripts/android-ci-scope.cjs');
             const scope = detectScope({eventName: context.eventName, event: context.payload, sha: context.sha});
             core.info(`Android build required: ${scope.required}. ${scope.reason}`);
             // Only changes that would start the Android toolchain need a turn.
-            if (scope.required && context.eventName === 'pull_request') {
+            if (scope.required) {
               const {inspectTurn} = require('./.github/scripts/pr-ci-queue.cjs');
               const turn = await inspectTurn({github, context, pr: context.payload.pull_request});
               if (typeof turn.ready !== 'boolean') throw new Error('Invalid PR queue decision');
@@ -52,7 +66,7 @@ jobs:
             }
             core.setOutput('required', scope.required);
       - name: Documentation or CI-only change
-        if: steps.scope.outputs.required == 'false' && steps.scope.outputs.ready != 'false'
+        if: github.event_name == 'pull_request' && steps.scope.outputs.required == 'false' && steps.scope.outputs.ready != 'false'
         run: echo 'Documentation or checked CI automation only; skipped Android toolchains, APK build and artifact uploads. Script tests and workflow validation run in Collaboration checks.' >> "$GITHUB_STEP_SUMMARY"
 
   android-check:
@@ -67,7 +81,7 @@ jobs:
     if: ${{ !cancelled() && needs.scope.result != 'skipped' && (github.event_name == 'pull_request' || needs.scope.result != 'success' || needs.scope.outputs.required != 'false') }}
     runs-on: ubuntu-latest
     concurrency:
-      group: android-build-${{ github.event_name == 'pull_request' && needs.scope.outputs.required == 'true' && 'pr' || github.event_name == 'push' && needs.scope.outputs.required == 'true' && github.ref || github.run_id }}
+      group: android-build-${{ github.event_name == 'pull_request' && needs.scope.outputs.required == 'true' && 'pr' || github.event_name == 'workflow_dispatch' && needs.scope.outputs.required == 'true' && github.ref || github.run_id }}
       cancel-in-progress: ${{ github.event_name != 'pull_request' }}
     steps:
       - name: Validate Android scope
