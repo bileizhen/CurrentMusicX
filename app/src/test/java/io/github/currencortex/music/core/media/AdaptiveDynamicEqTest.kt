@@ -75,6 +75,14 @@ class AdaptiveDynamicEqTest {
         }
     }
 
+    @Test fun sustainedUpperBassRetainsItsNegativeCorrection() {
+        val eq = AdaptiveDynamicEq(48000, 1)
+        // Use the vocal profile so intentional bass voicing does not mask the adaptive cut.
+        tone(eq, enabled.copy(curve = DynamicEqCurve.VOCAL), seconds = 8.0, frequency = 250.0, amplitude = .3)
+        assertTrue("Sustained 250 Hz energy must be attenuated, got ${eq.gains[3]} dB", eq.gains[3] < 0.0)
+        assertTrue("Boost-only sub-bass bands keep their nonnegative bounds", (0..2).all { eq.gains[it] >= 0.0 })
+    }
+
     @Test fun disablingDynamicsDecaysItsCorrectionAndCanEnableAgain() {
         val eq = AdaptiveDynamicEq(8000, 1)
         tone(eq, enabled, rate = 8000)
