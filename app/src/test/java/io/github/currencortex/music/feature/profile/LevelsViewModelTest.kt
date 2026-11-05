@@ -17,17 +17,81 @@ class LevelsViewModelTest {
         var submitted = 0
         var error: ApiException? = null
         var gate: CompletableDeferred<Unit>? = null
+        var progressGate: CompletableDeferred<Unit>? = null
+        var progressCalls = 0
+        var cancelledProgress = 0
+        var submissionResult = LevelTrialResult(60, true, 7)
         override suspend fun rules(owner: RequestSession) = rules
-        override suspend fun progress(owner: RequestSession) = current
+        override suspend fun progress(owner: RequestSession): LevelProgress {
+            progressCalls++
+            val pending = progressGate
+            progressGate = null
+            try { pending?.await() }
+            catch (e: CancellationException) { cancelledProgress++; throw e }
+            return current
+        }
         override suspend fun trial(owner: RequestSession, rules: LevelTrialRules) =
             LevelTrial(List(rules.questionCount) { TrialQuestion("Question $it", listOf("A", "B", "C", "D")) })
         override suspend fun submit(owner: RequestSession, trial: LevelTrial, answers: List<Int>): LevelTrialResult {
             submitted++
             gate?.await()
             error?.let { throw it }
-            current = current.copy(level = 7)
-            return LevelTrialResult(60, true, 7)
+            current = current.copy(level = submissionResult.level)
+            return submissionResult
         }
+    }
+    @Test fun passingSubmissionCancelsPendingPollWithoutLeavingRefreshDisabled() =
+        submissionDuringPoll(LevelTrialResult(60, true, 7))
+
+    @Test fun unsuccessfulTrialCanBeRetakenAfterCancellingPendingPoll() =
+        submissionDuringPoll(LevelTrialResult(40, false, 6))
+
+    @Test fun failedSubmissionKeepsAnswersAndAllowsRefreshAfterCancellingPendingPoll() =
+        submissionDuringPoll(LevelTrialResult(60, true, 7), ApiException(ErrorKind.Timeout))
+
+    @Test fun staleQuestionsCanBeReloadedAfterCancellingPendingPoll() =
+        submissionDuringPoll(LevelTrialResult(60, true, 7), ApiException(ErrorKind.Unknown, 400))
+
+    private fun submissionDuringPoll(result: LevelTrialResult, error: ApiException? = null) = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val store = ViewModelStore()
+        var polling: Job? = null
+        try {
+            val api = Fake().apply { submissionResult = result; this.error = error }
+            val vm = LevelsViewModel(api, MutableStateFlow(RequestSession("https://fixture/", "one")))
+            store.put("levels", vm); runCurrent()
+            vm.startTrial(); runCurrent(); repeat(50) { vm.answer(it, 0) }
+            polling = backgroundScope.launch { vm.poll() }; runCurrent()
+            val pending = CompletableDeferred<Unit>()
+            api.progressGate = pending
+            advanceTimeBy(30_000); runCurrent()
+            assertTrue(vm.state.value.loading)
+            assertTrue(vm.state.value.canSubmit)
+
+            vm.submit()
+            assertFalse("Submission must clear the cancelled poll's loading state", vm.state.value.loading)
+            runCurrent()
+            assertEquals(1, api.cancelledProgress)
+            assertEquals(1, api.submitted)
+            assertFalse(vm.state.value.loading); assertFalse(vm.state.value.busy)
+            if (error == null) {
+                assertEquals(result, vm.state.value.result)
+                assertEquals(result.level, vm.state.value.progress!!.level)
+                assertEquals(!result.passed, vm.state.value.canStartTrial)
+            } else if (error.status == 400) {
+                assertNull(vm.state.value.trial)
+                assertTrue(vm.state.value.canStartTrial)
+            } else {
+                assertNotNull(vm.state.value.trial)
+                assertEquals(50, vm.state.value.answers.count { it >= 0 })
+                assertTrue(vm.state.value.canSubmit)
+            }
+            pending.complete(Unit); runCurrent()
+            val calls = api.progressCalls
+            vm.refresh(); runCurrent()
+            assertEquals("Manual refresh remains available", calls + 1, api.progressCalls)
+            assertFalse(vm.state.value.loading)
+        } finally { polling?.cancel(); store.clear(); Dispatchers.resetMain() }
     }
     @Test fun eligibilityIncompleteAnswersRetryAndServerResultControlTheFlow() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))

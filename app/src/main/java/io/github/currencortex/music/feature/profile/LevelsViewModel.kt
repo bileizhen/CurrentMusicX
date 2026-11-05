@@ -93,7 +93,8 @@ class LevelsViewModel(private val repository: LevelsApi, owners: Flow<RequestSes
         if (!value.canSubmit) return
         action?.cancel()
         val epoch = ++revision
-        state.update { it.copy(busy = true, error = null) }
+        // Submission owns the action now; a cancelled progress poll cannot clear its loading flag.
+        state.update { it.copy(busy = true, loading = false, error = null) }
         action = viewModelScope.launch {
             val result = appResult { repository.submit(expected, trial, value.answers) }
             if (!current(expected, epoch)) return@launch
