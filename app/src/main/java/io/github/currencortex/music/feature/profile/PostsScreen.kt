@@ -2,8 +2,7 @@ package io.github.currencortex.music.feature.profile
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.text.selection.SelectionContainer
-import io.github.currencortex.music.ui.component.nativeui.GlassActionButton
-import io.github.currencortex.music.ui.component.nativeui.GlassIconButton
+import io.github.currencortex.music.ui.component.nativeui.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -57,22 +56,35 @@ private fun postTime(seconds: Long): String {
         contentPadding = PaddingValues(start = 16.dp, top = contentTopInset + 8.dp, end = 16.dp, bottom = 20.dp + bottom),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         rootMotionItems {
-        item { Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            GlassActionButton(if (account.account == null) "登录后发帖" else "发帖", {
-                if (account.account == null) navigate("user/login") else vm.editor(true)
-            }, Modifier.testTag("post_create"), primary = true, fillWidth = false)
-            Text(if (state.loaded) "共 ${state.total} 条" else "音乐与生活", fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        item {
+            SettingsGroup {
+                SettingsPreference(if (account.account == null) "登录后分享" else "分享此刻",
+                    "聊聊音乐，记录你的日常", Modifier.testTag("post_create"), onClick = {
+                        if (account.account == null) navigate("user/login") else vm.editor(true)
+                    }, leading = { Icon(MusicIcons.Add, null, Modifier.size(24.dp), tint = MiuixTheme.colorScheme.primary) },
+                    trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = MiuixTheme.colorScheme.onSurfaceVariantSummary) })
+            }
+        }
+        item { Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("社区动态", Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (state.loaded) "${state.total} 条" else "", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         } }
         state.message?.let { item { Text(it, fontSize = 13.sp, color = MiuixTheme.colorScheme.primary) } }
         state.error?.let { item { Text(it); MusicTextAction("重试", { vm.reload() }, Modifier.testTag("post_retry")) } }
         if (state.loading && state.posts.isEmpty()) item { LoadingPostList() }
         if (state.loaded && !state.loading && state.posts.isEmpty() && state.error == null) item {
-            Text("还没有帖子，分享你的音乐生活吧", Modifier.testTag("posts_empty"), fontSize = 14.sp)
+            SettingsGroup {
+                Column(Modifier.fillMaxWidth().padding(24.dp).testTag("posts_empty"),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(MusicIcons.Comment, null, Modifier.size(32.dp), tint = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    Text("还没有动态", fontSize = 17.sp, fontWeight = FontWeight.Medium)
+                    Text("分享一首歌，开启一段交流", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                }
+            }
         }
         items(state.posts, key = { it.id }) { post ->
-            Column(Modifier.fillMaxWidth().testTag("post_${post.id}").padding(horizontal = 4.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            SettingsGroup(Modifier.testTag("post_${post.id}")) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Row(Modifier.weight(1f).clickable { navigate("user/profile/${post.author.id}") },
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -108,14 +120,13 @@ private fun postTime(seconds: Long): String {
                             }
                         })
                 }
-                Column {
-                    HorizontalDivider(color = MiuixTheme.colorScheme.onSurface.copy(alpha = .07f))
-                    Row(Modifier.fillMaxWidth().padding(top = 2.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         PostAction(MusicIcons.Heart, "${if (post.likedByMe) "取消点赞" else "点赞"} ${post.likeCount}", {
                             if (account.account == null) navigate("user/login") else vm.like(post)
                         }, Modifier.testTag("post_like_${post.id}"), count = post.likeCount, selected = post.likedByMe, enabled = !state.busy)
                         PostAction(MusicIcons.Comment, "评论 ${post.commentCount}", { vm.comments(post.id) },
                             Modifier.testTag("post_comments_${post.id}"), count = post.commentCount)
+                        Spacer(Modifier.weight(1f))
                         PostAction(MusicIcons.Copy, "复制正文", { clipboard.setText(AnnotatedString(post.content)) },
                             Modifier.testTag("post_copy_${post.id}"))
                     }
