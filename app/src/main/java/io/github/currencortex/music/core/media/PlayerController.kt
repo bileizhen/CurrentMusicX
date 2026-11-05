@@ -40,7 +40,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         ++transportGeneration; commandIntent = null
         beforeExternal = saved; external = controls
         state.value = state.value.copy(mode = mode, playing = false, playRequested = false, resolving = false, loading = false,
-            canControlPlayback = mode != PlayerMode.ROOM, bufferedPositionMs = 0, audioFullyCached = false, listenTogether = null)
+            canControlPlayback = mode != PlayerMode.ROOM, audioInfo = null, bufferedPositionMs = 0, audioFullyCached = false, listenTogether = null)
         // Await this command before telling a TV to play: it cancels pending source resolution too.
         try { connect().sendCustomCommand(SessionCommand(MusicService.QUIESCE, Bundle.EMPTY), Bundle.EMPTY).await() }
         catch (e: Exception) { endExternal(controls); throw e }
@@ -127,6 +127,8 @@ class PlayerController(private val context: Context, override val queue: Playbac
         val old = state.value
         val next = old.copy(song = queue.state.value.current, playing = player.isPlaying && commandIntent != false,
             playbackSpeed = player.playbackParameters.speed,
+            audioInfo = if (matches && !old.resolving && old.mode == PlayerMode.LOCAL)
+                AudioStreamInfo.decode(player.currentMediaItem?.mediaMetadata?.extras?.getString("cm.audio.info")) else null,
             playRequested = commandIntent ?: if (state.value.resolving) state.value.playRequested else player.playWhenReady,
             loading = state.value.resolving || player.playbackState == Player.STATE_BUFFERING,
             bufferedPositionMs = if (matches && !state.value.resolving && player.playbackState != Player.STATE_IDLE)
@@ -141,18 +143,18 @@ class PlayerController(private val context: Context, override val queue: Playbac
             old.positionMs != next.positionMs || old.playing != next.playing || old.loading != next.loading ||
             old.playbackSpeed != next.playbackSpeed || old.anchorRealtimeMs == 0L) SystemClock.elapsedRealtime() else old.anchorRealtimeMs)
     }
-    fun load(play: Boolean = true, position: Long = queue.state.value.positionMs) = scope.launch(Dispatchers.Main.immediate) {
+    fun load(play: Boolean = true, position: Long = queue.state.value.positionMs, refreshSource: Boolean = false) = scope.launch(Dispatchers.Main.immediate) {
         val epoch = generation
         if (queue.state.value.current == null) return@launch
         val action = ++transportGeneration
         commandIntent = play
         state.value = state.value.copy(song = queue.state.value.current, playing = false, playRequested = play,
-            loading = true, resolving = true, positionMs = position, error = null, bufferedPositionMs = 0, audioFullyCached = false)
+            loading = true, resolving = true, audioInfo = null, positionMs = position, error = null, bufferedPositionMs = 0, audioFullyCached = false)
         try {
             val connected = connect()
             if (epoch != generation || action != transportGeneration || state.value.mode != PlayerMode.LOCAL) return@launch
             connected.sendCustomCommand(SessionCommand(MusicService.LOAD, Bundle.EMPTY), Bundle().apply {
-                putBoolean("play", play); putLong("position", position)
+                putBoolean("play", play); putLong("position", position); putBoolean("refreshSource", refreshSource)
             }).await()
         } catch (e: CancellationException) { throw e } catch (_: Exception) {
             if (action == transportGeneration) state.value = state.value.copy(playRequested = false, loading = false, resolving = false, error = "无法连接播放器")
@@ -217,6 +219,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
     }
     fun qualityChanged() { if (localOnly()) load(state.value.showPause,
         if (state.value.song?.id == queue.state.value.current?.id) state.value.positionMs else queue.state.value.positionMs) }
+    fun refreshSource() { if (localOnly() && !state.value.resolving) load(state.value.showPause, state.value.positionMs, refreshSource = true) }
     fun dismissError() { state.value = state.value.copy(error = null) }
     fun disconnect() { ++transportGeneration; commandIntent = null; controller?.release(); controller = null; connecting?.cancel(); connecting = null }
 }

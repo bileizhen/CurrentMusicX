@@ -109,6 +109,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         if (native) ProfileDestination("CurrentMusic 账户", "注册与登录、头像装饰与一起听", MusicIcons.Account,
             "open_currentmusic_login") { navigate("user/login") }
         else {
+            ProfileDestination("等级与成长", "查看积分、每日进度与等级试炼", MusicIcons.Check, "open_levels") { navigate("user/levels") }
+            SettingsDivider(52.dp)
             ProfileDestination("头像挂件", "装饰你的头像", MusicIcons.Image, "open_decorations") { navigate("user/decorations") }
             SettingsDivider(52.dp)
             ProfileDestination("账号与安全", "切换账号、修改密码与退出登录", MusicIcons.Account, "open_security") { navigate("user/security") }

@@ -217,7 +217,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         onBinding = { sidePage.close(); onAiNavigate("user/binding") },
                         onDialogActive = { sideDialog = it })
                     else PlayerSidePageContent(queue.current,
-                        quality = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else settings.quality.label,
+                        quality = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else state.audioInfo?.label ?: settings.quality.label,
                         qualityEnabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true,
                         onQuality = { overlay = PlayerOverlay.QUALITY },
                         onEffects = onEqualizer?.let { action -> { sidePage.close(); action() } },
@@ -320,7 +320,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         PlayerControlsRegion(controlsVisibility) { functions() }
                         PlayerControlsRegion(controlsVisibility, Modifier.testTag("player_transport_transition")) {
                             PlayerTransport(vm, onToggle, quality = {
-                                Text(if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else settings.quality.label,
+                                Text(if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else state.audioInfo?.label ?: settings.quality.label,
                                     Modifier.testTag("open_quality_sheet")
                                         .clickable(enabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true, role = Role.Button) {
                                             overlay = PlayerOverlay.QUALITY
@@ -373,7 +373,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     modifier = Modifier.testTag("playback_mode_${mode.name}").semantics { selected = mode == playbackMode }) }
             }
             PlayerOverlay.QUALITY -> AudioQualitySheet(settings.quality, vm::quality, dismiss, state.mode == PlayerMode.LOCAL,
-                onNetwork = onNetwork, song = queue.current, insights = vm.container.musicRepository.insights)
+                onNetwork = onNetwork, song = queue.current, insights = vm.container.musicRepository.insights,
+                audioInfo = state.audioInfo, onRefresh = if (state.mode == PlayerMode.LOCAL && state.song?.musicSource == io.github.currencortex.music.data.song.MusicSource.NETEASE && !state.resolving)
+                    ({ vm.container.playerController.refreshSource() }) else null)
             PlayerOverlay.ACTIONS -> if (queue.current != null) MusicChoiceDialog("歌曲操作", dismiss) { actions?.invoke(queue.current!!) }
             PlayerOverlay.OPTIONS -> MusicChoiceDialog("播放与歌词", dismiss) {
                 Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
@@ -397,7 +399,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     if (menuHost == null) overlay = PlayerOverlay.ACTIONS
                     else { dismiss(); menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false)) }
                 })
-                MusicDestinationRow("播放音质", summary = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true)
+                MusicDestinationRow("播放音质", summary = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else state.audioInfo?.label ?: settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true)
                 MusicDestinationRow("播放背景", summary = if (backgroundImage == null) "跟随歌曲封面" else "自定义图片 · 模糊 ${appearance.playerBackgroundBlur.toInt()}%",
                     modifier = Modifier.testTag("open_player_background"), onClick = { overlay = PlayerOverlay.BACKGROUND })
                 MusicDestinationRow("私人漫游", summary = if (roaming.active) roaming.choice.title else "按你的喜好连续推荐",

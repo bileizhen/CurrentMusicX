@@ -162,7 +162,7 @@ import kotlinx.coroutines.launch
     }
     val user = state.profile?.user ?: account.account?.takeIf { onBack == null }?.let {
         ProfileUser(id = it.id, username = it.username, nickname = it.nickname, avatar = it.avatar,
-            isAdmin = it.isAdmin, isSuper = it.isSuper, title = it.title)
+            isAdmin = it.isAdmin, isSuper = it.isSuper, title = it.title, level = it.level, points = it.points)
     }
     val own = user != null && user.id == account.account?.id
     val bottomInset = LocalMusicBottomInset.current
@@ -210,6 +210,7 @@ import kotlinx.coroutines.launch
                         FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp),
                             verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             UserRoleBadge(user.role)
+                            UserLevelBadge(user.level)
                             UserTitleBadge(user.title)
                         }
                         UserIdentityDetails("", user.ipRegion)

@@ -7,8 +7,11 @@ import io.github.currencortex.music.data.song.Song
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 object MediaItemFactory {
-    fun create(song: Song, url: String, cacheKey: String? = null) = MediaItem.Builder().setMediaId(song.id.toString()).setUri(url)
+    fun create(song: Song, url: String, cacheKey: String? = null, source: io.github.currencortex.music.data.song.AudioSource? = null) = MediaItem.Builder().setMediaId(song.id.toString()).setUri(url)
         .setCustomCacheKey(cacheKey)
-        .setMediaMetadata(MediaMetadata.Builder().setTitle(song.name).setArtist(song.artists).setAlbumTitle(song.album)
+        .setMediaMetadata(MediaMetadata.Builder().setExtras(source?.let { android.os.Bundle().apply {
+            putString("cm.audio.info", io.github.currencortex.music.core.network.ApiJson.encodeToString(
+                AudioStreamInfo.serializer(), AudioStreamInfo.from(it)))
+        } }).setTitle(song.name).setArtist(song.artists).setAlbumTitle(song.album)
             .setArtworkUri(song.cover.takeIf { it.isNotBlank() }?.let(Uri::parse)).build()).build()
 }

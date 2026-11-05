@@ -13,7 +13,7 @@ data class PlayerState(val song: Song? = null, val playing: Boolean = false, val
                        val playbackSpeed: Float = 1f, val bufferedPositionMs: Long = 0,
                        val audioFullyCached: Boolean = false,
                        val anchorRealtimeMs: Long = 0, val timelineRevision: Long = 0,
-                       val listenTogether: ListenTogetherPair? = null) {
+                       val listenTogether: ListenTogetherPair? = null, val audioInfo: AudioStreamInfo? = null) {
     val showPause get() = playing || playRequested
     fun bufferedProgress(duration: Long = durationMs): Float =
         if (resolving || mode == PlayerMode.CAST || duration <= 0) 0f
