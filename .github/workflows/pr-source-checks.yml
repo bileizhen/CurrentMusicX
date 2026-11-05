@@ -1,0 +1,19 @@
+name: PR source checks
+on:
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: pr-source-checks-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+jobs:
+  # Keep the status context required by main's branch protection.
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Check native source, legal assets and APK analysis scripts
+        run: python3 -m unittest discover -s scripts/tests -v
