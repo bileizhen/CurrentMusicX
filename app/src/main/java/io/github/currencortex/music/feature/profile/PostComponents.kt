@@ -45,11 +45,11 @@ internal fun postAttachmentLabel(type: String) = when (type) {
     GlassIconButton(click, label, modifier.semantics { this.selected = selected }, enabled = enabled) {
         if (count == null) {
             Icon(icon, null, Modifier.size(21.dp), tint = color.copy(alpha = if (enabled) 1f else .4f))
-        } else Box(Modifier.fillMaxSize()) {
-            Icon(icon, null, Modifier.align(Alignment.BottomStart).padding(start = 7.dp, bottom = 7.dp).size(18.dp),
+        } else Row(Modifier.height(23.dp), horizontalArrangement = Arrangement.spacedBy(1.dp)) {
+            Icon(icon, null, Modifier.align(Alignment.Bottom).size(20.dp),
                 tint = color.copy(alpha = if (enabled) 1f else .4f))
-            Text("$count", Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 7.dp).widthIn(max = 30.dp)
-                .clearAndSetSemantics {}, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            Text("$count", Modifier.align(Alignment.Top).widthIn(max = 18.dp).clearAndSetSemantics {},
+                fontSize = 10.sp, lineHeight = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 color = color.copy(alpha = if (enabled) 1f else .4f))
         }
     }
