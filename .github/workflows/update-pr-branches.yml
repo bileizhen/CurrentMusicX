@@ -4,17 +4,26 @@ on:
     branches: [main]
   pull_request_target:
     branches: [main]
-    types: [opened, reopened, ready_for_review, synchronize]
+    types: [opened, reopened, ready_for_review, synchronize, closed, converted_to_draft, labeled, unlabeled, edited]
+  workflow_run:
+    workflows: [Android CI]
+    types: [completed]
   workflow_dispatch:
 permissions:
+  actions: write
   contents: write
   pull-requests: write
 concurrency:
-  group: update-pr-branches-${{ github.event.pull_request.number || 'all' }}
+  group: update-pr-branches-main
   cancel-in-progress: false
 jobs:
   update:
-    if: github.repository == 'bileizhen/CurrentMusicX' && github.ref == 'refs/heads/main'
+    if: >-
+      github.repository == 'bileizhen/CurrentMusicX' && github.ref == 'refs/heads/main' &&
+      (github.event_name != 'workflow_run' ||
+       (github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.conclusion == 'success')) &&
+      (!contains(fromJSON('["labeled","unlabeled"]'), github.event.action) || github.event.label.name == 'bot: skip') &&
+      (github.event.action != 'edited' || github.event.changes.base != null)
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
