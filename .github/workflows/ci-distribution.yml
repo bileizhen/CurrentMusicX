@@ -1,5 +1,15 @@
 name: Publish CI build
 on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: Successful main Android CI run to publish
+        required: true
+        type: string
+      run_attempt:
+        description: Exact Android CI run attempt
+        required: true
+        type: string
   workflow_run:
     workflows: [Android CI]
     types: [completed]
@@ -9,21 +19,25 @@ permissions:
 jobs:
   gate:
     if: >-
-      github.event.workflow_run.conclusion == 'success' &&
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.head_branch == 'main' &&
       github.event.workflow_run.head_repository.full_name == github.repository &&
-      contains(fromJSON('["push","workflow_dispatch"]'), github.event.workflow_run.event)
+      contains(fromJSON('["push","workflow_dispatch"]'), github.event.workflow_run.event)))
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     permissions:
       contents: read
       actions: read
       pull-requests: read
     outputs:
       required: ${{ steps.scope.outputs.result }}
+      run: ${{ steps.scope.outputs.run }}
     steps:
       - uses: actions/checkout@v5
         with:
-          # Load the policy from the trusted main revision of this workflow_run.
+          # Both supported triggers are restricted to the trusted main revision.
           ref: ${{ github.sha }}
           sparse-checkout: .github/scripts
           persist-credentials: false
@@ -31,12 +45,15 @@ jobs:
         id: scope
         with:
           script: |
-            const {trustedRun, hasSuccessfulAndroidBuild} = require('./.github/scripts/ci-release.cjs');
-            const run = context.payload.workflow_run;
-            if (!trustedRun(run, `${context.repo.owner}/${context.repo.repo}`)) throw new Error('Untrusted upstream run');
-            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
-              {...context.repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100});
-            if (!hasSuccessfulAndroidBuild(jobs)) return false;
+            const {resolveUpstream} = require('./.github/scripts/ci-publication.cjs');
+            const run = await resolveUpstream({github, context});
+            if (!run) return false;
+            core.setOutput('run', JSON.stringify({
+              id: run.id, run_number: run.run_number, run_attempt: run.run_attempt,
+              head_sha: run.head_sha, head_branch: run.head_branch,
+              head_repository: {full_name: run.head_repository.full_name},
+              event: run.event, path: run.path, status: run.status, conclusion: run.conclusion,
+            }));
             const {releaseDecision} = require('./.github/scripts/ci-batch.cjs');
             const decision = await releaseDecision({github, context, sha: run.head_sha});
             core.info(decision.reason);
@@ -49,6 +66,8 @@ jobs:
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: ci-signing
+    env:
+      UPSTREAM_RUN: ${{ needs.gate.outputs.run }}
     permissions:
       contents: write
       actions: read
@@ -57,7 +76,7 @@ jobs:
       # The only secret-bearing job runs trusted main scripts, never a PR head.
       - uses: actions/checkout@v5
         with:
-          # Load the policy from the trusted main revision of this workflow_run.
+          # Both supported triggers are restricted to the trusted main revision.
           ref: ${{ github.sha }}
           sparse-checkout: .github/scripts
           persist-credentials: false
@@ -65,7 +84,7 @@ jobs:
         with:
           name: ci-unsigned
           path: ci-dist
-          run-id: ${{ github.event.workflow_run.id }}
+          run-id: ${{ fromJSON(needs.gate.outputs.run).id }}
           github-token: ${{ github.token }}
       - name: Verify upstream artifact metadata
         uses: actions/github-script@v8
@@ -73,7 +92,7 @@ jobs:
           script: |
             const {validateMetadata} = require('./.github/scripts/ci-release.cjs');
             const metadata = JSON.parse(require('node:fs').readFileSync('ci-dist/output-metadata.json', 'utf8'));
-            const {tag} = validateMetadata(metadata, context.payload.workflow_run.run_number);
+            const {tag} = validateMetadata(metadata, JSON.parse(process.env.UPSTREAM_RUN).run_number);
             core.exportVariable('CI_TAG', tag);
       - uses: android-actions/setup-android@v4
         with:
@@ -103,4 +122,20 @@ jobs:
         with:
           script: |
             const {releaseDecision} = require('./.github/scripts/ci-batch.cjs');
-            await require('./.github/scripts/ci-release.cjs').publish({github,context,core,releaseDecision});
+            const upstreamRun = JSON.parse(process.env.UPSTREAM_RUN);
+            await require('./.github/scripts/ci-release.cjs').publish({github,context,core,releaseDecision,upstreamRun});
+
+  request-cleanup:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      # Explicit dispatch also keeps retention working after bot-triggered runs.
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo, workflow_id: 'ci-prune.yml', ref: 'main',
+            });
