@@ -1,56 +1,74 @@
 const {test} = require('node:test');
 const assert = require('node:assert/strict');
-const {skipReason, run} = require('./update-pr-branches.cjs');
-const pr = () => ({number: 13, state: 'open', draft: false, merged: false, mergeable: true,
-  maintainer_can_modify: true, labels: [], base: {ref: 'main', sha: 'previous-main-tip', repo: {full_name: 'owner/app'}},
-  head: {sha: 'head', repo: {full_name: 'contributor/app'}}});
+const {run} = require('./update-pr-branches.cjs');
 
-test('only open, non-draft, mergeable and writable PRs targeting main qualify', () => {
-  assert.equal(skipReason(pr(), 'owner/app'), null);
-  for (const change of [{state: 'closed'}, {draft: true}, {merged: true}, {mergeable: false},
-    {mergeable: null}, {maintainer_can_modify: false}, {labels: [{name: 'bot: skip'}]},
-    {head: {repo: null}}, {base: {ref: 'develop'}},
-    {base: {ref: 'main', repo: {full_name: 'another/app'}}}]) {
-    assert.ok(skipReason({...pr(), ...change}, 'owner/app'));
-  }
-  assert.equal(skipReason({...pr(), maintainer_can_modify: false,
-    head: {sha: 'head', repo: {full_name: 'owner/app'}}}, 'owner/app'), null);
+const fullName = 'owner/app';
+const pull = (number, changes = {}) => ({
+  number, state: 'open', draft: false, mergeable: true, labels: [],
+  maintainer_can_modify: true, base: {ref: 'main', sha: 'base', repo: {full_name: fullName}},
+  head: {ref: 'topic', sha: 'head' + number, repo: {full_name: fullName}}, ...changes,
 });
 
-function fixture({behind = 1, updateError, pull = pr(), event = true} = {}) {
+function fixture({prs = [pull(13)], live, behind = 1, updateError, event = {}} = {}) {
   const updates = [], comparisons = [], warnings = [];
-  const github = {paginate: async () => [{number: 13}], rest: {
-    pulls: {list() {}, get: async () => ({data: pull}), updateBranch: async args => {
-      updates.push(args); if (updateError) throw Object.assign(new Error('denied'), {status: updateError});
-    }}, repos: {compareCommitsWithBasehead: async args => {
+  const github = {rest: {
+    pulls: {list() {}, get: async ({pull_number}) => ({data: live ?? prs.find(pr => pr.number === pull_number)}),
+      updateBranch: async args => {
+        updates.push(args); if (updateError) throw Object.assign(new Error('denied'), {status: updateError});
+      }},
+    repos: {compareCommitsWithBasehead: async args => {
       comparisons.push(args); return {data: {behind_by: behind}};
     }},
+    actions: {listWorkflowRuns: async () => ({data: {workflow_runs: []}})},
   }};
+  github.paginate = async method => method === github.rest.pulls.list ? prs : [];
   return {updates, comparisons, warnings, args: {github,
-    context: {repo: {owner: 'owner', repo: 'app'}, payload: event ? {pull_request: {number: 13}} : {}},
+    context: {repo: {owner: 'owner', repo: 'app'}, payload: event},
     core: {info() {}, warning: text => warnings.push(text)}}};
 }
-test('updates behind PR with an exact head guard on PR events and main pushes', async () => {
-  for (const event of [true, false]) {
-    const f = fixture({event}); await run(f.args);
-    assert.equal(f.updates.length, 1);
-    assert.equal(f.updates[0].expected_head_sha, 'head');
-    assert.equal(f.comparisons[0].basehead, 'main...head');
+
+test('a main push and a later PR event both synchronize only the oldest eligible PR', async () => {
+  for (const event of [{}, {pull_request: {number: 16}}]) {
+    const prs = [pull(16), pull(11, {draft: true}), pull(12, {labels: [{name: 'bot: skip'}]}), pull(13)];
+    const f = fixture({prs, event}); await run(f.args);
+    assert.deepEqual(f.updates.map(x => [x.pull_number, x.expected_head_sha]), [[13, 'head13']]);
+    assert.deepEqual(f.comparisons.map(x => x.basehead), ['base...head13']);
   }
 });
-test('up-to-date branches never produce an update or another CI run', async () => {
+
+test('after the first PR leaves, only the new head is updated', async () => {
+  const f = fixture({prs: [pull(16), pull(14)], event: {action: 'closed', pull_request: {number: 13}}});
+  await run(f.args);
+  assert.deepEqual(f.updates.map(x => x.pull_number), [14]);
+});
+
+test('an empty queue or a concurrent edit does not update a PR', async () => {
+  for (const options of [{prs: []}, {live: pull(13, {state: 'closed'})}, {live: pull(13, {draft: true})},
+    {live: pull(13, {labels: [{name: 'bot: skip'}]})}, {live: pull(13, {head: pull(14).head})}]) {
+    const f = fixture(options); await run(f.args);
+    assert.equal(f.comparisons.length, 0); assert.equal(f.updates.length, 0);
+  }
+});
+
+test('an up-to-date PR does not create a new head', async () => {
   const f = fixture({behind: 0}); await run(f.args); assert.equal(f.updates.length, 0);
 });
-test('conflicts are not sent to the update API', async () => {
-  const f = fixture({pull: {...pr(), mergeable: false}}); await run(f.args);
-  assert.equal(f.comparisons.length, 0); assert.equal(f.updates.length, 0);
+
+test('conflicts and forks that disallow maintainer edits never receive updates', async () => {
+  for (const live of [pull(13, {mergeable: false}), pull(13, {maintainer_can_modify: false,
+    head: {...pull(13).head, repo: {full_name: 'contributor/app'}}})]) {
+    const f = fixture({live}); await run(f.args);
+    assert.equal(f.updates.length, 0); assert.equal(f.warnings.length, 1);
+  }
 });
+
 test('permission and concurrent-head failures are reported without retrying writes', async () => {
   for (const updateError of [403, 404, 409, 422]) {
     const f = fixture({updateError}); await run(f.args);
     assert.equal(f.updates.length, 1); assert.equal(f.warnings.length, 1);
   }
 });
-test('unexpected API errors fail the job visibly', async () => {
+
+test('unexpected API errors fail the controller', async () => {
   const f = fixture({updateError: 500}); await assert.rejects(run(f.args));
 });

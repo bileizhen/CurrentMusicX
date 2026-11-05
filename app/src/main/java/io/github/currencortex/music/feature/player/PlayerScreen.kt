@@ -320,7 +320,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         PlayerControlsRegion(controlsVisibility) { functions() }
                         PlayerControlsRegion(controlsVisibility, Modifier.testTag("player_transport_transition")) {
                             PlayerTransport(vm, onToggle, quality = {
-                                if (!roaming.active) Text(if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else settings.quality.label,
+                                Text(if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else settings.quality.label,
                                     Modifier.testTag("open_quality_sheet")
                                         .clickable(enabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true, role = Role.Button) {
                                             overlay = PlayerOverlay.QUALITY
