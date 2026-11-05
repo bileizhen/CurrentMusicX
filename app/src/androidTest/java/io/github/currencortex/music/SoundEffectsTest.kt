@@ -130,8 +130,7 @@ class SoundEffectsTest {
         open()
         waitFor { !vm.catalog.value.loading }
         assertEquals(0, analysisRequests.get())
-        compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_smart_action"))
-        compose.onNodeWithTag("sound_smart_action").performClick()
+        compose.runOnIdle { vm.smartEnabled(true) }
         waitFor { vm.tuning.value.active && container.equalizer.state.value.active }
         compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_song_analysis"))
         compose.onNodeWithTag("sound_song_analysis").assertTextContains("69 BPM", substring = true)
@@ -169,8 +168,7 @@ class SoundEffectsTest {
         val account = container.accountRepository.state.value
         compose.runOnIdle { vm.useLocal(EqualizerPreset.VOCAL) }
         waitFor { container.equalizerSettings.state.value.enabled && container.equalizerSettings.state.value.preset == EqualizerPreset.VOCAL }
-        compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_open_equalizer"))
-        compose.onNodeWithTag("sound_open_equalizer").assertTextContains(EqualizerPreset.VOCAL.label)
+        compose.onNodeWithTag("sound_open_equalizer").assertDoesNotExist()
         waitFor { container.smartTuning.effective.value.preset == EqualizerPreset.VOCAL && container.equalizer.state.value.active }
         nativeMatchesSaved()
         assertFalse(container.soundEffectsSettings.state.value.smartEnabled)
@@ -203,15 +201,14 @@ class SoundEffectsTest {
             container.playerController.state.value = PlayerState(mode = io.github.currencortex.music.core.media.PlayerMode.CAST)
         }
         open()
-        compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_smart_action"))
-        compose.onNodeWithTag("sound_smart_action").assertIsEnabled().performClick()
+        compose.runOnIdle { vm.turnOff() }
         waitFor { !vm.preferences.value.smartEnabled }
-        compose.onNodeWithTag("sound_smart_action").assertIsNotEnabled()
+        compose.onNodeWithTag("sound_smart_action").assertDoesNotExist()
         assertFalse(container.equalizer.state.value.active)
         assertEquals(0, analysisRequests.get())
     }
 
-    @Test fun turnOffFromSmartCardDisablesProcessingAndPreservesManualCurve() = runBlocking<Unit> {
+    @Test fun turnOffDisablesProcessingAndPreservesManualCurveWithoutLocalTuningControls() = runBlocking<Unit> {
         container.equalizerSettings.select(EqualizerPreset.BASS)
         container.equalizerSettings.setEnabled(true)
         waitFor { container.equalizerSettings.state.value.enabled }
@@ -220,15 +217,17 @@ class SoundEffectsTest {
         vm.smartEnabled(true)
         waitFor { vm.preferences.value.smartEnabled }
         open()
-        compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_smart_action"))
-        compose.onNodeWithTag("sound_smart_action").assertIsDisplayed().performClick()
+        compose.runOnIdle { vm.turnOff() }
         waitFor { !vm.preferences.value.smartEnabled && !vm.manual.value.enabled && !vm.runtime.value.active }
         assertEquals(saved.gains, container.equalizerSettings.snapshot().gains)
         assertEquals(saved.preset, container.equalizerSettings.snapshot().preset)
         assertEquals(queue, container.playbackQueue.state.value)
         compose.onNodeWithTag("sound_status_bar").assertDoesNotExist()
         compose.onNodeWithText("个性化音效").assertDoesNotExist()
-        compose.onNodeWithTag("sound_smart_action").assertIsEnabled().performClick()
+        compose.onNodeWithText("本机调音").assertDoesNotExist()
+        compose.onNodeWithTag("sound_smart_action").assertDoesNotExist()
+        compose.onNodeWithTag("sound_open_equalizer").assertDoesNotExist()
+        compose.runOnIdle { vm.smartEnabled(true) }
         waitFor { vm.preferences.value.smartEnabled }
     }
 

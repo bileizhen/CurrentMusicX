@@ -1,6 +1,7 @@
 package io.github.currencortex.music
 
 import androidx.compose.ui.test.*
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.data.auth.UserDto
@@ -17,7 +18,7 @@ import java.util.UUID
 class SoundEffectsMiniPlayerTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun effectsRetainsThePlayerAndLastEffectRemainsReachable() = runBlocking {
+    @Test fun effectsRetainsThePlayerAndRemainingContentStaysReachable() = runBlocking {
         val app = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
         val container = AppContainer(app, "effects-mini-${UUID.randomUUID()}", useNativeNetease = false)
         val server = MockWebServer()
@@ -58,11 +59,16 @@ class SoundEffectsMiniPlayerTest {
             val player = compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot
             assertTrue("Content must extend behind the whole player: $list / $player", list.bottom >= player.bottom)
             assertEquals("No blank bottom strip may truncate the scrolling viewport", window.bottom, list.bottom, 1f)
-            compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_open_equalizer"))
-            compose.onNodeWithTag("sound_effects_screen").performTouchInput { swipeUp() }
-            val last = compose.onNodeWithTag("sound_open_equalizer").fetchSemanticsNode().boundsInRoot
+            compose.onNodeWithTag("sound_effects_screen").performScrollToNode(hasTestTag("sound_official_effects"))
+            // Scroll the vertical list itself; its center can now fall inside the master pager.
+            compose.onNodeWithTag("sound_effects_screen")
+                .performSemanticsAction(SemanticsActions.ScrollBy) { it(0f, list.height) }
+            compose.onNodeWithText("本机调音").assertDoesNotExist()
+            compose.onNodeWithTag("sound_smart_action").assertDoesNotExist()
+            compose.onNodeWithTag("sound_open_equalizer").assertDoesNotExist()
+            val last = compose.onNodeWithTag("sound_official_effects").assertIsDisplayed().fetchSemanticsNode().boundsInRoot
             val mini = compose.onNodeWithTag("mini_glass_surface").fetchSemanticsNode().boundsInRoot
-            assertTrue("The last effect must scroll above the player: $last / $mini", last.bottom < mini.top)
+            assertTrue("Remaining content must scroll above the player: $last / $mini", last.bottom < mini.top)
             compose.onNodeWithTag("mini_queue").performClick()
             compose.onNodeWithTag("mini_queue_sheet").assertIsDisplayed()
             assertEquals(55L, container.playerController.queue.state.value.current?.id)
