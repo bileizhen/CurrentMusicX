@@ -480,13 +480,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         // Update layout values without replacing the decorator that retains each page.
         val sceneInsets = remember {
             NavEntryDecorator<String> { entry ->
-                val ribbonScene = ribbonEnabled.value && isPlaylistRoute(entry.contentKey.toString())
+                val playlistScene = isPlaylistRoute(entry.contentKey.toString())
+                val ribbonScene = ribbonEnabled.value && playlistScene
                 val miniSpace = if (availableMini.value && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video", "appearance-font")) miniInset.value else 0.dp
                 // Each moving scene must cover the outgoing page and its dim scrim, including
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
                 Box(Modifier.fillMaxSize().background(if (ribbonScene) androidx.compose.ui.graphics.Color(0xFF0A0A0A) else MiuixTheme.colorScheme.background)
                     .testTag("music_scene_${entry.contentKey}")
-                    .then(if (ribbonScene || entry.contentKey in setOf(PLAYER.toString(), "lib/video", EQUALIZER.toString())) Modifier else Modifier.navigationBarsPadding())) {
+                    .then(if (playlistScene || entry.contentKey in setOf(PLAYER.toString(), "lib/video", EQUALIZER.toString())) Modifier else Modifier.navigationBarsPadding())) {
                     // Keep the scene viewport full size so the glass samples page content.
                     // Clearance belongs to the end of each scrollable list, not to its bounds.
                     CompositionLocalProvider(LocalMusicBottomInset provides miniSpace,
@@ -791,6 +792,13 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
         KeyboardDockOverlay(keyboardOpen) {
         val unifiedDock = settings.floatingBar && !wideLayout
+        val standardNavigation = !unifiedDock && !keyboardOpen && (showRootNavigation && !rootWide || hasEmbyDock && !playerPresented)
+        // When the tabs are absent or collapsed, the mini is the bottommost visible surface.
+        val glowOnStandardBar = standardNavigation && !dockCollapsed
+        val glow: (@Composable (Modifier) -> Unit)? = if (settings.navigationGlow && currentSong != null) {
+            { modifier -> NavigationGlow(currentSong?.cover.orEmpty(), playerVm.state, container.dockAudioLevel, modifier,
+                active = dockVisible && !keyboardOpen && !playerPresented && !miniQueueOpen) }
+        } else null
         val miniBody: @Composable () -> Unit = {
         MiniPlayer(playerVm, { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
             { playWithPermission { container.playerController.toggle() } },
@@ -798,7 +806,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             else Modifier.navigationBarsPadding().graphicsLayer {
                     translationY = -miniLift.value.toPx()
                 }
-                .then(if (miniRoot && wideLayout) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) else Modifier)
+                .then(if (wideLayout) Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal)) else Modifier)
                 .padding(end = if (miniRoot && wideLayout) SideNavigationSpace else 0.dp)
                 .onSizeChanged { miniHeight = with(density) { it.height.toDp() } }.padding(horizontal = 12.dp, vertical = 8.dp),
             onNext = { container.playerController.next(container.playerController.state.value.showPause) },
@@ -809,7 +817,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             } },
             onSurfaceBounds = { miniBounds = it }, active = showMini, onSurfaceCoordinates = { miniCoordinates = it },
             onArtworkOrigin = { miniArtworkOrigin = it }, artworkVisible = { !artworkTransition.moving && !miniQueueTransition.coverMoving },
-            onOpenBounds = { miniOpenBounds = it })
+            onOpenBounds = { miniOpenBounds = it }, glow = if (!unifiedDock && !glowOnStandardBar) glow else null)
         }
         if (unifiedDock) {
             val glassNavigation = LocalMusicDockNavigation.current
@@ -822,22 +830,17 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 onOrigin = { dockOrigin = it }, mini = miniBody,
                 navigation = glassNavigation ?: { mod -> PlainFloatingBar(dockSelected, dockLabels, dockIcons, dockSelect, mod, embedded = true) },
                 glow = {
-                    if (settings.navigationGlow && currentSong != null) io.github.currencortex.music.ui.component.NavigationGlow(
-                        currentSong?.cover.orEmpty(), playerVm.state, container.dockAudioLevel,
-                        Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(88.dp),
-                        active = dockVisible && !keyboardOpen && !playerPresented && !miniQueueOpen)
+                    glow?.invoke(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(88.dp))
                 })
         } else if (miniRetainedAvailable) RetainedOverlay(dockVisible, Modifier.align(Alignment.BottomCenter)
             .then(if (playerPresented || miniQueueOpen) Modifier.clearAndSetSemantics {} else Modifier)
             .graphicsLayer { alpha = 1f - playerSheetSurfaceAlpha(playerExpansion.value) }) {
             miniBody()
         }
-        if ((showRootNavigation && !rootWide || hasEmbyDock && !playerPresented) && !keyboardOpen && (!settings.floatingBar || wideLayout)) ScrollCollapsingNavigation(
+        if (standardNavigation) ScrollCollapsingNavigation(
             expanded = !dockCollapsed, modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding().widthIn(max = 480.dp)) {
             StandardNavigationBar(dockSelected, dockLabels, dockIcons, dockSelect)
-            if (settings.navigationGlow && currentSong != null) io.github.currencortex.music.ui.component.NavigationGlow(
-                currentSong?.cover.orEmpty(), playerVm.state, container.dockAudioLevel,
-                Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(48.dp), active = dockVisible && !playerPresented && !miniQueueOpen)
+            if (glowOnStandardBar) glow?.invoke(Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(48.dp))
         }
         if (rootWide && showRootNavigation && !keyboardOpen) FloatingSideBar(selected, labels, icons, ::selectTab,
             Modifier.align(Alignment.BottomEnd).windowInsetsPadding(WindowInsets.safeDrawing).padding(end = 12.dp, bottom = 12.dp))

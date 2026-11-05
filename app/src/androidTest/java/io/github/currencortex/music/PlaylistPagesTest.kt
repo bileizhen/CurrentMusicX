@@ -1,10 +1,15 @@
 package io.github.currencortex.music
 
 import android.graphics.Bitmap
+import android.graphics.Color
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.core.media.PlaybackMode
 import io.github.currencortex.music.core.media.PlayerState
@@ -23,6 +28,7 @@ import java.io.File
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 /** Exercises real navigation and menus with isolated storage and synthetic server data. */
 class PlaylistPagesTest {
@@ -140,6 +146,85 @@ class PlaylistPagesTest {
         compose.onNodeWithTag("playlist_card_3").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithTag("playlist_song_2").fetchSemanticsNodes().isNotEmpty() }
     }
+
+    private fun showWindow(size: State<DpSize>) {
+        compose.setContent {
+            DeviceConfigurationOverride(DeviceConfigurationOverride.ForcedSize(size.value)) {
+                CurrentMusicApp(container)
+            }
+        }
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("music_home").fetchSemanticsNodes().isNotEmpty() }
+    }
+
+    private fun enterVisiblePlaylist() {
+        compose.onNodeWithTag("music_home").performScrollToNode(hasTestTag("open_playlists"))
+        compose.onNodeWithTag("open_playlists").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("playlist_card_3").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("playlist_card_3").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("playlist_artwork_background").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+    }
+
+    @Test fun landscapePlaylistCoverReachesBothEdgesWhileTracksStayCentered() {
+        showWindow(mutableStateOf(DpSize(960.dp, 420.dp)))
+        enterVisiblePlaylist()
+        val window = compose.onNodeWithTag("music_window")
+        val bounds = window.fetchSemanticsNode().boundsInRoot
+        val artwork = compose.onNodeWithTag("playlist_artwork_background").fetchSemanticsNode().boundsInRoot
+        val tracks = compose.onNodeWithTag("playlist_tracks").fetchSemanticsNode().boundsInRoot
+        assertEquals("Cover must reach the left window edge", bounds.left, artwork.left, 1f)
+        assertEquals("Cover must reach the right window edge", bounds.right, artwork.right, 1f)
+        assertTrue("Tracks must keep a readable width", tracks.width <= bounds.width * 840f / 960f + 2f)
+        assertTrue("Tracks must stay within both artwork edges", tracks.left > artwork.left && tracks.right < artwork.right)
+        val bitmap = window.captureToImage().asAndroidBitmap()
+        val y = (artwork.top - bounds.top + artwork.height / 4).toInt().coerceIn(0, bitmap.height - 1)
+        for (x in listOf(2, bitmap.width - 3)) {
+            assertTrue("The window edge at x=$x must show the darkened cover in light theme",
+                androidx.core.graphics.ColorUtils.calculateLuminance(bitmap.getPixel(x, y)) < .7)
+        }
+    }
+
+    @Test fun landscapeMiniPlayerKeepsItsGlowAcrossNavigationAndWindowResizing() {
+        val size = mutableStateOf(DpSize(960.dp, 420.dp))
+        showWindow(size)
+        val mini = compose.onNodeWithTag("mini_player")
+        val glow = compose.onNodeWithTag("navigation_glow", useUnmergedTree = true)
+        fun assertActiveGlow() {
+            compose.onAllNodesWithTag("navigation_glow", useUnmergedTree = true).assertCountEquals(1)
+            glow.assertIsDisplayed()
+            compose.waitUntil(5000) { container.dockAudioLevel.enabled }
+        }
+        fun assertMiniGlow() {
+            assertActiveGlow()
+            val light = glow.fetchSemanticsNode().boundsInRoot
+            val surface = mini.fetchSemanticsNode().boundsInRoot
+            assertEquals(surface.left, light.left, 1f)
+            assertEquals(surface.right, light.right, 1f)
+            assertEquals(surface.bottom, light.bottom, 1f)
+        }
+        compose.onNodeWithTag("wide_navigation").assertIsDisplayed()
+        assertMiniGlow()
+        enterVisiblePlaylist()
+        assertMiniGlow()
+        compose.runOnIdle { size.value = DpSize(420.dp, 960.dp) }
+        assertActiveGlow()
+        compose.runOnIdle { size.value = DpSize(960.dp, 420.dp) }
+        assertMiniGlow()
+        compose.mainClock.advanceTimeBy(1200)
+        fun bottomPixel(): Int {
+            val bitmap = mini.captureToImage().asAndroidBitmap()
+            return bitmap.getPixel(bitmap.width / 4, bitmap.height - 3)
+        }
+        val lit = bottomPixel()
+        runBlocking { container.settings.edit { it.copy(navigationGlow = false) } }
+        compose.waitUntil(5000) { compose.onAllNodesWithTag("navigation_glow", useUnmergedTree = true).fetchSemanticsNodes().isEmpty() }
+        assertFalse("Disabling the glow must stop audio metering", container.dockAudioLevel.enabled)
+        val unlit = bottomPixel()
+        val difference = abs(Color.red(lit) - Color.red(unlit)) + abs(Color.green(lit) - Color.green(unlit)) +
+            abs(Color.blue(lit) - Color.blue(unlit))
+        assertTrue("Disabling the glow must visibly change the capsule's bottom pixels", difference > 15)
+    }
+
     @Test fun importsCustomPlaylistIntoNeteaseLikesAndRepeatingOnlySkips() {
         customPlaylist = true
         runBlocking { container.musicSettings.setNeteaseMainLibrary(false) }
