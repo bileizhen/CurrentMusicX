@@ -685,6 +685,19 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     authVm.begin(); navigateLibrary("user/login")
                                 }, onBack = ::navigateBack)
                                 route == "user/login" -> LoginScreen(authVm, addingAccount = true, onDone = ::navigateBack, onBack = ::navigateBack)
+                                route == "user/levels" -> {
+                                    val vm: LevelsViewModel = viewModel(key = route, factory = viewModelFactory {
+                                        LevelsViewModel(io.github.currencortex.music.data.profile.LevelsRepository(container.apiClient),
+                                            kotlinx.coroutines.flow.combine(container.accountRepository.sessionRevision,
+                                                container.musicSettings.state.map { it.server }) { _, _ ->
+                                                io.github.currencortex.music.core.network.RequestSession(container.accountRepository.server,
+                                                    container.accountRepository.token)
+                                            }) { owner, progress ->
+                                            container.authRepository.updateProgress(owner, progress.level, progress.points)
+                                        }
+                                    })
+                                    LevelsScreen(vm, ::navigateBack)
+                                }
                                 route == "user/decorations" -> {
                                     val vm: DecorationViewModel = viewModel(key = route, factory = viewModelFactory { DecorationViewModel(container) })
                                     DecorationScreen(vm, ::navigateBack)
