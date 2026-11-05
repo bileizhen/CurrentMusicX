@@ -1,0 +1,57 @@
+name: Check pending CI release
+on:
+  push:
+    branches: [main]
+  pull_request_target:
+    # Retargeting away from main must also wake a pending batch.
+    types: [closed, edited]
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+jobs:
+  wake:
+    if: >-
+      github.repository == 'bileizhen/CurrentMusicX' &&
+      (github.event_name == 'push' ||
+       (github.event.action == 'closed' && !github.event.pull_request.merged && github.event.pull_request.base.ref == 'main') ||
+       (github.event.action == 'edited' && github.event.changes.base.ref.from == 'main' && github.event.pull_request.base.ref != 'main'))
+    concurrency:
+      group: ci-batch-wakeup-main
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # This dispatch-capable job only loads policy from the trusted main branch.
+      - uses: actions/checkout@v4
+        with:
+          ref: refs/heads/main
+          sparse-checkout: .github/scripts
+          persist-credentials: false
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const {releaseDecision} = require('./.github/scripts/ci-batch.cjs');
+            // Pending controller runs can be coalesced. Always reconcile the live tip.
+            const sha = (await github.rest.repos.getBranch({...context.repo, branch: 'main'})).data.commit.sha;
+            const decision = await releaseDecision({github, context, sha});
+            core.info(decision.reason);
+            if (!decision.required) return;
+
+            const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+              ...context.repo, workflow_id: 'android.yml', event: 'workflow_dispatch',
+              branch: 'main', head_sha: sha, per_page: 100,
+            });
+            for (const run of runs.filter(run => run.status !== 'completed')) {
+              // A run still checking scope may already have deferred to a PR that just closed.
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt, {
+                ...context.repo, run_id: run.id, attempt_number: run.run_attempt, per_page: 100,
+              });
+              if (jobs.some(job => job.name === 'build' && job.status === 'in_progress')) {
+                core.info(`Android CI is already building ${sha}`);
+                return;
+              }
+            }
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo, workflow_id: 'android.yml', ref: 'main', inputs: {batch_wakeup: 'true'},
+            });

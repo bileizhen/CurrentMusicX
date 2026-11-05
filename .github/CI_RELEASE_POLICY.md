@@ -4,9 +4,15 @@
 
 **GitHub Releases 中始终只保留最新一个完整发布的 CurrentMusic CI 版本**。正式版（如 `v1.3.0`、`v1.3.1`、`v1.3.2`）必须永久排除在自动清理范围之外。
 
+## CI 版发布时机
+
+每个应用 PR 先按 Android CI 队列完成验证。只要还有目标为 `main` 的开放 PR，仓库就推迟构建和发布 CI 版，草稿和带 `bot: skip` 标签的 PR 也计入。中途合并只触发轻量的 **Check pending CI release** 检查。
+
+最后一个 PR 合并、关闭或改投其他分支后，检查最新 `main` 和上一个完整 CI 版之间的累计改动。有应用改动时构建并发布一个 CI 版。若只改了文档或 CI，则跳过打包。签名发布流程会再次核对 PR 和主线状态。
+
 ## 判断规则
 
-- 仅修改 GitHub 工作流或 CI 脚本时，由协作检查运行脚本测试和工作流校验，自动构建跳过 Android 工具链、APK 和预发布。需要验证工具链时可在 Actions 手动启动 Android CI。
+- 仅修改 GitHub 工作流或 CI 脚本时，由协作检查运行脚本测试和工作流校验，自动构建跳过 Android 工具链、APK 和预发布。队列清空后，可手动启动 Android CI 验证工具链；是否发布仍取决于累计改动。
 - CI 版和正式版的自动更新说明都排除仅修改 CI 的 PR。若同一 PR 还修改应用代码，保留该 PR 的更新条目。
 
 - 仅匹配 `vX.Y.Z-ci.N` 格式的 tag、`CurrentMusic CI #N` 名称、`prerelease=true` 且 `draft=false` 的完整 CI Release。

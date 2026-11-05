@@ -57,22 +57,12 @@ function prepare() {
   fs.appendFileSync(process.env.GITHUB_OUTPUT, `tag=${result.tag}\n`);
 }
 
-async function publish({github, context, core}) {
+async function publish({github, context, core, releaseDecision}) {
   const repo = context.repo, fullName = `${repo.owner}/${repo.repo}`;
   const eventRun = context.payload.workflow_run;
   if (!trustedRun(eventRun, fullName)) throw new Error('Only successful main Android CI may publish');
   const run = (await github.rest.actions.getWorkflowRun({...repo, run_id:eventRun.id})).data;
   if (!trustedRun(run, fullName) || run.head_sha !== eventRun.head_sha || run.run_attempt !== eventRun.run_attempt) throw new Error('CI run changed');
-  const main = (await github.rest.repos.getBranch({...repo,branch:'main'})).data.commit.sha;
-  if (main !== run.head_sha) {
-    const comparison = (await github.rest.repos.compareCommitsWithBasehead({
-      ...repo, basehead: `${run.head_sha}...${main}`, per_page: 1,
-    })).data;
-    if (!onlyLightweightChangesSince(comparison, run.head_sha)) {
-      core.info('Main has different or unverified Android inputs; skip this superseded build');
-      return;
-    }
-  }
   const metadata = JSON.parse(fs.readFileSync('ci-dist/output-metadata.json', 'utf8'));
   const {tag,file} = validateMetadata(metadata, run.run_number);
   if (tag !== process.env.CI_TAG) throw new Error('Unexpected CI tag');
@@ -87,15 +77,35 @@ async function publish({github, context, core}) {
   const notes = (await github.rest.repos.generateReleaseNotes({...repo,tag_name:tag,target_commitish:run.head_sha,
     previous_tag_name:previous.tag_name,configuration_file_path:'.github/release.yml'})).data.body;
   const body = `## 更新说明\n\n主线 CI 构建 #${run.run_number}，包含自上次正式版 ${previous.tag_name} 以来的改动。\n\n${notes}\n\n## Installation & Verification\n\n提交 ${run.head_sha}。[Android CI](https://github.com/${fullName}/actions/runs/${run.id}) 已通过；本次签名分发前已完成 Release 构建、单元测试和 Lint。未进行真机验收，不代表正式版稳定性。\n\n使用与正式版相同的签名，可保留数据覆盖安装。切回正式版需等待后续更高版本，不支持降级覆盖。\n\nSHA-256: \`${sha256}\`\n`;
+  const eligible = async () => {
+    const decision = await releaseDecision({github, context, sha: run.head_sha});
+    core.info(decision.reason);
+    return decision.required;
+  };
+  if (!(await eligible())) return;
   // Publish only after all assets are present. A partial upload remains a draft and is never offered by the app.
   const release = (await github.rest.repos.createRelease({...repo,tag_name:tag,target_commitish:run.head_sha,name:`CurrentMusic CI #${run.run_number}`,body,draft:true,prerelease:true,make_latest:'false'})).data;
   const upload = async (name, data, type) => github.rest.repos.uploadReleaseAsset({url:release.upload_url,name,data,headers:{'content-type':type,'content-length':data.length}});
   const asset = (await upload(file,apk,'application/vnd.android.package-archive')).data;
   if (asset.size !== apk.length || asset.digest !== `sha256:${sha256}`) throw new Error('GitHub asset verification failed; leave draft unpublished');
   await upload('SHA256SUMS.txt',Buffer.from(`${sha256}  ${file}\n`),'text/plain');
+  // A PR may have opened while the APK was uploading. Only discard our own
+  // fresh draft if that happens, so a later attempt can use the same CI tag.
+  let expose = false;
+  try {
+    expose = await eligible();
+  } finally {
+    if (!expose) {
+      const {data: draft} = await github.rest.repos.getRelease({...repo, release_id:release.id});
+      if (draft.draft && draft.tag_name === tag && draft.target_commitish === run.head_sha) {
+        await github.rest.repos.deleteRelease({...repo, release_id:release.id});
+      }
+    }
+  }
+  if (!expose) return;
   await github.rest.repos.updateRelease({...repo,release_id:release.id,draft:false,prerelease:true,make_latest:'false'});
   core.info(`Published ${release.html_url}`);
 }
 
 if (require.main === module && process.argv[2] === 'prepare') prepare();
-module.exports = {validateMetadata,trustedRun,hasSuccessfulAndroidBuild,publish};
+module.exports = {validateMetadata,trustedRun,hasSuccessfulAndroidBuild,onlyLightweightChangesSince,publish};
