@@ -22,18 +22,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable internal fun UserRoleBadge(role: UserRole?, modifier: Modifier = Modifier) {
     if (role == null) return
     val tint = if (role == UserRole.SUPER_ADMIN || role == UserRole.OWNER) Color(0xffb78324) else MiuixTheme.colorScheme.primary
-    Text(role.label, modifier.testTag("user_role_${role.name.lowercase()}")
-        .background(tint.copy(alpha = .10f), RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
-        color = tint, fontSize = 10.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+    UserIdentityBadge(role.label, tint, .10f, modifier.testTag("user_role_${role.name.lowercase()}"))
 }
 
 @Composable internal fun UserTitleBadge(title: String, modifier: Modifier = Modifier) {
     val label = title.trim()
     if (label.isEmpty()) return
     val tint = Color(0xFF9A7025)
-    Text(label, modifier.testTag("user_title").widthIn(max = 240.dp)
-        .background(tint.copy(alpha = .08f), RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
-        color = tint, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    UserIdentityBadge(label, tint, .08f, modifier.testTag("user_title").widthIn(max = 240.dp))
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -54,6 +50,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable internal fun UserLevelBadge(level: Int?, modifier: Modifier = Modifier) {
     val label = io.github.currencortex.music.data.profile.userLevelLabel(level) ?: return
     val color = MiuixTheme.colorScheme.primary
-    Text(label, modifier.testTag("user_level").background(color.copy(alpha = .08f), RoundedCornerShape(5.dp))
-        .padding(horizontal = 6.dp, vertical = 2.dp), color = color, fontSize = 10.sp, maxLines = 1)
+    UserIdentityBadge(label, color, .08f, modifier.testTag("user_level"))
+}
+
+@Composable private fun UserIdentityBadge(label: String, tint: Color, backgroundAlpha: Float, modifier: Modifier) {
+    Text(label, modifier.background(tint.copy(alpha = backgroundAlpha), RoundedCornerShape(5.dp))
+        .padding(horizontal = 6.dp, vertical = 2.dp), color = tint,
+        fontSize = 10.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium,
+        maxLines = 1, overflow = TextOverflow.Ellipsis)
 }
