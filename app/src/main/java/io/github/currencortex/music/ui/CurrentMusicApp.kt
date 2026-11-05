@@ -762,7 +762,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             route == "lib/recognition" -> io.github.currencortex.music.feature.recognition.MusicRecognitionScreen(::navigateBack) { songs, index ->
                                 playWithPermission { container.playerController.playList(songs, index) }
                             }
-                            route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateLibrary, onBack = ::navigateBack)
+                            route == "lib/playlists" -> PlaylistIndexScreen(libraryVm, ::navigateLibrary,
+                                play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
+                                onBack = ::navigateBack)
                             route == "lib/local" -> {
                                 val detailVm: LibraryDetailViewModel = viewModel(key = route, factory = viewModelFactory { LibraryDetailViewModel(container, route) })
                                 LocalMusicScreen(detailVm, libraryVm, ::navigateBack, ::navigateLibrary) { songs, index ->
