@@ -29,10 +29,10 @@ jobs:
     outputs:
       target: ${{ steps.notes.outputs.target }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v8
         id: notes
         env:
           RELEASE_TAG: ${{ inputs.tag }}
@@ -41,7 +41,7 @@ jobs:
         with:
           script: |
             await require('./.github/scripts/release-draft.cjs').prepare({github, context, core});
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: release-notes
           path: release-draft.txt
@@ -52,13 +52,13 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: release-notes
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@v8
         env:
           RELEASE_TAG: ${{ inputs.tag }}
           RELEASE_TARGET: ${{ needs.notes.outputs.target }}
