@@ -1,0 +1,1 @@
+"""CurrentMusicX group feedback plugin."""

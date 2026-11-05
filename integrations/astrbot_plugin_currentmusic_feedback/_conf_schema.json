@@ -1,0 +1,10 @@
+{
+  "enabled": {"description": "启用群反馈识别", "type": "bool", "default": true},
+  "allowed_groups": {"description": "指定群号（白名单）", "type": "list", "default": [], "hint": "每项一个群号。留空不监听任何群。确认通知直接 @ 当前群所用 AstrBot 配置文件中的管理员 ID，无需重复配置。"},
+  "platform_ids": {"description": "机器人平台实例 ID（可选）", "type": "list", "default": [], "hint": "同一 AstrBot 接入多个 OneBot 机器人时可限定实例；留空允许所有 OneBot 实例。"},
+  "provider_id": {"description": "识别模型 ID", "type": "string", "default": "", "hint": "留空跟随当前群的聊天模型。仅调用文本生成，无工具调用。"},
+  "github_token": {"description": "GitHub Token", "type": "string", "default": "", "secret": true, "hint": "仅需 CurrentMusicX 仓库 Issues 读写权限；也可通过 CURRENTMUSIC_GITHUB_TOKEN 环境变量提供。"},
+  "confidence_threshold": {"description": "Bug 识别置信度阈值", "type": "float", "default": 0.85, "hint": "范围 0.5 至 1；低于阈值不生成草稿。"},
+  "approval_ttl_hours": {"description": "草稿确认有效期（小时）", "type": "int", "default": 24, "hint": "范围 1 至 168，超时不会自动提交。"},
+  "daily_draft_limit": {"description": "每群 24 小时草稿上限", "type": "int", "default": 20, "hint": "范围 1 至 100，避免重复提醒刷屏。"}
+}

@@ -1,0 +1,27 @@
+name: AstrBot feedback tests
+on:
+  pull_request:
+    paths:
+      - 'integrations/astrbot_plugin_currentmusic_feedback/**'
+      - '.github/workflows/astrbot-feedback.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install -r integrations/astrbot_plugin_currentmusic_feedback/requirements.txt
+      - run: python -m unittest discover -s integrations/astrbot_plugin_currentmusic_feedback/tests -v
+      - run: python integrations/astrbot_plugin_currentmusic_feedback/package.py dist/astrbot_plugin_currentmusic_feedback-v0.1.0.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: astrbot-currentmusic-feedback
+          path: dist/astrbot_plugin_currentmusic_feedback-v0.1.0.zip
+          if-no-files-found: error

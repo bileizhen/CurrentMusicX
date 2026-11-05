@@ -1,0 +1,9 @@
+name: astrbot_plugin_currentmusic_feedback
+display_name: CurrentMusicX 群反馈
+desc: 指定群自动识别 Bug，复用 AstrBot 管理员 ID，确认后提交 GitHub Issue。
+version: v0.1.0
+author: bileizhen
+repo: https://github.com/bileizhen/CurrentMusicX
+support_platforms:
+  - aiocqhttp
+astrbot_version: '>=4.26.7,<5'
