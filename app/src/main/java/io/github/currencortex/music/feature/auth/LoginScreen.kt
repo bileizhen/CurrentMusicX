@@ -101,12 +101,14 @@ import io.github.currencortex.music.data.auth.RegistrationInput
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = if (register) ImeAction.Next else ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { if (canLogin) submit() }),
                         trailingIcon = {
-                            Image(painterResource(if (revealPassword) R.drawable.auth_password_hidden else R.drawable.auth_password_visible),
-                                contentDescription = if (revealPassword) "隐藏密码" else "显示密码",
-                                Modifier.size(20.dp).clickable(role = Role.Button,
+                            Box(Modifier.size(48.dp).clickable(role = Role.Button,
                                     interactionSource = remember { MutableInteractionSource() }, indication = null) { revealPassword = !revealPassword }
                                     .testTag("login_password_toggle"),
-                                colorFilter = ColorFilter.tint(secondary))
+                                contentAlignment = Alignment.Center) {
+                                Image(painterResource(if (revealPassword) R.drawable.auth_password_hidden else R.drawable.auth_password_visible),
+                                    contentDescription = if (revealPassword) "隐藏密码" else "显示密码",
+                                    modifier = Modifier.size(20.dp), colorFilter = ColorFilter.tint(secondary))
+                            }
                         },
                         modifier = Modifier.fillMaxWidth().testTag("login_password"))
                     if (!register) GlassActionButton("忘记密码？", onClick = { vm.clearMessage(); recovering = true }, fillWidth = false,
