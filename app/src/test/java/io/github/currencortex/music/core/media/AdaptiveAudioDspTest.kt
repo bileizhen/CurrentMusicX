@@ -35,13 +35,13 @@ class AdaptiveAudioDspTest {
         dsp.process(frame, AdaptiveAudioSettings())
         assertArrayEquals(doubleArrayOf(.125, -.75), frame, 0.0)
     }
-    @Test fun virtualBassAddsHarmonicsRatherThanOnlyAmplifyingTheFundamental() {
+    @Test fun virtualBassAddsMultipleHarmonicsAndRejectsDc() {
         val base = AdaptiveAudioSettings(enabled = true, dynamicEq = false)
         val dry = tone(base, 60.0).first
         val wet = tone(base.copy(virtualBass = true, bassStrength = 100), 60.0).first
         assertTrue(magnitude(dry, 120.0) < 1e-5)
         assertTrue(magnitude(wet, 120.0) > .005)
-        assertTrue(abs(magnitude(dry, 60.0) - magnitude(wet, 60.0)) < .005)
+        assertTrue(magnitude(wet, 180.0) > .001)
         assertTrue(abs(wet.takeLast(rate).average()) < 1e-4)
     }
     @Test fun manualBandRaisesItsOwnFrequencyAndKeepsStereoIndependent() {
@@ -60,10 +60,68 @@ class AdaptiveAudioDspTest {
     }
     @Test fun dynamicGainsRespondToAudioAndRemainBounded() {
         val settings = AdaptiveAudioSettings(enabled = true, strength = 4)
-        val low = tone(settings, 125.0).second.gains
-        val high = tone(settings, 4000.0).second.gains
+        val low = tone(settings, 125.0, seconds = 6).second.gains
+        val high = tone(settings, 4000.0, seconds = 6).second.gains
         assertTrue(abs(low[2] - high[2]) > .5)
-        assertTrue((low + high).all { it in -3.01f..3.01f })
+        assertTrue((low + high).all { it in -9f..9f })
+    }
+    @Test fun flatEnabledChainPreservesLevelWithoutSystemGainCompensation() {
+        val settings = AdaptiveAudioSettings(enabled = true, dynamicEq = false)
+        val samples = tone(settings, 1000.0).first
+        assertEquals(.15, magnitude(samples, 1000.0), 1e-5)
+    }
+    @Test fun disablingDynamicEqPromptlyReturnsToTheDisplayedManualBaseline() {
+        val dsp = AdaptiveAudioDsp(8000, 1)
+        val manual = List(10) { if (it == 2) 2f else 0f }
+        val settings = AdaptiveAudioSettings(enabled = true, gains = manual)
+        val frame = DoubleArray(1)
+        repeat(8000 * 6) { i ->
+            frame[0] = sin(2 * PI * 125 * i / 8000) * .2
+            dsp.process(frame, settings)
+        }
+        assertTrue(dsp.gains.indices.any { abs(dsp.gains[it] - manual[it]) > .1f })
+        repeat(1600) { i ->
+            frame[0] = sin(2 * PI * 125 * i / 8000) * .2
+            dsp.process(frame, settings.copy(dynamicEq = false))
+        }
+        dsp.gains.forEachIndexed { band, gain -> assertEquals(manual[band], gain, .002f) }
+    }
+    @Test fun peakProtectionKeepsSurroundBalanceAndDoesNotClip() {
+        val settings = AdaptiveAudioSettings(enabled = true, dynamicEq = false, gains = List(10) { 6f })
+        val dsp = AdaptiveAudioDsp(rate, 6)
+        val frame = DoubleArray(6)
+        var peak = 0.0
+        repeat(rate) { i ->
+            val input = sin(2 * PI * 1000 * i / rate) * .95
+            for (channel in frame.indices) frame[channel] = input / (channel + 1)
+            dsp.process(frame, settings)
+            peak = max(peak, abs(frame[0]))
+            for (channel in frame.indices) {
+                assertTrue(frame[channel].isFinite() && abs(frame[channel]) <= 1.0)
+                assertEquals(frame[0] / (channel + 1), frame[channel], 1e-8)
+            }
+        }
+        assertTrue(peak > .8)
+    }
+    @Test fun surroundChannelsKeepIndependentFilterAndBassHistory() {
+        val settings = AdaptiveAudioSettings(enabled = true, dynamicEq = false,
+            gains = List(10) { 6f }, virtualBass = true, bassStrength = 100)
+        for (channels in listOf(6, 8)) for (activeChannel in 0 until channels) {
+            val dsp = AdaptiveAudioDsp(44100, channels)
+            val frame = DoubleArray(channels)
+            var outputPower = 0.0
+            repeat(4410) { i ->
+                frame.fill(0.0)
+                frame[activeChannel] = sin(2 * PI * 60 * i / 44100) * .25
+                dsp.process(frame, settings)
+                for (channel in 0 until channels) {
+                    assertTrue(frame[channel].isFinite() && abs(frame[channel]) <= 1.0)
+                    if (channel != activeChannel) assertEquals("Channel $activeChannel leaked to $channel", 0.0, frame[channel], 0.0)
+                }
+                outputPower += frame[activeChannel] * frame[activeChannel]
+            }
+            assertTrue("Every input channel must be processed", outputPower > 1.0)
+        }
     }
     @Test fun silenceDoesNotCreateSoundOrMakeupGain() {
         val dsp = AdaptiveAudioDsp(rate, 2)

@@ -50,10 +50,11 @@ internal class AdaptiveAudioProcessor(
     private var bass = 0.0
     private var lastReport = 0L
     private var reported = false
+    private var bypassReset = false
     override fun onConfigure(inputAudioFormat: AudioFormat) = inputAudioFormat
     override fun onFlush(streamMetadata: StreamMetadata) {
         positionUs = streamMetadata.positionOffsetUs; period = streamMetadata.periodUid
-        frames = 0; samples = 0; full = 0.0; bass = 0.0; reported = false; lastReport = 0
+        frames = 0; samples = 0; full = 0.0; bass = 0.0; reported = false; lastReport = 0; bypassReset = false
         haptics.clear()
         val format = inputAudioFormat
         val configured = format.channelCount > 0 && format.sampleRate > 0
@@ -78,12 +79,19 @@ internal class AdaptiveAudioProcessor(
         val engine = dsp
         val bytes = inputAudioFormat.bytesPerFrame
         if (engine == null || bytes <= 0 || inputBuffer.remaining() % bytes != 0 || !s.enabled && engine.settledBypass) {
+            if (engine != null && !s.enabled && engine.settledBypass && !bypassReset) {
+                // No PCM reaches the DSP during exact byte bypass. Discard old filter tails
+                // and analysis history once, so enabling on a later passage starts cleanly.
+                dsp = AdaptiveAudioDsp(inputAudioFormat.sampleRate, inputAudioFormat.channelCount)
+                samples = 0; full = 0.0; bass = 0.0; bypassReset = true
+            }
             if (bytes > 0) frames += inputBuffer.remaining() / bytes
             haptics.clear()
             if (reported) { reported = false; report(AdaptiveAudioRuntime()) }
             replaceOutputBuffer(inputBuffer.remaining()).put(inputBuffer).flip()
             return
         }
+        bypassReset = false
         val output = replaceOutputBuffer(inputBuffer.remaining()).order(java.nio.ByteOrder.LITTLE_ENDIAN)
         val input = inputBuffer.order(java.nio.ByteOrder.LITTLE_ENDIAN)
         val floating = inputAudioFormat.encoding == C.ENCODING_PCM_FLOAT
