@@ -11,7 +11,12 @@ import kotlinx.coroutines.flow.*
 data class PostsState(val posts: List<CommunityPost> = emptyList(), val total: Int = 0,
     val offset: Int = 0, val done: Boolean = false, val loaded: Boolean = false, val loading: Boolean = false,
     val busy: Boolean = false, val error: String? = null, val message: String? = null,
-    val editor: Boolean = false, val draft: String = "", val commentsFor: Long? = null,
+    val editor: Boolean = false, val draft: String = "", val attachments: List<PostAttachment> = emptyList(),
+    val picker: Boolean = false, val attachmentQuery: String = "", val attachmentType: String = "song",
+    val attachmentResults: List<PostAttachment> = emptyList(), val attachmentLoading: Boolean = false,
+    val attachmentError: String? = null, val attachmentSearched: Boolean = false,
+    val attachmentOffset: Int = 0, val attachmentMore: Boolean = false,
+    val commentsFor: Long? = null,
     val comments: List<PostComment> = emptyList(), val commentsLoading: Boolean = false,
     val commentsError: String? = null)
 
@@ -24,11 +29,14 @@ class PostsViewModel(val container: AppContainer) : ViewModel() {
     private var feedTask: Job? = null
     private var commentTask: Job? = null
     private var actionTask: Job? = null
+    private var attachmentTask: Job? = null
+    private var attachmentGeneration = 0L
     init { viewModelScope.launch {
         container.sessionRestored.await()
         combine(container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged())
             { revision, server -> revision to server }.collect {
-                ++generation; feedTask?.cancel(); commentTask?.cancel(); actionTask?.cancel()
+                ++generation; ++attachmentGeneration
+                feedTask?.cancel(); commentTask?.cancel(); actionTask?.cancel(); attachmentTask?.cancel()
                 state.value = PostsState()
                 if (requested) reload()
             }
@@ -80,14 +88,62 @@ class PostsViewModel(val container: AppContainer) : ViewModel() {
     }
     fun editor(open: Boolean) {
         if (state.value.busy) return
+        if (!open) picker(false)
         state.update { it.copy(editor = open, message = null) }
     }
-    fun draft(value: String) { state.update { it.copy(draft = value) } }
-    fun publish(attachments: List<PostAttachment>) {
+    fun draft(value: String) { if (!state.value.busy) state.update { it.copy(draft = value) } }
+    fun publish() {
         val content = state.value.draft
+        val attachments = state.value.attachments
         if (content.isNotBlank()) action("帖子已发布", { repository.create(content, attachments) }) {
-            state.update { it.copy(editor = false, draft = "") }
+            state.update { it.copy(editor = false, draft = "", attachments = emptyList(), picker = false) }
         }
+    }
+    fun picker(open: Boolean) {
+        if (state.value.busy) return
+        ++attachmentGeneration; attachmentTask?.cancel()
+        state.update { it.copy(picker = open, attachmentLoading = false, message = null) }
+    }
+    fun attachmentQuery(value: String) {
+        ++attachmentGeneration; attachmentTask?.cancel()
+        state.update { it.copy(attachmentQuery = value, attachmentResults = emptyList(), attachmentLoading = false,
+            attachmentSearched = false, attachmentError = null, attachmentMore = false, attachmentOffset = 0) }
+    }
+    fun attachmentType(value: String) {
+        if (value !in setOf("song", "album", "artist", "playlist")) return
+        state.update { it.copy(attachmentType = value) }
+        attachmentQuery(state.value.attachmentQuery)
+        searchAttachments()
+    }
+    fun searchAttachments(more: Boolean = false) {
+        val before = state.value
+        if (before.attachmentQuery.isBlank() || (more && (!before.attachmentMore || before.attachmentLoading))) return
+        attachmentTask?.cancel()
+        val request = ++attachmentGeneration
+        val expected = session()
+        state.update { it.copy(attachmentLoading = true, attachmentError = null, attachmentSearched = true) }
+        attachmentTask = viewModelScope.launch {
+            val result = appResult { repository.searchAttachments(before.attachmentQuery, before.attachmentType,
+                if (more) before.attachmentOffset else 0) }
+            if (request != attachmentGeneration || expected != session()) return@launch
+            state.update { current -> when (result) {
+                is AppResult.Success -> current.copy(attachmentLoading = false,
+                    attachmentResults = ((if (more) before.attachmentResults else emptyList()) + result.value.items).distinctBy { it.type to it.id },
+                    attachmentOffset = result.value.nextOffset, attachmentMore = result.value.hasMore)
+                is AppResult.Failure -> current.copy(attachmentLoading = false, attachmentError = result.kind.message)
+            } }
+        }
+    }
+    fun attach(card: PostAttachment) {
+        if (state.value.busy) return
+        state.update {
+            if (it.attachments.any { current -> current.type == card.type && current.id == card.id }) it
+            else if (it.attachments.size >= 5) it.copy(message = "最多添加 5 项内容")
+            else it.copy(attachments = validMusicAttachments(it.attachments + card), message = null)
+        }
+    }
+    fun removeAttachment(card: PostAttachment) {
+        if (!state.value.busy) state.update { it.copy(attachments = it.attachments.filterNot { a -> a.type == card.type && a.id == card.id }, message = null) }
     }
     fun comments(id: Long?) {
         commentTask?.cancel()
