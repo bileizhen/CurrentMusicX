@@ -4,10 +4,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -18,9 +16,6 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.*
@@ -29,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -37,10 +31,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -84,9 +75,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     Column(Modifier.fillMaxSize().testTag("discover_users")) {
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            UserSearchField(state.query, vm::query, ::search, {
-                focus.clearFocus(); keyboard?.hide(); scope.launch { list.scrollToItem(0); vm.clearQuery() }
-            })
+            MusicSearchBar(state.query, ::search, Modifier.fillMaxWidth(),
+                onInput = { if (it.isEmpty()) vm.clearQuery() else vm.query(it) },
+                placeholder = "搜索昵称或简介", inputTag = "discover_query", submitTag = "discover_submit",
+                clearTag = "discover_clear", onCancel = vm::clearQuery)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 UserFilterChip(state.listening) { focus.clearFocus(); keyboard?.hide(); vm.filter(!state.listening) }
                 Spacer(Modifier.weight(1f))
@@ -153,28 +145,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     Modifier.testTag("discover_sort_$key"))
             }
         }
-    }
-}
-
-@Composable private fun UserSearchField(query: String, change: (String) -> Unit, search: () -> Unit, clear: () -> Unit) {
-    val interactions = remember { MutableInteractionSource() }
-    val focused by interactions.collectIsFocusedAsState()
-    val colors = MiuixTheme.colorScheme
-    val outline by animateColorAsState(if (focused) colors.primary.copy(alpha = .4f) else Color.Transparent, tween(160), label = "user search focus")
-    Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clip(RoundedCornerShape(15.dp))
-        .background(colors.surfaceContainer).border(1.dp, outline, RoundedCornerShape(15.dp)).padding(start = 14.dp, end = 4.dp),
-        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Icon(Icons.Default.Search, null, Modifier.size(19.dp), tint = colors.onSurface.copy(alpha = .4f))
-        BasicTextField(query, change, Modifier.weight(1f).padding(vertical = 12.dp).testTag("discover_query")
-            .semantics { contentDescription = "搜索昵称或简介" }, singleLine = true, interactionSource = interactions,
-            textStyle = TextStyle(fontSize = 14.sp, color = colors.onSurface), cursorBrush = SolidColor(colors.primary),
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search), keyboardActions = KeyboardActions(onSearch = { search() }),
-            decorationBox = { inner -> Box { if (query.isEmpty()) Text("搜索昵称或简介", Modifier.clearAndSetSemantics {}, fontSize = 14.sp, color = colors.onSurface.copy(alpha = .4f)); inner() } })
-        if (query.isNotEmpty()) Box(Modifier.size(36.dp).clip(CircleShape).clickable(role = Role.Button, onClick = clear)
-            .testTag("discover_clear"), contentAlignment = Alignment.Center) {
-            Icon(Icons.Default.Close, "清除搜索", Modifier.size(16.dp), tint = colors.onSurface.copy(alpha = .5f))
-        }
-        MusicTextAction("搜索", search, Modifier.testTag("discover_submit"))
     }
 }
 
