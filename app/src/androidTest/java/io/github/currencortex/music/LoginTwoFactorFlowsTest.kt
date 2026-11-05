@@ -134,6 +134,7 @@ class LoginTwoFactorFlowsTest {
     }
     @Test fun emailCodeLoginCanCompleteSecurityQuestionWithoutPassword() {
         securityQuestion = true; open()
+        compose.onNodeWithTag("login_passkey").assertExists()
         compose.onNodeWithTag("login_method_1").performScrollTo().performClick()
         compose.onNodeWithTag("login_password").assertDoesNotExist()
         field("login_email", "listener@example.org")
@@ -165,6 +166,7 @@ class LoginTwoFactorFlowsTest {
         compose.onNodeWithTag("login_switch_mode").performScrollTo().performClick()
         compose.onNodeWithTag("register_card").assertExists()
         compose.onNodeWithTag("login_email_send_code").assertDoesNotExist()
+        compose.onNodeWithTag("login_passkey").assertDoesNotExist()
     }
     @Test fun recoveryCodeCanCompleteTheSecondStepInDarkLargeType() {
         recovery = true; open(true); begin()

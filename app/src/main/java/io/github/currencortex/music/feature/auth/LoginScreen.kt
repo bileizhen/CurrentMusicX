@@ -38,6 +38,7 @@ import io.github.currencortex.music.data.auth.RegistrationInput
     val state by vm.state.collectAsStateWithLifecycle()
     val account by vm.account.collectAsStateWithLifecycle()
     val challenge by vm.loginChallenge.collectAsStateWithLifecycle()
+    val context = androidx.compose.ui.platform.LocalContext.current
     DisposableEffect(vm) { onDispose { vm.dismissLogin() } }
     var username by rememberSaveable { mutableStateOf("") }
     // Password is intentionally not saved in SavedState or a persistent store.
@@ -174,6 +175,9 @@ import io.github.currencortex.music.data.auth.RegistrationInput
                         else submit()
                     }, enabled = if (register) canRegister else canLogin, primary = true,
                         modifier = Modifier.fillMaxWidth().testTag("login_submit"))
+                    if (!register) GlassActionButton("使用通行密钥登录", {
+                        password = ""; code = ""; vm.loginWithPasskey(context)
+                    }, enabled = !state.loading, modifier = Modifier.fillMaxWidth().testTag("login_passkey"))
                 }
             }
         }

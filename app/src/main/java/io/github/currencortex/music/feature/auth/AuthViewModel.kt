@@ -94,6 +94,18 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
         dismissLogin()
         loginAction { container.authRepository.loginWithEmail(email, code) }
     }
+    fun loginWithPasskey(context: android.content.Context) {
+        if (state.value.loading) return
+        dismissLogin()
+        loginAction {
+            when (val origin = appResult { AndroidPasskeyLogin.origin(context) }) {
+                is AppResult.Failure -> origin
+                is AppResult.Success -> container.authRepository.loginWithPasskey(origin.value) {
+                    AndroidPasskeyLogin.credential(context, it)
+                }
+            }
+        }
+    }
     fun loginEmailCode(email: String) {
         if (SystemClock.elapsedRealtime() < loginEmailCodeUntil.value) return
         action("登录验证码已发送") {

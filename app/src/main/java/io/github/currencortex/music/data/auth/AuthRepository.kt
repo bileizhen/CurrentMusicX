@@ -152,6 +152,42 @@ class AuthRepository(private val api: ApiClient, val accounts: AccountRepository
             LoginOutcome.VerificationRequired(challenge)
         } else LoginOutcome.SignedIn(acceptLogin(response, owner, revision))
     }
+    suspend fun loginWithPasskey(origin: String, credential: suspend (String) -> String): AppResult<LoginOutcome> =
+        sessionMutex.withLock { appResult {
+            loginChallenge = null
+            val owner = RequestSession(accounts.server, accounts.token)
+            val revision = accounts.sessionRevision.value
+            val expected = RequestSession(owner.server, null)
+            val rpId = NativePasskeyRoute.rpId(owner.server)
+            val response = try {
+                api.request("POST", "auth/passkeys/login/options", body = buildJsonObject { put("platform", "app") },
+                    expectedSession = expected, retryConnection = false, passkeyOrigin = origin).jsonObject
+            } catch (e: ApiException) {
+                if (e.status == 403 && e.userMessage?.contains("HTTPS 网页入口") == true)
+                    throw ApiException(ErrorKind.Forbidden, 403, "当前服务器尚未支持 Android 通行密钥登录，请使用密码或邮箱验证码")
+                throw e
+            }
+            checkLoginOwner(owner, revision)
+            val token = response["challengeToken"]!!.jsonPrimitive.content
+            val options = response["publicKey"]!!.jsonObject
+            require(token.isNotBlank() && token.length <= 8192)
+            require(options["rpId"]?.jsonPrimitive?.content == rpId)
+            require(options["challenge"]?.jsonPrimitive?.contentOrNull?.isNotBlank() == true)
+            require(options["userVerification"]?.jsonPrimitive?.content == "required")
+            val seconds = response["expiresIn"]?.jsonPrimitive?.longOrNull ?: 300L
+            require(seconds > 0)
+            val deadline = clock() + seconds.coerceAtMost(300) * 1000
+            val assertion = credential(options.toString())
+            checkLoginOwner(owner, revision)
+            if (clock() >= deadline) throw ApiException(ErrorKind.Unauthorized, userMessage = "通行密钥验证已过期，请重新登录")
+            require(assertion.length <= 131072)
+            val result = api.request("POST", "auth/passkeys/login/verify", body = buildJsonObject {
+                put("challengeToken", token); put("credential", ApiJson.parseToJsonElement(assertion).jsonObject)
+                put("device", device); put("platform", "app")
+            }, expectedSession = expected, retryConnection = false, passkeyOrigin = origin).jsonObject
+            checkLoginOwner(owner, revision)
+            LoginOutcome.SignedIn(acceptLogin(result, owner, revision))
+        } }
     suspend fun verifyLogin(challenge: LoginChallenge, code: String): AppResult<LoginOutcome.SignedIn> = sessionMutex.withLock { appResult {
         if (loginChallenge !== challenge || challenge.remainingSeconds <= 0)
             throw ApiException(ErrorKind.Unauthorized, userMessage = "登录验证已失效，请重新登录")
