@@ -13,11 +13,11 @@
 - 不自动解决审查讨论、不自动批准、不自动合并、不将密钥提供给来自 fork 的 PR。
 - AI 审查是否自动触发及其额度取决于 Codex/GitHub 连接设置，应在 GitHub 中单独确认。
 
-## Android CI 排队
+## PR 合并检查
 
-目标为 `main` 的非草稿 PR 按编号从小到大排队。只有队首会自动同步最新 `main` 并构建 Android。其他应用 PR 先运行轻量检查，必需的 `build` 等待上报。仅修改文档或 CI 的 PR 沿用轻量检查，可单独合并。
+面向 `main` 的 PR 可以同时验证。`build` 执行仓库的 Python 源码与资源检查，`test` 执行协作脚本测试和 actionlint。两个检查通过后，由维护者按分支保护规则合并。
 
-队首构建成功后，由维护者决定何时合并。合并、关闭、转为草稿或添加 `bot: skip` 标签都会让下一个 PR 接棒。如果队首有冲突、测试失败或等待审查，可先处理问题，也可转为草稿让后续 PR 先走。机器人更新分支后，GitHub 可能要求维护者在 PR 页面点击 **Approve workflows to run**。如需重新检查队列，可在 Actions 手动运行 **Update PR branches**。
+`Update PR branches` 会同步落后的非草稿分支，跳过冲突或带 `bot: skip` 标签的 PR。必要时可从 Actions 手动运行。机器人更新分支后，GitHub 可能要求维护者批准新检查。
 
 ## 人工复核清单
 

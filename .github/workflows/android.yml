@@ -1,10 +1,6 @@
 name: Android CI
-run-name: >-
-  ${{ github.event_name == 'pull_request' && format('PR #{0} · Android checks', github.event.pull_request.number) || 'Build CI release · main' }}
+run-name: Build CI release · main
 on:
-  pull_request:
-    branches: [ main ]
-    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   workflow_dispatch:
     inputs:
       batch_wakeup:
@@ -15,21 +11,15 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  # Only updates to the same PR replace its earlier checks.
-  group: android-${{ github.event.pull_request.number || github.run_id }}
-  cancel-in-progress: true
-
 jobs:
   scope:
-    if: (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'pull_request' && !github.event.pull_request.draft)
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       pull-requests: read
     outputs:
       required: ${{ steps.scope.outputs.required }}
-      ready: ${{ steps.scope.outputs.ready }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -39,85 +29,40 @@ jobs:
         uses: actions/github-script@v8
         with:
           script: |
-            if (context.eventName === 'workflow_dispatch') {
-              const {releaseDecision} = require('./.github/scripts/ci-batch.cjs');
-              const verifyOnly = context.payload.inputs?.batch_wakeup !== 'true';
-              const decision = await releaseDecision({github, context, sha: context.sha, verifyOnly});
-              core.info(decision.reason);
-              await core.summary.addRaw(decision.reason).write();
-              core.setOutput('required', decision.required);
-              return;
-            }
-            const {detectScope} = require('./.github/scripts/android-ci-scope.cjs');
-            const scope = detectScope({eventName: context.eventName, event: context.payload, sha: context.sha});
-            core.info(`Android build required: ${scope.required}. ${scope.reason}`);
-            // Only changes that would start the Android toolchain need a turn.
-            if (scope.required) {
-              const {inspectTurn} = require('./.github/scripts/pr-ci-queue.cjs');
-              const turn = await inspectTurn({github, context, pr: context.payload.pull_request});
-              if (typeof turn.ready !== 'boolean') throw new Error('Invalid PR queue decision');
-              core.setOutput('ready', turn.ready);
-              core.info(turn.reason);
-              if (!turn.ready) {
-                core.setOutput('required', false);
-                await core.summary.addRaw(turn.reason).write();
-                return;
-              }
-            }
-            core.setOutput('required', scope.required);
-      - name: Documentation or CI-only change
-        if: github.event_name == 'pull_request' && steps.scope.outputs.required == 'false' && steps.scope.outputs.ready != 'false'
-        run: echo 'Documentation or checked CI automation only; skipped Android toolchains, APK build and artifact uploads. Script tests and workflow validation run in Collaboration checks.' >> "$GITHUB_STEP_SUMMARY"
+            const {releaseDecision} = require('./.github/scripts/ci-batch.cjs');
+            const verifyOnly = context.payload.inputs?.batch_wakeup !== 'true';
+            const decision = await releaseDecision({github, context, sha: context.sha, verifyOnly});
+            if (typeof decision.required !== 'boolean') throw new Error('Invalid Android build decision');
+            core.info(decision.reason);
+            await core.summary.addRaw(decision.reason).write();
+            core.setOutput('required', decision.required);
 
-  android-check:
+  build:
     needs: scope
-    # GitHub only expands a needs-dependent check name when the job actually runs.
-    # A waiting PR reports its own check and never executes Android build steps.
-    name: >-
-      ${{ (github.event.pull_request.draft || (needs.scope.result == 'success' && needs.scope.outputs.ready == 'false'))
-          && format('waiting-for-pr-turn / {0} / {1} / {2}', github.event.pull_request.number, github.event.pull_request.base.sha, github.event.pull_request.head.sha)
-          || 'build' }}
-    # A failed or missing scope result must fail the required build check.
-    if: ${{ !cancelled() && needs.scope.result != 'skipped' && (github.event_name == 'pull_request' || needs.scope.result != 'success' || needs.scope.outputs.required != 'false') }}
+    if: needs.scope.outputs.required == 'true'
     runs-on: ubuntu-latest
     concurrency:
-      group: android-build-${{ github.event_name == 'pull_request' && needs.scope.outputs.required == 'true' && 'pr' || github.event_name == 'workflow_dispatch' && needs.scope.outputs.required == 'true' && github.ref || github.run_id }}
-      cancel-in-progress: ${{ github.event_name != 'pull_request' }}
+      group: android-build-${{ github.ref }}
+      cancel-in-progress: true
     steps:
-      - name: Validate Android scope
-        env:
-          SCOPE_RESULT: ${{ needs.scope.result }}
-          BUILD_REQUIRED: ${{ needs.scope.outputs.required }}
-        run: test "$SCOPE_RESULT" = success && [[ "$BUILD_REQUIRED" == true || "$BUILD_REQUIRED" == false ]]
       - uses: actions/checkout@v5
-        if: needs.scope.outputs.required == 'true'
         with:
           persist-credentials: false
       - uses: actions/setup-java@v5
-        if: needs.scope.outputs.required == 'true'
         with:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v4
-        if: needs.scope.outputs.required == 'true'
         with:
           cmdline-tools-version: '12266719'
           packages: platform-tools
           log-accepted-android-sdk-licenses: false
       - name: Install Android SDK
-        if: needs.scope.outputs.required == 'true'
         run: sdkmanager "platforms;android-37.0" "build-tools;35.0.0" "ndk;30.0.16248370" "cmake;4.1.2"
       - uses: gradle/actions/setup-gradle@v5
-        if: needs.scope.outputs.required == 'true'
       - name: Test native source contract and legal assets
-        if: needs.scope.outputs.required == 'true'
         run: python3 -m unittest discover -s scripts/tests -v
-      - name: Build debug APK and run unit tests
-        if: needs.scope.outputs.required == 'true' && github.event_name == 'pull_request'
-        # PR checks compile one representative ABI, execute unit tests and lint; instrumentation APKs remain available for explicit device-verification builds.
-        run: ./gradlew assembleDebug testDebugUnitTest lintDebug --build-cache --no-daemon --stacktrace -Plei.officialRepositoriesFirst=true -PciPrArm64Only=true
       - name: Bundle installed CI release notes
-        if: needs.scope.outputs.required == 'true' && github.event_name != 'pull_request'
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
         uses: actions/github-script@v8
@@ -125,24 +70,14 @@ jobs:
           script: |
             await require('./.github/scripts/bundled-release-notes.cjs').bundle({github, context});
       - name: Build and verify unsigned CI release
-        if: needs.scope.outputs.required == 'true' && github.event_name != 'pull_request'
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
         run: ./gradlew :app:assembleRelease :app:testReleaseUnitTest :app:lintRelease -PciBuildNumber="$CI_BUILD_NUMBER" -PinstalledReleaseNotesDir="$GITHUB_WORKSPACE/app/build/generated/installedReleaseNotes" -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace
       - name: Prepare CI artifact
-        if: needs.scope.outputs.required == 'true' && github.event_name != 'pull_request'
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
         run: node .github/scripts/ci-release.cjs prepare
-      - name: Upload debug APK
-        if: needs.scope.outputs.required == 'true' && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v6
-        with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
       - name: Upload unsigned CI APK
-        if: needs.scope.outputs.required == 'true' && github.event_name != 'pull_request'
         uses: actions/upload-artifact@v6
         with:
           name: ci-unsigned
@@ -150,21 +85,20 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Upload test reports
-        if: always() && needs.scope.outputs.required == 'true'
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: unit-test-reports
           path: app/build/reports/tests/test*UnitTest/
       - name: Upload lint report
-        if: always() && needs.scope.outputs.required == 'true'
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: lint-report
           path: app/build/reports/lint-results-*
 
   request-publication:
-    needs: [scope, android-check]
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.scope.outputs.required == 'true'
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

@@ -21,21 +21,30 @@ function fixture({prs = [pull(13)], live, mainSha = 'base', behind = 1, updateEr
     }, compareCommitsWithBasehead: async args => {
       comparisons.push(args); return {data: {behind_by: behind}};
     }},
-    actions: {listWorkflowRuns: async () => ({data: {workflow_runs: []}})},
   }};
-  github.paginate = async method => method === github.rest.pulls.list ? prs : [];
+  github.paginate = async (method, params) => {
+    assert.equal(method, github.rest.pulls.list);
+    assert.equal(event.pull_request, undefined, 'PR-specific events must not enumerate unrelated PRs');
+    assert.deepEqual(params, {owner: 'owner', repo: 'app', state: 'open', base: 'main', per_page: 100});
+    return prs;
+  };
   return {updates, comparisons, warnings, args: {github,
     context: {repo: {owner: 'owner', repo: 'app'}, payload: event},
     core: {info() {}, warning: text => warnings.push(text)}}};
 }
 
-test('a main push and a later PR event both synchronize only the oldest eligible PR', async () => {
-  for (const event of [{}, {pull_request: {number: 16}}]) {
-    const prs = [pull(16), pull(11, {draft: true}), pull(12, {labels: [{name: 'bot: skip'}]}), pull(13)];
-    const f = fixture({prs, event}); await run(f.args);
-    assert.deepEqual(f.updates.map(x => [x.pull_number, x.expected_head_sha]), [[13, 'head13']]);
-    assert.deepEqual(f.comparisons.map(x => x.basehead), ['base...head13']);
-  }
+test('main reconciliation updates all eligible branches and skips conflicts', async () => {
+  const prs = [pull(16), pull(11, {draft: true}), pull(12, {labels: [{name: 'bot: skip'}]}),
+    pull(14, {mergeable: false}), pull(15, {head: {repo: null}}), pull(13)];
+  const f = fixture({prs}); await run(f.args);
+  assert.deepEqual(f.updates.map(x => [x.pull_number, x.expected_head_sha]), [[16, 'head16'], [13, 'head13']]);
+  assert.deepEqual(f.comparisons.map(x => x.basehead), ['base...head16', 'base...head13']);
+});
+
+test('a PR event checks only the PR that triggered it', async () => {
+  const prs = [pull(13), pull(16)];
+  const f = fixture({prs, event: {pull_request: prs[1]}}); await run(f.args);
+  assert.deepEqual(f.updates.map(x => [x.pull_number, x.expected_head_sha]), [[16, 'head16']]);
 });
 
 test('main can advance while the PR still reports an older base SHA', async () => {
@@ -50,13 +59,7 @@ test('main can advance while the PR still reports an older base SHA', async () =
   assert.deepEqual(f.updates.map(x => x.expected_head_sha), ['head13']);
 });
 
-test('after the first PR leaves, only the new head is updated', async () => {
-  const f = fixture({prs: [pull(16), pull(14)], event: {action: 'closed', pull_request: {number: 13}}});
-  await run(f.args);
-  assert.deepEqual(f.updates.map(x => x.pull_number), [14]);
-});
-
-test('an empty queue or a concurrent edit does not update a PR', async () => {
+test('an empty list or a stale event does not update a PR', async () => {
   for (const options of [{prs: []}, {live: pull(13, {state: 'closed'})}, {live: pull(13, {draft: true})},
     {live: pull(13, {labels: [{name: 'bot: skip'}]})}, {live: pull(13, {head: pull(14).head})}]) {
     const f = fixture(options); await run(f.args);
