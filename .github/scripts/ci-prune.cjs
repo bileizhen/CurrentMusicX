@@ -38,7 +38,7 @@ function planCiPrune(releases) {
 function trustedUpstream(run,repo) {
   return run?.status==='completed' && run.conclusion==='success' &&
     run.head_branch==='main' && run.head_repository?.full_name===repo &&
-    run.path==='.github/workflows/ci-distribution.yml' && run.event==='workflow_run';
+    run.path==='.github/workflows/ci-distribution.yml' && ['workflow_run','workflow_dispatch'].includes(run.event);
 }
 
 async function prune({github,context,core}) {
