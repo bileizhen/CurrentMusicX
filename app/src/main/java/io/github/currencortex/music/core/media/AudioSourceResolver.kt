@@ -8,7 +8,8 @@ import kotlinx.coroutines.sync.withLock
 import java.io.IOException
 
 data class AudioRequest(val songId: Long, val quality: AudioQuality, val accountId: Long, val session: RequestSession,
-    val providerIdentity: String = "currentmusic", val song: io.github.currencortex.music.data.song.Song? = null) {
+    val providerIdentity: String = "currentmusic", val song: io.github.currencortex.music.data.song.Song? = null,
+    val refresh: Boolean = false) {
     val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity)
 }
 data class ResolvedAudio(val source: AudioSource, val key: String, val refreshAfterMs: Long = 25_000)
@@ -20,7 +21,8 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
     private val validateRequest: (AudioRequest) -> Boolean? = { null },
     private val loadTrack: (suspend (AudioRequest) -> AudioSource)? = null,
     private val load: suspend (Long, AudioQuality, RequestSession) -> AudioSource) {
-    private data class Entry(val request: AudioRequest, val source: AudioSource, val until: Long)
+    private data class Entry(val request: AudioRequest, val source: AudioSource, val until: Long,
+        val cacheKey: String = sourceCacheKey(request.key, source))
     private data class Denial(val request: AudioRequest, val error: ApiException)
     private val memo = java.util.concurrent.ConcurrentHashMap<String, Entry>()
     private val denied = java.util.concurrent.ConcurrentHashMap<String, Denial>()
@@ -36,7 +38,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
         val entry = memo[request.key]?.takeIf { it.request == request && it.until > now() } ?: return null
         // A network failure can memoize a fully cached source. LRU may reclaim its spans
         // before the memo expires; metadata and a cache:// URI alone are not playable audio.
-        if (entry.source.url.startsWith("cache://audio/") && cache.completeSource(request.key) == null) {
+        if (entry.source.url.startsWith("cache://audio/") && cache.completeSource(entry.cacheKey) == null) {
             memo.remove(request.key, entry)
             return null
         }
@@ -45,7 +47,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
     private fun result(entry: Entry): ResolvedAudio {
         val remainingMs = (entry.until - now()) / 1_000_000
         val advanceMs = minOf(30_000, entry.source.validForSeconds.coerceIn(1, 600) * 200)
-        return ResolvedAudio(entry.source, entry.request.key, (remainingMs - advanceMs).coerceAtLeast(250))
+        return ResolvedAudio(entry.source, entry.cacheKey, (remainingMs - advanceMs).coerceAtLeast(250))
     }
     suspend fun resolve(request: AudioRequest, refresh: Boolean = false): ResolvedAudio = withContext(Dispatchers.IO) {
         request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL }?.let { song ->
@@ -59,7 +61,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
             denied[key]?.takeIf { it.request == request }?.let { throw it.error }
             // Complete, account/provider/quality-scoped audio does not need a CDN URL.
             // Partial cache must still resolve a live URL to read the missing bytes.
-            cache.completeSource(key)?.let {
+            cache.completeSource(key)?.takeUnless { it.matched || cache.matchedSourceKey(key) != null }?.let {
                 checkRequest(request)
                 return@withContext ResolvedAudio(it, key, refreshAfterMs = Long.MAX_VALUE)
             }
@@ -70,7 +72,8 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
             if (!refresh) saved(request)?.let { return@withLock it }
             checkRequest(request)
             val started = now()
-            val source = try { loadTrack?.invoke(request) ?: load(request.songId, request.quality, request.session) }
+            var fallbackKey: String? = null
+            val source = try { loadTrack?.invoke(request.copy(refresh = refresh)) ?: load(request.songId, request.quality, request.session) }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) {
                 // Never turn a denied or expired account response into an offline success.
@@ -83,20 +86,30 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
                     throw e
                 }
                 denied[key]?.takeIf { it.request == request }?.let { throw it.error }
-                cache.completeSource(key) ?: throw e
+                val cachedKey = cache.matchedSourceKey(key) ?: key
+                (cache.completeSource(cachedKey)?.takeUnless { cachedKey == key && it.matched } ?: throw e)
+                    .also { fallbackKey = cachedKey }
             }
             checkRequest(request)
             denied.remove(key)
             // Disk cache failure must not turn a valid network source into playback failure.
-            runCatching { cache.rememberSource(key, source) }
+            val sourceKey = fallbackKey ?: sourceCacheKey(key, source)
+            if (fallbackKey == null) runCatching {
+                cache.rememberSource(sourceKey, source)
+                cache.rememberSelection(key, sourceKey)
+            }
             // Bound reuse, reserve expiry headroom, and include the time spent resolving.
             // A memo hit never extends the original URL's lifetime.
             val seconds = source.validForSeconds.coerceIn(1, 600)
             val lifetime = seconds * 1_000_000_000L
-            val entry = Entry(request, source, started + lifetime - minOf(lifetime / 10, 30_000_000_000L))
+            val entry = Entry(request, source, started + lifetime - minOf(lifetime / 10, 30_000_000_000L), sourceKey)
             memo[key] = entry
             if (memo.size > 24) memo.entries.minByOrNull { it.value.until }?.let { memo.remove(it.key, it.value) }
             result(entry)
         }
     }
 }
+
+/** Matched files never share byte ranges with the official file or a different candidate. */
+internal fun sourceCacheKey(requestKey: String, source: AudioSource): String =
+    if (source.matched) "$requestKey:match:${source.cacheIdentity}" else requestKey
