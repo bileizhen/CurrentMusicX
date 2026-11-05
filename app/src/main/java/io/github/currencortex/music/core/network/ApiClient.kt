@@ -52,7 +52,7 @@ class ApiClient(
     suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
                         body: JsonElement? = null, authenticated: Boolean = false, expectedSession: RequestSession? = null,
                         retryConnection: Boolean = true, callTimeoutMillis: Long? = null,
-                        projectOnly: Boolean = false): JsonElement = withContext(Dispatchers.IO) {
+                        projectOnly: Boolean = false, passkeyOrigin: String? = null): JsonElement = withContext(Dispatchers.IO) {
         val session = RequestSession(server(), if (authenticated) token() else null)
         val requiresAccount = path == "ncmbind/import" || path.startsWith("ncmbind/qr/") || path.startsWith("ncmbind/phone/") || path == "ncm/captcha/sent/v1"
         val loginOwner = RequestSession(server(), token())
@@ -84,9 +84,15 @@ class ApiClient(
         // need a project session; do not send known-anonymous requests just to receive 401.
         if (authenticated && session.token.isNullOrBlank())
             throw ApiException(ErrorKind.Unauthorized, userMessage = "请先登录 CurrentMusic 账号")
-        val url = ServerUrl.endpoint(routeServer(session.server), path, query)
+        if (passkeyOrigin != null) {
+            require(path in setOf("auth/passkeys/login/options", "auth/passkeys/login/verify"))
+            require(passkeyOrigin.matches(Regex("android:apk-key-hash:[A-Za-z0-9_-]{43}")))
+        }
+        val url = ServerUrl.endpoint(if (passkeyOrigin != null) NativePasskeyRoute.server(session.server)
+            else routeServer(session.server), path, query)
         val request = Request.Builder().url(url).tag(RequestSession::class.java, session)
             .header("Accept", "application/json")
+            .apply { if (passkeyOrigin != null) header("Origin", passkeyOrigin) }
             .method(method, if (method == "GET") null else (body?.toString() ?: "{}").toRequestBody("application/json".toMediaType()))
             .build()
         val response = suspendCancellableCoroutine<Response> { cont ->
@@ -116,7 +122,8 @@ class ApiClient(
                 // Other routes and server failures retain their existing bounded error mapping.
                 val accountError = if (it.code in 400..499 && path in setOf("auth/login", "auth/2fa/login", "auth/security-question/login",
                         "auth/login/email", "auth/login/email/code", "auth/2fa/setup", "auth/2fa/enable", "auth/2fa/disable",
-                        "auth/security-question", "auth/register", "auth/email/code", "auth/phone/code",
+                        "auth/security-question", "auth/passkeys/login/options", "auth/passkeys/login/verify",
+                        "auth/register", "auth/email/code", "auth/phone/code",
                         "auth/password/code", "auth/password/reset", "profile/password/code", "profile/password"))
                     runCatching {
                         (ApiJson.parseToJsonElement(errorText).jsonObject["error"] as? JsonPrimitive)
