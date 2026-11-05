@@ -3,7 +3,6 @@
 // @ 7fd417fb9a9a277c6a9339a8ac87f907df7c25f7. The original is a scrim, not a blur filter.
 package io.github.currencortex.music.ui.component.nativeui
 
-import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -11,7 +10,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
@@ -32,7 +30,6 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
-private val headerFade=CubicBezierEasing(.42f,0f,.58f,1f)
 internal val SettingsToolbarHeight=72.dp
 
 /** CommonScaffold's unpushed pageTitle bar: 24/30sp, 600 weight, 72dp tall. */
@@ -73,22 +70,7 @@ internal val SettingsToolbarHeight=72.dp
             val height=constraints.maxHeight+16.dp.roundToPx()
             val child=measurable.measure(constraints.copy(minHeight=height,maxHeight=height))
             layout(constraints.maxWidth,constraints.maxHeight){child.place(0,0)}
-        }.drawWithCache {
-                // scaffold.dart passes fadeStart = status / (status + pageToolbarHeight).
-                // FloatingHeader then normalizes that start over its 16dp overhang.
-                val overhang=16.dp.toPx()
-                val fadeStart=status.toPx()/(status.toPx()+toolbarHeight.toPx())
-                val start=(size.height-overhang)*fadeStart/size.height
-                val stops=buildList {
-                    add(0f to background.copy(alpha=1f))
-                    for(i in 0..8) {
-                        val t=i/8f
-                        add(start+(1-start)*t to background.copy(alpha=1-headerFade.transform(t)))
-                    }
-                }
-                val scrim=Brush.verticalGradient(*stops.toTypedArray())
-                onDrawBehind {drawRect(scrim, alpha=opacity().coerceIn(0f,1f))}
-            })
+        }.headerScrim(background,status,toolbarHeight,opacity))
         content()
     }
 }
