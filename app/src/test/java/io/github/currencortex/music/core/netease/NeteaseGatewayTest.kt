@@ -466,6 +466,25 @@ class NeteaseGatewayTest {
         assertEquals("Bearer current-secret", request.getHeader("Authorization"))
         assertNull(request.getHeader("Cookie")); assertEquals(0, upstream.requestCount)
     }
+    @Test fun transientLiveCheckFailuresKeepThePersistedLogin() = runBlocking {
+        login()
+        for (body in listOf("""{"code":500}""", """{"code":429}""", """{"code":200}""")) {
+            enqueue(body)
+            assertTrue(appResult { binding.live() } is AppResult.Failure)
+            assertFalse(sessions.state.value.stale)
+            val restored = NeteaseSessionStore(vault, scope)
+            restored.ready.await()
+            assertTrue(restored.state.value.loggedIn)
+            assertFalse(restored.state.value.stale)
+        }
+        assertEquals(0, expired)
+    }
+    @Test fun explicitAnonymousLiveCheckMarksLoginExpired() = runBlocking {
+        login(); enqueue("""{"code":200,"account":null,"profile":null}""")
+        assertFalse(binding.live().ok)
+        assertTrue(sessions.state.value.stale)
+        assertEquals(0, expired)
+    }
     @Test fun expiredNativeLoginDoesNotLogOutCurrentMusic() = runBlocking {
         login(); enqueue("""{"code":301}""")
         val failure = appResult { call("ncmbind/likelist") } as AppResult.Failure

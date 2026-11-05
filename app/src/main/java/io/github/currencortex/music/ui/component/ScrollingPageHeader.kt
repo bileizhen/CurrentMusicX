@@ -21,21 +21,22 @@ import kotlin.math.roundToInt
  * It observes the whole page, so pager children and reversed chat lists share the same behavior.
  */
 @Composable internal fun ScrollingPageHeader(topInset: Dp, resetKey: Any?,
-    modifier: Modifier = Modifier, header: @Composable () -> Unit, content: @Composable (Dp) -> Unit) {
+    modifier: Modifier = Modifier, scrollEnabled: Boolean = true,
+    header: @Composable () -> Unit, content: @Composable (Dp) -> Unit) {
     val density = LocalDensity.current
     val estimate = with(density) { 56.dp.toPx() }
     var height by remember(density) { mutableFloatStateOf(estimate) }
-    var hidden by remember(resetKey, density) { mutableFloatStateOf(0f) }
-    val connection = remember(resetKey, density) {
+    var hidden by remember(resetKey, density, scrollEnabled) { mutableFloatStateOf(0f) }
+    val connection = remember(resetKey, density, scrollEnabled) {
         object : NestedScrollConnection {
             override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
-                if (available.y >= 0f) return Offset.Zero
+                if (!scrollEnabled || available.y >= 0f) return Offset.Zero
                 val previous = hidden
                 hidden = (previous - available.y).coerceIn(0f, height)
                 return Offset(0f, previous - hidden)
             }
             override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
-                if (available.y <= 0f) return Offset.Zero
+                if (!scrollEnabled || available.y <= 0f) return Offset.Zero
                 val previous = hidden
                 hidden = (previous - available.y).coerceIn(0f, height)
                 return Offset(0f, previous - hidden)
