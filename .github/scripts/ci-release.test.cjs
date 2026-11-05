@@ -45,7 +45,7 @@ async function publicationScenario(options, check) {
   const directory=fs.mkdtempSync(path.join(os.tmpdir(),'currentmusic-ci-test-'));
   const run={conclusion:'success',status:'completed',head_branch:'main',event:'push',head_repository:{full_name:'owner/app'},head_sha:'a'.repeat(40),id:1,run_number:42,run_attempt:1,path:'.github/workflows/android.yml'};
   const calls=[];
-  const api={actions:{getWorkflowRun:async()=>({data:run})},repos:{
+  const api={actions:{getWorkflowRun:async()=>({data:{...run,...options.liveRun}})},repos:{
     getReleaseByTag:async()=>{if(options.existing)return {data:{}};throw Object.assign(new Error('missing'),{status:404});},
     getLatestRelease:async()=>({data:{tag_name:'v1.3.2'}}),
     generateReleaseNotes:async()=>({data:{body:'* Feature by @author in #10'}}),
@@ -68,7 +68,9 @@ async function publicationScenario(options, check) {
       if (required instanceof Error) throw required;
       return {required,reason:'batch status'};
     };
-    await check(()=>publish({github:{rest:api},context:{repo:{owner:'owner',repo:'app'},payload:{workflow_run:run}},core:{info:()=>{}},releaseDecision}),calls);
+    const context={repo:{owner:'owner',repo:'app'},payload:options.dispatched ? {} : {workflow_run:run}};
+    await check(()=>publish({github:{rest:api},context,core:{info:()=>{}},releaseDecision,
+      ...(options.dispatched ? {upstreamRun:run} : {})}),calls);
   } finally {
     process.chdir(previousCwd);
     if(previousTag===undefined) delete process.env.CI_TAG; else process.env.CI_TAG=previousTag;
@@ -86,6 +88,17 @@ test('bad uploaded digest leaves a draft rather than exposing a broken update',a
   await publicationScenario({badDigest:true},async(run,calls)=>{
     await assert.rejects(run,/verification failed/); assert.equal(calls.some(c=>c[0]==='publish'),false);
   });
+});
+
+test('explicit publication uses the validated upstream snapshot and rejects changes before release creation',async()=>{
+  await publicationScenario({dispatched:true},async(run,calls)=>{
+    await run(); assert.deepEqual(calls.map(c=>c[0]),['create','upload','upload','publish']);
+  });
+  for (const liveRun of [{run_attempt:2},{head_sha:'b'.repeat(40)},{conclusion:'failure'}]) {
+    await publicationScenario({dispatched:true,liveRun},async(run,calls)=>{
+      await assert.rejects(run,/CI run changed/); assert.equal(calls.length,0);
+    });
+  }
 });
 test('reruns and superseded main builds never overwrite published assets',async()=>{
   for(const options of [{existing:true},{decisions:[false]}]) await publicationScenario(options,async(run,calls)=>{
