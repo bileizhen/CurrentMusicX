@@ -9,6 +9,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Rect
+import top.yukonga.miuix.kmp.blur.layerBackdrop
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
@@ -49,8 +51,23 @@ private fun postTime(seconds: Long): String {
     val clipboard = LocalClipboardManager.current
     var deleting by remember { mutableStateOf<CommunityPost?>(null) }
     var options by remember { mutableStateOf<CommunityPost?>(null) }
+    var menuAnchor by remember { mutableStateOf<Rect?>(null) }
+    var menuOpen by remember { mutableStateOf(false) }
+    val menuBackdrop = rememberGlassBackdrop()
+    val menuItems = options?.let { post -> buildList {
+        add(GlassMenuItem("post_menu_copy", "复制正文", MusicIcons.Copy, onClick = {
+            clipboard.setText(AnnotatedString(post.content)); menuOpen = false
+        }))
+        if (post.canDelete) add(GlassMenuItem("post_delete_${post.id}", "删除帖子", MusicIcons.Trash, danger = true,
+            enabled = !state.busy, onClick = { menuOpen = false; deleting = post }))
+    } }.orEmpty()
     var deletingComment by remember { mutableStateOf<PostComment?>(null) }
-    LaunchedEffect(account.account?.id) { deleting = null; deletingComment = null; options = null }
+    LaunchedEffect(account.account?.id) { deleting = null; deletingComment = null; options = null; menuOpen = false }
+    Box(Modifier.fillMaxSize()) {
+    GlassMenu(menuOpen, { menuOpen = it }, menuItems, menuAnchor, menuBackdrop,
+        GlassMenuTags("post_menu_panel", "post_menu_dismiss", "post_menu_action"), bottomInset = bottom,
+        content = {
+    Box(Modifier.fillMaxSize().then(if (menuBackdrop != null) Modifier.layerBackdrop(menuBackdrop) else Modifier)) {
     MusicPullToRefresh(state.loading, { vm.reload() }, Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize().testTag("discover_posts"),
         contentPadding = PaddingValues(start = 16.dp, top = contentTopInset + 8.dp, end = 16.dp, bottom = 20.dp + bottom),
@@ -99,7 +116,9 @@ private fun postTime(seconds: Long): String {
                             Text(postTime(post.createdAt), fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                         }
                     }
-                    GlassIconButton({ options = post }, "帖子操作", Modifier.testTag("post_more_${post.id}"), surface = false) {
+                    var bounds by remember(post.id) { mutableStateOf<Rect?>(null) }
+                    GlassIconButton({ options = post; menuAnchor = bounds; menuOpen = true }, "帖子操作",
+                        Modifier.testTag("post_more_${post.id}"), onBoundsChanged = { bounds = it }, opensMenu = true, surface = false) {
                         Icon(MusicIcons.More, null, Modifier.size(20.dp))
                     }
                 }
@@ -138,13 +157,10 @@ private fun postTime(seconds: Long): String {
     }
     }
     }
+    }
+    }, toolbar = {})
+    }
     if (state.editor) PostEditorScreen(vm, state)
-    options?.let { post -> MusicChoiceDialog("帖子操作", { options = null }) {
-        MusicTextAction("复制正文", { clipboard.setText(AnnotatedString(post.content)); options = null })
-        if (post.canDelete) MusicTextAction("删除帖子", { options = null; deleting = post },
-            Modifier.testTag("post_delete_${post.id}"), enabled = !state.busy)
-        MusicDialogButton("关闭", { options = null })
-    } }
     if (state.commentsFor != null && deletingComment == null) {
         var reply by rememberSaveable(state.commentsFor, account.account?.id) { mutableStateOf("") }
         LaunchedEffect(state.message) { if (state.message == "评论已发布") reply = "" }

@@ -3,8 +3,7 @@ package io.github.currencortex.music.feature.profile
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.shape.CircleShape
-import io.github.currencortex.music.ui.component.nativeui.ElasticPress
+import io.github.currencortex.music.ui.component.nativeui.GlassIconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,13 +42,12 @@ internal fun postAttachmentLabel(type: String) = when (type) {
 @Composable internal fun PostAction(icon: ImageVector, label: String, click: () -> Unit, modifier: Modifier = Modifier,
     count: Int? = null, selected: Boolean = false, enabled: Boolean = true) {
     val color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary
-    ElasticPress(modifier.clickable(enabled = enabled, role = Role.Button, onClick = click)
-        .semantics { contentDescription = label; this.selected = selected }, enabled = enabled) {
-    Row(Modifier.heightIn(min = 44.dp).widthIn(min = 48.dp).clip(CircleShape)
-        .background(color.copy(alpha = if (selected) .12f else .055f)).padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(icon, null, Modifier.size(21.dp), tint = color.copy(alpha = if (enabled) 1f else .4f))
-        count?.takeIf { it > 0 }?.let { Text("$it", fontSize = 12.sp, color = color) }
-    }
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+        GlassIconButton(click, label, modifier.semantics { this.selected = selected }, enabled = enabled) {
+            Icon(icon, null, Modifier.size(21.dp), tint = color.copy(alpha = if (enabled) 1f else .4f))
+        }
+        count?.takeIf { it > 0 }?.let {
+            Text("$it", Modifier.clearAndSetSemantics {}, fontSize = 12.sp, color = color)
+        }
     }
 }

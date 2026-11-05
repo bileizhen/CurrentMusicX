@@ -30,6 +30,7 @@ class DiscoverSectionsTest {
     @Volatile private var failPostPublish = false
     @Volatile private var failAttachmentSearch = false
     @Volatile private var postVisualFixture = false
+    @Volatile private var postCanDelete = true
     private val attachmentOffsets = ConcurrentLinkedQueue<Int>()
     private val postWrites = java.util.concurrent.atomic.AtomicInteger()
     @Volatile private var reply = ""
@@ -51,7 +52,7 @@ class DiscoverSectionsTest {
     private fun post(id: Int, content: String) = buildJsonObject {
         put("id", id); put("content", content); put("author", ApiJson.parseToJsonElement(user))
         put("likeCount", if (liked) 1 else 0); put("likedByMe", liked); put("commentCount", if (reply.isBlank()) 0 else 1)
-        put("canDelete", true)
+        put("canDelete", postCanDelete)
         if (postVisualFixture) {
             put("content", "忙了一天，终于有时间听一首喜欢的歌。")
             put("createdAt", System.currentTimeMillis() / 1000 - 300)
@@ -577,6 +578,26 @@ class DiscoverSectionsTest {
         capture("post_editor", "post-editor-writing.png")
         compose.onNodeWithTag("post_add_attachment").performScrollTo().performClick()
         capture("post_editor", "post-editor-picker.png")
+        assertEquals(0, postWrites.get())
+    }
+
+    @Test fun postMenuShowsNativeCopyActionWithoutDuplicateDismissButtons() {
+        postVisualFixture = true
+        postCanDelete = false
+        open(); compose.onNodeWithText("帖子").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("post_more_1").performScrollTo().performClick()
+        compose.onNodeWithTag("post_menu_copy").assertIsDisplayed()
+        compose.onNodeWithTag("post_delete_1").assertDoesNotExist()
+        compose.onNodeWithText("关闭").assertDoesNotExist()
+        compose.onNodeWithText("取消").assertDoesNotExist()
+        capture("discover_screen", "posts-native-action-menu.png")
+        compose.onNodeWithTag("post_menu_copy").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_menu_panel").fetchSemanticsNodes().isEmpty() }
+        val app = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        val clipboard = app.getSystemService(android.content.ClipboardManager::class.java)
+        assertEquals("忙了一天，终于有时间听一首喜欢的歌。", clipboard.primaryClip?.getItemAt(0)?.text.toString())
+        capture("discover_screen", "posts-native-action-buttons.png")
         assertEquals(0, postWrites.get())
     }
 
