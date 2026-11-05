@@ -29,7 +29,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var code by remember(challenge) { mutableStateOf("") }
     var remaining by remember(challenge) { mutableLongStateOf(challenge.remainingSeconds) }
     val focus = remember { FocusRequester() }
-    val canSubmit = !loading && remaining > 0 && if (recovery) code.isNotBlank() else code.length == 6
+    val question = challenge.securityQuestion
+    val canSubmit = !loading && remaining > 0 && if (recovery || question != null) code.isNotBlank() else code.length == 6
     fun submit() { if (canSubmit) { onVerify(code); code = "" } }
     BackHandler { onCancel() }
     LaunchedEffect(challenge) {
@@ -42,21 +43,21 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     SettingsGroup(Modifier.fillMaxWidth().testTag("login_two_factor")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-            Text("两步验证", fontSize = 20.sp, fontWeight = FontWeight.Medium)
-            Text("账号密码已通过验证，请完成第二步登录。", fontSize = 13.sp,
+            Text(if (question != null) "登录密保" else "两步验证", fontSize = 20.sp, fontWeight = FontWeight.Medium)
+            Text("请完成第二步验证以继续登录。", fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            SettingsSegmentedControl(listOf("验证器", "恢复码"), if (recovery) 1 else 0, {
+            if (question == null) SettingsSegmentedControl(listOf("验证器", "恢复码"), if (recovery) 1 else 0, {
                 recovery = it == 1; code = ""; onEdit()
             }, enabled = !loading, tag = "login_two_factor_method")
-            Text(if (recovery) "输入开启两步验证时保存的一次性恢复码。" else "打开验证器应用，输入当前显示的 6 位验证码。",
+            Text(question ?: if (recovery) "输入开启两步验证时保存的一次性恢复码。" else "打开验证器应用，输入当前显示的 6 位验证码。",
                 fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             TextField(code, { value ->
-                code = if (recovery) value.take(128) else value.filter { it in '0'..'9' }.take(6)
+                code = if (recovery || question != null) value.take(128) else value.filter { it in '0'..'9' }.take(6)
                 onEdit()
             }, singleLine = true, enabled = !loading && remaining > 0,
-                label = if (recovery) "恢复码" else "6 位验证码",
-                visualTransformation = if (recovery) PasswordVisualTransformation() else VisualTransformation.None,
-                keyboardOptions = KeyboardOptions(keyboardType = if (recovery) KeyboardType.Ascii else KeyboardType.Number,
+                label = if (question != null) "密保答案" else if (recovery) "恢复码" else "6 位验证码",
+                visualTransformation = if (recovery || question != null) PasswordVisualTransformation() else VisualTransformation.None,
+                keyboardOptions = KeyboardOptions(keyboardType = if (question != null) KeyboardType.Password else if (recovery) KeyboardType.Ascii else KeyboardType.Number,
                     imeAction = ImeAction.Done, autoCorrectEnabled = false),
                 keyboardActions = KeyboardActions(onDone = { submit() }),
                 modifier = Modifier.fillMaxWidth().focusRequester(focus).testTag("login_two_factor_code"))
