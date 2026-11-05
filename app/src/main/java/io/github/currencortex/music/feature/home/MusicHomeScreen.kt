@@ -16,10 +16,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.feature.library.*
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.data.library.Playlist
-import io.github.currencortex.music.core.media.PlaybackMode
-import io.github.currencortex.music.core.media.PlayerMode
-import io.github.currencortex.music.core.network.AppResult
-import io.github.currencortex.music.core.network.appResult
 import io.github.currencortex.music.data.profile.ProfileUser
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
@@ -27,8 +23,6 @@ import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import io.github.currencortex.music.core.media.PlayerState
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.map as mapPlayback
 import java.time.LocalDate
 import androidx.lifecycle.Lifecycle
@@ -54,9 +48,6 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     val downloadSong = LocalSongDownload.current
     var artworkPreview by remember { mutableStateOf<Pair<Song, Rect>?>(null) }
     var playlistPreview by remember { mutableStateOf<Pair<Playlist, Rect>?>(null) }
-    var playlistLoading by remember { mutableStateOf(false) }
-    var playlistJob by remember { mutableStateOf<Job?>(null) }
-    val playlistScope = rememberCoroutineScope()
     var sharingSong by remember { mutableStateOf<Song?>(null) }
     val bottomInset = LocalMusicBottomInset.current
     val playbackSummary = remember(vm) { vm.container.playerController.state.mapPlayback {
@@ -64,38 +55,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
             mode = it.mode, canControlPlayback = it.canControlPlayback, error = it.error)
     }.distinctUntilChanged() }
     val playback by playbackSummary.collectAsStateWithLifecycle(initialValue = PlayerState())
-    val pageActive = LocalMusicPageActive.current
-    val canPlayPlaylist by rememberUpdatedState(request == null && playback.mode == PlayerMode.LOCAL && pageActive)
-    val currentPlay by rememberUpdatedState(play)
-    LaunchedEffect(pageActive) { if (!pageActive) playlistJob?.cancel() }
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { playlistJob?.cancel() }
-    fun playPlaylist(playlist: Playlist, shuffle: Boolean) {
-        if (playlistLoading || !canPlayPlaylist) return
-        val expected = vm.container.musicSession()
-        playlistLoading = true
-        vm.message.value = "正在加载歌单…"
-        playlistJob = playlistScope.launch {
-            try {
-                val result = appResult {
-                    if (playlist.source == "netease") vm.container.neteaseLibrary.playlist(playlist.id).songs
-                    else vm.container.libraryRepository.playlist(playlist.id).songs
-                }
-                if (expected != vm.container.musicSession() || !canPlayPlaylist ||
-                    vm.container.playerController.state.value.mode != PlayerMode.LOCAL) return@launch
-                when (result) {
-                    is AppResult.Failure -> vm.container.errorNotices.show(result.message)
-                    is AppResult.Success -> {
-                        val songs = result.value
-                        if (songs.isEmpty()) vm.message.value = "歌单暂无歌曲"
-                        else {
-                            vm.container.playerController.setMode(if (shuffle) PlaybackMode.SHUFFLE else PlaybackMode.LIST)
-                            currentPlay(songs, if (shuffle) songs.indices.random() else 0)
-                        }
-                    }
-                }
-            } finally { playlistLoading = false }
-        }
-    }
+    val playlistPlayback = rememberPlaylistPreviewPlayback(vm, play)
     var today by remember { mutableStateOf(LocalDate.now()) }
     LaunchedEffect(vm) { vm.refreshForNewDay() }
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
@@ -205,8 +165,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
             onDismiss = { artworkPreview = null })
     }
     playlistPreview?.let { (playlist, bounds) ->
-        PlaylistArtworkPreview(playlist, bounds, canPlay = canPlayPlaylist && !playlistLoading,
-            onPlay = { shuffle -> playPlaylist(playlist, shuffle) },
+        PlaylistArtworkPreview(playlist, bounds, canPlay = playlistPlayback.enabled,
+            onPlay = { shuffle -> playlistPlayback.play(playlist, shuffle) },
             onOpen = { navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}") },
             onDismiss = { playlistPreview = null })
     }
