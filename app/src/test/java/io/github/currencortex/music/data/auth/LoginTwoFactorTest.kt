@@ -115,4 +115,59 @@ class LoginTwoFactorTest {
             assertNull(f.accounts.token); assertNull(f.store.value); assertEquals(0L, f.persisted)
         }
     }
+    @Test fun emailLoginUsesDedicatedEndpointsAndStillRequiresSecondFactor(): Unit = runBlocking {
+        Fixture().use { f ->
+            f.accounts.save("existing", UserDto(9, "existing"))
+            f.reply("{}")
+            assertTrue(f.repo.sendLoginEmailCode(" listener@example.org ") is AppResult.Success)
+            val sent = f.server.takeRequest()
+            assertEquals("/cm/auth/login/email/code", sent.path)
+            assertNull(sent.getHeader("Authorization"))
+            assertEquals("listener@example.org", ApiJson.parseToJsonElement(sent.body.readUtf8()).jsonObject["email"]!!.jsonPrimitive.content)
+            f.reply("""{"requires2FA":true,"challengeToken":"email-challenge","expiresIn":300}""")
+            val result = f.repo.loginWithEmail(" listener@example.org ", " 654321 ") as AppResult.Success
+            val challenge = (result.value as LoginOutcome.VerificationRequired).challenge
+            val request = f.server.takeRequest()
+            assertEquals("/cm/auth/login/email", request.path)
+            assertNull(request.getHeader("Authorization"))
+            val body = ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject
+            assertEquals(setOf("email", "code", "device", "platform"), body.keys)
+            assertEquals("654321", body["code"]!!.jsonPrimitive.content)
+            assertEquals("existing", f.store.value)
+            f.reply(signedIn)
+            assertTrue(f.repo.verifyLogin(challenge, "123456") is AppResult.Success)
+            assertEquals("/cm/auth/2fa/login", f.server.takeRequest().path)
+        }
+    }
+    @Test fun bothLoginMethodsCanAnswerSecurityQuestionsWithoutSendingASecondFactorCode(): Unit = runBlocking {
+        for (email in listOf(false, true)) Fixture().use { f ->
+            f.reply("""{"requires2FA":false,"requiresSecurityQuestion":true,"securityQuestion":"第一只宠物？","challengeToken":"question-proof","expiresIn":300}""")
+            val result = (if (email) f.repo.loginWithEmail("listener@example.org", "123456")
+                else f.repo.login("listener", "password")) as AppResult.Success
+            f.server.takeRequest()
+            val challenge = (result.value as LoginOutcome.VerificationRequired).challenge
+            assertEquals("第一只宠物？", challenge.securityQuestion)
+            assertNull(f.accounts.token)
+            f.reply("""{"error":"密保答案不正确，请重新输入"}""", 400)
+            assertEquals("密保答案不正确，请重新输入", (f.repo.verifyLogin(challenge, "错误答案") as AppResult.Failure).message)
+            f.server.takeRequest()
+            f.reply(signedIn)
+            assertTrue(f.repo.verifyLogin(challenge, " 小白猫 ") is AppResult.Success)
+            val request = f.server.takeRequest()
+            assertEquals("/cm/auth/security-question/login", request.path)
+            assertNull(request.getHeader("Authorization"))
+            val body = ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject
+            assertEquals(setOf("challengeToken", "answer"), body.keys)
+            assertEquals("小白猫", body["answer"]!!.jsonPrimitive.content)
+            assertTrue(f.repo.verifyLogin(challenge, "小白猫") is AppResult.Failure)
+            assertNull(f.server.takeRequest(100, TimeUnit.MILLISECONDS))
+        }
+    }
+    @Test fun malformedSecurityQuestionChallengesCannotFallThroughToSignedIn(): Unit = runBlocking {
+        for (extra in listOf("", "\"requires2FA\":true,\"securityQuestion\":\"问题\",")) Fixture().use { f ->
+            f.reply("""{${extra}"requiresSecurityQuestion":true,"challengeToken":"proof","token":"invalid","user":{"id":5}}""")
+            assertTrue(f.repo.loginWithEmail("listener@example.org", "123456") is AppResult.Failure)
+            assertNull(f.store.value)
+        }
+    }
 }
