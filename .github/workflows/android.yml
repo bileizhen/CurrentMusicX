@@ -4,7 +4,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened, ready_for_review, converted_to_draft]
   workflow_dispatch:
 
 permissions:
@@ -19,8 +19,12 @@ jobs:
   scope:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       required: ${{ steps.scope.outputs.required }}
+      ready: ${{ steps.scope.outputs.ready }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -32,21 +36,38 @@ jobs:
           script: |
             const {detectScope} = require('./.github/scripts/android-ci-scope.cjs');
             const scope = detectScope({eventName: context.eventName, event: context.payload, sha: context.sha});
-            core.setOutput('required', scope.required);
             core.info(`Android build required: ${scope.required}. ${scope.reason}`);
+            // Only changes that would start the Android toolchain need a turn.
+            if (scope.required && context.eventName === 'pull_request') {
+              const {inspectTurn} = require('./.github/scripts/pr-ci-queue.cjs');
+              const turn = await inspectTurn({github, context, pr: context.payload.pull_request});
+              if (typeof turn.ready !== 'boolean') throw new Error('Invalid PR queue decision');
+              core.setOutput('ready', turn.ready);
+              core.info(turn.reason);
+              if (!turn.ready) {
+                core.setOutput('required', false);
+                await core.summary.addRaw(turn.reason).write();
+                return;
+              }
+            }
+            core.setOutput('required', scope.required);
       - name: Documentation or CI-only change
-        if: steps.scope.outputs.required == 'false'
+        if: steps.scope.outputs.required == 'false' && steps.scope.outputs.ready != 'false'
         run: echo 'Documentation or checked CI automation only; skipped Android toolchains, APK build and artifact uploads. Script tests and workflow validation run in Collaboration checks.' >> "$GITHUB_STEP_SUMMARY"
 
-  build:
+  android-check:
     needs: scope
+    # A skipped job named "build" would satisfy branch protection for an untested PR.
+    name: >-
+      ${{ (github.event.pull_request.draft || (needs.scope.result == 'success' && needs.scope.outputs.ready == 'false'))
+          && format('waiting-for-pr-turn / {0} / {1} / {2}', github.event.pull_request.number, github.event.pull_request.base.sha, github.event.pull_request.head.sha)
+          || 'build' }}
     # A failed or missing scope result must fail the required build check.
     if: ${{ !cancelled() && needs.scope.result != 'skipped' && (needs.scope.result != 'success' || needs.scope.outputs.required != 'false') }}
     runs-on: ubuntu-latest
     concurrency:
-      # Only actual main builds replace earlier main builds. A lightweight push never enters this job.
-      group: android-build-${{ github.event_name == 'push' && needs.scope.outputs.required == 'true' && github.ref || github.run_id }}
-      cancel-in-progress: true
+      group: android-build-${{ github.event_name == 'pull_request' && 'pr' || github.event_name == 'push' && needs.scope.outputs.required == 'true' && github.ref || github.run_id }}
+      cancel-in-progress: ${{ github.event_name != 'pull_request' }}
     steps:
       - name: Validate Android scope
         env:
