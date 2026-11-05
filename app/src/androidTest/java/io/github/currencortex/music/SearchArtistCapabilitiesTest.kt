@@ -14,6 +14,7 @@ import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.data.settings.ThemeMode
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.core.media.PlayerState
+import io.github.currencortex.music.feature.library.RecordShelfView
 import io.github.currencortex.music.ui.CurrentMusicApp
 import io.github.currencortex.music.ui.component.nativeui.LiquidGlassOpticsKey
 import kotlinx.coroutines.runBlocking
@@ -33,6 +34,7 @@ class SearchArtistCapabilitiesTest {
     @Volatile private var biographyFail = true
     @Volatile private var playlistPageFail = true
     @Volatile private var playlistFixture = false
+    @Volatile private var recordShelfFixture = false
     @Volatile private var projectLiked = false
     @Volatile private var longSearchPage = false
     @Volatile private var fixtureCover = ""
@@ -82,7 +84,10 @@ class SearchArtistCapabilitiesTest {
                     "/cm/ncm/artist/albums" -> json("""{"albums":[${album(42)}],"more":false}""")
                     "/cm/ncm/album" -> json("""{"id":41,"name":"Fixture Album 41","songs":[${song(11)}]}""")
                     "/cm/ncmbind" -> if (playlistFixture) json("""{"bound":true,"profile":{"uid":8,"nickname":"Fixture creator"}}""") else json("""{"bound":false}""")
-                    "/cm/ncm/playlist/detail" -> json("""{"code":200,"playlist":{"id":71,"name":"Fixture playlist 71","creator":{"userId":8,"nickname":"Fixture creator"},"trackCount":1,"tracks":[{"id":11,"name":"Playlist fixture song","ar":[{"name":"Fixture artist"}]}]}}""")
+                    "/cm/ncm/playlist/detail" -> if (recordShelfFixture) {
+                        val id = requireNotNull(url.queryParameter("id")).toInt()
+                        json("""{"code":200,"playlist":{"id":$id,"name":"Fixture playlist $id","creator":{"userId":8},"trackCount":2,"tracks":[{"id":${id * 10 + 1},"name":"Playlist $id first","ar":[{"name":"Artist $id"}]},{"id":${id * 10 + 2},"name":"Playlist $id second","ar":[{"name":"Artist $id"}]}]}}""")
+                    } else json("""{"code":200,"playlist":{"id":71,"name":"Fixture playlist 71","creator":{"userId":8,"nickname":"Fixture creator"},"trackCount":1,"tracks":[{"id":11,"name":"Playlist fixture song","ar":[{"name":"Fixture artist"}]}]}}""")
                     "/cm/daily" -> json("""{"daily":[],"forYou":[],"artists":[]}""")
                     "/cm/playlists" -> json("""{"playlists":[]}""")
                     "/cm/plays/recent", "/cm/likes/mine" -> json("""{"songs":[]}""")
@@ -387,6 +392,67 @@ class SearchArtistCapabilitiesTest {
         assertTrue(pages.all { it.requestUrl!!.queryParameter("keywords") == "fixture" && it.getHeader("Authorization") == null })
         assertTrue(requests.any { it.requestUrl!!.encodedPath == "/cm/ncm/playlist/detail" && it.requestUrl!!.queryParameter("id") == "71" })
         assertEquals(listOf(900L), container.playerController.queue.state.value.songs.map { it.id })
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun searchedPlaylistsKeepRecordShelfActiveAndUseTheirOwnSongs() {
+        playlistFixture = true
+        recordShelfFixture = true
+        openResults()
+        compose.onNodeWithTag("search_category_playlist").performClick()
+        awaitTag("search_playlist_71")
+        val resultRequests = searchCount()
+
+        fun renderer(): RecordShelfView {
+            lateinit var result: RecordShelfView
+            compose.runOnUiThread {
+                fun find(view: android.view.View): RecordShelfView? {
+                    if (view is RecordShelfView) return view
+                    if (view is android.view.ViewGroup) for (i in 0 until view.childCount)
+                        find(view.getChildAt(i))?.let { return it }
+                    return null
+                }
+                val activity = ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).first()
+                result = requireNotNull(find(activity.window.decorView))
+            }
+            return result
+        }
+
+        for (playlistId in listOf(71, 72)) {
+            compose.onNodeWithTag("search_playlist_$playlistId").performClick()
+            awaitTag("playlist_song_${playlistId * 10 + 1}")
+            compose.onNodeWithTag("playlist_record_shelf_toggle").performClick()
+            awaitTag("record_shelf_canvas")
+            val shelf = renderer()
+            compose.waitUntil(5000) {
+                var active = false
+                compose.runOnUiThread { active = shelf.running }
+                active
+            }
+            compose.runOnUiThread {
+                assertEquals(listOf(playlistId * 10 + 1L, playlistId * 10 + 2L), shelf.displayedSongs.map { it.id })
+            }
+            compose.onNodeWithTag("record_shelf_title").assertTextEquals("Playlist $playlistId first")
+            compose.onNodeWithTag("record_shelf_canvas").performSemanticsAction(SemanticsActions.ScrollToIndex) { it(1) }
+            compose.waitUntil(5000) {
+                compose.onNodeWithTag("record_shelf_title").fetchSemanticsNode().config[
+                    androidx.compose.ui.semantics.SemanticsProperties.Text].first().text == "Playlist $playlistId second"
+            }
+            compose.onNodeWithTag("record_shelf_title").assertTextEquals("Playlist $playlistId second")
+            compose.onNodeWithTag("record_shelf_canvas").assert(
+                SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.StateDescription,
+                    "2 / 2，Playlist $playlistId second，Artist $playlistId"))
+            assertEquals(listOf(900L), container.playbackQueue.state.value.songs.map { it.id })
+
+            compose.onNodeWithTag("record_shelf_close").performClick()
+            awaitTag("playlist_song_${playlistId * 10 + 2}")
+            compose.onNodeWithTag("navigate_back").performClick()
+            compose.waitUntil(5000) { compose.onAllNodesWithTag("library_detail").fetchSemanticsNodes().isEmpty() }
+            compose.onNodeWithTag("search_playlist_$playlistId").assertIsDisplayed()
+            compose.onNodeWithTag("search_input").assertTextContains("fixture").assertIsNotFocused()
+            compose.onNodeWithTag("search_category_playlist").assertIsSelected()
+        }
+        assertEquals("Returning from a playlist must retain the cached search results", resultRequests, searchCount())
         assertFalse(container.playerController.state.value.playing)
     }
 

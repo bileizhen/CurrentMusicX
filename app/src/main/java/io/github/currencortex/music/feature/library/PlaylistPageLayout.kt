@@ -66,14 +66,16 @@ internal val LocalPlaylistStatusBarStyle = compositionLocalOf<((Boolean) -> Unit
     val rowsUnderToolbar = list.canScrollBackward
     val headerBackdrop = if (rowsUnderToolbar && base != null && body != null) rememberCombinedBackdrop(base, body) else base
     val scene = LocalPageGlassScene.current
+    // Keep text and controls inside a readable, cutout-safe column while the cover fills the window.
+    val contentColumn = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
+        .widthIn(max = 840.dp).fillMaxWidth()
     SettingsUiScope {
     CompositionLocalProvider(LocalContentColor provides colors.onSurface) {
     Box(Modifier.fillMaxSize().graphicsLayer {
         // Reuse the composited page while it slides in. When it leaves, the remaining
         // visible area shrinks; drawing that directly avoids a full-page offscreen pass.
         compositingStrategy = if (scene?.entering() == true) CompositingStrategy.Offscreen else CompositingStrategy.Auto
-    }.background(colors.background).navigationBarsPadding().testTag(tag)) {
-    Box(Modifier.widthIn(max = 840.dp).fillMaxSize().align(Alignment.TopCenter)) {
+    }.testTag(tag), contentAlignment = Alignment.TopCenter) {
         Box(Modifier.matchParentSize().then(if (base != null) Modifier.layerBackdrop(base) else Modifier)
             .background(colors.background)) {
             PlaylistArtworkBackground(cover, colors.background, Modifier.fillMaxWidth()
@@ -82,16 +84,16 @@ internal val LocalPlaylistStatusBarStyle = compositionLocalOf<((Boolean) -> Unit
                 })
         }
         CompositionLocalProvider(LocalGlassBackdrop provides rowBackdrop) {
-            Box(Modifier.fillMaxSize().then(if (rowsUnderToolbar && body != null) Modifier.layerBackdrop(body) else Modifier)) { content(topInset) }
+            Box(contentColumn.fillMaxHeight().navigationBarsPadding()
+                .then(if (rowsUnderToolbar && body != null) Modifier.layerBackdrop(body) else Modifier)) { content(topInset) }
         }
         CompositionLocalProvider(LocalGlassBackdrop provides headerBackdrop) {
             SettingsFloatingHeader(background = colors.background, opacity = { .9f * progress.value }) {
-                Box(Modifier.fillMaxWidth().statusBarsPadding()) {
-                    toolbar(progress.value)
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+                    Box(contentColumn.statusBarsPadding()) { toolbar(progress.value) }
                 }
             }
         }
-    }
     }
     }
     }

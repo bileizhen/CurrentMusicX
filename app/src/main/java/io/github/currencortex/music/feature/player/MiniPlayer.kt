@@ -83,7 +83,7 @@ private fun PlayerState.miniTransport() =
     onSurfaceBounds: (Rect) -> Unit = {}, active: Boolean = true,
     onSurfaceCoordinates: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {},
     onArtworkOrigin: (() -> PlayerArtworkOrigin?) -> Unit = {}, artworkVisible: () -> Boolean = { true },
-    onOpenBounds: (Rect) -> Unit = {}) {
+    onOpenBounds: (Rect) -> Unit = {}, glow: (@Composable (Modifier) -> Unit)? = null) {
     val playback = vm.state.collectAsStateWithLifecycle()
     val queue = vm.queue.collectAsStateWithLifecycle()
     val state by remember(playback) { derivedStateOf(structuralEqualityPolicy()) { playback.value.miniTransport() } }
@@ -134,6 +134,7 @@ private fun PlayerState.miniTransport() =
     }
     val surface = LocalMusicGlassSurface.current
     surface(modifier.fillMaxWidth().testTag("mini_player")) {
+        glow?.invoke(Modifier.matchParentSize().clip(CircleShape))
         Row(Modifier.heightIn(min = 52.dp).onGloballyPositioned { onSurfaceBounds(it.boundsInRoot()); onSurfaceCoordinates(it) }
             .playerSheetDrag(fromMini = true, enabled = song?.video != true)
             .padding(horizontal = 6.dp), verticalAlignment = Alignment.CenterVertically) {
