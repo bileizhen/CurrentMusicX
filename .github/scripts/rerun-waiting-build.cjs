@@ -1,6 +1,6 @@
 // Re-run the original, already approved pull_request workflow. Its check stays
 // associated with the PR and fork code never runs in the controller's context.
-async function rerunWaitingBuild({github, context, core, pr}) {
+async function rerunWaitingBuild({github, context, core, pr, baseSha}) {
   const repo = context.repo;
   const actions = github.rest.actions;
   const runs = await github.paginate(actions.listWorkflowRuns, {
@@ -24,7 +24,7 @@ async function rerunWaitingBuild({github, context, core, pr}) {
   });
   // run.pull_requests can be empty on forks or reflect a newer base. The
   // marker captures the native event's immutable base and head at run time.
-  const marker = `waiting-for-pr-turn / ${pr.number} / ${pr.base.sha} / ${pr.head.sha}`;
+  const marker = `waiting-for-pr-turn / ${pr.number} / ${baseSha} / ${pr.head.sha}`;
   if (!jobs.some(job => job.name === 'scope' && job.conclusion === 'success') ||
       !jobs.some(job => job.name === marker && job.conclusion === 'success') ||
       jobs.some(job => job.name === 'build')) return;

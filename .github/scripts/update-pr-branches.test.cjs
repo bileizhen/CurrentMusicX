@@ -9,14 +9,16 @@ const pull = (number, changes = {}) => ({
   head: {ref: 'topic', sha: 'head' + number, repo: {full_name: fullName}}, ...changes,
 });
 
-function fixture({prs = [pull(13)], live, behind = 1, updateError, event = {}} = {}) {
+function fixture({prs = [pull(13)], live, mainSha = 'base', behind = 1, updateError, event = {}} = {}) {
   const updates = [], comparisons = [], warnings = [];
   const github = {rest: {
     pulls: {list() {}, get: async ({pull_number}) => ({data: live ?? prs.find(pr => pr.number === pull_number)}),
       updateBranch: async args => {
         updates.push(args); if (updateError) throw Object.assign(new Error('denied'), {status: updateError});
       }},
-    repos: {compareCommitsWithBasehead: async args => {
+    repos: {getBranch: async args => {
+      assert.equal(args.branch, 'main'); return {data: {commit: {sha: mainSha}}};
+    }, compareCommitsWithBasehead: async args => {
       comparisons.push(args); return {data: {behind_by: behind}};
     }},
     actions: {listWorkflowRuns: async () => ({data: {workflow_runs: []}})},
@@ -34,6 +36,18 @@ test('a main push and a later PR event both synchronize only the oldest eligible
     assert.deepEqual(f.updates.map(x => [x.pull_number, x.expected_head_sha]), [[13, 'head13']]);
     assert.deepEqual(f.comparisons.map(x => x.basehead), ['base...head13']);
   }
+});
+
+test('main can advance while the PR still reports an older base SHA', async () => {
+  const f = fixture({mainSha: 'merged-47'});
+  const compare = f.args.github.rest.repos.compareCommitsWithBasehead;
+  f.args.github.rest.repos.compareCommitsWithBasehead = async args => {
+    await compare(args);
+    return {data: {behind_by: args.basehead === 'base...head13' ? 0 : 4}};
+  };
+  await run(f.args);
+  assert.deepEqual(f.comparisons.map(x => x.basehead), ['merged-47...head13']);
+  assert.deepEqual(f.updates.map(x => x.expected_head_sha), ['head13']);
 });
 
 test('after the first PR leaves, only the new head is updated', async () => {

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const {rerunWaitingBuild} = require('./rerun-waiting-build.cjs');
 
 const pr = {number: 15, head: {sha: 'head', ref: 'fix', repo: {id: 2}},
-  base: {sha: 'base', ref: 'main', repo: {id: 1}}};
+  base: {sha: 'previous-base', ref: 'main', repo: {id: 1}}};
 const run = {id: 101, run_number: 10, run_attempt: 2, event: 'pull_request', head_sha: 'head',
   head_branch: 'fix', repository: {id: 1}, head_repository: {id: 2}, pull_requests: [],
   status: 'completed', conclusion: 'success'};
@@ -28,7 +28,7 @@ function fixture({runs = [run], jobs = [scope, marker], payload = {}, denied, cu
     assert.equal(args.attempt_number, run.run_attempt);
     return jobs;
   }};
-  return {calls, start: () => rerunWaitingBuild({github, pr,
+  return {calls, start: () => rerunWaitingBuild({github, pr, baseSha: 'base',
     context: {repo: {owner: 'owner', repo: 'app'}, payload}, core: {info() {}}})};
 }
 
