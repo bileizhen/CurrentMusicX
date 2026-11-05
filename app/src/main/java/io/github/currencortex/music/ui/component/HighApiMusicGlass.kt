@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.dropShadow
@@ -59,7 +60,7 @@ internal fun Modifier.musicGlassMaterial(backdrop: Backdrop, blurEnabled: Boolea
 
 @Composable @RequiresApi(33)
 internal fun MusicGlassCapsule(backdrop: Backdrop, modifier: Modifier, blur: Boolean, glass: Boolean,
-    content: @Composable () -> Unit) {
+    content: @Composable BoxScope.() -> Unit) {
     val dark = isInDarkTheme()
     val highlight = if (blur && glass) rememberGravityRotatedHighlight(iosIndicatorSpecular, -45f) else iosIndicatorSpecular
     Box(modifier.dropShadow(CircleShape, Shadow(radius = 10.dp, color = Color.Black, alpha = if (dark) .2f else .1f))

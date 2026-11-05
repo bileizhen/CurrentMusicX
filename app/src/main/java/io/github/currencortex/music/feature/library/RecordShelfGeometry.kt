@@ -6,11 +6,63 @@ import kotlin.math.pow
 import kotlin.math.roundToInt
 
 /** A bounded strip of a potentially very large collection. Each song has one sleeve. */
-internal fun shelfWindow(position: Float, count: Int): IntRange {
+internal fun shelfWindow(position: Float, count: Int, nearSlots: Int = 10): IntRange {
     if (count <= 0) return IntRange.EMPTY
     val center = position.roundToInt()
-    val first = center - minOf(10, (count - 1) / 2)
+    val first = center - minOf(nearSlots, (count - 1) / 2)
     return first until first + minOf(count, 29)
+}
+
+/** Keep the cases at their height-limited size while a wide viewport extends the rack. */
+internal class ShelfGeometry(val viewportWidth: Float, val top: Float, val height: Float,
+    val viewportHeight: Float = top + height) {
+    val caseScale = minOf(viewportWidth, height * 1.12f)
+    val wide = viewportWidth > caseScale
+    private val originX = (viewportWidth - caseScale) * .5f
+    private val spacing = if (wide) maxOf(caseScale * .069f, viewportWidth / 24f) else caseScale * .069f
+    private val verticalRoom = (height - caseScale * .677f).coerceAtLeast(0f)
+    private val rackX = originX + caseScale * .120f
+    private val rackY = top + verticalRoom * .5f
+    private val caseWidth = caseScale * .435f
+    // The rack follows the screen's lower-left to upper-right diagonal. Only the
+    // selected case uses the central stage; outer cases may continue into the corners.
+    // At either screen edge, leave part of a case visible even when the rack's central
+    // anchor sits high or low. Include its skew and up to one slot of alignment error.
+    private val edgeReveal = caseScale * .1f
+    private val edgeSkew = spacing * (.132f / .435f)
+    private val rightSlope = (rackY + caseScale * .582f - edgeReveal - edgeSkew) /
+        (viewportWidth - caseWidth - rackX + spacing).coerceAtLeast(1f)
+    private val leftSlope = (viewportHeight - edgeReveal - rackY - edgeSkew) /
+        (rackX + spacing).coerceAtLeast(1f)
+    private val rise = if (wide) spacing * minOf(.5773503f, .92f * viewportHeight / viewportWidth,
+        rightSlope, leftSlope).coerceAtLeast(0f) else caseScale * .046f
+
+    fun window(position: Float, count: Int) = shelfWindow(position, count, if (wide) 14 else 10)
+
+    /** Global coordinates are shared by rendering, hit testing, and search-result motion. */
+    fun quad(distance: Float, extraction: Float, out: FloatArray) {
+        if (!wide) {
+            shelfQuad(distance, caseScale, top, height, extraction, out)
+            return
+        }
+        val x = rackX + caseScale * extraction * .367f + distance * spacing
+        val y = rackY - distance * rise + caseScale * extraction * .095f
+        val w = caseWidth
+        val h = caseScale * .45f
+        val skew = caseScale * .132f
+        out[0] = x; out[1] = y
+        out[2] = x + w; out[3] = y + skew
+        out[4] = x + w; out[5] = y + skew + h
+        out[6] = x; out[7] = y + h
+    }
+
+    fun entryOffset(seconds: Float, distance: Float, restingX: Float) =
+        shelfEntryOffsetX(seconds, distance, viewportWidth, restingX)
+
+    fun exitOffset(seconds: Float, distance: Float, restingX: Float) =
+        shelfResultsExitOffsetX(seconds, distance, viewportWidth, restingX, 0f)
+
+    fun entryRise(offset: Float) = shelfEntryOffsetY(offset, viewportWidth)
 }
 
 /** Measured from the reference's 724 x 1574 screen: a case is .435 W wide, .45 W tall,

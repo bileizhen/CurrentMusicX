@@ -1,8 +1,6 @@
 package io.github.currencortex.music.ui.component
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -18,12 +16,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.SemanticsPropertyKey
 import io.github.currencortex.music.ui.component.miuix.animation.DampedDragAnimation
+import io.github.currencortex.music.ui.component.nativeui.ElasticPress
 import io.github.currencortex.music.ui.theme.isInDarkTheme
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -62,6 +64,8 @@ internal val LocalMusicSideWaterDrop = staticCompositionLocalOf<(@Composable
     val waterDrop = LocalMusicSideWaterDrop.current
     val scope = rememberCoroutineScope()
     val select by rememberUpdatedState(onSelect)
+    val currentSelected by rememberUpdatedState(selected)
+    val touchSlop = LocalViewConfiguration.current.touchSlop
     BoxWithConstraints(modifier.width(64.dp).testTag("wide_navigation")) {
         val gap = 4.dp
         val padding = 6.dp
@@ -69,26 +73,50 @@ internal val LocalMusicSideWaterDrop = staticCompositionLocalOf<(@Composable
         val stride = itemHeight + gap
         val contentHeight = itemHeight * labels.size + gap * (labels.size - 1) + padding * 2
         val panelHeight = contentHeight.coerceAtMost(maxHeight)
+        val scrollable = contentHeight > maxHeight
         val stridePx = with(density) { stride.toPx() }
+        val indicatorCenter = with(density) { (padding + itemHeight / 2).toPx() }
         var dragging by remember { mutableStateOf(false) }
-        val motion = if (waterDrop != null) remember(scope, stridePx, labels.size) {
+        val motion = remember(scope, stridePx, indicatorCenter, labels.size, touchSlop) {
+            var distance = Offset.Zero
+            var draggedPastSlop = false
+            var startIndex = selected.toFloat()
+            var dragTarget = startIndex
             DampedDragAnimation(scope, selected.toFloat(), 0f..labels.lastIndex.toFloat(), .001f, 1f, 78f / 56f,
-                onDragStarted = { dragging = true },
+                onDragStarted = { position ->
+                    dragging = true
+                    distance = Offset.Zero
+                    draggedPastSlop = false
+                    startIndex = ((position.y - indicatorCenter) / stridePx).roundToInt().coerceIn(labels.indices).toFloat()
+                    dragTarget = startIndex
+                    updateValue(dragTarget)
+                },
                 onDragStopped = {
-                    val target = targetValue.roundToInt().coerceIn(labels.indices)
+                    val target = if (draggedPastSlop) dragTarget.roundToInt().coerceIn(labels.indices) else currentSelected
                     dragging = false
                     animateToValue(target.toFloat())
-                    select(target)
+                    if (target != currentSelected) select(target)
                 },
-                onDrag = { _, amount -> updateValue(targetValue + amount.y / stridePx) })
-        } else null
-        LaunchedEffect(selected, motion) {
-            if (motion != null && !dragging && motion.targetValue != selected.toFloat()) motion.animateToValue(selected.toFloat())
+                onDragCancelled = {
+                    dragging = false
+                    animateToValue(currentSelected.toFloat())
+                },
+                onDrag = { _, amount ->
+                    distance += amount
+                    if (distance.getDistance() >= touchSlop) draggedPastSlop = true
+                    dragTarget = (startIndex + distance.y / stridePx).coerceIn(0f, labels.lastIndex.toFloat())
+                    updateValue(dragTarget)
+                })
         }
-        val selectedOffset = animateDpAsState(stride * selected.coerceIn(labels.indices),
-            tween(260, easing = CubicBezierEasing(.2f, 0f, .2f, 1f)), label = "side tab indicator")
+        LaunchedEffect(selected, motion) {
+            if (!dragging && motion.targetValue != selected.toFloat()) motion.animateToValue(selected.toFloat())
+        }
         // In short split windows keep touch targets intact and reveal the selected item.
-        LaunchedEffect(selected, itemHeight, panelHeight) {
+        LaunchedEffect(selected, itemHeight, panelHeight, scrollable) {
+            if (!scrollable) {
+                scroll.scrollTo(0)
+                return@LaunchedEffect
+            }
             val top = with(density) { (padding + stride * selected).toPx() }
             val bottom = top + with(density) { itemHeight.toPx() }
             val viewport = with(density) { panelHeight.toPx() }
@@ -100,28 +128,34 @@ internal val LocalMusicSideWaterDrop = staticCompositionLocalOf<(@Composable
             }
             scroll.animateScrollTo(target.toInt().coerceAtLeast(0))
         }
-        Box(Modifier.fillMaxWidth().height(panelHeight)) {
-        surface(Modifier.fillMaxSize()
-            .dropShadow(shape, Shadow(radius = 8.dp, color = Color.Black, alpha = if (dark) .18f else .07f)), { shape }) {
-            Box(Modifier.fillMaxSize().clip(shape)) {
-                Box(Modifier.fillMaxWidth().verticalScroll(scroll)) {
-                    if (waterDrop == null) Box(Modifier.padding(padding).width(52.dp).height(itemHeight)
-                        .graphicsLayer { translationY = selectedOffset.value.toPx() }
-                        .testTag("side_tab_indicator").clip(selectionShape)
-                        .background(primary.copy(alpha = if (dark) .20f else .12f)))
-                    SideTabLabels(selected, labels, icons, onSelect, itemHeight)
+        ElasticPress(Modifier.fillMaxWidth().height(panelHeight).testTag("side_surface_press")
+            .then(if (scrollable) Modifier else motion.modifier)) {
+            Box(Modifier.fillMaxSize()) {
+                surface(Modifier.fillMaxSize()
+                    .dropShadow(shape, Shadow(radius = 8.dp, color = Color.Black, alpha = if (dark) .18f else .07f)), { shape }) {
+                    Box(Modifier.fillMaxSize().clip(shape)) {
+                        // A fitted rail is a tab control. Even a zero-range verticalScroll installs
+                        // overscroll handling and steals drags that start on unselected tabs.
+                        Box(Modifier.fillMaxWidth().then(if (scrollable) Modifier.verticalScroll(scroll) else Modifier)) {
+                            if (waterDrop == null) Box(Modifier.padding(padding).width(52.dp).height(itemHeight)
+                                .graphicsLayer { translationY = motion.value * stridePx; scaleX = motion.scaleX; scaleY = motion.scaleY }
+                                .testTag("side_tab_indicator").clip(selectionShape)
+                                .background(primary.copy(alpha = if (dark) .20f else .12f)))
+                            SideTabLabels(selected, labels, icons, onSelect, itemHeight)
+                        }
+                    }
+                }
+                if (waterDrop != null) Box(Modifier.fillMaxSize().then(if (scrollable) Modifier.clipToBounds() else Modifier)) {
+                    waterDrop(Modifier.padding(padding).width(52.dp).height(itemHeight)
+                        .graphicsLayer { translationY = motion.value * stridePx - if (scrollable) scroll.value else 0 }, motion) { mirrorModifier ->
+                        Box(mirrorModifier.fillMaxSize().clip(shape)) {
+                            SideTabLabels(selected, labels, icons, {}, itemHeight, mirror = true,
+                                modifier = Modifier.graphicsLayer { translationY = if (scrollable) -scroll.value.toFloat() else 0f },
+                                mirrorScale = { 1f + .2f * motion.pressProgress })
+                        }
+                    }
                 }
             }
-        }
-        if (waterDrop != null && motion != null) waterDrop(
-            Modifier.padding(padding).width(52.dp).height(itemHeight)
-                .graphicsLayer { translationY = motion.value * stridePx - scroll.value }, motion) { mirrorModifier ->
-            Box(mirrorModifier.fillMaxSize().clip(shape)) {
-                SideTabLabels(selected, labels, icons, {}, itemHeight, mirror = true,
-                    modifier = Modifier.graphicsLayer { translationY = -scroll.value.toFloat() },
-                    mirrorScale = { 1f + .2f * motion.pressProgress })
-            }
-        }
         }
     }
 }

@@ -34,7 +34,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val highlight = if (glass) rememberGravityRotatedHighlight(iosIndicatorSpecular, 90f) else iosIndicatorSpecular
     mirror(Modifier.clearAndSetSemantics {}.alpha(0f).layerBackdrop(tabs)
         .graphicsLayer(colorFilter = ColorFilter.tint(primary)))
-    Box(modifier.then(motion.modifier).testTag("side_water_drop")
+    Box(modifier.testTag("side_water_drop")
         .semantics { this[SideWaterDropVisual] = SideWaterDropFrame(motion.value, motion.pressProgress, motion.scaleX, motion.scaleY) }
         .drawBackdrop(backdrop = combined, shape = { shape }, effects = {
             if (glass) lens(refractionHeight = 10.dp.toPx() * motion.pressProgress,

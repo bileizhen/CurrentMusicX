@@ -30,6 +30,7 @@ class DampedDragAnimation(
     val onDragStarted: DampedDragAnimation.(position: Offset) -> Unit,
     val onDragStopped: DampedDragAnimation.() -> Unit,
     val onDrag: DampedDragAnimation.(size: IntSize, dragAmount: Offset) -> Unit,
+    val onDragCancelled: (DampedDragAnimation.() -> Unit)? = null,
 ) {
 
     private val valueAnimationSpec =
@@ -65,40 +66,54 @@ class DampedDragAnimation(
     val scaleY: Float get() = scaleYAnimation.value
     val velocity: Float get() = velocityAnimation.value
 
-    val modifier: Modifier = Modifier.pointerInput(Unit) {
+    val modifier: Modifier = Modifier.pointerInput(this@DampedDragAnimation) {
         var dragOffset = Offset.Zero
         var ownsDrag = false
-        inspectDragGestures(
-            onDragStart = { down ->
-                dragOffset = Offset.Zero
-                ownsDrag = false
-                onDragStarted(down.position)
-                press()
-            },
-            onDragEnd = {
-                onDragStopped()
-                release()
-            },
-            onDragCancel = {
-                onDragStopped()
-                release()
+        var gestureActive = false
+        try {
+            inspectDragGestures(
+                onDragStart = { down ->
+                    gestureActive = true
+                    dragOffset = Offset.Zero
+                    ownsDrag = false
+                    onDragStarted(down.position)
+                    press()
+                },
+                onDragEnd = {
+                    gestureActive = false
+                    onDragStopped()
+                    release()
+                },
+                onDragCancel = {
+                    gestureActive = false
+                    (onDragCancelled ?: onDragStopped)()
+                    release()
+                }
+            ) { change, dragAmount ->
+                // Own the drag even at the range/track edge: otherwise the parent
+                // tab swipe can take over and select another page on the same up.
+                // Keep normal tap tolerance until the pointer crosses touch slop.
+                dragOffset += dragAmount
+                if (dragOffset.getDistance() >= viewConfiguration.touchSlop) ownsDrag = true
+                if (ownsDrag && dragAmount != Offset.Zero) change.consume()
+
+                val position = change.position
+                val previousPosition = change.previousPosition
+
+                val isInside = canDrag(position)
+                val wasInside = canDrag(previousPosition)
+
+                if (isInside && wasInside) {
+                    onDrag(size, dragAmount)
+                }
             }
-        ) { change, dragAmount ->
-            // Own the drag even at the range/track edge: otherwise the parent
-            // tab swipe can take over and select another page on the same up.
-            // Keep normal tap tolerance until the pointer crosses touch slop.
-            dragOffset += dragAmount
-            if (dragOffset.getDistance() >= viewConfiguration.touchSlop) ownsDrag = true
-            if (ownsDrag && dragAmount != Offset.Zero) change.consume()
-
-            val position = change.position
-            val previousPosition = change.previousPosition
-
-            val isInside = canDrag(position)
-            val wasInside = canDrag(previousPosition)
-
-            if (isInside && wasInside) {
-                onDrag(size, dragAmount)
+        } finally {
+            // ACTION_CANCEL and a removed pointer-input node cancel its coroutine.
+            // Only opt-in callers receive this lifecycle cancellation; existing
+            // bottom-bar callers keep their previous disposal behavior.
+            if (gestureActive && onDragCancelled != null) {
+                onDragCancelled.invoke(this@DampedDragAnimation)
+                release()
             }
         }
     }
