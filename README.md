@@ -252,9 +252,9 @@ Release 启用 R8 与资源压缩，仍发布一个包含现有 ABI 的通用 AP
 - 自动分流根据表单选择设置 `module: *` 标签，缺少必要信息时使用 `needs-info` 并更新同一条追问评论。自由格式问题保留人工判断，不使用 AI 猜测重复问题或自动关闭。仓库变量 `TRIAGE_MODE` 支持 `live`（默认）、`dry-run`、`off`。
 - 每天北京时间 03:00 检查过期条目。`STALE_MODE` 默认 `dry-run`，维护者检查 Actions 日志后可设为 `live`：缺信息 14 天、无活动 60 天标记 stale，再等待 30 天；每次最多关闭两个符合条件的 Bug／问题。功能建议、PR、已分配负责人、有里程碑、重开过的条目受保护；`bot: skip`、`needs follow-up` 等标签可豁免。关闭理由是暂不计划处理，不代表修复完成。作者回复会转为待跟进，普通讨论会解除 stale。
 - 开发使用独立功能分支 → PR → CI → 合并 `main`。PR 标题使用 `feat:`、`fix:`、`perf:`、`docs:`、`deps:` 或 `chore:` 等前缀，机器人映射到已有发布分类标签；维护者手工添加的标签不被自动撤销。一个 PR 对应一个明确改动，完整解决问题时用 `Fixes #编号`，仅关联讨论时用 `Refs #编号`，不为制造发布条目而创建空 PR。
-- PR 元数据自动化只运行默认分支的可信脚本，不检出或执行 fork 的 PR 代码。Android CI 在 PR 中执行 Debug 构建、单元测试、Lint 和测试包编译；主线或手动运行直接生成 CI Release 包并执行 Release 单元测试和 Lint，不再先构建 Debug 再重复构建 Release；协作脚本由 `node --test .github/scripts/*.test.cjs` 测试，工作流由 actionlint 校验。代码检查通过不等于已完成真机验收。
-- 仅修改根目录 README 系列文档、`.github/img/` 展示图片，或 Android CI / Collaboration checks / CI 分发工作流及 `android-ci-scope` / `ci-release` 脚本与测试时，`build` 只检查改动范围，不安装 Android 工具链、不编译或上传 APK；协作检查仍执行脚本测试和 actionlint 工作流校验。源码、运行时素材、Gradle 配置、发布流程或其他文件有变化时执行完整 Android 检查；无法确认完整差异时也执行完整检查。手动运行 Android CI 始终执行完整检查；同一分支的新提交或手动运行会取消仍在执行的旧构建。
-- 仓库允许对已审查的具体 PR 启用 Auto-merge，仅使用 Merge commit 保留原子提交。`main` 要求分支与主线同步、解决审查讨论，并通过 Android CI 的 `build` 和 Collaboration checks 的 `test`，管理员同样受约束；独立维护者不强制第二人批准。前一个 PR 合并后，后续 PR 若落后于主线，需更新分支并重新检查。
+- 每个 PR 独立运行两个快速检查。`build` 用 Python 校验原生源码约束、随包法律文件及 APK 分析脚本，`test` 运行协作脚本测试和 actionlint。PR 检查不启动 Gradle，也不生成 APK。PR 元数据自动化仅使用默认分支的可信脚本。
+- 所有面向 `main` 的开放 PR 处理完毕后，Android CI 按累计改动决定是否打包。有应用改动时构建 Release APK，执行 Release 单元测试与 Lint，再交给签名发布流程。
+- 仓库允许对已审查的具体 PR 启用 Auto-merge，仅使用 Merge commit 保留原子提交。合并前需通过 `build` 和 `test`，并满足现有的分支同步与审查要求。
 - PR 合并后由 GitHub 自动删除远端功能分支，PR 记录和提交历史保留。本地分支及 worktree 不自动删除，清理前确认没有未提交或未合并的工作。
 - `Update PR branches` 在主线推进、PR 打开或更新时自动把 `main` 合入落后的非草稿 PR。仅处理无冲突且允许维护者更新的分支，使用精确 head SHA 防止并发覆盖；已同步的分支不重复更新，`bot: skip` 可退出自动处理。工作流只运行主线可信脚本，不检出 PR 代码、不强推、不代替审查或自动批准 CI。使用内置 `GITHUB_TOKEN` 更新后，GitHub 可能要求维护者批准新检查；fork 权限不足、冲突或分支保护阻止更新时会在日志提示，需人工处理。
 - 更新设置提供「正式版 / CI 版」。旧「预发布版」选择自动迁移为 CI；CI 只接收 `vX.Y.Z-ci.N` 的完整签名构建，不接收普通 beta/rc 或 PR Debug 产物。CI 渠道隐藏只返回正式包的 CurrentMusic 专用源，保留 GitHub 和其他代理源，并沿用 SHA-256、大小、包名、版本及签名校验。
