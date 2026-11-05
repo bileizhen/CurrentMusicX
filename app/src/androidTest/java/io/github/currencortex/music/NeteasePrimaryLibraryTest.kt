@@ -91,6 +91,21 @@ class NeteasePrimaryLibraryTest {
         compose.onNodeWithTag("mini_cover").performClick()
         compose.waitUntil(10000) { compose.onAllNodesWithTag("player_like").fetchSemanticsNodes().isNotEmpty() }
     }
+    @Test fun playlistCategoriesSeparateOwnedAndCollectedNeteaseLists() {
+        open()
+        compose.onNode(hasTestTag("open_playlists") and hasAnyAncestor(hasTestTag("music_home")))
+            .performScrollTo().performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithText("Own native playlist").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("playlist_category_2").performClick()
+        compose.onNodeWithText("Foreign playlist").assertIsDisplayed()
+        compose.onNodeWithText("Own native playlist").assertDoesNotExist()
+        compose.onNodeWithText("CurrentMusic playlist").assertDoesNotExist()
+        compose.onNodeWithTag("playlist_category_1").performClick()
+        compose.onNodeWithText("Own native playlist").assertIsDisplayed()
+        compose.onNodeWithText("Foreign playlist").assertDoesNotExist()
+        assertEquals(0, imports.get())
+    }
+
     @Test fun playerTapTogglesOnlyNeteaseAndDoesNotUnionTheCurrentMusicHeart() {
         player()
         compose.waitUntil(10000) { compose.onNodeWithTag("player_like").fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsProperties.Selected] }
