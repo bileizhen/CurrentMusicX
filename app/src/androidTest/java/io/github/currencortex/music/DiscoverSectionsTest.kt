@@ -416,6 +416,7 @@ class DiscoverSectionsTest {
         open()
         compose.onNodeWithText("用户").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("discover_user_7").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("discover_query_surface", useUnmergedTree = true).assertExists()
         compose.onNodeWithTag("discover_query").performTextInput("Tester")
         compose.onNodeWithText("帖子").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isNotEmpty() }
@@ -491,7 +492,7 @@ class DiscoverSectionsTest {
         assertEquals("unsent", userRequests.last()["query"])
         compose.onNodeWithTag("discover_clear").performClick()
         compose.waitUntil(10_000) { directory.state.value.submitted.isEmpty() && !directory.state.value.loading }
-        compose.onNodeWithTag("discover_query").assertTextEquals("")
+        compose.onNodeWithTag("discover_query").assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
     }
 
     @Test fun automaticPaginationUsesServerOffsetsAndRetryPreservesLoadedUsers(): Unit = runBlocking {
