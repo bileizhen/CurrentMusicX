@@ -284,6 +284,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         var searchBounds by remember { mutableStateOf<Rect?>(null) }
         var searchFocus by remember { mutableStateOf(false) }
         val searchPresented by remember(searchOpen) { derivedStateOf { searchOpen || searchSheet.progress > .0001f } }
+        // Search stays in the back stack beneath details opened from its results.
+        // Only the top search sheet (including its closing animation) obscures a scene.
+        val searchObscuresScene = searchPresented && (!searchOpen || backStack.last() == SEARCH.toString())
         val sceneStack = remember(backStack) { backStack.filter { it != PLAYER.toString() && it != SEARCH.toString() } }
         val playerSavedState = rememberSaveableStateHolder()
         var navigationBounds by remember { mutableStateOf<Rect?>(null) }
@@ -475,7 +478,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val ribbonEnabled = androidx.compose.runtime.rememberUpdatedState(settings.playlistDepthRibbon || settings.playlistRecordShelf)
         val availableMini = androidx.compose.runtime.rememberUpdatedState(miniAvailable)
         val miniInset = androidx.compose.runtime.rememberUpdatedState(miniHeight)
-        val pageInteractive = androidx.compose.runtime.rememberUpdatedState(!playerPresented && !searchPresented)
+        val pageInteractive = androidx.compose.runtime.rememberUpdatedState(!playerPresented && !searchObscuresScene)
         val activeScene = androidx.compose.runtime.rememberUpdatedState(sceneStack.last())
         // Update layout values without replacing the decorator that retains each page.
         val sceneInsets = remember {
@@ -912,7 +915,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         // navigation, once, and take precedence over returning to the parent page.
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
-            isBackEnabled = backStack.size > 1 && !playerPresented && !searchPresented && !predictiveBack && !showLogs &&
+            isBackEnabled = backStack.size > 1 && !playerPresented && !searchObscuresScene && !predictiveBack && !showLogs &&
                 pendingPlay == null && !updateDialogVisible && updatePrompt == null && !announcementVisible && !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )

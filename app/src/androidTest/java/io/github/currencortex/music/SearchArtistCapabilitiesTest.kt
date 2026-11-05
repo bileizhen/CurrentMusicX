@@ -140,6 +140,52 @@ class SearchArtistCapabilitiesTest {
         awaitTag("search_song_11")
     }
 
+    @Test fun playlistRecordShelfFromSearchRendersWithoutTouchAndReturnsToResults() {
+        assertSearchRecordShelf(predictiveBack = true)
+    }
+
+    @Test fun playlistRecordShelfFromSearchSupportsNonPredictiveBack() {
+        assertSearchRecordShelf(predictiveBack = false)
+    }
+
+    private fun assertSearchRecordShelf(predictiveBack: Boolean) {
+        playlistFixture = true
+        runBlocking { container.settings.edit { it.copy(playlistRecordShelf = true, predictiveBack = predictiveBack) } }
+        openResults()
+        compose.onNodeWithTag("search_category_playlist").performClick()
+        awaitTag("search_playlist_71")
+        compose.onNodeWithTag("search_playlist_71").performClick()
+        awaitTag("record_shelf_canvas")
+        val renderer = compose.runOnUiThread {
+            fun find(view: android.view.View): io.github.currencortex.music.feature.library.RecordShelfView? {
+                if (view is io.github.currencortex.music.feature.library.RecordShelfView) return view
+                if (view is android.view.ViewGroup) for (index in 0 until view.childCount) {
+                    find(view.getChildAt(index))?.let { return it }
+                }
+                return null
+            }
+            val activity = ActivityLifecycleMonitorRegistry.getInstance().getActivitiesInStage(Stage.RESUMED).first()
+            requireNotNull(find(activity.window.decorView))
+        }
+        // Text and the ruler can appear even while the rack's frame loop is paused.
+        // Wait for the actual entrance to complete without tapping or swiping the shelf.
+        compose.waitUntil(5_000) { compose.runOnUiThread { renderer.running && renderer.introTime >= 1.8f } }
+        compose.runOnUiThread {
+            val quad = requireNotNull(renderer.recordQuad(renderer.displayedSongs.first()))
+            assertTrue("A record must enter the visible viewport", quad[0] < renderer.width && quad[2] > 0f)
+        }
+        compose.onNodeWithTag("record_shelf_title").assertTextEquals("Playlist fixture song")
+        save("search-playlist-record-shelf.png")
+        assertEquals(listOf(900L), container.playbackQueue.state.value.songs.map { it.id })
+        compose.onNodeWithTag("record_shelf_close").performClick()
+        awaitTag("playlist_song_11")
+        androidx.test.platform.app.InstrumentationRegistry.getInstrumentation()
+            .sendKeyDownUpSync(android.view.KeyEvent.KEYCODE_BACK)
+        awaitTag("search_playlist_71")
+        compose.onNodeWithTag("search_category_playlist").assertIsSelected()
+        compose.onNodeWithTag("search_input").assertTextContains("fixture")
+    }
+
     @Test fun categoriesScrollWithResultsWhileTheSearchFieldStaysFixed() {
         longSearchPage = true
         openResults()
