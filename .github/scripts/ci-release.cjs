@@ -57,9 +57,9 @@ function prepare() {
   fs.appendFileSync(process.env.GITHUB_OUTPUT, `tag=${result.tag}\n`);
 }
 
-async function publish({github, context, core, releaseDecision}) {
+async function publish({github, context, core, releaseDecision, upstreamRun = context.payload.workflow_run}) {
   const repo = context.repo, fullName = `${repo.owner}/${repo.repo}`;
-  const eventRun = context.payload.workflow_run;
+  const eventRun = upstreamRun;
   if (!trustedRun(eventRun, fullName)) throw new Error('Only successful main Android CI may publish');
   const run = (await github.rest.actions.getWorkflowRun({...repo, run_id:eventRun.id})).data;
   if (!trustedRun(run, fullName) || run.head_sha !== eventRun.head_sha || run.run_attempt !== eventRun.run_attempt) throw new Error('CI run changed');

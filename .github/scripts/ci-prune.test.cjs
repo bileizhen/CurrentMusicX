@@ -49,6 +49,7 @@ test('only completed trusted main Publish CI build triggers cleanup',()=>{
   const run={status:'completed',conclusion:'success',head_branch:'main',event:'workflow_run',
     head_repository:{full_name:'bileizhen/CurrentMusicX'},path:'.github/workflows/ci-distribution.yml'};
   assert.equal(trustedUpstream(run,'bileizhen/CurrentMusicX'),true);
+  assert.equal(trustedUpstream({...run,event:'workflow_dispatch'},'bileizhen/CurrentMusicX'),true);
   for(const patch of [
     {status:'in_progress'},{conclusion:'failure'},{head_branch:'feature'},
     {event:'pull_request'},{path:'.github/workflows/android.yml'},

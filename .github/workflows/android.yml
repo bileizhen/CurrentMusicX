@@ -161,3 +161,22 @@ jobs:
         with:
           name: lint-report
           path: app/build/reports/lint-results-*
+
+  request-publication:
+    needs: [scope, android-check]
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && needs.scope.outputs.required == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      # GITHUB_TOKEN dispatches do not reliably propagate workflow_run events.
+      # This job has no checkout or signing secrets; the publisher revalidates it.
+      - name: Request CI publication
+        uses: actions/github-script@v8
+        with:
+          script: |
+            await github.rest.actions.createWorkflowDispatch({
+              ...context.repo, workflow_id: 'ci-distribution.yml', ref: 'main',
+              inputs: {run_id: String(context.runId), run_attempt: process.env.GITHUB_RUN_ATTEMPT},
+            });
