@@ -76,6 +76,7 @@ internal class PlayerPagerArtworkTransition(val progress: () -> Float, val queue
     val titleLayouts = mutableStateMapOf<PlayerPagerArtworkRole, PlayerSharedTextSnapshot>()
     val subtitleLayouts = mutableStateMapOf<PlayerPagerArtworkRole, PlayerSharedTextSnapshot>()
     private var endpoints by mutableStateOf<Pair<Rect, Rect>?>(null)
+    private var coverTitleBounds by mutableStateOf<Rect?>(null)
     private var titleEndpoints by mutableStateOf<Pair<Rect, Rect>?>(null)
     private var subtitleEndpoints by mutableStateOf<Pair<Rect, Rect>?>(null)
     private var queueBounds by mutableStateOf<Rect?>(null)
@@ -96,7 +97,7 @@ internal class PlayerPagerArtworkTransition(val progress: () -> Float, val queue
 
     /** Measure within unscrolled pages so layer updates cannot feed motion back into its endpoints. */
     fun updateBounds() {
-        if (!ready) { endpoints = null; titleEndpoints = null; subtitleEndpoints = null; return }
+        if (!ready) { endpoints = null; coverTitleBounds = null; titleEndpoints = null; subtitleEndpoints = null; return }
         paneOffset = mainPage!!.localPositionOf(container!!, Offset.Zero)
         fun bounds(page: LayoutCoordinates?, child: LayoutCoordinates?): Rect? {
             if (page?.isAttached != true || child?.isAttached != true) return null
@@ -110,6 +111,7 @@ internal class PlayerPagerArtworkTransition(val progress: () -> Float, val queue
         val coverBounds = if (immersive) Rect(-paneOffset, Size(root!!.size.width.toFloat(), root!!.size.height.toFloat()))
             else bounds(coverPage, cover)!!
         endpoints = coverBounds to bounds(lyricsPage, lyrics)!!
+        coverTitleBounds = bounds(coverPage, titles[PlayerPagerArtworkRole.COVER])
         titleEndpoints = pair(titles)
         subtitleEndpoints = pair(subtitles)
         // Queue coordinates are relative to its full-size translating layer, not the window.
@@ -135,6 +137,13 @@ internal class PlayerPagerArtworkTransition(val progress: () -> Float, val queue
         element(subtitleEndpoints, queueSubtitle, bend) else element(titleEndpoints, queueTitle, bend)
     fun immersion(): Float = if (immersive) (1 - progress().coerceIn(0f, 1f)) *
         (1 - queueProgress().coerceIn(0f, 1f)) else 0f
+    /** Use the stationary cover page, so dragging never shifts the fade's measured endpoint. */
+    fun coverFadeEndFraction(gap: Float): Float? {
+        val coverBounds = endpoints?.first ?: return null
+        val title = coverTitleBounds ?: return null
+        if (!immersive || coverBounds.height <= 0f) return null
+        return ((title.top - coverBounds.top - gap) / coverBounds.height).coerceIn(0f, 1f)
+    }
     fun cornerRadius(bounds: Rect, queueRadius: Float): Float {
         val q = if (queueReady) queueProgress().coerceIn(0f, 1f) else 0f
         return bounds.size.minDimension / 2 * (1 - immersion()) * (1 - q) + queueRadius * q
@@ -203,6 +212,7 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
     if (!ready) return
     if (transfer.immersive) {
         val queueRadius = with(density) { 8.dp.toPx() }
+        val contentGap = with(density) { 12.dp.toPx() }
         val sheetOffset = LocalPlayerSheetOffset.current
         val moving by remember(sheet) { derivedStateOf { sheet?.moving == true } }
         val visual = remember(transfer, sheet, sheetOffset, geometry) { derivedStateOf {
@@ -223,7 +233,8 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
             }, bounds = { visual.value?.bounds },
             radius = { visual.value?.let { f -> f.bounds.size.minDimension / 2 * (1 - f.progress) +
                 transfer.cornerRadius(f.bounds, queueRadius) * f.progress } ?: 0f },
-            immersion = { transfer.immersion() * (visual.value?.progress ?: 1f) })
+            immersion = { transfer.immersion() * (visual.value?.progress ?: 1f) },
+            contentBoundary = { transfer.coverFadeEndFraction(contentGap) ?: .52f })
         if (drawText) PlayerPagerSongText(transfer)
         return
     }
