@@ -28,7 +28,7 @@ class AdaptiveAudioTest {
 
     @Test fun disabledAndUnsupportedFormatsPreserveEveryByte() {
         for ((encoding, channels) in listOf(C.ENCODING_PCM_16BIT to 2, C.ENCODING_PCM_FLOAT to 2, C.ENCODING_PCM_16BIT to 6)) {
-            var settings = AdaptiveAudioSettings(enabled = channels == 6)
+            val settings = AdaptiveAudioSettings(enabled = false)
             val processor = AdaptiveAudioProcessor({ settings })
             processor.configure(AudioFormat(48000, channels, encoding)); processor.flush()
             val input = pcm(2048, encoding, channels); val expected = bytes(input)
@@ -39,6 +39,16 @@ class AdaptiveAudioTest {
             processor.queueEndOfStream(); assertTrue(processor.isEnded)
             processor.reset()
         }
+        var runtime = AdaptiveAudioRuntime()
+        val unsupported = AdaptiveAudioProcessor({ AdaptiveAudioSettings(enabled = true) }, report = { runtime = it })
+        unsupported.configure(AudioFormat(48000, 2, C.ENCODING_PCM_24BIT)); unsupported.flush()
+        val input = ByteBuffer.allocateDirect(60).apply { repeat(60) { put(it.toByte()) }; flip() }
+        val expected = bytes(input)
+        unsupported.queueInput(input)
+        assertArrayEquals(expected, bytes(unsupported.output))
+        assertFalse(runtime.processing)
+        assertTrue(runtime.message.contains("编码不支持"))
+        unsupported.reset()
     }
     @Test fun processingKeepsFrameCountAndSanitizesFloatingPointAudio() {
         var runtime = AdaptiveAudioRuntime()

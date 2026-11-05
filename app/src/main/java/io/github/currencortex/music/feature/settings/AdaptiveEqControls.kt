@@ -1,16 +1,20 @@
 package io.github.currencortex.music.feature.settings
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.*
@@ -18,6 +22,7 @@ import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.settings.AdaptiveAudioSettings
@@ -36,7 +41,11 @@ internal fun gainLabel(value: Float) = String.format(Locale.ROOT, "%+.1f dB", va
     liveGains: List<Float>? = null) {
     val fontScale = LocalDensity.current.fontScale
     BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp).testTag("adaptive_bands")) {
-        val count = if (maxWidth / 10 < 27.dp * fontScale) 5 else 10
+        val count = when {
+            maxWidth / 10 >= 27.dp * fontScale -> 10
+            maxWidth / 5 >= 27.dp * fontScale -> 5
+            else -> 2
+        }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             AdaptiveAudioSettings.FREQUENCIES.indices.chunked(count).forEach { indices ->
                 Row(Modifier.fillMaxWidth()) {
@@ -75,8 +84,11 @@ private data class EqGainDrag(val manual: Float, val displayed: Float, val limit
     val save by rememberUpdatedState(onSave)
     val cancel by rememberUpdatedState(onCancel)
     fun resolve(v: Float) = (v.coerceIn(-6f, 6f) * 10).roundToInt() / 10f
-    Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(modifier.clip(RoundedCornerShape(10.dp)).background(
+        if (selected) ink.copy(alpha = .07f) else colors.onSurface.copy(alpha = 0f)).padding(vertical = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally) {
         Text(String.format(Locale.ROOT, "%+.1f", displayed), Modifier.testTag("adaptive_band_value_$index"), fontSize = 10.sp, maxLines = 1,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             color = if (selected && enabled) ink else colors.onSurfaceVariantSummary)
         Canvas(Modifier.fillMaxWidth().height(148.dp).testTag("adaptive_band_$index")
             .semantics {
@@ -149,28 +161,47 @@ private data class EqGainDrag(val manual: Float, val displayed: Float, val limit
             val y = top + (limit - displayed) / (2 * limit) * (bottom - top)
             drawLine(colors.onSurface.copy(alpha = .10f), Offset(x, top), Offset(x, bottom), 5.dp.toPx(), StrokeCap.Round)
             drawLine(colors.onSurface.copy(alpha = .12f), Offset(0f, zero), Offset(size.width, zero), 1.dp.toPx())
+            for (fraction in listOf(.25f, .75f)) {
+                val tick = top + fraction * (bottom - top)
+                drawLine(colors.onSurface.copy(alpha = .13f), Offset(x - 3.dp.toPx(), tick), Offset(x + 3.dp.toPx(), tick), 1.dp.toPx())
+            }
             drawLine(ink.copy(alpha = .5f), Offset(x, zero), Offset(x, y), 5.dp.toPx(), StrokeCap.Round)
             if (selected && enabled) drawCircle(ink.copy(alpha = .12f), 12.dp.toPx(), Offset(x, y))
             drawCircle(ink, 7.dp.toPx(), Offset(x, y))
             drawCircle(colors.onPrimary, 2.5.dp.toPx(), Offset(x, y))
         }
         Text(if (frequency < 1000) "$frequency" else "${frequency / 1000}k", fontSize = 11.sp, maxLines = 1,
+            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             color = if (selected && enabled) ink else colors.onSurfaceVariantSummary)
     }
 }
 
 @Composable internal fun AdaptiveEqCurve(gains: List<Float>, live: Boolean) {
     val colors = MiuixTheme.colorScheme
-    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(if (live) "当前输出曲线 · 含动态调整" else "手动曲线 · 播放后显示动态调整", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-        Canvas(Modifier.fillMaxWidth().height(56.dp).padding(vertical = 8.dp).testTag("adaptive_eq_curve")) {
-            drawLine(colors.onSurface.copy(alpha = .12f), Offset(0f, size.height / 2), Offset(size.width, size.height / 2))
-            val points = gains.mapIndexed { i, v -> Offset(size.width * i / 9, size.height * (.5f - v.coerceIn(-9f, 9f) / 18)) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
+        .clip(RoundedCornerShape(14.dp)).background(colors.onSurface.copy(alpha = .025f)).padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(if (live) "实时曲线 · 手动 + 动态" else "手动曲线 · 等待音乐播放", fontSize = 12.sp,
+            lineHeight = 17.sp, fontWeight = FontWeight.Medium, color = if (live) colors.primary else colors.onSurfaceVariantSummary)
+        Text("±9 dB · 中线为 0 dB", fontSize = 10.sp, color = colors.onSurfaceVariantSummary)
+        Canvas(Modifier.fillMaxWidth().height(72.dp).padding(vertical = 4.dp).testTag("adaptive_eq_curve")
+            .semantics { contentDescription = if (live) "十段均衡实时输出曲线" else "十段均衡手动曲线" }) {
+            val mid = size.height / 2
+            for (fraction in listOf(0f, .5f, 1f)) drawLine(colors.onSurface.copy(alpha = if (fraction == .5f) .16f else .06f),
+                Offset(0f, size.height * fraction), Offset(size.width, size.height * fraction))
+            val points = List(10) { i -> Offset(size.width * i / 9, size.height * (.5f - (gains.getOrNull(i) ?: 0f).coerceIn(-9f, 9f) / 18)) }
+            points.forEach { point -> drawLine(colors.onSurface.copy(alpha = .045f), Offset(point.x, 0f), Offset(point.x, size.height)) }
             val path = Path().apply {
                 moveTo(points[0].x, points[0].y)
                 points.zipWithNext { a, b -> cubicTo((a.x + b.x) / 2, a.y, (a.x + b.x) / 2, b.y, b.x, b.y) }
             }
+            val fill = Path().apply { addPath(path); lineTo(size.width, mid); lineTo(0f, mid); close() }
+            drawPath(fill, Brush.verticalGradient(listOf(colors.primary.copy(alpha = if (live) .16f else .07f), colors.primary.copy(alpha = .02f))))
             drawPath(path, colors.primary.copy(alpha = if (live) 1f else .45f), style = Stroke(2.dp.toPx(), cap = StrokeCap.Round))
+            points.forEach { drawCircle(colors.primary.copy(alpha = if (live) 1f else .45f), 2.dp.toPx(), it) }
+        }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            listOf("31 Hz", "16 kHz").forEach { Text(it, fontSize = 10.sp, color = colors.onSurfaceVariantSummary) }
         }
     }
 }

@@ -3,105 +3,115 @@ package io.github.currencortex.music.core.media
 import io.github.currencortex.music.data.settings.AdaptiveAudioSettings
 import kotlin.math.*
 
-/** Local, bounded energy-based EQ. No model, network access or song-level analysis. */
+/** Virtual bass, windowed spectral analysis, smoothed EQ, then shared peak protection. */
 internal class AdaptiveAudioDsp(private val sampleRate: Int, private val channels: Int) {
-    private val detectors = Array(10) { band -> Array(channels) { Biquad().apply {
-        bandPass(AdaptiveAudioSettings.FREQUENCIES[band].toDouble(), sampleRate)
-    } } }
-    private val filters = Array(10) { Array(channels) { Biquad() } }
-    private val powers = DoubleArray(10)
+    private val virtualBass = AdaptiveVirtualBass(sampleRate, channels)
+    private val dynamicEq = AdaptiveDynamicEq(sampleRate, channels)
+    private val filters = Array(10) { band ->
+        EqBand(AdaptiveAudioSettings.FREQUENCIES[band].toDouble(), sampleRate, channels)
+    }
     private val currentGains = DoubleArray(10)
+    private val dry = DoubleArray(channels)
     private val low = DoubleArray(channels)
     private val low2 = DoubleArray(channels)
-    private val dc = DoubleArray(channels)
-    private val harmonic = DoubleArray(channels)
     private val bassAlpha = 1 - exp(-2 * PI * 130 / sampleRate)
-    private val dcAlpha = 1 - exp(-2 * PI * 35 / sampleRate)
-    private val harmonicAlpha = 1 - exp(-2 * PI * 600 / sampleRate)
-    private val smoothing = 1 - exp(-1.0 / (.008 * sampleRate))
-    private var sampleCount = 0
-    private var energy = 0.0
+    private val switchSmoothing = 1 - exp(-1.0 / (.008 * sampleRate))
+    private val gainSmoothing = 1 - exp(-COEFFICIENT_FRAMES.toDouble() / (.024 * sampleRate))
+    private val limiterRelease = 1 - exp(-1.0 / (.100 * sampleRate))
+    private var coefficientFrames = 0
     private var mix = 0.0
-    private var bassMix = 0.0
+    private var limiterGain = 1.0
     var bassPower = 0.0; private set
     var fullPower = 0.0; private set
     val gains: List<Float> get() = currentGains.map { it.toFloat() }
 
-    /** One interleaved frame, in-place. All state and scratch memory stay on the audio thread. */
+    /** One interleaved frame, in-place. Scratch memory and channel history stay on the audio thread. */
     fun process(frame: DoubleArray, settings: AdaptiveAudioSettings) {
-        mix += smoothing * ((if (settings.enabled) 1.0 else 0.0) - mix)
-        bassMix += smoothing * ((if (settings.virtualBass) settings.bassStrength / 100.0 else 0.0) - bassMix)
+        mix += switchSmoothing * ((if (settings.enabled) 1.0 else 0.0) - mix)
         fullPower = 0.0; bassPower = 0.0
         for (channel in 0 until channels) {
             val input = frame[channel].let { if (it.isFinite()) it.coerceIn(-1.0, 1.0) else 0.0 }
+            dry[channel] = input
+            frame[channel] = input
             fullPower += input * input / channels
             low[channel] += bassAlpha * (input - low[channel])
             low2[channel] += bassAlpha * (low[channel] - low2[channel])
             bassPower += low2[channel] * low2[channel] / channels
-            var processed = input
-            for (band in 0..9) {
-                if (settings.dynamicEq) {
-                    val detected = detectors[band][channel].process(input)
-                    powers[band] += detected * detected / channels
-                }
-                processed = filters[band][channel].process(processed)
-            }
-            // Full-wave rectification creates harmonics of the missing fundamental.
-            // Remove its DC and constrain its bandwidth instead of simply boosting sub-bass.
-            val rectified = abs(low2[channel])
-            dc[channel] += dcAlpha * (rectified - dc[channel])
-            harmonic[channel] += harmonicAlpha * (rectified - dc[channel] - harmonic[channel])
-            processed += harmonic[channel] * bassMix * 1.6
-            // Reserve 6 dB before the output knee; never send an out-of-range sample to the sink.
-            val wet = processed * .5011872336
-            val bounded = if (abs(wet) <= .9) wet else sign(wet) * (.9 + .1 * tanh((abs(wet) - .9) / .1))
-            frame[channel] = input + mix * (bounded - input)
         }
-        energy += fullPower
-        sampleCount++
-        val interval = (sampleRate / (20 * AdaptiveAudioSettings.SPEEDS[settings.speed])).toInt().coerceAtLeast(1)
-        if (sampleCount >= interval) {
-            val average = energy / sampleCount
-            val response = 1 - exp(-sampleCount.toDouble() / (sampleRate * .3))
-            val amount = listOf(.35, .6, .9, 1.2, 1.5)[settings.strength]
-            for (band in 0..9) {
-                val frequency = AdaptiveAudioSettings.FREQUENCIES[band]
-                // Silence and bands beyond Nyquist must not acquire runaway makeup gain.
-                val correction = if (settings.dynamicEq && average > 1e-7 && frequency < sampleRate * .45) {
-                    val relativeDb = 10 * log10((powers[band] / sampleCount + 1e-12) / (average + 1e-12))
-                    ((settings.curve.tilt[band] + (-10 - relativeDb) * .12) * amount).coerceIn(-3.0, 3.0)
-                } else 0.0
-                val desired = if (frequency < sampleRate * .45) settings.gains[band] + correction else 0.0
-                currentGains[band] += response * (desired - currentGains[band])
-                filters[band].forEach { it.peak(frequency.toDouble(), sampleRate, currentGains[band]) }
-                powers[band] = 0.0
-            }
-            sampleCount = 0; energy = 0.0
+
+        // Keep floating-point headroom through the whole chain. A software endpoint
+        // needs no device-dependent system gain to undo an intermediate attenuation.
+        virtualBass.process(frame, settings.enabled && settings.virtualBass, settings.bassStrength)
+        dynamicEq.process(frame, settings)
+        if (coefficientFrames == 0) updateGains(settings)
+        coefficientFrames = (coefficientFrames + 1) % COEFFICIENT_FRAMES
+        var peak = 0.0
+        for (channel in 0 until channels) {
+            var value = frame[channel]
+            for (band in filters) value = band.process(value, channel)
+            frame[channel] = value
+            peak = max(peak, abs(value))
+        }
+
+        // Link gain across all channels: limiting must not move the stereo/surround image.
+        // Instant peak capture prevents clipping; slower release avoids sample-by-sample pumping.
+        val targetGain = if (peak > .95) .95 / peak else 1.0
+        limiterGain = if (targetGain < limiterGain) targetGain
+            else limiterGain + limiterRelease * (targetGain - limiterGain)
+        for (channel in 0 until channels) {
+            val wet = frame[channel] * limiterGain
+            frame[channel] = (dry[channel] + mix * (wet - dry[channel])).coerceIn(-1.0, 1.0)
         }
     }
+
+    private fun updateGains(settings: AdaptiveAudioSettings) {
+        for (band in 0..9) {
+            // Manual settings remain the baseline. Runtime correction never writes preferences.
+            val correction = if (settings.dynamicEq) dynamicEq.gains[band] else 0.0
+            val desired = if (AdaptiveAudioSettings.FREQUENCIES[band] < sampleRate * .45)
+                (settings.gains[band] + correction).coerceIn(-9.0, 9.0) else 0.0
+            currentGains[band] += gainSmoothing * (desired - currentGains[band])
+            if (abs(desired - currentGains[band]) < 1e-6) currentGains[band] = desired
+            filters[band].gain(currentGains[band])
+        }
+    }
+
     val settledBypass get() = mix < .00001
 
-    // RBJ biquads, normalized by a0: https://www.w3.org/TR/audio-eq-cookbook/
-    private class Biquad {
-        var b0 = 1.0; var b1 = 0.0; var b2 = 0.0; var a1 = 0.0; var a2 = 0.0
-        var z1 = 0.0; var z2 = 0.0
-        fun process(x: Double): Double {
-            val y = b0 * x + z1
-            z1 = b1 * x - a1 * y + z2; z2 = b2 * x - a2 * y
-            return y
+    /** Shared RBJ coefficients, independent transposed direct-form-II delay lines per channel. */
+    private class EqBand(frequency: Double, rate: Int, channels: Int) {
+        private val valid = frequency < rate * .45
+        private val cosine = cos(2 * PI * frequency / rate)
+        private val alpha = sin(2 * PI * frequency / rate) / (2 * 1.1)
+        private var b0 = 1.0; private var b1 = 0.0; private var b2 = 0.0
+        private var a1 = 0.0; private var a2 = 0.0
+        private var lastGain = Double.NaN
+        private val z1 = DoubleArray(channels)
+        private val z2 = DoubleArray(channels)
+        fun process(input: Double, channel: Int): Double {
+            if (!valid) return input
+            val output = b0 * input + z1[channel]
+            val next1 = b1 * input - a1 * output + z2[channel]
+            val next2 = b2 * input - a2 * output
+            if (!output.isFinite() || !next1.isFinite() || !next2.isFinite()) {
+                z1[channel] = 0.0; z2[channel] = 0.0
+                return 0.0
+            }
+            z1[channel] = if (abs(next1) < 1e-30) 0.0 else next1
+            z2[channel] = if (abs(next2) < 1e-30) 0.0 else next2
+            return output
         }
-        fun bandPass(frequency: Double, rate: Int) {
-            if (frequency >= rate * .45) { b0 = 0.0; return }
-            val w = 2 * PI * frequency / rate; val alpha = sin(w) / 2
-            b0 = alpha / (1 + alpha); b1 = 0.0; b2 = -b0
-            a1 = -2 * cos(w) / (1 + alpha); a2 = (1 - alpha) / (1 + alpha)
-        }
-        fun peak(frequency: Double, rate: Int, gain: Double) {
-            if (frequency >= rate * .45) return
-            val w = 2 * PI * frequency / rate; val alpha = sin(w) / (2 * 1.1)
-            val a = 10.0.pow(gain / 40); val denominator = 1 + alpha / a
-            b0 = (1 + alpha * a) / denominator; b1 = -2 * cos(w) / denominator
-            b2 = (1 - alpha * a) / denominator; a1 = b1; a2 = (1 - alpha / a) / denominator
+        fun gain(db: Double) {
+            if (!valid || db == lastGain) return
+            lastGain = db
+            val a = 10.0.pow(db / 40)
+            val denominator = 1 + alpha / a
+            b0 = (1 + alpha * a) / denominator
+            b1 = -2 * cosine / denominator
+            b2 = (1 - alpha * a) / denominator
+            a1 = b1; a2 = (1 - alpha / a) / denominator
         }
     }
+
+    companion object { private const val COEFFICIENT_FRAMES = 32 }
 }
