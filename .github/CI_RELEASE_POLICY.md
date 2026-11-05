@@ -6,7 +6,7 @@
 
 ## CI 版发布时机
 
-每个应用 PR 先按 Android CI 队列完成验证。只要还有目标为 `main` 的开放 PR，仓库就推迟构建和发布 CI 版，草稿和带 `bot: skip` 标签的 PR 也计入。中途合并只触发轻量的 **Check pending CI release** 检查。
+PR 合并前并行运行源码与协作检查。Android 编译、Release 单元测试和 Lint 集中在主线进行。只要还有目标为 `main` 的开放 PR，仓库就推迟构建和发布 CI 版，草稿和带 `bot: skip` 标签的 PR 也计入。中途合并只触发轻量的 **Check pending CI release** 检查。
 
 最后一个 PR 合并、关闭或改投其他分支后，检查最新 `main` 和上一个完整 CI 版之间的累计改动。有应用改动时构建并发布一个 CI 版。若只改了文档或 CI，则跳过打包。签名发布流程会再次核对 PR 和主线状态。
 
