@@ -274,6 +274,7 @@ import kotlinx.coroutines.launch
     val busy by vm.busy.collectAsStateWithLifecycle()
     val colors = MiuixTheme.colorScheme
     var removing by remember { mutableStateOf<io.github.currencortex.music.data.auth.SavedAccount?>(null) }
+    var protection by remember { mutableStateOf<String?>(null) }
     MusicSubpage("账号与安全", "security_page", onBack, actions = {
         MusicTextAction("添加账号", add, Modifier.testTag("add_account"), enabled = !state.loading)
     }) { topInset ->
@@ -302,6 +303,12 @@ import kotlinx.coroutines.launch
         } }
         item { SettingsListHeader("安全") }
         item { SettingsGroup {
+            MusicDestinationRow("登录密保", { protection = "question" }, Modifier.testTag("open_security_question"),
+                "设置或关闭登录密保问题", enabled = !busy && account.account != null)
+            SettingsDivider()
+            MusicDestinationRow("验证器", { protection = "totp" }, Modifier.testTag("open_authenticator"),
+                "绑定、关闭与查看恢复码剩余数量", enabled = !busy && account.account != null)
+            SettingsDivider()
             MusicDestinationRow("修改密码", { vm.dialog.value = "password" }, Modifier.testTag("open_password"),
                 "登录密码至少 6 位", enabled = !busy)
             SettingsDivider()
@@ -313,6 +320,8 @@ import kotlinx.coroutines.launch
     }
     }
     SettingsUiScope {
+    protection?.let { kind -> io.github.currencortex.music.feature.auth.LoginProtectionDialog(container,
+        questionMode = kind == "question", onDismiss = { protection = null }) }
     removing?.let { saved -> MusicDialog("移除已保存账号？", { removing = null }) {
         Text(saved.nickname.ifBlank { saved.username }); Text("仅移除本机凭据，账号本身不受影响。")
         MusicDialogButton("确认移除", onClick = { removing = null; auth.removeSaved(saved.key) },
