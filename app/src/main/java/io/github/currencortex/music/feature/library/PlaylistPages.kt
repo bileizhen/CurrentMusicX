@@ -59,8 +59,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     navigate: (String) -> Unit, onBack: (() -> Unit)? = null, onCreate: () -> Unit) {
     val home by vm.home.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
-    val neteaseMain by vm.container.primaryLibrary.usesNetease.collectAsStateWithLifecycle()
     val nativeAccount by vm.container.neteaseSessions.state.collectAsStateWithLifecycle()
+    var category by rememberSaveable { mutableStateOf(PlaylistCategory.ALL) }
+    val playlists = remember(home.playlists, category, account.account?.id) {
+        home.playlists.filter { category.includes(it, account.account?.id ?: 0) }
+    }
     MusicSubpage("我的歌单", "playlist_index_page", onBack, actions = {
         if (account.account != null || (nativeAccount.loggedIn && !nativeAccount.stale))
             GlassIconButton(onCreate, "新建歌单", Modifier.testTag("create_playlist")) { Icon(Icons.Default.Add, null) }
@@ -69,7 +72,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         LazyVerticalGrid(GridCells.Adaptive(148.dp), Modifier.fillMaxSize().testTag("playlist_index"),
             contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
             horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            item(span = { GridItemSpan(maxLineSpan) }) { SettingsHint("${home.playlists.size} 个歌单 · 你的音乐收藏") }
+            item(key = "categories", span = { GridItemSpan(maxLineSpan) }) {
+                SettingsSegmentedControl(PlaylistCategory.entries.map { it.label }, category.ordinal,
+                    { category = PlaylistCategory.entries[it] }, tag = "playlist_category")
+            }
+            item(key = "count", span = { GridItemSpan(maxLineSpan) }) { SettingsHint("${playlists.size} 个歌单 · ${category.label}") }
             home.errors["我的歌单"]?.let { error -> item(span = { GridItemSpan(maxLineSpan) }) {
                 Column { Text(error); TextButton("重试", onClick = vm::refresh) }
             } }
@@ -85,7 +92,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
                     }
                 }
-            items(home.playlists, key = { "${it.source}-${it.id}" }) { playlist ->
+            if (!home.loading && home.playlists.isNotEmpty() && playlists.isEmpty() && home.errors["我的歌单"] == null)
+                item(span = { GridItemSpan(maxLineSpan) }) { SettingsHint("暂无${category.label}歌单") }
+            items(playlists, key = { "${it.source}-${it.id}" }) { playlist ->
                 Column(Modifier.testTag("playlist_card_${playlist.id}").clickable(role = Role.Button) {
                     navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}")
                 }) {
