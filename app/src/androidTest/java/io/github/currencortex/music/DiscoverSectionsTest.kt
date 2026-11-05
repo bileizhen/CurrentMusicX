@@ -26,6 +26,13 @@ class DiscoverSectionsTest {
     @Volatile private var liked = false
     @Volatile private var deleted = false
     @Volatile private var published = ""
+    @Volatile private var publishedAttachments = JsonArray(emptyList())
+    @Volatile private var failPostPublish = false
+    @Volatile private var failAttachmentSearch = false
+    @Volatile private var postVisualFixture = false
+    @Volatile private var postCanDelete = true
+    private val attachmentOffsets = ConcurrentLinkedQueue<Int>()
+    private val postWrites = java.util.concurrent.atomic.AtomicInteger()
     @Volatile private var reply = ""
     @Volatile private var pagingUsers = false
     @Volatile private var longUserList = false
@@ -45,7 +52,14 @@ class DiscoverSectionsTest {
     private fun post(id: Int, content: String) = buildJsonObject {
         put("id", id); put("content", content); put("author", ApiJson.parseToJsonElement(user))
         put("likeCount", if (liked) 1 else 0); put("likedByMe", liked); put("commentCount", if (reply.isBlank()) 0 else 1)
-        put("canDelete", true)
+        put("canDelete", postCanDelete)
+        if (postVisualFixture) {
+            put("content", "忙了一天，终于有时间听一首喜欢的歌。")
+            put("createdAt", System.currentTimeMillis() / 1000 - 300)
+            put("attachments", buildJsonArray { add(buildJsonObject {
+                put("type", "song"); put("id", 1); put("name", "晚风里的旋律"); put("sub", "社区测试歌曲")
+            }) })
+        }
     }
     private fun chatMessage(id: Long, content: String, uid: Long = 7) = buildJsonObject {
         put("id", id); put("userId", uid); put("content", content); put("createdAt", 1_790_000_000)
@@ -128,11 +142,28 @@ class DiscoverSectionsTest {
                             else -> json("""{"total":1,"users":[$user],"stats":{"users":1}}""")
                         }
                     }
+                    path == "/cm/ncm/search" -> {
+                        attachmentOffsets.add(request.requestUrl!!.queryParameter("offset")?.toIntOrNull() ?: 0)
+                        if (failAttachmentSearch) return json("{\"error\":\"搜索暂时不可用\"}").setResponseCode(503)
+                        val type = request.requestUrl!!.queryParameter("type") ?: "song"
+                        json(buildJsonObject {
+                            put(type + "s", JsonArray((1..8).map { id -> buildJsonObject {
+                                put(if (type == "song") "ncm_id" else "id", id)
+                                put("name", "$type 音乐 $id"); put("artists", "测试歌手"); put("artist", "测试歌手")
+                            } }))
+                            put("hasMore", buildJsonObject { put(type, false) })
+                        }.toString())
+                    }
                     path == "/cm/decorations/scales" -> json("""{"scales":{}}""")
                     path == "/cm/posts" && request.method == "POST" -> {
                         assertEquals("Bearer isolated-token", request.getHeader("Authorization"))
-                        published = ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject["content"]!!.jsonPrimitive.content
-                        json("{}")
+                        postWrites.incrementAndGet()
+                        if (failPostPublish) MockResponse().setResponseCode(503) else {
+                            val body = ApiJson.parseToJsonElement(request.body.readUtf8()).jsonObject
+                            published = body["content"]!!.jsonPrimitive.content
+                            publishedAttachments = body["attachments"]!!.jsonArray
+                            json("{}")
+                        }
                     }
                     path == "/cm/posts" -> json(buildJsonObject {
                         val posts = listOfNotNull(if (!deleted) post(1, "社区测试帖子") else null,
@@ -171,9 +202,9 @@ class DiscoverSectionsTest {
             })
             CurrentMusicApp(container)
         }
-        compose.waitUntil(15_000) { compose.onAllNodesWithText("首页").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15_000) { compose.onAllNodesWithText("首页").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
         compose.onNodeWithText("发现").performClick()
-        compose.onNodeWithTag("discover_music").assertExists()
+        compose.waitUntil(15_000) { compose.onAllNodesWithTag("discover_music").fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty() }
     }
     @Test fun sectionTabsStayFixedWhileUsersAndChatHistoryScrollIndependently() {
         longUserList = true
@@ -416,6 +447,7 @@ class DiscoverSectionsTest {
         open()
         compose.onNodeWithText("用户").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("discover_user_7").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("discover_query_surface", useUnmergedTree = true).assertExists()
         compose.onNodeWithTag("discover_query").performTextInput("Tester")
         compose.onNodeWithText("帖子").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isNotEmpty() }
@@ -453,7 +485,7 @@ class DiscoverSectionsTest {
         open(); compose.onNodeWithText("帖子").performClick()
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("post_like_1").performScrollTo().performClick()
-        compose.waitUntil(10_000) { liked && compose.onAllNodesWithText("已赞 1").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(10_000) { liked && compose.onAllNodes(hasTestTag("post_like_1") and isSelected()).fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("post_comments_1").performClick()
         compose.onNodeWithTag("post_reply").performTextInput("测试回复")
         compose.onNodeWithTag("post_reply_send").performClick()
@@ -467,10 +499,166 @@ class DiscoverSectionsTest {
         compose.onNodeWithTag("post_draft").performTextInput("新的测试帖子")
         compose.onNodeWithTag("post_publish").performClick()
         compose.waitUntil(10_000) { published == "新的测试帖子" && compose.onAllNodesWithTag("post_2").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("post_delete_1").performScrollTo().performClick()
+        compose.onNodeWithTag("post_more_1").performScrollTo().performClick()
+        compose.onNodeWithTag("post_delete_1").performClick()
         assertFalse(deleted)
         compose.onNodeWithTag("post_confirm_delete").performClick()
         compose.waitUntil(10_000) { deleted && compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isEmpty() }
+    }
+
+    @Test fun postEditorSupportsMarkdownFiveMixedAttachmentsAndFailedPublishRetry() {
+        open(); compose.onNodeWithText("帖子").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("post_create").performClick()
+        compose.onNodeWithTag("post_publish").assertIsNotEnabled()
+        compose.onNodeWithTag("post_draft").performTextInput("附件测试")
+        compose.onNodeWithTag("post_tool_heading").performClick()
+        compose.onNodeWithTag("post_draft").assertTextEquals("# 附件测试")
+        compose.onNodeWithTag("post_editor_mode_1").performClick()
+        compose.onNodeWithTag("post_preview").assertExists()
+        compose.onNodeWithTag("post_editor_mode_0").performClick()
+        compose.onNodeWithTag("post_add_attachment").performScrollTo().performClick()
+        compose.onNodeWithTag("post_attachment_query").performTextInput("音乐")
+        compose.onNodeWithTag("post_attachment_search").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_pick_song_1").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("post_pick_song_1").performClick().assertIsSelected()
+        compose.onNodeWithTag("post_pick_song_2").performClick().assertIsSelected()
+        listOf("album", "artist", "playlist").forEachIndexed { index, type ->
+            compose.onNodeWithTag("post_attachment_type_${index + 1}").performClick()
+            compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_pick_${type}_1").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithTag("post_pick_${type}_1").performClick().assertIsSelected()
+        }
+        compose.onNodeWithTag("post_pick_playlist_2").assertIsNotEnabled()
+        compose.onNodeWithTag("post_picker_done").performClick()
+        compose.onNodeWithTag("post_attachment_count").assertTextEquals("5/5")
+        compose.onNodeWithTag("post_add_attachment").assertIsNotEnabled()
+        compose.onNodeWithTag("post_editor_close").performClick()
+        compose.onNodeWithTag("post_create").performClick()
+        compose.onNodeWithTag("post_draft").assertTextEquals("# 附件测试")
+        compose.onNodeWithTag("post_attachment_count").performScrollTo().assertTextEquals("5/5")
+        failPostPublish = true
+        compose.onNodeWithTag("post_publish").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_editor_message").fetchSemanticsNodes().isNotEmpty() }
+        assertEquals(1, postWrites.get())
+        compose.onNodeWithTag("post_publish").assertIsEnabled()
+        compose.onNodeWithTag("post_draft").performScrollTo().assertTextEquals("# 附件测试")
+        failPostPublish = false
+        compose.onNodeWithTag("post_publish").performClick()
+        compose.waitUntil(10_000) { published == "# 附件测试" && compose.onAllNodesWithTag("post_editor").fetchSemanticsNodes().isEmpty() }
+        assertEquals(5, publishedAttachments.size)
+        assertEquals(setOf("song", "album", "artist", "playlist"), publishedAttachments.map { it.jsonObject["type"]!!.jsonPrimitive.content }.toSet())
+        compose.onNodeWithTag("post_create").performScrollTo().performClick()
+        compose.onNodeWithTag("post_draft").assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
+        compose.onNodeWithTag("post_attachment_count").assertTextEquals("0/5")
+    }
+
+    private fun capture(tag: String, name: String) {
+            compose.onNodeWithTag(tag).captureToImage().asAndroidBitmap().let { bitmap ->
+                val context = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+                java.io.File(context.getExternalFilesDir(null), name).outputStream().use {
+                    bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+                }
+                bitmap.recycle()
+            }
+        }
+
+    @Test fun postEditorAndUserSearchVisualsNeverWriteToTheCommunity() {
+        postVisualFixture = true
+        open(); compose.onNodeWithText("用户").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("discover_user_7").fetchSemanticsNodes().isNotEmpty() }
+        capture("discover_screen", "discover-new-search.png")
+        compose.onNodeWithText("帖子").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isNotEmpty() }
+        capture("discover_screen", "discover-new-posts.png")
+        compose.onNodeWithTag("post_create").performClick()
+        compose.onNodeWithTag("post_draft").performTextInput("# 今日推荐\n\n分享最近喜欢的音乐。\n\n> 让旋律陪伴此刻。")
+        compose.onNodeWithTag("post_editor_mode_1").performClick()
+        capture("post_editor", "post-editor-preview.png")
+        compose.onNodeWithTag("post_editor_mode_0").performClick()
+        capture("post_editor", "post-editor-writing.png")
+        compose.onNodeWithTag("post_add_attachment").performScrollTo().performClick()
+        capture("post_editor", "post-editor-picker.png")
+        assertEquals(0, postWrites.get())
+    }
+
+    @Test fun postMenuShowsNativeCopyActionWithoutDuplicateDismissButtons() {
+        postVisualFixture = true
+        postCanDelete = false
+        liked = true
+        reply = "测试回复"
+        open(); compose.onNodeWithText("帖子").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("post_more_1").performScrollTo().performClick()
+        compose.onNodeWithTag("post_menu_copy").assertIsDisplayed()
+        compose.onNodeWithTag("post_delete_1").assertDoesNotExist()
+        compose.onNodeWithText("关闭").assertDoesNotExist()
+        compose.onNodeWithText("取消").assertDoesNotExist()
+        capture("discover_screen", "posts-native-action-menu.png")
+        compose.onNodeWithTag("post_menu_copy").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_menu_panel").fetchSemanticsNodes().isEmpty() }
+        val app = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
+        val clipboard = app.getSystemService(android.content.ClipboardManager::class.java)
+        assertEquals("忙了一天，终于有时间听一首喜欢的歌。", clipboard.primaryClip?.getItemAt(0)?.text.toString())
+        capture("discover_screen", "posts-native-action-buttons.png")
+        assertEquals(0, postWrites.get())
+    }
+
+    @Test fun postAttachmentRetryRepeatsTheFailedFirstPageWithExistingResults() {
+        open(); compose.onNodeWithText("帖子").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("post_create").performClick()
+        compose.onNodeWithTag("post_add_attachment").performScrollTo().performClick()
+        compose.onNodeWithTag("post_attachment_query").performTextInput("音乐")
+        compose.onNodeWithTag("post_attachment_search").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_pick_song_1").fetchSemanticsNodes().isNotEmpty() }
+        failAttachmentSearch = true
+        compose.onNodeWithTag("post_attachment_query").performClick().performImeAction()
+        compose.waitUntil(10_000) { attachmentOffsets.size > 1 }
+        compose.onNodeWithTag("post_attachment_results").performScrollToIndex(8)
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_attachment_retry").fetchSemanticsNodes().isNotEmpty() }
+        failAttachmentSearch = false
+        val beforeRetry = attachmentOffsets.size
+        compose.onNodeWithTag("post_attachment_retry").performScrollTo().performClick()
+        compose.waitUntil(10_000) { attachmentOffsets.size > beforeRetry && compose.onAllNodesWithTag("post_attachment_retry").fetchSemanticsNodes().isEmpty() }
+        assertTrue(attachmentOffsets.all { it == 0 })
+        compose.onNodeWithTag("post_attachment_results").performScrollToNode(hasTestTag("post_pick_song_1"))
+        compose.onNodeWithTag("post_pick_song_1").assertExists()
+        assertEquals(0, postWrites.get())
+    }
+
+    @Test fun darkLargePostEditorKeepsNativeControlsAndFormattingAccessible() {
+        postVisualFixture = true
+        runBlocking { container.settings.edit { it.copy(
+            themeMode = io.github.currencortex.music.data.settings.ThemeMode.DARK,
+            customTextScale = true, textScale = 1.3f) } }
+        open(); compose.onNodeWithText("帖子").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isNotEmpty() }
+        capture("discover_screen", "posts-native-dark-large.png")
+        compose.onNodeWithTag("post_create").performClick()
+        compose.onNodeWithTag("post_draft").performTextInput("今天想分享一首歌。")
+        compose.onNodeWithTag("post_editor_mode_1").performClick()
+        val layouts = mutableListOf<androidx.compose.ui.text.TextLayoutResult>()
+        compose.onNodeWithText("正文预览").performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.GetTextLayoutResult) { it(layouts) }
+        assertEquals(1.3f, layouts.single().layoutInput.density.fontScale, .01f)
+        capture("post_editor", "post-editor-dark-large.png")
+        compose.onNodeWithTag("post_editor_mode_0").performClick()
+        compose.onNodeWithTag("post_draft").performTextReplacement("一段听歌记录。\n".repeat(30))
+        compose.onNodeWithTag("post_editor_mode_1").performClick()
+        compose.onNodeWithTag("post_editor_mode_0").performClick()
+        compose.onNodeWithTag("post_editor_content").performScrollToNode(hasTestTag("post_add_attachment"))
+        compose.onNodeWithTag("post_add_attachment").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithTag("post_editor_content").performScrollToNode(hasTestTag("post_tool_heading"))
+        compose.onNodeWithTag("post_tool_heading").performScrollTo().performClick()
+        compose.onNodeWithTag("post_editor_mode_1").performClick()
+        compose.onNodeWithTag("post_publish").assertIsDisplayed()
+        compose.onNodeWithTag("post_editor_content").performScrollToNode(hasTestTag("post_add_attachment"))
+        compose.onNodeWithTag("post_add_attachment").performScrollTo().performClick()
+        compose.onNodeWithTag("post_attachment_query").performTextInput("音乐")
+        compose.onNodeWithTag("post_attachment_search").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_pick_song_1").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("post_picker_done").assertIsDisplayed()
+        capture("post_editor", "post-picker-dark-large.png")
+        assertEquals(0, postWrites.get())
     }
 
     @Test fun userSortAndListeningFilterDoNotSubmitAnUnsentSearchDraft() {
@@ -491,7 +679,7 @@ class DiscoverSectionsTest {
         assertEquals("unsent", userRequests.last()["query"])
         compose.onNodeWithTag("discover_clear").performClick()
         compose.waitUntil(10_000) { directory.state.value.submitted.isEmpty() && !directory.state.value.loading }
-        compose.onNodeWithTag("discover_query").assertTextEquals("")
+        compose.onNodeWithTag("discover_query").assert(SemanticsMatcher.expectValue(SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
     }
 
     @Test fun automaticPaginationUsesServerOffsetsAndRetryPreservesLoadedUsers(): Unit = runBlocking {
