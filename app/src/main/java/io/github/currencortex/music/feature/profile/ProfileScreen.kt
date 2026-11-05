@@ -224,7 +224,6 @@ import kotlinx.coroutines.launch
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                 state.profile?.stat?.let { ProfileStatsBlock(it) }
             } }
-            if (state.loading && state.profile == null) item { LoadingProfileCard() }
             if (own) {
                 item("library") { ProfileLibrarySection(navigate) }
                 item("services") { ProfileServicesSection(navigate, tasksEnabled == true,
