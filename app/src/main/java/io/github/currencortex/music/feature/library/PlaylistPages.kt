@@ -5,6 +5,11 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.layout.onGloballyPositioned
+import io.github.currencortex.music.data.library.Playlist
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.*
@@ -56,10 +61,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /** Cover-first library entrance; the existing create dialog and server ownership stay in the host. */
 @Composable internal fun PlaylistIndexBody(vm: LibraryViewModel,
-    navigate: (String) -> Unit, onBack: (() -> Unit)? = null, onCreate: () -> Unit) {
+    navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit,
+    onBack: (() -> Unit)? = null, onCreate: () -> Unit) {
     val home by vm.home.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val nativeAccount by vm.container.neteaseSessions.state.collectAsStateWithLifecycle()
+    var playlistPreview by remember { mutableStateOf<Pair<Playlist, Rect>?>(null) }
+    val playlistPlayback = rememberPlaylistPreviewPlayback(vm, play)
     var category by rememberSaveable { mutableStateOf(PlaylistCategory.ALL) }
     val playlists = remember(home.playlists, category, account.account?.id) {
         home.playlists.filter { category.includes(it, account.account?.id ?: 0) }
@@ -95,11 +103,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             if (!home.loading && home.playlists.isNotEmpty() && playlists.isEmpty() && home.errors["我的歌单"] == null)
                 item(span = { GridItemSpan(maxLineSpan) }) { SettingsHint("暂无${category.label}歌单") }
             items(playlists, key = { "${it.source}-${it.id}" }) { playlist ->
-                Column(Modifier.testTag("playlist_card_${playlist.id}").clickable(role = Role.Button) {
-                    navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}")
-                }) {
+                var coverBounds by remember { mutableStateOf(Rect.Zero) }
+                Column(Modifier.testTag("playlist_card_${playlist.id}").combinedClickable(role = Role.Button,
+                    onClick = { navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}") },
+                    onLongClickLabel = "预览歌单与操作",
+                    onLongClick = { if (!coverBounds.isEmpty) playlistPreview = playlist to coverBounds })) {
                     MusicCover(playlist.cover.ifBlank { playlist.songs.firstOrNull()?.cover.orEmpty() },
-                        Modifier.fillMaxWidth().aspectRatio(1f), 480, cornerRadius = 18.dp)
+                        Modifier.fillMaxWidth().aspectRatio(1f).onGloballyPositioned { coordinates ->
+                            coverBounds = Rect(coordinates.localToWindow(Offset.Zero),
+                                coordinates.localToWindow(Offset(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())))
+                        }, 480, cornerRadius = 18.dp)
                     Text(playlist.name, Modifier.padding(top = 10.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium,
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text("${playlist.count.takeIf { it > 0 } ?: playlist.songs.size} 首 · ${if (playlist.source in setOf("ncm", "netease")) "网易云音乐" else "CurrentMusic"}",
@@ -108,6 +121,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
         }
     }
+    }
+    playlistPreview?.let { (playlist, bounds) ->
+        PlaylistArtworkPreview(playlist, bounds, canPlay = playlistPlayback.enabled,
+            onPlay = { shuffle -> playlistPlayback.play(playlist, shuffle) },
+            onOpen = { navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}") },
+            onDismiss = { playlistPreview = null })
     }
 }
 
@@ -431,9 +450,20 @@ internal fun playlistDurationLabel(songs: List<Song>): String {
     val room = LocalRoomSongRequest.current.takeUnless { song.privateLibrary || song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL }
     val pending = room?.pending?.invoke(song.id) == true
     val primary = { if (room != null) room.request(song) else play() }
-    Row(Modifier.fillMaxWidth().testTag("playlist_song_${song.id}").clickable(enabled = !pending, role = Role.Button, onClick = primary)
+    var coverBounds by remember(song.id, song.musicSource) { mutableStateOf(Rect.Zero) }
+    fun openMenu(preview: Boolean) {
+        val value = SongMenu(song, primary, next, enqueue, room != null, extra,
+            previewAnchor = coverBounds.takeIf { preview && !it.isEmpty })
+        if (host != null) host(value) else menu = value
+    }
+    Row(Modifier.fillMaxWidth().testTag("playlist_song_${song.id}").combinedClickable(
+        enabled = !pending, role = Role.Button, onClick = primary,
+        onLongClickLabel = "预览歌曲与操作", onLongClick = { openMenu(preview = true) })
         .padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-        MusicCover(song.cover, Modifier.size(48.dp), cornerRadius = 10.dp)
+        MusicCover(song.cover, Modifier.size(48.dp).onGloballyPositioned { coordinates ->
+            coverBounds = Rect(coordinates.localToWindow(Offset.Zero),
+                coordinates.localToWindow(Offset(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())))
+        }, cornerRadius = 10.dp)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(song.name, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
                 color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface)
@@ -446,8 +476,7 @@ internal fun playlistDurationLabel(songs: List<Song>): String {
             if (song.mv > 0) Text("MV", fontSize = 10.sp, color = MiuixTheme.colorScheme.primary)
         }
         PlaylistIconAction(Icons.Default.MoreVert, "歌曲操作", {
-            val value = SongMenu(song, primary, next, enqueue, room != null, extra)
-            if (host != null) host(value) else menu = value
+            openMenu(preview = false)
         }, Modifier.testTag("song_menu_${song.id}"), ink = MiuixTheme.colorScheme.onSurface.copy(alpha = .4f),
             background = Color.Transparent, enabled = !pending)
     }

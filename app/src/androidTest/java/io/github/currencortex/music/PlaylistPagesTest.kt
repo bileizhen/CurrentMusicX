@@ -572,6 +572,53 @@ class PlaylistPagesTest {
         compose.onNodeWithTag("depth_ribbon_play").assertDoesNotExist()
     }
 
+    @Test fun playlistIndexLongPressPreviewsWithoutNavigatingOrPlaying() {
+        compose.setContent { CurrentMusicApp(container) }
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("open_playlists").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("open_playlists").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("playlist_card_3").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("playlist_card_3").performTouchInput { longClick() }
+        compose.onNodeWithTag("artwork_preview_menu").assertIsDisplayed()
+        compose.onNodeWithTag("library_detail").assertDoesNotExist()
+        assertEquals(listOf(99L), container.playbackQueue.state.value.songs.map { it.id })
+        compose.onNodeWithText("播放全部").assertIsDisplayed()
+        compose.onNodeWithText("随机播放").assertIsDisplayed()
+        compose.onNodeWithTag("artwork_preview_open_playlist").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("playlist_song_2").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("artwork_preview").assertDoesNotExist()
+        assertFalse(container.playerController.state.value.playing)
+    }
+
+    @Test fun filteredPlaylistLongPressQueuesTheSelectedSongWithoutPlaying() {
+        open()
+        compose.onNodeWithTag("playlist_search_toggle").performClick()
+        compose.onNodeWithTag("playlist_query").performTextInput("ALPHA")
+        compose.onNodeWithTag("playlist_song_2").performTouchInput { longClick() }
+        compose.onNodeWithTag("artwork_preview_menu").assertIsDisplayed()
+        assertEquals(listOf(99L), container.playbackQueue.state.value.songs.map { it.id })
+        compose.onNodeWithTag("artwork_preview_queue").performClick()
+        compose.waitUntil(5000) { container.playbackQueue.state.value.songs.map { it.id } == listOf(99L, 2L) }
+        compose.onNodeWithTag("artwork_preview").assertDoesNotExist()
+        assertFalse(container.playerController.state.value.playing)
+        compose.onNodeWithTag("song_menu_2").performClick()
+        compose.onNodeWithTag("song_download").assertExists()
+        compose.onNodeWithText("下一首播放").assertExists()
+    }
+
+    @Test fun playlistIndexPreviewLoadsAndShufflesTheFullPlaylist() {
+        compose.setContent { CurrentMusicApp(container) }
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("open_playlists").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("open_playlists").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("playlist_card_3").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("playlist_card_3").performTouchInput { longClick() }
+        compose.onNodeWithTag("artwork_preview_shuffle").performClick()
+        compose.waitUntil(10000) { container.playbackQueue.state.value.songs.map { it.id }.toSet() == setOf(1L, 2L, 3L) }
+        assertEquals(PlaybackMode.SHUFFLE, container.playbackQueue.state.value.mode)
+        assertEquals(1, sourcePlaylistReads.get())
+        compose.onNodeWithTag("artwork_preview").assertDoesNotExist()
+        compose.onNodeWithTag("playlist_index").assertIsDisplayed()
+    }
+
     @Test fun searchSortAndSongActionsUseTheVisibleSongsAndPreserveReadonlyOwnership() {
         open()
         compose.onNodeWithTag("playlist_hero").assertIsDisplayed()

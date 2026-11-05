@@ -106,13 +106,13 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     }
 }
 
-@Composable fun PlaylistIndexScreen(vm: LibraryViewModel, navigate: (String) -> Unit, onBack: (() -> Unit)? = null) {
+@Composable fun PlaylistIndexScreen(vm: LibraryViewModel, navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit, onBack: (() -> Unit)? = null) {
     val busy by vm.busy.collectAsStateWithLifecycle()
     val neteaseMain by vm.container.primaryLibrary.usesNetease.collectAsStateWithLifecycle()
     var create by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
     var description by rememberSaveable { mutableStateOf("") }
-    PlaylistIndexBody(vm, navigate, onBack, onCreate = { create = true })
+    PlaylistIndexBody(vm, navigate, play, onBack, onCreate = { create = true })
     SettingsUiScope {
     if (create) MusicDialog("新建歌单", onDismiss = { if (!busy) create = false }) {
         TextField(name, { name = it }, label = "歌单名称", modifier = Modifier.fillMaxWidth().then(Modifier.testTag("playlist_name")))
