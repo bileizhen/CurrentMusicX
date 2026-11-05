@@ -8,9 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.offset
 import kotlin.math.ceil
@@ -21,26 +19,16 @@ internal val LocalElasticRowPaint = staticCompositionLocalOf<MutableMap<ElasticP
 
 private data class VerticalOverflow(val top: Int, val bottom: Int)
 
-/** Both the lazy row and its wrapper read these insets during measurement. */
-private class ElasticRowPadding(presses: Map<ElasticPressState, Unit>, private val density: Density,
-    private val horizontalInset: Dp) : PaddingValues {
-    private val growth = with(density) { 16.dp.toPx() }
-    val pixels by derivedStateOf(structuralEqualityPolicy()) {
-        var top = 0f
-        var bottom = 0f
-        for (press in presses.keys) {
-            val frame = press.frame(growth)
-            val swell = press.size.height * (frame.scaleY - 1f) / 2f
-            top = max(top, swell - frame.pull.y)
-            bottom = max(bottom, swell + frame.pull.y)
-        }
-        VerticalOverflow(ceil(top).toInt(), ceil(bottom).toInt())
+private fun verticalOverflow(presses: Map<ElasticPressState, Unit>, growth: Float): VerticalOverflow {
+    var top = 0f
+    var bottom = 0f
+    for (press in presses.keys) {
+        val frame = press.frame(growth)
+        val swell = press.size.height * (frame.scaleY - 1f) / 2f
+        top = max(top, swell - frame.pull.y)
+        bottom = max(bottom, swell + frame.pull.y)
     }
-
-    override fun calculateTopPadding() = with(density) { pixels.top.toDp() }
-    override fun calculateBottomPadding() = with(density) { pixels.bottom.toDp() }
-    override fun calculateLeftPadding(layoutDirection: LayoutDirection) = horizontalInset
-    override fun calculateRightPadding(layoutDirection: LayoutDirection) = horizontalInset
+    return VerticalOverflow(ceil(top).toInt(), ceil(bottom).toInt())
 }
 
 /** Expand the cross-axis viewport to the painted bounds, without moving the resting items
@@ -52,10 +40,18 @@ private class ElasticRowPadding(presses: Map<ElasticPressState, Unit>, private v
     val presses = remember { mutableStateMapOf<ElasticPressState, Unit>() }
     val density = LocalDensity.current
     val inset = edgeToEdgeInset.coerceAtLeast(0.dp)
-    val padding = remember(presses, density, inset) { ElasticRowPadding(presses, density, inset) }
+    val growth = with(density) { 16.dp.toPx() }
+    val pixels by remember(presses, growth) {
+        derivedStateOf(structuralEqualityPolicy()) { verticalOverflow(presses, growth) }
+    }
+    // Keep the wrapper and LazyRow on the same immutable padding snapshot. Changing
+    // contentPadding invalidates the row's measure policy even while scrolling is idle.
+    val (topPx, bottomPx) = pixels
+    val padding = with(density) {
+        PaddingValues(start = inset, top = topPx.toDp(), end = inset, bottom = bottomPx.toDp())
+    }
     CompositionLocalProvider(LocalElasticRowPaint provides presses) {
         LazyRow(modifier.layout { measurable, constraints ->
-            val (topPx, bottomPx) = padding.pixels
             val overflow = topPx + bottomPx
             // Let cards scroll through the parent's side gutters, while the first/last
             // card still rests on the same inset as the surrounding page content.
