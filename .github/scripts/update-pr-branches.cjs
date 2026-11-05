@@ -21,11 +21,14 @@ async function run({github, context, core}) {
   if (pr.mergeable !== true) {
     core.warning(`#${pr.number} holds the queue; resolve conflicts or move it to draft to continue`); return;
   }
+  // A PR can retain its previous base SHA after another PR merges.
+  const {data: main} = await github.rest.repos.getBranch({...repo, branch: pr.base.ref});
+  const baseSha = main.commit.sha;
   const comparison = (await github.rest.repos.compareCommitsWithBasehead({
-    ...repo, basehead: `${pr.base.sha}...${pr.head.sha}`, per_page: 1,
+    ...repo, basehead: `${baseSha}...${pr.head.sha}`, per_page: 1,
   })).data;
   if (comparison.behind_by === 0) {
-    await rerunWaitingBuild({github, context, core, pr});
+    await rerunWaitingBuild({github, context, core, pr, baseSha});
     return;
   }
   if (!(comparison.behind_by > 0)) throw new Error(`Unknown ahead/behind result for #${pr.number}`);
