@@ -211,8 +211,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         } ?: request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY }?.let {
             emby.accepts(it) && request.session == emby.session() && request.providerIdentity == "emby:" + emby.state.value.identity
         } },
-        loadTrack = { request -> request.song?.let { musicRepository.source(it, request.quality, request.session) }
-            ?: musicRepository.source(request.songId, request.quality, request.session) }, load = musicRepository::source)
+        loadTrack = { request -> request.song?.let { musicRepository.source(it, request.quality, request.session, request.refresh) }
+            ?: musicRepository.source(request.songId, request.quality, request.session, request.refresh) },
+        load = { id, quality, session -> musicRepository.source(id, quality, session) })
     val libraryRepository = io.github.currencortex.music.data.library.LibraryRepository(apiClient,
         { accountRepository.state.value.account?.id ?: 0L }, { musicSession() })
     val todayListening = TodayListeningStore(context.applicationContext, storageSuffix)

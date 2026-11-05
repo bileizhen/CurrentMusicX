@@ -81,7 +81,7 @@ class SongDownloadEngine(
             if (cover != null) files += SongDownloadFile(File(folder, "cover.jpg").apply { writeBytes(cover.bytes) }, "image/jpeg")
             progress(SongDownloadProgress("保存到下载文件夹"))
             val saved = store.save(SongDownloadNames.base(info), files, tree)
-            SongDownloadResult(saved, warnings.joinToString("；"), AudioQuality.from(source.level).label)
+            SongDownloadResult(saved, warnings.joinToString("；"), source.qualityLabel)
         } finally {
             // Only this attempt's private directory, never the user's download folder.
             folder.deleteRecursively()

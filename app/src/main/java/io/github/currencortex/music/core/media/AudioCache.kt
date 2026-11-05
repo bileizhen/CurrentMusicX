@@ -116,6 +116,14 @@ class AudioCache(context: Context, directory: File,
     fun cachedSource(key: String): AudioSource? = runCatching {
         cache.getContentMetadata(key).get(SOURCE, "")?.takeIf { it.isNotBlank() }?.let { ApiJson.decodeFromString<AudioSource>(it) }
     }.getOrNull()
+    fun matchedSourceKey(requestKey: String): String? = runCatching {
+        cache.getContentMetadata(requestKey).get("cm.audio.matchedKey", "")
+            ?.takeIf { it.startsWith("$requestKey:match:") }
+    }.getOrNull()
+    fun rememberSelection(requestKey: String, sourceKey: String) {
+        cache.applyContentMetadataMutations(requestKey, ContentMetadataMutations()
+            .set("cm.audio.matchedKey", sourceKey.takeUnless { it == requestKey }.orEmpty()))
+    }
     fun rememberSource(key: String, source: AudioSource) {
         val old = cachedSource(key)
         if (old != null && (old.level != source.level || old.sampleRate != source.sampleRate || old.channelCount != source.channelCount ||
