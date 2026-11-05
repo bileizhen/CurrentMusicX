@@ -7,6 +7,7 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.core.media.PlayerState
+import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.core.netease.NeteaseEndpoints
 import io.github.currencortex.music.data.binding.BoundProfile
 import io.github.currencortex.music.data.roaming.RoamingCatalog
@@ -158,11 +159,11 @@ class PersonalRoamingUiTest {
         assertEquals(0, back)
     }
 
-    @Test fun activePlayerHeaderOpensModeDialogAndQualityRemainsInOptions() {
+    @Test fun activePlayerHeaderOpensModeDialogAndQualityRemainsAvailable() {
         val song = seed()
         showPlayer()
         compose.onNodeWithText("私人漫游 · 默认模式").assertIsDisplayed()
-        compose.onNodeWithTag("open_quality_sheet").assertDoesNotExist()
+        compose.onNodeWithTag("open_quality_sheet").assertIsDisplayed().assertIsEnabled()
         click("open_roaming_modes")
         compose.waitUntil(8_000) { c.personalRoaming.state.value.catalog.scenes.size == 2 }
         val end = compose.onNodeWithTag("roaming_stop").getUnclippedBoundsInRoot()
@@ -196,6 +197,31 @@ class PersonalRoamingUiTest {
         compose.onNodeWithTag("open_quality_sheet").performClick()
         compose.onNodeWithText("当前歌曲音质").assertIsDisplayed()
     }
+    @Test fun roamingQualityStaysBelowProgressAndCanChangeWithoutLeavingRoaming() {
+        val song = seed()
+        runBlocking { c.musicSettings.setQuality(AudioQuality.STANDARD) }
+        val queue = c.playbackQueue.state.value
+        showPlayer()
+        val quality = compose.onNodeWithTag("open_quality_sheet").assertIsDisplayed().assertIsEnabled()
+            .fetchSemanticsNode().boundsInRoot
+        val seek = compose.onNodeWithTag("player_seek").fetchSemanticsNode().boundsInRoot
+        val toggle = compose.onNodeWithTag("player_toggle").fetchSemanticsNode().boundsInRoot
+        assertEquals("Roaming quality stays centered beneath the seek bar", seek.center.x, quality.center.x, 1f)
+        assertTrue(quality.top >= seek.bottom && quality.bottom <= toggle.top)
+        save("roaming-player-quality.png")
+        compose.onNodeWithTag("open_quality_sheet").performClick()
+        compose.onNodeWithText("当前歌曲音质").assertIsDisplayed()
+        compose.onNodeWithTag("quality_LOSSLESS").performScrollTo().performClick()
+        compose.waitUntil(5_000) { c.musicSettings.state.value.quality == AudioQuality.LOSSLESS }
+        compose.onNodeWithTag("quality_choices").assertDoesNotExist()
+        compose.onNodeWithTag("open_quality_sheet").assertTextEquals(AudioQuality.LOSSLESS.label)
+        assertTrue(c.personalRoaming.state.value.active)
+        assertEquals("DEFAULT", c.personalRoaming.state.value.choice.code)
+        assertEquals(queue, c.playbackQueue.state.value)
+        assertEquals(song, c.playbackQueue.state.value.current)
+        assertEquals(0, recommendationRequests.get())
+    }
+
     @Test fun longSceneCatalogScrollsAndKeepsConfirmationVisible() {
         showDialog()
         compose.runOnUiThread {
@@ -218,6 +244,7 @@ class PersonalRoamingUiTest {
         compose.waitUntil(8_000) { compose.onAllNodesWithTag("roaming_puzzle_tile_0").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("player_screen").assertIsDisplayed()
         compose.onNodeWithTag("player_toggle").assertIsDisplayed()
+        compose.onNodeWithTag("open_quality_sheet").assertIsDisplayed().assertIsEnabled()
         compose.onNodeWithTag("player_pager_artwork").assertDoesNotExist()
         save("roaming-puzzle-player.png")
         for ((a, b) in listOf(0 to 5, 2 to 7, 4 to 5, 5 to 8, 6 to 7)) {
