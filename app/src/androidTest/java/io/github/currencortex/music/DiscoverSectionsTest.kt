@@ -28,7 +28,9 @@ class DiscoverSectionsTest {
     @Volatile private var published = ""
     @Volatile private var publishedAttachments = JsonArray(emptyList())
     @Volatile private var failPostPublish = false
+    @Volatile private var failAttachmentSearch = false
     @Volatile private var postVisualFixture = false
+    private val attachmentOffsets = ConcurrentLinkedQueue<Int>()
     private val postWrites = java.util.concurrent.atomic.AtomicInteger()
     @Volatile private var reply = ""
     @Volatile private var pagingUsers = false
@@ -140,6 +142,8 @@ class DiscoverSectionsTest {
                         }
                     }
                     path == "/cm/ncm/search" -> {
+                        attachmentOffsets.add(request.requestUrl!!.queryParameter("offset")?.toIntOrNull() ?: 0)
+                        if (failAttachmentSearch) return json("{\"error\":\"搜索暂时不可用\"}").setResponseCode(503)
                         val type = request.requestUrl!!.queryParameter("type") ?: "song"
                         json(buildJsonObject {
                             put(type + "s", JsonArray((1..8).map { id -> buildJsonObject {
@@ -573,6 +577,29 @@ class DiscoverSectionsTest {
         capture("post_editor", "post-editor-writing.png")
         compose.onNodeWithTag("post_add_attachment").performScrollTo().performClick()
         capture("post_editor", "post-editor-picker.png")
+        assertEquals(0, postWrites.get())
+    }
+
+    @Test fun postAttachmentRetryRepeatsTheFailedFirstPageWithExistingResults() {
+        open(); compose.onNodeWithText("帖子").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_1").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("post_create").performClick()
+        compose.onNodeWithTag("post_add_attachment").performScrollTo().performClick()
+        compose.onNodeWithTag("post_attachment_query").performTextInput("音乐")
+        compose.onNodeWithTag("post_attachment_search").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_pick_song_1").fetchSemanticsNodes().isNotEmpty() }
+        failAttachmentSearch = true
+        compose.onNodeWithTag("post_attachment_query").performClick().performImeAction()
+        compose.waitUntil(10_000) { attachmentOffsets.size > 1 }
+        compose.onNodeWithTag("post_attachment_results").performScrollToIndex(8)
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("post_attachment_retry").fetchSemanticsNodes().isNotEmpty() }
+        failAttachmentSearch = false
+        val beforeRetry = attachmentOffsets.size
+        compose.onNodeWithTag("post_attachment_retry").performScrollTo().performClick()
+        compose.waitUntil(10_000) { attachmentOffsets.size > beforeRetry && compose.onAllNodesWithTag("post_attachment_retry").fetchSemanticsNodes().isEmpty() }
+        assertTrue(attachmentOffsets.all { it == 0 })
+        compose.onNodeWithTag("post_attachment_results").performScrollToNode(hasTestTag("post_pick_song_1"))
+        compose.onNodeWithTag("post_pick_song_1").assertExists()
         assertEquals(0, postWrites.get())
     }
 

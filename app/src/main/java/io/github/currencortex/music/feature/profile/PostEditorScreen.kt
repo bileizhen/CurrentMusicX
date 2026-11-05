@@ -168,7 +168,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
             state.attachmentError?.let { error -> item {
                 Text(error, fontSize = 13.sp)
-                MusicTextAction("重试", { vm.searchAttachments(state.attachmentResults.isNotEmpty()) })
+                MusicTextAction("重试", vm::retryAttachments, Modifier.testTag("post_attachment_retry"))
             } }
             if (state.attachmentMore && !state.attachmentLoading && state.attachmentError == null) item {
                 MusicTextAction("加载更多", { vm.searchAttachments(true) }, Modifier.testTag("post_attachment_more"))

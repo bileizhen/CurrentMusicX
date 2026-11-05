@@ -15,7 +15,7 @@ data class PostsState(val posts: List<CommunityPost> = emptyList(), val total: I
     val picker: Boolean = false, val attachmentQuery: String = "", val attachmentType: String = "song",
     val attachmentResults: List<PostAttachment> = emptyList(), val attachmentLoading: Boolean = false,
     val attachmentError: String? = null, val attachmentSearched: Boolean = false,
-    val attachmentOffset: Int = 0, val attachmentMore: Boolean = false,
+    val attachmentOffset: Int = 0, val attachmentMore: Boolean = false, val attachmentRetryMore: Boolean = false,
     val commentsFor: Long? = null,
     val comments: List<PostComment> = emptyList(), val commentsLoading: Boolean = false,
     val commentsError: String? = null)
@@ -107,7 +107,7 @@ class PostsViewModel(val container: AppContainer) : ViewModel() {
     fun attachmentQuery(value: String) {
         ++attachmentGeneration; attachmentTask?.cancel()
         state.update { it.copy(attachmentQuery = value, attachmentResults = emptyList(), attachmentLoading = false,
-            attachmentSearched = false, attachmentError = null, attachmentMore = false, attachmentOffset = 0) }
+            attachmentSearched = false, attachmentError = null, attachmentMore = false, attachmentOffset = 0, attachmentRetryMore = false) }
     }
     fun attachmentType(value: String) {
         if (value !in setOf("song", "album", "artist", "playlist")) return
@@ -115,13 +115,14 @@ class PostsViewModel(val container: AppContainer) : ViewModel() {
         attachmentQuery(state.value.attachmentQuery)
         searchAttachments()
     }
+    fun retryAttachments() = searchAttachments(state.value.attachmentRetryMore)
     fun searchAttachments(more: Boolean = false) {
         val before = state.value
         if (before.attachmentQuery.isBlank() || (more && (!before.attachmentMore || before.attachmentLoading))) return
         attachmentTask?.cancel()
         val request = ++attachmentGeneration
         val expected = session()
-        state.update { it.copy(attachmentLoading = true, attachmentError = null, attachmentSearched = true) }
+        state.update { it.copy(attachmentLoading = true, attachmentError = null, attachmentSearched = true, attachmentRetryMore = more) }
         attachmentTask = viewModelScope.launch {
             val result = appResult { repository.searchAttachments(before.attachmentQuery, before.attachmentType,
                 if (more) before.attachmentOffset else 0) }
