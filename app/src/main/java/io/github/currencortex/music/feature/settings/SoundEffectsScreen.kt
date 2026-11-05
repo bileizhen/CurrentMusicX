@@ -262,7 +262,7 @@ import kotlinx.serialization.json.*
                 Text("网易云暂未返回可用音效", Modifier.padding(horizontal = 16.dp), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
             }
             if (!expandedCatalog) item {
-                BoxWithConstraints(Modifier.fillMaxWidth()) {
+                BoxWithConstraints(Modifier.fillMaxWidth().testTag("sound_official_effects")) {
                     val cardWidth = ((maxWidth - 48.dp) / 3f).coerceIn(104.dp, 196.dp)
                     LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         items(if (page.featured.isEmpty()) catalog.items else page.featured.map { tile ->
@@ -341,15 +341,6 @@ import kotlinx.serialization.json.*
                 } }
             }
 
-            item { SettingsSection("本机调音", MusicIcons.Scale, Modifier.padding(horizontal = 16.dp)) {
-                SettingsToggle("本机智能调音", options.smartEnabled,
-                    { if (it) vm.smartEnabled(true) else vm.turnOff() },
-                    Modifier.testTag("sound_smart_action"), enabled = canApply || options.smartEnabled,
-                    summary = if (options.smartEnabled) status else "依据歌曲分析，随切歌调整均衡器")
-                SettingsDivider()
-                PageNavigationPreference("均衡器", manual.preset.label, Modifier.testTag("sound_open_equalizer"),
-                    onClick = onEqualizer)
-            } }
             if (options.smartEnabled) item {
                 Card(Modifier.padding(horizontal = 16.dp)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(playback.song?.name ?: "等待播放", fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
