@@ -56,11 +56,20 @@ internal class AdaptiveAudioProcessor(
         frames = 0; samples = 0; full = 0.0; bass = 0.0; reported = false; lastReport = 0
         haptics.clear()
         val format = inputAudioFormat
-        dsp = if (format.encoding in listOf(C.ENCODING_PCM_16BIT, C.ENCODING_PCM_FLOAT) &&
-            format.channelCount in 1..2 && format.sampleRate in 8000..192000)
+        val configured = format.channelCount > 0 && format.sampleRate > 0
+        // The DSP keeps independent history for every input channel. Do not reject
+        // surround PCM or high sample rates before the output sink can route them.
+        dsp = if (configured && format.encoding in listOf(C.ENCODING_PCM_16BIT, C.ENCODING_PCM_FLOAT))
             AdaptiveAudioDsp(format.sampleRate, format.channelCount) else null
-        frame = DoubleArray(format.channelCount.coerceIn(1, 2))
-        report(AdaptiveAudioRuntime(message = if (dsp == null) "当前音频格式不支持，已旁路" else "等待音频处理"))
+        frame = DoubleArray(if (dsp != null) format.channelCount else 0)
+        val message = when {
+            !configured -> "等待音频格式"
+            dsp == null -> "当前 PCM 编码不支持，已旁路"
+            else -> "等待音频处理"
+        }
+        CurrentMusicAudioDiagnostics.record("adaptive.configure rate=${format.sampleRate} channels=${format.channelCount} " +
+            "encoding=${format.encoding} supported=${dsp != null}")
+        report(AdaptiveAudioRuntime(message = message))
     }
     override fun onReset() { dsp = null; haptics.clear(); report(AdaptiveAudioRuntime()) }
     override fun queueInput(inputBuffer: ByteBuffer) {
