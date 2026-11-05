@@ -6,6 +6,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -73,7 +75,7 @@ class AdaptiveAudioUiTest {
             compose.waitUntil { container.adaptiveAudio.state.value.haptics }
         } else compose.onNodeWithTag("adaptive_haptics").assertIsNotEnabled()
         scroll("adaptive_dynamic").assertIsOn()
-        compose.onNodeWithText("人声", useUnmergedTree = true).performScrollTo().performClick()
+        scroll("adaptive_curve_VOCAL").performClick()
         compose.waitUntil { container.adaptiveAudio.state.value.curve == DynamicEqCurve.VOCAL }
         save("adaptive-audio-dynamic.png")
         val saved = runBlocking { container.adaptiveAudio.snapshot() }
@@ -148,6 +150,36 @@ class AdaptiveAudioUiTest {
         val first = compose.onNodeWithTag("adaptive_band_0").fetchSemanticsNode().boundsInRoot
         val sixth = compose.onNodeWithTag("adaptive_band_5").fetchSemanticsNode().boundsInRoot
         assertTrue(sixth.top > first.top)
+    }
+
+    @Test fun largeTextLayoutKeepsAdjustmentAndCurveChoicesReachable() {
+        runBlocking { container.adaptiveAudio.edit { it.copy(enabled = true) } }
+        val vm = SoundEffectsViewModel(container)
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1.6f)) {
+                Box(Modifier.width(280.dp)) { AdaptiveAudioScreen(vm, {}) }
+            }
+        }
+        fun scroll(tag: String): SemanticsNodeInteraction {
+            compose.onNodeWithTag("adaptive_audio_list").performScrollToNode(hasTestTag(tag))
+            return compose.onNodeWithTag(tag)
+        }
+        scroll("adaptive_band_9").performSemanticsAction(SemanticsActions.SetProgress) { it(1.5f) }
+        compose.waitUntil { container.adaptiveAudio.state.value.gains[9] == 1.5f }
+        scroll("adaptive_band_fine").assertContentDescriptionEquals("16000 Hz · 手动增益")
+        scroll("adaptive_curve_VOCAL").performClick()
+        compose.waitUntil { container.adaptiveAudio.state.value.curve == DynamicEqCurve.VOCAL }
+        compose.onNodeWithTag("adaptive_curve_VOCAL").assertIsSelected()
+        scroll("adaptive_speed").performSemanticsAction(SemanticsActions.SetProgress) { it(4f) }
+        compose.waitUntil { container.adaptiveAudio.state.value.speed == 4 }
+        scroll("adaptive_strength").assertIsDisplayed()
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        compose.onRoot().captureToImage().asAndroidBitmap().let { bitmap ->
+            java.io.File(context.cacheDir, "adaptive-audio-large-text.png").outputStream().use {
+                bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it)
+            }
+        }
     }
 
     @Test fun liveDspGainsDriveNumbersAndKnobsWithoutChangingManualSettings() {

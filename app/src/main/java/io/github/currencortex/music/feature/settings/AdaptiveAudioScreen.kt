@@ -1,13 +1,19 @@
 package io.github.currencortex.music.feature.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
@@ -62,19 +68,26 @@ import kotlin.math.roundToInt
         }) { topInset ->
             LazyColumn(Modifier.fillMaxSize().testTag("adaptive_audio_list"), contentPadding = musicScrollPadding(PaddingValues(
                 start = 16.dp, end = 16.dp, top = topInset, bottom = 24.dp)),
-                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item("master") {
                     SettingsGroup {
                         SettingsToggle("启用音频处理", settings.enabled, { value -> vm.editAdaptive { it.copy(enabled = value) } },
-                            Modifier.testTag("adaptive_enabled"), summary = "均衡器、低频增强与音乐震动")
-                        SettingsHint(status, Modifier.testTag("adaptive_status"))
+                            Modifier.testTag("adaptive_enabled"))
+                        Row(Modifier.fillMaxWidth().background(MiuixTheme.colorScheme.primary.copy(alpha = if (live) .08f else .03f))
+                            .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(
+                                if (live) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary))
+                            Text(status, Modifier.weight(1f).testTag("adaptive_status"), fontSize = 12.sp, lineHeight = 17.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                        }
                     }
                 }
                 item("equalizer") {
                     SettingsGroup {
-                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text("十段均衡器", fontSize = 17.sp)
+                        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                                Text("十段均衡器", fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold)
                                 Text(if (liveEq) "实时增益 · 含动态 EQ · ±9 dB" else "手动调节 · ±6 dB",
                                     Modifier.testTag("adaptive_band_mode"), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                             }
@@ -87,47 +100,63 @@ import kotlin.math.roundToInt
                             onPreview = { index, value -> vm.previewAdaptive { it.copy(gains = it.gains.toMutableList().apply { set(index, value) }) } },
                             onSave = { index, value -> vm.commitAdaptive { it.copy(gains = it.gains.toMutableList().apply { set(index, value) }) } },
                             onCancel = vm::clearAdaptivePreview, liveGains = runtime.gains.takeIf { liveEq })
-                        AudioAdjustment("${AdaptiveAudioSettings.FREQUENCIES[selectedBand]} Hz · 手动增益", settings.gains[selectedBand], -6f..6f,
-                            ::gainLabel, enabled, "adaptive_band_fine", key = selectedBand,
-                            onPreview = { vm.previewAdaptive(band(it)) }, onCancel = vm::clearAdaptivePreview,
-                            onSave = { vm.commitAdaptive(band(it)) })
-                        SettingsHint(if (liveEq) "数字与圆点跟随动态 EQ；拖动可叠加手动调节。" else "拖动圆点调节，空白处滑动页面；滑条可精调。")
+                        Column(Modifier.padding(horizontal = 12.dp).clip(RoundedCornerShape(14.dp))
+                            .background(MiuixTheme.colorScheme.primary.copy(alpha = if (enabled) .07f else .025f))) {
+                            AudioAdjustment("${AdaptiveAudioSettings.FREQUENCIES[selectedBand]} Hz · 手动增益", settings.gains[selectedBand], -6f..6f,
+                                ::gainLabel, enabled, "adaptive_band_fine", key = selectedBand,
+                                onPreview = { vm.previewAdaptive(band(it)) }, onCancel = vm::clearAdaptivePreview,
+                                onSave = { vm.commitAdaptive(band(it)) })
+                        }
+                        SettingsHint(if (liveEq) "圆点显示实时增益，手动微调始终单独保留。" else "拖动圆点调音，空白轨道可上下滚动。")
                     }
                 }
                 item("dynamic") {
                     SettingsGroup {
                         SettingsToggle("动态 EQ", settings.dynamicEq, { value -> vm.editAdaptive { it.copy(dynamicEq = value) } },
-                            Modifier.testTag("adaptive_dynamic"), "随音乐变化微调音色，保留手动均衡设置", enabled = enabled)
+                            Modifier.testTag("adaptive_dynamic"), "跟随音乐调整，叠加在手动曲线上", enabled = enabled)
                         if (settings.dynamicEq) {
                             val controls = enabled && settings.dynamicEq
                             AdaptiveEqCurve(if (live) runtime.gains else settings.gains, live)
-                            Column(Modifier.padding(horizontal = 16.dp).semantics { selectableGroup() }, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                DynamicEqCurve.entries.chunked(2).forEach { pair ->
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        pair.forEach { curve -> AudioChoice(curve.label, settings.curve == curve, controls,
-                                            Modifier.weight(1f).testTag("adaptive_curve_${curve.name}")) { vm.editAdaptive { it.copy(curve = curve) } } }
+                            AudioSectionLabel("音色方向")
+                            BoxWithConstraints(Modifier.padding(horizontal = 16.dp).semantics { selectableGroup() }) {
+                                val columns = if (maxWidth < 240.dp * LocalDensity.current.fontScale) 1 else 2
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    DynamicEqCurve.entries.chunked(columns).forEach { pair ->
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            pair.forEach { curve ->
+                                                AudioCurveChoice(curve, settings.curve == curve, controls,
+                                                    Modifier.weight(1f).testTag("adaptive_curve_${curve.name}")) {
+                                                    vm.editAdaptive { it.copy(curve = curve) }
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
+                            Spacer(Modifier.height(12.dp))
+                            SettingsDivider()
                             AudioAdjustment("效果强度", settings.strength.toFloat(), 0f..4f,
                                 { listOf("弱", "默认", "中", "强", "超强")[it.roundToInt().coerceIn(0, 4)] }, controls,
                                 "adaptive_strength", steps = 3, onPreview = { value -> vm.previewAdaptive { it.copy(strength = value.roundToInt()) } },
                                 onCancel = vm::clearAdaptivePreview, onSave = { value -> vm.commitAdaptive { it.copy(strength = value.roundToInt()) } })
                             AudioAdjustment("响应速度", settings.speed.toFloat(), 0f..4f,
-                                { listOf("舒缓 · 0.5×", "标准 · 1×", "灵敏 · 1.5×", "快速 · 2×", "极快 · 3×")[it.roundToInt().coerceIn(0, 4)] }, controls,
+                                { listOf("舒缓", "标准", "灵敏", "快速", "极快")[it.roundToInt().coerceIn(0, 4)] }, controls,
                                 "adaptive_speed", steps = 3, onPreview = { value -> vm.previewAdaptive { it.copy(speed = value.roundToInt()) } },
                                 onCancel = vm::clearAdaptivePreview, onSave = { value -> vm.commitAdaptive { it.copy(speed = value.roundToInt()) } })
-                            SettingsHint("响应越快，耗电可能越高。")
+                            SettingsHint("舒缓更稳定，快速更跟手；鼓点等瞬态会平滑过渡。")
                         }
                     }
                 }
                 item("bass") {
                     SettingsGroup {
                         SettingsToggle("虚拟低频", settings.virtualBass, { value -> vm.editAdaptive { it.copy(virtualBass = value) } },
-                            Modifier.testTag("adaptive_bass"), "增强小型扬声器的低音感知", enabled = enabled)
-                        if (settings.virtualBass) AudioAdjustment("低频力度", settings.bassStrength.toFloat(), 0f..100f, { "${it.roundToInt()}%" },
-                            enabled, "adaptive_bass_strength", onPreview = { value -> vm.previewAdaptive { it.copy(bassStrength = value.roundToInt()) } },
-                            onCancel = vm::clearAdaptivePreview, onSave = { value -> vm.commitAdaptive { it.copy(bassStrength = value.roundToInt()) } })
+                            Modifier.testTag("adaptive_bass"), "用低频谐波补充厚度，适合小型扬声器", enabled = enabled)
+                        if (settings.virtualBass) {
+                            AudioAdjustment("低频力度", settings.bassStrength.toFloat(), 0f..100f, { "${it.roundToInt()}%" },
+                                enabled, "adaptive_bass_strength", onPreview = { value -> vm.previewAdaptive { it.copy(bassStrength = value.roundToInt()) } },
+                                onCancel = vm::clearAdaptivePreview, onSave = { value -> vm.commitAdaptive { it.copy(bassStrength = value.roundToInt()) } })
+                            SettingsHint("从轻量开始，按扬声器的听感增加力度。")
+                        }
                     }
                 }
                 item("haptics") {
@@ -136,9 +165,20 @@ import kotlin.math.roundToInt
                             Modifier.testTag("adaptive_haptics"), if (vm.hapticsSupported) "随音乐震动，暂停即停止" else "此设备没有可用马达",
                             enabled = enabled && vm.hapticsSupported)
                         if (settings.haptics && vm.hapticsSupported) {
-                            Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).semantics { selectableGroup() }, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                MusicHapticMode.entries.forEach { mode -> AudioChoice(mode.label, settings.hapticMode == mode, enabled,
-                                    Modifier.weight(1f).testTag("adaptive_haptic_mode_${mode.name}")) { vm.editAdaptive { it.copy(hapticMode = mode) } } }
+                            BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 16.dp).semantics { selectableGroup() }) {
+                                val columns = if (maxWidth < 220.dp * LocalDensity.current.fontScale) 1 else 2
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    MusicHapticMode.entries.chunked(columns).forEach { modes ->
+                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                            modes.forEach { mode ->
+                                                AudioChoice(mode.label, settings.hapticMode == mode, enabled,
+                                                    Modifier.weight(1f).testTag("adaptive_haptic_mode_${mode.name}")) {
+                                                    vm.editAdaptive { it.copy(hapticMode = mode) }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             AudioAdjustment("震动力度", settings.hapticStrength.toFloat(), 0f..100f, { "${it.roundToInt()}%" },
                                 enabled, "adaptive_haptic_strength", onPreview = { value -> vm.previewAdaptive { it.copy(hapticStrength = value.roundToInt()) } },
@@ -148,6 +188,35 @@ import kotlin.math.roundToInt
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable private fun AudioSectionLabel(title: String) {
+    Text(title, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 12.sp,
+        fontWeight = FontWeight.Medium, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+}
+
+@Composable private fun AudioCurveChoice(curve: DynamicEqCurve, selected: Boolean, enabled: Boolean,
+    modifier: Modifier, onClick: () -> Unit) {
+    val colors = MiuixTheme.colorScheme
+    val summary = when (curve) {
+        DynamicEqCurve.WARM -> "柔和、厚实"
+        DynamicEqCurve.V_SHAPE -> "低音与高音更突出"
+        DynamicEqCurve.VOCAL -> "突出人声层次"
+        DynamicEqCurve.BRIGHT -> "清晰、明亮"
+    }
+    ElasticPress(modifier.selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = onClick), enabled) {
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+            .background(if (selected) colors.primary.copy(alpha = .12f) else colors.onSurface.copy(alpha = .035f))
+            .padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(curve.label, Modifier.weight(1f), fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium,
+                    color = (if (selected) colors.primary else colors.onSurface).copy(alpha = if (enabled) 1f else .38f))
+                if (selected) Icon(MusicIcons.Check, null, Modifier.size(16.dp), tint = colors.primary.copy(alpha = if (enabled) 1f else .38f))
+            }
+            Text(summary, fontSize = 11.sp, lineHeight = 16.sp,
+                color = colors.onSurfaceVariantSummary.copy(alpha = if (enabled) 1f else .45f))
         }
     }
 }
@@ -163,9 +232,11 @@ import kotlin.math.roundToInt
     key(key) {
         var preview by remember(value) { mutableFloatStateOf(value) }
         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, Modifier.weight(1f), fontSize = 14.sp)
-                Text(label(preview), fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(title, Modifier.padding(end = 12.dp), fontSize = 13.sp, lineHeight = 19.sp)
+                Text(label(preview), fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold,
+                    color = if (enabled) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary)
             }
             GlassSlider(preview, { preview = if (steps == 0 && range.start < 0) (it * 10).roundToInt() / 10f else it; onPreview(preview) },
                 Modifier.fillMaxWidth().testTag(tag).semantics { contentDescription = title }, enabled = enabled,
