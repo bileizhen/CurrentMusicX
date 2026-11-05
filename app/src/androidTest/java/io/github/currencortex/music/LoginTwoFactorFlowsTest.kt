@@ -36,24 +36,28 @@ class LoginTwoFactorFlowsTest {
     @Volatile private var expiresIn = 300
     @Volatile private var holdVerify = false
     @Volatile private var recovery = false
+    @Volatile private var securityQuestion = false
     private val success = """{"token":"new-login-session","user":{"id":5,"username":"listener","nickname":"Listener"}}"""
     @Before fun setup(): Unit = runBlocking {
         server.dispatcher = object : Dispatcher() {
             override fun dispatch(request: RecordedRequest): MockResponse {
-                if (request.path == "/cm/auth/login") {
+                if (request.path == "/cm/auth/login/email/code") return MockResponse().setBody("{}")
+                if (request.path in listOf("/cm/auth/login", "/cm/auth/login/email")) {
                     assertNull(request.getHeader("Authorization")); loginCalls.incrementAndGet()
-                    return MockResponse().setBody(if (twoFactor)
+                    return MockResponse().setBody(if (securityQuestion)
+                        """{"requiresSecurityQuestion":true,"securityQuestion":"第一只宠物的名字？","challengeToken":"local-challenge","expiresIn":$expiresIn}""" else if (twoFactor)
                         """{"requires2FA":true,"challengeToken":"local-challenge","expiresIn":$expiresIn}""" else success)
                 }
-                if (request.path == "/cm/auth/2fa/login") {
+                if (request.path in listOf("/cm/auth/2fa/login", "/cm/auth/security-question/login")) {
                     assertNull(request.getHeader("Authorization")); verifyCalls.incrementAndGet(); verifyEntered.countDown()
                     if (holdVerify) releaseVerify.await(5, TimeUnit.SECONDS)
                     val body = io.github.currencortex.music.core.network.ApiJson.parseToJsonElement(request.body.readUtf8())
                         .let { it as kotlinx.serialization.json.JsonObject }
-                    assertEquals(setOf("challengeToken", "code"), body.keys)
+                    val field = if (securityQuestion) "answer" else "code"
+                    assertEquals(setOf("challengeToken", field), body.keys)
                     assertEquals("local-challenge", (body["challengeToken"] as kotlinx.serialization.json.JsonPrimitive).content)
-                    val code = (body["code"] as kotlinx.serialization.json.JsonPrimitive).content
-                    val accepted = code == if (recovery) "ABCD-EFGH-IJKL" else "123456"
+                    val code = (body[field] as kotlinx.serialization.json.JsonPrimitive).content
+                    val accepted = code == if (securityQuestion) "小白" else if (recovery) "ABCD-EFGH-IJKL" else "123456"
                     verifyFinished.countDown()
                     return if (accepted) MockResponse().setBody(success)
                         else MockResponse().setResponseCode(401).setBody("""{"error":"验证码不正确，请重试"}""")
@@ -84,13 +88,35 @@ class LoginTwoFactorFlowsTest {
         } }
     }
     private fun field(tag: String, value: String) = compose.onNodeWithTag(tag).performScrollTo().performTextReplacement(value)
+    private fun clickLogin() {
+        // IME resize is outside Compose's animation clock; dismiss it before coordinate clicks.
+        val decor = compose.runOnIdle {
+            val activity = androidx.test.runner.lifecycle.ActivityLifecycleMonitorRegistry.getInstance()
+                .getActivitiesInStage(androidx.test.runner.lifecycle.Stage.RESUMED).first()
+            activity.window.decorView.also { view ->
+                val keyboard = activity.getSystemService(android.content.Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                keyboard.hideSoftInputFromWindow(view.windowToken, 0)
+            }
+        }
+        compose.waitUntil(5000) {
+            compose.runOnIdle { androidx.core.view.ViewCompat.getRootWindowInsets(decor)
+                ?.isVisible(androidx.core.view.WindowInsetsCompat.Type.ime()) != true }
+        }
+        compose.onNodeWithTag("login_submit").performScrollTo().performClick()
+    }
     private fun begin() {
         field("login_username", "listener"); field("login_password", "test-password")
-        compose.onNodeWithTag("login_submit").performScrollTo().performClick()
-        compose.waitUntil(5000) { vm.loginChallenge.value != null }
+        clickLogin()
+        awaitLogin { vm.loginChallenge.value != null }
         compose.onNodeWithTag("login_two_factor").assertExists()
         assertEquals("existing-session", container.accountRepository.token)
         assertEquals(0, completions.get()); assertEquals(0, verifyCalls.get())
+    }
+    private fun awaitLogin(condition: () -> Boolean) {
+        try { compose.waitUntil(5000, condition) }
+        catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
+            throw AssertionError("Login did not finish: requests=${loginCalls.get()}, state=${vm.state.value}, signedIn=${container.accountRepository.state.value.account?.id}", e)
+        }
     }
     private fun submit() = compose.onNodeWithTag("login_two_factor_submit").performScrollTo().performClick()
 
@@ -105,6 +131,42 @@ class LoginTwoFactorFlowsTest {
         field("login_two_factor_code", "123456"); submit()
         compose.waitUntil(5000) { completions.get() == 1 && container.accountRepository.token == "new-login-session" }
         assertEquals(2, verifyCalls.get()); assertNull(vm.loginChallenge.value)
+    }
+    @Test fun emailCodeLoginCanCompleteSecurityQuestionWithoutPassword() {
+        securityQuestion = true; open()
+        compose.onNodeWithTag("login_passkey").assertExists()
+        compose.onNodeWithTag("login_method_1").performScrollTo().performClick()
+        compose.onNodeWithTag("login_password").assertDoesNotExist()
+        field("login_email", "listener@example.org")
+        compose.onNodeWithTag("login_email_send_code").performScrollTo().performClick()
+        compose.waitUntil(5000) { vm.loginEmailCodeUntil.value > 0 && !vm.state.value.loading }
+        compose.onNodeWithTag("login_email_send_code").assertIsNotEnabled()
+        field("login_email_code", "123456")
+        clickLogin()
+        compose.waitUntil(5000) { vm.loginChallenge.value != null }
+        compose.onNodeWithText("第一只宠物的名字？").assertExists()
+        compose.onNodeWithTag("login_two_factor_method").assertDoesNotExist()
+        assertEquals("existing-session", container.accountRepository.token)
+        field("login_two_factor_code", "小白"); submit()
+        compose.waitUntil(5000) { completions.get() == 1 }
+        assertEquals("new-login-session", container.accountRepository.token)
+    }
+    @Test fun switchingLoginMethodsClearsSecretsAndKeepsRegistrationSeparate() {
+        open()
+        field("login_password", "must-not-survive")
+        compose.onNodeWithTag("login_method_1").performScrollTo().performClick()
+        field("login_email_code", "123456")
+        compose.onNodeWithTag("login_method_0").performScrollTo().performClick()
+        compose.onNodeWithTag("login_password").assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
+        compose.onNodeWithTag("login_submit").assertIsNotEnabled()
+        compose.onNodeWithTag("login_method_1").performScrollTo().performClick()
+        compose.onNodeWithTag("login_email_code").assert(SemanticsMatcher.expectValue(
+            androidx.compose.ui.semantics.SemanticsProperties.EditableText, androidx.compose.ui.text.AnnotatedString("")))
+        compose.onNodeWithTag("login_switch_mode").performScrollTo().performClick()
+        compose.onNodeWithTag("register_card").assertExists()
+        compose.onNodeWithTag("login_email_send_code").assertDoesNotExist()
+        compose.onNodeWithTag("login_passkey").assertDoesNotExist()
     }
     @Test fun recoveryCodeCanCompleteTheSecondStepInDarkLargeType() {
         recovery = true; open(true); begin()
@@ -137,7 +199,7 @@ class LoginTwoFactorFlowsTest {
     @Test fun verifiedLoginStillFinishesWhenTheRootLoginFormDisposes(): Unit = runBlocking {
         container.accountRepository.clear(); open(root = true)
         field("login_username", "listener"); field("login_password", "test-password")
-        compose.onNodeWithTag("login_submit").performScrollTo().performClick()
+        clickLogin()
         compose.waitUntil(5000) { vm.loginChallenge.value != null }
         assertNull(container.accountRepository.token)
         field("login_two_factor_code", "123456"); submit()
@@ -149,8 +211,8 @@ class LoginTwoFactorFlowsTest {
     @Test fun ordinaryLoginStillFinishesWhenTheRootLoginFormDisposes(): Unit = runBlocking {
         twoFactor = false; container.accountRepository.clear(); open(root = true)
         field("login_username", "listener"); field("login_password", "test-password")
-        compose.onNodeWithTag("login_submit").performScrollTo().performClick()
-        compose.waitUntil(5000) { vm.state.value.message == "登录成功" }
+        clickLogin()
+        awaitLogin { vm.state.value.message == "登录成功" }
         compose.onNodeWithTag("signed_in").assertIsDisplayed()
         assertEquals("new-login-session", container.accountRepository.token)
         assertEquals(1, loginCalls.get()); assertEquals(0, verifyCalls.get())
