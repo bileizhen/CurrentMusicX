@@ -143,12 +143,12 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
     }
 }
 
-data class DiscoverState(val query: String = "", val submitted: String = "", val sort: String = "reg",
+data class DiscoverState(val query: String = "", val submitted: String = "", val sort: String = "composite",
     val listening: Boolean = false, val loading: Boolean = false, val users: List<SquareUser> = emptyList(),
     val total: Int = 0, val stats: SquareStats = SquareStats(), val error: String? = null,
     val loaded: Boolean = false, val nextOffset: Int = 0, val hasMore: Boolean = true,
     val loadingMore: Boolean = false, val failedMore: Boolean = false)
-internal val userSortOptions = listOf("reg" to "最新注册", "reg_asc" to "最早注册", "name" to "昵称",
+internal val userSortOptions = listOf("composite" to "综合", "active" to "最近活跃", "level" to "等级", "reg" to "最新注册", "reg_asc" to "最早注册", "name" to "昵称",
     "days" to "听歌天数", "listen" to "听歌时长", "likes" to "点赞数")
 class DiscoverViewModel(val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(DiscoverState())

@@ -28,7 +28,7 @@ fun userRole(isAdmin: Boolean, isSuper: Boolean, isOwner: Boolean = false): User
     @JsonNames("is_super") @Serializable(with = ApiBooleanSerializer::class) val isSuper: Boolean = false,
     val title: String = "", @JsonNames("ip_region") val ipRegion: String = "",
     @JsonNames("is_owner") @Serializable(with = ApiBooleanSerializer::class) val isOwner: Boolean = false,
-    val isBot: Boolean = false) {
+    val isBot: Boolean = false, val level: Int? = null, val points: Long? = null) {
     val role get() = userRole(isAdmin, isSuper, isOwner)
     val decoration get() = avatarDecoration.ifBlank { legacyDecoration }
     val visible get() = publicSquare ?: public ?: legacyPublic
@@ -42,11 +42,11 @@ fun userRole(isAdmin: Boolean, isSuper: Boolean, isOwner: Boolean = false): User
     @JsonNames("is_admin") @Serializable(with = ApiBooleanSerializer::class) val isAdmin: Boolean = false,
     @JsonNames("is_super") @Serializable(with = ApiBooleanSerializer::class) val isSuper: Boolean = false,
     val title: String = "", @JsonNames("ip_region") val ipRegion: String = "",
-    @JsonNames("is_owner") @Serializable(with = ApiBooleanSerializer::class) val isOwner: Boolean = false) {
+    @JsonNames("is_owner") @Serializable(with = ApiBooleanSerializer::class) val isOwner: Boolean = false, val level: Int? = null) {
     val role get() = userRole(isAdmin, isSuper, isOwner)
     fun profileUser() = ProfileUser(id = id, nickname = nickname, avatar = avatar, bio = bio,
         avatarDecoration = avatarDecoration.ifBlank { legacyDecoration }, isAdmin = isAdmin, isSuper = isSuper,
-        title = title, ipRegion = ipRegion, isOwner = isOwner)
+        title = title, ipRegion = ipRegion, isOwner = isOwner, level = level)
 }
 @Serializable data class SquareStats(val users: Int = 0, val listening: Int = 0)
 @Serializable data class SquareDto(val total: Int = 0, val users: List<SquareUser> = emptyList(), val stats: SquareStats = SquareStats())

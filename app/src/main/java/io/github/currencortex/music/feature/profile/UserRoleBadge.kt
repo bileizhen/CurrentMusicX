@@ -50,3 +50,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         }
     }
 }
+
+@Composable internal fun UserLevelBadge(level: Int?, modifier: Modifier = Modifier) {
+    val label = io.github.currencortex.music.data.profile.userLevelLabel(level) ?: return
+    val color = MiuixTheme.colorScheme.primary
+    Text(label, modifier.testTag("user_level").background(color.copy(alpha = .08f), RoundedCornerShape(5.dp))
+        .padding(horizontal = 6.dp, vertical = 2.dp), color = color, fontSize = 10.sp, maxLines = 1)
+}
