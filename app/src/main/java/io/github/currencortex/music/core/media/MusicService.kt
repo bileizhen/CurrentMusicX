@@ -193,7 +193,7 @@ class MusicService : MediaSessionService() {
         transitions = PlaybackTransitions(createPlaybackPlayer(probe), probe, scope, ::createPlaybackPlayer,
             ::transitionOffer, resolve = { offer ->
                 val resolved = container.audioSources.resolve(offer.request)
-                MediaItemFactory.create(offer.next, resolved.source.url, resolved.key.takeIf(String::isNotBlank))
+                MediaItemFactory.create(offer.next, resolved.source.url, resolved.key.takeIf(String::isNotBlank), resolved.source)
             }, promote = ::promoteTransition, discard = { playerSlots.remove(it)?.equalizer?.close(); deckVolumes.remove(it) },
             currentSong = { container.playbackQueue.state.value.current },
             readVolume = { deckVolumes[it] ?: 1f }, writeVolume = ::deckVolume)
@@ -612,7 +612,7 @@ class MusicService : MediaSessionService() {
         else if (container.playbackQueue.state.value.radioSession != null) container.playerController.onRadioBoundary?.invoke()
     }
     private fun previousSong() { container.playbackQueue.previous(); prepareSong(true, 0) }
-    private fun prepareSong(play: Boolean, position: Long, newPlayback: Boolean = false) {
+    private fun prepareSong(play: Boolean, position: Long, newPlayback: Boolean = false, refreshSource: Boolean = false) {
         if (container.playerController.state.value.mode != PlayerMode.LOCAL) return
         loading?.cancel()
         musicHaptics.close()
@@ -631,7 +631,7 @@ class MusicService : MediaSessionService() {
             audioFocusReady.await()
             when (val result = appResult { withContext(Dispatchers.IO) {
                 if (song.video) ResolvedAudio(io.github.currencortex.music.data.song.AudioSource(container.libraryRepository.mvSource(song.mv, song.videoQuality), "video", 0, 0), "")
-                else container.audioSources.resolve(audioRequest(song, container.musicSettings.snapshot().quality))
+                else container.audioSources.resolve(audioRequest(song, container.musicSettings.snapshot().quality), refresh = refreshSource)
             } }) {
                 is AppResult.Failure -> container.playerController.state.value = container.playerController.state.value.copy(playing = false,
                     playRequested = false, loading = false, resolving = false, error = result.kind.message)
@@ -639,8 +639,8 @@ class MusicService : MediaSessionService() {
                     if (container.playbackQueue.state.value.current?.id != song.id) return@launch
                     val source = result.value.source
                     container.playerController.state.value = container.playerController.state.value.copy(resolving = false, error = null,
-                        audioFullyCached = source.url.startsWith("cache://audio/"))
-                    engine.prepare(MediaItemFactory.create(song, source.url, result.value.key.takeIf(String::isNotBlank)), position, play)
+                        audioFullyCached = source.url.startsWith("cache://audio/"), audioInfo = AudioStreamInfo.from(source))
+                    engine.prepare(MediaItemFactory.create(song, source.url, result.value.key.takeIf(String::isNotBlank), source), position, play)
                 }
             }
         }
@@ -681,7 +681,8 @@ class MusicService : MediaSessionService() {
                         pauseFade.pause(!directOutput() && player.isPlaying)
                     } else if (args.getBoolean("seek") && player.playbackState == Player.STATE_READY) player.seekTo(position)
                 }
-                LOAD -> prepareSong(args.getBoolean("play", true), args.getLong("position", 0))
+                LOAD -> prepareSong(args.getBoolean("play", true), args.getLong("position", 0),
+                    refreshSource = args.getBoolean("refreshSource"))
                 else -> return@future SessionResult(SessionError.ERROR_NOT_SUPPORTED)
             }
             SessionResult(SessionResult.RESULT_SUCCESS)

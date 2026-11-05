@@ -204,6 +204,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(user.nickname, Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 UserRoleBadge(user.role)
+                UserLevelBadge(user.level)
             }
             UserIdentityDetails(user.title, user.ipRegion)
             if (user.bio.isNotBlank()) Text(user.bio, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,

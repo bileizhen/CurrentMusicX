@@ -44,7 +44,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 /** Quality is a requested level, never a claim about the stream returned by the provider. */
 @Composable internal fun AudioQualitySheet(selected: AudioQuality, onSelect: (AudioQuality) -> Unit,
     onDismiss: () -> Unit, enabled: Boolean = true, title: String = "当前歌曲音质", onNetwork: (() -> Unit)? = null,
-    song: Song? = null, insights: SongInsightsRepository? = null) {
+    song: Song? = null, insights: SongInsightsRepository? = null,
+    audioInfo: io.github.currencortex.music.core.media.AudioStreamInfo? = null, onRefresh: (() -> Unit)? = null) {
     var visible by remember { mutableStateOf(true) }
     var afterDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
     val dismiss by rememberUpdatedState(onDismiss)
@@ -58,6 +59,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 visible = false
             }
         }, enabled, onNetwork?.let { action -> { afterDismiss = action; visible = false } }, extraContent = {
+            audioInfo?.let { info ->
+                Text("实际播放 · ${info.summary}", Modifier.padding(4.dp).testTag("actual_audio_source"), fontSize = 13.sp)
+                if (info.matched) Text("官方音源暂不可用，正在播放匹配音源。音质与版本以实际文件为准。",
+                    Modifier.padding(4.dp), fontSize = 12.sp)
+            }
+            onRefresh?.let { refresh -> MusicTextAction("重新获取音源", { afterDismiss = refresh; visible = false }, Modifier.testTag("refresh_audio_source")) }
             if (visible && song != null && insights != null && NeteaseSongActionsRepository.songId(song) != null)
                 SongQualityFileDetails(song, insights)
         })

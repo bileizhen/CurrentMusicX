@@ -18,8 +18,9 @@ import java.security.MessageDigest
 /** Public metadata only. Credentials reside in separate Keystore-encrypted files. */
 @Serializable data class SavedAccount(val key: String, val id: Long, val server: String,
     val username: String = "", val nickname: String = "", val avatar: String = "",
-    val isAdmin: Boolean = false, val isSuper: Boolean = false, val title: String = "") {
-    fun account() = Account(id, nickname.ifBlank { username }, username, avatar, isAdmin, isSuper, title)
+    val isAdmin: Boolean = false, val isSuper: Boolean = false, val title: String = "",
+    val level: Int? = null, val points: Long? = null) {
+    fun account() = Account(id, nickname.ifBlank { username }, username, avatar, isAdmin, isSuper, title, level, points)
 }
 interface AccountVault {
     val accounts: StateFlow<List<SavedAccount>>
@@ -42,7 +43,7 @@ class EncryptedAccountVault(private val preferences: DataStore<Preferences>, sco
     override suspend fun remember(server: String, user: UserDto, token: String) {
         val key = accountKey(server, user.id)
         withContext(Dispatchers.IO) { tokenStore(key).write(token) }
-        val entry = SavedAccount(key, user.id, server, user.username, user.nickname, user.avatar, user.isAdmin, user.isSuper, user.title)
+        val entry = SavedAccount(key, user.id, server, user.username, user.nickname, user.avatar, user.isAdmin, user.isSuper, user.title, user.level, user.points)
         preferences.edit { p -> p[entriesKey] = ApiJson.encodeToString(listOf(entry) + entries(p).filterNot { it.key == key }); p[activeKey] = key }
     }
     override suspend fun credential(key: String): Pair<SavedAccount, String>? {

@@ -36,11 +36,11 @@ class MusicRepository(private val api: ApiClient,
     suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.EMBY) appResult {
         io.github.currencortex.music.feature.lyrics.model.LyricsDocument(metadata = io.github.currencortex.music.feature.lyrics.model.LyricsMetadata(source = "Emby"))
     } else if (song.musicSource == MusicSource.NAVIDROME) appResult { requireNotNull(navidrome).lyrics(song) } else lyricsDocument(song.id)
-    suspend fun source(song: Song, quality: AudioQuality, session: RequestSession? = null): AudioSource {
+    suspend fun source(song: Song, quality: AudioQuality, session: RequestSession? = null, refresh: Boolean = false): AudioSource {
         if (song.musicSource == MusicSource.NAVIDROME) return requireNotNull(navidrome).source(song, quality)
         if (song.musicSource == MusicSource.EMBY) return requireNotNull(emby).source(song)
         val access = audioAccess()
-        return if (access.provider == AudioProvider.LX) lxSource(song, quality, access) else source(song.id, quality, session)
+        return if (access.provider == AudioProvider.LX) lxSource(song, quality, access) else source(song.id, quality, session, refresh)
     }
     private suspend fun lxSource(song: Song, quality: AudioQuality, access: AudioSourceAccess): AudioSource {
         val result = try { requireNotNull(lx) { "落雪音源尚未初始化" }.source(song, quality, access.lxSourceId) }
@@ -157,7 +157,7 @@ class MusicRepository(private val api: ApiClient,
         else if (source == LyricsSource.CURRENT_MUSIC) throw ApiException(ErrorKind.Server)
         else read("ncm/lyric")
     }
-    suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null): AudioSource {
+    suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null, refresh: Boolean = false): AudioSource {
         val access = audioAccess()
         if (access.provider == AudioProvider.LX) return lxSource(Song(id, ""), quality, access)
         if (access.provider == AudioProvider.LEIZ) {
@@ -165,7 +165,10 @@ class MusicRepository(private val api: ApiClient,
             if (audioAccess().identity != access.identity) throw ApiException(ErrorKind.AudioSourceChanged)
             return source
         }
-        val query = mapOf("id" to "$id", "level" to quality.value)
+        val query = buildMap {
+            put("id", "$id"); put("level", quality.value)
+            if (refresh && access.provider == AudioProvider.CURRENT_MUSIC) put("refresh", "1")
+        }
         val dto = if (access.provider == AudioProvider.NETEASE) {
             val gateway = api.netease ?: throw ApiException(ErrorKind.NotFound)
             ApiJson.decodeFromJsonElement<SongUrlDto>(gateway.request("GET", "ncm/song/url", query, null,
@@ -177,7 +180,9 @@ class MusicRepository(private val api: ApiClient,
         if (audioAccess().identity != access.identity) throw ApiException(ErrorKind.AudioSourceChanged)
         // Both sources report expi. Bound reuse to five minutes when a server omits it.
         return AudioSource(url.toString(), dto.level, maxOf(dto.sr, dto.sampleRate), maxOf(dto.ch, dto.channelCount), dto.type, dto.md5,
-            validForSeconds = dto.expi.takeIf { it > 0 } ?: 300)
+            validForSeconds = dto.expi.takeIf { it > 0 } ?: if (dto.level == "matched" || dto.source == "netease-match") 120 else 300,
+            source = dto.source, requestedLevel = dto.requestedLevel, matchSource = dto.matchSource,
+            bitrate = dto.br, bits = dto.bits, size = dto.size, durationMs = dto.durationMs, expectedDurationMs = dto.expectedDurationMs)
     }
 }
 
