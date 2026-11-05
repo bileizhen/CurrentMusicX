@@ -1,12 +1,16 @@
 package io.github.currencortex.music.feature.profile
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.selection.SelectionContainer
+import io.github.currencortex.music.ui.component.nativeui.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.geometry.Rect
+import top.yukonga.miuix.kmp.blur.layerBackdrop
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
@@ -16,74 +20,116 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import coil3.compose.AsyncImage
 import io.github.currencortex.music.data.profile.*
 import io.github.currencortex.music.data.song.Song
-import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.feature.update.MarkdownText
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.util.collectAsPageState
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.distinctUntilChanged
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private fun postTime(seconds: Long) = if (seconds <= 0) "" else
-    SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(seconds * 1000))
+private fun postTime(seconds: Long): String {
+    if (seconds <= 0) return ""
+    val age = (System.currentTimeMillis() / 1000 - seconds).coerceAtLeast(0)
+    return when {
+        age < 60 -> "刚刚"
+        age < 3600 -> "${age / 60} 分钟前"
+        age < 86400 -> "${age / 3600} 小时前"
+        age < 86400 * 30 -> "${age / 86400} 天前"
+        else -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(seconds * 1000))
+    }
+}
 
 @Suppress("DEPRECATION")
 @Composable internal fun PostsScreen(vm: PostsViewModel, navigate: (String) -> Unit, contentTopInset: androidx.compose.ui.unit.Dp = 0.dp) {
     val state by vm.state.collectAsPageState()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
-    val songFlow = remember(vm) { vm.container.playerController.state.map { it.song }.distinctUntilChanged() }
-    val playingSong by songFlow.collectAsStateWithLifecycle(initialValue = null)
     val bottom = LocalMusicBottomInset.current
     val clipboard = LocalClipboardManager.current
     var deleting by remember { mutableStateOf<CommunityPost?>(null) }
+    var options by remember { mutableStateOf<CommunityPost?>(null) }
+    var menuAnchor by remember { mutableStateOf<Rect?>(null) }
+    var menuOpen by remember { mutableStateOf(false) }
+    val menuBackdrop = rememberGlassBackdrop()
+    val menuItems = options?.let { post -> buildList {
+        add(GlassMenuItem("post_menu_copy", "复制正文", MusicIcons.Copy, onClick = {
+            clipboard.setText(AnnotatedString(post.content)); menuOpen = false
+        }))
+        if (post.canDelete) add(GlassMenuItem("post_delete_${post.id}", "删除帖子", MusicIcons.Trash, danger = true,
+            enabled = !state.busy, onClick = { menuOpen = false; deleting = post }))
+    } }.orEmpty()
     var deletingComment by remember { mutableStateOf<PostComment?>(null) }
-    LaunchedEffect(account.account?.id) { deleting = null; deletingComment = null }
+    LaunchedEffect(account.account?.id) { deleting = null; deletingComment = null; options = null; menuOpen = false }
+    Box(Modifier.fillMaxSize()) {
+    GlassMenu(menuOpen, { menuOpen = it }, menuItems, menuAnchor, menuBackdrop,
+        GlassMenuTags("post_menu_panel", "post_menu_dismiss", "post_menu_action"), bottomInset = bottom,
+        content = {
+    Box(Modifier.fillMaxSize().then(if (menuBackdrop != null) Modifier.layerBackdrop(menuBackdrop) else Modifier)) {
     MusicPullToRefresh(state.loading, { vm.reload() }, Modifier.fillMaxSize()) {
     LazyColumn(Modifier.fillMaxSize().testTag("discover_posts"),
         contentPadding = PaddingValues(start = 16.dp, top = contentTopInset + 8.dp, end = 16.dp, bottom = 20.dp + bottom),
         verticalArrangement = Arrangement.spacedBy(14.dp)) {
         rootMotionItems {
-        item { Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (state.loaded) "${state.total} 条帖子" else "音乐与生活", Modifier.weight(1f), fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
-            MusicTextAction(if (account.account == null) "登录后发帖" else "发帖", {
-                if (account.account == null) navigate("user/login") else vm.editor(true)
-            }, Modifier.testTag("post_create"))
+        item {
+            SettingsGroup {
+                SettingsPreference(if (account.account == null) "登录后分享" else "分享此刻",
+                    "聊聊音乐，记录你的日常", Modifier.testTag("post_create"), onClick = {
+                        if (account.account == null) navigate("user/login") else vm.editor(true)
+                    }, leading = { Icon(MusicIcons.Add, null, Modifier.size(24.dp), tint = MiuixTheme.colorScheme.primary) },
+                    trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = MiuixTheme.colorScheme.onSurfaceVariantSummary) })
+            }
+        }
+        item { Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("社区动态", Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(if (state.loaded) "${state.total} 条" else "", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         } }
         state.message?.let { item { Text(it, fontSize = 13.sp, color = MiuixTheme.colorScheme.primary) } }
         state.error?.let { item { Text(it); MusicTextAction("重试", { vm.reload() }, Modifier.testTag("post_retry")) } }
         if (state.loading && state.posts.isEmpty()) item { LoadingPostList() }
         if (state.loaded && !state.loading && state.posts.isEmpty() && state.error == null) item {
-            Text("还没有帖子，分享你的音乐生活吧", Modifier.testTag("posts_empty"), fontSize = 14.sp)
+            SettingsGroup {
+                Column(Modifier.fillMaxWidth().padding(24.dp).testTag("posts_empty"),
+                    horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Icon(MusicIcons.Comment, null, Modifier.size(32.dp), tint = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    Text("还没有动态", fontSize = 17.sp, fontWeight = FontWeight.Medium)
+                    Text("分享一首歌，开启一段交流", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                }
+            }
         }
         items(state.posts, key = { it.id }) { post ->
-            Card(Modifier.fillMaxWidth().testTag("post_${post.id}")) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Row(Modifier.fillMaxWidth().clickable { navigate("user/profile/${post.author.id}") },
-                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        UserAvatar(post.author, vm.container, 36.dp, reserveOverlay = false)
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            SettingsGroup(Modifier.testTag("post_${post.id}")) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Row(Modifier.weight(1f).clickable { navigate("user/profile/${post.author.id}") },
+                        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        UserAvatar(post.author, vm.container, 40.dp, reserveOverlay = false)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(post.author.nickname.ifBlank { post.author.username }, Modifier.weight(1f), fontSize = 14.sp,
+                                Text(post.author.nickname.ifBlank { post.author.username }, Modifier.weight(1f, fill = false), fontSize = 15.sp,
                                     fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 UserRoleBadge(post.author.role)
                             }
                             UserIdentityDetails(post.author.title, post.author.ipRegion)
-                            Text(postTime(post.createdAt), fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .45f))
+                            Text(postTime(post.createdAt), fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                         }
                     }
-                    var expanded by rememberSaveable(post.id) { mutableStateOf(false) }
+                    var bounds by remember(post.id) { mutableStateOf<Rect?>(null) }
+                    GlassIconButton({ options = post; menuAnchor = bounds; menuOpen = true }, "帖子操作",
+                        Modifier.testTag("post_more_${post.id}"), onBoundsChanged = { bounds = it }, opensMenu = true, surface = false) {
+                        Icon(MusicIcons.More, null, Modifier.size(20.dp))
+                    }
+                }
+                var expanded by rememberSaveable(post.id) { mutableStateOf(false) }
+                SelectionContainer {
                     MarkdownText(if (!expanded && post.content.length > 600) post.content.take(600) + "…" else post.content, compact = true)
-                    if (post.content.length > 600) MusicTextAction(if (expanded) "收起" else "展开全文", { expanded = !expanded })
-                    post.attachments.forEach { attachment ->
-                        Row(Modifier.fillMaxWidth().clickable(enabled = attachment.id > 0) {
+                }
+                if (post.content.length > 600) MusicTextAction(if (expanded) "收起" else "展开全文", { expanded = !expanded })
+                post.attachments.forEach { attachment ->
+                    PostAttachmentTile(attachment, Modifier.testTag("post_attachment_${post.id}_${attachment.type}_${attachment.id}"),
+                        enabled = attachment.id > 0, onClick = {
                             when (attachment.type) {
                                 "song" -> vm.container.playerController.playList(listOf(Song(attachment.id, attachment.name,
                                     attachment.sub, cover = attachment.pic)), 0)
@@ -91,23 +137,17 @@ private fun postTime(seconds: Long) = if (seconds <= 0) "" else
                                 "album" -> navigate("lib/album/${attachment.id}")
                                 "artist" -> navigate("lib/artist/${attachment.id}")
                             }
-                        }.padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                            AsyncImage(attachment.pic, null, Modifier.size(40.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text(attachment.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                Text(attachment.sub, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
-                            }
-                        }
-                    }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        MusicTextAction("${if (post.likedByMe) "已赞" else "赞"} ${post.likeCount}", { vm.like(post) },
-                            Modifier.testTag("post_like_${post.id}"), enabled = !state.busy)
-                        MusicTextAction("评论 ${post.commentCount}", { vm.comments(post.id) }, Modifier.testTag("post_comments_${post.id}"))
+                        })
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        PostAction(MusicIcons.Heart, "${if (post.likedByMe) "取消点赞" else "点赞"} ${post.likeCount}", {
+                            if (account.account == null) navigate("user/login") else vm.like(post)
+                        }, Modifier.testTag("post_like_${post.id}"), count = post.likeCount, selected = post.likedByMe, enabled = !state.busy)
+                        PostAction(MusicIcons.Comment, "评论 ${post.commentCount}", { vm.comments(post.id) },
+                            Modifier.testTag("post_comments_${post.id}"), count = post.commentCount)
                         Spacer(Modifier.weight(1f))
-                        MusicTextAction("复制", { clipboard.setText(AnnotatedString(post.content)) })
-                        if (post.canDelete) MusicTextAction("删除", { deleting = post }, Modifier.testTag("post_delete_${post.id}"), enabled = !state.busy)
+                        PostAction(MusicIcons.Copy, "复制正文", { clipboard.setText(AnnotatedString(post.content)) },
+                            Modifier.testTag("post_copy_${post.id}"))
                     }
                 }
             }
@@ -117,22 +157,10 @@ private fun postTime(seconds: Long) = if (seconds <= 0) "" else
     }
     }
     }
-    if (state.editor) {
-        var attachCurrent by rememberSaveable(account.account?.id) { mutableStateOf(false) }
-        val current = playingSong?.takeIf { it.musicSource == MusicSource.NETEASE }
-        MusicDialog("发帖", { vm.editor(false) }) {
-            TextField(state.draft, vm::draft, Modifier.fillMaxWidth().heightIn(min = 160.dp).testTag("post_draft"))
-            Text("支持 Markdown 格式", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
-            current?.let { SettingsSwitch("附带当前歌曲", attachCurrent, { attachCurrent = it }, summary = it.name) }
-            state.message?.let { Text(it, fontSize = 12.sp) }
-            MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            MusicDialogButton("取消", { vm.editor(false) }, enabled = !state.busy, modifier = Modifier.weight(1f))
-            MusicDialogButton(if (state.busy) "发布中…" else "发布", {
-                vm.publish(if (attachCurrent && current != null) listOf(PostAttachment("song", current.id, current.name, current.artists, current.cover)) else emptyList())
-            }, enabled = !state.busy && state.draft.isNotBlank(), modifier = Modifier.weight(1f).testTag("post_publish"))
-            }
-        }
     }
+    }, toolbar = {})
+    }
+    if (state.editor) PostEditorScreen(vm, state)
     if (state.commentsFor != null && deletingComment == null) {
         var reply by rememberSaveable(state.commentsFor, account.account?.id) { mutableStateOf("") }
         LaunchedEffect(state.message) { if (state.message == "评论已发布") reply = "" }

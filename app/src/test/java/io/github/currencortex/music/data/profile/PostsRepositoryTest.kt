@@ -9,6 +9,41 @@ import org.junit.Test
 import java.util.concurrent.TimeUnit
 
 class PostsRepositoryTest {
+    @Test fun attachmentSearchSupportsAllTypesAndKeepsMoreThanFiveCandidates(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            val base = server.url("/cm/").toString()
+            val repo = PostsRepository(ApiClient({ base }, { "token" }, {})) { RequestSession(base, "token") }
+            for (type in listOf("song", "album", "artist", "playlist")) {
+                server.enqueue(MockResponse().setBody(buildJsonObject {
+                    put(type + "s", JsonArray((1..8).map { id -> buildJsonObject {
+                        put(if (type == "song") "ncm_id" else "id", id); put("name", "$type $id")
+                        put("artists", "演唱者"); put("artist", "专辑作者"); put("alias", "别名"); put("creator", "创建者")
+                    } }))
+                    put("hasMore", buildJsonObject { put(type, true) })
+                }.toString()))
+                val result = repo.searchAttachments("  音乐  ", type, 30)
+                assertEquals(8, result.items.size); assertEquals(38, result.nextOffset); assertTrue(result.hasMore)
+                assertEquals(1L, result.items.first().id)
+                assertEquals(when (type) { "song" -> "演唱者"; "album" -> "专辑作者"; "artist" -> "别名"; else -> "创建者" }, result.items.first().sub)
+                val request = server.takeRequest()
+                assertEquals("音乐", request.requestUrl!!.queryParameter("keywords"))
+                assertEquals(type, request.requestUrl!!.queryParameter("type"))
+                assertEquals("30", request.requestUrl!!.queryParameter("offset"))
+            }
+        }
+    }
+    @Test fun publishingRejectsDuplicateInvalidAndOverLimitAttachmentsBeforeSending(): Unit = runBlocking {
+        MockWebServer().use { server ->
+            val base = server.url("/cm/").toString()
+            val repo = PostsRepository(ApiClient({ base }, { "token" }, {})) { RequestSession(base, "token") }
+            val card = PostAttachment("song", 1, "歌曲")
+            for (cards in listOf(listOf(card, card), listOf(card.copy(type = "unknown")),
+                listOf(card.copy(id = 0)), (1L..6L).map { card.copy(id = it) })) {
+                assertTrue(appResult { repo.create("正文", cards) } is AppResult.Failure)
+            }
+            assertNull(server.takeRequest(100, TimeUnit.MILLISECONDS))
+        }
+    }
     @Test fun publicFeedRetainsTitlesAttachmentsAndPaginationWithoutRequiringLogin(): Unit = runBlocking {
         MockWebServer().use { server ->
             val base = server.url("/cm/").toString()

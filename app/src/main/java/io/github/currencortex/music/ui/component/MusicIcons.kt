@@ -190,6 +190,11 @@ object MusicIcons {
     val Add = icon("Add") { moveTo(12f, 4f); lineTo(12f, 20f); moveTo(4f, 12f); lineTo(20f, 12f) }
     val Close = icon("Close") { moveTo(6f, 6f); lineTo(18f, 18f); moveTo(18f, 6f); lineTo(6f, 18f) }
     val More = icon("More") { repeat(3) { val y = 5f + it * 7f; moveTo(12f, y); lineTo(12f, y + .2f) } }
+    val Comment = icon("Comment") {
+        moveTo(5f, 4f); lineTo(19f, 4f); quadTo(21f, 4f, 21f, 6f)
+        lineTo(21f, 16f); quadTo(21f, 18f, 19f, 18f); lineTo(8f, 18f)
+        lineTo(3f, 22f); lineTo(3f, 6f); quadTo(3f, 4f, 5f, 4f); close()
+    }
     val Pause = icon("Pause") { moveTo(8f, 5f); lineTo(8f, 19f); moveTo(16f, 5f); lineTo(16f, 19f) }
     val Play = icon("Play") { moveTo(7f, 4f); lineTo(20f, 12f); lineTo(7f, 20f); close() }
     val Shuffle = icon("Shuffle") {
