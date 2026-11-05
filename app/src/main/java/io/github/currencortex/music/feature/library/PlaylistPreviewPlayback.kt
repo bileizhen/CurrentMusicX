@@ -28,7 +28,8 @@ internal class PlaylistPreviewPlayback(val enabled: Boolean, val play: (Playlist
     val request = LocalRoomSongRequest.current
     val pageActive = LocalMusicPageActive.current
     val modes = remember(vm) { vm.container.playerController.state.map { it.mode }.distinctUntilChanged() }
-    val mode by modes.collectAsStateWithLifecycle(initialValue = vm.container.playerController.state.value.mode)
+    // Keep playback disabled until the lifecycle-aware collector supplies the actual mode.
+    val mode by modes.collectAsStateWithLifecycle(initialValue = null)
     val allowed by rememberUpdatedState(request == null && mode == PlayerMode.LOCAL && pageActive)
     val currentPlay by rememberUpdatedState(play)
     LaunchedEffect(pageActive) { if (!pageActive) job?.cancel() }
