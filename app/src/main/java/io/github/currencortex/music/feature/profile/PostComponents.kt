@@ -42,12 +42,15 @@ internal fun postAttachmentLabel(type: String) = when (type) {
 @Composable internal fun PostAction(icon: ImageVector, label: String, click: () -> Unit, modifier: Modifier = Modifier,
     count: Int? = null, selected: Boolean = false, enabled: Boolean = true) {
     val color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary
-    Row(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        GlassIconButton(click, label, modifier.semantics { this.selected = selected }, enabled = enabled) {
+    GlassIconButton(click, label, modifier.semantics { this.selected = selected }, enabled = enabled) {
+        if (count == null) {
             Icon(icon, null, Modifier.size(21.dp), tint = color.copy(alpha = if (enabled) 1f else .4f))
-        }
-        count?.takeIf { it > 0 }?.let {
-            Text("$it", Modifier.clearAndSetSemantics {}, fontSize = 12.sp, color = color)
+        } else Box(Modifier.fillMaxSize()) {
+            Icon(icon, null, Modifier.align(Alignment.BottomStart).padding(start = 7.dp, bottom = 7.dp).size(18.dp),
+                tint = color.copy(alpha = if (enabled) 1f else .4f))
+            Text("$count", Modifier.align(Alignment.TopEnd).padding(top = 5.dp, end = 7.dp).widthIn(max = 30.dp)
+                .clearAndSetSemantics {}, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = color.copy(alpha = if (enabled) 1f else .4f))
         }
     }
 }
