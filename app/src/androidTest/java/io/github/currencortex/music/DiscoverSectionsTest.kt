@@ -2,6 +2,7 @@ package io.github.currencortex.music
 
 import androidx.compose.ui.test.*
 import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.core.app.ApplicationProvider
 import io.github.currencortex.music.core.network.ApiJson
@@ -27,6 +28,7 @@ class DiscoverSectionsTest {
     @Volatile private var published = ""
     @Volatile private var reply = ""
     @Volatile private var pagingUsers = false
+    @Volatile private var longUserList = false
     @Volatile private var failUsers = false
     @Volatile private var failNextUserPage = true
     private val userRequests = ConcurrentLinkedQueue<Map<String, String>>()
@@ -108,6 +110,13 @@ class DiscoverSectionsTest {
                         userRequests.add(listOf("query", "sort", "offset", "listening").associateWith { query.queryParameter(it).orEmpty() })
                         when {
                             failUsers -> MockResponse().setResponseCode(503)
+                            longUserList -> json(buildJsonObject {
+                                put("total", 40)
+                                put("users", JsonArray((7..46).map { id -> buildJsonObject {
+                                    put("id", id); put("nickname", "Scrolling user $id")
+                                } }))
+                                put("stats", buildJsonObject { put("users", 40) })
+                            }.toString())
                             pagingUsers && offset == 3 && failNextUserPage -> { failNextUserPage = false; MockResponse().setResponseCode(503) }
                             pagingUsers -> {
                                 val ids = when (offset) { 0 -> listOf(7, 8, 9); 3 -> listOf(9, 10, 11); else -> listOf(12) }
@@ -166,6 +175,70 @@ class DiscoverSectionsTest {
         compose.onNodeWithText("发现").performClick()
         compose.onNodeWithTag("discover_music").assertExists()
     }
+    @Test fun sectionTabsStayFixedWhileUsersAndChatHistoryScrollIndependently() {
+        longUserList = true
+        chatMessages.clear()
+        for (id in 1L..80L) chatMessages[id] = chatMessage(id,
+            "固定切换栏的历史消息 $id\n这是本地测试记录，用来验证消息列表能够独立滚动。", if (id % 2L == 0L) 7L else 8L)
+        // Keep history deterministic; this test reads fixture messages and never publishes.
+        streamOpened.set(true)
+        open()
+        compose.onNodeWithTag("discover_tabs_1").performClick()
+        compose.waitUntil(10000) {
+            directory.state.value.loaded && !directory.state.value.loading && directory.state.value.users.size == 40
+        }
+        compose.waitForIdle()
+        fun bounds(tag: String) = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
+        fun scrollPosition(tag: String) = compose.onNodeWithTag(tag).fetchSemanticsNode()
+            .config[SemanticsProperties.VerticalScrollAxisRange].value()
+        fun assertTabsVisible() {
+            (0..3).forEach { compose.onNodeWithTag("discover_tabs_$it").assertIsDisplayed() }
+        }
+        val userTabs = bounds("discover_tabs")
+        val toolbar = bounds("discover_root_toolbar")
+        val beforeUsers = scrollPosition("discover_users_list")
+        compose.onNodeWithTag("discover_users_list").performTouchInput {
+            swipeUp(startY = height * .8f, endY = height * .2f, durationMillis = 400)
+        }
+        compose.waitForIdle()
+        assertTrue("The user list must actually move", scrollPosition("discover_users_list") > beforeUsers)
+        assertEquals("Scrolling users must not move the section tabs", userTabs, bounds("discover_tabs"))
+        assertEquals("Scrolling users must not move the root toolbar", toolbar, bounds("discover_root_toolbar"))
+        assertTabsVisible()
+        compose.onNodeWithTag("discover_tabs_1").assertIsSelected()
+
+        compose.onNodeWithTag("discover_tabs_3").performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("chat_message_80").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitForIdle()
+        assertTabsVisible()
+        compose.onNodeWithTag("discover_tabs_3").assertIsSelected()
+        val chatTabs = bounds("discover_tabs")
+        val chatHeader = bounds("chat_header")
+        val composer = bounds("chat_composer")
+        val messages = bounds("chat_messages")
+        assertEquals("Entering Chat keeps the tabs at the same top position", userTabs.top, chatTabs.top, 1f)
+        assertTrue("Chat controls start below the fixed section tabs", chatHeader.top >= chatTabs.bottom - 1f)
+        val beforeMessages = scrollPosition("chat_messages")
+        // Chat is reverse-layout: drag downward inside the area between its own fixed controls.
+        compose.onNodeWithTag("chat_messages").performTouchInput {
+            val clearTop = chatHeader.bottom - messages.top
+            val clearBottom = composer.top - messages.top
+            val travel = clearBottom - clearTop
+            swipeDown(startY = clearTop + travel * .2f, endY = clearTop + travel * .8f, durationMillis = 450)
+        }
+        compose.waitForIdle()
+        assertTrue("The history gesture must reach the message list", scrollPosition("chat_messages") > beforeMessages)
+        assertEquals("Scrolling Chat must not move its section tabs", chatTabs, bounds("discover_tabs"))
+        assertEquals("Chat's own header stays fixed", chatHeader, bounds("chat_header"))
+        assertEquals("Chat's composer stays fixed", composer, bounds("chat_composer"))
+        assertTabsVisible()
+        compose.onNodeWithTag("discover_tabs_1").performClick()
+        compose.onNodeWithTag("discover_users_list").assertIsDisplayed()
+        compose.onNodeWithTag("discover_tabs_1").assertIsSelected()
+        assertEquals("Returning from Chat must not leave the tabs collapsed", userTabs, bounds("discover_tabs"))
+        assertEquals("Scrolling tests must never publish chat messages", 0, chatWrites.get())
+    }
+
     @Test fun chatScrollingKeepsSectionTabsVisibleForLeavingChat() {
         repeat(30) { index -> chatMessages[index + 10L] = chatMessage(index + 10L, "历史消息 $index") }
         open()
