@@ -61,7 +61,7 @@ class RootPageChromeTest {
             customTextScale = true, textScale = scale) } }
         compose.setContent { CurrentMusicApp(container) }
         awaitTag("tab_0")
-        val theme = if(dark)"dark-large"else "light"
+        val theme = if(dark)"dark-large" else "light"
         for((tab, bar, list) in listOf(Triple(0,"home_root_toolbar","music_home"),
             Triple(1,"discover_root_toolbar","discover_music"), Triple(2,"me_root_toolbar","profile_screen"))) {
             compose.onNodeWithTag("tab_$tab").performClick()
@@ -74,6 +74,7 @@ class RootPageChromeTest {
                 compose.onNodeWithTag("style_catalog_expand").performScrollTo().performClick()
                 compose.onNodeWithTag("discover_tabs_0").assertIsSelected()
             }
+            val fixedTabs = if (tab == 1) compose.onNodeWithTag("discover_tabs").fetchSemanticsNode().boundsInRoot else null
             capture("root-$tab-$theme.png")
             val body = compose.onNodeWithTag(list)
             val before = body.fetchSemanticsNode().config[SemanticsProperties.VerticalScrollAxisRange].value()
@@ -86,7 +87,9 @@ class RootPageChromeTest {
             compose.onNodeWithTag(bar).assertIsDisplayed()
             if(tab==0)compose.onNodeWithTag("home_profile_avatar").assertIsDisplayed()
             if (tab == 1) {
-                compose.onNodeWithTag("discover_tabs_0").assertIsNotDisplayed()
+                compose.onNodeWithTag("discover_tabs_0").assertIsDisplayed().assertIsSelected()
+                assertEquals("Discover section tabs must stay fixed while music scrolls", fixedTabs,
+                    compose.onNodeWithTag("discover_tabs").fetchSemanticsNode().boundsInRoot)
                 capture("discover-tabs-scrolled-$theme.png")
                 body.performScrollToIndex(0)
                 body.performTouchInput {
