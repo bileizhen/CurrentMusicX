@@ -133,7 +133,19 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 }
                 val raw = transport.request("/api/w/nuser/account/get", encoding = NeteaseEncoding.WEB, session = expected).body
                 val user = profile(raw)
-                if (user == null) sessions.markStale(expected)
+                val code = raw.long("code").toInt()
+                if (code in setOf(301, 401) ||
+                    (code == 200 && raw["account"] == JsonNull && raw["profile"] == JsonNull)) {
+                    sessions.markStale(expected)
+                } else if (code != 200 || user == null) {
+                    // A transient error or incomplete response is not proof that the saved login expired.
+                    throw ApiException(when (code) {
+                        403 -> ErrorKind.Forbidden
+                        406, 429 -> ErrorKind.RateLimited
+                        200 -> ErrorKind.Parse
+                        else -> ErrorKind.Server
+                    }, code)
+                }
                 return ApiJson.encodeToJsonElement(LiveBinding.serializer(), LiveBinding(true, user != null, user ?: current.profile))
             }
             "ncmbind/qr/key" -> {

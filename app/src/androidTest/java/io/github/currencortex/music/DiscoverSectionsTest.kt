@@ -166,6 +166,24 @@ class DiscoverSectionsTest {
         compose.onNodeWithText("发现").performClick()
         compose.onNodeWithTag("discover_music").assertExists()
     }
+    @Test fun chatScrollingKeepsSectionTabsVisibleForLeavingChat() {
+        repeat(30) { index -> chatMessages[index + 10L] = chatMessage(index + 10L, "历史消息 $index") }
+        open()
+        compose.onNodeWithTag("discover_tabs_3").performClick()
+        compose.waitUntil(10_000) { compose.onAllNodesWithTag("chat_message_39").fetchSemanticsNodes().isNotEmpty() }
+        val before = compose.onNodeWithTag("discover_tabs_0").fetchSemanticsNode().boundsInRoot
+        repeat(2) {
+            compose.onNodeWithTag("chat_messages").performTouchInput { swipeUp() }
+            compose.onNodeWithTag("discover_tabs_0").assertIsDisplayed()
+            compose.onNodeWithTag("chat_messages").performTouchInput { swipeDown() }
+            compose.onNodeWithTag("discover_tabs_0").assertIsDisplayed()
+        }
+        assertEquals(before, compose.onNodeWithTag("discover_tabs_0").fetchSemanticsNode().boundsInRoot)
+        compose.onNodeWithTag("discover_tabs_0").performClick()
+        compose.onNodeWithTag("discover_music").assertIsDisplayed()
+        assertEquals(0, chatWrites.get())
+    }
+
     @Test fun chatHidesTheWholeDockAndReleasesComposerSpaceThenRestoresItOnExit() {
         val song = io.github.currencortex.music.data.song.Song(900, "暂停的测试歌曲")
         container.playerController.queue.replace(listOf(song), 0)

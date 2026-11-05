@@ -117,16 +117,6 @@ import kotlin.math.roundToInt
                         enabled = Build.VERSION.SDK_INT >= 34, modifier = Modifier.testTag("setting_predictive"))
                 }
             }
-            item("playlist_appearance") {
-                AppearanceSection("歌单样式", MusicIcons.Image) {
-                    SettingsSwitch("歌单立体缎带", config.playlistDepthRibbon, { value -> viewModel.edit {
-                        it.copy(playlistDepthRibbon = value, playlistRecordShelf = if (value) false else it.playlistRecordShelf)
-                    } }, summary = "沿歌曲封面穿行，左右拖动，长按查看全景", modifier = Modifier.testTag("setting_depth_ribbon"))
-                    SettingsSwitch("歌单 CD 唱片架", config.playlistRecordShelf, { value -> viewModel.edit {
-                        it.copy(playlistRecordShelf = value, playlistDepthRibbon = if (value) false else it.playlistDepthRibbon)
-                    } }, summary = "透明唱片盒斜向排列，滑动浏览、抽出封面", modifier = Modifier.testTag("setting_record_shelf"))
-                }
-            }
             item("display_scale") {
                 AppearanceSection("显示缩放", MusicIcons.Scale) {
                     var draft by remember(config.uiScale) { mutableFloatStateOf(config.uiScale) }

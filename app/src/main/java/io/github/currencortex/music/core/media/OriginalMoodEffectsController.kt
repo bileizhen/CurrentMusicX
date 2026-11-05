@@ -132,7 +132,7 @@ class OriginalMoodEffectsController internal constructor(
         }
         pending = scope.launch request@ {
             try {
-                val right = entitlement()
+                val right = retryMoodNetwork { entitlement() }
                 if (!isCurrent(token, current)) return@request
                 if (right.userId != account.userId) { revoke("网易云权益账号校验未通过，请重新登录后再试"); return@request }
                 if (!right.canUse || right.expiresAt <= now()) {
@@ -177,10 +177,10 @@ class OriginalMoodEffectsController internal constructor(
                 }
                 val prepared = withContext(workDispatcher) {
                     val algorithm = OriginalMoodCodec(raw)
-                    val row = descriptor(target.id) ?: kotlinx.serialization.json.buildJsonObject {
+                    val row = retryMoodNetwork { descriptor(target.id) } ?: kotlinx.serialization.json.buildJsonObject {
                         put("song_id", kotlinx.serialization.json.JsonPrimitive(target.id))
                     }
-                    OriginalMoodModel(prepareModel()).use { model ->
+                    OriginalMoodModel(retryMoodNetwork { prepareModel() }).use { model ->
                         val input = algorithm.prepare(row, model.inputs, model.outputs)
                         val output = if (input.infer) model.infer(input.emotion, input.genre, input.features, input.extra) else null
                         algorithm.finish(input, output)
