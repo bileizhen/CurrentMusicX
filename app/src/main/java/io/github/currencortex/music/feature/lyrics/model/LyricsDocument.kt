@@ -44,4 +44,5 @@ data class LyricAgent(val id: String, val type: String = "", val name: String = 
 @Immutable @Serializable
 data class LyricsMetadata(val values: Map<String, List<String>> = emptyMap(),
     val agents: List<LyricAgent> = emptyList(), val language: String? = null,
-    val durationMs: Long? = null, val source: String = "CurrentMusic")
+    val durationMs: Long? = null, val source: String = "CurrentMusic",
+    val wordLevel: Boolean? = null, val instrumental: Boolean? = null)

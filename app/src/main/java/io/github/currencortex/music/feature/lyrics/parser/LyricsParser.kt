@@ -27,9 +27,15 @@ object LyricsParser {
             romanization = it.romanization.ifBlank { romanizations[it.startTimeMs]?.text.orEmpty() }) }
         // Preserve an explicit provider verdict; an empty lyric alone never means instrumental.
         val pure = (listOf(obj) + listOf("lrc", "yrc", "ytlrc", "tlyric").mapNotNull { obj[it] as? JsonObject })
-            .any { (it["pureMusic"] as? JsonPrimitive)?.booleanOrNull == true }
+            .any { (it["pureMusic"] as? JsonPrimitive)?.booleanOrNull == true } ||
+            (obj["instrumental"] as? JsonPrimitive)?.booleanOrNull == true || obj.string("source") == "ncm:inst"
+        val metadata = LyricsMetadata(
+            values = if (pure) mapOf("pureMusic" to listOf("true")) else emptyMap(),
+            source = obj.string("source").ifBlank { "CurrentMusic" },
+            wordLevel = (obj["wordLevel"] as? JsonPrimitive)?.booleanOrNull,
+            instrumental = if (pure) true else (obj["instrumental"] as? JsonPrimitive)?.booleanOrNull)
         return if (pure) LyricsDocument(merged.ifEmpty { listOf(LyricLine(0, 5000, "纯音乐，请欣赏")) },
-            LyricsMetadata(values = mapOf("pureMusic" to listOf("true")))) else LyricsDocument(merged)
+            metadata) else LyricsDocument(merged, metadata)
     }
 
     private fun raw(element: JsonElement?): String = when (element) {
