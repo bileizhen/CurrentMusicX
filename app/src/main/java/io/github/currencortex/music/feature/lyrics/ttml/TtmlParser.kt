@@ -1,3 +1,5 @@
+// Ruby/transliteration additions informed by AMLL f322858, AGPL-3.0-only;
+// original AMLL contributors retain attribution. See THIRD_PARTY_NOTICES.md.
 package io.github.currencortex.music.feature.lyrics.ttml
 
 import io.github.currencortex.music.feature.lyrics.model.*
@@ -56,8 +58,11 @@ object TtmlParser {
         val translations = mutableListOf<LyricAuxiliary>()
         val romans = mutableListOf<LyricAuxiliary>()
         val bgNodes = mutableListOf<TtmlNode>()
-        fun append(node: TtmlNode) {
-            for (part in node.content) {
+        val ruby = mutableListOf<LyricRuby>()
+        val bases = mutableListOf<TtmlBaseRange>()
+        val romanTracks = mutableListOf<List<TtmlTimedText>>()
+        fun append(container: TtmlNode, insideTimedWord: Boolean = false) {
+            for (part in container.content) {
                 if (part is String) {
                     // Formatting indentation is not an English word separator; literal inline spaces are.
                     text.append(if (part.isBlank() && ('\n' in part || '\r' in part)) "" else cleanTtmlText(part))
@@ -66,26 +71,52 @@ object TtmlParser {
                 part as TtmlNode
                 when {
                     "x-translation" in part.attr("role").orEmpty().split(' ') -> translations.add(LyricAuxiliary(cleanTtmlText(part.text()).trim(), part.attr("lang")))
-                    "x-roman" in part.attr("role").orEmpty().split(' ') -> romans.add(LyricAuxiliary(cleanTtmlText(part.text()).trim(), part.attr("lang")))
+                    part.hasRole("x-roman") -> if (container === node) {
+                        romans.add(LyricAuxiliary(cleanTtmlText(part.text()).trim(), part.attr("lang")))
+                        romanTracks.add(ttmlRomanWords(part))
+                    }
                     "x-bg" in part.attr("role").orEmpty().split(' ') -> bgNodes.add(part)
-                    part.attr("ruby") in setOf("text", "textContainer") -> Unit // Ruby is annotation, not duplicate lyric text.
+                    part.attr("ruby") in setOf("text", "textContainer", "delimiter") -> Unit // Annotation never enters the primary text.
                     part.name == "br" -> text.append('\n')
                     else -> {
                         val offset = text.length
                         val wordCount = words.size
-                        append(part)
-                        val begin = part.attr("begin")
-                        val end = part.attr("end")
-                        if (begin != null || end != null || part.attr("dur") != null) {
-                            val from = begin?.let(TtmlTimeParser::parse) ?: throw LyricsException(LyricsErrorCode.INVALID_TIMELINE, "Timed word is missing begin")
-                            val to = end?.let(TtmlTimeParser::parse) ?: part.attr("dur")?.let { from + TtmlTimeParser.parse(it) }
-                                ?: throw LyricsException(LyricsErrorCode.INVALID_TIMELINE, "Timed word is missing end")
-                            if (to < from) throw LyricsException(LyricsErrorCode.INVALID_TIMELINE, "Word end must not precede begin")
+                        val baseCount = bases.size
+                        val timing = part.explicitTiming()
+                        append(part, insideTimedWord || timing != null)
+                        if (part.attr("ruby") == "base" && text.length > offset)
+                            bases.add(TtmlBaseRange(offset, text.length))
+                        if (timing != null) {
+                            val (from, to) = timing
                             // Zero-duration markers have no singable interval. Preserve their text; the
                             // coverage check below falls this line back to line timing without inventing duration.
                             // A timed wrapper around several timed spans must not duplicate their glyphs.
                             if (to > from && words.size == wordCount && text.length > offset) words.add(LyricWord(text.substring(offset), from, to, offset, text.length,
                                 part.attr("agent"), part.attr("role").orEmpty().split(' ').filter { it.isNotEmpty() }))
+                        }
+                        if (part.attr("ruby") == "container") {
+                            val annotations = ttmlRuby(part, bases.drop(baseCount).ifEmpty {
+                                if (text.length > offset) listOf(TtmlBaseRange(offset, text.length)) else emptyList()
+                            })
+                            ruby.addAll(annotations)
+                            // The base can inherit the explicitly timed ruby syllables' union.
+                            // A surrounding timed word keeps ownership; untimed ruby never invents words.
+                            if (timing == null && !insideTimedWord && words.size == wordCount) {
+                                annotations.groupBy { it.startOffset to it.endOffset }.forEach { (range, segments) ->
+                                    if (segments.all { it.startTimeMs != null && it.endTimeMs != null }) {
+                                        val from = segments.minOf { it.startTimeMs!! }
+                                        val to = segments.maxOf { it.endTimeMs!! }
+                                        if (to > from) words.add(LyricWord(text.substring(range.first, range.second), from, to,
+                                            range.first, range.second, part.attr("agent"), part.attr("role").orEmpty().split(' ').filter(String::isNotEmpty)))
+                                    }
+                                }
+                            }
+                        }
+                        val ownedRomans = part.children.filter { it.hasRole("x-roman") }
+                        if (ownedRomans.isNotEmpty()) {
+                            val owner = words.indexOfFirst { it.startOffset == offset && it.endOffset == text.length }
+                            if (owner >= 0) words[owner] = words[owner].copy(romanization = cleanTtmlText(ownedRomans.first().text()).trim())
+                            else ownedRomans.forEach { romans.add(LyricAuxiliary(cleanTtmlText(it.text()).trim(), it.attr("lang"))) }
                         }
                     }
                 }
@@ -99,16 +130,26 @@ object TtmlParser {
             ?: throw LyricsException(LyricsErrorCode.INVALID_TIMELINE, "Lyric line is missing end")
         if (end <= start || words.any { it.startTimeMs < start || it.endTimeMs > end })
             throw LyricsException(LyricsErrorCode.INVALID_TIMELINE, "Invalid line/word bounds")
+        if (ruby.any { it.startTimeMs != null && it.startTimeMs < start || it.endTimeMs != null && it.endTimeMs > end })
+            throw LyricsException(LyricsErrorCode.INVALID_TIMELINE, "Ruby timing exceeds its vocal line")
         translations.addAll(TtmlMetadataParser.auxiliary(head, key, background, false))
         romans.addAll(TtmlMetadataParser.auxiliary(head, key, background, true))
+        romanTracks.addAll(TtmlMetadataParser.romanWordTracks(head, key, background))
         val auxiliary = translations.filter { it.text.isNotBlank() }.distinct()
         val roman = romans.filter { it.text.isNotBlank() }.distinct()
         // Keep untimed literal text, but don't fabricate word timing for partial lyric coverage.
-        val timedWords = words.sortedBy { it.startTimeMs }.takeIf { tokens -> text.indices.all { index -> text[index].isWhitespace() || tokens.any { index in it.startOffset until it.endOffset } } }.orEmpty()
+        val timedWords = alignTtmlRomanization(words.sortedBy { it.startTimeMs }.takeIf { tokens ->
+            text.indices.all { index -> text[index].isWhitespace() || tokens.any { index in it.startOffset until it.endOffset } }
+        }.orEmpty(), romanTracks).map { word -> word.copy(ruby = ruby.filter {
+            it.startOffset >= word.startOffset && it.endOffset <= word.endOffset
+        }) }
+        if (timedWords.any { word -> word.ruby.any {
+            it.startTimeMs != null && it.startTimeMs < word.startTimeMs || it.endTimeMs != null && it.endTimeMs > word.endTimeMs
+        } }) throw LyricsException(LyricsErrorCode.INVALID_TIMELINE, "Ruby timing exceeds its word")
         val line = LyricLine(start, end, text.toString(), timedWords,
             (auxiliary.firstOrNull { it.language?.startsWith("zh") == true } ?: auxiliary.firstOrNull())?.text.orEmpty(), roman.firstOrNull()?.text.orEmpty(),
             background, agent != null && primaryAgent != null && agent != primaryAgent, agent, roles, key,
-            translations = auxiliary, romanizations = roman)
+            translations = auxiliary, romanizations = roman, ruby = ruby.distinct())
         return line.copy(backgroundVocals = bgNodes.map { parseLine(it, head, primaryAgent, line) })
     }
 

@@ -18,17 +18,26 @@ internal fun LyricLine.withInlineTranslationBlocks(): LyricLine {
     val until = retained.indexOfLast { !text[it].isWhitespace() }
     val translated = blocks.map { it.groupValues[1].trim() }.filter { it.isNotEmpty() }.joinToString("\n")
     // A standalone translator credit still needs a visible line; never discard its text.
-    if (from < 0) return copy(text = translated, words = emptyList())
+    if (from < 0) return copy(text = translated, words = emptyList(), ruby = emptyList())
     val offsets = IntArray(text.length) { -1 }
     val primary = buildString {
         for (i in from..until) { val old = retained[i]; offsets[old] = length; append(text[old]) }
+    }
+    fun remapRuby(annotation: LyricRuby): LyricRuby? {
+        if (annotation.startOffset < 0 || annotation.endOffset > text.length || annotation.endOffset <= annotation.startOffset) return null
+        val range = annotation.startOffset until annotation.endOffset
+        // If some of the base was removed, its reading no longer has an unambiguous owner.
+        if (range.any { offsets[it] < 0 }) return null
+        return annotation.copy(startOffset = offsets[range.first], endOffset = offsets[range.last] + 1)
     }
     val remapped = words.mapNotNull { word ->
         val start = word.startOffset.coerceAtLeast(0)
         val end = word.endOffset.coerceAtMost(text.length)
         val kept = (start until end).filter { offsets[it] >= 0 }
         if (kept.isEmpty()) null else word.copy(text = kept.joinToString("") { text[it].toString() },
-            startOffset = offsets[kept.first()], endOffset = offsets[kept.last()] + 1)
+            startOffset = offsets[kept.first()], endOffset = offsets[kept.last()] + 1,
+            ruby = word.ruby.mapNotNull(::remapRuby))
     }
-    return copy(text = primary, words = remapped, translation = translation.ifBlank { translated })
+    return copy(text = primary, words = remapped, translation = translation.ifBlank { translated },
+        ruby = ruby.mapNotNull(::remapRuby))
 }
