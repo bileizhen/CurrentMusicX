@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.player
 
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.currencortex.music.AppContainer
@@ -27,8 +28,10 @@ data class PlayerComments(val songId: Long? = null, val total: Long? = null, val
     val busy: Set<String> = emptySet(), val actionError: String? = null, val retryMore: Boolean = false)
 data class CommentReplies(val comments: List<NeteaseComment> = emptyList(), val total: Long = 0,
     val cursor: String? = null, val more: Boolean = false, val loading: Boolean = false, val error: String? = null)
-data class PlayerCommentComposer(val draft: String = "", val replyTo: NeteaseComment? = null,
-    val sending: Boolean = false, val error: String? = null, val message: String? = null)
+data class PlayerCommentComposer(val input: TextFieldState = TextFieldState(), val replyTo: NeteaseComment? = null,
+    val sending: Boolean = false, val error: String? = null, val message: String? = null) {
+    val draft: String get() = input.text.toString()
+}
 class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
     val player = container.playerController
     val sleepTimer = container.sleepTimer
@@ -321,18 +324,19 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
             if (delete && result is AppResult.Success) loadComments()
         }
     }
-    fun editComment(value: String) { if (!commentComposer.value.sending) commentComposer.update { it.copy(draft = value.take(1000), error = null, message = null) } }
+    fun onCommentEdited() { if (!commentComposer.value.sending) commentComposer.update { it.copy(error = null, message = null) } }
     fun replyTo(comment: NeteaseComment?) { if (!commentComposer.value.sending) commentComposer.update { it.copy(replyTo = comment, error = null, message = null) } }
     fun sendComment() {
         val id = NeteaseSongActionsRepository.songId(queue.value.current) ?: return
         val draft = commentComposer.value
-        if (draft.sending || draft.draft.isBlank() || _comments.value.loading || _comments.value.busy.isNotEmpty()) return
+        val content = draft.draft
+        if (draft.sending || content.isBlank() || content.length > 1000 || _comments.value.loading || _comments.value.busy.isNotEmpty()) return
         val epoch = commentsEpoch
         commentComposer.update { it.copy(sending = true, error = null, message = null) }
         commentSendJob = viewModelScope.launch {
             val result = appResult {
-                if (_comments.value.enhanced == true) songComments.send(id, draft.draft, draft.replyTo?.id)
-                else netease.sendComment(id, draft.draft, draft.replyTo?.commentId)
+                if (_comments.value.enhanced == true) songComments.send(id, content, draft.replyTo?.id)
+                else netease.sendComment(id, content, draft.replyTo?.commentId)
             }
             if (epoch != commentsEpoch) return@launch
             when (result) {

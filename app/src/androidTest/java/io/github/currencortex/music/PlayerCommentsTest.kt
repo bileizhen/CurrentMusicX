@@ -1,5 +1,9 @@
 package io.github.currencortex.music
 
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputConnection
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.platform.InterceptPlatformTextInput
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.test.core.app.ApplicationProvider
@@ -19,12 +23,15 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 
 /** Writes only to a local fixture; never posts to real users or NetEase. */
+@OptIn(ExperimentalComposeUiApi::class)
 class PlayerCommentsTest {
     @get:Rule val compose = createComposeRule()
     private lateinit var container: AppContainer
     private lateinit var server: MockWebServer
     private lateinit var vm: PlayerViewModel
     private val posted = CopyOnWriteArrayList<JsonObject>()
+    @Volatile private var captureIme = false
+    @Volatile private var inputConnection: InputConnection? = null
     @Volatile private var failure = false
     @Volatile private var slow = false
     @Volatile private var richComments = false
@@ -79,7 +86,16 @@ class PlayerCommentsTest {
         container.playerController.state.value = PlayerState(song = song)
         compose.setContent {
             vm = androidx.lifecycle.viewmodel.compose.viewModel(factory = io.github.currencortex.music.ui.util.viewModelFactory { PlayerViewModel(container) })
-            CurrentMusicApp(container)
+            InterceptPlatformTextInput(interceptor = { request, next ->
+                if (captureIme) {
+                    val connection = request.createInputConnection(EditorInfo())
+                    inputConnection = connection
+                    try { awaitCancellation() } finally {
+                        inputConnection = null
+                        connection.closeConnection()
+                    }
+                } else next.startInputMethod(request)
+            }) { CurrentMusicApp(container) }
         }
         compose.waitUntil(10_000) { compose.onAllNodesWithTag("mini_cover").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithTag("mini_cover").performClick()
@@ -88,6 +104,83 @@ class PlayerCommentsTest {
         compose.waitUntil(10_000) { compose.onAllNodesWithText("原评论").fetchSemanticsNodes().isNotEmpty() }
     }
     @After fun cleanup() { container.close(); server.shutdown() }
+    private fun startIme() {
+        captureIme = true
+        compose.onNodeWithTag("player_comment_draft").performClick()
+        compose.waitUntil(5000) { inputConnection != null }
+    }
+
+    private fun ime(action: InputConnection.() -> Unit) {
+        compose.runOnIdle { requireNotNull(inputConnection).action() }
+        compose.waitForIdle()
+    }
+
+    @Test fun composingCandidatesReplaceAcrossFramesAndCommitOnlyOnce() {
+        startIme()
+        ime { setComposingText("听", 1) }
+        ime { setComposingText("听这首", 1) }
+        ime { setComposingText("听这首歌", 1) }
+        compose.runOnIdle { assertEquals("听这首歌", vm.commentComposer.value.draft) }
+        ime { commitText("听这首歌", 1) }
+        // Handwriting/typing may reopen an already committed candidate for correction.
+        ime { setComposingRegion(1, 4) }
+        ime { setComposingText("那首歌", 1) }
+        ime { finishComposingText() }
+        compose.runOnIdle { assertEquals("听那首歌", vm.commentComposer.value.draft) }
+        compose.onNodeWithTag("player_comment_send").performClick()
+        compose.waitUntil(10000) { posted.size == 1 && !vm.commentComposer.value.sending }
+        assertEquals("听那首歌", posted.single()["content"]!!.jsonPrimitive.content)
+        assertEquals("", vm.commentComposer.value.draft)
+    }
+
+    @Test fun batchedCandidateEditsPreserveSurroundingTextAndDeletion() {
+        startIme()
+        ime { commitText("前后", 1); setSelection(1, 1) }
+        ime {
+            beginBatchEdit()
+            setComposingText("音", 1)
+            setComposingText("音乐", 1)
+            endBatchEdit()
+        }
+        compose.runOnIdle { assertEquals("前音乐后", vm.commentComposer.value.draft) }
+        ime { setComposingText("乐", 1) }
+        ime { commitText("乐", 1); deleteSurroundingText(1, 0) }
+        compose.runOnIdle { assertEquals("前后", vm.commentComposer.value.draft) }
+        assertTrue(posted.isEmpty())
+    }
+
+    @Test fun sendingImmediatelyAfterImeCommitUsesLatestText() {
+        startIme()
+        ime { setComposingText("候选", 1) }
+        compose.runOnIdle {
+            requireNotNull(inputConnection).commitText("最终评论", 1)
+            vm.sendComment()
+        }
+        compose.waitUntil(10000) { posted.size == 1 && !vm.commentComposer.value.sending }
+        assertEquals("最终评论", posted.single()["content"]!!.jsonPrimitive.content)
+    }
+
+    @Test fun lengthLimitBlocksSendingWithoutInterruptingCandidateReplacement() {
+        val prefix = "字".repeat(998)
+        startIme()
+        ime { commitText(prefix, 1) }
+        ime { setComposingText("音乐", 1) }
+        ime { setComposingText("音乐会", 1) }
+        compose.runOnIdle {
+            assertEquals(prefix + "音乐会", vm.commentComposer.value.draft)
+            vm.sendComment()
+            assertFalse(vm.commentComposer.value.sending)
+        }
+        compose.onNodeWithTag("player_comment_send").assertIsNotEnabled()
+        compose.onNodeWithTag("player_comment_error").assertTextEquals("评论最多 1000 字，请删减后发送")
+        ime { setComposingText("歌曲", 1) }
+        ime { commitText("歌曲", 1) }
+        compose.runOnIdle { assertEquals(prefix + "歌曲", vm.commentComposer.value.draft) }
+        compose.onNodeWithTag("player_comment_send").assertIsEnabled()
+        compose.onNodeWithTag("player_comment_error").assertDoesNotExist()
+        assertTrue(posted.isEmpty())
+    }
+
     @Test fun composerSendsRepliesOnceAndKeepsDraftOnFailure() {
         slow = true
         compose.onNodeWithTag("player_comment_send").assertIsNotEnabled()
