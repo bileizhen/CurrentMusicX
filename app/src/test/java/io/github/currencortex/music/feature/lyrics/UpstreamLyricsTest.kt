@@ -12,6 +12,26 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class UpstreamLyricsTest {
+    @Test fun lddcWordEndTimesAndProvenanceSurviveWithoutAnOfficialYrcFlag() {
+        val document = LyricsParser.parse(ApiJson.parseToJsonElement("""{"isYrc":false,"source":"lddc:kg","wordLevel":true,"lines":[{"t":1000,"txt":"你好","trans":"Hello","roma":"ni hao","words":[{"text":"你","start":1000,"end":1300},{"text":"好","start":1500,"end":1800}],"w":[[1000,"你"],[1500,"好"]]}]}"""))
+        assertEquals("lddc:kg", document.metadata.source)
+        assertEquals(true, document.metadata.wordLevel)
+        assertEquals(listOf(1300L, 1800L), document.lines.single().words.map { it.endTimeMs })
+        assertEquals("Hello", document.lines.single().translation)
+        assertEquals("ni hao", document.lines.single().romanization)
+        assertEquals(document, ApiJson.decodeFromString(LyricsDocument.serializer(), ApiJson.encodeToString(LyricsDocument.serializer(), document)))
+    }
+    @Test fun normalizedInstrumentalMarkersAreExplicitButMissingLyricsAreNot() {
+        for (json in listOf("""{"source":"ncm:inst","lines":[]}""", """{"instrumental":true,"lines":[]}""")) {
+            val document = LyricsParser.parse(ApiJson.parseToJsonElement(json))
+            assertEquals(true, document.metadata.instrumental)
+            assertEquals(listOf("true"), document.metadata.values["pureMusic"])
+            assertEquals("纯音乐，请欣赏", document.lines.single().text)
+        }
+        val missing = LyricsParser.parse(ApiJson.parseToJsonElement("""{"source":"none","wordLevel":false,"lines":[]}"""))
+        assertTrue(missing.lines.isEmpty())
+        assertNull(missing.metadata.instrumental)
+    }
     @Test fun oldCachedEstimatesLoseOnlySyntheticTimingIncludingBackgroundVocals() {
         val words = listOf(LyricWord("夜に", 1000, 2000, 0, 2))
         val estimated = LyricLine(1000, 2000, "夜に", words, "夜晚", "yo ni", wordsEstimated = true)

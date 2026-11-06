@@ -21,9 +21,11 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
     private val overrides: SongLyricsStore? = null,
     private val autoMatch: (suspend (Song) -> SavedLyrics?)? = null,
     private val alignMatch: (suspend (Song, SavedLyrics) -> SavedLyrics)? = null,
-    private val localLyrics: (suspend (Song) -> SavedLyrics?)? = null) {
+    private val localLyrics: (suspend (Song) -> SavedLyrics?)? = null,
+    private val now: () -> Long = System::currentTimeMillis) {
     private val lock = Mutex()
-    private val memory = linkedMapOf<Pair<List<Any?>, List<LyricsKey>>, LyricsResult>()
+    private data class MemoryEntry(val result: LyricsResult, val savedAtMillis: Long, val expiresAtMillis: Long?)
+    private val memory = linkedMapOf<Pair<List<Any?>, List<LyricsKey>>, MemoryEntry>()
     suspend fun load(song: Song): LyricsResult = withContext(Dispatchers.IO) { lock.withLock {
         // User-selected files/matches are authoritative, including explicit instrumental results.
         overrides?.active(song)?.let { saved ->
@@ -51,10 +53,14 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
         val issues = mutableListOf<LyricsIssue>()
         fun issue(code: LyricsErrorCode, detail: String) { issues.add(LyricsIssue(code, detail)); log("$code: $detail") }
         fun remember(document: LyricsDocument, origin: LyricsOrigin? = selectedOrigin,
-            source: LyricsDocument? = null, alignment: LyricsTimingAlignment? = null): LyricsResult {
+            source: LyricsDocument? = null, alignment: LyricsTimingAlignment? = null,
+            expiresAtMillis: Long? = null): LyricsResult {
             val result = LyricsResult(document, issues = issues.toList(), origin = origin,
                 sourceDocument = source, timingAlignment = alignment)
-            if (keys.isNotEmpty()) { memory[memoryKey] = result; if (memory.size > 16) memory.remove(memory.keys.first()) }
+            if (keys.isNotEmpty()) {
+                memory[memoryKey] = MemoryEntry(result, now(), expiresAtMillis)
+                if (memory.size > 16) memory.remove(memory.keys.first())
+            }
             return result
         }
         var automaticFailed = false
@@ -73,7 +79,12 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
         // Automatic selection is a fresh comparison on every load. A previous
         // provider/cache result must not take precedence over the current winner.
         if (selected?.automatic == true) return@withLock matchAutomatically() ?: unavailable()
-        memory[memoryKey]?.takeIf { keys.isNotEmpty() }?.let { return@withLock it }
+        memory[memoryKey]?.takeIf { keys.isNotEmpty() }?.let { entry ->
+            val at = now()
+            if (entry.expiresAtMillis == null || at >= entry.savedAtMillis && at < entry.expiresAtMillis)
+                return@withLock entry.result
+            memory.remove(memoryKey)
+        }
         fun parse(raw: String, key: LyricsKey): LyricsDocument {
             val document = TtmlParser.parse(raw)
             if (!LyricsMatcher.matches(document.metadata.values, key)) throw LyricsException(LyricsErrorCode.UNSUPPORTED_FORMAT, "TTML platform metadata does not match ${key.source}/${key.songId}")
@@ -94,7 +105,8 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
             catch (e: Exception) { issue(LyricsErrorCode.NETWORK_ERROR, "Provider: ${e.javaClass.simpleName}"); continue }
             when (result) {
                 is LyricsProviderResult.Failure -> issue(result.code, result.detail)
-                is LyricsProviderResult.Parsed -> if (result.document.lines.isNotEmpty()) return@withLock remember(result.document)
+                is LyricsProviderResult.Parsed -> if (result.document.lines.isNotEmpty())
+                    return@withLock remember(result.document, expiresAtMillis = result.expiresAtMillis)
                     else issue(LyricsErrorCode.NO_LYRICS, "Provider returned an empty document")
                 is LyricsProviderResult.Ttml -> try {
                     val document = parse(result.text, result.key)
