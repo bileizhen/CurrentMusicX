@@ -86,8 +86,10 @@ import top.yukonga.miuix.kmp.basic.*
     Column(Modifier.fillMaxSize().testTag("room_screen")) {
         val detail = live.detail
         if (detail == null) {
-            LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp),
-                contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 24.dp)),
+            // Keep the viewport full-width so elastic controls can paint into the side gutters.
+            LazyColumn(Modifier.fillMaxSize(),
+                contentPadding = musicScrollPadding(PaddingValues(start = 16.dp, end = 16.dp,
+                    top = topInset + 8.dp, bottom = 24.dp)),
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 item {
                     SettingsSection("与好友一起", io.github.currencortex.music.ui.component.MusicIcons.Headphones) {
@@ -96,9 +98,12 @@ import top.yukonga.miuix.kmp.basic.*
                     }
                 }
                 item {
-                    SettingsSectionHeader("CurrentMusic 房间")
-                    MusicCategoryTabs(listOf("public" to "公开房间", "mine" to "我的房间"), browser.scope.query,
-                        { vm.load(query, roomScope = if (it == "mine") RoomScope.MINE else RoomScope.PUBLIC) }, "room_scope")
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        SettingsInfoHeader("CurrentMusic 房间", io.github.currencortex.music.ui.component.MusicIcons.Room,
+                            horizontalInset = 0.dp)
+                        MusicCategoryTabs(listOf("public" to "公开房间", "mine" to "我的房间"), browser.scope.query,
+                            { vm.load(query, roomScope = if (it == "mine") RoomScope.MINE else RoomScope.PUBLIC) }, "room_scope")
+                    }
                 }
                 item {
                     MusicSearchBar(query, { vm.search(query.trim()) }, onInput = { query = it },
