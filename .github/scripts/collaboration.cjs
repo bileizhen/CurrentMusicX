@@ -1,5 +1,5 @@
 // Repository metadata only. Never load or execute files from a pull request head.
-const {labelColor}=require('./label-palette.cjs');
+const {STATUS_LABELS,labelColor}=require('./label-palette.cjs');
 const types = {
   feat: 'enhancement', fix: 'bug', perf: 'performance', docs: 'documentation',
   deps: 'dependencies', chore: 'maintenance', ci: 'maintenance', build: 'maintenance',
@@ -58,6 +58,7 @@ function issuePlan(issue) {
 }
 function staleDecision(issue, comments, events, now = Date.now()) {
   const labels = names(issue);
+  if (labels.some(label => Object.hasOwn(STATUS_LABELS,label))) return null;
   if (issue.state !== 'open' || issue.locked || issue.assignees?.length || issue.milestone || maintainer(issue) ||
       labels.some(l => ['bot: skip', 'announcement', 'needs follow-up', 'help wanted', 'priority: high', 'provider-request'].includes(l))) return null;
   const activity = Math.max(Date.parse(issue.created_at), ...comments.filter(human).map(c => Date.parse(c.updated_at ?? c.created_at)));
