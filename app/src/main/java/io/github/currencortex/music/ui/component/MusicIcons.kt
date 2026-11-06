@@ -167,6 +167,11 @@ object MusicIcons {
         curveTo(8f, 1.6f, 16f, 1.6f, 16f, 7f); close()
         moveTo(4f, 21f); curveTo(4f, 11f, 20f, 11f, 20f, 21f)
     }
+    val Room = icon("Room") {
+        moveTo(3f, 10f); lineTo(12f, 3f); lineTo(21f, 10f)
+        moveTo(5f, 9f); lineTo(5f, 21f); lineTo(19f, 21f); lineTo(19f, 9f)
+        moveTo(9f, 21f); lineTo(9f, 14f); lineTo(15f, 14f); lineTo(15f, 21f)
+    }
     val Device = icon("Device") {
         moveTo(6f, 2f); lineTo(18f, 2f); lineTo(18f, 22f); lineTo(6f, 22f); close()
         moveTo(10f, 5f); lineTo(14f, 5f); moveTo(11f, 19f); lineTo(13f, 19f)
