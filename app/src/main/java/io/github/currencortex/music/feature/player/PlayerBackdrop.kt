@@ -48,10 +48,11 @@ import androidx.lifecycle.compose.currentStateAsState
 
 /** Artwork-derived flowing or frosted backgrounds; controls stay on a separate sharp layer. */
 @Composable fun PlayerBackdrop(cover: String, modifier: Modifier = Modifier, customImage: File? = null,
-    blurPercent: Float = 35f, active: Boolean = true, dynamicBackground: Boolean = true) {
+    blurPercent: Float = 35f, active: Boolean = true, dynamicBackground: Boolean = true,
+    motionSpeed: (() -> Float)? = null) {
     Box(modifier.clipToBounds().background(Color(0xFF262428))) {
         if (customImage != null) CustomPlayerBackground(customImage, blurPercent, Modifier.matchParentSize())
-        else if (dynamicBackground) ArtworkPlayerBackground(cover, active, Modifier.matchParentSize())
+        else if (dynamicBackground) ArtworkPlayerBackground(cover, active, motionSpeed, Modifier.matchParentSize())
         else FrostedArtworkBackground(cover, blurPercent, Modifier.matchParentSize())
         val frosted = customImage == null && !dynamicBackground
         Box(Modifier.matchParentSize().background(Brush.verticalGradient(
@@ -97,7 +98,7 @@ import androidx.lifecycle.compose.currentStateAsState
     }
 }
 
-@Composable private fun ArtworkPlayerBackground(cover: String, active: Boolean, modifier: Modifier) {
+@Composable private fun ArtworkPlayerBackground(cover: String, active: Boolean, motionSpeed: (() -> Float)?, modifier: Modifier) {
     // Reuse the dock/lyrics palette cache and Coil's small software cover request.
     val palette by rememberArtworkGlowPalette(cover)
     val primary by animateColorAsState(Color(palette.primary), tween(900), label = "player background primary")
@@ -115,7 +116,7 @@ import androidx.lifecycle.compose.currentStateAsState
             lerp(Color(0xFF171719), secondary, .35f))))) {
         BgEffectBackground(dynamicBackground = active && motionEnabled && lifecycle.isAtLeast(Lifecycle.State.RESUMED),
             modifier = Modifier.matchParentSize(), isFullSize = true, effectBackground = accelerated,
-            palette = pools, darkTheme = true, surfaceColor = Color(0xFF171719)) { }
+            palette = pools, darkTheme = true, surfaceColor = Color(0xFF171719), motionSpeed = motionSpeed) { }
     }
 }
 

@@ -39,6 +39,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var blur by remember { mutableFloatStateOf(config.playerBackgroundBlur) }
     LaunchedEffect(config.playerBackgroundBlur) { blur = config.playerBackgroundBlur }
     val file = remember(config.playerBackground) { container.playerBackgrounds.file(config.playerBackground) }
+    val playback by container.playerController.state.collectAsStateWithLifecycle()
+    val backgroundSpeed = rememberPlayerFluidSpeed(container.dockAudioLevel, playback.playing,
+        file == null && config.playerDynamicBackground, queue.current, playback.playbackSpeed)
     val canAdjustBlur = !busy && (file != null || !config.playerDynamicBackground)
     fun operation(action: suspend () -> Unit) {
         if (busy) return
@@ -64,10 +67,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             .testTag("player_background_settings"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.fillMaxWidth().height(140.dp)
                 .clip(RoundedCornerShape(18.dp)).testTag("player_background_preview"), file, blur,
-                dynamicBackground = config.playerDynamicBackground)
+                dynamicBackground = config.playerDynamicBackground,
+                motionSpeed = { backgroundSpeed.value })
             Text(if (busy) "正在保存图片…" else if (file != null) "自定义背景 · 图片仅保存在本机"
                 else if (config.playerBackground.isNotBlank()) "图片不可用，请重新选择"
-                else if (config.playerDynamicBackground) "流动背景 · 跟随歌曲封面取色"
+                else if (config.playerDynamicBackground) "流动背景 · 随播放中的实时节奏变化"
                 else "封面毛玻璃 · 播放与歌词共用柔和背景", fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             MusicDialogActions(horizontalArrangement = Arrangement.spacedBy(12.dp)) {

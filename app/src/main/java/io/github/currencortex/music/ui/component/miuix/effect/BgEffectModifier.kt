@@ -23,7 +23,7 @@ internal fun Modifier.bgEffectDraw(
     effectBackground: Boolean,
     isFullSize: Boolean,
     playing: Boolean,
-    animationSpeed: Float,
+    animationSpeed: () -> Float,
     colorStage: () -> Float,
     alpha: () -> Float,
 ): Modifier = this then BgEffectElement(
@@ -49,7 +49,7 @@ private data class BgEffectElement(
     val effectBackground: Boolean,
     val isFullSize: Boolean,
     val playing: Boolean,
-    val animationSpeed: Float,
+    val animationSpeed: () -> Float,
     val colorStage: () -> Float,
     val alpha: () -> Float,
 ) : ModifierNodeElement<BgEffectNode>() {
@@ -94,7 +94,7 @@ private class BgEffectNode(
     private var effectBackground: Boolean,
     private var isFullSize: Boolean,
     private var playing: Boolean,
-    private var animationSpeed: Float,
+    private var animationSpeed: () -> Float,
     private var colorStage: () -> Float,
     private var alpha: () -> Float,
 ) : Modifier.Node(),
@@ -121,7 +121,7 @@ private class BgEffectNode(
         effectBackground: Boolean,
         isFullSize: Boolean,
         playing: Boolean,
-        animationSpeed: Float,
+        animationSpeed: () -> Float,
         colorStage: () -> Float,
         alpha: () -> Float,
     ) {
@@ -157,7 +157,8 @@ private class BgEffectNode(
             while (isActive) {
                 val now = withInfiniteAnimationFrameNanos { it }
                 if (now - lastEmit < minDeltaNanos) continue
-                animTime += (now - lastEmit) / 1_000_000_000f * animationSpeed
+                val speed = animationSpeed().takeIf { it.isFinite() }?.coerceIn(0f, 6f) ?: 1f
+                animTime += (now - lastEmit).coerceAtMost(100_000_000L) / 1_000_000_000f * speed
                 lastEmit = now
                 invalidateDraw()
             }

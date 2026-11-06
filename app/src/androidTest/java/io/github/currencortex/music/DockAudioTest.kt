@@ -22,6 +22,43 @@ import java.util.concurrent.atomic.AtomicReference
 @androidx.annotation.OptIn(UnstableApi::class)
 class DockAudioTest {
     @get:Rule val compose = createAndroidComposeRule<ComponentActivity>()
+    @Test fun rhythmTracksChangingPcmTempoAcrossBufferSizesWithoutChangingAudio() {
+        for ((encoding, channels) in listOf(C.ENCODING_PCM_16BIT to 2, C.ENCODING_PCM_FLOAT to 6)) {
+            val meter = DockAudioLevel().apply { enabled = true }
+            val processor = DockAudioProcessor(meter)
+            processor.configure(AudioFormat(48000, channels, encoding)); processor.flush()
+            val wave = FloatArray(480) { (sin(2 * PI * it / 480) * .5).toFloat() }
+            fun segment(period: Int) {
+                var frame = 0
+                val total = 48000 * 8
+                while (frame < total) {
+                    val frames = minOf(if (frame % 2 == 0) 137 else 2048, total - frame)
+                    val bytes = if (encoding == C.ENCODING_PCM_FLOAT) 4 else 2
+                    val input = ByteBuffer.allocateDirect(frames * channels * bytes).order(ByteOrder.LITTLE_ENDIAN)
+                    repeat(frames) {
+                        val value = if (frame % period < 2400) wave[frame % wave.size] else 0f
+                        repeat(channels) {
+                            if (bytes == 4) input.putFloat(value) else input.putShort((value * 32767).toInt().toShort())
+                        }
+                        frame++
+                    }
+                    input.flip()
+                    val original = ByteArray(input.remaining()).also { input.duplicate().get(it) }
+                    processor.queueInput(input)
+                    val output = processor.output
+                    assertArrayEquals(original, ByteArray(output.remaining()).also { output.get(it) })
+                }
+            }
+            try {
+                segment(38400)
+                assertEquals("75 BPM must come from PCM sample time, not buffer arrival time", 75f, meter.sample.bpm!!, 3f)
+                segment(19200)
+                assertEquals("Tempo changes within one stream must be detected", 150f, meter.sample.bpm!!, 5f)
+                processor.flush()
+                assertNull(meter.sample.bpm)
+            } finally { processor.reset() }
+        }
+    }
     @Test fun floatPcmAnalysisPreservesEveryByteAndWorksWithoutVisualMeter() {
         val probe = TrackEnergyProbe().apply { enabled = true }
         val processor = DockAudioProcessor(DockAudioLevel(), probe)
@@ -60,16 +97,20 @@ class DockAudioTest {
         processor.reset()
     }
 
-    @Test fun realExoPlayerSinkPublishesMusicEnergyAndThenSilence() {
+    @Test fun realExoPlayerSinkPublishesChangingRhythmAndThenSilence() {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         val meter = DockAudioLevel().apply { enabled = true }
-        val frames = 48000 * 5
+        val frames = 48000 * 15
         val data = ByteBuffer.allocate(44 + frames * 2).order(ByteOrder.LITTLE_ENDIAN)
         data.put("RIFF".toByteArray()).putInt(36 + frames * 2).put("WAVEfmt ".toByteArray())
             .putInt(16).putShort(1).putShort(1).putInt(48000).putInt(96000).putShort(2).putShort(16)
             .put("data".toByteArray()).putInt(frames * 2)
-        repeat(frames) { frame -> data.putShort(if (frame < 96000) (sin(2 * PI * 100 * frame / 48000) * 8000).toInt().toShort() else 0) }
+        repeat(frames) { frame ->
+            val period = if (frame < 48000 * 6) 38400 else 19200
+            val attack = frame < 48000 * 12 && frame % period < 2400
+            data.putShort(if (attack) (sin(2 * PI * 100 * frame / 48000) * 8000).toInt().toShort() else 0)
+        }
         val file = File.createTempFile("dock-pcm-", ".wav", context.cacheDir).apply { writeBytes(data.array()) }
         var player: ExoPlayer? = null
         val details = AtomicReference("not created")
@@ -91,7 +132,9 @@ class DockAudioTest {
                 assertTrue("enabled=${meter.enabled}, sample=${meter.sample}, ${details.get()}", test())
             }
             await { meter.sample.energy > .25f && meter.sample.bass > .20f }
-            await { meter.sample.timestampNanos != 0L && meter.sample.energy < .001f }
+            await { meter.sample.bpm?.let { kotlin.math.abs(it - 75f) < 4f } == true }
+            await { meter.sample.bpm?.let { kotlin.math.abs(it - 150f) < 5f } == true }
+            await { meter.sample.timestampNanos != 0L && meter.sample.energy < .001f && meter.sample.bpm == null }
         } finally { instrumentation.runOnMainSync { player?.release() }; file.delete() }
     }
 }
