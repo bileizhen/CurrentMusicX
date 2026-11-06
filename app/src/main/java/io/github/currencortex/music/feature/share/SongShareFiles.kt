@@ -7,6 +7,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import androidx.core.content.FileProvider
 import coil3.SingletonImageLoader
+import coil3.ImageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.request.allowHardware
@@ -19,35 +20,52 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
-internal data class SongShareFile(val file: File, val content: SongShareContent, val coverLoaded: Boolean)
+internal data class SongShareFile(val file: File, val content: SongShareContent, val coverLoaded: Boolean,
+    val serverFallback: Boolean = false)
 
 internal object SongShareFiles {
-    suspend fun create(context: Context, song: Song): SongShareFile {
+    suspend fun create(context: Context, song: Song, style: SongShareStyle = SongShareStyle.SQUARE,
+        imageLoader: ImageLoader = SingletonImageLoader.get(context)): SongShareFile {
         val content = SongShareContent.from(song)
+        val onlineUrl = content.imageUrl(style)
+        val online = try {
+            onlineUrl?.let { url -> withTimeoutOrNull(8000) {
+                (imageLoader.execute(ImageRequest.Builder(context).data(url)
+                    .size(SongSharePoster.WIDTH, SongSharePoster.HEIGHT).allowHardware(false).build()) as? SuccessResult)
+                    ?.image?.toBitmap()?.takeIf { it.width == SongSharePoster.WIDTH && it.height == SongSharePoster.HEIGHT }
+            } }
+        } catch (cancelled: CancellationException) { throw cancelled }
+          catch (_: Exception) { null }
+        if (online != null) return write(context, content, online, coverLoaded = true, serverFallback = false)
         val result = try {
             if (song.cover.isBlank()) null else withTimeoutOrNull(8000) {
-                SingletonImageLoader.get(context).execute(ImageRequest.Builder(context)
+                imageLoader.execute(ImageRequest.Builder(context)
                     .data(coverRequestUrl(song.cover, 1000)).size(800).allowHardware(false).build())
             }
         } catch (cancelled: CancellationException) { throw cancelled }
           catch (_: Exception) { null }
         val cover = (result as? SuccessResult)?.image?.toBitmap()
         return withContext(Dispatchers.Default) {
-            val bitmap = SongSharePoster.render(content, cover)
+            val bitmap = SongSharePoster.render(content, cover, style)
             try {
-                withContext(Dispatchers.IO) {
-                    val directory = File(context.cacheDir, "song-shares").apply { check(mkdirs() || isDirectory) }
-                    val cutoff = System.currentTimeMillis() - 86_400_000L
-                    directory.listFiles()?.filter { it.isFile && it.name.startsWith("poster-") && it.lastModified() < cutoff }
-                        ?.forEach { it.delete() }
-                    val file = File.createTempFile("poster-", ".png", directory)
-                    try {
-                        file.outputStream().buffered().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
-                        SongShareFile(file, content, cover != null)
-                    } catch (error: Exception) { file.delete(); throw error }
-                }
+                write(context, content, bitmap, cover != null, serverFallback = onlineUrl != null)
             } finally { bitmap.recycle() }
         }
+    }
+
+    // Preview, export and sharing use the same PNG, including downloaded JPEG posters.
+    // Online/cover bitmaps belong to Coil's cache and must not be recycled here.
+    private suspend fun write(context: Context, content: SongShareContent, bitmap: Bitmap,
+        coverLoaded: Boolean, serverFallback: Boolean): SongShareFile = withContext(Dispatchers.IO) {
+        val directory = File(context.cacheDir, "song-shares").apply { check(mkdirs() || isDirectory) }
+        val cutoff = System.currentTimeMillis() - 86_400_000L
+        directory.listFiles()?.filter { it.isFile && it.name.startsWith("poster-") && it.lastModified() < cutoff }
+            ?.forEach { it.delete() }
+        val file = File.createTempFile("poster-", ".png", directory)
+        try {
+            file.outputStream().buffered().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
+            SongShareFile(file, content, coverLoaded, serverFallback)
+        } catch (error: Exception) { file.delete(); throw error }
     }
 
     fun shareIntent(context: Context, poster: SongShareFile): Intent {
