@@ -18,7 +18,8 @@ data class RoomSessionState(val detail: RoomDetail? = null, val connecting: Bool
 class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClient,
     private val player: ExternalPlayer, private val scope: CoroutineScope,
     private val userId: () -> Long, private val expire: (RequestSession) -> Unit,
-    private val monotonic: () -> Long = { android.os.SystemClock.elapsedRealtime() }) : ExternalPlayback {
+    private val monotonic: () -> Long = { android.os.SystemClock.elapsedRealtime() },
+    private val recoveryIntervalMs: Long = 10_000) : ExternalPlayback {
     val state = MutableStateFlow(RoomSessionState())
     private var session: RequestSession? = null
     private var activeId: String? = null
@@ -38,6 +39,11 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     private var advanceIntent = 0L
     private var advanceRetry: Job? = null
     private var lastRenew = Long.MIN_VALUE
+    private fun RoomTimeline.recoveryIdentity() = trackNcmId to trackRevision
+    private var recoveryTrack: Pair<Long, Long?>? = null
+    private var recoveryJob: Job? = null
+    private var recoveryRevision = 0L
+    private var lastRecovery = Long.MIN_VALUE
     private val role get() = state.value.detail?.role(userId())
     val active get() = activeId != null
     suspend fun join(info: RoomInfo, password: String = "", created: Boolean = false, expected: RequestSession = repo.session()) {
@@ -126,14 +132,20 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
         }
         if (activeId == id && session == expected) clock.replaceWith(samples)
     }
-    suspend fun refresh(reset: Boolean = false) = refreshMutex.withLock {
+    suspend fun refresh(reset: Boolean = false, reloadTrack: Pair<Long, Long?>? = null) = refreshMutex.withLock {
         val id = activeId ?: return@withLock; val expected = session ?: return@withLock
         val detail = repo.detail(id, expected)
         if (activeId != id || expected != session || expected != repo.session()) return@withLock
-        if (!reset && detail.latestSeq < seq) return@withLock
+        if (!reset && detail.latestSeq < seq) {
+            if (reloadTrack != null && state.value.detail?.timeline?.recoveryIdentity() == reloadTrack) {
+                loaded = null; applyTimeline()
+            }
+            return@withLock
+        }
         if (detail.role(userId()) == null) { disconnect("你已不在此房间"); return@withLock }
         seq = detail.latestSeq
         lastId = seq.toString()
+        if (reloadTrack != null && detail.timeline?.recoveryIdentity() == reloadTrack) loaded = null
         state.update { it.copy(detail = detail) }; applyTimeline()
     }
     fun dismissError() { state.update { it.copy(error = null) } }
@@ -153,6 +165,12 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     private suspend fun applyTimeline() {
         publishPermission()
         val timeline = state.value.detail?.timeline
+        if (recoveryTrack != null && timeline?.recoveryIdentity() != recoveryTrack) {
+            recoveryTrack = null
+            val previous = recoveryJob; recoveryJob = null
+            // A recovery fetch can discover a new track; let that fetch finish applying it.
+            if (currentCoroutineContext()[Job] !== previous) previous?.cancel()
+        }
         val url = timeline?.stream?.url?.takeIf { it.toHttpUrlOrNull() != null }
         val key = if (timeline != null && timeline.trackNcmId > 0 && url != null) Triple(timeline.trackNcmId, url, timeline.trackRevision) else null
         if (key != loaded) {
@@ -302,13 +320,53 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
         }
     }
     override fun failed() {
-        renewStream(reload = true)
+        val timeline = state.value.detail?.timeline?.takeIf { it.trackNcmId > 0 } ?: return
+        val id = activeId ?: return; val expected = session ?: return
+        val track = timeline.recoveryIdentity()
+        if (recoveryTrack != track) {
+            recoveryJob?.cancel(); recoveryJob = null
+            recoveryTrack = track; lastRecovery = Long.MIN_VALUE
+        }
+        recoveryRevision++
+        if (recoveryJob?.isActive == true) return
+        val epoch = generation
+        fun valid() = generation == epoch && activeId == id && session == expected && repo.session() == expected &&
+            role != null && recoveryTrack == track && state.value.detail?.timeline?.recoveryIdentity() == track
+        val recovery = scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                while (isActive && valid()) {
+                    if (lastRecovery != Long.MIN_VALUE) {
+                        delay((recoveryIntervalMs - (monotonic() - lastRecovery)).coerceAtLeast(1))
+                    }
+                    // Keep the failed-prepare request while a proactive renewal is in flight.
+                    state.first { "stream/renew" !in it.pendingActions }
+                    if (!valid()) return@launch
+                    renewStream()
+                    state.first { "stream/renew" !in it.pendingActions }
+                    if (!valid()) return@launch
+                    lastRecovery = monotonic()
+                    val attempt = recoveryRevision
+                    when (val result = appResult { refresh(reloadTrack = track) }) {
+                        is AppResult.Success -> if (valid() && attempt == recoveryRevision) {
+                            return@launch
+                        }
+                        is AppResult.Failure -> if (valid()) {
+                            state.update { it.copy(error = "房间音频恢复失败：${result.kind.message}") }
+                            if (result.kind in setOf(ErrorKind.Unauthorized, ErrorKind.Forbidden, ErrorKind.NotFound)) return@launch
+                        }
+                    }
+                }
+            } finally {
+                if (recoveryJob === currentCoroutineContext()[Job]) recoveryJob = null
+            }
+        }
+        recoveryJob = recovery
+        recovery.start()
     }
-    private fun renewStream(reload: Boolean = false) {
+    private fun renewStream() {
         val now = monotonic()
         if (lastRenew != Long.MIN_VALUE && now - lastRenew < 10_000) return
         lastRenew = now
-        if (reload) loaded = null
         action("stream/renew", permission = { it != null })
     }
     override fun stop() { scope.launch { leave() } }
@@ -322,6 +380,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
         generation++
         advanceRetry?.cancel(); advanceRetry = null
         scheduledStart?.cancel(); scheduledStart = null
+        recoveryJob?.cancel(); recoveryJob = null; recoveryTrack = null
         job?.cancel(); job = null; activeId = null; session = null; loaded = null
         player.endExternal(this); state.value = RoomSessionState(error = message)
     }
