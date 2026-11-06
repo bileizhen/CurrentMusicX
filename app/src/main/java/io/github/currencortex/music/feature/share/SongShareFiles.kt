@@ -20,23 +20,12 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
-internal data class SongShareFile(val file: File, val content: SongShareContent, val coverLoaded: Boolean,
-    val serverFallback: Boolean = false)
+internal data class SongShareFile(val file: File, val content: SongShareContent, val coverLoaded: Boolean)
 
 internal object SongShareFiles {
     suspend fun create(context: Context, song: Song, style: SongShareStyle = SongShareStyle.SQUARE,
         imageLoader: ImageLoader = SingletonImageLoader.get(context)): SongShareFile {
         val content = SongShareContent.from(song)
-        val onlineUrl = content.imageUrl(style)
-        val online = try {
-            onlineUrl?.let { url -> withTimeoutOrNull(8000) {
-                (imageLoader.execute(ImageRequest.Builder(context).data(url)
-                    .size(SongSharePoster.WIDTH, SongSharePoster.HEIGHT).allowHardware(false).build()) as? SuccessResult)
-                    ?.image?.toBitmap()?.takeIf { it.width == SongSharePoster.WIDTH && it.height == SongSharePoster.HEIGHT }
-            } }
-        } catch (cancelled: CancellationException) { throw cancelled }
-          catch (_: Exception) { null }
-        if (online != null) return write(context, content, online, coverLoaded = true, serverFallback = false)
         val result = try {
             if (song.cover.isBlank()) null else withTimeoutOrNull(8000) {
                 imageLoader.execute(ImageRequest.Builder(context)
@@ -48,15 +37,15 @@ internal object SongShareFiles {
         return withContext(Dispatchers.Default) {
             val bitmap = SongSharePoster.render(content, cover, style)
             try {
-                write(context, content, bitmap, cover != null, serverFallback = onlineUrl != null)
+                write(context, content, bitmap, cover != null)
             } finally { bitmap.recycle() }
         }
     }
 
-    // Preview, export and sharing use the same PNG, including downloaded JPEG posters.
-    // Online/cover bitmaps belong to Coil's cache and must not be recycled here.
+    // Preview, export and sharing use the same locally rendered PNG.
+    // Cover bitmaps belong to Coil's cache and must not be recycled here.
     private suspend fun write(context: Context, content: SongShareContent, bitmap: Bitmap,
-        coverLoaded: Boolean, serverFallback: Boolean): SongShareFile = withContext(Dispatchers.IO) {
+        coverLoaded: Boolean): SongShareFile = withContext(Dispatchers.IO) {
         val directory = File(context.cacheDir, "song-shares").apply { check(mkdirs() || isDirectory) }
         val cutoff = System.currentTimeMillis() - 86_400_000L
         directory.listFiles()?.filter { it.isFile && it.name.startsWith("poster-") && it.lastModified() < cutoff }
@@ -64,7 +53,7 @@ internal object SongShareFiles {
         val file = File.createTempFile("poster-", ".png", directory)
         try {
             file.outputStream().buffered().use { check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)) }
-            SongShareFile(file, content, coverLoaded, serverFallback)
+            SongShareFile(file, content, coverLoaded)
         } catch (error: Exception) { file.delete(); throw error }
     }
 
