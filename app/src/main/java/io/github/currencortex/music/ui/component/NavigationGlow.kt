@@ -20,9 +20,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.currentStateAsState
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
 import coil3.request.SuccessResult
@@ -70,16 +70,11 @@ private val glowPalettes = LruCache<String, ArtworkGlowPalette>(16)
     modifier: Modifier = Modifier, active: Boolean = true) {
     val owner = LocalLifecycleOwner.current
     val motionEnabled = (rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) > 0f
-    var resumed by remember(owner) { mutableStateOf(owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) }
-    DisposableEffect(owner, meter, active, motionEnabled) {
-        fun update() {
-            resumed = owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)
-            meter.enabled = active && resumed && motionEnabled
-            if (!meter.enabled) meter.reset()
-        }
-        val observer = LifecycleEventObserver { _, _ -> update() }
-        owner.lifecycle.addObserver(observer); update()
-        onDispose { owner.lifecycle.removeObserver(observer); meter.enabled = false; meter.reset() }
+    val lifecycle by owner.lifecycle.currentStateAsState()
+    val resumed = lifecycle.isAtLeast(Lifecycle.State.RESUMED)
+    DisposableEffect(meter, active, resumed, motionEnabled) {
+        val subscription = if (active && resumed && motionEnabled) meter.acquire() else null
+        onDispose { subscription?.close() }
     }
     val primary = animateColorAsState(Color(palette.primary), tween(900), label = "dock primary colour")
     val secondary = animateColorAsState(Color(palette.secondary), tween(900), label = "dock secondary colour")
