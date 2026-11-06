@@ -1,6 +1,8 @@
 package io.github.currencortex.music.feature.player
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,7 +25,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable internal fun PlayerListeningPage(container: AppContainer, onPlay: () -> Unit,
-    onBinding: () -> Unit, onDialogActive: (Boolean) -> Unit) {
+    onBinding: () -> Unit, onDialogActive: (Boolean) -> Unit, onListening: () -> Unit = {}) {
     val account by container.accountRepository.state.collectAsStateWithLifecycle()
     val netease by container.neteaseSessions.state.collectAsStateWithLifecycle()
     val today by container.todayListening.today.collectAsStateWithLifecycle()
@@ -52,7 +54,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             UserTitleBadge(user.title)
                         }
                     }
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+                    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onListening).testTag("player_open_listening"), horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Bottom) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("今日听歌", fontSize = 14.sp)

@@ -718,6 +718,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     })
                                     LevelsScreen(vm, ::navigateBack)
                                 }
+                                route == "user/listening" -> io.github.currencortex.music.feature.listening.ListeningScreen(
+                                    container, ::navigateBack, onLogin = { navigateLibrary("user/binding") })
                                 route == "user/decorations" -> {
                                     val vm: DecorationViewModel = viewModel(key = route, factory = viewModelFactory { DecorationViewModel(container) })
                                     DecorationScreen(vm, ::navigateBack)
