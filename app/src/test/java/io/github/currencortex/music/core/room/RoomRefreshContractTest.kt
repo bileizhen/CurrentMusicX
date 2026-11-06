@@ -89,14 +89,77 @@ class RoomRefreshContractTest {
         }
     }
 
+    @Test fun seekingBackWithinSameTrackCancelsFailedAutomaticAdvance() = runBlocking {
+        val writes = AtomicInteger()
+        val snapshot = AtomicReference("""{"room":{"id":"r1"},"role":"admin","latestSeq":5,"timeline":{"playing":true,"trackRevision":19,"baseAt":1000}}""")
+        fixture(snapshot, action = { request ->
+            if (request.requestUrl!!.encodedPath.endsWith("/next")) {
+                writes.incrementAndGet(); MockResponse().setResponseCode(502)
+            } else MockResponse().setBody("{}")
+        }) { _, session, _ ->
+            session.ended()
+            withTimeout(2000) { while (writes.get() != 1 || session.state.value.pendingActions.isNotEmpty()) delay(10) }
+            // Another controller seeks within the same recording: the revision is unchanged.
+            snapshot.set("""{"room":{"id":"r1"},"role":"admin","latestSeq":6,"timeline":{"playing":true,"trackRevision":19,"basePosition":30000,"baseAt":2000}}""")
+            session.refresh()
+            delay(5500)
+            assertEquals(1, writes.get())
+            // Reaching the end of this new playback timeline is still allowed to advance.
+            session.ended()
+            withTimeout(2000) { while (writes.get() < 2) delay(10) }
+            assertEquals(2, writes.get())
+        }
+    }
+
+    @Test fun localPlaybackIntentCancelsRetryBeforeServerTimelineChanges() = runBlocking {
+        val writes = AtomicInteger()
+        val snapshot = AtomicReference("""{"room":{"id":"r1"},"role":"admin","latestSeq":5,"timeline":{"playing":true,"trackRevision":19}}""")
+        fixture(snapshot, action = { request ->
+            val path = request.requestUrl!!.encodedPath
+            if (path.endsWith("/next")) writes.incrementAndGet()
+            if (path.endsWith("/next") || path.endsWith("/seek")) MockResponse().setResponseCode(502)
+            else MockResponse().setBody("{}")
+        }) { _, session, _ ->
+            session.ended()
+            withTimeout(2000) { while (writes.get() != 1 || session.state.value.pendingActions.isNotEmpty()) delay(10) }
+            session.seek(30_000)
+            delay(5500)
+            assertEquals(1, writes.get())
+        }
+    }
+
+    @Test fun automaticAdvanceSurvivesTransientSnapshotFailure() = runBlocking {
+        val writes = CopyOnWriteArrayList<String>()
+        val failedSnapshots = AtomicInteger()
+        val snapshot = AtomicReference("""{"room":{"id":"r1"},"role":"admin","latestSeq":5,"timeline":{"playing":true,"trackRevision":19}}""")
+        fixture(snapshot, detail = {
+            if (writes.size == 1 && failedSnapshots.getAndIncrement() == 0) MockResponse().setResponseCode(503)
+            else MockResponse().setBody(snapshot.get())
+        }, action = { request ->
+            if (request.requestUrl!!.encodedPath.endsWith("/next")) {
+                writes.add(request.body.readUtf8())
+                if (writes.size == 1) MockResponse().setResponseCode(502) else {
+                    snapshot.set("""{"room":{"id":"r1"},"role":"admin","latestSeq":6,"timeline":{"playing":false,"trackRevision":20}}""")
+                    MockResponse().setBody("{}")
+                }
+            } else MockResponse().setBody("{}")
+        }) { _, session, _ ->
+            session.ended()
+            withTimeout(18_000) { while (writes.size < 2) delay(20) }
+            assertTrue(failedSnapshots.get() >= 2)
+            assertEquals(listOf("{\"trackRevision\":19}", "{\"trackRevision\":19}"), writes.toList())
+        }
+    }
+
     private suspend fun fixture(snapshot: AtomicReference<String>,
         events: (RecordedRequest) -> MockResponse = { MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE) },
+        detail: () -> MockResponse = { MockResponse().setBody(snapshot.get()) },
         action: (RecordedRequest) -> MockResponse = { MockResponse().setBody("{}") },
         block: suspend (MockWebServer, RoomSession, SilentExternalPlayer) -> Unit) {
         MockWebServer().use { server ->
             server.dispatcher = object : Dispatcher() {
                 override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
-                    "/cm/rooms/r1" -> MockResponse().setBody(snapshot.get())
+                    "/cm/rooms/r1" -> detail()
                     "/cm/rooms/r1/sync" -> MockResponse().setBody("""{"serverNow":${System.currentTimeMillis()}}""")
                     "/cm/live/r1/events" -> events(request)
                     else -> action(request)
