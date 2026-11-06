@@ -41,6 +41,8 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.CurrentMusic">
         <receiver android:name=".core.media.NeteaseUsbPermissionReceiver" android:exported="false" />
+        <provider android:name=".core.media.LocalArtworkProvider"
+            android:authorities="${applicationId}.local-artwork" android:exported="false" />
         <provider android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.files" android:exported="false" android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />

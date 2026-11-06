@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.DocumentsContract
+import io.github.currencortex.music.core.media.LocalArtworkProvider
 import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.data.song.Song
 import kotlinx.coroutines.currentCoroutineContext
@@ -64,6 +65,7 @@ internal suspend fun scanLocalFolder(context: Context, tree: Uri): List<Song> {
         catch (_: RuntimeException) { /* Unsupported tags do not prevent importing a playable file. */ }
         finally { metadata.release() }
         songs += Song(id = localSongId(uri.toString()), name = title, artists = artist, album = album,
+            cover = LocalArtworkProvider.artworkUri(context, uri).toString(),
             durationMs = duration, musicSource = MusicSource.LOCAL, localUri = uri.toString())
     })
     return songs.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.name })
