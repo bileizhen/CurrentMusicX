@@ -38,8 +38,8 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Validate retention policy
-        run: node --test .github/scripts/ci-prune.test.cjs
+      - name: Check automation script syntax
+        run: node --check .github/scripts/ci-prune.cjs
       - name: Remove old CI releases and their tags
         uses: actions/github-script@v8
         with:

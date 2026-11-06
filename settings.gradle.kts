@@ -47,4 +47,7 @@ dependencyResolutionManagement {
 }
 rootProject.name = "CurrentMusic"
 include(":app")
-include(":baselineprofile", ":benchmark")
+// Local performance tools are not distributed with the repository.
+if (file("baselineprofile/build.gradle.kts").isFile && file("benchmark/build.gradle.kts").isFile) {
+    include(":baselineprofile", ":benchmark")
+}

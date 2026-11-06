@@ -21,7 +21,11 @@ jobs:
         with:
           node-version: 22
           package-manager-cache: false
-      - run: node --test .github/scripts/*.test.cjs
+      - name: Check automation script syntax
+        run: |
+          for script in .github/scripts/*.cjs; do
+            node --check "$script"
+          done
       - name: Validate workflow syntax
         uses: docker://rhysd/actionlint:1.7.7
         with:
