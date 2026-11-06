@@ -30,4 +30,11 @@ internal object TtmlMetadataParser {
             }
         }
     }
+
+    fun romanWordTracks(head: TtmlNode?, key: String?, background: Boolean): List<List<TtmlTimedText>> {
+        if (head == null || key == null) return emptyList()
+        return head.descendants("transliteration").flatMap { track ->
+            track.descendants("text").filter { it.attr("for") == key }.map { ttmlRomanWords(it, background) }
+        }
+    }
 }

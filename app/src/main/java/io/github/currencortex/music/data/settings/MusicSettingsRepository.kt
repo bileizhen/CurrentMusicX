@@ -51,6 +51,11 @@ enum class KaraokeScope(val label: String) {
     companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: ALL }
 }
 
+enum class LyricsStyle(val label: String) {
+    CLASSIC("经典"), APPLE_MUSIC("Apple Music");
+    companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: CLASSIC }
+}
+
 data class LyricsDisplayOptions(
     val centered: Boolean = false, val fontWeight: Int = 500,
     val blur: Boolean = true, val stagger: Boolean = true,
@@ -60,12 +65,18 @@ data class LyricsDisplayOptions(
     val glow: Boolean = true, val wordLift: Boolean = true,
     val smoke: Boolean = false,
     val particles: Boolean = false,
+    val style: LyricsStyle = LyricsStyle.CLASSIC,
+    val appleMusic: AppleMusicLyricsOptions = AppleMusicLyricsOptions(),
 ) {
-    /** Smoke owns a flat, centered stage; also repairs incompatible older preferences. */
-    fun normalized() = when {
-        particles -> copy(centered = true, perspective = false, smoke = false)
-        smoke -> copy(centered = true, perspective = false)
-        else -> this
+    /** Classic stages own their layout; their saved options must not constrain Apple Music. */
+    fun normalized(): LyricsDisplayOptions {
+        val value = copy(appleMusic = appleMusic.normalized())
+        return when {
+            style == LyricsStyle.APPLE_MUSIC -> value
+            particles -> value.copy(centered = true, perspective = false, smoke = false)
+            smoke -> value.copy(centered = true, perspective = false)
+            else -> value
+        }
     }
 }
 
@@ -114,6 +125,12 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val wordLift = booleanPreferencesKey("lyrics.wordLift")
     private val smoke = booleanPreferencesKey("lyrics.smoke")
     private val particles = booleanPreferencesKey("lyrics.particles")
+    private val lyricsStyle = stringPreferencesKey("lyrics.style")
+    private val appleLineSpacing = floatPreferencesKey("lyrics.appleMusic.lineSpacing")
+    private val appleLineHeight = floatPreferencesKey("lyrics.appleMusic.lineHeight")
+    private val appleAnimationSpeed = floatPreferencesKey("lyrics.appleMusic.animationSpeed")
+    private val appleGlowIntensity = floatPreferencesKey("lyrics.appleMusic.glowIntensity")
+    private val appleBlurStrength = floatPreferencesKey("lyrics.appleMusic.blurStrength")
     private val neteaseMain = booleanPreferencesKey("library.neteaseMain")
     private val likeMode = stringPreferencesKey("music.likeMode")
     private val concurrentPlayback = booleanPreferencesKey("music.allowConcurrentPlayback")
@@ -138,6 +155,13 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private fun decodeLyricsSource(p: Preferences) =
         if ((p[lyricsSourceMigration] ?: 0) < LYRICS_SOURCE_AUTOMATIC_VERSION) LyricsSource.AUTO
         else LyricsSource.from(p[lyricsSource])
+    private fun decodeAppleMusic(p: Preferences) = AppleMusicLyricsOptions(
+        lineSpacing = p[appleLineSpacing] ?: AppleMusicLyricsOptions.DEFAULT_LINE_SPACING,
+        lineHeight = p[appleLineHeight] ?: AppleMusicLyricsOptions.DEFAULT_LINE_HEIGHT,
+        animationSpeed = p[appleAnimationSpeed] ?: AppleMusicLyricsOptions.DEFAULT_ANIMATION_SPEED,
+        glowIntensity = p[appleGlowIntensity] ?: AppleMusicLyricsOptions.DEFAULT_GLOW_INTENSITY,
+        blurStrength = p[appleBlurStrength] ?: AppleMusicLyricsOptions.DEFAULT_BLUR_STRENGTH,
+    )
     private fun decode(p: Preferences) = MusicSettings(p[server] ?: ServerDefaults.URL, AudioQuality.from(p[quality].orEmpty()),
         p[restore] ?: true, p[nickname].orEmpty(), p[account] ?: 0,
         p[preload] ?: true, p[metered] ?: false, LyricsTypography.normalize(p[lyricsSize] ?: LyricsTypography.DEFAULT_SIZE),
@@ -145,7 +169,8 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
         LyricsDisplayOptions(p[centered] ?: false, (p[fontWeight] ?: 500).coerceIn(400, 900),
             p[blur] ?: true, p[stagger] ?: true, KaraokeScope.from(p[karaokeScope]), p[hideControls] ?: false,
             p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true,
-            p[perspective] ?: true, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false, p[particles] ?: false).normalized(), p[neteaseMain] ?: true,
+            p[perspective] ?: true, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false, p[particles] ?: false,
+            LyricsStyle.from(p[lyricsStyle]), decodeAppleMusic(p)).normalized(), p[neteaseMain] ?: true,
         p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), LikeMode.from(p[likeMode]), decodeLyricsSource(p),
         LyricsFont.from(p[lyricsFont]), p[lyricsFontFile].orEmpty(),
         CurrentMusicServer.from(p[serverMode], p[server]),
@@ -209,6 +234,12 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[glow] = value.glow; p[wordLift] = value.wordLift
             p[smoke] = value.smoke
             p[particles] = value.particles
+            p[lyricsStyle] = value.style.name
+            p[appleLineSpacing] = value.appleMusic.lineSpacing
+            p[appleLineHeight] = value.appleMusic.lineHeight
+            p[appleAnimationSpeed] = value.appleMusic.animationSpeed
+            p[appleGlowIntensity] = value.appleMusic.glowIntensity
+            p[appleBlurStrength] = value.appleMusic.blurStrength
         }
     }
     suspend fun setAccount(id: Long, name: String) { store.edit { it[account] = id; it[nickname] = name } }
