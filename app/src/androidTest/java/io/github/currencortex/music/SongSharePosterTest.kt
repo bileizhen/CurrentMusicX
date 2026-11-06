@@ -67,7 +67,7 @@ class SongSharePosterTest {
         val cover = File(context.cacheDir, "share-fixture-cover.png")
         val image = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.rgb(43, 86, 180)) }
         cover.outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }; image.recycle()
-        val song = Song(3340114785, "Reply", "kz / かぐや", cover = Uri.fromFile(cover).toString(), musicSource = MusicSource.QQ_MUSIC)
+        val song = Song(3340114785, "Reply", "kz / かぐや", cover = Uri.fromFile(cover).toString())
         val generated = SongShareFiles.create(context, song)
         try {
             assertTrue(generated.coverLoaded)
@@ -132,42 +132,74 @@ class SongSharePosterTest {
         }
     }
 
-    @Test fun onlineStylesUseDistinctRequestsAndServerFailureFallsBack(): Unit = runBlocking {
+    @Test fun everySourceAndStyleRendersLocallyWithoutRequestingOnlinePosters(): Unit = runBlocking {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val requests = mutableListOf<String>()
-        val image = Bitmap.createBitmap(1080, 1440, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.CYAN) }
-        val bytes = java.io.ByteArrayOutputStream().apply { image.compress(Bitmap.CompressFormat.JPEG, 95, this) }.toByteArray()
-        image.recycle()
-        var fail = false
         val client = OkHttpClient.Builder().addInterceptor { chain ->
-            val request = chain.request()
-            requests += request.url.toString()
-            assertNull(request.header("Authorization")); assertNull(request.header("Cookie"))
-            Response.Builder().request(request).protocol(Protocol.HTTP_1_1).code(if (fail) 503 else 200)
-                .message(if (fail) "Unavailable" else "OK")
-                .body(if (fail) "Unavailable".toResponseBody() else bytes.toResponseBody("image/jpeg".toMediaType())).build()
+            requests += chain.request().url.toString()
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(503)
+                .message("Unexpected network request").body("Unavailable".toResponseBody()).build()
         }.build()
         val loader = ImageLoader.Builder(context).memoryCache(null).diskCache(null)
             .components { add(OkHttpNetworkFetcherFactory(callFactory = { client })) }.build()
-        val song = Song(3340114785, "Reply", "kz")
+        val cover = File(context.cacheDir, "share-local-only-cover.png")
+        val image = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.CYAN) }
+        cover.outputStream().use { image.compress(Bitmap.CompressFormat.PNG, 100, it) }; image.recycle()
         try {
-            for (style in SongShareStyle.entries) {
+            for (source in MusicSource.entries) for (style in SongShareStyle.entries) {
+                val song = Song(3340114785, "Reply", "kz", cover = Uri.fromFile(cover).toString(), musicSource = source)
                 val poster = SongShareFiles.create(context, song, style, loader)
                 try {
-                    assertFalse(poster.serverFallback)
+                    assertTrue("$source / $style", poster.coverLoaded)
                     val bitmap = BitmapFactory.decodeFile(poster.file.path)
-                    try { assertTrue(Color.blue(bitmap.getPixel(540, 500)) > 240) } finally { bitmap.recycle() }
-                    assertTrue(requests.last().endsWith("/3340114785/image?style=${style.apiValue}"))
+                    try {
+                        assertEquals(1080, bitmap.width); assertEquals(1440, bitmap.height)
+                        assertTrue(Color.blue(bitmap.getPixel(540, 500)) > 200)
+                    } finally { bitmap.recycle() }
+                    assertTrue("No poster service may be contacted: $requests", requests.isEmpty())
                 } finally { poster.file.delete() }
             }
-            fail = true
-            val fallback = SongShareFiles.create(context, song, SongShareStyle.IMMERSIVE, loader)
-            try { assertTrue(fallback.serverFallback); assertFalse(fallback.coverLoaded); assertTrue(fallback.file.length() > 1000) }
-            finally { fallback.file.delete() }
-            val requestCount = requests.size
-            val privatePoster = SongShareFiles.create(context, song.copy(musicSource = MusicSource.NAVIDROME), SongShareStyle.IMMERSIVE, loader)
-            try { assertFalse(privatePoster.serverFallback); assertEquals(requestCount, requests.size) }
-            finally { privatePoster.file.delete() }
+        } finally {
+            cover.delete(); loader.shutdown(); client.dispatcher.executorService.shutdown(); client.connectionPool.evictAll()
+        }
+    }
+
+    @Test fun remoteArtworkIsTheOnlyRequestAndFailureStillProducesBothLocalStyles(): Unit = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        val requests = mutableListOf<String>()
+        val coverUrl = "https://artwork.example/cover.png"
+        val image = Bitmap.createBitmap(128, 128, Bitmap.Config.ARGB_8888).apply { eraseColor(Color.CYAN) }
+        val bytes = java.io.ByteArrayOutputStream().apply { image.compress(Bitmap.CompressFormat.PNG, 100, this) }.toByteArray()
+        image.recycle()
+        var fail = false
+        val client = OkHttpClient.Builder().addInterceptor { chain ->
+            requests += chain.request().url.toString()
+            Response.Builder().request(chain.request()).protocol(Protocol.HTTP_1_1).code(if (fail) 503 else 200)
+                .message(if (fail) "Unavailable" else "OK")
+                .body(if (fail) "Unavailable".toResponseBody() else bytes.toResponseBody("image/png".toMediaType())).build()
+        }.build()
+        val loader = ImageLoader.Builder(context).memoryCache(null).diskCache(null)
+            .components { add(OkHttpNetworkFetcherFactory(callFactory = { client })) }.build()
+        try {
+            for (unavailable in listOf(false, true)) {
+                fail = unavailable
+                for (style in SongShareStyle.entries) {
+                    val before = requests.size
+                    val poster = SongShareFiles.create(context, Song(3340114785, "Reply", "kz", cover = coverUrl), style, loader)
+                    try {
+                        assertEquals(!unavailable, poster.coverLoaded)
+                        assertTrue(poster.file.length() > 1000)
+                        assertEquals(listOf(coverUrl), requests.drop(before))
+                        val bitmap = BitmapFactory.decodeFile(poster.file.path)
+                        try {
+                            val pixels = IntArray(248 * 248)
+                            bitmap.getPixels(pixels, 0, 248, 736, 1136, 248, 248)
+                            assertEquals(poster.content.publicUrl, MultiFormatReader().decode(BinaryBitmap(
+                                HybridBinarizer(RGBLuminanceSource(248, 248, pixels)))).text)
+                        } finally { bitmap.recycle() }
+                    } finally { poster.file.delete() }
+                }
+            }
         } finally { loader.shutdown(); client.dispatcher.executorService.shutdown(); client.connectionPool.evictAll() }
     }
 }
