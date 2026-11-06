@@ -36,12 +36,26 @@ class QqLyricsMatchSource(client: OkHttpClient = OkHttpClient(), baseUrl: String
         require(text.length <= OnlineLyricsMatcher.MAX_QUERY_LENGTH) { "搜索关键词过长" }
         // The album remains candidate-ranking evidence; including it in QQ's keyword can hide
         // the right recording, especially for long editions and soundtrack catalogue names.
-        val keyword = text.split(Regex("\\s+-\\s+")).take(2).joinToString(" ")
+        val parts = text.split(Regex("\\s+-\\s+"))
+        val keyword = parts.take(2).joinToString(" ")
+        val results = searchCatalogue(keyword)
+        // Multiple artists can over-constrain QQ's keyword search. Keep the original metadata
+        // for the matcher's assessment, but offer title-only candidates when the catalogue is empty.
+        val title = parts.first().trim()
+        if (results.isNotEmpty() || title.isEmpty() || title == keyword) results else searchCatalogue(title)
+    }
+
+    private suspend fun searchCatalogue(keyword: String): List<LyricsCandidate> {
         val root = request("soso/fcgi-bin/search_for_qq_cp", mapOf("w" to keyword, "format" to "json", "p" to "1",
             "n" to OnlineLyricsMatcher.MAX_RESULTS.toString(), "ct" to "24", "qqmusic_ver" to "1298"))
-        checkBusiness(root, "搜索")
+        // QQ's public catalogue returns code=0/subcode=10003 with an empty song list for
+        // "no results". Only that validated search shape is empty; other refusals remain errors.
+        val noResults = root.number("code") == 0L && (root.number("retcode") ?: 0L) == 0L &&
+            root.number("subcode") == 10003L &&
+            (((root["data"] as? JsonObject)?.get("song") as? JsonObject)?.get("list") as? JsonArray)?.isEmpty() == true
+        if (!noResults) checkBusiness(root, "搜索")
         val songs = root.obj("data").obj("song").array("list")
-        songs.asSequence().mapNotNull { value ->
+        return songs.asSequence().mapNotNull { value ->
             val row = value as? JsonObject ?: return@mapNotNull null
             val mid = row.string("songmid").takeIf { it.matches(SONG_MID) } ?: return@mapNotNull null
             val title = cleanLabel(row.string("songname"))
