@@ -125,12 +125,29 @@ object LyricsFileCodec {
         fun line(value: LyricLine, depth: Int) {
             require(depth <= 8 && value.startTimeMs in 0..MAX_TIME && value.endTimeMs in value.startTimeMs..MAX_TIME) { "歌词时间轴无效" }
             require(value.text.length <= 100_000 && value.words.size <= 20_000) { "歌词单行过长" }
+            fun annotations(items: List<LyricRuby>, from: Int, until: Int, start: Long, end: Long) {
+                require(items.size <= 20_000) { "歌词注音数量过多" }
+                fun codePointBoundary(offset: Int): Boolean = offset == 0 || offset == value.text.length ||
+                    !(value.text[offset].isLowSurrogate() && value.text[offset - 1].isHighSurrogate())
+                items.forEach { ruby ->
+                    require(ruby.text.isNotBlank() && ruby.text.length <= 10_000 && ruby.startOffset >= from &&
+                        ruby.endOffset <= until && ruby.endOffset > ruby.startOffset &&
+                        codePointBoundary(ruby.startOffset) && codePointBoundary(ruby.endOffset)) { "歌词注音文本范围无效" }
+                    require((ruby.startTimeMs == null) == (ruby.endTimeMs == null)) { "歌词注音时间不完整" }
+                    ruby.startTimeMs?.let { at ->
+                        require(at in start..end && ruby.endTimeMs!! in at..end) { "歌词注音时间超出声部范围" }
+                    }
+                }
+            }
+            annotations(value.ruby, 0, value.text.length, value.startTimeMs, value.endTimeMs)
             var cursor = 0
             var previousStart = value.startTimeMs
             value.words.forEach { word ->
                 require(word.startTimeMs in previousStart..value.endTimeMs && word.endTimeMs in word.startTimeMs..value.endTimeMs &&
                     word.startOffset >= cursor && word.endOffset in word.startOffset..value.text.length &&
                     value.text.substring(word.startOffset, word.endOffset) == word.text) { "歌词逐字时间或文本范围无效" }
+                require(word.romanization.length <= 10_000) { "歌词逐词音译过长" }
+                annotations(word.ruby, word.startOffset, word.endOffset, word.startTimeMs, word.endTimeMs)
                 cursor = word.endOffset
                 previousStart = word.startTimeMs
             }
