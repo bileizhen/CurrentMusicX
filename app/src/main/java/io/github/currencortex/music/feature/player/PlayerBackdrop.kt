@@ -7,6 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.key
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.rememberCoroutineScope
@@ -44,25 +46,54 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
 
-/** About's flowing colour pools follow the artwork; controls stay on a separate sharp layer. */
+/** Artwork-derived flowing or frosted backgrounds; controls stay on a separate sharp layer. */
 @Composable fun PlayerBackdrop(cover: String, modifier: Modifier = Modifier, customImage: File? = null,
     blurPercent: Float = 35f, active: Boolean = true, dynamicBackground: Boolean = true) {
     Box(modifier.clipToBounds().background(Color(0xFF262428))) {
         if (customImage != null) CustomPlayerBackground(customImage, blurPercent, Modifier.matchParentSize())
         else if (dynamicBackground) ArtworkPlayerBackground(cover, active, Modifier.matchParentSize())
-        else StaticArtworkBackground(cover, Modifier.matchParentSize())
-        Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = .33f), Color.Black.copy(alpha = .62f)))))
+        else FrostedArtworkBackground(cover, blurPercent, Modifier.matchParentSize())
+        val frosted = customImage == null && !dynamicBackground
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(
+            if (frosted) listOf(Color.Black.copy(alpha = .56f), Color.Black.copy(alpha = .62f), Color.Black.copy(alpha = .58f))
+            else listOf(Color.Black.copy(alpha = .33f), Color.Black.copy(alpha = .62f)))))
     }
 }
 
-@Composable private fun StaticArtworkBackground(cover: String, modifier: Modifier) {
+@Composable private fun FrostedArtworkBackground(cover: String, percent: Float, modifier: Modifier) {
     val context = LocalContext.current
+    val blur = if (percent.isFinite()) percent.coerceIn(0f, 100f).roundToInt() else 35
+    // Blur a small software cover once per change, on every Android version. This avoids
+    // a full-screen RenderEffect and its transparent edges, including in software rendering.
+    val bitmap by key(cover) {
+        produceState<ImageBitmap?>(null, context, cover, blur) {
+            if (cover.isBlank()) return@produceState
+            delay(90)
+            val result = SingletonImageLoader.get(context).execute(ImageRequest.Builder(context)
+                .data(coverRequestUrl(cover, 192)).size(192).allowHardware(false).build())
+            value = if (result is SuccessResult) withContext(Dispatchers.Default) {
+                val input = result.image.toBitmap()
+                // Flatten transparent artwork before filtering to keep its edge colours neutral.
+                val opaque = android.graphics.Bitmap.createBitmap(input.width, input.height, android.graphics.Bitmap.Config.ARGB_8888)
+                android.graphics.Canvas(opaque).apply {
+                    drawColor(android.graphics.Color.rgb(66, 64, 63))
+                    drawBitmap(input, 0f, 0f, null)
+                }
+                val pixels = IntArray(input.width * input.height)
+                opaque.getPixels(pixels, 0, input.width, 0, 0, input.width, input.height)
+                opaque.recycle()
+                android.graphics.Bitmap.createBitmap(blurBackgroundPixels(pixels, input.width, input.height,
+                    (blur * .24f).roundToInt()), input.width, input.height, android.graphics.Bitmap.Config.ARGB_8888).asImageBitmap()
+            } else null
+        }
+    }
     Box(modifier.testTag("player_static_background")
-        .background(Brush.verticalGradient(listOf(Color(0xFF635047), Color(0xFF222832))))) {
-        if (cover.isNotBlank() && Build.VERSION.SDK_INT >= 31) AsyncImage(
-            model = remember(context, cover) { ImageRequest.Builder(context).data(coverRequestUrl(cover, 160)).size(160).build() },
-            contentDescription = null, contentScale = ContentScale.Crop,
-            modifier = Modifier.matchParentSize().graphicsLayer { scaleX = 1.3f; scaleY = 1.3f }.blur(65.dp))
+        .background(Color(0xFF42403F))) {
+        Crossfade(bitmap, animationSpec = tween(600), label = "frosted artwork", modifier = Modifier.matchParentSize()) { image ->
+            if (image != null) Image(image, contentDescription = null, contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize())
+        }
+        Box(Modifier.matchParentSize().background(Color(0xFFB5B1A8).copy(alpha = .08f)))
     }
 }
 

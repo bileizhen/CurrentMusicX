@@ -3,6 +3,7 @@ package io.github.currencortex.music
 import android.content.ContextWrapper
 import android.graphics.Bitmap
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -173,23 +174,76 @@ class PlayerBackgroundTest {
                 }
             } } }
             compose.waitUntil(5000) { compose.onAllNodesWithTag("player_dynamic_background").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("player_dynamic_background").assertIsOn().performClick()
+            compose.onNodeWithTag("player_dynamic_background").assertIsSelected()
+            compose.onNodeWithTag("player_frosted_background").performClick()
             compose.waitUntil(5000) { !container.settings.state.value.playerDynamicBackground }
             compose.onNodeWithTag("player_static_background").assertExists()
             compose.onNodeWithTag("player_artwork_background").assertDoesNotExist()
+            compose.onNodeWithTag("player_background_blur").performScrollTo().assertIsEnabled()
+                .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.SetProgress) { it(64f) }
+            compose.waitUntil(5000) { container.settings.state.value.playerBackgroundBlur == 64f }
             compose.onNodeWithText("完成").performScrollTo().performClick()
             compose.waitUntil(5000) { !shown }
             compose.onNodeWithText("再次打开").performClick()
             compose.waitUntil(5000) { compose.onAllNodesWithTag("player_dynamic_background").fetchSemanticsNodes().isNotEmpty() }
-            compose.onNodeWithTag("player_dynamic_background").assertIsOff().performClick()
+            compose.onNodeWithTag("player_frosted_background").assertIsSelected()
+            assertEquals(64f, container.settings.snapshot().playerBackgroundBlur)
+            compose.onNodeWithTag("player_dynamic_background").assertIsNotSelected().performClick()
             compose.waitUntil(5000) { container.settings.state.value.playerDynamicBackground }
             compose.onNodeWithTag("player_artwork_background").assertExists()
             compose.onNodeWithTag("player_static_background").assertDoesNotExist()
+            compose.onNodeWithTag("player_background_blur").performScrollTo().assertIsNotEnabled()
             assertTrue(container.settings.snapshot().playerDynamicBackground)
         } finally { container.close() }
     }
 
     private fun renderedBackground() = compose.onNodeWithTag("background_render").captureToImage().asAndroidBitmap()
+
+    @Test fun frostedArtworkFollowsCoverAndFallsBackAfterMissingOrFailedArtwork() {
+        val root = File(context.cacheDir, "frosted-colours-${UUID.randomUUID()}").apply { mkdirs() }
+        val warm = solidCover(root, "warm.png", 0xffe45b26.toInt())
+        val cool = solidCover(root, "cool.png", 0xff245cde.toInt())
+        var cover by mutableStateOf(warm.toURI().toString())
+        try {
+            compose.setContent { LeiTheme(AppearanceSettings()) {
+                PlayerBackdrop(cover, Modifier.size(260.dp, 360.dp).testTag("background_render"), dynamicBackground = false)
+            } }
+            compose.waitUntil(10000) { redBlueBalance(renderedBackground()) > 35 }
+            compose.runOnIdle { cover = cool.toURI().toString() }
+            compose.waitUntil(10000) { redBlueBalance(renderedBackground()) < -35 }
+            compose.runOnIdle { cover = File(root, "missing.png").toURI().toString() }
+            compose.waitUntil(10000) { kotlin.math.abs(redBlueBalance(renderedBackground())) < 10 }
+            compose.runOnIdle { cover = warm.toURI().toString() }
+            compose.waitUntil(10000) { redBlueBalance(renderedBackground()) > 35 }
+            compose.runOnIdle { cover = "" }
+            compose.waitUntil(10000) { kotlin.math.abs(redBlueBalance(renderedBackground())) < 10 }
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun frostedBlurSoftensArtworkAndKeepsForegroundSharp() {
+        val root = File(context.cacheDir, "frosted-blur-${UUID.randomUUID()}").apply { mkdirs() }
+        val image = fixture(root)
+        var blur by mutableFloatStateOf(0f)
+        try {
+            compose.setContent { LeiTheme(AppearanceSettings()) {
+                Box(Modifier.size(260.dp, 360.dp).testTag("background_render")) {
+                    PlayerBackdrop(image.toURI().toString(), Modifier.matchParentSize(), blurPercent = blur, dynamicBackground = false)
+                    Box(Modifier.size(24.dp).background(androidx.compose.ui.graphics.Color.White))
+                }
+            } }
+            fun contrast(): Int {
+                val bitmap = renderedBackground()
+                return (8 until bitmap.width).maxOf { x ->
+                    kotlin.math.abs((bitmap.getPixel(x, bitmap.height / 2) ushr 16 and 255) -
+                        (bitmap.getPixel(x - 8, bitmap.height / 2) ushr 16 and 255))
+                }
+            }
+            compose.waitUntil(10000) { contrast() > 65 }
+            compose.runOnIdle { blur = 100f }
+            compose.waitUntil(10000) { contrast() < 15 }
+            assertEquals(android.graphics.Color.WHITE, renderedBackground().getPixel(4, 4))
+        } finally { root.deleteRecursively() }
+    }
 
     private fun redBlueBalance(bitmap: Bitmap): Int {
         var balance = 0; var samples = 0
