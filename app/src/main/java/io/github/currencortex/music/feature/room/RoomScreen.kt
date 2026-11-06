@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.util.collectAsPageState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.room.*
+import io.github.currencortex.music.core.network.RequestSession
 import io.github.currencortex.music.ui.component.MusicDialog
 import io.github.currencortex.music.ui.component.MusicCover
 import io.github.currencortex.music.ui.component.MusicTextAction
@@ -74,8 +75,9 @@ import top.yukonga.miuix.kmp.basic.*
     var create by rememberSaveable { mutableStateOf(false) }
     var exit by remember { mutableStateOf(false) }
     var close by remember { mutableStateOf(false) }
+    var deleteRoom by remember(account.account?.id) { mutableStateOf<Pair<RoomCard, RequestSession>?>(null) }
     var memberDialog by remember { mutableStateOf(false) }
-    val dialogActive = create || exit || close || memberDialog || passwordRoom != null
+    val dialogActive = create || exit || close || memberDialog || passwordRoom != null || deleteRoom != null
     LaunchedEffect(dialogActive) { onDialogActive(dialogActive) }
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     val clipboard = LocalClipboard.current; val scope = rememberCoroutineScope()
@@ -95,6 +97,8 @@ import top.yukonga.miuix.kmp.basic.*
                 }
                 item {
                     SettingsSectionHeader("CurrentMusic 房间")
+                    MusicCategoryTabs(listOf("public" to "公开房间", "mine" to "我的房间"), browser.scope.query,
+                        { vm.load(query, roomScope = if (it == "mine") RoomScope.MINE else RoomScope.PUBLIC) }, "room_scope")
                 }
                 item {
                     MusicSearchBar(query, { vm.search(query.trim()) }, onInput = { query = it },
@@ -111,7 +115,7 @@ import top.yukonga.miuix.kmp.basic.*
                     }
                     if (account.account == null) SettingsHint("登录 CurrentMusic 账号后可创建房间。")
                 }
-                if (busy) item { ListenLoadingLabel("正在进入房间…") }
+                if (busy) item { ListenLoadingLabel("正在处理房间…") }
                 if (browser.loading && browser.rooms.isEmpty()) item { ListenTogetherSkeleton("正在加载房间…", "room_browser_loading", rows = 2) }
                 browser.error?.let { error -> item {
                     SettingsGroup { SettingsHint(error, error = true); MusicTextAction("重试", { vm.load() }, Modifier.padding(16.dp)) }
@@ -120,16 +124,22 @@ import top.yukonga.miuix.kmp.basic.*
                 items(browser.rooms, key = { it.id }) { room ->
                     SettingsGroup(Modifier.animateItem()) {
                         SettingsPreference(room.name,
-                            "#${room.code} · ${room.online} 人在线",
-                            trailing = { MusicTextAction("加入", { vm.find(room.code) }, enabled = !busy) })
+                            "#${room.code} · " + if (room.archived) {
+                                if (room.archiveReason == "idle") "闲置后自动归档" else "已归档"
+                            } else "${room.online} 人在线",
+                            trailing = { MusicTextAction(if (room.archived) "恢复并进入" else "加入",
+                                { if (browser.scope == RoomScope.MINE) vm.enterOwned(room) else vm.find(room.code) }, enabled = !busy) })
                         SettingsDivider()
                         SettingsHint(listOf(room.ownerName.takeIf { it.isNotBlank() },
                             if (room.freeMode) "自由点歌" else "点歌需要审批").filterNotNull().joinToString(" · "))
+                        if (browser.scope == RoomScope.MINE) MusicTextAction("永久删除", { deleteRoom = room to vm.container.roomRepository.session() },
+                            Modifier.padding(horizontal = 16.dp, vertical = 8.dp), enabled = !busy)
                     }
                 }
                 if (browser.more) item { GlassActionButton("加载更多", { vm.load(more = true) }, enabled = !browser.loading) }
                 if (!browser.loading && browser.rooms.isEmpty() && browser.error == null) item {
-                    SettingsGroup { SettingsPreference("暂无公开房间", "创建一个房间，或使用好友的六位房间号加入。") }
+                    SettingsGroup { SettingsPreference(if (browser.scope == RoomScope.MINE) "暂无我的房间" else "暂无公开房间",
+                        if (browser.scope == RoomScope.MINE) "你创建的房间和已归档房间会显示在这里。" else "创建一个房间，或使用好友的六位房间号加入。") }
                 }
             }
         } else {
@@ -194,7 +204,13 @@ import top.yukonga.miuix.kmp.basic.*
         }
     }
     }
-    if (create) RoomForm("创建房间", { if (!busy) create = false }, saving = busy, error = browser.error) { name, pw, public, free -> vm.create(name, pw.orEmpty(), public, free) }
+    if (create) RoomForm("创建房间", { if (!busy) create = false }, saving = busy, error = browser.error) { name, pw, public, free, approval, locked ->
+        vm.create(name, pw.orEmpty(), public, free, approval, locked) }
+    deleteRoom?.let { (room, expected) -> MusicDialog("永久删除房间", onDismiss = { deleteRoom = null }) {
+        Text("将永久删除「${room.name}」（#${room.code}）及其成员、点歌队列、事件与封禁记录。此操作无法恢复。")
+        MusicDialogButton("永久删除", onClick = { deleteRoom = null; vm.deleteOwned(room, expected) }, enabled = !busy,
+            modifier = Modifier.testTag("confirm_delete_room"))
+    } }
     passwordRoom?.let { room ->
         var password by remember(room.id) { mutableStateOf("") }
         MusicDialog("加入 ${room.name}", onDismiss = { vm.passwordRoom.value = null }) {
@@ -207,9 +223,9 @@ import top.yukonga.miuix.kmp.basic.*
         Text("退出后恢复本地队列，保持暂停。")
         MusicDialogButton("退出房间", onClick = { exit = false; vm.leave() }, modifier = Modifier.testTag("confirm_leave_room"))
     }
-    if (close) MusicDialog("关闭房间", onDismiss = { close = false }) {
-        Text("所有成员都会离开此房间。")
-        MusicDialogButton("关闭房间", onClick = { close = false; vm.session.action("close", permission = { it == RoomRole.OWNER }) })
+    if (close) MusicDialog("归档房间", onDismiss = { close = false }) {
+        Text("播放将停止，所有成员都会离开。房间号、队列和进度会保留，你可以从“我的房间”恢复。")
+        MusicDialogButton("归档房间", onClick = { close = false; vm.session.action("close", permission = { it == RoomRole.OWNER }) })
     }
 }
 @Composable private fun RoomTransport(label: String, icon: Int, onClick: () -> Unit, enabled: Boolean, primary: Boolean = false) {
@@ -224,6 +240,7 @@ import top.yukonga.miuix.kmp.basic.*
 }
 @Composable private fun RoomQueue(detail: RoomDetail, role: RoomRole?, vm: RoomViewModel, modifier: Modifier) {
     val live by vm.session.state.collectAsStateWithLifecycle()
+    val waiting = detail.queue.filter { it.status == "approved" }
     LazyColumn(modifier, contentPadding = musicScrollPadding(PaddingValues(0.dp)), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         items(detail.queue, key = { it.id }) { item -> SettingsGroup(Modifier.fillMaxWidth().animateItem()) { Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             val pending = "queue:${item.id}" in live.pendingActions
@@ -238,6 +255,12 @@ import top.yukonga.miuix.kmp.basic.*
                     MusicTextAction("拒绝", onClick = { vm.session.queueAction(item, "reject") }, enabled = !pending)
                 }
                 if (RoomPermissions.remove(role, item)) MusicTextAction("移除", onClick = { vm.session.queueAction(item, "remove") }, enabled = !pending)
+                if (item.status == "approved" && role?.controls == true) {
+                    val index = waiting.indexOfFirst { it.id == item.id }
+                    val reordering = live.pendingActions.any { it.startsWith("queue:") }
+                    if (index > 0) MusicTextAction("上移", { vm.session.reorder(item, index - 1) }, enabled = !reordering)
+                    if (index >= 0 && index < waiting.lastIndex) MusicTextAction("下移", { vm.session.reorder(item, index + 1) }, enabled = !reordering)
+                }
             }
         } } }
         if (detail.queue.isEmpty()) item {
@@ -250,7 +273,10 @@ import top.yukonga.miuix.kmp.basic.*
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     var target by remember { mutableStateOf<RoomMember?>(null) }
     var settings by remember { mutableStateOf(false) }
-    LaunchedEffect(target != null || settings) { onDialogActive(target != null || settings) }
+    var showBans by remember(detail.room.id) { mutableStateOf(false) }
+    val bans by vm.bans.collectAsStateWithLifecycle()
+    LaunchedEffect(role) { if (role != RoomRole.OWNER) { settings = false; showBans = false } }
+    LaunchedEffect(target != null || settings || showBans) { onDialogActive(target != null || settings || showBans) }
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     LazyColumn(modifier, contentPadding = musicScrollPadding(PaddingValues(0.dp)), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         if (role == RoomRole.OWNER) item {
@@ -261,7 +287,9 @@ import top.yukonga.miuix.kmp.basic.*
                     vm.session.action("settings", buildJsonObject { put("joinLocked", locked) }, { it == RoomRole.OWNER }) },
                     summary = "开启后不再接受新成员")
                 SettingsDivider()
-                SettingsPreference("关闭房间", "所有成员都会离开", onClick = onClose,
+                MusicDestinationRow("封禁名单", { showBans = true; vm.loadBans() }, summary = "查看并解除禁止加入")
+                SettingsDivider()
+                SettingsPreference("归档房间", "保留房间号、队列和进度，可稍后恢复", onClick = onClose,
                     trailing = { Icon(io.github.currencortex.music.ui.component.MusicIcons.Close, null, tint = MiuixTheme.colorScheme.error) })
             }
         }
@@ -288,30 +316,53 @@ import top.yukonga.miuix.kmp.basic.*
         MusicTextAction("移出房间", onClick = { vm.session.action("kick", buildJsonObject { put("userId", member.userId); put("ban", false) }, { RoomPermissions.kick(it, RoomRole.parse(member.role)) }); target = null })
         MusicTextAction("移出并禁止加入", onClick = { vm.session.action("kick", buildJsonObject { put("userId", member.userId); put("ban", true) }, { RoomPermissions.kick(it, RoomRole.parse(member.role)) }); target = null })
     } }
-    if (settings) RoomForm("房间设置", { settings = false }, detail.room) { name, password, public, free ->
-        vm.session.action("settings", buildJsonObject { put("name", name); put("isPublic", public); put("freeMode", free); put("needApproval", !free)
+    if (showBans) MusicDialog("封禁名单", onDismiss = { showBans = false }) {
+        Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            if (bans.loading) Text("正在加载…")
+            bans.error?.let { Text(it); MusicTextAction("重试", vm::loadBans) }
+            if (!bans.loading && bans.error == null && bans.bans.isEmpty()) Text("暂无封禁成员")
+            bans.bans.forEach { ban ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(ban.nickname.ifBlank { "用户 ${ban.userId}" })
+                        if (ban.reason.isNotBlank()) Text(ban.reason, fontSize = 12.sp)
+                    }
+                    MusicTextAction("解除封禁", { vm.unban(ban.userId) }, enabled = !bans.loading)
+                }
+            }
+        }
+    }
+    if (settings) RoomForm("房间设置", { settings = false }, detail.room) { name, password, public, free, approval, locked ->
+        vm.session.action("settings", buildJsonObject { put("name", name); put("isPublic", public); put("freeMode", free); put("needApproval", approval); put("joinLocked", locked)
             if (password != null) put("password", password) }, { it == RoomRole.OWNER }); settings = false
     }
 }
 @Composable private fun RoomForm(title: String, onDismiss: () -> Unit, initial: RoomInfo? = null,
     saving: Boolean = false, error: String? = null,
-    onSave: (String, String?, Boolean, Boolean) -> Unit) {
+    onSave: (String, String?, Boolean, Boolean, Boolean, Boolean) -> Unit) {
     var name by remember { mutableStateOf(initial?.name ?: "") }; var password by remember { mutableStateOf("") }
     var public by remember { mutableStateOf(initial?.isPublic ?: true) }; var free by remember { mutableStateOf(initial?.freeMode ?: false) }
+    var approval by remember { mutableStateOf(initial?.needApproval ?: true) }
+    var locked by remember { mutableStateOf(initial?.joinLocked ?: false) }
     var changePassword by remember { mutableStateOf(initial == null) }
     MusicDialog(title, onDismiss = onDismiss) {
         Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState()).testTag("room_form"),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            TextField(name, { name = it }, label = "房间名称", modifier = Modifier.fillMaxWidth())
+            TextField(name, { if (it.length <= 60) name = it }, label = "房间名称", modifier = Modifier.fillMaxWidth())
             if (initial != null) SettingsToggle("修改密码", changePassword, { changePassword = it }, summary = "留空保存可解除密码")
-            if (changePassword) TextField(password, { password = it }, label = "房间密码", visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
+            if (changePassword) TextField(password, { if (it.length <= 128) password = it }, label = "房间密码", visualTransformation = PasswordVisualTransformation(), modifier = Modifier.fillMaxWidth())
             SettingsGroup {
                 SettingsToggle("公开房间", public, { public = it }, summary = "在房间大厅中显示")
                 SettingsDivider()
-                SettingsToggle("自由点歌", free, { free = it }, summary = "关闭后，点歌需要房主或管理员审批")
+                SettingsToggle("自由点歌", free, { free = it }, summary = "开启后，普通成员点歌直接加入待播队列")
+                SettingsDivider()
+                SettingsToggle("点歌需要审批", approval, { approval = it }, summary = if (free) "自由点歌开启时暂不执行审批" else "关闭后，普通成员点歌直接入队")
+                SettingsDivider()
+                SettingsToggle("锁定加入", locked, { locked = it }, summary = "开启后不再接受新成员")
             }
             error?.let { Text(it, fontSize = 13.sp) }
-            MusicDialogButton(if (saving) "正在创建…" else "保存", enabled = name.isNotBlank() && !saving, onClick = { onSave(name, if (changePassword) password else null, public, free) })
+            MusicDialogButton(if (saving) "正在创建…" else "保存", enabled = name.trim().length in 1..60 && !saving,
+                onClick = { onSave(name.trim(), if (changePassword) password else null, public, free, approval, locked) })
         }
     }
 }
