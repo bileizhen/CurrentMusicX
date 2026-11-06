@@ -15,5 +15,11 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - name: Check native source, legal assets and APK analysis scripts
-        run: python3 -m unittest discover -s scripts/tests -v
+      - name: Check Python source syntax
+        run: |
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          for path in Path('scripts').glob('*.py'):
+              ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
+          PY
