@@ -3,7 +3,11 @@ package io.github.currencortex.music.feature.share
 import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.data.song.Song
 
-internal data class SongShareContent(val title: String, val artists: String, val publicUrl: String?) {
+internal data class SongShareContent(val title: String, val artists: String, val publicUrl: String?,
+    val neteaseId: Long? = null) {
+    fun imageUrl(style: SongShareStyle): String? = neteaseId?.let {
+        "https://music.20110208.xyz/cm/share/song/$it/image?style=${style.apiValue}"
+    }
     val text: String get() = listOf("分享歌曲《$title》", artists, publicUrl.orEmpty())
         .filter(String::isNotBlank).joinToString("\n")
     val filename: String get() = title.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_")
@@ -13,11 +17,11 @@ internal data class SongShareContent(val title: String, val artists: String, val
         fun from(song: Song): SongShareContent {
             fun clean(value: String) = value.replace(Regex("[\\r\\n\\t]+"), " ").trim()
             // IDs from other sources and private Navidrome credentials are never public song URLs.
-            val id = if (!song.video && song.musicSource == MusicSource.NETEASE && song.navidrome == null)
+            val id = if (!song.video && song.musicSource == MusicSource.NETEASE && song.navidrome == null && song.emby == null)
                 (song.externalIds.neteaseId?.toLongOrNull() ?: song.id).takeIf { it > 0 } else null
             return SongShareContent(clean(song.name).ifBlank { "未命名歌曲" },
                 clean(song.artists).ifBlank { "未知歌手" },
-                id?.let { "https://music.20110208.xyz/app/#/song/$it" })
+                id?.let { "https://music.20110208.xyz/app/#/song/$it" }, id)
         }
     }
 }

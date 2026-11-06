@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
@@ -25,26 +26,29 @@ import coil3.compose.AsyncImage
 import io.github.currencortex.music.ui.util.showMusicError
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.MusicDialog
+import io.github.currencortex.music.ui.component.nativeui.SettingsSegmentedControl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable internal fun SongShareDialog(song: Song, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var style by rememberSaveable { mutableStateOf(SongShareStyle.SQUARE) }
     var attempt by remember(song) { mutableIntStateOf(0) }
     var saving by remember { mutableStateOf(false) }
     var pendingSave by remember { mutableStateOf<SongShareFile?>(null) }
-    val result by produceState<Result<SongShareFile>?>(null, song, attempt) {
+    // A new state holder immediately hides the old file on a song/style/retry change.
+    // Otherwise produceState retains its previous value until its new coroutine starts.
+    val result by key(song, style, attempt) { produceState<Result<SongShareFile>?>(null) {
         value = null
-        value = try { Result.success(SongShareFiles.create(context.applicationContext, song)) }
+        value = try { Result.success(SongShareFiles.create(context.applicationContext, song, style)) }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) { Result.failure(error) }
-    }
+    } }
     val poster = result?.getOrNull()
     fun message(text: String, error: Boolean = false) {
         if (error) context.showMusicError(text) else context.showMusicMessage(text)
@@ -65,6 +69,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         Column(Modifier.fillMaxWidth().heightIn(max = (LocalConfiguration.current.screenHeightDp * .72f).dp)
             .verticalScroll(rememberScrollState()).testTag("song_share_dialog"),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            SettingsSegmentedControl(SongShareStyle.entries.map { it.label }, style.ordinal,
+                { style = SongShareStyle.entries[it] }, tag = "song_share_style")
             if (poster != null) AsyncImage(poster.file, "${poster.content.title} 分享海报",
                 Modifier.fillMaxWidth().height(previewHeight).testTag("song_share_preview"), contentScale = ContentScale.Fit)
             else Box(Modifier.fillMaxWidth().height(previewHeight), contentAlignment = Alignment.Center) {
@@ -75,6 +81,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 } else Text("海报生成失败，请重试", Modifier.testTag("song_share_error"))
             }
             if (poster != null && !poster.coverLoaded) Text("封面暂未加载，可重新生成海报", fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+            if (poster?.serverFallback == true) Text("在线分享图暂不可用，已在本机生成", fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
             MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MusicDialogButton("保存图片", onClick = {
@@ -100,7 +108,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         ClipData.newPlainText("歌曲分享", content.publicUrl ?: content.text))
                     message(if (content.publicUrl == null) "已复制歌曲信息" else "已复制链接")
                 }, modifier = Modifier.weight(1f).testTag("song_share_copy"))
-                if (result?.isFailure == true || poster?.coverLoaded == false) MusicDialogButton("重新生成", onClick = { attempt++ },
+                if (result?.isFailure == true || poster?.coverLoaded == false || poster?.serverFallback == true) MusicDialogButton("重新生成", onClick = { attempt++ },
                     modifier = Modifier.weight(1f).testTag("song_share_retry"))
             }
         }
