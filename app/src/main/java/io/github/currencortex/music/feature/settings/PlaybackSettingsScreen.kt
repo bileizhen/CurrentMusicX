@@ -8,6 +8,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.selectableGroup
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.dp
@@ -35,10 +36,9 @@ import kotlin.math.roundToInt
         item("quality") { SettingsSection("音质", MusicIcons.Headphones) {
             MusicDestinationRow("默认音质", { qualityOpen = true }, Modifier.testTag("default_quality"), summary = settings.quality.label)
         } }
-        item("lyrics") { SettingsSection("歌词显示", MusicIcons.File,
+        item("lyrics") { SettingsSection("歌词样式", MusicIcons.File,
             footer = "字体、翻译、罗马音及歌词效果可在播放器的歌词显示选项中调整。") {
-            LyricsStyleSelector(settings.lyricsDisplay.style, vm::lyricsStyle,
-                Modifier.padding(horizontal = 16.dp))
+            LyricsStyleSelector(settings.lyricsDisplay.style, vm::lyricsStyle)
             if (settings.lyricsDisplay.style == LyricsStyle.APPLE_MUSIC) {
                 SettingsDivider()
                 MusicDestinationRow("Apple Music 自定义", { appleLyricsOpen = true },
@@ -46,10 +46,17 @@ import kotlin.math.roundToInt
             }
         } }
         item("transition") { SettingsSection("歌曲衔接", MusicIcons.Update, footer = "自动切歌时生效。智能过渡和淡入淡出仅能选择一种。") {
-            SettingsOptionsRow("切换方式", modes.getValue(settings.transitionMode), modes.map { (mode, title) ->
-                SettingsOption(when(mode) { MusicTransitionMode.OFF -> "transition_off"; MusicTransitionMode.SMART -> "smart_transition"; MusicTransitionMode.CROSSFADE -> "crossfade" },
-                    title, settings.transitionMode == mode, onSelect = { vm.transition(mode) })
-            }, Modifier.testTag("playback_transition"))
+            Column(Modifier.testTag("playback_transition").semantics { selectableGroup() }) {
+                modes.entries.forEachIndexed { index, (mode, title) ->
+                    if (index > 0) SettingsDivider()
+                    SettingsChoiceRow(title, settings.transitionMode == mode, { vm.transition(mode) },
+                        Modifier.testTag(when (mode) {
+                            MusicTransitionMode.OFF -> "transition_off"
+                            MusicTransitionMode.SMART -> "smart_transition"
+                            MusicTransitionMode.CROSSFADE -> "crossfade"
+                        }))
+                }
+            }
             AnimatedVisibility(settings.transitionMode == MusicTransitionMode.CROSSFADE,
                 enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                 SettingsPreference("过渡时长", "${seconds.roundToInt()} 秒", footer = {

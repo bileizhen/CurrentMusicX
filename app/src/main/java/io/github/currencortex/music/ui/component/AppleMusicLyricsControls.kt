@@ -49,17 +49,19 @@ import kotlin.math.roundToInt
         AppleEffectToggle("歌词辉光", display.glow, "lyrics_glow") { enabled ->
             onDisplay { it.copy(glow = enabled) }
         }
-        LyricsParameterSlider("辉光亮度", options.glowIntensity, AppleMusicLyricsOptions.GLOW_INTENSITY_RANGE,
-            "apple_lyrics_glow", "调整中长音与强调处的光晕，不改变文字亮度", { "${(it * 100).roundToInt()}%" },
-            enabled = display.glow) { value -> onDisplay { it.copy(appleMusic = it.appleMusic.copy(glowIntensity = value)) } }
-        val blurSupported = Build.VERSION.SDK_INT >= 31
-        AppleEffectToggle("歌词视图模糊", display.blur, "lyrics_blur", enabled = blurSupported) { enabled ->
-            onDisplay { it.copy(blur = enabled) }
+        if (display.glow) LyricsParameterSlider("辉光亮度", options.glowIntensity, AppleMusicLyricsOptions.GLOW_INTENSITY_RANGE,
+            "apple_lyrics_glow", "调整中长音与强调处的光晕，不改变文字亮度", { "${(it * 100).roundToInt()}%" }) { value ->
+            onDisplay { it.copy(appleMusic = it.appleMusic.copy(glowIntensity = value)) }
         }
-        LyricsParameterSlider("模糊强度", options.blurStrength, AppleMusicLyricsOptions.BLUR_STRENGTH_RANGE,
-            "apple_lyrics_blur", if (blurSupported) "离当前句越远越模糊，0% 为清晰显示" else "需要 Android 12 或以上版本",
-            { "${(it * 100).roundToInt()}%" }, enabled = display.blur && blurSupported) { value ->
-            onDisplay { it.copy(appleMusic = it.appleMusic.copy(blurStrength = value)) }
+        if (Build.VERSION.SDK_INT >= 31) {
+            AppleEffectToggle("歌词视图模糊", display.blur, "lyrics_blur") { enabled ->
+                onDisplay { it.copy(blur = enabled) }
+            }
+            if (display.blur) LyricsParameterSlider("模糊强度", options.blurStrength, AppleMusicLyricsOptions.BLUR_STRENGTH_RANGE,
+                "apple_lyrics_blur", "离当前句越远越模糊，0% 为清晰显示",
+                { "${(it * 100).roundToInt()}%" }) { value ->
+                onDisplay { it.copy(appleMusic = it.appleMusic.copy(blurStrength = value)) }
+            }
         }
     }
 }

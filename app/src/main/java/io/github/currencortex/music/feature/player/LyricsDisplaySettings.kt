@@ -18,7 +18,6 @@ import io.github.currencortex.music.data.settings.LyricsDisplayOptions
 import io.github.currencortex.music.data.settings.LyricsStyle
 import io.github.currencortex.music.feature.lyrics.ui.lyricsFontWeight
 import io.github.currencortex.music.ui.component.MusicDestinationRow
-import io.github.currencortex.music.ui.component.LyricsStyleSelector
 import io.github.currencortex.music.ui.component.AppleMusicLyricsControls
 import io.github.currencortex.music.feature.lyrics.ui.currentLyricsFontFamily
 import top.yukonga.miuix.kmp.basic.*
@@ -34,15 +33,13 @@ import kotlin.math.roundToInt
     val ink = MiuixTheme.colorScheme.onSurface
     val classic = display.style == LyricsStyle.CLASSIC
     val staged = classic && (display.smoke || display.particles)
-    val effectName = if (display.particles) "星尘歌词" else "流烟歌词"
     var preview by remember(fontSize) { mutableFloatStateOf(fontSize) }
     var strength by remember(display.fontWeight) { mutableIntStateOf(display.fontWeight) }
     Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
         .testTag("lyrics_display_settings")) {
-        LyricsStyleSelector(display.style, { style -> onDisplay { it.copy(style = style) } })
         Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
             Text(previewText, fontFamily = currentLyricsFontFamily(), fontSize = preview.sp, fontWeight = lyricsFontWeight(weightMode, true, strength),
-                maxLines = 2, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                maxLines = 1, softWrap = false, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 color = ink, modifier = Modifier.fillMaxWidth().testTag("lyrics_font_preview"))
             LyricsFontSelector(font, fontFile, onFont, onFontFile)
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -65,8 +62,7 @@ import kotlin.math.roundToInt
                 })
         }
         if (!classic) AppleMusicLyricsControls(display, onDisplay)
-        LyricsToggle("歌词居中对齐", display.centered, { value -> onDisplay { it.copy(centered = value) } }, "lyrics_centered",
-            if (staged) "${effectName}固定居中" else null, !staged)
+        if (!staged) LyricsToggle("歌词居中对齐", display.centered, { value -> onDisplay { it.copy(centered = value) } }, "lyrics_centered")
         Column(Modifier.fillMaxWidth().padding(vertical = 12.dp)) {
             Text("字体粗细 $strength", fontSize = 16.sp, color = ink)
             Slider(value = strength.toFloat(), onValueChange = { strength = ((it / 100).roundToInt() * 100).coerceIn(400, 900) },
@@ -84,31 +80,29 @@ import kotlin.math.roundToInt
                 color = ink.copy(alpha = .6f), modifier = Modifier.padding(top = 4.dp))
         }
         MusicDestinationRow("歌词字重", summary = weightMode.label, onClick = onWeight, modifier = Modifier.testTag("open_lyrics_weight"))
-        if (classic) LyricsToggle("歌词视图模糊", display.blur, { value -> onDisplay { it.copy(blur = value) } }, "lyrics_blur",
-            "仅 Android 12 及以上支持", android.os.Build.VERSION.SDK_INT >= 31)
+        if (classic && android.os.Build.VERSION.SDK_INT >= 31) LyricsToggle("歌词视图模糊", display.blur,
+            { value -> onDisplay { it.copy(blur = value) } }, "lyrics_blur")
         LyricsToggle("交错滚动效果", display.stagger, { value -> onDisplay { it.copy(stagger = value) } }, "lyrics_stagger")
-        LyricsToggle("3D 倾斜歌词", display.perspective, { value -> onDisplay { it.copy(perspective = value) } },
-            "lyrics_perspective", if (!classic) "仅经典样式可用，已保留原有设置"
-                else if (staged) "与${effectName}互斥，请先关闭${effectName}"
-                else "横竖屏 3D 透视，近大远小的歌词平面", classic && !staged)
+        if (classic && !staged) LyricsToggle("3D 倾斜歌词", display.perspective, { value -> onDisplay { it.copy(perspective = value) } },
+            "lyrics_perspective", "横竖屏 3D 透视，近大远小的歌词平面")
         if (classic) LyricsToggle("歌词辉光", display.glow, { value -> onDisplay { it.copy(glow = value) } },
             "lyrics_glow", "中长音与强调处渐亮，短音保持正常高亮")
-        LyricsToggle("流烟歌词", display.smoke, { value -> onDisplay { it.copy(smoke = value, particles = if (value) false else it.particles).normalized() } },
-            "lyrics_smoke", if (classic) "自动关闭 3D 并居中显示当前句，下一句在进度条上方预览；颜色随封面变化"
-                else "仅经典样式可用，已保留原有设置", classic)
-        LyricsToggle("星尘歌词", display.particles, { value -> onDisplay { it.copy(particles = value, smoke = if (value) false else it.smoke).normalized() } },
-            "lyrics_particles", if (classic) "文字逐字聚合、散作星尘，颜色随封面变化；与流烟、3D 效果互斥"
-                else "仅经典样式可用，已保留原有设置", classic)
+        if (classic) {
+            LyricsToggle("流烟歌词", display.smoke, { value -> onDisplay { it.copy(smoke = value, particles = if (value) false else it.particles).normalized() } },
+                "lyrics_smoke", "自动关闭 3D 并居中显示当前句，下一句在进度条上方预览；颜色随封面变化")
+            LyricsToggle("星尘歌词", display.particles, { value -> onDisplay { it.copy(particles = value, smoke = if (value) false else it.smoke).normalized() } },
+                "lyrics_particles", "文字逐字聚合、散作星尘，颜色随封面变化；与流烟、3D 效果互斥")
+        }
         LyricsToggle("翻译歌词", display.translation, { value -> onDisplay { it.copy(translation = value) } },
             "lyrics_translation", if (classic) "只显示正在播放的歌词翻译" else "显示每句歌词的翻译，与原文一起滚动")
         LyricsToggle("罗马音", display.romanization, { value -> onDisplay { it.copy(romanization = value) } },
             "lyrics_romanization", if (classic) "只显示正在播放的歌词罗马音" else "显示歌词提供的逐词音译、注音或整行罗马音")
         LyricsToggle("逐字动画", display.wordAnimation, { value -> onDisplay { it.copy(wordAnimation = value) } }, "lyrics_word_animation")
-        LyricsToggle("逐字上提", display.wordLift, { value -> onDisplay { it.copy(wordLift = value) } },
-            "lyrics_word_lift", "唱到的字轻轻上提，唱过后保持抬高", display.wordAnimation)
-        MusicDestinationRow("卡拉OK（逐字）歌词动画兼容策略",
-            summary = if (classic) display.karaokeScope.label else "仅经典样式可用，已保留“${display.karaokeScope.label}”设置",
-            onClick = onKaraokeScope, enabled = classic, modifier = Modifier.testTag("open_karaoke_scope"))
+        if (display.wordAnimation) LyricsToggle("逐字上提", display.wordLift, { value -> onDisplay { it.copy(wordLift = value) } },
+            "lyrics_word_lift", "唱到的字轻轻上提，唱过后保持抬高")
+        if (classic) MusicDestinationRow("卡拉OK（逐字）歌词动画兼容策略",
+            summary = display.karaokeScope.label,
+            onClick = onKaraokeScope, modifier = Modifier.testTag("open_karaoke_scope"))
         LyricsToggle("隐藏歌词界面控制面板", display.hideControls, { value -> onDisplay { it.copy(hideControls = value) } },
             "lyrics_hide_controls", "歌词页底部可随时恢复控制")
     }
