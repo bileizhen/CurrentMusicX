@@ -4,6 +4,8 @@ import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.song.Song
 import kotlinx.serialization.json.*
 
+data class OwnedRoomEntry(val room: RoomInfo, val restored: Boolean)
+
 class RoomRepository(private val api: ApiClient, val session: () -> RequestSession) {
     private suspend fun request(method: String, path: String, body: JsonObject? = null,
         query: Map<String, String> = emptyMap(), expected: RequestSession = session()) =
@@ -32,6 +34,12 @@ class RoomRepository(private val api: ApiClient, val session: () -> RequestSessi
     suspend fun sync(id: String, expected: RequestSession): Long = request("POST", "rooms/$id/sync", expected = expected).jsonObject.getValue("serverNow").jsonPrimitive.long
     suspend fun reopen(id: String, expected: RequestSession): RoomInfo = api.decode(
         request("POST", "rooms/$id/reopen", expected = expected).jsonObject.getValue("room"))
+    suspend fun prepareOwnedEntry(id: String, expected: RequestSession): OwnedRoomEntry {
+        // Browser cards can predate an archive or a restoration on another device.
+        val current = detail(id, expected).room
+        return if (current.archived) OwnedRoomEntry(reopen(current.id, expected), restored = true)
+            else OwnedRoomEntry(current, restored = false)
+    }
     suspend fun delete(id: String, expected: RequestSession) { request("DELETE", "rooms/$id", expected = expected) }
     suspend fun bans(id: String, expected: RequestSession): List<RoomBan> =
         api.decode<RoomBansDto>(request("GET", "rooms/$id/bans", expected = expected)).bans

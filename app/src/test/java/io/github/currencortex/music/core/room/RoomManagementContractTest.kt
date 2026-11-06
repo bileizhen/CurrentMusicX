@@ -10,6 +10,34 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class RoomManagementContractTest {
+    @Test fun ownedEntryRestoresWhenFreshDetailIsArchived() = runBlocking {
+        MockWebServer().use { server ->
+            val session = RequestSession(server.url("/cm/").toString(), "fixture")
+            val repo = RoomRepository(ApiClient({ session.server }, { session.token }, {})) { session }
+            server.enqueue(MockResponse().setBody("""{"room":{"id":12,"code":"001234","archivedAt":1794000000}}"""))
+            server.enqueue(MockResponse().setBody("""{"room":{"id":12,"code":"001234","archivedAt":0}}"""))
+            val entry = repo.prepareOwnedEntry("12", session)
+            assertTrue(entry.restored)
+            assertFalse(entry.room.archived)
+            server.takeRequest().let { assertEquals("GET", it.method); assertEquals("/cm/rooms/12", it.path) }
+            server.takeRequest().let { assertEquals("POST", it.method); assertEquals("/cm/rooms/12/reopen", it.path) }
+            assertNull(server.takeRequest(100, java.util.concurrent.TimeUnit.MILLISECONDS))
+        }
+    }
+
+    @Test fun ownedEntryRequiresJoinWithoutReopenWhenFreshDetailIsActive() = runBlocking {
+        MockWebServer().use { server ->
+            val session = RequestSession(server.url("/cm/").toString(), "fixture")
+            val repo = RoomRepository(ApiClient({ session.server }, { session.token }, {})) { session }
+            server.enqueue(MockResponse().setBody("""{"room":{"id":12,"code":"001234","archivedAt":0}}"""))
+            val entry = repo.prepareOwnedEntry("12", session)
+            assertFalse(entry.restored)
+            assertFalse(entry.room.archived)
+            server.takeRequest().let { assertEquals("GET", it.method); assertEquals("/cm/rooms/12", it.path) }
+            assertNull(server.takeRequest(100, java.util.concurrent.TimeUnit.MILLISECONDS))
+        }
+    }
+
     @Test fun ownedRoomsKeepArchivedStateAndLeadingZeroInviteCode() = runBlocking {
         MockWebServer().use { server ->
             val session = RequestSession(server.url("/cm/").toString(), "fixture")

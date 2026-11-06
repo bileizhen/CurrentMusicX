@@ -23,6 +23,7 @@ class RoomViewModel(val container: AppContainer) : ViewModel() {
     private var bansJob: Job? = null
     private var bansOwner: Pair<RequestSession, String>? = null
     private var bansRevision = 0L
+    private var leaving = false
     init { viewModelScope.launch {
         container.sessionRestored.await()
         combine(container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged()) { revision, server -> revision to server }
@@ -31,6 +32,18 @@ class RoomViewModel(val container: AppContainer) : ViewModel() {
     init { viewModelScope.launch {
         session.state.map { it.detail?.room?.id to it.detail?.role(container.accountRepository.state.value.account?.id ?: 0) }
             .distinctUntilChanged().collect { resetBansForRoom() }
+    } }
+    init { viewModelScope.launch {
+        var previousRoom: String? = null
+        var previousSession: RequestSession? = null
+        session.state.map { it.detail?.room?.id }.distinctUntilChanged().collect { roomId ->
+            val current = container.roomRepository.session()
+            // Initial empty state and account/route changes are handled by the account observer.
+            val ended = previousRoom != null && roomId == null && previousSession == current
+            previousRoom = roomId
+            previousSession = if (roomId != null) current else null
+            if (ended && !leaving && container.accountRepository.state.value.account != null) load()
+        }
     } }
     fun load(value: String = query, more: Boolean = false, roomScope: RoomScope = browser.value.scope) {
         if (container.accountRepository.state.value.account == null) { browser.value = RoomBrowserState(error = "登录后可创建或加入听歌房"); return }
@@ -77,13 +90,15 @@ class RoomViewModel(val container: AppContainer) : ViewModel() {
         val room = container.roomRepository.create(name, password, public, free, expected, needApproval, joinLocked)
         session.join(room, created = true, expected = expected)
     }
-    fun leave() = run { session.leave(); load() }
+    fun leave() = run {
+        leaving = true
+        try { session.leave(); load() } finally { leaving = false }
+    }
     fun enterOwned(room: RoomCard) = run {
         session.requireCanJoin()
         val expected = container.roomRepository.session()
-        val info = if (room.archived) container.roomRepository.reopen(room.id, expected)
-            else container.roomRepository.detail(room.id, expected).room
-        session.join(info, created = room.archived, expected = expected)
+        val entry = container.roomRepository.prepareOwnedEntry(room.id, expected)
+        session.join(entry.room, created = entry.restored, expected = expected)
     }
     fun deleteOwned(room: RoomCard, expected: RequestSession) = run {
         check(browser.value.scope == RoomScope.MINE && !session.active)
