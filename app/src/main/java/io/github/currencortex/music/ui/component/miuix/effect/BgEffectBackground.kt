@@ -58,9 +58,10 @@ fun BgEffectBackground(
 
         val colorStage = remember { Animatable(0f) }
         val speed = animationSpeed.coerceIn(.1f, 6f)
+        val liveMotion = motionSpeed != null
 
-        LaunchedEffect(dynamicBackground, preset, speed) {
-            if (!dynamicBackground) return@LaunchedEffect
+        LaunchedEffect(dynamicBackground, preset, speed, liveMotion) {
+            if (!dynamicBackground || liveMotion) return@LaunchedEffect
             val animatesColors = preset.colors1 !== preset.colors2 || preset.colors2 !== preset.colors3
             if (!animatesColors) return@LaunchedEffect
 
@@ -89,6 +90,7 @@ fun BgEffectBackground(
                     isFullSize = isFullSize,
                     playing = dynamicBackground,
                     animationSpeed = motionSpeed ?: { speed },
+                    syncColorsToMotion = liveMotion,
                     colorStage = { colorStage.value },
                     alpha = alpha,
                 ),
