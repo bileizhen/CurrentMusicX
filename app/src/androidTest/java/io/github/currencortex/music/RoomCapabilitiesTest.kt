@@ -159,7 +159,9 @@ class RoomCapabilitiesTest {
         compose.waitUntil(10000) { vm.browser.value.rooms.isNotEmpty() }
         compose.runOnIdle {
             vm.browser.value = vm.browser.value.copy(scope = io.github.currencortex.music.data.room.RoomScope.MINE)
-            val stale = container.roomRepository.session().copy(token = "stale-confirmation-token")
+            val current = container.roomRepository.session()
+            val stale = io.github.currencortex.music.core.network.RequestSession(current.server,
+                "stale-confirmation-token", current.neteaseRevision)
             vm.deleteOwned(vm.browser.value.rooms.first(), stale)
         }
         compose.waitUntil(5000) { !vm.busy.value && vm.browser.value.error != null }
