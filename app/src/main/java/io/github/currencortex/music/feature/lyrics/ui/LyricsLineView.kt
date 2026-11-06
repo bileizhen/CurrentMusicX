@@ -23,7 +23,7 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
 @Composable internal fun LyricsLineView(line: LyricLine, index: Int, position: State<Long>, focused: Boolean,
     resting: Boolean, distance: Int, canSeek: Boolean, onSeek: (Long) -> Unit, translation: Boolean,
     romanization: Boolean, wordAnimation: Boolean, effects: Boolean, fontSize: Float, weightMode: LyricsWeight,
-    display: LyricsDisplayOptions, monetTone: MonetTone) {
+    display: LyricsDisplayOptions, monetTone: MonetTone, browsing: Boolean = false) {
     val mainFocused by remember(line, position) {
         derivedStateOf { position.value >= line.startTimeMs && position.value < line.endTimeMs }
     }
@@ -48,14 +48,15 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
                 reserveAuxiliarySpace = line.backgroundVocals.isNotEmpty())
             line.backgroundVocals.forEachIndexed { bgIndex, bg ->
                 val bgFocused by remember(bg, position) { derivedStateOf { position.value >= bg.startTimeMs && position.value < bg.endTimeMs } }
-                val bgAlpha = animateFloatAsState(if (bgFocused) 1f else 0f,
+                val bgVisible = browsing || bgFocused
+                val bgAlpha = animateFloatAsState(if (browsing) .55f else if (bgFocused) 1f else 0f,
                     tween(180), label = "background vocal opacity")
                 // Measure every backing vocal at its full height even before it is sung.
                 // Only the ink fades; translations and wrapped lines must not shift the next row.
                 Column(Modifier.padding(top = 10.dp).testTag("lyric_bg_${index}_$bgIndex")
-                    .then(if (bgFocused) Modifier else Modifier.clearAndSetSemantics {})
+                    .then(if (bgVisible) Modifier else Modifier.clearAndSetSemantics {})
                     .semantics { selected = bgFocused }
-                    .clickable(enabled = canSeek && bgFocused, role = Role.Button) { onSeek(bg.startTimeMs) }
+                    .clickable(enabled = canSeek && bgVisible, role = Role.Button) { onSeek(bg.startTimeMs) }
                     .graphicsLayer { alpha = bgAlpha.value }) {
                     LyricsVocalView(bg, position, bgFocused, false, translation, romanization, wordAnimation, fontSize * .75f, weightMode, display, effects, distance,
                         monetTone = monetTone, reserveAuxiliarySpace = true)
