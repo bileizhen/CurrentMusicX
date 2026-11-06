@@ -177,7 +177,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     lyric = page.matchedLyrics[song.id].takeIf { category == SearchCategory.LYRIC },
                     quickActions = quickActions?.let { render -> { render(song, category != SearchCategory.LYRIC) } },
                     extraActions = { actions?.invoke(song) },
-                    compactActions = category == SearchCategory.LYRIC)
+                    compactActions = category == SearchCategory.LYRIC, retryLyric = { vm.retryLyricContext(song.id) })
             }
         }
         if (page.loading && page.count > 0) item { LoadingSongList(2, searchActions = quickActions != null) }

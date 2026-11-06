@@ -53,9 +53,36 @@ class MusicRepository(private val api: ApiClient,
         if (code != null && code != 200) throw ApiException(ErrorKind.Server, code)
         return io.github.currencortex.music.feature.lyrics.parser.LyricsParser.parse(raw)
     }
-    suspend fun search(keyword: String, offset: Int = 0): AppResult<SearchPage> = appResult {
-        val result = api.get<SearchDto>("ncm/search", mapOf("keywords" to keyword, "offset" to "$offset", "limit" to "30", "type" to "song"))
-        SearchPage(result.songs.map(SongDto::toDomain), result.totals.song, result.hasMore.song)
+    suspend fun search(keyword: String, offset: Int = 0, backend: SearchBackend? = null): AppResult<SearchPage> =
+        searchPage(keyword, offset, "song", backend)
+
+    private suspend fun searchPage(keyword: String, offset: Int, type: String, backend: SearchBackend?): AppResult<SearchPage> = appResult {
+        val owner = api.publicSession()
+        val revision = api.netease?.sessions?.state?.value?.revision
+        val query = mapOf("keywords" to keyword, "offset" to "$offset", "limit" to "30", "type" to type)
+        suspend fun read(source: SearchBackend): SearchPage {
+            val raw = if (source == SearchBackend.NATIVE) requireNotNull(api.netease).request("GET", "ncm/search", query, null,
+                expectedRevision = revision)
+            else api.request("GET", "ncm/search", query, expectedSession = owner, projectOnly = true,
+                callTimeoutMillis = if (type == "lyric") 20_000 else 8_000)
+            if (owner != api.publicSession()) throw ApiException(ErrorKind.Unauthorized)
+            val code = (raw as? JsonObject)?.get("code")?.jsonPrimitive?.intOrNull
+            if (code != null && code != 200) throw ApiException(ErrorKind.Server, code)
+            val dto = api.decode<SearchDto>(raw)
+            val supplements = if (type == "song" && offset == 0) dto.catalogSongs else emptyList()
+            return SearchPage((supplements + dto.songs).map(SongDto::toDomain).distinctBy(Song::id),
+                dto.totals.song, dto.hasMore.song,
+                if (type == "lyric") dto.songs.mapNotNull { song -> searchLyricContextOf(song)?.let { song.id to it } }.toMap() else emptyMap(),
+                upstreamCount = dto.songs.size, backend = source)
+        }
+        // Pin the transport after the first page: offsets from two search indexes cannot be mixed.
+        if (backend != null) return@appResult read(backend)
+        when (val result = appResult { read(SearchBackend.PROJECT) }) {
+            is AppResult.Success -> result.value
+            is AppResult.Failure -> if (offset == 0 && api.netease != null && result.kind in setOf(
+                    ErrorKind.NotFound, ErrorKind.Network, ErrorKind.Timeout, ErrorKind.Server)) read(SearchBackend.NATIVE)
+                else throw ApiException(result.kind, result.status, result.message)
+        }
     }
     /** Matching sources are explicit: the media-source setting never reroutes this search. */
     suspend fun searchForLyricsMatching(keyword: String, source: LyricsSource): AppResult<SearchPage> = appResult {
@@ -111,13 +138,8 @@ class MusicRepository(private val api: ApiClient,
             }
         } ?: throw ApiException(ErrorKind.Timeout)
     }
-    suspend fun searchLyrics(keyword: String, offset: Int = 0): AppResult<SearchPage> = appResult {
-        // Native only: the project endpoint answers too slowly for search. Missing neighbours
-        // are backfilled per song from the full lyric document in the search view model.
-        val result = api.get<SearchDto>("ncm/search", mapOf("keywords" to keyword, "offset" to "$offset", "limit" to "30", "type" to "lyric"))
-        SearchPage(result.songs.map(SongDto::toDomain), result.totals.song, result.hasMore.song,
-            result.songs.mapNotNull { song -> searchLyricContextOf(song)?.let { song.id to it } }.toMap())
-    }
+    suspend fun searchLyrics(keyword: String, offset: Int = 0, backend: SearchBackend? = null): AppResult<SearchPage> =
+        searchPage(keyword, offset, "lyric", backend)
     suspend fun searchSuggestions(keyword: String): AppResult<List<String>> = appResult {
         val raw = api.request("GET", "ncm/search/suggest", mapOf("keywords" to keyword, "type" to "mobile"),
             callTimeoutMillis = 5000).jsonObject
@@ -212,6 +234,8 @@ internal fun parseSearchLyricContext(value: String): SearchLyricContext? {
 /** CurrentMusic servers now ship structured context rows; older deployments only carry the joined string. */
 internal fun searchLyricContextOf(dto: SongDto): SearchLyricContext? {
     val context = dto.lyricContext
+    if (dto.lyricContextStatus != null && context.isEmpty()) return SearchLyricContext(null,
+        cleanSearchLyric(dto.lyricMatch), null, dto.lyricContextStatus, dto.lyricContextRetryable)
     if (context.isEmpty()) return parseSearchLyricContext(dto.lyric)
     val firstHit = context.indexOfFirst { it.matched }
     val lastHit = context.indexOfLast { it.matched }
@@ -220,5 +244,5 @@ internal fun searchLyricContextOf(dto: SongDto): SearchLyricContext? {
     if (matched.isBlank()) return null
     val before = if (firstHit > 0) cleanSearchLyric(context[firstHit - 1].txt).takeIf(String::isNotBlank) else null
     val after = if (lastHit >= 0 && lastHit < context.lastIndex) cleanSearchLyric(context[lastHit + 1].txt).takeIf(String::isNotBlank) else null
-    return SearchLyricContext(before, matched, after)
+    return SearchLyricContext(before, matched, after, dto.lyricContextStatus, dto.lyricContextRetryable)
 }

@@ -257,7 +257,7 @@ class NeteaseGatewayTest {
     @Test fun lyricSearchPrefersHighlightedLinesFromTheOfficialArrayShape() = runBlocking {
         val hit = rawSong(11).dropLast(1) + """, "lyrics":["context", "<b>命中歌词</b>", "<b>命中歌词</b>", "after"]}"""
         enqueue("""{"code":200,"result":{"songCount":1,"songs":[$hit]}}""")
-        val result = MusicRepository(api).searchLyrics("命中歌词") as AppResult.Success
+        val result = MusicRepository(api).searchLyrics("命中歌词", backend = SearchBackend.NATIVE) as AppResult.Success
         val match = result.value.matchedLyrics[11]!!
         assertEquals("context", match.before)
         assertEquals("命中歌词", match.matched)
@@ -267,7 +267,7 @@ class NeteaseGatewayTest {
     @Test fun lyricSearchUsesOfficialTypeAndPreservesReadableMatchMetadata() = runBlocking {
         val hit = rawSong(11).dropLast(1) + """, "lyrics":{"txt":"<b>你好</b> &amp; 世界\n下一句"}}"""
         enqueue("""{"code":200,"result":{"songCount":31,"songs":[$hit]}}""")
-        val result = MusicRepository(api).searchLyrics("你好", 30) as AppResult.Success
+        val result = MusicRepository(api).searchLyrics("你好", 30, SearchBackend.NATIVE) as AppResult.Success
         val match = result.value.matchedLyrics[11]!!
         assertNull(match.before)
         assertEquals("你好 & 世界", match.matched)
