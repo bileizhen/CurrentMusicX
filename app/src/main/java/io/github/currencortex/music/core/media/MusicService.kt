@@ -271,7 +271,9 @@ class MusicService : MediaSessionService() {
                 if (!pauseFade.pausedIntent && !directOutput()) transitions.tick(settings.transitionMode, settings.crossfadeSeconds)
                 playerSlots.forEach { (source, slot) ->
                     slot.meter.enabled = source === player && container.dockAudioLevel.enabled
-                    if (source === player) slot.meter.sample.let { container.dockAudioLevel.publish(it.energy, it.bass, it.timestampNanos) }
+                    if (source === player) slot.meter.sample.let {
+                        container.dockAudioLevel.publish(it.energy, it.bass, it.timestampNanos, it.bpm, it.pulse)
+                    }
                 }
                 delay(if (settings.transitionMode != io.github.currencortex.music.data.settings.MusicTransitionMode.OFF || container.dockAudioLevel.enabled) 40 else 250)
             }

@@ -33,6 +33,7 @@ fun BgEffectBackground(
     effectBackground: Boolean = true,
     alpha: () -> Float = { 1f },
     animationSpeed: Float = 1f,
+    motionSpeed: (() -> Float)? = null,
     palette: List<Color>? = null,
     darkTheme: Boolean? = null,
     surfaceColor: Color? = null,
@@ -57,9 +58,10 @@ fun BgEffectBackground(
 
         val colorStage = remember { Animatable(0f) }
         val speed = animationSpeed.coerceIn(.1f, 6f)
+        val liveMotion = motionSpeed != null
 
-        LaunchedEffect(dynamicBackground, preset, speed) {
-            if (!dynamicBackground) return@LaunchedEffect
+        LaunchedEffect(dynamicBackground, preset, speed, liveMotion) {
+            if (!dynamicBackground || liveMotion) return@LaunchedEffect
             val animatesColors = preset.colors1 !== preset.colors2 || preset.colors2 !== preset.colors3
             if (!animatesColors) return@LaunchedEffect
 
@@ -87,7 +89,8 @@ fun BgEffectBackground(
                     effectBackground = effectBackground,
                     isFullSize = isFullSize,
                     playing = dynamicBackground,
-                    animationSpeed = speed,
+                    animationSpeed = motionSpeed ?: { speed },
+                    syncColorsToMotion = liveMotion,
                     colorStage = { colorStage.value },
                     alpha = alpha,
                 ),
