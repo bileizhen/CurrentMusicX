@@ -21,6 +21,8 @@ class RoomViewModel(val container: AppContainer) : ViewModel() {
     private var loading: Job? = null
     private var writing: Job? = null
     private var bansJob: Job? = null
+    private var bansOwner: Pair<RequestSession, String>? = null
+    private var bansRevision = 0L
     init { viewModelScope.launch {
         container.sessionRestored.await()
         combine(container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged()) { revision, server -> revision to server }
@@ -28,7 +30,7 @@ class RoomViewModel(val container: AppContainer) : ViewModel() {
     } }
     init { viewModelScope.launch {
         session.state.map { it.detail?.room?.id to it.detail?.role(container.accountRepository.state.value.account?.id ?: 0) }
-            .distinctUntilChanged().collect { bansJob?.cancel(); bans.value = RoomBansState() }
+            .distinctUntilChanged().collect { resetBansForRoom() }
     } }
     fun load(value: String = query, more: Boolean = false, roomScope: RoomScope = browser.value.scope) {
         if (container.accountRepository.state.value.account == null) { browser.value = RoomBrowserState(error = "登录后可创建或加入听歌房"); return }
@@ -91,7 +93,17 @@ class RoomViewModel(val container: AppContainer) : ViewModel() {
     }
     fun loadBans() = manageBans(null)
     fun unban(userId: Long) = manageBans(userId)
+    private fun resetBansForRoom() {
+        val detail = session.state.value.detail
+        val owner = detail?.takeIf { it.role(container.accountRepository.state.value.account?.id ?: 0) == RoomRole.OWNER }
+            ?.let { container.roomRepository.session() to it.room.id }
+        if (owner != bansOwner) {
+            bansOwner = owner; bansRevision++; bansJob?.cancel(); bans.value = RoomBansState()
+        }
+    }
     private fun manageBans(userId: Long?) {
+        // Also synchronize here: a caller can switch rooms before the flow collector runs.
+        resetBansForRoom()
         if (bans.value.loading) return
         val detail = session.state.value.detail ?: return
         val expected = container.roomRepository.session()
@@ -99,13 +111,15 @@ class RoomViewModel(val container: AppContainer) : ViewModel() {
             session.state.value.detail?.room?.id == detail.room.id &&
             session.state.value.detail?.role(container.accountRepository.state.value.account?.id ?: 0) == RoomRole.OWNER
         if (!valid()) return
+        val revision = ++bansRevision
         bans.value = RoomBansState(loading = true)
         bansJob = viewModelScope.launch {
             val result = appResult {
                 if (userId != null) container.roomRepository.unban(detail.room.id, userId, expected)
                 container.roomRepository.bans(detail.room.id, expected)
             }
-            if (!valid()) { bans.value = RoomBansState(); return@launch }
+            if (revision != bansRevision) return@launch
+            if (!valid()) { resetBansForRoom(); return@launch }
             bans.value = when (result) {
                 is AppResult.Success -> RoomBansState(result.value)
                 is AppResult.Failure -> RoomBansState(error = result.kind.message)
