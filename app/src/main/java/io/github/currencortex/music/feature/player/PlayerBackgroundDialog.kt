@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -38,6 +39,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var blur by remember { mutableFloatStateOf(config.playerBackgroundBlur) }
     LaunchedEffect(config.playerBackgroundBlur) { blur = config.playerBackgroundBlur }
     val file = remember(config.playerBackground) { container.playerBackgrounds.file(config.playerBackground) }
+    val canAdjustBlur = !busy && (file != null || !config.playerDynamicBackground)
     fun operation(action: suspend () -> Unit) {
         if (busy) return
         busy = true
@@ -65,12 +67,22 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 dynamicBackground = config.playerDynamicBackground)
             Text(if (busy) "正在保存图片…" else if (file != null) "自定义背景 · 图片仅保存在本机"
                 else if (config.playerBackground.isNotBlank()) "图片不可用，请重新选择"
-                else "默认背景 · 跟随歌曲封面取色", fontSize = 13.sp,
+                else if (config.playerDynamicBackground) "流动背景 · 跟随歌曲封面取色"
+                else "封面毛玻璃 · 播放与歌词共用柔和背景", fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            io.github.currencortex.music.ui.component.SettingsSwitch("动态背景", config.playerDynamicBackground,
-                { enabled -> scope.launch { container.settings.edit { it.copy(playerDynamicBackground = enabled) } } },
-                Modifier.testTag("player_dynamic_background"), enabled = !busy && file == null,
-                summary = if (file != null) "恢复默认背景后可设置" else "随歌曲封面取色并流动，关闭后使用静态封面")
+            MusicDialogActions(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                listOf(false to "封面毛玻璃", true to "流动背景").forEach { (dynamic, label) ->
+                    val chosen = file == null && config.playerDynamicBackground == dynamic
+                    MusicDialogButton(if (chosen) "✓ $label" else label, enabled = !busy && file == null,
+                        colors = if (chosen) ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.primary,
+                            textColor = MiuixTheme.colorScheme.onPrimary) else ButtonDefaults.textButtonColors(),
+                        modifier = Modifier.weight(1f).testTag(if (dynamic) "player_dynamic_background" else "player_frosted_background")
+                            .semantics { selected = chosen },
+                        onClick = { scope.launch { container.settings.edit { it.copy(playerDynamicBackground = dynamic) } } })
+                }
+            }
+            if (file != null) Text("恢复默认背景后可选择封面效果", fontSize = 13.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
             MusicDialogActions(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MusicDialogButton(if (file == null) "选择图片" else "更换图片",
                     colors = ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.primary, textColor = MiuixTheme.colorScheme.onPrimary),
@@ -82,11 +94,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
             Text("模糊度 ${blur.roundToInt()}%", fontSize = 15.sp)
             Slider(value = blur, onValueChange = { blur = it }, onValueChangeFinished = ::saveBlur,
-                valueRange = 0f..100f, enabled = file != null && !busy,
+                valueRange = 0f..100f, enabled = canAdjustBlur,
                 modifier = Modifier.fillMaxWidth().testTag("player_background_blur").semantics {
-                    if (file == null || busy) disabled()
+                    if (!canAdjustBlur) disabled()
                     setProgress { target ->
-                        if (file == null || busy || !target.isFinite()) false else {
+                        if (!canAdjustBlur || !target.isFinite()) false else {
                             blur = target.coerceIn(0f, 100f); saveBlur(); true
                         }
                     }
