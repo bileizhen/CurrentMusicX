@@ -24,6 +24,7 @@ internal fun Modifier.bgEffectDraw(
     isFullSize: Boolean,
     playing: Boolean,
     animationSpeed: () -> Float,
+    syncColorsToMotion: Boolean,
     colorStage: () -> Float,
     alpha: () -> Float,
 ): Modifier = this then BgEffectElement(
@@ -36,6 +37,7 @@ internal fun Modifier.bgEffectDraw(
     isFullSize = isFullSize,
     playing = playing,
     animationSpeed = animationSpeed,
+    syncColorsToMotion = syncColorsToMotion,
     colorStage = colorStage,
     alpha = alpha,
 )
@@ -50,6 +52,7 @@ private data class BgEffectElement(
     val isFullSize: Boolean,
     val playing: Boolean,
     val animationSpeed: () -> Float,
+    val syncColorsToMotion: Boolean,
     val colorStage: () -> Float,
     val alpha: () -> Float,
 ) : ModifierNodeElement<BgEffectNode>() {
@@ -64,6 +67,7 @@ private data class BgEffectElement(
         isFullSize = isFullSize,
         playing = playing,
         animationSpeed = animationSpeed,
+        syncColorsToMotion = syncColorsToMotion,
         colorStage = colorStage,
         alpha = alpha,
     )
@@ -79,6 +83,7 @@ private data class BgEffectElement(
             isFullSize = isFullSize,
             playing = playing,
             animationSpeed = animationSpeed,
+            syncColorsToMotion = syncColorsToMotion,
             colorStage = colorStage,
             alpha = alpha,
         )
@@ -95,6 +100,7 @@ private class BgEffectNode(
     private var isFullSize: Boolean,
     private var playing: Boolean,
     private var animationSpeed: () -> Float,
+    private var syncColorsToMotion: Boolean,
     private var colorStage: () -> Float,
     private var alpha: () -> Float,
 ) : Modifier.Node(),
@@ -122,6 +128,7 @@ private class BgEffectNode(
         isFullSize: Boolean,
         playing: Boolean,
         animationSpeed: () -> Float,
+        syncColorsToMotion: Boolean,
         colorStage: () -> Float,
         alpha: () -> Float,
     ) {
@@ -135,6 +142,7 @@ private class BgEffectNode(
         this.colorStage = colorStage
         this.alpha = alpha
         this.animationSpeed = animationSpeed
+        this.syncColorsToMotion = syncColorsToMotion
 
         if (this.playing != playing) {
             this.playing = playing
@@ -175,7 +183,9 @@ private class BgEffectNode(
                 painter.updateResolution(size.width, size.height)
                 painter.updateBoundIfNeeded(drawHeight, size.height, size.width)
                 painter.updatePresetIfNeeded(deviceType, isDarkTheme)
-                painter.updateColors(preset, colorStage())
+                // The live player uses the same integrated clock for geometry and colour.
+                // A zero/slow speed must not leave a separate wall-clock colour animation running.
+                painter.updateColors(preset, if (syncColorsToMotion) animTime / preset.colorInterpPeriod else colorStage())
                 painter.updateAnimTime(animTime)
                 painter.updatePointsAnim(animTime, preset)
 
