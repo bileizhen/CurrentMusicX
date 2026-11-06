@@ -31,6 +31,8 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.song.NeteaseComment
+import io.github.currencortex.music.data.song.CommentSort
+import io.github.currencortex.music.ui.component.MusicDialog
 import io.github.currencortex.music.ui.component.DecoratedAvatar
 import io.github.currencortex.music.ui.component.MusicOverlayDialog
 import io.github.currencortex.music.ui.component.MusicPlaceholder
@@ -42,7 +44,9 @@ import java.util.Date
 import java.util.Locale
 
 @Composable internal fun PlayerCommentsDialog(state: PlayerComments, dismiss: () -> Unit, reload: () -> Unit, more: () -> Unit,
-    composer: PlayerCommentComposer = PlayerCommentComposer(), edit: (String) -> Unit = {}, reply: (NeteaseComment?) -> Unit = {}, send: () -> Unit = {}) {
+    composer: PlayerCommentComposer = PlayerCommentComposer(), edit: (String) -> Unit = {}, reply: (NeteaseComment?) -> Unit = {}, send: () -> Unit = {},
+    sort: (CommentSort) -> Unit = {}, replies: (NeteaseComment, Boolean) -> Unit = { _, _ -> },
+    like: (NeteaseComment) -> Unit = {}, delete: (NeteaseComment) -> Unit = {}) {
     val colors = io.github.currencortex.music.ui.component.musicDialogColors()
     val indication = LocalIndication.current
     val density = LocalDensity.current
@@ -51,9 +55,11 @@ import java.util.Locale
     val safeTop = with(density) { WindowInsets.statusBars.getTop(this).toDp() }
     val maxHeight = (windowHeight - ime - safeTop - 72.dp).coerceIn(180.dp, 680.dp)
     var hotSelected by rememberSaveable(state.songId) { mutableStateOf(true) }
-    val showHot = hotSelected && state.hot.isNotEmpty()
+    val showHot = state.enhanced == false && hotSelected && state.hot.isNotEmpty()
+    var deleting by remember(state.songId) { mutableStateOf<NeteaseComment?>(null) }
     val hotScroll = rememberLazyListState()
     val latestScroll = rememberLazyListState()
+    LaunchedEffect(state.songId, state.sort) { latestScroll.scrollToItem(0); hotScroll.scrollToItem(0) }
     val focus = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -70,13 +76,19 @@ import java.util.Locale
                 Text("网易云评论", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 state.total?.let { Text(" $it", Modifier.weight(1f), fontSize = 13.sp, color = colors.onSurfaceVariantSummary) }
                     ?: Spacer(Modifier.weight(1f))
-                CommentAction(if (state.loading) "刷新中…" else "刷新", "refresh_comments", !state.loading, reload)
+                CommentAction(if (state.loading) "刷新中…" else "刷新", "refresh_comments", !state.loading && !composer.sending && state.busy.isEmpty(), reload)
                 Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = close)
                     .semantics { contentDescription = "关闭评论"; role = Role.Button }.testTag("close_comments"), contentAlignment = Alignment.Center) {
                     Icon(Icons.Default.Close, null, Modifier.size(20.dp), tint = colors.onSurfaceVariantSummary)
                 }
             }
-            if (state.hot.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+            if (state.enhanced != false) Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
+                CommentSort.entries.forEach { choice ->
+                    CommentTab(choice.label, state.sort == choice, "comments_${choice.value}") {
+                        if (!composer.sending && state.busy.isEmpty()) sort(choice)
+                    }
+                }
+            } else if (state.hot.isNotEmpty()) Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
                 CommentTab("热门", showHot, "comments_hot") { hotSelected = true }
                 CommentTab("最新", !showHot, "comments_latest") { hotSelected = false }
             }
@@ -93,8 +105,37 @@ import java.util.Locale
                         }
                     }
                 }
-                items(rows, key = { it.commentId }) { comment ->
-                    CommentContent(comment, enabled = !composer.sending) { reply(comment); focusReply++ }
+                items(rows, key = { it.id }) { comment ->
+                    var expandedReplies by rememberSaveable(state.songId, state.sort, comment.id) { mutableStateOf(false) }
+                    val actionsEnabled = !composer.sending && !state.loading && state.busy.isEmpty() && state.replies.values.none { it.loading }
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        CommentContent(comment, enabled = !composer.sending,
+                            enhanced = state.enhanced == true, busy = !actionsEnabled || comment.id in state.busy,
+                            own = state.meUid != 0L && state.meUid == comment.userId,
+                            like = { like(comment) }, delete = { deleting = comment }) { reply(comment); focusReply++ }
+                        if (state.enhanced == true && comment.replyCount > 0) {
+                            CommentAction(if (expandedReplies) "收起回复" else "查看 ${comment.replyCount} 条回复", "replies_${comment.id}") {
+                                expandedReplies = !expandedReplies
+                                if (expandedReplies && state.replies[comment.id] == null) replies(comment, false)
+                            }
+                            if (expandedReplies) Column(Modifier.padding(start = 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                val floor = state.replies[comment.id]
+                                if (floor == null) CommentAction("加载回复", "load_replies_${comment.id}", !state.loading && state.busy.isEmpty()) { replies(comment, false) }
+                                floor?.comments?.forEach { child -> key(child.id) {
+                                    CommentContent(child, !composer.sending, enhanced = true,
+                                        busy = !actionsEnabled || child.id in state.busy,
+                                        own = state.meUid != 0L && state.meUid == child.userId,
+                                        like = { like(child) }, delete = { deleting = child }) { reply(child); focusReply++ }
+                                } }
+                                if (floor?.loading == true) Text("正在加载回复…", fontSize = 12.sp)
+                                floor?.error?.let { Text(it, fontSize = 12.sp)
+                                    CommentAction("重试回复", "retry_replies_${comment.id}") { replies(comment, floor.comments.isNotEmpty()) }
+                                }
+                                if (floor?.more == true && !floor.loading && floor.error == null)
+                                    CommentAction("更多回复", "more_replies_${comment.id}") { replies(comment, true) }
+                            }
+                        }
+                    }
                 }
                 if (!state.loading && state.error == null && rows.isEmpty()) item {
                     Column(Modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally,
@@ -106,7 +147,7 @@ import java.util.Locale
                 state.error?.let { error -> item {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(error, fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
-                        CommentAction("重试", "retry_comments", !state.loading, reload)
+                        CommentAction("重试", "retry_comments", !state.loading, { if (state.retryMore) more() else reload() })
                     }
                 } }
                 if (!showHot && state.more && state.error == null) item {
@@ -120,6 +161,7 @@ import java.util.Locale
                 }
             }
             HorizontalDivider(color = colors.onSurface.copy(alpha = .08f))
+            state.actionError?.let { Text(it, fontSize = 12.sp, modifier = Modifier.testTag("comment_action_error")) }
             composer.replyTo?.let { comment ->
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.onSurface.copy(alpha = .04f)).padding(start = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
@@ -136,7 +178,7 @@ import java.util.Locale
                     insideMargin = DpSize(14.dp, 12.dp), cornerRadius = 16.dp, maxLines = 3,
                     textStyle = MiuixTheme.textStyles.main.copy(fontSize = 15.sp), readOnly = composer.sending)
                 MusicDialogButton(if (composer.sending) "发送中…" else "发送", send, Modifier.testTag("player_comment_send"),
-                    enabled = !composer.sending && composer.draft.isNotBlank(), fillWidth = false)
+                    enabled = !composer.sending && !state.loading && state.busy.isEmpty() && composer.draft.isNotBlank(), fillWidth = false)
             }
             val feedback = composer.error ?: composer.message
             if (feedback != null || composer.draft.isNotEmpty()) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -146,6 +188,15 @@ import java.util.Locale
                     color = if (composer.draft.length >= 1000) colors.primary else colors.onSurfaceVariantSummary)
             }
         }
+        }
+    }
+    deleting?.let { comment ->
+        MusicDialog("删除评论", { deleting = null }) {
+            Text("确定删除这条评论？")
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                MusicDialogButton("取消", { deleting = null }, modifier = Modifier.weight(1f))
+                MusicDialogButton("删除", { deleting = null; delete(comment) }, modifier = Modifier.weight(1f))
+            }
         }
     }
 }
@@ -166,9 +217,10 @@ import java.util.Locale
         color = MiuixTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else .45f))
 }
 
-@Composable private fun CommentContent(comment: NeteaseComment, enabled: Boolean, reply: () -> Unit) {
+@Composable private fun CommentContent(comment: NeteaseComment, enabled: Boolean, enhanced: Boolean = false,
+    busy: Boolean = false, own: Boolean = false, like: () -> Unit = {}, delete: () -> Unit = {}, reply: () -> Unit) {
     val colors = io.github.currencortex.music.ui.component.musicDialogColors()
-    var expanded by rememberSaveable(comment.commentId) { mutableStateOf(false) }
+    var expanded by rememberSaveable(comment.id) { mutableStateOf(false) }
     var overflow by remember(comment.content) { mutableStateOf(false) }
     val time = remember(comment.time) {
         if (comment.time > 0) SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault()).format(Date(comment.time)) else ""
@@ -179,13 +231,15 @@ import java.util.Locale
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(comment.user.nickname.ifBlank { "网易云用户" }, Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium,
                     color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (comment.likedCount > 0) Text("${comment.likedCount} 赞", Modifier.padding(start = 8.dp), fontSize = 11.sp, color = colors.onSurfaceVariantSummary)
+                if (enhanced) CommentAction("${if (comment.likedByMe) "已赞" else "赞"} ${comment.likedCount}",
+                    "like_comment_${comment.id}", !busy, like)
+                else if (comment.likedCount > 0) Text("${comment.likedCount} 赞", Modifier.padding(start = 8.dp), fontSize = 11.sp, color = colors.onSurfaceVariantSummary)
             }
             SelectionContainer {
                 Text(comment.content, fontSize = 15.sp, lineHeight = 23.sp, maxLines = if (expanded) Int.MAX_VALUE else 6,
                     overflow = TextOverflow.Ellipsis, onTextLayout = { if (!expanded) overflow = it.hasVisualOverflow })
             }
-            if (overflow || expanded) CommentAction(if (expanded) "收起" else "展开全文", "expand_comment_${comment.commentId}") { expanded = !expanded }
+            if (overflow || expanded) CommentAction(if (expanded) "收起" else "展开全文", "expand_comment_${comment.id}") { expanded = !expanded }
             comment.beReplied.firstOrNull()?.let { quote ->
                 Text("${quote.user?.nickname?.ifBlank { "网易云用户" } ?: "网易云用户"}：${quote.content ?: "原评论已删除"}",
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.onSurface.copy(alpha = .04f)).padding(10.dp),
@@ -193,7 +247,8 @@ import java.util.Locale
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(time, Modifier.weight(1f), fontSize = 11.sp, color = colors.onSurfaceVariantSummary)
-                CommentAction("回复", "reply_comment_${comment.commentId}", enabled, reply)
+                if (enhanced && own) CommentAction("删除", "delete_comment_${comment.id}", !busy, delete)
+                CommentAction("回复", "reply_comment_${comment.id}", enabled, reply)
             }
         }
     }
