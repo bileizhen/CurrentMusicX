@@ -2,6 +2,7 @@ package io.github.currencortex.music.feature.profile
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Settings
@@ -76,6 +77,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         SettingsDivider(52.dp)
         ProfileDestination("最近播放", "回顾听过的歌曲", MusicIcons.Update, "open_recent") { navigate("lib/recent") }
         SettingsDivider(52.dp)
+        ProfileDestination("听歌时长", "本机与网易云听歌足迹", MusicIcons.Headphones, "open_listening") { navigate("user/listening") }
+        SettingsDivider(52.dp)
         ProfileDestination("本地音乐", "手机上的歌曲", MusicIcons.Device, "open_local_music") { navigate("lib/local") }
     }
 }
@@ -119,7 +122,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @OptIn(ExperimentalLayoutApi::class)
-@Composable internal fun ProfileStatsBlock(stats: ProfileStats) {
+@Composable internal fun ProfileStatsBlock(stats: ProfileStats, onListening: (() -> Unit)? = null) {
     val muted = MiuixTheme.colorScheme.onSurfaceVariantSummary
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp).testTag("profile_stats"),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -143,7 +146,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 Text("听歌天数", fontSize = 12.sp, lineHeight = 16.sp, color = muted)
                 Text("${stats.playDays} 天", fontSize = 15.sp, lineHeight = 20.sp)
             }
-            Column(tile, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Column(tile.then(onListening?.let { Modifier.clickable(role = Role.Button, onClick = it).testTag("profile_listening_duration") }
+                ?: Modifier), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("听歌时长", fontSize = 12.sp, lineHeight = 16.sp, color = muted)
                 Text(listeningDuration(stats.listenMs), fontSize = 15.sp, lineHeight = 20.sp)
             }

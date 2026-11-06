@@ -121,6 +121,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         log = { logger.info("Network", it) })
     val nativeNetease = if (useNativeNetease) NeteaseGateway(neteaseTransport) else null
     val neteaseTasks = io.github.currencortex.music.data.netease.tasks.NeteaseTaskRepository(neteaseTransport)
+    internal val neteaseListening = io.github.currencortex.music.data.netease.listening.NeteaseListeningRepository(neteaseTransport)
     val playlistImporter = io.github.currencortex.music.data.netease.playlistimport.NeteasePlaylistImportRepository(neteaseTransport)
     val neteaseTaskPreferences = io.github.currencortex.music.data.netease.tasks.NeteaseTaskPreferences(settingsStore)
     val neteaseTasksEnabled = neteaseTaskPreferences.enabled.stateIn(appScope, SharingStarted.Eagerly, null)
@@ -588,6 +589,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         },
     )
     override fun close() {
+        todayListening.close()
         lxSources.close()
         originalAiMasterEffects.close()
         originalSpeakerEffects.close()
