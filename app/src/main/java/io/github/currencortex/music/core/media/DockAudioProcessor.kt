@@ -19,6 +19,7 @@ internal class DockAudioProcessor(private val meter: DockAudioLevel, private val
     private var low = 0.0
     private var coefficient = 0.0
     private var window = 1
+    private val rhythm = PlaybackRhythmDetector()
 
     override fun onConfigure(inputAudioFormat: AudioFormat): AudioFormat =
         if (inputAudioFormat.encoding in listOf(C.ENCODING_PCM_16BIT, C.ENCODING_PCM_FLOAT)) inputAudioFormat else AudioFormat.NOT_SET
@@ -28,15 +29,17 @@ internal class DockAudioProcessor(private val meter: DockAudioLevel, private val
         coefficient = 1.0 - exp(-2.0 * PI * 180.0 / inputAudioFormat.sampleRate.coerceAtLeast(1))
         window = (inputAudioFormat.sampleRate / 25).coerceAtLeast(1)
         meter.reset()
+        rhythm.reset()
         probe?.reset()
     }
 
-    override fun onReset() { meter.reset(); probe?.reset() }
+    override fun onReset() { meter.reset(); rhythm.reset(); probe?.reset() }
 
     override fun queueInput(inputBuffer: ByteBuffer) {
         // The sink also pumps EMPTY_BUFFER while draining downstream processors.
         // BaseAudioProcessor starts with that same singleton as its backing buffer.
         if (!inputBuffer.hasRemaining()) return
+        if (!meter.enabled) rhythm.reset()
         if (meter.enabled || probe?.enabled == true) {
             val channels = inputAudioFormat.channelCount.coerceAtLeast(1)
             val sampleBytes = if (inputAudioFormat.encoding == C.ENCODING_PCM_FLOAT) 4 else 2
@@ -57,7 +60,10 @@ internal class DockAudioProcessor(private val meter: DockAudioLevel, private val
                 count++
                 if (count >= window) {
                     // RMS compression keeps quiet recordings visible without making peaks flash.
-                    meter.publish(sqrt(sqrt(square / count)).toFloat(), sqrt(sqrt(bassSquare / count)).toFloat())
+                    val beat = if (meter.enabled) rhythm.update(sqrt(square / count).toFloat(),
+                        sqrt(bassSquare / count).toFloat(), count.toFloat() / inputAudioFormat.sampleRate) else null
+                    meter.publish(sqrt(sqrt(square / count)).toFloat(), sqrt(sqrt(bassSquare / count)).toFloat(),
+                        bpm = beat?.bpm, pulse = beat?.pulse ?: 0f)
                     probe?.publish(sqrt(square / count).toFloat(), sqrt(bassSquare / count).toFloat())
                     count = 0; square = 0.0; bassSquare = 0.0
                 }

@@ -118,6 +118,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     var controlsCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val sheetProgress = LocalPlayerSheetProgress.current
     val expanded by remember(sheetProgress) { derivedStateOf { sheetProgress() >= .995f } }
+    val backgroundSpeed = rememberPlayerFluidSpeed(vm.container.dockAudioLevel, state.playing,
+        expanded && !sidePage.active && backgroundImage == null && appearance.playerDynamicBackground,
+        queue.current, state.playbackSpeed)
     val sheetSettled by remember(sheetProgress) { derivedStateOf { sheetProgress() >= 1f } }
     val sheetDrag = LocalPlayerSheetDrag.current
     val colors = remember { darkColorScheme(primary = Color.White, onPrimary = Color(0xFF282629),
@@ -254,7 +257,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 }
             }) {
         PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize(), backgroundImage, appearance.playerBackgroundBlur,
-            active = expanded && !sidePage.active, dynamicBackground = appearance.playerDynamicBackground)
+            active = expanded && !sidePage.active, dynamicBackground = appearance.playerDynamicBackground,
+            motionSpeed = { backgroundSpeed.value })
         // The artwork viewport uses light ink; dialogs below inherit the app appearance.
         MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
         CompositionLocalProvider(LocalIndication provides indication) {
