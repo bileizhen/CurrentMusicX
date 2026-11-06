@@ -122,6 +122,83 @@ class RoomCapabilitiesTest {
         compose.waitUntil(10000) { reopens.get() == 1 && vm.session.state.value.detail != null }
         assertFalse(player.state.value.playing)
     }
+    @Test fun castingBlocksRoomCreationAndRestorationBeforeAnyWrite() {
+        val writes = AtomicInteger()
+        val original = server.dispatcher
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.method == "POST" && (request.requestUrl!!.encodedPath == "/cm/rooms" || request.requestUrl!!.encodedPath.endsWith("/reopen")))
+                    writes.incrementAndGet()
+                return original.dispatch(request)
+            }
+        }
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { RoomScreen(vm, {}, {}, {}) } }
+        compose.waitUntil(10000) { vm.browser.value.rooms.isNotEmpty() }
+        compose.runOnIdle {
+            player.state.value = player.state.value.copy(mode = PlayerMode.CAST)
+            vm.create("Blocked", "", true, false)
+        }
+        compose.waitUntil(5000) { !vm.busy.value && vm.browser.value.error != null }
+        compose.runOnIdle { vm.enterOwned(io.github.currencortex.music.data.room.RoomCard("1", closedAt = 1)) }
+        compose.waitUntil(5000) { !vm.busy.value && vm.browser.value.error != null }
+        assertEquals(0, writes.get())
+        assertEquals(PlayerMode.CAST, player.state.value.mode)
+    }
+    @Test fun deletionRejectsSessionChangedSinceConfirmationOpened() {
+        val deletes = AtomicInteger()
+        val original = server.dispatcher
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.method == "DELETE") deletes.incrementAndGet()
+                return original.dispatch(request)
+            }
+        }
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { RoomScreen(vm, {}, {}, {}) } }
+        compose.waitUntil(10000) { vm.browser.value.rooms.isNotEmpty() }
+        compose.runOnIdle {
+            vm.browser.value = vm.browser.value.copy(scope = io.github.currencortex.music.data.room.RoomScope.MINE)
+            val stale = container.roomRepository.session().copy(token = "stale-confirmation-token")
+            vm.deleteOwned(vm.browser.value.rooms.first(), stale)
+        }
+        compose.waitUntil(5000) { !vm.busy.value && vm.browser.value.error != null }
+        assertEquals(0, deletes.get())
+    }
+    @Test fun switchingRoomsCancelsSlowBanListAndLoadsNewRoomImmediately() {
+        val firstStarted = java.util.concurrent.CountDownLatch(1)
+        val releaseFirst = java.util.concurrent.CountDownLatch(1)
+        val secondRequests = AtomicInteger()
+        val original = server.dispatcher
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
+                "/cm/rooms/1/bans" -> {
+                    firstStarted.countDown(); releaseFirst.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                    json("""{"bans":[{"userId":1,"nickname":"Old room ban"}]}""")
+                }
+                "/cm/rooms/2/bans" -> { secondRequests.incrementAndGet(); json("""{"bans":[{"userId":2,"nickname":"New room ban"}]}""") }
+                else -> original.dispatch(request)
+            }
+        }
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { RoomScreen(vm, {}, {}, {}) } }
+        compose.waitUntil(10000) { vm.browser.value.rooms.isNotEmpty() }
+        fun detail(id: String) = io.github.currencortex.music.data.room.RoomDetail(
+            io.github.currencortex.music.data.room.RoomInfo(id),
+            members = listOf(io.github.currencortex.music.data.room.RoomMember(7, role = "owner")))
+        try {
+            compose.runOnIdle { vm.session.state.value = vm.session.state.value.copy(detail = detail("1")); vm.loadBans() }
+            assertTrue(firstStarted.await(3, java.util.concurrent.TimeUnit.SECONDS))
+            compose.runOnIdle {
+                vm.session.state.value = vm.session.state.value.copy(detail = detail("2"))
+                vm.loadBans()
+            }
+            compose.waitUntil(5000) { secondRequests.get() == 1 && vm.bans.value.bans.firstOrNull()?.userId == 2L }
+            releaseFirst.countDown()
+            compose.waitForIdle()
+            assertEquals("New room ban", vm.bans.value.bans.single().nickname)
+        } finally { releaseFirst.countDown() }
+    }
     @Test fun ownerApprovesRequestAndExitRestoresLocalQueuePaused() {
         val vm = show()
         compose.onNodeWithText("通过").performClick()
