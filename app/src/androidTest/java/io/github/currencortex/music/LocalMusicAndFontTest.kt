@@ -157,13 +157,15 @@ class LocalMusicAndFontTest {
             androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.assets
                 .open("download/fixture.$extension").use { input -> file.outputStream().use { input.copyTo(it) } }
             val song = Song(-1, title, durationMs = 1000, musicSource = MusicSource.LOCAL, localUri = uri.toString())
-            val text = "[00:00.10]本地歌词\n[00:00.50]离线读取"
+            val text = "[00:00.10]<00:00.10>Hello<00:00.40>\n[00:00.10]你好\n[00:00.50]さようなら\n[00:00.50]再见"
             io.github.currencortex.music.core.download.SongTagWriter.write(file, song, text, null)
             context.contentResolver.openOutputStream(uri)!!.use { output -> file.inputStream().use { it.copyTo(output) } }
             context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }, null, null)
             val result = io.github.currencortex.music.feature.lyrics.data.LocalLyricsProvider(context).load(song)
             assertEquals("local", result?.origin?.provider)
-            assertEquals(listOf("本地歌词", "离线读取"), result?.document?.lines?.map { it.text })
+            assertEquals(listOf("Hello", "さようなら"), result?.document?.lines?.map { it.text })
+            assertEquals(listOf("你好", "再见"), result?.document?.lines?.map { it.translation })
+            assertEquals(400L, result?.document?.lines?.first()?.words?.single()?.endTimeMs)
             assertEquals(100L, result?.document?.lines?.first()?.startTimeMs)
         } finally { context.contentResolver.delete(uri, null, null); file.delete() }
         }
