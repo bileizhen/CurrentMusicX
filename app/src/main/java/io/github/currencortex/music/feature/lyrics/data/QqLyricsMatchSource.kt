@@ -15,6 +15,7 @@ import okhttp3.*
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import java.io.IOException
 import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
 import java.nio.charset.CodingErrorAction
 import java.util.Base64
 import java.util.concurrent.TimeUnit
@@ -79,6 +80,9 @@ class QqLyricsMatchSource(client: OkHttpClient = OkHttpClient(), baseUrl: String
         checkBusiness(root, "歌词")
         val main = decodeTrack(root.string("lyric"))
         if (main.isBlank()) throw LyricsMatchException("QQ 音乐未提供这首歌的公开歌词")
+        if (!TIMESTAMP.containsMatchIn(main)) {
+            throw LyricsMatchException("QQ 音乐未提供可用的时间轴歌词，请切换其他来源")
+        }
         val translation = decodeTrack(root.string("trans"))
         val romanization = decodeTrack(root.string("roma").ifBlank { root.string("romalrc") })
         val parsed = LyricsParser.parse(buildJsonObject {
@@ -156,14 +160,16 @@ class QqLyricsMatchSource(client: OkHttpClient = OkHttpClient(), baseUrl: String
             if (plain.toByteArray(Charsets.UTF_8).size > LyricsFileCodec.MAX_BYTES) throw LyricsMatchException("QQ 音乐歌词文件过大")
             if (TIMESTAMP.containsMatchIn(plain)) return plain
             val bytes = try { Base64.getDecoder().decode(plain.replace(Regex("\\s+"), "")) }
-            catch (e: IllegalArgumentException) { throw LyricsMatchException("QQ 音乐返回了不支持的歌词编码", e) }
+            // nobase64=1 can return ordinary text without timestamps. Missing timing is
+            // not an encoding error; the caller requires timing only for the main track.
+            catch (_: IllegalArgumentException) { return plain }
             if (bytes.size > LyricsFileCodec.MAX_BYTES) throw LyricsMatchException("QQ 音乐歌词文件过大")
             val decoded = try { Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
                 .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString() }
-            catch (e: Exception) { throw LyricsMatchException("QQ 音乐歌词文字编码无效", e) }
-            val text = normalizeTrack(decoded)
-            if (!TIMESTAMP.containsMatchIn(text)) throw LyricsMatchException("QQ 音乐返回了不支持的歌词格式")
-            return text
+            // Plain ASCII lyrics can also look like Base64. Only a decoded timed track
+            // is usable; otherwise the untimed text remains subject to the caller's check.
+            catch (_: CharacterCodingException) { return plain }
+            return normalizeTrack(decoded)
         }
 
         private fun normalizeTrack(value: String): String {
