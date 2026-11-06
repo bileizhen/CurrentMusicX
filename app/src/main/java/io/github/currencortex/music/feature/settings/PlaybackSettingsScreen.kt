@@ -2,6 +2,8 @@ package io.github.currencortex.music.feature.settings
 
 import androidx.compose.animation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
@@ -13,6 +15,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.settings.LikeMode
 import io.github.currencortex.music.data.settings.MusicTransitionMode
 import io.github.currencortex.music.ui.component.MusicDestinationRow
+import io.github.currencortex.music.ui.component.LyricsStyleSelector
+import io.github.currencortex.music.ui.component.AppleMusicLyricsControls
+import io.github.currencortex.music.ui.component.LyricsSizeSlider
+import io.github.currencortex.music.ui.component.MusicDialog
+import io.github.currencortex.music.data.settings.LyricsStyle
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.SettingsSwitch
 import io.github.currencortex.music.ui.component.nativeui.*
@@ -21,11 +28,22 @@ import kotlin.math.roundToInt
 @Composable fun PlaybackSettingsScreen(vm: MusicSettingsViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     var qualityOpen by rememberSaveable { mutableStateOf(false) }
+    var appleLyricsOpen by rememberSaveable { mutableStateOf(false) }
     var seconds by remember(settings.crossfadeSeconds) { mutableFloatStateOf(settings.crossfadeSeconds.toFloat()) }
     val modes = mapOf(MusicTransitionMode.OFF to "关闭", MusicTransitionMode.SMART to "智能过渡", MusicTransitionMode.CROSSFADE to "淡入淡出")
     SettingsPage("播放", "playback_settings") {
         item("quality") { SettingsSection("音质", MusicIcons.Headphones) {
             MusicDestinationRow("默认音质", { qualityOpen = true }, Modifier.testTag("default_quality"), summary = settings.quality.label)
+        } }
+        item("lyrics") { SettingsSection("歌词显示", MusicIcons.File,
+            footer = "字体、翻译、罗马音及歌词效果可在播放器的歌词显示选项中调整。") {
+            LyricsStyleSelector(settings.lyricsDisplay.style, vm::lyricsStyle,
+                Modifier.padding(horizontal = 16.dp))
+            if (settings.lyricsDisplay.style == LyricsStyle.APPLE_MUSIC) {
+                SettingsDivider()
+                MusicDestinationRow("Apple Music 自定义", { appleLyricsOpen = true },
+                    Modifier.testTag("open_apple_lyrics_settings"), summary = "字号、间距、动画速度与光效")
+            }
         } }
         item("transition") { SettingsSection("歌曲衔接", MusicIcons.Update, footer = "自动切歌时生效。智能过渡和淡入淡出仅能选择一种。") {
             SettingsOptionsRow("切换方式", modes.getValue(settings.transitionMode), modes.map { (mode, title) ->
@@ -77,4 +95,11 @@ import kotlin.math.roundToInt
     }
     if (qualityOpen) io.github.currencortex.music.feature.player.AudioQualitySheet(settings.quality, vm::quality,
         { qualityOpen = false }, title = "默认播放音质")
+    if (appleLyricsOpen) MusicDialog("Apple Music 歌词", { appleLyricsOpen = false }) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
+            .testTag("apple_lyrics_settings")) {
+            LyricsSizeSlider(settings.lyricsFontSize, vm::lyricsFontSize)
+            AppleMusicLyricsControls(settings.lyricsDisplay, vm::lyricsDisplay)
+        }
+    }
 }
