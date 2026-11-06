@@ -125,9 +125,9 @@ class MusicLyricsMatchingRoutesTest {
         assertEquals(0, project.requestCount)
     }
 
-    @Test fun ordinarySearchRetainsItsExistingQueryAndRouting() = runBlocking {
+    @Test fun explicitNativeSearchRetainsItsExistingQueryAndRouting() = runBlocking {
         native.enqueue(nativeSearch())
-        repository.search("Song - Singer - Album") as AppResult.Success
+        repository.search("Song - Singer - Album", backend = SearchBackend.NATIVE) as AppResult.Success
         val request = native.takeRequest(1, TimeUnit.SECONDS)!!
         assertEquals("Song - Singer - Album", payload(request)["s"]!!.jsonPrimitive.content)
         assertEquals(0, project.requestCount)
@@ -154,6 +154,26 @@ class MusicLyricsMatchingRoutesTest {
         assertTrue(pending.isCancelled)
         assertEquals(1, project.requestCount)
         assertEquals(0, native.requestCount)
+    }
+
+    @Test fun enhancedSearchUsesProjectAndPinsNativeFallbackPagination() = runBlocking {
+        val repo = repository
+        project.enqueue(MockResponse().setBody("""{"songs":[],"catalogSongs":[{"ncm_id":9,"name":"Original"}]}"""))
+        assertEquals(9L, (repo.search("Original") as AppResult.Success).value.songs.single().id)
+        assertEquals(0, native.requestCount)
+        project.takeRequest()
+        project.enqueue(MockResponse().setResponseCode(503))
+        native.enqueue(MockResponse().setBody("""{"code":200,"result":{"songs":[{"id":1,"name":"One"}],"songCount":3}}"""))
+        val fallback = (repo.search("Native") as AppResult.Success).value
+        assertEquals(SearchBackend.NATIVE, fallback.backend)
+        project.takeRequest(); native.takeRequest()
+        native.enqueue(MockResponse().setBody("""{"code":200,"result":{"songs":[{"id":2,"name":"Two"}],"songCount":3}}"""))
+        repo.search("Native", fallback.upstreamCount, fallback.backend)
+        assertEquals(2, project.requestCount)
+        assertEquals("1", payload(native.takeRequest())["offset"]!!.jsonPrimitive.content)
+        project.enqueue(MockResponse().setResponseCode(503))
+        assertTrue(repo.search("Project", 30, SearchBackend.PROJECT) is AppResult.Failure)
+        assertEquals(2, native.requestCount)
     }
 
     private fun payload(request: RecordedRequest): JsonObject {

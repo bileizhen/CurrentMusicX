@@ -7,6 +7,7 @@ import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.library.CatalogEntry
 import io.github.currencortex.music.data.local.SearchHistoryEntity
 import io.github.currencortex.music.data.song.SearchLyricContext
+import io.github.currencortex.music.data.song.SearchBackend
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.data.settings.LyricsSource
 import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
@@ -21,7 +22,8 @@ enum class SearchCategory(val label: String, val route: String) {
 }
 data class SearchCategoryPage(val songs: List<Song> = emptyList(), val entries: List<CatalogEntry> = emptyList(),
     val total: Int = 0, val nextOffset: Int = 0, val more: Boolean = false, val loading: Boolean = false,
-    val loaded: Boolean = false, val error: String? = null, val matchedLyrics: Map<Long, SearchLyricContext> = emptyMap()) {
+    val loaded: Boolean = false, val error: String? = null, val matchedLyrics: Map<Long, SearchLyricContext> = emptyMap(),
+    val backend: SearchBackend? = null) {
     val count get() = songs.size + entries.size
 }
 data class SearchUiState(val query: String = "", val submitted: String = "", val category: SearchCategory = SearchCategory.SONG,
@@ -52,6 +54,8 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
     val history = container.database.music().history().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     private val requests = mutableMapOf<SearchCategory, Job>()
     private val backfills = mutableListOf<Job>()
+    private val lyricOffsets = mutableMapOf<Long, Int>()
+    private val lyricRetries = mutableMapOf<Int, Job>()
     private var generation = 0
     init { viewModelScope.launch {
         container.ready.await()
@@ -69,6 +73,9 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
         requests.clear()
         backfills.forEach(Job::cancel)
         backfills.clear()
+        lyricOffsets.clear()
+        lyricRetries.values.forEach(Job::cancel)
+        lyricRetries.clear()
     }
     fun input(value: String) {
         if (value.isEmpty()) { cancelRequests(); state.value = SearchUiState(category = state.value.category) }
@@ -170,11 +177,12 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
         val before = state.value
         if (before.searched && !before.loading) load(before.category, append = before.page.loaded && before.more)
     }
-    private suspend fun fetch(category: SearchCategory, query: String, offset: Int): AppResult<SearchCategoryPage> =
+    private suspend fun fetch(category: SearchCategory, query: String, offset: Int, backend: SearchBackend?): AppResult<SearchCategoryPage> =
         if (category == SearchCategory.SONG || category == SearchCategory.LYRIC) when (val result =
-            if (category == SearchCategory.LYRIC) container.musicRepository.searchLyrics(query, offset) else container.musicRepository.search(query, offset)) {
+            if (category == SearchCategory.LYRIC) container.musicRepository.searchLyrics(query, offset, backend) else container.musicRepository.search(query, offset, backend)) {
             is AppResult.Success -> AppResult.Success(SearchCategoryPage(songs = result.value.songs,
-                total = result.value.total, nextOffset = offset + result.value.songs.size, more = result.value.hasMore, matchedLyrics = result.value.matchedLyrics))
+                total = result.value.total, nextOffset = offset + result.value.upstreamCount, more = result.value.hasMore,
+                matchedLyrics = result.value.matchedLyrics, backend = result.value.backend))
             is AppResult.Failure -> result
         } else when (val result = appResult {
             if (category == SearchCategory.PLAYLIST) container.libraryRepository.searchPlaylists(query, offset)
@@ -193,7 +201,7 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
         requests[category] = viewModelScope.launch {
             container.ready.await()
             if (rememberHistory) container.database.music().remember(SearchHistoryEntity(before.submitted, System.currentTimeMillis()))
-            val result = fetch(category, before.submitted, old.nextOffset)
+            val result = fetch(category, before.submitted, old.nextOffset, old.backend)
             ensureActive()
             if (requestGeneration != generation) return@launch
             state.update { current ->
@@ -203,13 +211,33 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
                 val page = completeSearchPage(latest, result, append)
                 current.copy(pages = current.pages + (category to page))
             }
-            if (category == SearchCategory.LYRIC && result is AppResult.Success)
+            if (category == SearchCategory.LYRIC && result is AppResult.Success) {
+                result.value.songs.forEach { lyricOffsets[it.id] = old.nextOffset }
                 backfillLyricContexts(before.submitted, requestGeneration, result.value.songs, result.value.matchedLyrics)
+            }
+        }
+    }
+    fun retryLyricContext(songId: Long) {
+        val offset = lyricOffsets[songId] ?: return
+        if (lyricRetries[offset]?.isActive == true) return
+        val before = state.value
+        val page = before.pages[SearchCategory.LYRIC] ?: return
+        val epoch = generation
+        lyricRetries[offset] = viewModelScope.launch {
+            val result = container.musicRepository.searchLyrics(before.submitted, offset, page.backend)
+            ensureActive()
+            if (epoch != generation) return@launch
+            state.update { current ->
+                val latest = current.pages[SearchCategory.LYRIC] ?: return@update current
+                val contexts = if (result is AppResult.Success) result.value.matchedLyrics.filterKeys { it in latest.matchedLyrics }
+                    else mapOf(songId to (latest.matchedLyrics[songId] ?: return@update current).copy(status = "error", retryable = true))
+                current.copy(pages = current.pages + (SearchCategory.LYRIC to latest.copy(matchedLyrics = latest.matchedLyrics + contexts)))
+            }
         }
     }
     /** The native search never ships a preceding line; read the full lyric and take its neighbours. */
     private fun backfillLyricContexts(query: String, requestGeneration: Int, songs: List<Song>, contexts: Map<Long, SearchLyricContext>) {
-        val targets = songs.filter { song -> contexts[song.id]?.let { it.before == null || it.after == null } == true }
+        val targets = songs.filter { song -> contexts[song.id]?.let { it.status == null && (it.before == null || it.after == null) } == true }
         if (targets.isEmpty()) return
         backfills += viewModelScope.launch {
             val limiter = Semaphore(4)
@@ -252,14 +280,14 @@ internal fun completeSearchPage(current: SearchCategoryPage, result: AppResult<S
             val entries = (previous.entries + incoming.entries).distinctBy(CatalogEntry::id)
             val lyrics = previous.matchedLyrics.toMutableMap()
             incoming.matchedLyrics.forEach { (id, context) ->
-                val existing = lyrics[id]?.takeIf { it.matched == context.matched }
+                val existing = lyrics[id]?.takeIf { context.status == null && it.matched == context.matched }
                 lyrics[id] = context.copy(before = context.before ?: existing?.before,
                     after = context.after ?: existing?.after)
             }
             val count = songs.size + entries.size
             incoming.copy(songs = songs, entries = entries, matchedLyrics = lyrics,
                 total = maxOf(incoming.total, count), loading = false, loaded = true,
-                more = incoming.more && incoming.count > 0 && (!append || count > previous.count))
+                more = incoming.more && incoming.nextOffset > previous.nextOffset)
         }
     }
 

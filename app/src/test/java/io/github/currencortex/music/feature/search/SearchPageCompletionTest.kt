@@ -56,4 +56,10 @@ class SearchPageCompletionTest {
         val result = completeSearchPage(current, AppResult.Success(loading.copy(matchedLyrics = mapOf(1L to changed))), append = true)
         assertEquals(changed, result.matchedLyrics[1L])
     }
+    @Test fun duplicateOnlyPageKeepsPagingWhenUpstreamOffsetAdvances() {
+        val result = completeSearchPage(loading, AppResult.Success(loading.copy(nextOffset = 2)), append = true)
+        assertEquals(1, result.songs.size)
+        assertEquals(2, result.nextOffset)
+        assertTrue(result.more)
+    }
 }

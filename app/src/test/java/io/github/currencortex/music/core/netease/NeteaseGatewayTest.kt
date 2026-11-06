@@ -14,6 +14,46 @@ import java.net.URLDecoder
 import java.util.concurrent.TimeUnit
 
 class NeteaseGatewayTest {
+    @Test fun nativeCommentsKeepLocalIdentityAndOpaqueCursor() = runBlocking {
+        login()
+        val repo = SongCommentsRepository(api, ::owner)
+        enqueue("""{"code":200,"data":{"comments":[{"commentId":123,"content":"Reply","likedCount":2,"liked":true,"user":{"userId":42,"nickname":"Me"},"showFloorComment":{"replyCount":4}}],"totalCount":80,"hasMore":true,"cursor":"opaque#next"}}""")
+        val page = repo.comments(7, CommentSort.LATEST, 2, "opaque#previous")
+        assertEquals(42L, page.meUid); assertTrue(page.comments.single().likedByMe)
+        assertEquals("123", page.comments.single().id); assertEquals(4, page.comments.single().replyCount)
+        val request = upstream.takeRequest()
+        assertEquals("/eapi/v2/resource/comments", request.path)
+        assertEquals("opaque#previous", payload(request)["cursor"]!!.jsonPrimitive.content)
+        assertNull(request.getHeader("Authorization")); assertEquals(0, current.requestCount)
+    }
+    @Test fun expiredNativeCommentsReadAnonymouslyWithoutLosingLocalLogin() = runBlocking {
+        login()
+        val repo = SongCommentsRepository(api, ::owner)
+        enqueue("""{"code":301}""")
+        enqueue("""{"code":200,"data":{"comments":[{"commentId":1,"liked":true}],"hasMore":false}}""")
+        val result = repo.comments(7, CommentSort.HOT)
+        assertEquals(0L, result.meUid); assertFalse(result.comments.single().likedByMe)
+        assertTrue(upstream.takeRequest().getHeader("Cookie")!!.contains("native-cookie"))
+        assertFalse(upstream.takeRequest().getHeader("Cookie")!!.contains("native-cookie"))
+        assertTrue(sessions.state.value.loggedIn)
+    }
+    @Test fun commentWritesUseLocalCredentialsAndConfirmedNativeEndpoints() = runBlocking {
+        login()
+        val repo = SongCommentsRepository(api, ::owner)
+        enqueue("""{"code":200}""")
+        repo.send(7, "Local reply", "opaque-id")
+        val reply = upstream.takeRequest()
+        assertEquals("/eapi/resource/comments/reply", reply.path)
+        assertEquals("opaque-id", payload(reply)["commentId"]!!.jsonPrimitive.content)
+        assertNull(reply.getHeader("Authorization"))
+        enqueue("""{"code":200}""")
+        repo.like(7, "opaque-id", true)
+        assertEquals("/weapi/v1/comment/like", upstream.takeRequest().path)
+        enqueue("""{"code":403}""")
+        assertTrue(appResult { repo.delete(7, "opaque-id") } is AppResult.Failure)
+        assertEquals("/eapi/resource/comments/delete", upstream.takeRequest().path)
+        assertEquals(3, upstream.requestCount); assertEquals(0, current.requestCount)
+    }
     @Test fun chorusUsesPublicNormalizedProjectMetadataEvenWithNativeGateway() = runBlocking {
         current.enqueue(response("""{"id":33894312,"segments":[{"startMs":47500,"endMs":88500}]}"""))
         val clip = MusicRepository(api).previewClip(Song(33894312, "Sample", durationMs = 180000))
@@ -257,7 +297,7 @@ class NeteaseGatewayTest {
     @Test fun lyricSearchPrefersHighlightedLinesFromTheOfficialArrayShape() = runBlocking {
         val hit = rawSong(11).dropLast(1) + """, "lyrics":["context", "<b>命中歌词</b>", "<b>命中歌词</b>", "after"]}"""
         enqueue("""{"code":200,"result":{"songCount":1,"songs":[$hit]}}""")
-        val result = MusicRepository(api).searchLyrics("命中歌词") as AppResult.Success
+        val result = MusicRepository(api).searchLyrics("命中歌词", backend = SearchBackend.NATIVE) as AppResult.Success
         val match = result.value.matchedLyrics[11]!!
         assertEquals("context", match.before)
         assertEquals("命中歌词", match.matched)
@@ -267,7 +307,7 @@ class NeteaseGatewayTest {
     @Test fun lyricSearchUsesOfficialTypeAndPreservesReadableMatchMetadata() = runBlocking {
         val hit = rawSong(11).dropLast(1) + """, "lyrics":{"txt":"<b>你好</b> &amp; 世界\n下一句"}}"""
         enqueue("""{"code":200,"result":{"songCount":31,"songs":[$hit]}}""")
-        val result = MusicRepository(api).searchLyrics("你好", 30) as AppResult.Success
+        val result = MusicRepository(api).searchLyrics("你好", 30, SearchBackend.NATIVE) as AppResult.Success
         val match = result.value.matchedLyrics[11]!!
         assertNull(match.before)
         assertEquals("你好 & 世界", match.matched)
