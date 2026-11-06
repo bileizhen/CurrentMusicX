@@ -29,19 +29,25 @@ jobs:
           package-manager-cache: false
       - name: Test palette before applying
         run: node --test .github/scripts/label-palette.test.cjs
-      - name: Update existing label colors
+      - name: Create issue status labels and sync colors
         uses: actions/github-script@v8
         with:
           script: |
-            const {colorChanges}=require('./.github/scripts/label-palette.cjs');
+            const {STATUS_LABELS,colorChanges}=require('./.github/scripts/label-palette.cjs');
             const labels=await github.paginate(github.rest.issues.listLabelsForRepo,{
               ...context.repo,per_page:100
             });
             const changes=colorChanges(labels);
+            const existing=new Set(labels.map(label=>label.name.toLowerCase()));
+            const missing=Object.entries(STATUS_LABELS).filter(([name])=>!existing.has(name));
+            for (const [name,properties] of missing) {
+              await github.rest.issues.createLabel({...context.repo,name,...properties});
+              core.info(`Created ${name}`);
+            }
             for (const item of changes) {
               await github.rest.issues.updateLabel({...context.repo,name:item.name,color:item.after});
               core.info(`Label ${item.name}: ${item.before} -> ${item.after}`);
             }
             await core.summary.addHeading('CurrentMusicX · 标签配色已同步')
-              .addRaw(`已检查 ${labels.length} 个标签，更新 ${changes.length} 个颜色；名称与描述均未更改。`)
+              .addRaw(`已创建 ${missing.length} 个处理状态标签，更新 ${changes.length} 个已有标签的颜色。`)
               .write();
