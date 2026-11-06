@@ -36,10 +36,12 @@ import kotlin.math.roundToLong
     }
 
     fun applyTo(document: LyricsDocument): LyricsDocument {
+        fun ruby(value: LyricRuby): LyricRuby = value.copy(startTimeMs = value.startTimeMs?.let(::mapTime),
+            endTimeMs = value.endTimeMs?.let(::mapTime))
         fun line(value: LyricLine): LyricLine = value.copy(startTimeMs = mapTime(value.startTimeMs),
             endTimeMs = mapTime(value.endTimeMs), words = value.words.map {
-                it.copy(startTimeMs = mapTime(it.startTimeMs), endTimeMs = mapTime(it.endTimeMs))
-            }, backgroundVocals = value.backgroundVocals.map(::line))
+                it.copy(startTimeMs = mapTime(it.startTimeMs), endTimeMs = mapTime(it.endTimeMs), ruby = it.ruby.map(::ruby))
+            }, backgroundVocals = value.backgroundVocals.map(::line), ruby = value.ruby.map(::ruby))
         return document.copy(lines = document.lines.map(::line),
             metadata = document.metadata.copy(durationMs = document.metadata.durationMs?.let(::mapTime)))
     }

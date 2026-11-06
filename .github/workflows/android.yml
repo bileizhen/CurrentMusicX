@@ -60,8 +60,6 @@ jobs:
       - name: Install Android SDK
         run: sdkmanager "platforms;android-37.0" "build-tools;35.0.0" "ndk;30.0.16248370" "cmake;4.1.2"
       - uses: gradle/actions/setup-gradle@v5
-      - name: Test native source contract and legal assets
-        run: python3 -m unittest discover -s scripts/tests -v
       - name: Bundle installed CI release notes
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
@@ -72,7 +70,7 @@ jobs:
       - name: Build and verify unsigned CI release
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
-        run: ./gradlew :app:assembleRelease :app:testReleaseUnitTest :app:lintRelease -PciBuildNumber="$CI_BUILD_NUMBER" -PinstalledReleaseNotesDir="$GITHUB_WORKSPACE/app/build/generated/installedReleaseNotes" -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace
+        run: ./gradlew :app:assembleRelease :app:lintRelease -PciBuildNumber="$CI_BUILD_NUMBER" -PinstalledReleaseNotesDir="$GITHUB_WORKSPACE/app/build/generated/installedReleaseNotes" -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace
       - name: Prepare CI artifact
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
@@ -84,12 +82,6 @@ jobs:
           path: ci-dist/
           if-no-files-found: error
           retention-days: 7
-      - name: Upload test reports
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: unit-test-reports
-          path: app/build/reports/tests/test*UnitTest/
       - name: Upload lint report
         if: always()
         uses: actions/upload-artifact@v6

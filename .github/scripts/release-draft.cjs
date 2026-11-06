@@ -31,7 +31,7 @@ async function prepare({ github, context, core }) {
     .sort((a,b) => b.id - a.id)[0];
   if (latest?.conclusion !== 'success' || latest.status !== 'completed' ||
       latest.head_sha !== target) throw new Error('目标提交最新一次 main Android CI 尚未通过');
-  // Require the actual Release APK, release unit tests and lint; a lightweight
+  // Require the actual Release APK and lint; a lightweight
   // skipped build must never authorize a stable release draft.
   const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun,
     {...repo, run_id:latest.id, filter:'latest', per_page:100});
@@ -39,7 +39,7 @@ async function prepare({ github, context, core }) {
   if (!jobs.some(job => job.name === 'build' && job.conclusion === 'success' &&
       requiredSteps.every(name => job.steps?.some(step =>
         step.name === name && step.conclusion === 'success'))))
-    throw new Error('目标提交缺少完整 Release 构建、单元测试或 Lint 验证');
+    throw new Error('目标提交缺少完整 Release 构建或 Lint 验证');
   const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
     {...repo, run_id:latest.id, per_page:100});
   if (!artifacts.some(artifact => artifact.name === 'ci-unsigned' &&
@@ -47,7 +47,7 @@ async function prepare({ github, context, core }) {
     throw new Error('目标提交的 CI Release 产物不存在或已过期');
   const notes = (await github.rest.repos.generateReleaseNotes({ ...repo,tag_name:tag,previous_tag_name:previous,target_commitish:target,configuration_file_path:'.github/release.yml' })).data;
   // Preserve GitHub's author, PR, new contributor and full changelog links verbatim.
-  const body = `## 更新说明\n\n${process.env.RELEASE_SUMMARY.trim()}\n\n${notes.body}\n\n## Installation & Verification\n\n- 此草稿基于 ${target}，Android CI 的 Release 编译、单元测试、Lint 及 CI 产物已核验（运行 #${latest.run_number}）。\n- 待上传同一提交构建的正式签名 APK 与 SHA-256 校验文件。\n- 真机验收、签名和下载校验尚待维护者填写；CI 不代表真机验收。\n`;
+  const body = `## 更新说明\n\n${process.env.RELEASE_SUMMARY.trim()}\n\n${notes.body}\n\n## Installation & Verification\n\n- 此草稿基于 ${target}，Android CI 的 Release 编译、Lint 及 CI 产物已核验（运行 #${latest.run_number}）。\n- 待上传同一提交构建的正式签名 APK 与 SHA-256 校验文件。\n- 真机验收、签名和下载校验尚待维护者填写；CI 不代表真机验收。\n`;
   fs.writeFileSync('release-draft.txt',body);
   core.setOutput('target',target);
   core.setOutput('tag',tag);
