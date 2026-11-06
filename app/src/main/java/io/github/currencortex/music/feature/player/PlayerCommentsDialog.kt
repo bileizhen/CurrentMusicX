@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -42,9 +43,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.flow.drop
 
 @Composable internal fun PlayerCommentsDialog(state: PlayerComments, dismiss: () -> Unit, reload: () -> Unit, more: () -> Unit,
-    composer: PlayerCommentComposer = PlayerCommentComposer(), edit: (String) -> Unit = {}, reply: (NeteaseComment?) -> Unit = {}, send: () -> Unit = {},
+    composer: PlayerCommentComposer = PlayerCommentComposer(), edit: () -> Unit = {}, reply: (NeteaseComment?) -> Unit = {}, send: () -> Unit = {},
     sort: (CommentSort) -> Unit = {}, replies: (NeteaseComment, Boolean) -> Unit = { _, _ -> },
     like: (NeteaseComment) -> Unit = {}, delete: (NeteaseComment) -> Unit = {}) {
     val colors = io.github.currencortex.music.ui.component.musicDialogColors()
@@ -67,6 +69,11 @@ import java.util.Locale
     LaunchedEffect(focusReply) { if (focusReply > 0) { focus.requestFocus(); keyboard?.show() } }
     LaunchedEffect(composer.message) {
         if (composer.message != null) { focusManager.clearFocus(); keyboard?.hide(); hotSelected = false; latestScroll.scrollToItem(0) }
+    }
+    val onEdit by rememberUpdatedState(edit)
+    LaunchedEffect(composer.input) {
+        // Observe only for feedback; never round-trip IME text through the StateFlow.
+        snapshotFlow { composer.input.text.toString() }.drop(1).collect { onEdit() }
     }
     val close = { focusManager.clearFocus(); keyboard?.hide(); dismiss() }
     MusicOverlayDialog(show = true, onDismissRequest = close, insideMargin = DpSize(20.dp, 16.dp)) {
@@ -173,16 +180,16 @@ import java.util.Locale
                 }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Bottom) {
-                TextField(composer.draft, edit, Modifier.fillMaxWidth().then(Modifier.weight(1f).focusRequester(focus).testTag("player_comment_draft")),
+                TextField(state = composer.input, modifier = Modifier.fillMaxWidth().then(Modifier.weight(1f).focusRequester(focus).testTag("player_comment_draft")),
                     label = if (composer.replyTo == null) "写下你的评论" else "写下你的回复", useLabelAsPlaceholder = true,
-                    insideMargin = DpSize(14.dp, 12.dp), cornerRadius = 16.dp, maxLines = 3,
+                    insideMargin = DpSize(14.dp, 12.dp), cornerRadius = 16.dp, lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 3),
                     textStyle = MiuixTheme.textStyles.main.copy(fontSize = 15.sp), readOnly = composer.sending)
                 MusicDialogButton(if (composer.sending) "发送中…" else "发送", send, Modifier.testTag("player_comment_send"),
-                    enabled = !composer.sending && !state.loading && state.busy.isEmpty() && composer.draft.isNotBlank(), fillWidth = false)
+                    enabled = !composer.sending && !state.loading && state.busy.isEmpty() && composer.draft.isNotBlank() && composer.draft.length <= 1000, fillWidth = false)
             }
-            val feedback = composer.error ?: composer.message
+            val feedback = if (composer.draft.length > 1000) "评论最多 1000 字，请删减后发送" else composer.error ?: composer.message
             if (feedback != null || composer.draft.isNotEmpty()) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                Text(feedback ?: "", Modifier.weight(1f).testTag(if (composer.error != null) "player_comment_error" else "player_comment_result")
+                Text(feedback ?: "", Modifier.weight(1f).testTag(if (composer.error != null || composer.draft.length > 1000) "player_comment_error" else "player_comment_result")
                     .semantics { liveRegion = LiveRegionMode.Polite }, fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
                 if (composer.draft.isNotEmpty()) Text("${composer.draft.length}/1000", Modifier.padding(start = 8.dp), fontSize = 11.sp,
                     color = if (composer.draft.length >= 1000) colors.primary else colors.onSurfaceVariantSummary)
