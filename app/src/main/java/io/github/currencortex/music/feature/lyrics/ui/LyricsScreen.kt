@@ -79,7 +79,13 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
     romanization: Boolean = false, wordAnimation: Boolean = true, effects: Boolean = true,
     fontSize: Float = LyricsTypography.DEFAULT_SIZE, weightMode: LyricsWeight = LyricsWeight.CURRENT, lyricsOffsetMs: Long = 0,
     display: LyricsDisplayOptions = LyricsDisplayOptions(), minimal: Boolean = false, perspective: Boolean = false,
-    cover: String = "", mediaDurationMs: Long = 0) {
+    cover: String = "", mediaDurationMs: Long = 0, playbackRunning: Boolean = true) {
+    if (display.style == io.github.currencortex.music.data.settings.LyricsStyle.APPLE_MUSIC) {
+        AppleMusicLyrics(document, position, onSeek, modifier, canSeek, translation, romanization,
+            wordAnimation, effects, LyricsTypography.normalize(fontSize), weightMode,
+            lyricsOffsetMs, display, mediaDurationMs, playbackRunning)
+        return
+    }
     val smokeColors = if (display.smoke || display.particles) rememberLyricsSmokeColors(cover) else null
     val size = LyricsTypography.normalize(fontSize)
     val timeline = remember(document) { LyricsSynchronizer(document) }
