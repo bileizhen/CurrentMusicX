@@ -7,6 +7,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class LyricsEngineTest {
+    @Test fun decimalMillisecondsStayExactForLineAndWordStamps() {
+        val document = LyricsParser.lrc("[00:01.001]<00:01.001>A<00:01.003>\n[00:01.002]B")
+        assertEquals(listOf(1001L, 1002L), document.lines.map { it.startTimeMs })
+        assertEquals(1001L, document.lines.first().words.single().startTimeMs)
+        assertEquals(1003L, document.lines.first().words.single().endTimeMs)
+    }
     @Test fun legacyRowsStayLineTimedAndSort() {
         val doc = LyricsParser.parse(ApiJson.parseToJsonElement("""{"lines":[{"t":3000,"txt":"第二句","trans":"Second"},{"t":1000,"txt":"第一句"}]}"""))
         assertFalse(doc.hasWordTiming)
