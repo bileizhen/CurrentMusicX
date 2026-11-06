@@ -196,6 +196,8 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         val expected = sessions.snapshot()
         if (expectedRevision != null && expectedRevision != expected.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
         if (path.startsWith("ncmbind")) return binding(method, path, query, body as? JsonObject ?: buildJsonObject {}, expected, loginGuard)
+        if (path in setOf("ncm/comments/page", "ncm/comments/replies", "ncm/comment", "ncm/comment/like"))
+            return NeteaseCommentsApi(transport).request(method, path, query, body as? JsonObject ?: buildJsonObject {}, expected)
         fun arg(name: String, fallback: String = "") = query[name] ?: fallback
         fun page(name: String, fallback: Int, min: Int = 0, max: Int = 1000) = arg(name).toIntOrNull()?.coerceIn(min, max) ?: fallback
         val id = arg("id")
