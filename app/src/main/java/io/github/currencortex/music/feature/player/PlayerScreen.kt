@@ -401,7 +401,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     else { dismiss(); menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false)) }
                 })
                 MusicDestinationRow("播放音质", summary = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else state.audioInfo?.label ?: settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true)
-                MusicDestinationRow("播放背景", summary = if (backgroundImage == null) "跟随歌曲封面" else "自定义图片 · 模糊 ${appearance.playerBackgroundBlur.toInt()}%",
+                MusicDestinationRow("播放背景", summary = if (backgroundImage != null) "自定义图片 · 模糊 ${appearance.playerBackgroundBlur.toInt()}%"
+                    else if (appearance.playerDynamicBackground) "流动背景 · 跟随歌曲封面"
+                    else "封面毛玻璃 · 模糊 ${appearance.playerBackgroundBlur.toInt()}%",
                     modifier = Modifier.testTag("open_player_background"), onClick = { overlay = PlayerOverlay.BACKGROUND })
                 MusicDestinationRow("私人漫游", summary = if (roaming.active) roaming.choice.title else "按你的喜好连续推荐",
                     modifier = Modifier.testTag("open_player_roaming"), onClick = { overlay = PlayerOverlay.ROAMING })
