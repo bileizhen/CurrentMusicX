@@ -16,8 +16,8 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,10 +28,13 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.yukonga.miuix.kmp.basic.Text
 import io.github.currencortex.music.data.song.formatNeteaseCount
@@ -39,6 +42,8 @@ import io.github.currencortex.music.data.song.formatNeteaseCount
 internal data class PlayerButtonVisual(val pressed: Boolean, val scale: Float, val glyphProgress: Float, val alpha: Float)
 internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("PlayerButtonVisuals")
 internal val PlayerBufferedProgress = SemanticsPropertyKey<Float>("PlayerBufferedProgress")
+internal data class PlayerSeekVisual(val pressed: Boolean, val dragging: Boolean, val thicknessDp: Float)
+internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerSeekVisuals")
 
 /** Keep 48dp touch targets while grouping the secondary actions near the center. */
 @Composable internal fun PlayerFunctionBar(modifier: Modifier = Modifier, actionCount: Int = 3,
@@ -113,32 +118,91 @@ internal val PlayerBufferedProgress = SemanticsPropertyKey<Float>("PlayerBuffere
     val preview by rememberUpdatedState(onPreview)
     val seek by rememberUpdatedState(onSeek)
     val cancel by rememberUpdatedState(onCancel)
+    val progress = value.takeIf(Float::isFinite)?.coerceIn(0f, 1f) ?: 0f
+    val currentProgress by rememberUpdatedState(progress)
+    val buffer = bufferedValue.takeIf(Float::isFinite)?.coerceIn(0f, 1f) ?: 0f
+    var pressed by remember { mutableStateOf(false) }
     var dragging by remember { mutableStateOf(false) }
-    var target by remember { mutableFloatStateOf(value) }
-    val buffered = animateFloatAsState(bufferedValue.coerceIn(0f, 1f), tween(180), label = "audio buffer progress")
-    Canvas(modifier.fillMaxWidth().height(34.dp).testTag("player_seek").semantics {
-        progressBarRangeInfo = ProgressBarRangeInfo(value.coerceIn(0f, 1f), 0f..1f)
+    var target by remember { mutableFloatStateOf(progress) }
+    var bounds by remember { mutableStateOf(IntSize.Zero) }
+    val thickness = animateFloatAsState(if (pressed) 8f else 3f,
+        tween(if (pressed) 100 else 160, easing = CubicBezierEasing(.2f, 0f, 0f, 1f)), label = "seek press")
+    val buffered = animateFloatAsState(buffer, tween(180), label = "audio buffer progress")
+    Canvas(modifier.fillMaxWidth().height(34.dp).onSizeChanged { bounds = it }.testTag("player_seek").semantics {
+        progressBarRangeInfo = ProgressBarRangeInfo(if (pressed) target else progress, 0f..1f)
         contentDescription = "播放进度"
-        this[PlayerBufferedProgress] = bufferedValue.coerceIn(0f, 1f)
-        stateDescription = "已加载 ${(bufferedValue.coerceIn(0f, 1f) * 100).toInt()}%"
-        if (enabled) setProgress { seek(it.coerceIn(0f, 1f)); true } else disabled()
-    }.pointerInput(enabled) {
-        if (enabled) detectTapGestures { seek((it.x / size.width).coerceIn(0f, 1f)) }
-    }.pointerInput(enabled) {
-        if (enabled) detectHorizontalDragGestures(
-            onDragStart = { dragging = true; target = (it.x / size.width).coerceIn(0f, 1f); preview(target) },
-            onDragEnd = { dragging = false; seek(target) },
-            onDragCancel = { dragging = false; cancel() },
-            onHorizontalDrag = { change, _ -> change.consume(); target = (change.position.x / size.width).coerceIn(0f, 1f); preview(target) })
+        this[PlayerBufferedProgress] = buffer
+        this[PlayerSeekVisuals] = PlayerSeekVisual(pressed, dragging, thickness.value)
+        stateDescription = "已加载 ${(buffer * 100).toInt()}%"
+        if (enabled) setProgress {
+            if (!it.isFinite()) false else { seek(it.coerceIn(0f, 1f)); true }
+        } else disabled()
+    }.pointerInput(enabled, bounds) {
+        if (!enabled || size.width <= 0) return@pointerInput
+        awaitEachGesture {
+            val down = awaitFirstDown(requireUnconsumed = false)
+            if (down.isConsumed) return@awaitEachGesture
+            val width = size.width.toFloat()
+            val initial = currentProgress
+            val slop = viewConfiguration.touchSlop
+            var previousX = down.position.x
+            var committed = false
+            pressed = true
+            target = initial
+            // Freeze the preview where playback was when the finger landed, never at the touch X.
+            preview(target)
+            try {
+                while (true) {
+                    val event = awaitPointerEvent()
+                    val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                    if (change.isConsumed || event.changes.any { it.id != down.id && it.pressed }) break
+                    val dx = change.position.x - down.position.x
+                    val dy = change.position.y - down.position.y
+                    if (!change.pressed) {
+                        val quickTap = !dragging && change.uptimeMillis - down.uptimeMillis < viewConfiguration.longPressTimeoutMillis &&
+                            kotlin.math.abs(dx) <= slop && kotlin.math.abs(dy) <= slop &&
+                            change.position.x in 0f..width && change.position.y in 0f..size.height.toFloat()
+                        if (dragging || quickTap) {
+                            // A short tap retains direct seeking; holding still only reveals the track.
+                            change.consume()
+                            committed = true
+                            seek(if (dragging) target else (change.position.x / width).coerceIn(0f, 1f))
+                        }
+                        break
+                    }
+                    if (!dragging) {
+                        if (kotlin.math.abs(dy) > slop && kotlin.math.abs(dy) >= kotlin.math.abs(dx)) break
+                        if (kotlin.math.abs(dx) > slop) {
+                            dragging = true
+                            target = (initial + dx / width).coerceIn(0f, 1f)
+                        } else if (change.position.x !in 0f..width || change.position.y !in 0f..size.height.toFloat()) break
+                    } else {
+                        // Accumulate clamped deltas so reversing at either edge responds immediately.
+                        target = (target + (change.position.x - previousX) / width).coerceIn(0f, 1f)
+                    }
+                    previousX = change.position.x
+                    if (dragging) { change.consume(); preview(target) }
+                    // Leave a vertical gesture available to the surrounding player/pager.
+                    val final = awaitPointerEvent(PointerEventPass.Final)
+                    if (!dragging && final.changes.firstOrNull { it.id == down.id }?.isConsumed == true) break
+                }
+            } finally {
+                // Also runs on disable, a new track, rotation or disposal of the player.
+                pressed = false
+                dragging = false
+                if (!committed) cancel()
+            }
+        }
     }) {
         val y = size.height / 2
-        val end = size.width * value.coerceIn(0f, 1f)
+        val end = size.width * if (pressed) target else progress
+        val stroke = thickness.value.dp.toPx()
         val ink = Color.White.copy(alpha = if (enabled) .85f else .28f)
-        drawLine(Color.White.copy(alpha = .18f), Offset(0f, y), Offset(size.width, y), 3.dp.toPx(), StrokeCap.Round)
+        drawLine(Color.White.copy(alpha = .18f), Offset(0f, y), Offset(size.width, y), stroke, StrokeCap.Round)
         if (buffered.value > 0f) drawLine(Color.White.copy(alpha = .42f), Offset(0f, y),
-            Offset(size.width * buffered.value, y), 3.dp.toPx(), StrokeCap.Round)
-        drawLine(ink, Offset(0f, y), Offset(end, y), 3.dp.toPx(), StrokeCap.Round)
-        if (dragging) drawCircle(ink, 6.dp.toPx(), Offset(end, y))
+            Offset(size.width * buffered.value, y), stroke, StrokeCap.Round)
+        drawLine(ink, Offset(0f, y), Offset(end, y), stroke, StrokeCap.Round)
+        if (pressed) drawCircle(ink, 6.dp.toPx(), Offset(end, y))
     }
 }
 
