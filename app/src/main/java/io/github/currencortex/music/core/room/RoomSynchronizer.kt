@@ -19,8 +19,12 @@ class RoomSynchronizer {
         if (!sample.ready) return
         serverAnchor = sample.serverAnchor; monotonicAnchor = sample.monotonicAnchor; bestRtt = sample.bestRtt
     }
+    fun serverNow(now: Long): Long = serverAnchor + (now - monotonicAnchor).coerceAtLeast(0)
+    fun startsIn(timeline: RoomTimeline, now: Long): Long = if (timeline.playing && ready)
+        (timeline.baseAt - serverNow(now)).coerceAtLeast(0) else 0
+    fun shouldPlay(timeline: RoomTimeline, now: Long) = ready && timeline.playing && startsIn(timeline, now) == 0L
     fun position(timeline: RoomTimeline, now: Long): Long = (timeline.basePosition + if (timeline.playing)
-        (serverAnchor + (now - monotonicAnchor).coerceAtLeast(0) - timeline.baseAt).coerceAtLeast(0) else 0).coerceAtLeast(0)
+        (serverNow(now) - timeline.baseAt).coerceAtLeast(0) else 0).coerceAtLeast(0)
     data class Correction(val position: Long, val seek: Boolean, val speed: Float)
     fun correction(timeline: RoomTimeline, now: Long, actual: Long): Correction {
         val position = position(timeline, now); val drift = position - actual
