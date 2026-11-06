@@ -223,7 +223,9 @@ class LyricsSourceSettingsTest {
             val music = MusicRepository(ApiClient({ "http://127.0.0.1:1/" }, { null }, {}))
             suspend fun read(source: LyricsSource, server: String) = CurrentMusicLyricsProvider(music, db.music(), source, { server }).findLyrics(Song(7, "Fixture"))
             assertEquals("Native cached", (read(LyricsSource.NETEASE, "server-a") as LyricsProviderResult.Parsed).document.lines.single().text)
-            assertEquals("Project cached", (read(LyricsSource.CURRENT_MUSIC, "server-a") as LyricsProviderResult.Parsed).document.lines.single().text)
+            // Pre-validation project caches cannot bring a mismatched recording back offline.
+            assertTrue(read(LyricsSource.CURRENT_MUSIC, "server-a") is LyricsProviderResult.Failure)
+            assertNotNull(db.music().lyrics(7, "currentmusic:server-a"))
             assertTrue(read(LyricsSource.CURRENT_MUSIC, "server-b") is LyricsProviderResult.Failure)
         } finally { db.close(); context.deleteDatabase(name) }
     }
