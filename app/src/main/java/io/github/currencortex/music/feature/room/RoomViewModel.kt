@@ -70,13 +70,14 @@ class RoomViewModel(val container: AppContainer) : ViewModel() {
     }
     fun join(room: RoomInfo, password: String) = run { session.join(room, password); passwordRoom.value = null }
     fun create(name: String, password: String, public: Boolean, free: Boolean, needApproval: Boolean = !free, joinLocked: Boolean = false) = run {
+        session.requireCanJoin()
         val expected = container.roomRepository.session()
         val room = container.roomRepository.create(name, password, public, free, expected, needApproval, joinLocked)
         session.join(room, created = true, expected = expected)
     }
     fun leave() = run { session.leave(); load() }
     fun enterOwned(room: RoomCard) = run {
-        check(!session.active) { "请先退出当前房间" }
+        session.requireCanJoin()
         val expected = container.roomRepository.session()
         val info = if (room.archived) container.roomRepository.reopen(room.id, expected)
             else container.roomRepository.detail(room.id, expected).room

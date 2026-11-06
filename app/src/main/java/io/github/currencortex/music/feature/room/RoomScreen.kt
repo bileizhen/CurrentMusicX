@@ -131,7 +131,7 @@ import top.yukonga.miuix.kmp.basic.*
                                 { if (browser.scope == RoomScope.MINE) vm.enterOwned(room) else vm.find(room.code) }, enabled = !busy) })
                         SettingsDivider()
                         SettingsHint(listOf(room.ownerName.takeIf { it.isNotBlank() },
-                            if (room.freeMode) "自由点歌" else "点歌需要审批").filterNotNull().joinToString(" · "))
+                            if (room.freeMode) "自由点歌" else "普通模式").filterNotNull().joinToString(" · "))
                         if (browser.scope == RoomScope.MINE) MusicTextAction("永久删除", { deleteRoom = room to vm.container.roomRepository.session() },
                             Modifier.padding(horizontal = 16.dp, vertical = 8.dp), enabled = !busy)
                     }
@@ -166,7 +166,7 @@ import top.yukonga.miuix.kmp.basic.*
                         MusicCover(track?.pic.orEmpty(), Modifier.size(56.dp), cornerRadius = 16.dp)
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(track?.name ?: "等待点歌", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            Text(track?.artists?.takeIf { it.isNotBlank() } ?: if (detail.room.freeMode) "所有成员都可以点歌" else "点歌通过审批后加入队列",
+                            Text(track?.artists?.takeIf { it.isNotBlank() } ?: if (detail.room.freeMode || !detail.room.needApproval) "所有成员可直接点歌" else "点歌通过审批后加入队列",
                                 fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }

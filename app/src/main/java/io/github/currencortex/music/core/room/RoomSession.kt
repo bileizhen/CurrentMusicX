@@ -35,8 +35,11 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     private var lastRenew = Long.MIN_VALUE
     private val role get() = state.value.detail?.role(userId())
     val active get() = activeId != null
-    suspend fun join(info: RoomInfo, password: String = "", created: Boolean = false, expected: RequestSession = repo.session()) {
+    fun requireCanJoin() {
         check(!active && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听或结束投屏" }
+    }
+    suspend fun join(info: RoomInfo, password: String = "", created: Boolean = false, expected: RequestSession = repo.session()) {
+        requireCanJoin()
         if (expected != repo.session()) throw ApiException(ErrorKind.Unauthorized)
         if (!created) repo.action(info.id, "join", buildJsonObject { put("password", password) }, expected)
         try {
