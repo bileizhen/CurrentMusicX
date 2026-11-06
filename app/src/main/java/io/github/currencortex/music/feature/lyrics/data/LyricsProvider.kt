@@ -8,7 +8,7 @@ fun interface LyricsProvider { suspend fun findLyrics(song: Song): LyricsProvide
 
 sealed interface LyricsProviderResult {
     data class Ttml(val text: String, val key: LyricsKey) : LyricsProviderResult
-    data class Parsed(val document: LyricsDocument) : LyricsProviderResult
+    data class Parsed(val document: LyricsDocument, val expiresAtMillis: Long? = null) : LyricsProviderResult
     data class Failure(val code: LyricsErrorCode, val detail: String) : LyricsProviderResult
 }
 
