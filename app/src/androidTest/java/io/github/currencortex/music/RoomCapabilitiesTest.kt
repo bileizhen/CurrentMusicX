@@ -91,6 +91,189 @@ class RoomCapabilitiesTest {
         compose.waitUntil(10000) { vm.session.state.value.detail != null }
         return vm
     }
+    @Test fun ownedArchivedRoomRequiresDeleteConfirmationAndCanBeRestored() {
+        val deletes = AtomicInteger()
+        val reopens = AtomicInteger()
+        val original = server.dispatcher
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.requestUrl!!.encodedPath
+                return when {
+                    path == "/cm/rooms" && request.requestUrl!!.queryParameter("scope") == "mine" ->
+                        json("""{"rooms":[{"id":1,"code":"001234","name":"Archived fixture","closed_at":1794000000,"archive_reason":"idle"}],"total":1}""")
+                    path == "/cm/rooms/1" && request.method == "DELETE" -> { deletes.incrementAndGet(); json("{}") }
+                    path == "/cm/rooms/1" && reopens.get() == 0 ->
+                        json("""{"room":{"id":1,"code":"001234","name":"Archived fixture","archivedAt":1794000000}}""")
+                    path == "/cm/rooms/1/reopen" -> {
+                        reopens.incrementAndGet(); json("""{"room":{"id":1,"code":"001234","name":"Fixture room","archivedAt":0}}""")
+                    }
+                    else -> original.dispatch(request)
+                }
+            }
+        }
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { RoomScreen(vm, {}, {}, {}) } }
+        compose.onNodeWithText("我的房间").performClick()
+        compose.waitUntil(10000) { vm.browser.value.rooms.firstOrNull()?.archived == true }
+        compose.onNodeWithText("永久删除").performScrollTo().performClick()
+        compose.onNodeWithTag("confirm_delete_room").assertExists()
+        assertEquals(0, deletes.get())
+        compose.onNodeWithTag("confirm_delete_room").performClick()
+        compose.waitUntil(10000) { deletes.get() == 1 && !vm.busy.value }
+        compose.onNodeWithText("恢复并进入").performScrollTo().performClick()
+        compose.waitUntil(10000) { reopens.get() == 1 && vm.session.state.value.detail != null }
+        assertFalse(player.state.value.playing)
+    }
+    @Test fun archivingOwnedRoomRefreshesCardAndCanRestoreWithoutSwitchingTabs() {
+        val archived = java.util.concurrent.atomic.AtomicBoolean(false)
+        val reopens = AtomicInteger()
+        val lists = AtomicInteger()
+        val original = server.dispatcher
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                val path = request.requestUrl!!.encodedPath
+                val stamp = if (archived.get()) 1794000000 else 0
+                return when {
+                    path == "/cm/rooms" -> {
+                        lists.incrementAndGet()
+                        json("""{"rooms":[{"id":1,"code":"001234","name":"Fixture room","closed_at":$stamp}],"total":1}""")
+                    }
+                    path == "/cm/rooms/1" -> json("""{"room":{"id":1,"code":"001234","name":"Fixture room","archivedAt":$stamp},"members":[{"userId":7,"role":"owner"}]}""")
+                    path == "/cm/rooms/1/close" -> { archived.set(true); json("{}") }
+                    path == "/cm/rooms/1/reopen" -> {
+                        archived.set(false); reopens.incrementAndGet()
+                        json("""{"room":{"id":1,"code":"001234","name":"Fixture room","archivedAt":0}}""")
+                    }
+                    path == "/cm/live/1/events" -> MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
+                    else -> original.dispatch(request)
+                }
+            }
+        }
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { RoomScreen(vm, {}, {}, {}) } }
+        compose.waitUntil(10000) { vm.browser.value.rooms.isNotEmpty() && !vm.browser.value.loading }
+        compose.onNodeWithText("我的房间").performClick()
+        compose.waitUntil(10000) { vm.browser.value.scope == io.github.currencortex.music.data.room.RoomScope.MINE && !vm.browser.value.loading }
+        compose.onNodeWithText("加入").performScrollTo().performClick()
+        compose.waitUntil(10000) { vm.session.active && !vm.busy.value }
+        val beforeClose = lists.get()
+        compose.runOnIdle { vm.session.action("close", permission = { it == io.github.currencortex.music.data.room.RoomRole.OWNER }) }
+        compose.waitUntil(10000) { !vm.session.active && !vm.browser.value.loading && vm.browser.value.rooms.firstOrNull()?.archived == true }
+        assertTrue(lists.get() > beforeClose)
+        assertEquals(io.github.currencortex.music.data.room.RoomScope.MINE, vm.browser.value.scope)
+        compose.onNodeWithText("恢复并进入").performScrollTo().performClick()
+        compose.waitUntil(10000) { vm.session.active && !vm.busy.value }
+        assertEquals(1, reopens.get())
+        assertFalse(player.state.value.playing)
+    }
+    @Test fun staleActiveCardReopensRoomArchivedOnAnotherDevice() = checkOwnedEntryUsesFreshState(true, false)
+    @Test fun staleArchivedCardJoinsRoomAlreadyRestoredOnAnotherDevice() = checkOwnedEntryUsesFreshState(false, true)
+    private fun checkOwnedEntryUsesFreshState(serverArchived: Boolean, cardArchived: Boolean) {
+        val archived = java.util.concurrent.atomic.AtomicBoolean(serverArchived)
+        val reopens = AtomicInteger()
+        val joins = AtomicInteger()
+        val original = server.dispatcher
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
+                "/cm/rooms/1" -> json("""{"room":{"id":1,"code":"001234","name":"Fixture room","archivedAt":${if (archived.get()) 1794000000 else 0}},"members":[{"userId":7,"role":"owner"}]}""")
+                "/cm/rooms/1/reopen" -> {
+                    reopens.incrementAndGet(); archived.set(false)
+                    json("""{"room":{"id":1,"code":"001234","name":"Fixture room","archivedAt":0}}""")
+                }
+                "/cm/rooms/1/join" -> { joins.incrementAndGet(); if (archived.get()) MockResponse().setResponseCode(404) else json("{}") }
+                "/cm/live/1/events" -> MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)
+                else -> original.dispatch(request)
+            }
+        }
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { RoomScreen(vm, {}, {}, {}) } }
+        compose.waitUntil(10000) { vm.browser.value.rooms.isNotEmpty() && !vm.browser.value.loading }
+        compose.runOnIdle {
+            vm.enterOwned(io.github.currencortex.music.data.room.RoomCard("1", closedAt = if (cardArchived) 1794000000 else 0))
+        }
+        compose.waitUntil(10000) { vm.session.active && !vm.busy.value }
+        assertEquals(if (serverArchived) 1 else 0, reopens.get())
+        assertEquals(if (serverArchived) 0 else 1, joins.get())
+    }
+    @Test fun castingBlocksRoomCreationAndRestorationBeforeAnyWrite() {
+        val writes = AtomicInteger()
+        val original = server.dispatcher
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.method == "POST" && (request.requestUrl!!.encodedPath == "/cm/rooms" || request.requestUrl!!.encodedPath.endsWith("/reopen")))
+                    writes.incrementAndGet()
+                return original.dispatch(request)
+            }
+        }
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { RoomScreen(vm, {}, {}, {}) } }
+        compose.waitUntil(10000) { vm.browser.value.rooms.isNotEmpty() }
+        compose.runOnIdle {
+            player.state.value = player.state.value.copy(mode = PlayerMode.CAST)
+            vm.create("Blocked", "", true, false)
+        }
+        compose.waitUntil(5000) { !vm.busy.value && vm.browser.value.error != null }
+        compose.runOnIdle { vm.enterOwned(io.github.currencortex.music.data.room.RoomCard("1", closedAt = 1)) }
+        compose.waitUntil(5000) { !vm.busy.value && vm.browser.value.error != null }
+        assertEquals(0, writes.get())
+        assertEquals(PlayerMode.CAST, player.state.value.mode)
+    }
+    @Test fun deletionRejectsSessionChangedSinceConfirmationOpened() {
+        val deletes = AtomicInteger()
+        val original = server.dispatcher
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse {
+                if (request.method == "DELETE") deletes.incrementAndGet()
+                return original.dispatch(request)
+            }
+        }
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { RoomScreen(vm, {}, {}, {}) } }
+        compose.waitUntil(10000) { vm.browser.value.rooms.isNotEmpty() }
+        compose.runOnIdle {
+            vm.browser.value = vm.browser.value.copy(scope = io.github.currencortex.music.data.room.RoomScope.MINE)
+            val current = container.roomRepository.session()
+            val stale = io.github.currencortex.music.core.network.RequestSession(current.server,
+                "stale-confirmation-token", current.neteaseRevision)
+            vm.deleteOwned(vm.browser.value.rooms.first(), stale)
+        }
+        compose.waitUntil(5000) { !vm.busy.value && vm.browser.value.error != null }
+        assertEquals(0, deletes.get())
+    }
+    @Test fun switchingRoomsCancelsSlowBanListAndLoadsNewRoomImmediately() {
+        val firstStarted = java.util.concurrent.CountDownLatch(1)
+        val releaseFirst = java.util.concurrent.CountDownLatch(1)
+        val secondRequests = AtomicInteger()
+        val original = server.dispatcher
+        server.dispatcher = object : Dispatcher() {
+            override fun dispatch(request: RecordedRequest): MockResponse = when (request.requestUrl!!.encodedPath) {
+                "/cm/rooms/1/bans" -> {
+                    firstStarted.countDown(); releaseFirst.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                    json("""{"bans":[{"userId":1,"nickname":"Old room ban"}]}""")
+                }
+                "/cm/rooms/2/bans" -> { secondRequests.incrementAndGet(); json("""{"bans":[{"userId":2,"nickname":"New room ban"}]}""") }
+                else -> original.dispatch(request)
+            }
+        }
+        val vm = RoomViewModel(container)
+        compose.setContent { LeiTheme(AppearanceSettings(blur = false)) { RoomScreen(vm, {}, {}, {}) } }
+        compose.waitUntil(10000) { vm.browser.value.rooms.isNotEmpty() }
+        fun detail(id: String) = io.github.currencortex.music.data.room.RoomDetail(
+            io.github.currencortex.music.data.room.RoomInfo(id),
+            members = listOf(io.github.currencortex.music.data.room.RoomMember(7, role = "owner")))
+        try {
+            compose.runOnIdle { vm.session.state.value = vm.session.state.value.copy(detail = detail("1")); vm.loadBans() }
+            assertTrue(firstStarted.await(3, java.util.concurrent.TimeUnit.SECONDS))
+            compose.runOnIdle {
+                vm.session.state.value = vm.session.state.value.copy(detail = detail("2"))
+                vm.loadBans()
+            }
+            compose.waitUntil(5000) { secondRequests.get() == 1 && vm.bans.value.bans.firstOrNull()?.userId == 2L }
+            releaseFirst.countDown()
+            compose.waitForIdle()
+            assertEquals("New room ban", vm.bans.value.bans.single().nickname)
+        } finally { releaseFirst.countDown() }
+    }
     @Test fun ownerApprovesRequestAndExitRestoresLocalQueuePaused() {
         val vm = show()
         compose.onNodeWithText("通过").performClick()
