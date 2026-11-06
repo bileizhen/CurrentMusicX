@@ -44,7 +44,7 @@ class RoomManagementContractTest {
             server.takeRequest().let { assertEquals("DELETE", it.method); assertEquals("/cm/rooms/12/bans/9", it.path) }
             server.enqueue(MockResponse().setBody("{}")); repo.delete("12", expected)
             server.takeRequest().let { assertEquals("DELETE", it.method); assertEquals("/cm/rooms/12", it.path) }
-            session = session.copy(token = "replacement")
+            session = RequestSession(session.server, "replacement", session.neteaseRevision)
             assertTrue(appResult { repo.delete("12", expected) } is AppResult.Failure)
             assertNull(server.takeRequest(100, java.util.concurrent.TimeUnit.MILLISECONDS))
         }
