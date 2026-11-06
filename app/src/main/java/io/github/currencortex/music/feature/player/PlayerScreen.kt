@@ -360,7 +360,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlayerOverlay.LYRICS_MANAGEMENT -> queue.current?.let { PlayerLyricsManagementDialog(vm.container, it, dismiss) }
             PlayerOverlay.SHARE -> queue.current?.let { io.github.currencortex.music.feature.share.SongShareDialog(it, dismiss) }
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) },
-                commentComposer, vm::editComment, vm::replyTo, vm::sendComment)
+                commentComposer, vm::onCommentEdited, vm::replyTo, vm::sendComment)
             PlayerOverlay.QUEUE -> Unit
             PlayerOverlay.ROAMING -> io.github.currencortex.music.feature.roaming.PersonalRoamingDialog(vm.container, dismiss) {
                 onAiNavigate("user/binding")

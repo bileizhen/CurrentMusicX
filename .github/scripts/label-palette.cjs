@@ -2,7 +2,12 @@
 
 // CurrentMusicX · Aurora / 曜光配色
 // Hex without #, as required by GitHub's label API.
-// Keep names and descriptions unchanged; only recolor existing labels.
+const STATUS_LABELS = Object.freeze({
+  'status: investigating': {color: '9987C5', description: '正在复现问题或排查原因'},
+  'status: in progress': {color: '5998CD', description: '已开始处理，正在实现修复或改进'},
+  'status: blocked': {color: 'D79B63', description: '等待依赖或前置条件，暂时无法继续处理'},
+  'status: needs verification': {color: '65AD9B', description: '修复已就绪，等待复测确认结果'},
+});
 const COLORS = Object.freeze({
   'risk: low': '3AAE95',
   'risk: medium': 'D5A34F',
@@ -56,6 +61,7 @@ const FALLBACK = Object.freeze(['8194B0','8AA7A8','A196BC','A8A27F','B49BA4','90
 function labelColor(name) {
   if (typeof name !== 'string' || !name.trim()) throw new Error('Label name must be nonempty');
   const key=name.trim().toLowerCase();
+  if (Object.hasOwn(STATUS_LABELS,key)) return STATUS_LABELS[key].color;
   if (Object.hasOwn(COLORS,key)) return COLORS[key];
   if (key.startsWith('risk:')) return 'B67E81';
   if (key.startsWith('module:')) return '8C9BBB';
@@ -70,4 +76,4 @@ function colorChanges(labels) {
     String(item.color||'').toLowerCase()!==labelColor(item.name).toLowerCase())
     .map(item=>({name:item.name,before:item.color,after:labelColor(item.name)}));
 }
-module.exports={COLORS,labelColor,colorChanges};
+module.exports={COLORS,STATUS_LABELS,labelColor,colorChanges};
