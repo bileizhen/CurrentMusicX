@@ -6,6 +6,8 @@ import io.github.currencortex.music.ui.component.nativeui.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -162,8 +164,8 @@ private fun postTime(seconds: Long): String {
     }
     if (state.editor) PostEditorScreen(vm, state)
     if (state.commentsFor != null && deletingComment == null) {
-        var reply by rememberSaveable(state.commentsFor, account.account?.id) { mutableStateOf("") }
-        LaunchedEffect(state.message) { if (state.message == "评论已发布") reply = "" }
+        val reply = rememberSaveable(state.commentsFor, account.account?.id, saver = TextFieldState.Saver) { TextFieldState() }
+        LaunchedEffect(state.message) { if (state.message == "评论已发布") reply.clearText() }
         MusicDialog("评论", { vm.comments(null) }) {
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 340.dp).testTag("post_comment_list"), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 if (state.commentsLoading) item { Text("正在加载评论…") }
@@ -186,10 +188,10 @@ private fun postTime(seconds: Long): String {
             }
             state.message?.let { Text(it, fontSize = 12.sp) }
             if (account.account != null) {
-                TextField(reply, { reply = it }, Modifier.fillMaxWidth().testTag("post_reply"))
+                TextField(state = reply, modifier = Modifier.fillMaxWidth().testTag("post_reply"), readOnly = state.busy)
                 MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     MusicDialogButton("关闭", { vm.comments(null) }, modifier = Modifier.weight(1f))
-                    MusicDialogButton("发送", { vm.sendComment(reply) }, enabled = !state.busy && reply.isNotBlank(),
+                    MusicDialogButton("发送", { vm.sendComment(reply.text.toString()) }, enabled = !state.busy && reply.text.isNotBlank(),
                         modifier = Modifier.weight(1f).testTag("post_reply_send"))
                 }
             } else MusicTextAction("登录后评论", { vm.comments(null); navigate("user/login") })
