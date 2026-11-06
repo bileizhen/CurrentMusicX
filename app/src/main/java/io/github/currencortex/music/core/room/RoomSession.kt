@@ -46,8 +46,11 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     private var lastRecovery = Long.MIN_VALUE
     private val role get() = state.value.detail?.role(userId())
     val active get() = activeId != null
-    suspend fun join(info: RoomInfo, password: String = "", created: Boolean = false, expected: RequestSession = repo.session()) {
+    fun requireCanJoin() {
         check(!active && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听或结束投屏" }
+    }
+    suspend fun join(info: RoomInfo, password: String = "", created: Boolean = false, expected: RequestSession = repo.session()) {
+        requireCanJoin()
         if (expected != repo.session()) throw ApiException(ErrorKind.Unauthorized)
         if (!created) repo.action(info.id, "join", buildJsonObject { put("password", password) }, expected)
         try {
@@ -142,6 +145,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
             }
             return@withLock
         }
+        if (detail.room.archived) { disconnect("房间已归档，可从我的房间恢复"); return@withLock }
         if (detail.role(userId()) == null) { disconnect("你已不在此房间"); return@withLock }
         seq = detail.latestSeq
         lastId = seq.toString()
@@ -215,7 +219,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
         if (action in setOf("play", "pause", "seek")) cancelAdvanceRetry()
         command(action, id, expected, { permission(role) }) {
             repo.action(id, action, fields, expected)
-            if (action == "close") disconnect("房间已关闭")
+            if (action == "close") disconnect("房间已归档，可从我的房间恢复")
         }
     }
     fun queueAction(item: RoomQueueItem, action: String) {
@@ -227,6 +231,14 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
             { if (action == "remove") RoomPermissions.remove(role, item) else role?.controls == true }) {
             repo.queueAction(id, item.id, action, expected)
         }
+    }
+    fun reorder(item: RoomQueueItem, index: Int) {
+        val id = activeId ?: return; val expected = session ?: return
+        fun permitted() = role?.controls == true && state.value.detail?.queue?.any {
+            it.id == item.id && it.status == "approved"
+        } == true
+        if (!permitted()) return
+        command("queue:${item.id}", id, expected, ::permitted) { repo.reorder(id, item.id, index, expected) }
     }
     private fun command(key: String, id: String, expected: RequestSession, permitted: () -> Boolean,
         onFailure: (() -> Unit)? = null, write: suspend () -> Unit) {
