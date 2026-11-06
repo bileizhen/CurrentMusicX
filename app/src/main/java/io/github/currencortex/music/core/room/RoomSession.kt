@@ -124,6 +124,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
         val detail = repo.detail(id, expected)
         if (activeId != id || expected != session || expected != repo.session()) return@withLock
         if (detail.latestSeq < seq) return@withLock
+        if (detail.room.archived) { disconnect("房间已归档，可从我的房间恢复"); return@withLock }
         if (detail.role(userId()) == null) { disconnect("你已不在此房间"); return@withLock }
         seq = maxOf(seq, detail.latestSeq)
         state.update { it.copy(detail = detail) }; applyTimeline()
@@ -172,7 +173,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
         if (!permission(role)) { state.update { it.copy(error = "没有操作权限") }; return }
         command(action, id, expected, { permission(role) }) {
             repo.action(id, action, fields, expected)
-            if (action == "close") disconnect("房间已关闭")
+            if (action == "close") disconnect("房间已归档，可从我的房间恢复")
         }
     }
     fun queueAction(item: RoomQueueItem, action: String) {
@@ -184,6 +185,14 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
             { if (action == "remove") RoomPermissions.remove(role, item) else role?.controls == true }) {
             repo.queueAction(id, item.id, action, expected)
         }
+    }
+    fun reorder(item: RoomQueueItem, index: Int) {
+        val id = activeId ?: return; val expected = session ?: return
+        fun permitted() = role?.controls == true && state.value.detail?.queue?.any {
+            it.id == item.id && it.status == "approved"
+        } == true
+        if (!permitted()) return
+        command("queue:${item.id}", id, expected, ::permitted) { repo.reorder(id, item.id, index, expected) }
     }
     private fun command(key: String, id: String, expected: RequestSession, permitted: () -> Boolean, write: suspend () -> Unit) {
         if (key in state.value.pendingActions) return

@@ -51,9 +51,18 @@ enum class RoomRole { OWNER, ADMIN, MEMBER;
     @Serializable(with = RoomBooleanSerializer::class) val freeMode: Boolean = false,
     @Serializable(with = RoomBooleanSerializer::class) val isPublic: Boolean = true,
     @Serializable(with = RoomBooleanSerializer::class) val joinLocked: Boolean = false,
-    @Serializable(with = RoomBooleanSerializer::class) val needApproval: Boolean = true)
+    @Serializable(with = RoomBooleanSerializer::class) val needApproval: Boolean = true,
+    val archivedAt: Long = 0, val archiveReason: String? = null) {
+    val archived get() = archivedAt > 0
+}
 @Serializable data class RoomCard(@Serializable(with = RoomIdSerializer::class) val id: String, val name: String = "", val code: String = "", val online: Int = 0,
-    @SerialName("owner_name") val ownerName: String = "", @SerialName("free_mode") @Serializable(with = RoomBooleanSerializer::class) val freeMode: Boolean = false)
+    @SerialName("owner_name") val ownerName: String = "", @SerialName("free_mode") @Serializable(with = RoomBooleanSerializer::class) val freeMode: Boolean = false,
+    @SerialName("closed_at") val closedAt: Long? = null, @SerialName("archive_reason") val archiveReason: String? = null) {
+    val archived get() = (closedAt ?: 0) > 0
+}
+enum class RoomScope(val query: String) { PUBLIC("public"), MINE("mine") }
+@Serializable data class RoomBan(val userId: Long, val nickname: String = "", val reason: String = "", val createdAt: Long = 0)
+@Serializable data class RoomBansDto(val bans: List<RoomBan> = emptyList())
 @Serializable data class RoomsDto(val rooms: List<RoomCard> = emptyList(), val total: Int = 0)
 @Serializable data class RoomMember(val userId: Long, val nickname: String = "", val avatar: String = "",
     val avatarDecoration: String = "", val role: String = "member")
