@@ -18,7 +18,8 @@ data class RoomSessionState(val detail: RoomDetail? = null, val connecting: Bool
 class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClient,
     private val player: ExternalPlayer, private val scope: CoroutineScope,
     private val userId: () -> Long, private val expire: (RequestSession) -> Unit,
-    private val monotonic: () -> Long = { android.os.SystemClock.elapsedRealtime() }) : ExternalPlayback {
+    private val monotonic: () -> Long = { android.os.SystemClock.elapsedRealtime() },
+    private val recoveryIntervalMs: Long = 10_000) : ExternalPlayback {
     val state = MutableStateFlow(RoomSessionState())
     private var session: RequestSession? = null
     private var activeId: String? = null
@@ -30,9 +31,19 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     private var generation = 0L
     private var seq = 0L
     private var lastId: String? = null
-    private var loaded: Pair<Long, String>? = null
-    private var advanced: Long? = null
+    private var loaded: Triple<Long, String, Long?>? = null
+    private var scheduledStart: Job? = null
+    private data class AdvanceState(val track: Long, val revision: Long?, val position: Long, val anchor: Long, val playing: Boolean)
+    private fun RoomTimeline.advanceState() = AdvanceState(trackNcmId, trackRevision, basePosition, baseAt, playing)
+    private var advanced: AdvanceState? = null
+    private var advanceIntent = 0L
+    private var advanceRetry: Job? = null
     private var lastRenew = Long.MIN_VALUE
+    private fun RoomTimeline.recoveryIdentity() = trackNcmId to trackRevision
+    private var recoveryTrack: Pair<Long, Long?>? = null
+    private var recoveryJob: Job? = null
+    private var recoveryRevision = 0L
+    private var lastRecovery = Long.MIN_VALUE
     private val role get() = state.value.detail?.role(userId())
     val active get() = activeId != null
     suspend fun join(info: RoomInfo, password: String = "", created: Boolean = false, expected: RequestSession = repo.session()) {
@@ -55,7 +66,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
                     applyTimeline()
                     launch { while (isActive) { delay(15_000); val result = appResult { repo.action(info.id, "heartbeat", expected = expected) }
                         if (result is AppResult.Failure) state.update { it.copy(error = "房间心跳失败：${result.kind.message}") } } }
-                    launch { while (isActive) { delay(1000); when(val result = appResult { align() }) {
+                    launch { while (isActive) { delay(state.value.detail?.timeline?.let { clock.startsIn(it, monotonic()).takeIf { wait -> wait > 0 }?.coerceAtMost(1000) } ?: 1000); when(val result = appResult { align() }) {
                         is AppResult.Failure -> state.update { it.copy(error = "同步播放失败：${result.kind.message}") }; else -> Unit } } }
                     launch { while (isActive) { delay(60_000); calibrate(info.id, expected) } }
                     var backoff = 1000L
@@ -69,6 +80,8 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
                                     }
                                     is RoomSignal.Event -> {
                                         val raw = runCatching { ApiJson.parseToJsonElement(signal.data) as? JsonObject }.getOrNull() ?: return@collect
+                                        // reset may carry the same/older sequence as our cursor.
+                                        if (signal.type == "reset") { refresh(reset = true); return@collect }
                                         val next = raw["seq"]?.jsonPrimitive?.longOrNull
                                         if (next != null && next <= seq) return@collect
                                         val payload = (raw["payload"] as? JsonObject) ?: raw
@@ -77,7 +90,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
                                             ApiJson.decodeFromJsonElement<RoomTimeline>(it)
                                         }
                                         if (next != null) seq = next
-                                        lastId = signal.id ?: lastId
+                                        lastId = next?.toString() ?: signal.id ?: lastId
                                         backoff = 1000
                                         if (signal.type == "close" || signal.type == "kick" && payload["userId"]?.jsonPrimitive?.longOrNull == userId()) {
                                             disconnect("已离开房间"); return@collect
@@ -119,13 +132,20 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
         }
         if (activeId == id && session == expected) clock.replaceWith(samples)
     }
-    suspend fun refresh() = refreshMutex.withLock {
+    suspend fun refresh(reset: Boolean = false, reloadTrack: Pair<Long, Long?>? = null) = refreshMutex.withLock {
         val id = activeId ?: return@withLock; val expected = session ?: return@withLock
         val detail = repo.detail(id, expected)
         if (activeId != id || expected != session || expected != repo.session()) return@withLock
-        if (detail.latestSeq < seq) return@withLock
+        if (!reset && detail.latestSeq < seq) {
+            if (reloadTrack != null && state.value.detail?.timeline?.recoveryIdentity() == reloadTrack) {
+                loaded = null; applyTimeline()
+            }
+            return@withLock
+        }
         if (detail.role(userId()) == null) { disconnect("你已不在此房间"); return@withLock }
-        seq = maxOf(seq, detail.latestSeq)
+        seq = detail.latestSeq
+        lastId = seq.toString()
+        if (reloadTrack != null && detail.timeline?.recoveryIdentity() == reloadTrack) loaded = null
         state.update { it.copy(detail = detail) }; applyTimeline()
     }
     fun dismissError() { state.update { it.copy(error = null) } }
@@ -145,13 +165,33 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     private suspend fun applyTimeline() {
         publishPermission()
         val timeline = state.value.detail?.timeline
+        if (recoveryTrack != null && timeline?.recoveryIdentity() != recoveryTrack) {
+            recoveryTrack = null
+            val previous = recoveryJob; recoveryJob = null
+            // A recovery fetch can discover a new track; let that fetch finish applying it.
+            if (currentCoroutineContext()[Job] !== previous) previous?.cancel()
+        }
         val url = timeline?.stream?.url?.takeIf { it.toHttpUrlOrNull() != null }
-        val key = if (timeline != null && timeline.trackNcmId > 0 && url != null) timeline.trackNcmId to url else null
+        val key = if (timeline != null && timeline.trackNcmId > 0 && url != null) Triple(timeline.trackNcmId, url, timeline.trackRevision) else null
         if (key != loaded) {
             loaded = key
             player.roomTrack(key?.let { timeline!!.trackMeta?.song(it.first) ?: Song(it.first, "房间歌曲") }, key?.second,
-                timeline?.let { target(it) } ?: 0, timeline?.playing == true)
+                timeline?.let { target(it) } ?: 0, timeline?.let { clock.shouldPlay(it, monotonic()) } == true)
             publishPermission()
+        }
+        scheduledStart?.cancel()
+        val wait = timeline?.let { clock.startsIn(it, monotonic()) } ?: 0
+        if (wait > 0) {
+            val epoch = generation
+            scheduledStart = scope.launch {
+                delay(wait)
+                if (epoch == generation && state.value.detail?.timeline == timeline) {
+                    when (val result = appResult { align() }) {
+                        is AppResult.Failure -> if (epoch == generation) state.update { it.copy(error = "同步播放失败：${result.kind.message}") }
+                        else -> Unit
+                    }
+                }
+            }
         }
         align()
     }
@@ -162,14 +202,17 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     private fun target(tl: RoomTimeline) = if (clock.ready) clock.position(tl, monotonic()) else tl.basePosition
     private suspend fun align() {
         val tl = state.value.detail?.timeline ?: return
+        if (clock.ready && tl.trackNcmId > 0 && (tl.stream?.url.isNullOrBlank() ||
+            (tl.stream?.expireAt ?: 0) > 0 && tl.stream!!.expireAt - clock.serverNow(monotonic()) <= 60_000)) renewStream()
         if (!clock.ready || loaded == null || player.state.value.loading) return
         val correction = clock.correction(tl, monotonic(), player.state.value.positionMs)
         state.update { it.copy(driftMs = correction.position - player.state.value.positionMs) }
-        player.roomCorrection(correction.position, correction.seek, correction.speed, tl.playing)
+        player.roomCorrection(correction.position, correction.seek, correction.speed, clock.shouldPlay(tl, monotonic()))
     }
     fun action(action: String, fields: JsonObject = buildJsonObject {}, permission: (RoomRole?) -> Boolean = { it?.controls == true }) {
         val id = activeId ?: return; val expected = session ?: return
         if (!permission(role)) { state.update { it.copy(error = "没有操作权限") }; return }
+        if (action in setOf("play", "pause", "seek")) cancelAdvanceRetry()
         command(action, id, expected, { permission(role) }) {
             repo.action(id, action, fields, expected)
             if (action == "close") disconnect("房间已关闭")
@@ -185,7 +228,8 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
             repo.queueAction(id, item.id, action, expected)
         }
     }
-    private fun command(key: String, id: String, expected: RequestSession, permitted: () -> Boolean, write: suspend () -> Unit) {
+    private fun command(key: String, id: String, expected: RequestSession, permitted: () -> Boolean,
+        onFailure: (() -> Unit)? = null, write: suspend () -> Unit) {
         if (key in state.value.pendingActions) return
         val epoch = generation
         fun valid() = generation == epoch && activeId == id && session == expected && repo.session() == expected
@@ -198,7 +242,10 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
                     write()
                 } }
                 if (!valid()) return@launch
-                if (result is AppResult.Failure) state.update { it.copy(error = result.kind.message) }
+                if (result is AppResult.Failure) {
+                    state.update { it.copy(error = result.kind.message) }
+                    onFailure?.invoke()
+                }
                 else if (appResult { refresh() } is AppResult.Failure && valid())
                     state.update { it.copy(error = "操作已提交，房间刷新失败，请刷新查看") }
             } finally { if (valid()) state.update { it.copy(pendingActions = it.pendingActions - key) } }
@@ -222,19 +269,104 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     override fun request(song: Song) { scope.launch { submit(song) } }
     override fun play(playing: Boolean) = action(if (playing) "play" else "pause", buildJsonObject { if (playing) put("position", player.state.value.positionMs) })
     override fun seek(position: Long) = action("seek", buildJsonObject { put("position", position) })
-    override fun next() = action("next")
-    override fun previous() = action("prev")
+    private fun cancelAdvanceRetry() {
+        advanceIntent++
+        advanceRetry?.cancel(); advanceRetry = null
+    }
+    private fun changeTrack(action: String, automatic: Boolean = false) {
+        val id = activeId ?: return; val expected = session ?: return
+        val timeline = state.value.detail?.timeline
+        if (role?.controls != true) { state.update { it.copy(error = "没有操作权限") }; return }
+        val revision = timeline?.trackRevision
+        val identity = timeline?.advanceState()
+        if (!automatic) cancelAdvanceRetry()
+        val intent = advanceIntent
+        fun stillEnded() = activeId == id && session == expected && repo.session() == expected &&
+            intent == advanceIntent && role?.controls == true &&
+            state.value.detail?.timeline?.advanceState() == identity
+        command(action, id, expected, { role?.controls == true && (!automatic || stillEnded()) }, onFailure = {
+            // Retrying an ambiguous POST is safe only with the server's revision guard.
+            if (automatic && revision != null && stillEnded() && advanceRetry?.isActive != true) {
+                val epoch = generation
+                advanceRetry = scope.launch {
+                    var retryDelay = 5000L
+                    while (isActive && epoch == generation && stillEnded()) {
+                        delay(retryDelay)
+                        if (epoch != generation || !stillEnded()) return@launch
+                        val refreshed = appResult { refresh() }
+                        if (epoch != generation || !stillEnded()) return@launch
+                        if (refreshed is AppResult.Success) {
+                            advanced = null; advanceRetry = null; ended()
+                            return@launch
+                        }
+                        if (refreshed is AppResult.Failure && refreshed.kind in setOf(
+                                ErrorKind.Unauthorized, ErrorKind.Forbidden, ErrorKind.NotFound)) return@launch
+                        // A temporary snapshot failure must not permanently strand an ended track.
+                        retryDelay = (retryDelay * 2).coerceAtMost(30_000)
+                    }
+                }
+            }
+        }) {
+            repo.action(id, action, buildJsonObject { revision?.let { put("trackRevision", it) } }, expected)
+        }
+        if (automatic) advanced = identity
+    }
+    override fun next() = changeTrack("next")
+    override fun previous() = changeTrack("prev")
     override fun ended() {
         val timeline = state.value.detail?.timeline ?: return
-        // Only the owner advances automatically; administrators can still advance explicitly.
-        if (role == RoomRole.OWNER && timeline.playing && advanced != timeline.baseAt) {
-            advanced = timeline.baseAt; next()
+        if (role?.controls == true && timeline.playing && advanced != timeline.advanceState()) {
+            changeTrack("next", automatic = true)
         }
     }
     override fun failed() {
+        val timeline = state.value.detail?.timeline?.takeIf { it.trackNcmId > 0 } ?: return
+        val id = activeId ?: return; val expected = session ?: return
+        val track = timeline.recoveryIdentity()
+        if (recoveryTrack != track) {
+            recoveryJob?.cancel(); recoveryJob = null
+            recoveryTrack = track; lastRecovery = Long.MIN_VALUE
+        }
+        recoveryRevision++
+        if (recoveryJob?.isActive == true) return
+        val epoch = generation
+        fun valid() = generation == epoch && activeId == id && session == expected && repo.session() == expected &&
+            role != null && recoveryTrack == track && state.value.detail?.timeline?.recoveryIdentity() == track
+        val recovery = scope.launch(start = CoroutineStart.LAZY) {
+            try {
+                while (isActive && valid()) {
+                    if (lastRecovery != Long.MIN_VALUE) {
+                        delay((recoveryIntervalMs - (monotonic() - lastRecovery)).coerceAtLeast(1))
+                    }
+                    // Keep the failed-prepare request while a proactive renewal is in flight.
+                    state.first { "stream/renew" !in it.pendingActions }
+                    if (!valid()) return@launch
+                    renewStream()
+                    state.first { "stream/renew" !in it.pendingActions }
+                    if (!valid()) return@launch
+                    lastRecovery = monotonic()
+                    val attempt = recoveryRevision
+                    when (val result = appResult { refresh(reloadTrack = track) }) {
+                        is AppResult.Success -> if (valid() && attempt == recoveryRevision) {
+                            return@launch
+                        }
+                        is AppResult.Failure -> if (valid()) {
+                            state.update { it.copy(error = "房间音频恢复失败：${result.kind.message}") }
+                            if (result.kind in setOf(ErrorKind.Unauthorized, ErrorKind.Forbidden, ErrorKind.NotFound)) return@launch
+                        }
+                    }
+                }
+            } finally {
+                if (recoveryJob === currentCoroutineContext()[Job]) recoveryJob = null
+            }
+        }
+        recoveryJob = recovery
+        recovery.start()
+    }
+    private fun renewStream() {
         val now = monotonic()
         if (lastRenew != Long.MIN_VALUE && now - lastRenew < 10_000) return
-        lastRenew = now; loaded = null
+        lastRenew = now
         action("stream/renew", permission = { it != null })
     }
     override fun stop() { scope.launch { leave() } }
@@ -246,6 +378,9 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     }
     fun disconnect(message: String? = null) {
         generation++
+        advanceRetry?.cancel(); advanceRetry = null
+        scheduledStart?.cancel(); scheduledStart = null
+        recoveryJob?.cancel(); recoveryJob = null; recoveryTrack = null
         job?.cancel(); job = null; activeId = null; session = null; loaded = null
         player.endExternal(this); state.value = RoomSessionState(error = message)
     }
