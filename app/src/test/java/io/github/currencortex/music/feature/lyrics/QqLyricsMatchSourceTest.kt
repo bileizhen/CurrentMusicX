@@ -104,6 +104,73 @@ class QqLyricsMatchSourceTest {
         } finally { server.shutdown() }
     }
 
+    @Test fun emptyCatalogueSubcodeRetriesTheTitleWithoutAllArtistsOrAlbum() = runBlocking {
+        val server = MockWebServer()
+        try {
+            // Public QQ response for the screenshot's combined title/artist query.
+            server.enqueue(MockResponse().setBody("""{"code":0,"subcode":10003,"message":"no results","data":{"song":{"list":[]}}}"""))
+            server.enqueue(MockResponse().setBody("""{"code":0,"data":{"song":{"list":[{"songmid":"$mid","songname":"MONTAGEM BYE","singer":[{"name":"Another artist"}]}]}}}"""))
+            server.start()
+            val result = source(server).search("MONTAGEM BYE - broken / Trispect / Su7N1_Regret - Album").single()
+            assertEquals(mid, result.id)
+            // Retain the catalogue identity so the matching gate can reject a different recording.
+            assertEquals("Another artist", result.artists)
+            assertEquals("MONTAGEM BYE broken / Trispect / Su7N1_Regret", server.takeRequest().requestUrl!!.queryParameter("w"))
+            val fallback = server.takeRequest()
+            assertEquals("MONTAGEM BYE", fallback.requestUrl!!.queryParameter("w"))
+            assertNull(fallback.getHeader("Cookie")); assertNull(fallback.getHeader("Authorization"))
+            assertEquals(2, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
+    @Test fun emptySearchesStopAfterDistinctTitleFallbackAndDoNotRepeatFreeText() = runBlocking {
+        val server = MockWebServer()
+        try {
+            server.enqueue(MockResponse().setBody("""{"code":0,"subcode":0,"data":{"song":{"list":[]}}}"""))
+            repeat(2) {
+                server.enqueue(MockResponse().setBody("""{"code":0,"subcode":10003,"data":{"song":{"list":[]}}}"""))
+            }
+            server.start()
+            assertTrue(source(server).search("Missing - Singer").isEmpty())
+            assertEquals(2, server.requestCount)
+            assertTrue(source(server).search("Missing").isEmpty())
+            assertEquals(3, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
+    @Test fun subcode10003IsNotIgnoredForMalformedNonemptyOrRejectedSearchesOrLyrics() = runBlocking {
+        val server = MockWebServer()
+        try {
+            val invalid = listOf(
+                """{"code":10003,"data":{"song":{"list":[]}}}""",
+                """{"code":0,"subcode":10003,"data":{}}""",
+                """{"code":0,"subcode":10003,"data":{"song":{"list":[{"songmid":"$mid","songname":"Fixture"}]}}}""",
+                """{"code":0,"retcode":2001,"subcode":10003,"data":{"song":{"list":[]}}}""",
+                """{"code":0,"subcode":2001,"data":{"song":{"list":[]}}}"""
+            )
+            invalid.forEach { server.enqueue(MockResponse().setBody(it)) }
+            server.enqueue(MockResponse().setBody("""{"code":0,"subcode":10003,"lyric":"[00:01]Wrong"}"""))
+            server.start()
+            invalid.forEachIndexed { index, _ ->
+                assertTrue(runCatching { source(server).search("Fixture - Singer") }.exceptionOrNull() is LyricsMatchException)
+                assertEquals(index + 1, server.requestCount)
+            }
+            assertTrue(runCatching { source(server).load(candidate()) }.exceptionOrNull()!!.message!!.contains("10003"))
+            assertEquals(invalid.size + 1, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
+    @Test fun titleFallbackFailureIsNotHiddenByTheFirstEmptyResult() = runBlocking {
+        val server = MockWebServer()
+        try {
+            server.enqueue(MockResponse().setBody("""{"code":0,"subcode":10003,"data":{"song":{"list":[]}}}"""))
+            server.enqueue(MockResponse().setResponseCode(503))
+            server.start()
+            assertTrue(runCatching { source(server).search("Fixture - Singer") }.exceptionOrNull()!!.message!!.contains("503"))
+            assertEquals(2, server.requestCount)
+        } finally { server.shutdown() }
+    }
+
     @Test fun qqInstrumentalNoticeWithColonTimestampIsPlainLrcRatherThanUnsupportedEncoding() = runBlocking {
         val server = MockWebServer()
         try {
