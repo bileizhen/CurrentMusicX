@@ -32,7 +32,10 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     private var lastId: String? = null
     private var loaded: Triple<Long, String, Long?>? = null
     private var scheduledStart: Job? = null
-    private var advanced: Long? = null
+    private data class AdvanceState(val track: Long, val revision: Long?, val position: Long, val anchor: Long, val playing: Boolean)
+    private fun RoomTimeline.advanceState() = AdvanceState(trackNcmId, trackRevision, basePosition, baseAt, playing)
+    private var advanced: AdvanceState? = null
+    private var advanceIntent = 0L
     private var advanceRetry: Job? = null
     private var lastRenew = Long.MIN_VALUE
     private val role get() = state.value.detail?.role(userId())
@@ -191,6 +194,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     fun action(action: String, fields: JsonObject = buildJsonObject {}, permission: (RoomRole?) -> Boolean = { it?.controls == true }) {
         val id = activeId ?: return; val expected = session ?: return
         if (!permission(role)) { state.update { it.copy(error = "没有操作权限") }; return }
+        if (action in setOf("play", "pause", "seek")) cancelAdvanceRetry()
         command(action, id, expected, { permission(role) }) {
             repo.action(id, action, fields, expected)
             if (action == "close") disconnect("房间已关闭")
@@ -247,22 +251,40 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     override fun request(song: Song) { scope.launch { submit(song) } }
     override fun play(playing: Boolean) = action(if (playing) "play" else "pause", buildJsonObject { if (playing) put("position", player.state.value.positionMs) })
     override fun seek(position: Long) = action("seek", buildJsonObject { put("position", position) })
+    private fun cancelAdvanceRetry() {
+        advanceIntent++
+        advanceRetry?.cancel(); advanceRetry = null
+    }
     private fun changeTrack(action: String, automatic: Boolean = false) {
         val id = activeId ?: return; val expected = session ?: return
         val timeline = state.value.detail?.timeline
         if (role?.controls != true) { state.update { it.copy(error = "没有操作权限") }; return }
         val revision = timeline?.trackRevision
-        val identity = revision ?: timeline?.baseAt
-        command(action, id, expected, { role?.controls == true }, onFailure = {
+        val identity = timeline?.advanceState()
+        if (!automatic) cancelAdvanceRetry()
+        val intent = advanceIntent
+        fun stillEnded() = activeId == id && session == expected && repo.session() == expected &&
+            intent == advanceIntent && role?.controls == true &&
+            state.value.detail?.timeline?.advanceState() == identity
+        command(action, id, expected, { role?.controls == true && (!automatic || stillEnded()) }, onFailure = {
             // Retrying an ambiguous POST is safe only with the server's revision guard.
-            if (automatic && revision != null && advanceRetry?.isActive != true) {
+            if (automatic && revision != null && stillEnded() && advanceRetry?.isActive != true) {
                 val epoch = generation
                 advanceRetry = scope.launch {
-                    delay(5000)
-                    if (epoch != generation) return@launch
-                    if (appResult { refresh() } is AppResult.Success &&
-                        state.value.detail?.timeline?.trackRevision == revision) {
-                        advanced = null; advanceRetry = null; ended()
+                    var retryDelay = 5000L
+                    while (isActive && epoch == generation && stillEnded()) {
+                        delay(retryDelay)
+                        if (epoch != generation || !stillEnded()) return@launch
+                        val refreshed = appResult { refresh() }
+                        if (epoch != generation || !stillEnded()) return@launch
+                        if (refreshed is AppResult.Success) {
+                            advanced = null; advanceRetry = null; ended()
+                            return@launch
+                        }
+                        if (refreshed is AppResult.Failure && refreshed.kind in setOf(
+                                ErrorKind.Unauthorized, ErrorKind.Forbidden, ErrorKind.NotFound)) return@launch
+                        // A temporary snapshot failure must not permanently strand an ended track.
+                        retryDelay = (retryDelay * 2).coerceAtMost(30_000)
                     }
                 }
             }
@@ -275,7 +297,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     override fun previous() = changeTrack("prev")
     override fun ended() {
         val timeline = state.value.detail?.timeline ?: return
-        if (role?.controls == true && timeline.playing && advanced != (timeline.trackRevision ?: timeline.baseAt)) {
+        if (role?.controls == true && timeline.playing && advanced != timeline.advanceState()) {
             changeTrack("next", automatic = true)
         }
     }
