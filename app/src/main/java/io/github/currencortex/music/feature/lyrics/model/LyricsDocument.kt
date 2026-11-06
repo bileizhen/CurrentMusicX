@@ -28,12 +28,20 @@ data class LyricLine(
     val backgroundVocals: List<LyricLine> = emptyList(),
     val translations: List<LyricAuxiliary> = emptyList(), val romanizations: List<LyricAuxiliary> = emptyList(),
     val wordsEstimated: Boolean = false,
+    val ruby: List<LyricRuby> = emptyList(),
 )
 
 /** Offsets refer to UTF-16 ranges in the complete, laid-out line (including spaces). */
 @Immutable @Serializable
 data class LyricWord(val text: String, val startTimeMs: Long, val endTimeMs: Long,
-    val startOffset: Int, val endOffset: Int, val agent: String? = null, val roles: List<String> = emptyList())
+    val startOffset: Int, val endOffset: Int, val agent: String? = null, val roles: List<String> = emptyList(),
+    val romanization: String = "", val ruby: List<LyricRuby> = emptyList())
+
+/** Annotation text belongs to this UTF-16 range of the complete vocal line, never to the annotation itself.
+ * Optional syllable times are preserved only when explicitly supplied by the source. */
+@Immutable @Serializable
+data class LyricRuby(val text: String, val startOffset: Int, val endOffset: Int,
+    val startTimeMs: Long? = null, val endTimeMs: Long? = null)
 
 @Immutable @Serializable
 data class LyricAuxiliary(val text: String, val language: String? = null)

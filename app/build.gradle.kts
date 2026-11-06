@@ -119,7 +119,7 @@ android {
             // Retain symbols as an external diagnostic artifact, not in every shipped ELF.
             ndk.debugSymbolLevel = "SYMBOL_TABLE"
         }
-        create("performance") {
+        if (rootProject.findProject(":baselineprofile") != null) create("performance") {
             initWith(getByName("release"))
             applicationIdSuffix = ".benchmark"
             signingConfig = signingConfigs.getByName("debug")
@@ -154,7 +154,7 @@ baselineProfile {
     dexLayoutOptimization = true
     filter { exclude("io.github.currencortex.music.benchmark.**") }
     variants {
-        create("performance") { from(project(":baselineprofile")) }
+        if (rootProject.findProject(":baselineprofile") != null) create("performance") { from(project(":baselineprofile")) }
     }
 }
 

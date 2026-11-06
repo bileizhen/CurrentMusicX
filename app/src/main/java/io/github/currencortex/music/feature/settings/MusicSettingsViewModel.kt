@@ -88,6 +88,21 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { container.errorNotices.show("歌词来源保存失败，请重试") }
     }
+    fun lyricsStyle(value: io.github.currencortex.music.data.settings.LyricsStyle) = viewModelScope.launch {
+        try { container.musicSettings.editLyricsDisplay { it.copy(style = value) } }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("歌词样式保存失败，请重试") }
+    }
+    fun lyricsDisplay(transform: (io.github.currencortex.music.data.settings.LyricsDisplayOptions) -> io.github.currencortex.music.data.settings.LyricsDisplayOptions) = viewModelScope.launch {
+        try { container.musicSettings.editLyricsDisplay(transform) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("歌词效果保存失败，请重试") }
+    }
+    fun lyricsFontSize(value: Float) = viewModelScope.launch {
+        try { container.musicSettings.setLyricsFontSize(value) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("歌词字号保存失败，请重试") }
+    }
     fun likeMode(value: io.github.currencortex.music.data.settings.LikeMode) = viewModelScope.launch { container.musicSettings.setLikeMode(value) }
     fun preloadMetered(value: Boolean) = viewModelScope.launch { container.musicSettings.setPreloadMetered(value) }
     fun clearCache() = viewModelScope.launch {

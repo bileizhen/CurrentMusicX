@@ -38,6 +38,7 @@ import io.github.currencortex.music.core.media.*
 import io.github.currencortex.music.feature.lyrics.ui.*
 import io.github.currencortex.music.data.settings.LyricsWeight
 import io.github.currencortex.music.data.settings.KaraokeScope
+import io.github.currencortex.music.data.settings.LyricsStyle
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -46,6 +47,7 @@ import top.yukonga.miuix.kmp.theme.ThemeController
 import top.yukonga.miuix.kmp.theme.ColorSchemeMode
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 
 private enum class PlayerContent { COVER, LYRICS }
 private enum class PlayerOverlay { NONE, QUEUE, COMMENTS, OPTIONS, SHARE, QUALITY, ACTIONS, MODE, LYRICS, WEIGHT, KARAOKE, SLEEP, AI, ROAMING, BACKGROUND, LYRICS_MANAGEMENT }
@@ -186,6 +188,26 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         val hideControls = animateFloatAsState(
             if ((settings.lyricsDisplay.hideControls || controlsHidden) && !controlsRevealed) 1f else 0f,
             tween(260, easing = LinearOutSlowInEasing), label = "lyricsControls")
+        // The neighbour page used to mount its complete Apple rail on the first drag frame.
+        // Prepare it after the opening flight and other player transitions have settled,
+        // while preserving the cheaper classic-page deferral and the immediate-swipe fallback.
+        val idleForLyrics by remember(pager, queueMotion, sidePage, sheetProgress, sheetDrag, hideControls) {
+            derivedStateOf {
+                sheetProgress() >= 1f && !pager.isScrollInProgress && !queueGesture &&
+                    queueMotion.progress <= .0001f && !sidePage.active && !sideDialog &&
+                    overlay == PlayerOverlay.NONE && sheetDrag?.state?.dragging != true &&
+                    (hideControls.value <= .0001f || hideControls.value >= .9999f)
+            }
+        }
+        val appleLyrics = settings.lyricsDisplay.style == LyricsStyle.APPLE_MUSIC
+        var lyricsPrepared by remember { mutableStateOf(false) }
+        LaunchedEffect(appleLyrics, idleForLyrics) {
+            if (appleLyrics && idleForLyrics && !lyricsPrepared) {
+                delay(120)
+                withFrameNanos { }
+                lyricsPrepared = true
+            }
+        }
         val controlsVisibility = {
             1f - hideControls.value * (pager.currentPage + pager.currentPageOffsetFraction).coerceIn(0f, 1f)
         }
@@ -277,7 +299,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                         .onGloballyPositioned { lyricsCoordinates = it },
                                         // Rasterizing the lyric rail competes with the mini-cover flight.
                                         // Reveal it after expansion; LyricsPanel retains it while collapsing.
-                                        active = sheetSettled && (pager.currentPage == 1 || pager.isScrollInProgress), minimal = true)
+                                        active = sheetSettled && (pager.currentPage == 1 || pager.isScrollInProgress), minimal = true,
+                                        prepare = appleLyrics && lyricsPrepared)
                                 }
                             }
                         }
@@ -310,7 +333,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                             }
                             LyricsPanel(vm, Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { lyricsCoordinates = it },
                                 active = pager.currentPage == 1 || pager.isScrollInProgress,
-                                expandLyricsWindow = controlsHidden)
+                                expandLyricsWindow = controlsHidden, prepare = appleLyrics && lyricsPrepared)
                         } else CoverContent(vm, Modifier.fillMaxSize(), transitionTarget = pager.currentPage == 0,
                             active = pager.currentPage == 0 || pager.isScrollInProgress,
                             pagerRole = PlayerPagerArtworkRole.COVER,
@@ -416,7 +439,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 MusicDestinationRow("播放模式", summary = playbackMode.label, onClick = { overlay = PlayerOverlay.MODE }, enabled = state.mode == PlayerMode.LOCAL || (together.active && !together.busy))
                 MusicDestinationRow("定时关闭", summary = sleepSummary(sleepState), modifier = Modifier.testTag("open_sleep_timer"),
                     onClick = { overlay = PlayerOverlay.SLEEP })
-                MusicDestinationRow("歌词显示", summary = "霞鹜文楷 · 字号 ${settings.lyricsFontSize.toInt()}",
+                MusicDestinationRow("歌词显示", summary = "${settings.lyricsDisplay.style.label} · ${settings.lyricsFont.label} · 字号 ${settings.lyricsFontSize.toInt()}",
                     modifier = Modifier.testTag("open_lyrics_display"), onClick = { overlay = PlayerOverlay.LYRICS })
                 if (queue.current != null && queue.current?.video != true)
                     MusicDestinationRow("歌词管理", summary = "来源 · 在线匹配 · 单曲偏移 · 导入导出",
@@ -534,12 +557,13 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 }
 
 @Composable private fun LyricsPanel(vm: PlayerViewModel, modifier: Modifier, active: Boolean = true, minimal: Boolean = false,
-    expandLyricsWindow: Boolean = false) {
+    expandLyricsWindow: Boolean = false, prepare: Boolean = false) {
     // The pager keeps its neighbouring header measured for shared-element endpoints.
-    // Its full lyric rail (paragraphs, blur layers and animations) is not needed until
-    // that page is actually revealed. Retain it after first use to preserve browsing.
+    // Apple paragraphs are prepared in the settled player's idle interval; waiting for
+    // the first horizontal drag would put shaping and raster work on that gesture frame.
+    // Keep the prepared/visited composition so returning does not repeat that work.
     var revealed by remember { mutableStateOf(false) }
-    if (!active && !revealed) {
+    if (!active && !prepare && !revealed) {
         Box(modifier.testTag("player_lyrics_deferred"))
         return
     }
@@ -555,7 +579,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             settings.lyricsWeight, settings.lyricsOffsetMs - lyrics.songOffsetMs,
             settings.lyricsDisplay.copy(hideControls = settings.lyricsDisplay.hideControls || expandLyricsWindow),
             minimal = minimal, perspective = settings.lyricsDisplay.perspective, cover = player.song?.cover.orEmpty(),
-            mediaDurationMs = player.durationMs)
+            mediaDurationMs = player.durationMs, playbackRunning = active && player.playing && !player.loading)
     } else Box(modifier.testTag("lyrics_panel"), contentAlignment = Alignment.Center) {
         if (lyrics.loading) Column(Modifier.fillMaxWidth().padding(28.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
             MusicPlaceholder(Modifier.fillMaxWidth(.8f).height(30.dp))

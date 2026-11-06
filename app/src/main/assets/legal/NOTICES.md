@@ -219,7 +219,8 @@ The native lyrics engine fetches individual TTML files from AMLL TTML DB,
 https://github.com/amll-dev/amll-ttml-db (repository data license: CC0-1.0).
 The database is not bundled in the app. Song platform ids, lyric author metadata,
 translations, romanization and vocal agents are preserved when parsing.
-No AMLL Web Renderer code is included.
+The AMLL browser renderer is not bundled. The optional native display adaptation is
+separately attributed under "Apple Music-like Lyrics native display and TTML annotations" below.
 
 
 ## Native NetEase request protocol
@@ -432,3 +433,32 @@ not the application's accounts, cookies or filesystem.
 and contributors, MIT: https://github.com/brix/crypto-js/tree/4.2.0 . Its license is
 included at `legal/CRYPTO-JS-MIT.txt`. The buffer, timer, HTTP, compression and raw
 RSA protocol adapters are CurrentMusic implementations.
+
+
+## Apple Music-like Lyrics native display and TTML annotations
+
+Copyright SteveXMH and Apple Music-like Lyrics (AMLL) contributors. Reference version:
+https://github.com/amll-dev/applemusic-like-lyrics/tree/f32285864056587c4afa59d310208b0aa829cb53
+
+The optional native Apple Music lyric style adapts AMLL's lyric layout, focus and scroll
+policies, staggered springs, word-mask brightness, word float and sustained-note emphasis,
+duet/background-vocal presentation, and interlude behavior. References include
+`packages/core/src/lyric-player/base/{index,layout,focus,scroll,spring,timeline,group,line,interlude-dots}.ts`,
+`packages/core/src/lyric-player/dom/{lyric-line,lyric-group,line-brightness}.ts`,
+`packages/core/src/lyric-player/dom/animation/{float,emphasize,mask}/`, and the core styles.
+Native Compose/Android text rendering and the existing media clock replace DOM, CSS and
+Web Animations. The browser renderer and its JavaScript runtime are not bundled.
+
+TTML ruby and timed transliteration handling references `packages/ttml/src/parser.ts`,
+`packages/ttml/src/utils/amll-converter.ts`, and the documented TTML structure at the same
+version. Ruby base-text ranges and explicitly provided syllable timing are preserved;
+word readings require direct structural ownership or unambiguous supplied timing. Plain
+line romanization is not split into invented word cues. This native implementation also
+retains multiple background voices and untimed line-level ruby annotations.
+
+These adaptations were modified for CurrentMusic in November 2026 and are AGPL-3.0-only.
+The full license is provided offline at `legal/AGPL-3.0.txt`. Existing GPL-3.0 code keeps
+its license; the combination is conveyed under GPLv3/AGPLv3 section 13. Corresponding
+application source and build instructions are available from the configured GitHub
+source link. AMLL is an independent Apple Music-inspired project; neither it nor this
+native style is an Apple product or a claim of complete parity with Apple's software.
