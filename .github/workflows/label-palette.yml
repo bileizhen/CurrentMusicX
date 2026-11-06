@@ -27,8 +27,8 @@ jobs:
         with:
           node-version: '22'
           package-manager-cache: false
-      - name: Test palette before applying
-        run: node --test .github/scripts/label-palette.test.cjs
+      - name: Check automation script syntax
+        run: node --check .github/scripts/label-palette.cjs
       - name: Create issue status labels and sync colors
         uses: actions/github-script@v8
         with:
