@@ -3,11 +3,7 @@ package io.github.currencortex.music.feature.share
 import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.data.song.Song
 
-internal data class SongShareContent(val title: String, val artists: String, val publicUrl: String?,
-    val neteaseId: Long? = null) {
-    fun imageUrl(style: SongShareStyle): String? = neteaseId?.let {
-        "https://music.20110208.xyz/cm/share/song/$it/image?style=${style.apiValue}"
-    }
+internal data class SongShareContent(val title: String, val artists: String, val publicUrl: String?) {
     val text: String get() = listOf("分享歌曲《$title》", artists, publicUrl.orEmpty())
         .filter(String::isNotBlank).joinToString("\n")
     val filename: String get() = title.replace(Regex("[\\\\/:*?\"<>|\\p{Cntrl}]"), "_")
@@ -21,7 +17,7 @@ internal data class SongShareContent(val title: String, val artists: String, val
                 (song.externalIds.neteaseId?.toLongOrNull() ?: song.id).takeIf { it > 0 } else null
             return SongShareContent(clean(song.name).ifBlank { "未命名歌曲" },
                 clean(song.artists).ifBlank { "未知歌手" },
-                id?.let { "https://music.20110208.xyz/app/#/song/$it" }, id)
+                id?.let { "https://music.20110208.xyz/app/#/song/$it" })
         }
     }
 }
