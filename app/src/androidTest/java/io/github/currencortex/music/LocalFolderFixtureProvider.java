@@ -49,15 +49,53 @@ public final class LocalFolderFixtureProvider extends ContentProvider {
         if (id.equals("denied")) throw new SecurityException("Fixture read permission revoked");
         if (!mode.equals("r") || !(id.equals("track") || id.equals("nestedTrack") || id.equals("outsideTrack")))
             throw new FileNotFoundException();
-        File file = new File(getContext().getCacheDir(), "local-folder-fixture.mp3");
+        boolean artwork = id.equals("track");
+        File file = new File(getContext().getCacheDir(), "local-folder-artwork-v1-" + artwork + ".mp3");
         if (!file.exists()) {
-            try (InputStream in = getContext().getAssets().open("download/fixture.mp3");
+            try (BufferedInputStream in = new BufferedInputStream(getContext().getAssets().open("download/fixture.mp3"));
                  OutputStream out = new FileOutputStream(file)) {
+                if (artwork) {
+                    // Replace the fixture's original ID3 tag instead of stacking two headers.
+                    in.mark(10);
+                    byte[] header = new byte[10];
+                    new DataInputStream(in).readFully(header);
+                    if (header[0] == 'I' && header[1] == 'D' && header[2] == '3') {
+                        int tagSize = 0;
+                        for (int i = 6; i < 10; i++) tagSize = (tagSize << 7) | (header[i] & 127);
+                        for (int i = 0; i < tagSize; i++) if (in.read() < 0) throw new EOFException();
+                    } else in.reset();
+                    out.write(artworkTag());
+                }
                 byte[] buffer = new byte[8192];
                 int n;
                 while ((n = in.read(buffer)) != -1) out.write(buffer, 0, n);
             } catch (IOException error) { throw new FileNotFoundException(error.toString()); }
         }
         return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY);
+    }
+
+    /** Synthetic blue PNG in an ID3v2.3 APIC frame; nestedTrack remains coverless. */
+    private static byte[] artworkTag() throws IOException {
+        android.graphics.Bitmap bitmap = android.graphics.Bitmap.createBitmap(24, 24,
+            android.graphics.Bitmap.Config.ARGB_8888);
+        ByteArrayOutputStream picture = new ByteArrayOutputStream();
+        try {
+            bitmap.eraseColor(android.graphics.Color.BLUE);
+            bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, picture);
+        } finally { bitmap.recycle(); }
+        ByteArrayOutputStream payload = new ByteArrayOutputStream();
+        payload.write(0); // ISO-8859-1 description
+        payload.write("image/png".getBytes(java.nio.charset.StandardCharsets.US_ASCII));
+        payload.write(0); payload.write(3); payload.write(0); // Front cover, empty description
+        payload.write(picture.toByteArray());
+        ByteArrayOutputStream tag = new ByteArrayOutputStream();
+        DataOutputStream out = new DataOutputStream(tag);
+        out.writeBytes("ID3"); out.write(new byte[]{3, 0, 0});
+        int size = 10 + payload.size();
+        out.write(new byte[]{(byte)((size >> 21) & 127), (byte)((size >> 14) & 127),
+            (byte)((size >> 7) & 127), (byte)(size & 127)});
+        out.writeBytes("APIC"); out.writeInt(payload.size()); out.writeShort(0);
+        payload.writeTo(out);
+        return tag.toByteArray();
     }
 }

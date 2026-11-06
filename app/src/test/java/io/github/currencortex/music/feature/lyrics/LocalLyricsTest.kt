@@ -3,6 +3,7 @@ package io.github.currencortex.music.feature.lyrics
 import io.github.currencortex.music.data.song.*
 import io.github.currencortex.music.feature.lyrics.data.*
 import io.github.currencortex.music.feature.lyrics.model.*
+import io.github.currencortex.music.feature.lyrics.model.LyricLine
 import kotlinx.coroutines.*
 import org.junit.Assert.*
 import org.junit.Rule
@@ -15,6 +16,39 @@ class LocalLyricsTest {
     private val origin = LyricsOrigin("本地内嵌歌词", "local")
     private val local = SavedLyrics(requireNotNull(decodeEmbeddedLyrics("[00:01]local lyrics", 180000)), origin)
     private val forbidden = LyricsProvider { error("Local lyrics must work offline") }
+
+    @Test fun embeddedBilingualLrcKeepsTranslationOutOfPrimaryTimeline() {
+        val document = requireNotNull(decodeEmbeddedLyrics(
+            "[00:01.000]こんにちは\n[00:01.000]你好\n[00:03.000]さようなら\n[00:03.000]再见", 10000))
+        assertEquals(listOf("こんにちは", "さようなら"), document.lines.map { it.text })
+        assertEquals(listOf("你好", "再见"), document.lines.map { it.translation })
+        assertEquals(3000L, document.lines.first().endTimeMs)
+        assertFalse(document.hasWordTiming)
+    }
+
+    @Test fun downloadedEnhancedLrcRoundTripsOriginalWordsAndTranslation() {
+        val original = LyricLine(1000, 3000, "Hello world",
+            listOf(LyricWord("Hello", 1000, 1500, 0, 5), LyricWord("world", 2000, 3000, 6, 11)),
+            translation = "你好，世界")
+        val exported = io.github.currencortex.music.core.download.DownloadLyrics.lrc(song, LyricsDocument(listOf(original)))
+        val decoded = requireNotNull(decodeEmbeddedLyrics(exported, 10000)).lines.single()
+        assertEquals(original, decoded)
+        assertEquals(decoded, LyricsFileCodec.decode(exported.toByteArray(), "song.lrc").document.lines.single())
+    }
+
+    @Test fun ambiguousSimultaneousLyricsAndDifferentTimestampsStaySeparate() {
+        for (raw in listOf(
+            "[00:01]第一声部\n[00:01]第二声部",
+            "[00:01]First voice\n[00:01]Second voice",
+            "[00:01]Hello\n[00:01.001]你好",
+            "[00:01]你好\n[00:01]Hello",
+            "[00:01]Hello\n[00:01]你好\n[00:01]ni hao",
+            "[00:01]Hello\n[00:01]<00:01>你<00:02>好<00:03>",
+            "[00:01]Hello[tr]已有翻译[/tr]\n[00:01]另一声部")) {
+            val expected = io.github.currencortex.music.feature.lyrics.parser.LyricsParser.lrc(raw)
+            assertEquals(raw, expected, requireNotNull(decodeEmbeddedLyrics(raw, 10000)))
+        }
+    }
 
     @Test fun timedAndUntimedTagsKeepTheirOriginalTiming() {
         assertEquals(1000L, local.document.lines.single().startTimeMs)

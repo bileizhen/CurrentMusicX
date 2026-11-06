@@ -30,6 +30,56 @@ import java.util.UUID
 class LocalMusicAndFontTest {
     private val context get() = ApplicationProvider.getApplicationContext<CurrentMusicApplication>()
 
+    @Test fun folderArtworkLoadsThroughCoilAndMediaSessionAfterCacheClear() = runBlocking {
+        val songs = io.github.currencortex.music.feature.library.scanLocalFolder(context, fixtureTree())
+        val song = songs.single {
+            android.provider.DocumentsContract.getDocumentId(Uri.parse(it.localUri)) == "track"
+        }
+        assertTrue(song.cover.isNotBlank())
+        val restored = kotlinx.serialization.json.Json.decodeFromString(Song.serializer(),
+            kotlinx.serialization.json.Json.encodeToString(Song.serializer(), song))
+        val loader = coil3.ImageLoader.Builder(context).build()
+        try {
+            repeat(2) {
+                val result = loader.execute(coil3.request.ImageRequest.Builder(context)
+                    .data(restored.cover).build())
+                assertTrue("Folder artwork failed: $result", result is coil3.request.SuccessResult)
+                val artwork = io.github.currencortex.music.core.media.MediaItemFactory
+                    .create(restored, restored.localUri).mediaMetadata.artworkUri!!
+                val sessionBitmap = androidx.media3.datasource.DataSourceBitmapLoader(context)
+                    .loadBitmap(artwork).get(5, java.util.concurrent.TimeUnit.SECONDS)
+                try { assertEquals(android.graphics.Color.BLUE, sessionBitmap.getPixel(12, 12)) }
+                finally { sessionBitmap.recycle() }
+                context.contentResolver.openInputStream(artwork)!!.use { input ->
+                    val bitmap = android.graphics.BitmapFactory.decodeStream(input)!!
+                    try { assertEquals(android.graphics.Color.BLUE, bitmap.getPixel(12, 12)) }
+                    finally { bitmap.recycle() }
+                }
+                loader.memoryCache?.clear()
+                loader.diskCache?.clear()
+            }
+            val noCover = songs.single { it.id != song.id }
+            assertTrue(noCover.durationMs > 0)
+            val missing = loader.execute(coil3.request.ImageRequest.Builder(context).data(noCover.cover).build())
+            assertTrue("Coverless audio must use the image error fallback", missing is coil3.request.ErrorResult)
+        } finally { loader.shutdown() }
+    }
+
+    @Test fun artworkEndpointIsPrivateAndRejectsWritesAndNonDocumentSources() {
+        val authority = "${context.packageName}.local-artwork"
+        assertFalse(context.packageManager.resolveContentProvider(authority, 0)!!.exported)
+        for (source in listOf("https://fixture.invalid/song.mp3", "file:///sdcard/song.mp3",
+            "content://$authority/embedded", "content://io.github.currencortex.music.test.localfolders/arbitrary")) {
+            val uri = io.github.currencortex.music.core.media.LocalArtworkProvider.artworkUri(context, Uri.parse(source))
+            try { context.contentResolver.openInputStream(uri)?.close(); fail("Accepted $source") }
+            catch (_: java.io.FileNotFoundException) { }
+        }
+        val document = android.provider.DocumentsContract.buildDocumentUriUsingTree(fixtureTree(), "track")
+        val uri = io.github.currencortex.music.core.media.LocalArtworkProvider.artworkUri(context, document)
+        try { context.contentResolver.openFileDescriptor(uri, "w")?.close(); fail("Accepted a write") }
+        catch (_: java.io.FileNotFoundException) { }
+    }
+
     @Test fun folderScanReadsOnlyGrantedTreeAndNestedAudio() = runBlocking {
         val tree = fixtureTree()
         val songs = io.github.currencortex.music.feature.library.scanLocalFolder(context, tree)
@@ -107,13 +157,15 @@ class LocalMusicAndFontTest {
             androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().context.assets
                 .open("download/fixture.$extension").use { input -> file.outputStream().use { input.copyTo(it) } }
             val song = Song(-1, title, durationMs = 1000, musicSource = MusicSource.LOCAL, localUri = uri.toString())
-            val text = "[00:00.10]本地歌词\n[00:00.50]离线读取"
+            val text = "[00:00.10]<00:00.10>Hello<00:00.40>\n[00:00.10]你好\n[00:00.50]さようなら\n[00:00.50]再见"
             io.github.currencortex.music.core.download.SongTagWriter.write(file, song, text, null)
             context.contentResolver.openOutputStream(uri)!!.use { output -> file.inputStream().use { it.copyTo(output) } }
             context.contentResolver.update(uri, ContentValues().apply { put(MediaStore.Audio.Media.IS_PENDING, 0) }, null, null)
             val result = io.github.currencortex.music.feature.lyrics.data.LocalLyricsProvider(context).load(song)
             assertEquals("local", result?.origin?.provider)
-            assertEquals(listOf("本地歌词", "离线读取"), result?.document?.lines?.map { it.text })
+            assertEquals(listOf("Hello", "さようなら"), result?.document?.lines?.map { it.text })
+            assertEquals(listOf("你好", "再见"), result?.document?.lines?.map { it.translation })
+            assertEquals(400L, result?.document?.lines?.first()?.words?.single()?.endTimeMs)
             assertEquals(100L, result?.document?.lines?.first()?.startTimeMs)
         } finally { context.contentResolver.delete(uri, null, null); file.delete() }
         }

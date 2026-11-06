@@ -123,7 +123,13 @@ object LyricsParser {
         LyricLine(start, start + duration, text.toString(), words)
     }.toList())
 
-    private fun millis(minutes: String, seconds: String) = ((minutes.toLongOrNull() ?: 0) * 60000 + (seconds.toDoubleOrNull() ?: 0.0) * 1000).toLong()
+    private fun millis(minutes: String, seconds: String): Long {
+        // Decimal timestamps are exact: floating-point truncation turns 01.001 into
+        // 1000 ms and can incorrectly pair distinct original/translation lines.
+        val whole = seconds.substringBefore('.').toLongOrNull() ?: 0
+        val fraction = seconds.substringAfter('.', "").take(3).padEnd(3, '0').toLongOrNull() ?: 0
+        return (minutes.toLongOrNull() ?: 0) * 60000 + whole * 1000 + fraction
+    }
     private fun finish(lines: List<LyricLine>): LyricsDocument {
         val sorted = lines.map { it.withInlineTranslationBlocks() }.filter { it.text.isNotBlank() }
             .distinctBy { it.startTimeMs to it.text }.sortedBy { it.startTimeMs }

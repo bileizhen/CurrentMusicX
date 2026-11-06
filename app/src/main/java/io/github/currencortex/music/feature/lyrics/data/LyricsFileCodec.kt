@@ -53,7 +53,7 @@ object LyricsFileCodec {
             extension == "qrc" || trimmed.contains("LyricContent=") -> LyricsFileDocument(parseQrc(text))
             extension == "yrc" || Regex("^\\[\\d+,\\d+\\]\\(\\d+,\\d+,\\d+\\)", RegexOption.MULTILINE).containsMatchIn(text) ->
                 LyricsFileDocument(LyricsParser.yrc(text))
-            else -> LyricsFileDocument(LyricsParser.lrc(text))
+            else -> LyricsFileDocument(LyricsParser.lrc(text).withBilingualLrcTranslations())
         }
         val clean = result.document.withoutEstimatedTiming()
         validate(clean)
