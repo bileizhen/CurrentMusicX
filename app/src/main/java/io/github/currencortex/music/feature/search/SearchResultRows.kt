@@ -78,7 +78,7 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
 @Composable internal fun SearchResultSongRow(song: Song, query: String, active: Boolean, onPlay: () -> Unit,
     onNext: () -> Unit, onQueue: () -> Unit, lyric: SearchLyricContext? = null,
     quickActions: (@Composable () -> Unit)? = null, extraActions: (@Composable () -> Unit)? = null,
-    compactActions: Boolean = false) {
+    compactActions: Boolean = false, retryLyric: () -> Unit = {}) {
     val colors = MiuixTheme.colorScheme
     val request = LocalRoomSongRequest.current
     val pending = request?.pending?.invoke(song.id) == true
@@ -117,16 +117,27 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
             }
             val lyricBlock = @Composable {
                 lyric?.let { match ->
-                    // Fixed three-row NetEase-style block; absent neighbours stay as the placeholder.
-                    Text(match.before ?: "……", fontSize = 12.sp, color = colors.onSurface.copy(alpha = .58f),
+                    if (match.before != null || match.status == null) Text(match.before ?: "……", fontSize = 12.sp, color = colors.onSurface.copy(alpha = .58f),
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.testTag("search_lyric_before_${song.id}"))
                     Text(searchMatchText(lyricMatchWindow(match.matched, query), query, colors.primary), fontSize = 12.sp,
                         color = colors.onSurface.copy(alpha = .58f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.testTag("search_lyric_${song.id}"))
-                    Text(match.after ?: "……", fontSize = 12.sp, color = colors.onSurface.copy(alpha = .58f),
+                    if (match.after != null || match.status == null) Text(match.after ?: "……", fontSize = 12.sp, color = colors.onSurface.copy(alpha = .58f),
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.testTag("search_lyric_after_${song.id}"))
+                    val status = when (match.status) {
+                        "pending" -> "歌词前后文仍在补全"
+                        "error" -> "歌词前后文加载失败"
+                        "missing" -> "纯音乐或未收录歌词"
+                        "unmatched" -> "未能定位命中片段的前后文"
+                        "single_line" -> "完整歌词仅有一句"
+                        else -> null
+                    }
+                    status?.let { Text(it, fontSize = 12.sp, color = colors.onSurface.copy(alpha = .58f)) }
+                    if (match.retryable) Text("重试前后文", fontSize = 12.sp, color = colors.primary,
+                        modifier = Modifier.clickable(role = Role.Button, onClick = retryLyric)
+                            .testTag("retry_lyric_${song.id}").padding(vertical = 8.dp))
                 }
             }
             if (compactActions) {

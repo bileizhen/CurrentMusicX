@@ -18,21 +18,26 @@ import kotlinx.serialization.SerialName
     val sampleRate: Int = 0, val channels: Int = 0)
 @Serializable data class SongExternalIds(val neteaseId: String? = null, val qqMusicId: String? = null,
     val appleMusicId: String? = null, val spotifyId: String? = null)
-@Serializable data class LyricContextDto(val t: Long = 0, val txt: String = "", val matched: Boolean = false)
+@Serializable data class LyricContextDto(val t: Long? = null, val txt: String = "", val matched: Boolean = false)
 @Serializable data class SongDto(@SerialName("ncm_id") val id: Long, val name: String, val artists: String = "",
                                 val album: String = "", val pic: String = "", val duration: Long = 0, val mv: Long = 0,
                                 @SerialName("artist_ids") val artistIds: List<Long> = emptyList(), val lyric: String = "",
                                 @SerialName("lyricMatch") val lyricMatch: String = "",
-                                @SerialName("lyricContext") val lyricContext: List<LyricContextDto> = emptyList()) {
+                                @SerialName("lyricContext") val lyricContext: List<LyricContextDto> = emptyList(),
+                                val lyricContextStatus: String? = null, val lyricContextRetryable: Boolean = false) {
     fun toDomain() = Song(id, name, artists, album, pic.replace("http:", "https:"), duration, mv, artistIds)
 }
-@Serializable data class SearchDto(val songs: List<SongDto> = emptyList(), val totals: SearchTotals = SearchTotals(), val hasMore: SearchMore = SearchMore())
+@Serializable data class SearchDto(val songs: List<SongDto> = emptyList(), val totals: SearchTotals = SearchTotals(), val hasMore: SearchMore = SearchMore(),
+    val catalogSongs: List<SongDto> = emptyList())
 @Serializable data class SearchTotals(val song: Int = 0)
 @Serializable data class SearchMore(val song: Boolean = false)
 /** One line of a lyric-search hit with its immediate neighbours, when the source provides them. */
-data class SearchLyricContext(val before: String?, val matched: String, val after: String?)
+data class SearchLyricContext(val before: String?, val matched: String, val after: String?,
+    val status: String? = null, val retryable: Boolean = false)
+enum class SearchBackend { PROJECT, NATIVE }
 data class SearchPage(val songs: List<Song>, val total: Int, val hasMore: Boolean,
-    val matchedLyrics: Map<Long, SearchLyricContext> = emptyMap())
+    val matchedLyrics: Map<Long, SearchLyricContext> = emptyMap(), val upstreamCount: Int = songs.size,
+    val backend: SearchBackend? = null)
 @Serializable data class SongDetailDto(val songs: List<SongDto> = emptyList())
 @Serializable data class SongUrlDto(val url: String? = null, val type: String = "", val level: String = "",
                                   val sr: Int = 0, val ch: Int = 0, val sampleRate: Int = 0, val channelCount: Int = 0, val md5: String = "",
