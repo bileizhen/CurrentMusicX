@@ -10,8 +10,6 @@ class SongShareContentTest {
         assertEquals("https://music.20110208.xyz/app/#/song/3438848556", content.publicUrl)
         assertEquals("歌名 Live", content.title)
         assertTrue(content.text.contains(content.publicUrl!!))
-        for (style in SongShareStyle.entries) assertEquals(
-            "https://music.20110208.xyz/cm/share/song/3438848556/image?style=${style.apiValue}", content.imageUrl(style))
     }
 
     @Test fun privateAndUnrelatedSourceIdsDoNotBecomePublicNeteaseLinks() {
@@ -19,16 +17,15 @@ class SongShareContentTest {
             val content = SongShareContent.from(Song(123, "Private song", "Artist", cover = "https://private.test/art?token=secret",
                 musicSource = source, externalIds = SongExternalIds(neteaseId = "123")))
             assertNull(content.publicUrl)
-            for (style in SongShareStyle.entries) assertNull(content.imageUrl(style))
             assertFalse(content.text.contains("secret"))
             assertFalse(content.text.contains("private.test"))
         }
         assertNull(SongShareContent.from(Song(-1, "Unknown")).publicUrl)
         assertNull(SongShareContent.from(Song(1, "Video", video = true)).publicUrl)
         assertNull(SongShareContent.from(Song(1, "Private", navidrome = NavidromeTrackRef("1", "server")))
-            .imageUrl(SongShareStyle.IMMERSIVE))
+            .publicUrl)
         assertNull(SongShareContent.from(Song(1, "Private", emby = EmbyTrackRef("1", "server")))
-            .imageUrl(SongShareStyle.SQUARE))
+            .publicUrl)
     }
 
     @Test fun documentNamesCannotEscapeTheSelectedDirectory() {

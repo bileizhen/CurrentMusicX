@@ -82,8 +82,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
             if (poster != null && !poster.coverLoaded) Text("封面暂未加载，可重新生成海报", fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-            if (poster?.serverFallback == true) Text("在线分享图暂不可用，已在本机生成", fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
             MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MusicDialogButton("保存图片", onClick = {
                     if (poster != null) {
@@ -108,7 +106,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         ClipData.newPlainText("歌曲分享", content.publicUrl ?: content.text))
                     message(if (content.publicUrl == null) "已复制歌曲信息" else "已复制链接")
                 }, modifier = Modifier.weight(1f).testTag("song_share_copy"))
-                if (result?.isFailure == true || poster?.coverLoaded == false || poster?.serverFallback == true) MusicDialogButton("重新生成", onClick = { attempt++ },
+                if (result?.isFailure == true || poster?.coverLoaded == false) MusicDialogButton("重新生成", onClick = { attempt++ },
                     modifier = Modifier.weight(1f).testTag("song_share_retry"))
             }
         }
