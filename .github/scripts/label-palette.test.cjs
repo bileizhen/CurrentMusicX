@@ -1,7 +1,7 @@
 'use strict';
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
-const {COLORS,labelColor,colorChanges}=require('./label-palette.cjs');
+const {COLORS,STATUS_LABELS,labelColor,colorChanges}=require('./label-palette.cjs');
 test('All palette colors are valid GitHub hex values',()=>{
   for(const [name,color] of Object.entries(COLORS)){
     assert.match(color,/^[0-9A-F]{6}$/i,name);
@@ -16,6 +16,13 @@ test('module and status labels have distinct readable colors',()=>{
   assert.notEqual(labelColor('module: playback'),labelColor('module: lyrics'));
   assert.notEqual(labelColor('bug'),labelColor('enhancement'));
   assert.equal(labelColor(' Risk: High '),'D86870');
+});
+test('issue statuses retain their own colors across palette syncs',()=>{
+  for (const [name,{color,description}] of Object.entries(STATUS_LABELS)) {
+    assert.match(color,/^[0-9A-F]{6}$/i);
+    assert.ok(description.length > 0 && description.length <= 100);
+    assert.deepEqual(colorChanges([{name,color}]),[]);
+  }
 });
 test('unknown labels are colored deterministically',()=>{
   assert.equal(labelColor('user custom label'),labelColor('user custom label'));

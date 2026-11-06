@@ -47,6 +47,15 @@ test('needs-info timeout does not close an issue with a later human reply', () =
   assert.equal(staleDecision(item, [], events, now), 'close-info');
   assert.equal(staleDecision(item, [{user:{type:'User'},created_at:ago(1)}], events, now), null);
 });
+test('tracked issues are exempt from inactivity and needs-info timeouts', () => {
+  const {STATUS_LABELS} = require('./label-palette.cjs');
+  for (const status of Object.keys(STATUS_LABELS)) {
+    for (const tag of ['bug','stale','needs-info']) {
+      const events = [{event:'labeled',label:{name:tag},created_at:ago(40)}];
+      assert.equal(staleDecision(issue({labels:['bug',tag,status]}), [], events, now), null);
+    }
+  }
+});
 test('dry-run emits plans without remote writes', async () => {
   const old = process.env.TRIAGE_MODE;
   process.env.TRIAGE_MODE = 'dry-run';
