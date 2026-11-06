@@ -44,14 +44,21 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
         }) {
             LyricsVocalView(line, position, mainFocused, resting, translation, romanization, wordAnimation,
                 if (line.isBackground) fontSize * .75f else fontSize, weightMode, display, effects, distance,
-                vocalModifier = Modifier.testTag("lyric_vocal_$index"), monetTone = monetTone)
+                vocalModifier = Modifier.testTag("lyric_vocal_$index"), monetTone = monetTone,
+                reserveAuxiliarySpace = line.backgroundVocals.isNotEmpty())
             line.backgroundVocals.forEachIndexed { bgIndex, bg ->
                 val bgFocused by remember(bg, position) { derivedStateOf { position.value >= bg.startTimeMs && position.value < bg.endTimeMs } }
+                val bgAlpha = animateFloatAsState(if (bgFocused) 1f else 0f,
+                    tween(180), label = "background vocal opacity")
+                // Measure every backing vocal at its full height even before it is sung.
+                // Only the ink fades; translations and wrapped lines must not shift the next row.
                 Column(Modifier.padding(top = 10.dp).testTag("lyric_bg_${index}_$bgIndex")
+                    .then(if (bgFocused) Modifier else Modifier.clearAndSetSemantics {})
                     .semantics { selected = bgFocused }
-                    .clickable(enabled = canSeek, role = Role.Button) { onSeek(bg.startTimeMs) }
-                    .graphicsLayer { alpha = if (bgFocused) 1f else .55f }) {
-                    LyricsVocalView(bg, position, bgFocused, false, translation, romanization, wordAnimation, fontSize * .75f, weightMode, display, effects, distance, monetTone = monetTone)
+                    .clickable(enabled = canSeek && bgFocused, role = Role.Button) { onSeek(bg.startTimeMs) }
+                    .graphicsLayer { alpha = bgAlpha.value }) {
+                    LyricsVocalView(bg, position, bgFocused, false, translation, romanization, wordAnimation, fontSize * .75f, weightMode, display, effects, distance,
+                        monetTone = monetTone, reserveAuxiliarySpace = true)
                 }
             }
         }
@@ -61,7 +68,7 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
 @Composable private fun LyricsVocalView(line: LyricLine, position: State<Long>, focused: Boolean,
     resting: Boolean, translation: Boolean, romanization: Boolean, wordAnimation: Boolean, size: Float, weightMode: LyricsWeight,
     display: LyricsDisplayOptions, effects: Boolean, distance: Int, vocalModifier: Modifier = Modifier,
-    monetTone: MonetTone) {
+    monetTone: MonetTone, reserveAuxiliarySpace: Boolean = false) {
     val weight = lyricsFontWeight(weightMode, focused || resting, display.fontWeight)
     val reservedWeight = lyricsFontWeight(LyricsWeight.ALL, true, display.fontWeight)
     val auxiliaryWeight = lyricsFontWeight(weightMode, true, display.fontWeight)
@@ -87,8 +94,10 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
         prepareDrawResources = true, prewarmGlow = display.glow && beforeStart && distance == 1,
         )
     LyricsAuxiliaryText(line.translation, position, translation && focused, size * .6f,
-        auxiliaryWeight, align, "lyric_translation", .65f, animateHeight = false)
+        auxiliaryWeight, align, "lyric_translation", .65f,
+        reserveSpace = reserveAuxiliarySpace && translation, animateHeight = false)
     LyricsAuxiliaryText(line.romanization, position, romanization && focused, size * .53f,
-        auxiliaryWeight, align, "lyric_romanization", .5f, animateHeight = false)
+        auxiliaryWeight, align, "lyric_romanization", .5f,
+        reserveSpace = reserveAuxiliarySpace && romanization, animateHeight = false)
     }
 }
