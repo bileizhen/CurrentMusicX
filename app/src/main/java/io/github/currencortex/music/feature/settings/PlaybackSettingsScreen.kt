@@ -37,8 +37,7 @@ import kotlin.math.roundToInt
         } }
         item("lyrics") { SettingsSection("歌词显示", MusicIcons.File,
             footer = "字体、翻译、罗马音及歌词效果可在播放器的歌词显示选项中调整。") {
-            LyricsStyleSelector(settings.lyricsDisplay.style, vm::lyricsStyle,
-                Modifier.padding(horizontal = 16.dp))
+            LyricsStyleSelector(settings.lyricsDisplay.style, vm::lyricsStyle)
             if (settings.lyricsDisplay.style == LyricsStyle.APPLE_MUSIC) {
                 SettingsDivider()
                 MusicDestinationRow("Apple Music 自定义", { appleLyricsOpen = true },
