@@ -16,7 +16,7 @@ internal object SongSharePoster {
     const val WIDTH = 1080
     const val HEIGHT = 1440
 
-    fun render(content: SongShareContent, cover: Bitmap?): Bitmap {
+    fun render(content: SongShareContent, cover: Bitmap?, style: SongShareStyle = SongShareStyle.SQUARE): Bitmap {
         val output = Bitmap.createBitmap(WIDTH, HEIGHT, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(output)
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -40,6 +40,20 @@ internal object SongSharePoster {
         glow(palette.primary, 1040f, 160f, 900f)
         glow(palette.secondary, 40f, 1400f, 950f)
         paint.shader = null
+        if (style == SongShareStyle.IMMERSIVE && cover != null) {
+            val scale = maxOf(WIDTH.toFloat() / cover.width, HEIGHT.toFloat() / cover.height)
+            val left = (WIDTH - cover.width * scale) / 2f
+            val top = (HEIGHT - cover.height * scale) / 2f
+            paint.isFilterBitmap = true
+            canvas.drawBitmap(cover, null, RectF(left, top, WIDTH - left, HEIGHT - top), paint)
+        }
+        if (style == SongShareStyle.IMMERSIVE) {
+            paint.shader = LinearGradient(0f, 0f, 0f, HEIGHT.toFloat(),
+                intArrayOf(0x99000000.toInt(), 0x10000000, 0x33000000, 0xdd000000.toInt(), 0xf5000000.toInt()),
+                floatArrayOf(0f, .22f, .45f, .76f, 1f), Shader.TileMode.CLAMP)
+            canvas.drawRect(0f, 0f, WIDTH.toFloat(), HEIGHT.toFloat(), paint)
+            paint.shader = null
+        }
         fun label(text: String, x: Float, y: Float, size: Float, color: Int, bold: Boolean = false) {
             paint.color = color; paint.textSize = size
             paint.typeface = if (bold) Typeface.DEFAULT_BOLD else Typeface.DEFAULT
@@ -47,21 +61,23 @@ internal object SongSharePoster {
         }
         label("CurrentMusic", 90f, 112f, 40f, Color.WHITE, true)
         label("MUSIC SHARE", 90f, 154f, 22f, 0x88ffffff.toInt(), true)
-        val artwork = RectF(230f, 180f, 850f, 800f)
-        canvas.save()
-        canvas.clipPath(Path().apply { addRoundRect(artwork, 34f, 34f, Path.Direction.CW) })
-        paint.color = Color.WHITE
-        if (cover != null) {
-            val side = minOf(cover.width, cover.height)
-            val left = (cover.width - side) / 2; val top = (cover.height - side) / 2
-            paint.isFilterBitmap = true
-            canvas.drawBitmap(cover, Rect(left, top, left + side, top + side), artwork, paint)
-        } else {
-            paint.color = dark(palette.primary, .5f)
-            canvas.drawRect(artwork, paint)
-            label("♪", 438f, 592f, 230f, 0xccffffff.toInt())
+        if (style == SongShareStyle.SQUARE) {
+            val artwork = RectF(230f, 180f, 850f, 800f)
+            canvas.save()
+            canvas.clipPath(Path().apply { addRoundRect(artwork, 34f, 34f, Path.Direction.CW) })
+            paint.color = Color.WHITE
+            if (cover != null) {
+                val side = minOf(cover.width, cover.height)
+                val left = (cover.width - side) / 2; val top = (cover.height - side) / 2
+                paint.isFilterBitmap = true
+                canvas.drawBitmap(cover, Rect(left, top, left + side, top + side), artwork, paint)
+            } else {
+                paint.color = dark(palette.primary, .5f)
+                canvas.drawRect(artwork, paint)
+                label("♪", 438f, 592f, 230f, 0xccffffff.toInt())
+            }
+            canvas.restore()
         }
-        canvas.restore()
         var titleSize = 54f
         while (titleSize > 40f && paragraph(content.title, titleSize, 900, 20, Color.WHITE, true).lineCount > 3) titleSize -= 2f
         val title = paragraph(content.title, titleSize, 900, 3, Color.WHITE, true)
@@ -97,7 +113,7 @@ internal object SongSharePoster {
 
     internal fun qr(url: String): Bitmap {
         val matrix = QRCodeWriter().encode(url, BarcodeFormat.QR_CODE, 216, 216,
-            mapOf(EncodeHintType.MARGIN to 2, EncodeHintType.CHARACTER_SET to "UTF-8",
+            mapOf(EncodeHintType.MARGIN to 4, EncodeHintType.CHARACTER_SET to "UTF-8",
                 EncodeHintType.ERROR_CORRECTION to ErrorCorrectionLevel.M))
         val pixels = IntArray(matrix.width * matrix.height) { i -> if (matrix[i % matrix.width, i / matrix.width]) Color.BLACK else Color.WHITE }
         return Bitmap.createBitmap(pixels, matrix.width, matrix.height, Bitmap.Config.ARGB_8888)
