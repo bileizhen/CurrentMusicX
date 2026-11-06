@@ -71,15 +71,21 @@ enum class RoomScope(val query: String) { PUBLIC("public"), MINE("mine") }
     fun song(fallback: Long = id) = Song(id.takeIf { it > 0 } ?: fallback, name, artists, cover = pic, durationMs = duration)
     companion object { fun from(song: Song) = RoomTrack(song.id, song.name, song.artists, song.cover, song.durationMs) }
 }
-@Serializable data class RoomStream(val url: String = "")
+@Serializable data class RoomStream(val url: String = "", val expireAt: Long = 0)
 @Serializable data class RoomTimeline(val trackNcmId: Long = 0, val trackMeta: RoomTrack? = null,
     val stream: RoomStream? = null, @Serializable(with = RoomBooleanSerializer::class) val playing: Boolean = false,
-    @Serializable(with = RoomPositionSerializer::class) val basePosition: Long = 0, val baseAt: Long = 0)
+    @Serializable(with = RoomPositionSerializer::class) val basePosition: Long = 0, val baseAt: Long = 0,
+    val trackRevision: Long? = null)
 @Serializable data class RoomQueueItem(@Serializable(with = RoomIdSerializer::class) val id: String, val name: String = "", val artists: String = "",
     val status: String = "pending", val requester: String = "", @Serializable(with = RoomBooleanSerializer::class) val mine: Boolean = false)
+private const val LEGACY_ROOM_ROLE = "__role_not_provided__"
 @Serializable data class RoomDetail(val room: RoomInfo, val members: List<RoomMember> = emptyList(),
-    val queue: List<RoomQueueItem> = emptyList(), val timeline: RoomTimeline? = null, val latestSeq: Long = 0) {
-    fun role(userId: Long) = members.firstOrNull { it.userId == userId }?.let { RoomRole.parse(it.role) }
+    val queue: List<RoomQueueItem> = emptyList(), val timeline: RoomTimeline? = null, val latestSeq: Long = 0,
+    val role: String? = LEGACY_ROOM_ROLE, val serverTime: Long = 0) {
+    // An explicit null revokes membership even if a stale member row still exists.
+    fun role(userId: Long) = if (role == LEGACY_ROOM_ROLE)
+        members.firstOrNull { it.userId == userId }?.let { RoomRole.parse(it.role) }
+        else role?.let(RoomRole::parse)
 }
 object RoomPermissions {
     fun kick(actor: RoomRole?, target: RoomRole) = actor == RoomRole.OWNER && target != RoomRole.OWNER || actor == RoomRole.ADMIN && target == RoomRole.MEMBER
