@@ -110,7 +110,7 @@ data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
                 itemsIndexed(state.page.songs, key = { index, song -> "$index:${song.id}" }) { index, song ->
                     PlaylistTrack(song, queue.current?.id == song.id, likes[song.id] == true,
                         { if (vm.container.playerController.state.value.mode == io.github.currencortex.music.core.media.PlayerMode.LOCAL)
-                            play(state.page.songs, index) else vm.error.value = "请先退出一起听或结束投屏" },
+                            play(state.page.songs, index) else vm.error.value = "请先退出一起听" },
                         { vm.enqueue(song, true) }, { vm.enqueue(song, false) }) {
                         val dismiss = LocalDismissSongMenu.current
                         MusicDestinationRow(if (likes[song.id] == true) "取消喜欢" else "喜欢", { dismiss(); vm.toggleLike(song) }, enabled = !busy)

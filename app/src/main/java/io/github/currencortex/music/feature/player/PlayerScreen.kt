@@ -56,7 +56,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 @OptIn(ExperimentalLayoutApi::class)
 @Composable fun PlayerScreen(vm: PlayerViewModel, onBack: () -> Unit, onToggle: () -> Unit,
     actions: (@Composable (io.github.currencortex.music.data.song.Song) -> Unit)? = null,
-    onCast: (() -> Unit)? = null, onRoom: (() -> Unit)? = null, onDialogActive: (Boolean) -> Unit = {},
+    onRoom: (() -> Unit)? = null, onDialogActive: (Boolean) -> Unit = {},
     onNetwork: (() -> Unit)? = null, onLike: (() -> Unit)? = null, onEqualizer: (() -> Unit)? = null,
     onAiNavigate: (String) -> Unit = {}, roamingRequest: Int = 0, onRoamingRequestConsumed: () -> Unit = {}) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -420,8 +420,6 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         scope.launch { pager.animateScrollToPage(if (pager.targetPage == 0) 1 else 0,
                             animationSpec = tween(260, easing = LinearOutSlowInEasing)) }
                     })
-                if (onCast != null && state.song?.privateLibrary != true) MusicDestinationRow(if (state.mode == PlayerMode.CAST) "投屏控制" else "投屏",
-                    modifier = Modifier.testTag("open_player_cast"), onClick = { dismiss(); onCast() })
                 if (controlsRevealed && settings.lyricsDisplay.hideControls && content == PlayerContent.LYRICS)
                     MusicDestinationRow("隐藏控制面板", modifier = Modifier.testTag("lyrics_conceal_controls"), onClick = { controlsRevealed = false; dismiss() })
                 if (actions != null && queue.current != null) MusicDestinationRow("歌曲操作", onClick = {

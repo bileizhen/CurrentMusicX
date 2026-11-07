@@ -368,7 +368,7 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
     // Select immediately; recommendations fill the queue later or restore the previous mode on failure.
     fun setPlaybackMode(mode: PlaybackMode) {
         if (together.state.value.active) { together.setQueueMode(mode); return }
-        if (state.value.mode != PlayerMode.LOCAL) { _actions.update { it.copy(error = "请先退出一起听或结束投屏") }; return }
+        if (state.value.mode != PlayerMode.LOCAL) { _actions.update { it.copy(error = "请先退出一起听") }; return }
         if (mode != PlaybackMode.HEART) {
             heartStartRevision++
             heartStartJob?.cancel()

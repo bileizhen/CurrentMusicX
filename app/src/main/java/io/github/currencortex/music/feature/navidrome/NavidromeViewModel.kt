@@ -123,7 +123,7 @@ class NavidromeViewModel(val container: AppContainer) : ViewModel() {
     }
     fun enqueue(song: Song, next: Boolean = false) {
         if (container.playerController.state.value.mode != io.github.currencortex.music.core.media.PlayerMode.LOCAL) {
-            actionError.value = "请先退出一起听或结束投屏，再播放私有曲库"; return
+            actionError.value = "请先退出一起听，再播放私有曲库"; return
         }
         container.playerController.add(song, next); message.value = if (next) "已设为下一首" else "已加入播放队列"
     }

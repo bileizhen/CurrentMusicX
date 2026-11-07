@@ -70,7 +70,7 @@ class PersonalRoamingController(private val repository: PersonalRoamingRepositor
     fun start(choice: RoamingChoice = state.value.choice) {
         if (!state.value.ready) return
         if (player.state.value.mode != PlayerMode.LOCAL) {
-            state.update { it.copy(error = "请先退出一起听或结束投屏，再开启私人漫游") }; return
+            state.update { it.copy(error = "请先退出一起听，再开启私人漫游") }; return
         }
         val epoch = ++generation
         job?.cancel(); waitingRevision = null; failedChoice = null
@@ -157,13 +157,11 @@ class PersonalRoamingController(private val repository: PersonalRoamingRepositor
     }
     fun stop(restore: Boolean = state.value.settings.restoreQueue) {
         ++generation; job?.cancel(); job = null; waitingRevision = null; failedChoice = null
-        val owned = station != null && player.queue.state.value.radioSession == station
+        val owned = station != null && player.queue.state.value.radioSession == station && player.state.value.mode == PlayerMode.LOCAL
         station = null
         state.update { it.copy(active = false, loading = false, waiting = false) }
         if (owned) {
-            // An external player keeps the selected list, but no longer has a station to refill it.
-            // Restoring local playback is only valid before handing off to that external player.
-            if (restore && original != null && player.state.value.mode == PlayerMode.LOCAL) {
+            if (restore && original != null) {
                 player.pause(); player.queue.restore(original!!)
                 if (player.queue.state.value.current == null) player.clear() else player.load(false)
             } else player.queue.state.value = player.queue.state.value.copy(radioSession = null)
