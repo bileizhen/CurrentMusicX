@@ -691,6 +691,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     entry(route) {
                         Box(Modifier.fillMaxSize()) {
                             when {
+                                route == "user/admin" -> {
+                                    val vm: io.github.currencortex.music.feature.admin.AdminViewModel = viewModel(key = route,
+                                        factory = viewModelFactory { io.github.currencortex.music.feature.admin.AdminViewModel(container) })
+                                    io.github.currencortex.music.feature.admin.AdminScreen(vm, ::navigateBack)
+                                }
                                 route == "user/announcements" -> {
                                     val vm: io.github.currencortex.music.feature.announcement.AnnouncementArchiveViewModel =
                                         viewModel(key = route, factory = viewModelFactory {
