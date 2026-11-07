@@ -157,11 +157,13 @@ class PersonalRoamingController(private val repository: PersonalRoamingRepositor
     }
     fun stop(restore: Boolean = state.value.settings.restoreQueue) {
         ++generation; job?.cancel(); job = null; waitingRevision = null; failedChoice = null
-        val owned = station != null && player.queue.state.value.radioSession == station && player.state.value.mode == PlayerMode.LOCAL
+        val owned = station != null && player.queue.state.value.radioSession == station
         station = null
         state.update { it.copy(active = false, loading = false, waiting = false) }
         if (owned) {
-            if (restore && original != null) {
+            // An external player keeps the selected list, but no longer has a station to refill it.
+            // Restoring local playback is only valid before handing off to that external player.
+            if (restore && original != null && player.state.value.mode == PlayerMode.LOCAL) {
                 player.pause(); player.queue.restore(original!!)
                 if (player.queue.state.value.current == null) player.clear() else player.load(false)
             } else player.queue.state.value = player.queue.state.value.copy(radioSession = null)
