@@ -325,7 +325,16 @@ internal fun chineseMonth(month:Int)=listOf("一","二","三","四","五","六",
     Box(modifier.padding(vertical=8.dp).clip(CircleShape).background(FootprintRed).clickable(onClick=click).padding(horizontal=20.dp,vertical=10.dp),contentAlignment=Alignment.Center){FootprintText(label,color=Color.White,weight=FontWeight.SemiBold)}
 }
 @Composable internal fun FootprintDialog(title:String,dismiss:()->Unit,content:@Composable ColumnScope.()->Unit) {
-    Dialog(dismiss) { FootprintCard { Column(Modifier.padding(24.dp),verticalArrangement=Arrangement.spacedBy(16.dp)) {
-        FootprintText(title,size=20f,weight=FontWeight.Bold);content();FootprintAction("知道了",dismiss)
-    } } }
+    Dialog(dismiss) {
+        BoxWithConstraints {
+            FootprintCard(Modifier.heightIn(max = maxHeight * .85f)) {
+                Column(Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    FootprintText(title, size = 20f, weight = FontWeight.Bold)
+                    Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
+                        .testTag("listening_dialog_content"), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+                    FootprintAction("知道了", dismiss, Modifier.testTag("listening_dialog_dismiss"))
+                }
+            }
+        }
+    }
 }
