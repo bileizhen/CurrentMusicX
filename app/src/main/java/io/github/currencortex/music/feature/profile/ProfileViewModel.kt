@@ -29,9 +29,19 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
     init {
         viewModelScope.launch {
             container.sessionRestored.await()
-            combine(container.accountRepository.state.map { it.account?.id }.distinctUntilChanged(),
+            // Only our own profile contains local account/library data. Public profiles
+            // must not reload when the viewer changes a music source or playlist.
+            val libraryChanges = if (userId == null) {
+                combine(container.primaryLibrary.identity,
+                    container.neteaseSessions.state.map { it.revision }.distinctUntilChanged(),
+                    container.libraryRepository.revision, container.neteaseLibrary.revision,
+                    container.audioSettings.state.map { it.provider }.distinctUntilChanged()) { _, _, _, _, _ -> Unit }
+                    .combine(container.neteaseSongActions.revision) { _, _ -> Unit }
+            } else flowOf(Unit)
+            combine(container.accountRepository.sessionRevision,
                 container.musicSettings.state.map { it.server }.distinctUntilChanged(), container.profileRepository.revision, refresh)
-                { id, server, revision, refresh -> listOf(id, server, revision, refresh) }
+                { _, _, _, _ -> Unit }
+                .combine(libraryChanges) { _, _ -> Unit }
                 .collectLatest { state.value = ProfileState(); load() }
         }
     }
