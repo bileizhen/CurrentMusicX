@@ -148,7 +148,9 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
         val d = api.get<ArtistAlbumsDto>("ncm/artist/albums", mapOf("id" to "$id", "offset" to "$offset", "limit" to "30", "order" to order))
         return d.albums.map(AlbumDto::domain) to d.more
     }
-    suspend fun album(id: Long) = api.get<AlbumDto>("ncm/album", mapOf("id" to "$id")).domain().copy(id = id)
+    suspend fun album(id: Long) = api.get<AlbumDto>("ncm/album", mapOf("id" to "$id")).domain().let { album ->
+        album.copy(id = id, songs = album.songs.map { it.copy(albumId = id) })
+    }
     suspend fun catalog(query: String, albums: Boolean, offset: Int = 0): CatalogPage {
         val d = api.get<CatalogSearchDto>("ncm/search", mapOf("keywords" to query, "type" to if (albums) "album" else "artist", "limit" to "30", "offset" to "$offset"))
         return if (albums) CatalogPage(d.albums.map { CatalogEntry(it.id, it.name, it.pic.replace("http:", "https:"), it.artist) }, d.hasMore.album, d.totals.album)
