@@ -17,6 +17,11 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.ZoneId
+import java.time.Clock
+
+internal fun listeningToday(source: ListeningSource, clock: Clock = Clock.systemUTC(),
+    deviceZone: ZoneId = ZoneId.systemDefault()): LocalDate =
+    LocalDate.now(clock.withZone(if (source == ListeningSource.NETEASE) ZoneId.of("Asia/Shanghai") else deviceZone))
 
 @Composable internal fun ListeningScreen(container: AppContainer, onBack: () -> Unit, onLogin: () -> Unit,
     onNavigate: (String) -> Unit, onPlay: (io.github.currencortex.music.data.song.Song) -> Unit,
@@ -24,18 +29,18 @@ import java.time.ZoneId
     val uriHandler = LocalUriHandler.current
     val context = LocalContext.current
     val settings by container.musicSettings.state.collectAsStateWithLifecycle()
-    var periodName by rememberSaveable { mutableStateOf(ListeningPeriod.WEEK.name) }
-    var anchorText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
-    var selectedText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
-    var retry by remember { mutableIntStateOf(0) }
     val source = settings.listeningSource
+    var today by remember(source) { mutableStateOf(listeningToday(source)) }
+    var periodName by rememberSaveable { mutableStateOf(ListeningPeriod.WEEK.name) }
+    var anchorText by rememberSaveable(source) { mutableStateOf(today.toString()) }
+    var selectedText by rememberSaveable(source) { mutableStateOf(today.toString()) }
+    var retry by remember { mutableIntStateOf(0) }
     val period = ListeningPeriod.valueOf(periodName)
     val anchor = LocalDate.parse(anchorText)
     val selected = LocalDate.parse(selectedText)
     val session by container.neteaseSessions.state.collectAsStateWithLifecycle()
     val playback by container.playerController.state.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    var today by remember(source) { mutableStateOf(LocalDate.now(if (source == ListeningSource.NETEASE) ZoneId.of("Asia/Shanghai") else ZoneId.systemDefault())) }
     LaunchedEffect(source) {
         retry = 0
         if (anchor > today) anchorText = today.toString()
@@ -43,7 +48,7 @@ import java.time.ZoneId
     }
     LaunchedEffect(source, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
         while (true) {
-            today = LocalDate.now(if (source == ListeningSource.NETEASE) ZoneId.of("Asia/Shanghai") else ZoneId.systemDefault())
+            today = listeningToday(source)
             delay(15_000)
         }
     } }
