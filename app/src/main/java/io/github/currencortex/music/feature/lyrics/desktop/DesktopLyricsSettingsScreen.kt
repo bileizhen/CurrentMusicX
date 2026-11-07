@@ -164,8 +164,7 @@ import kotlin.math.roundToInt
                     } }
                 } }
             } }
-            item("window") { SettingsSection("窗口位置", MusicIcons.BottomBar,
-                footer = "固定水平居中。点击切换歌词与帧率，左右滑动切歌，长按编辑；也可从通知解锁。") {
+            item("window") { SettingsSection("窗口位置", MusicIcons.BottomBar) {
                 DesktopSlider("高度", "${(islandHeight * 100).roundToInt()}%", islandHeight, 0f..1f, "desktop_island_height",
                     { islandHeight = it }, { saveIslandHeight(islandHeight) }, { value -> islandHeight = value; saveIslandHeight(value) },
                     reset = { islandHeight = DESKTOP_ISLAND_HEIGHT; saveIslandHeight(islandHeight) },
@@ -175,8 +174,7 @@ import kotlin.math.roundToInt
                 SettingsSwitch("锁定窗口", options.locked, { value -> edit { it.copy(locked = value) } },
                     Modifier.testTag("desktop_lock"), enabled = ready && options.enabled, summary = "固定位置，保留切换与切歌手势")
             } }
-            item("sync") { SettingsSection("歌词同步", MusicIcons.Update,
-                footer = "正值提前，负值延后。拖动时预览，松手保存；仅影响桌面歌词。") {
+            item("sync") { SettingsSection("歌词同步", MusicIcons.Update) {
                 val range = maxOf(3000f, abs(offset))
                 DesktopSlider("歌词偏移", if (offset == 0f) "同步" else "${if (offset > 0) "+" else ""}${offset.toInt()} ms",
                     offset, -range..range, "desktop_offset", { offset = (it / 100).roundToInt() * 100f }, { saveOffset(offset) },

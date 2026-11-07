@@ -240,6 +240,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
                     if (sidePage.direction > 0f) PlayerListeningPage(vm.container, onPlay = sidePage::close,
                         onBinding = { sidePage.close(); onAiNavigate("user/binding") },
+                        onListening = { sidePage.close(); onAiNavigate("user/listening") },
                         onDialogActive = { sideDialog = it })
                     else PlayerSidePageContent(queue.current,
                         quality = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else state.audioInfo?.label ?: settings.quality.label,
