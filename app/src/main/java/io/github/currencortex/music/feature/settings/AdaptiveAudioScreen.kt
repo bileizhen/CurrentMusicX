@@ -107,7 +107,6 @@ import kotlin.math.roundToInt
                                 onPreview = { vm.previewAdaptive(band(it)) }, onCancel = vm::clearAdaptivePreview,
                                 onSave = { vm.commitAdaptive(band(it)) })
                         }
-                        SettingsHint(if (liveEq) "圆点显示实时增益，手动微调始终单独保留。" else "拖动圆点调音，空白轨道可上下滚动。")
                     }
                 }
                 item("dynamic") {
@@ -143,7 +142,6 @@ import kotlin.math.roundToInt
                                 { listOf("舒缓", "标准", "灵敏", "快速", "极快")[it.roundToInt().coerceIn(0, 4)] }, controls,
                                 "adaptive_speed", steps = 3, onPreview = { value -> vm.previewAdaptive { it.copy(speed = value.roundToInt()) } },
                                 onCancel = vm::clearAdaptivePreview, onSave = { value -> vm.commitAdaptive { it.copy(speed = value.roundToInt()) } })
-                            SettingsHint("舒缓更稳定，快速更跟手；鼓点等瞬态会平滑过渡。")
                         }
                     }
                 }
@@ -155,7 +153,6 @@ import kotlin.math.roundToInt
                             AudioAdjustment("低频力度", settings.bassStrength.toFloat(), 0f..100f, { "${it.roundToInt()}%" },
                                 enabled, "adaptive_bass_strength", onPreview = { value -> vm.previewAdaptive { it.copy(bassStrength = value.roundToInt()) } },
                                 onCancel = vm::clearAdaptivePreview, onSave = { value -> vm.commitAdaptive { it.copy(bassStrength = value.roundToInt()) } })
-                            SettingsHint("从轻量开始，按扬声器的听感增加力度。")
                         }
                     }
                 }

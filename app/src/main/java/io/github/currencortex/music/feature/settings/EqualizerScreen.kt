@@ -83,8 +83,7 @@ import java.util.Locale
                 }
                 }
             } }
-            item { SettingsSection("频段调节", MusicIcons.Scale,
-                footer = "−12 dB 至 +12 dB · 1 dB 步进 · 自动保存") { Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            item { SettingsSection("频段调节", MusicIcons.Scale) { Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 EqualizerSettings.FREQUENCIES.forEachIndexed { index, frequency ->
                     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text(if (frequency >= 1000) String.format(Locale.ROOT, "%.1f kHz", frequency / 1000f) else "$frequency Hz",

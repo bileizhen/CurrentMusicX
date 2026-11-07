@@ -48,8 +48,7 @@ import kotlin.math.roundToInt
                 }
             }
         } }
-        item("lyrics") { SettingsSection("歌词样式", MusicIcons.File,
-            footer = "字体、翻译、罗马音及歌词效果可在播放器的歌词显示选项中调整。") {
+        item("lyrics") { SettingsSection("歌词样式", MusicIcons.File) {
             LyricsStyleSelector(settings.lyricsDisplay.style, vm::lyricsStyle)
             if (settings.lyricsDisplay.style == LyricsStyle.APPLE_MUSIC) {
                 SettingsDivider()
@@ -57,7 +56,7 @@ import kotlin.math.roundToInt
                     Modifier.testTag("open_apple_lyrics_settings"), summary = "字号、间距、动画速度与光效")
             }
         } }
-        item("transition") { SettingsSection("歌曲衔接", MusicIcons.Update, footer = "自动切歌时生效。智能过渡和淡入淡出仅能选择一种。") {
+        item("transition") { SettingsSection("歌曲衔接", MusicIcons.Update) {
             Column(Modifier.testTag("playback_transition").semantics { selectableGroup() }) {
                 modes.entries.forEachIndexed { index, (mode, title) ->
                     if (index > 0) SettingsDivider()
@@ -92,15 +91,13 @@ import kotlin.math.roundToInt
             SettingsSwitch("恢复播放队列", settings.restoreQueue, vm::restore,
                 summary = "重新打开应用时回到上次的播放位置", modifier = Modifier.testTag("restore_queue"))
         } }
-        item("preload") { SettingsSection("预加载", MusicIcons.Download,
-            footer = "正常播放后提前加载下一首。播放缓存默认最多 1 GiB，按最近使用情况自动回收；完整缓存可离线重播，下载文件不受影响。") {
+        item("preload") { SettingsSection("预加载", MusicIcons.Download) {
             SettingsSwitch("预加载下一首", settings.preloadAudio, vm::preload, modifier = Modifier.testTag("preload_audio"))
             SettingsDivider()
             SettingsSwitch("允许计费网络预加载", settings.preloadMetered, vm::preloadMetered,
                 summary = "包括移动网络，会额外消耗流量", enabled = settings.preloadAudio, modifier = Modifier.testTag("preload_metered"))
         } }
-        item("likes") { SettingsSection("红心与点赞", MusicIcons.Heart,
-            footer = "自动模式下，已绑定网易云则同步到网易云，否则存入 CurrentMusic。") {
+        item("likes") { SettingsSection("红心与点赞", MusicIcons.Heart) {
             SettingsOptionsRow("默认红心位置", settings.likeMode.label, LikeMode.entries.map { mode ->
                 SettingsOption("like_mode_${mode.name}", mode.label, mode == settings.likeMode,
                     summary = when (mode) {
