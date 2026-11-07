@@ -38,11 +38,6 @@ class DlnaController(private val player: ExternalPlayer, private val music: Musi
             try {
                 check(player.beginExternal(PlayerMode.CAST, this@DlnaController))
                 mutex.withLock { load(epoch, player.state.value.positionMs) }
-                if (!valid(epoch)) return@launch
-                polling = scope.launch { while (isActive && valid(epoch)) {
-                    delay(2000)
-                    mutex.withLock { poll(epoch) }
-                } }
             } catch (e: CancellationException) { throw e }
             catch (_: Exception) { if (epoch == generation) state.update { it.copy(error = "投屏失败，请重试或选择其他设备") } }
             finally { if (epoch == generation) state.update { it.copy(busy = false) } }
@@ -82,6 +77,17 @@ class DlnaController(private val player: ExternalPlayer, private val music: Musi
         if (!valid(epoch)) return
         state.update { it.copy(busy = false, quality = if (fallback) "极高（兼容）" else "无损", error = null) }
         player.state.value = PlayerState(song = song, playing = true, positionMs = position, durationMs = song.durationMs, mode = PlayerMode.CAST)
+        ensurePolling(epoch)
+    }
+    /** Every successful load, including a retry after the first failure, needs device updates. */
+    private fun ensurePolling(epoch: Long) {
+        if (!valid(epoch) || polling?.isActive == true) return
+        polling = scope.launch {
+            while (isActive && valid(epoch)) {
+                delay(2000)
+                mutex.withLock { if (valid(epoch)) poll(epoch) }
+            }
+        }
     }
     private suspend fun poll(epoch: Long) {
         try {
