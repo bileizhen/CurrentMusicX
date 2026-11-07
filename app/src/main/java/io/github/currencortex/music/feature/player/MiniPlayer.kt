@@ -129,7 +129,6 @@ private fun PlayerState.miniTransport() =
     var dragged by remember { mutableFloatStateOf(0f) }
     val subtitle = when (state.mode) {
         PlayerMode.ROOM -> if (pair != null) "双人一起听" else if (state.canControlPlayback) "房间控制" else "跟随房间"
-        PlayerMode.CAST -> "正在投屏"
         else -> song?.artists.orEmpty()
     }
     val surface = LocalMusicGlassSurface.current

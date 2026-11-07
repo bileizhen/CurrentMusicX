@@ -162,7 +162,7 @@ import kotlinx.coroutines.launch
     }
     val user = state.profile?.user ?: account.account?.takeIf { onBack == null }?.let {
         ProfileUser(id = it.id, username = it.username, nickname = it.nickname, avatar = it.avatar,
-            isAdmin = it.isAdmin, isSuper = it.isSuper, title = it.title, level = it.level, points = it.points)
+            isAdmin = it.isAdmin, isSuper = it.isSuper, title = it.title, level = it.level, points = it.points, isOwner = it.isOwner)
     }
     val own = user != null && user.id == account.account?.id
     val bottomInset = LocalMusicBottomInset.current
@@ -228,7 +228,8 @@ import kotlinx.coroutines.launch
                 item("library") { ProfileLibrarySection(navigate) }
                 item("services") { ProfileServicesSection(navigate, tasksEnabled == true,
                     navidromeConfigured = navidromeAccount.configured, embyConfigured = embyAccount.configured) }
-                item("account") { ProfileAccountSection(navigate) }
+                item("account") { ProfileAccountSection(navigate, administrator = !account.loading && !account.offline &&
+                    account.account?.let { it.isAdmin || it.isSuper || it.isOwner } == true) }
             }
             state.profile?.current?.let { song -> item { SettingsListHeader("当前在听")
                 SongRow(SongRowUi(song.toDomain()), { play(listOf(song.toDomain()), 0) },
@@ -241,7 +242,7 @@ import kotlinx.coroutines.launch
             }
             val lists = state.profile?.playlists.orEmpty()
             if (lists.isNotEmpty()) item { SettingsListHeader(if (own) "我的歌单" else "公开歌单") }
-            items(lists, key = { "playlist-${it.id}" }) { list ->
+            items(lists, key = { "playlist-${it.source}-${it.id}" }) { list ->
                 SettingsGroup(Modifier.padding(bottom = 12.dp)) {
                     SettingsUiScope {
                         SettingsPreference(list.name, "${list.count} 首" + if (list.source in setOf("ncm", "netease")) " · 网易云" else "",

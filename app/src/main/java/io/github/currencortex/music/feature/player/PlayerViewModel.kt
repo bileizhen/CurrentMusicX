@@ -46,8 +46,8 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
     val currentSong = queue.map { it.current }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), queue.value.current)
     val settings = container.musicSettings.state
-    val ai = PlayerAiController(io.github.currencortex.music.data.profile.PlayerAiRepository(session = { container.audioSession() },
-        routeServer = container.serverRouter::resolve), viewModelScope) { container.audioSession() }
+    val ai = PlayerAiController(io.github.currencortex.music.data.profile.PlayerAiRepository(session = { container.projectSession() },
+        routeServer = container.serverRouter::resolve), viewModelScope) { container.projectSession() }
     fun openAi() { queue.value.current?.let(ai::open) }
     fun playAiCard(card: io.github.currencortex.music.data.profile.PostAttachment) {
         val song = Song(card.id, card.name, card.sub, cover = card.pic)
@@ -368,7 +368,7 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
     // Select immediately; recommendations fill the queue later or restore the previous mode on failure.
     fun setPlaybackMode(mode: PlaybackMode) {
         if (together.state.value.active) { together.setQueueMode(mode); return }
-        if (state.value.mode != PlayerMode.LOCAL) { _actions.update { it.copy(error = "请先退出一起听或结束投屏") }; return }
+        if (state.value.mode != PlayerMode.LOCAL) { _actions.update { it.copy(error = "请先退出一起听") }; return }
         if (mode != PlaybackMode.HEART) {
             heartStartRevision++
             heartStartJob?.cancel()

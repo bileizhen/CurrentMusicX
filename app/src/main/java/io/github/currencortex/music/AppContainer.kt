@@ -141,6 +141,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     fun musicSession(authenticated: Boolean = true) = RequestSession(
         accountRepository.server.ifBlank { musicSettings.state.value.server },
         accountRepository.token.takeIf { authenticated }, nativeNetease?.sessions?.state?.value?.revision)
+    /** Community features belong to the project account, independently of the audio provider. */
+    fun projectSession() = RequestSession(
+        accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)
     fun audioSession() = if (audioSettings.access().provider == AudioProvider.NETEASE)
         RequestSession("https://music.163.com/", null, neteaseSessions.state.value.revision)
         else RequestSession(accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)
@@ -436,13 +439,6 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         { song -> musicRepository.source(song, AudioQuality.from(musicSettings.state.value.quality.value), audioSession()).url },
         details = musicRepository::details,
         trace = { if (BuildConfig.DEBUG) android.util.Log.d("ListenTogetherSync", it) })
-    private val dlnaSoap = io.github.currencortex.music.core.dlna.SoapClient(networkSocketFactory = {
-        val manager = context.getSystemService(android.net.ConnectivityManager::class.java)
-        manager.allNetworks.firstOrNull { manager.getNetworkCapabilities(it)?.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) == true }?.socketFactory
-    })
-    val dlnaDiscovery = io.github.currencortex.music.core.dlna.DlnaDiscovery(context, soap = dlnaSoap)
-    val dlnaController = io.github.currencortex.music.core.dlna.DlnaController(externalPlayer ?: playerController, musicRepository,
-        { audioSession() }, playerScope, dlnaSoap)
     val ready = CompletableDeferred<Unit>()
     val sessionRestored = CompletableDeferred<Unit>()
     init {
@@ -513,7 +509,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         }
         playerScope.launch {
             accountRepository.sessionRevision.collect {
-                audioSources.invalidate(); roomSession.disconnect(); listenTogether.disconnect(); dlnaController.stop()
+                audioSources.invalidate(); roomSession.disconnect(); listenTogether.disconnect()
                 bindingRepository.clearSession(); neteaseLibrary.invalidate(); neteaseSongActions.clearSession()
             }
         }

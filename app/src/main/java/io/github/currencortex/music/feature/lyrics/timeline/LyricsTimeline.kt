@@ -13,7 +13,7 @@ data class PlaybackAnchor(val positionMs: Long, val realtimeMs: Long, val playin
     val durationMs: Long = 0, val speed: Float = 1f, val revision: Long = 0) {
     internal companion object { const val MAX_EXTRAPOLATION_MS = 3000L }
     fun positionAt(nowMs: Long): Long {
-        // DLNA samples every two seconds; allow that interval while bounding stale anchors.
+        // Keep short gaps smooth without extrapolating indefinitely from stale anchors.
         val elapsed = if (playing) ((nowMs - realtimeMs).coerceIn(0, MAX_EXTRAPOLATION_MS) * speed).toLong() else 0
         return (positionMs + elapsed).coerceIn(0, durationMs.takeIf { it > 0 } ?: Long.MAX_VALUE)
     }
