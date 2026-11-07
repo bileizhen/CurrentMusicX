@@ -51,6 +51,26 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
             result.distinctBy { it.id }
         }
     }
+    suspend fun recommendedPlaylists(fresh: Boolean = false): List<Playlist> = withContext(Dispatchers.Default) {
+        val expectedOwner = session()
+        val uid = owner(fresh)
+        if (expectedOwner != session()) throw ApiException(ErrorKind.Unauthorized)
+        reads.read("recommended-playlists/$uid", fresh) { expected ->
+            if (expected != expectedOwner) throw ApiException(ErrorKind.Unauthorized)
+            val response = request("recommend/resource", emptyMap(), expected)
+            val recommendations = response["recommend"] as? JsonArray ?: throw ApiException(ErrorKind.Parse)
+            recommendations.mapNotNull { entry ->
+                val raw = entry as? JsonObject ?: return@mapNotNull null
+                raw.toPlaylist(uid)?.let { playlist ->
+                    playlist.copy(
+                        cover = (raw["picUrl"] as? JsonPrimitive)?.contentOrNull
+                            ?.takeIf(String::isNotBlank)?.replace("http:", "https:") ?: playlist.cover,
+                        description = (raw["copywriter"] as? JsonPrimitive)?.contentOrNull
+                            ?.takeIf(String::isNotBlank) ?: playlist.description)
+                }
+            }.distinctBy { it.id }
+        }
+    }
     private suspend fun songs(ids: List<Long>, expected: RequestSession, known: List<Song> = emptyList()): List<Song> {
         val found = known.associateByTo(mutableMapOf()) { it.id }
         // Direct NetEase accepts up to 1000 IDs; retain the legacy gateway's smaller limit.
