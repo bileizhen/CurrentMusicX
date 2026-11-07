@@ -1,16 +1,12 @@
 package io.github.currencortex.music.core.network
 
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.io.IOException
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
-import kotlin.coroutines.resumeWithException
 import io.github.currencortex.music.core.netease.NeteaseGateway
 
 class ApiClient(
@@ -95,49 +91,40 @@ class ApiClient(
             .apply { if (passkeyOrigin != null) header("Origin", passkeyOrigin) }
             .method(method, if (method == "GET") null else (body?.toString() ?: "{}").toRequestBody("application/json".toMediaType()))
             .build()
-        val response = suspendCancellableCoroutine<Response> { cont ->
-            val call = (if (retryConnection) http else singleAttemptHttp).newCall(request)
-            callTimeoutMillis?.let { call.timeout().timeout(it, TimeUnit.MILLISECONDS) }
-            cont.invokeOnCancellation { call.cancel() }
-            call.enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) { if (!cont.isCancelled) cont.resumeWithException(e) }
-                override fun onResponse(call: Call, response: Response) {
-                    cont.resume(response, onCancellation = { _, value, _ -> value.close() })
-                }
-            })
+        val call = (if (retryConnection) http else singleAttemptHttp).newCall(request)
+        callTimeoutMillis?.let { call.timeout().timeout(it, TimeUnit.MILLISECONDS) }
+        val (code, raw) = call.readResponse {
+            it.code to it.body?.string().orEmpty()
         }
-        response.use {
-            checkLoginOwner()
-            if (expectedSession != null && (expectedSession.server != server() || expectedSession.token != if (authenticated) token() else null))
-                throw ApiException(ErrorKind.Unauthorized)
-            if ((netease?.handles(path) == true || path == "ncmbind/import") && expectedSession?.neteaseRevision != null &&
-                expectedSession.neteaseRevision != netease?.sessions?.state?.value?.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
-            log("$method $path HTTP ${it.code}")
-            if (!it.isSuccessful) {
-                // Older NCM gateway also uses 401 for missing NCM binding. Only a project-session
-                // rejection should invalidate the account.
-                val errorText = it.body?.string().orEmpty()
-                if (it.code == 401 && authenticated && !errorText.contains("绑定")) onUnauthorized(session)
-                // Account validation is user-facing upstream text, not a generic HTTP failure.
-                // Other routes and server failures retain their existing bounded error mapping.
-                val accountError = if (it.code in 400..499 && path in setOf("auth/login", "auth/2fa/login", "auth/security-question/login",
-                        "auth/login/email", "auth/login/email/code", "auth/2fa/setup", "auth/2fa/enable", "auth/2fa/disable",
-                        "auth/security-question", "auth/passkeys/login/options", "auth/passkeys/login/verify",
-                        "auth/register", "auth/email/code", "auth/phone/code",
-                        "auth/password/code", "auth/password/reset", "profile/password/code", "profile/password"))
-                    runCatching {
-                        (ApiJson.parseToJsonElement(errorText).jsonObject["error"] as? JsonPrimitive)
-                            ?.takeIf { value -> value.isString }?.content?.trim()?.takeIf { value -> value.isNotEmpty() }?.take(240)
-                    }.getOrNull() else null
-                throw ApiException(when (it.code) {
-                    401 -> if (errorText.contains("绑定")) ErrorKind.Forbidden else ErrorKind.Unauthorized
-                    403 -> ErrorKind.Forbidden; 404 -> ErrorKind.NotFound; 429 -> ErrorKind.RateLimited
-                    in 500..599 -> ErrorKind.Server; else -> ErrorKind.Unknown
-                }, it.code, accountError)
-            }
-            val raw = it.body?.string().orEmpty()
-            if (raw.isBlank()) JsonNull else ApiJson.parseToJsonElement(raw)
+        checkLoginOwner()
+        if (expectedSession != null && (expectedSession.server != server() || expectedSession.token != if (authenticated) token() else null))
+            throw ApiException(ErrorKind.Unauthorized)
+        if ((netease?.handles(path) == true || path == "ncmbind/import") && expectedSession?.neteaseRevision != null &&
+            expectedSession.neteaseRevision != netease?.sessions?.state?.value?.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
+        log("$method $path HTTP $code")
+        if (code !in 200..299) {
+            // Older NCM gateway also uses 401 for missing NCM binding. Only a project-session
+            // rejection should invalidate the account.
+            val errorText = raw
+            if (code == 401 && authenticated && !errorText.contains("绑定")) onUnauthorized(session)
+            // Account validation is user-facing upstream text, not a generic HTTP failure.
+            // Other routes and server failures retain their existing bounded error mapping.
+            val accountError = if (code in 400..499 && path in setOf("auth/login", "auth/2fa/login", "auth/security-question/login",
+                    "auth/login/email", "auth/login/email/code", "auth/2fa/setup", "auth/2fa/enable", "auth/2fa/disable",
+                    "auth/security-question", "auth/passkeys/login/options", "auth/passkeys/login/verify",
+                    "auth/register", "auth/email/code", "auth/phone/code",
+                    "auth/password/code", "auth/password/reset", "profile/password/code", "profile/password"))
+                runCatching {
+                    (ApiJson.parseToJsonElement(errorText).jsonObject["error"] as? JsonPrimitive)
+                        ?.takeIf { value -> value.isString }?.content?.trim()?.takeIf { value -> value.isNotEmpty() }?.take(240)
+                }.getOrNull() else null
+            throw ApiException(when (code) {
+                401 -> if (errorText.contains("绑定")) ErrorKind.Forbidden else ErrorKind.Unauthorized
+                403 -> ErrorKind.Forbidden; 404 -> ErrorKind.NotFound; 429 -> ErrorKind.RateLimited
+                in 500..599 -> ErrorKind.Server; else -> ErrorKind.Unknown
+            }, code, accountError)
         }
+        if (raw.isBlank()) JsonNull else ApiJson.parseToJsonElement(raw)
     }
     suspend inline fun <reified T> decode(value: JsonElement): T = withContext(Dispatchers.Default) {
         ApiJson.decodeFromJsonElement(value)

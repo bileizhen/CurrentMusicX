@@ -70,7 +70,7 @@ class PersonalRoamingController(private val repository: PersonalRoamingRepositor
     fun start(choice: RoamingChoice = state.value.choice) {
         if (!state.value.ready) return
         if (player.state.value.mode != PlayerMode.LOCAL) {
-            state.update { it.copy(error = "请先退出一起听或结束投屏，再开启私人漫游") }; return
+            state.update { it.copy(error = "请先退出一起听，再开启私人漫游") }; return
         }
         val epoch = ++generation
         job?.cancel(); waitingRevision = null; failedChoice = null
