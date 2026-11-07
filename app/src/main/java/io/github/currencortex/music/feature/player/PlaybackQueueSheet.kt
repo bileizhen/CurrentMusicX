@@ -274,7 +274,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .07f)))
                 error?.let { Text(it, color = Color.White.copy(alpha = .55f), fontSize = 12.sp,
                     modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 10.dp)) }
-                if (!shared && !editable) Text("请先退出一起听或结束投屏，再编辑队列", color = Color.White.copy(alpha = .55f), fontSize = 12.sp,
+                if (!shared && !editable) Text("请先退出一起听，再编辑队列", color = Color.White.copy(alpha = .55f), fontSize = 12.sp,
                     modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 10.dp))
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     QueueTextAction(queue.mode.label + if (loading) " · 加载中" else "", { modeOpen = true }, editable,

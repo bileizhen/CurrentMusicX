@@ -6,12 +6,10 @@ package io.github.currencortex.music.feature.player
 import android.content.ContentResolver
 import android.net.Uri
 import android.provider.OpenableColumns
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.AppContainer
+import io.github.currencortex.music.ui.component.LocalDocumentRequests
 import io.github.currencortex.music.data.settings.LyricsSource
 import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.data.song.Song
@@ -21,18 +19,15 @@ import io.github.currencortex.music.feature.lyrics.model.LyricsErrorCode
 import kotlinx.coroutines.*
 import java.io.ByteArrayOutputStream
 
-/** Keep picker callbacks attached to the song for which the dialog was opened. */
+/** Per-song editing state; the root document host owns any outstanding picker request. */
 @Composable internal fun PlayerLyricsManagementDialog(container: AppContainer, song: Song, onDismiss: () -> Unit) {
     key(container, SongLyricsStore.identity(song)) { PlayerLyricsManagementContent(container, song, onDismiss) }
 }
 
-private data class LyricImportRequest(val song: Song)
 private enum class LyricExportFormat(val extension: String) { FIA("fia"), LRC("lrc") }
-private data class LyricExportRequest(val song: Song, val format: LyricExportFormat, val name: String, val bytes: ByteArray)
 
 @Composable private fun PlayerLyricsManagementContent(container: AppContainer, song: Song, onDismiss: () -> Unit) {
-    val context = LocalContext.current
-    val resolver = context.contentResolver
+    val documents = LocalDocumentRequests.current
     val scope = rememberCoroutineScope()
     val choices by container.songLyrics.state.collectAsStateWithLifecycle()
     val playback by container.playbackLyrics.state.collectAsStateWithLifecycle()
@@ -42,9 +37,7 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
     var message by remember { mutableStateOf<String?>(null) }
     var messageError by remember { mutableStateOf(false) }
     var mutationJob by remember { mutableStateOf<Job?>(null) }
-    var pendingImport by remember { mutableStateOf<LyricImportRequest?>(null) }
-    var pendingExport by remember { mutableStateOf<LyricExportRequest?>(null) }
-    val blocked = busy || pendingImport != null || pendingExport != null
+    val blocked = busy || documents.busy
     var offsetInput by remember(options.offsetMs) { mutableStateOf(options.offsetMs.toString()) }
 
     var matching by remember { mutableStateOf(false) }
@@ -153,40 +146,6 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
         cancelMatching(); matching = false; message = null
     }
 
-    // A picker result uses the request's immutable song/payload, never whatever is playing later.
-    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        val request = pendingImport
-        pendingImport = null
-        if (uri != null && request != null) operation("歌词已导入") {
-            val (name, bytes) = withContext(Dispatchers.IO) { readLyricImport(resolver, uri) }
-            val decoded = withContext(Dispatchers.Default) { LyricsFileCodec.decode(bytes, name) }
-            currentCoroutineContext().ensureActive()
-            container.songLyrics.saveImported(request.song, SavedLyrics(decoded.document,
-                LyricsOrigin(name.take(256), "imported", name), decoded.timingAlignment), decoded.offsetMs)
-        }
-    }
-    fun finishExport(uri: Uri?, format: LyricExportFormat) {
-        val request = pendingExport?.takeIf { it.format == format }
-        pendingExport = null
-        if (uri != null && request != null) operation("已导出 ${request.name}") {
-            withContext(Dispatchers.IO) {
-                ensureActive()
-                val output = resolver.openOutputStream(uri, "w") ?: error("无法打开保存位置")
-                output.use {
-                    var cursor = 0
-                    while (cursor < request.bytes.size) {
-                        ensureActive()
-                        val count = minOf(8192, request.bytes.size - cursor)
-                        it.write(request.bytes, cursor, count)
-                        cursor += count
-                    }
-                    it.flush()
-                }
-            }
-        }
-    }
-    val exportFia = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { finishExport(it, LyricExportFormat.FIA) }
-    val exportLrc = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { finishExport(it, LyricExportFormat.LRC) }
     fun startExport(format: LyricExportFormat) {
         if (blocked) return
         // This is application-owned source data, before any renderer filters or visual effects.
@@ -194,7 +153,6 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
         val capturedOffset = options.offsetMs
         busy = true; message = null
         mutationJob = scope.launch {
-            var preparing = true
             try {
                 val saved = container.songLyrics.active(song) ?: capturedPlayback?.let {
                     SavedLyrics(it.sourceDocument ?: it.document, it.origin ?: LyricsOrigin("默认歌词"), it.timingAlignment)
@@ -211,15 +169,11 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
                 }
                 currentCoroutineContext().ensureActive()
                 val name = lyricExportName(song, format.extension)
-                pendingExport = LyricExportRequest(song, format, name, bytes)
+                documents.exportBytes(bytes, name, if (format == LyricExportFormat.FIA) "application/json" else "text/plain")
                 notify("请选择保存位置")
-                // The callback may be immediate in an ActivityResultRegistry. It owns the write
-                // operation's busy flag once launched; preparation must not reset it afterwards.
-                busy = false; preparing = false
-                if (format == LyricExportFormat.FIA) exportFia.launch(name) else exportLrc.launch(name)
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (failure: Exception) { pendingExport = null; notify(lyricManagementError(failure), true) }
-            finally { if (preparing) busy = false }
+            catch (failure: Exception) { notify(lyricManagementError(failure), true) }
+            finally { busy = false }
         }
     }
     DisposableEffect(Unit) { onDispose {
@@ -277,15 +231,27 @@ private data class LyricExportRequest(val song: Song, val format: LyricExportFor
                 onMatch = { matching = true; message = null },
                 onImport = {
                     if (!blocked) {
-                        cancelMatching(); pendingImport = LyricImportRequest(song)
-                        try { importer.launch(arrayOf("*/*")) }
-                        catch (failure: Exception) { pendingImport = null; notify("无法打开文件选择器", true) }
+                        cancelMatching()
+                        try { documents.importLyrics(song) }
+                        catch (failure: Exception) { notify("无法打开文件选择器", true) }
                     }
                 }, onExportFia = { startExport(LyricExportFormat.FIA) },
                 onExportLrc = { startExport(LyricExportFormat.LRC) }, onClose = ::close,
                 alignmentLabel = playback.takeIf { it.matches(song) }?.timingAlignment?.let(::lyricsAlignmentLabel))
         }
     }
+}
+
+/** Result processing is independent of the current song and the original dialog's lifetime. */
+internal suspend fun importLyricsDocument(container: AppContainer, resolver: ContentResolver, uri: Uri, song: Song) {
+    try {
+        val (name, bytes) = withContext(Dispatchers.IO) { readLyricImport(resolver, uri) }
+        val decoded = withContext(Dispatchers.Default) { LyricsFileCodec.decode(bytes, name) }
+        currentCoroutineContext().ensureActive()
+        container.songLyrics.saveImported(song, SavedLyrics(decoded.document,
+            LyricsOrigin(name.take(256), "imported", name), decoded.timingAlignment), decoded.offsetMs)
+    } catch (cancelled: CancellationException) { throw cancelled }
+    catch (failure: Exception) { throw IllegalStateException(lyricManagementError(failure), failure) }
 }
 
 private suspend fun readLyricImport(resolver: ContentResolver, uri: Uri): Pair<String, ByteArray> {
