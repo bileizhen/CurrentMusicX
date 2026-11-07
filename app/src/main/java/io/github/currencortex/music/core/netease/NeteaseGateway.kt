@@ -255,6 +255,8 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 val raw = official("/api/v3/song/detail", data("c" to c), web = true, expected = expected)
                 return buildJsonObject { put("code", 200); put("songs", songs(raw.array("songs"))) }
             }
+            "recommend/resource" -> return official("/api/v1/discovery/recommend/resource",
+                web = true, expected = expected, authenticated = true)
             "user/playlist" -> return official("/api/user/playlist", data("uid" to arg("uid"), "limit" to arg("limit", "100"),
                 "offset" to arg("offset", "0"), "includeVideo" to "true"), web = true, expected = expected, authenticated = true)
             "playlist/detail" -> return official("/api/v6/playlist/detail", data("id" to id, "n" to "100000", "s" to arg("s", "0")), expected = expected)
