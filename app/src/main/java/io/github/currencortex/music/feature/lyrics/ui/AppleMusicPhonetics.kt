@@ -14,7 +14,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Density
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.feature.lyrics.model.LyricWord
 
@@ -22,14 +21,15 @@ internal data class ApplePhoneticSyllable(val text: String, val start: Long?, va
 internal data class ApplePhoneticAnchor(val startOffset: Int, val endOffset: Int, val above: Boolean,
     val syllables: List<ApplePhoneticSyllable>)
 
-/** One shaped annotation texture. Real source syllables share a batch, without per-syllable jobs. */
+/** Annotation geometry stays stable while its optional atlas is prepared off the UI thread. */
 internal class ApplePhoneticInk private constructor(val layout: TextLayoutResult,
-    private var origin: Offset, private val ink: AppleMusicWordInk?,
+    private var origin: Offset, val cues: List<LyricWord>,
     val fallback: Boolean, private val displayScale: Float) {
     val bottom: Float get() = origin.y + layout.size.height * displayScale
     fun placeFallback(top: Float) { if (fallback) origin = origin.copy(y = top) }
 
-    fun draw(scope: DrawScope, now: Long, animate: Boolean, opacity: Float = 1f) = with(scope) {
+    fun draw(scope: DrawScope, now: Long, animate: Boolean, opacity: Float = 1f,
+        ink: AppleMusicWordInk? = null) = with(scope) {
         translate(origin.x, origin.y) {
             scale(displayScale, displayScale, pivot = Offset.Zero) {
             if (!animate || ink == null) {
@@ -45,7 +45,7 @@ internal class ApplePhoneticInk private constructor(val layout: TextLayoutResult
     companion object {
         fun create(anchor: ApplePhoneticAnchor, base: TextLayoutResult, measurer: TextMeasurer,
             fontSize: Float, family: FontFamily, width: Int, density: Density,
-            direction: LayoutDirection, lineHeight: Float = 1.2f): ApplePhoneticInk? {
+            lineHeight: Float = 1.2f): ApplePhoneticInk? {
             val firstLine = base.getLineForOffset(anchor.startOffset)
             val boxes = (anchor.startOffset until anchor.endOffset).filter { base.getLineForOffset(it) == firstLine }
                 .map { base.getBoundingBox(it) }.filter { it.width > 0f }
@@ -76,8 +76,7 @@ internal class ApplePhoneticInk private constructor(val layout: TextLayoutResult
                 if (applePhoneticProgress(0, syllable.start, syllable.end) == null) null else
                     LyricWord(syllable.text, syllable.start!!, syllable.end!!, from, offset)
             }
-            val ink = AppleMusicWordInk.create(layout, cues, List(cues.size) { false }, measurer, density, direction)
-            return ApplePhoneticInk(layout, Offset(x, y), ink, fallback, displayScale)
+            return ApplePhoneticInk(layout, Offset(x, y), cues, fallback, displayScale)
         }
     }
 }
