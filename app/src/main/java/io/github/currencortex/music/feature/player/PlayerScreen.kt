@@ -100,14 +100,21 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     var controlsHidden by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(settings.lyricsDisplay.hideControls) { controlsRevealed = false; controlsHidden = false }
     val menuHost = LocalSongMenu.current
+    val songNavigation = rememberPlayerSongNavigation(queue.current, vm.container.musicRepository, settings.server) {
+        sidePage.close()
+        onAiNavigate(it)
+    }
+    val artistLink = Modifier.testTag("player_song_artist").clickable(
+        enabled = songNavigation.artistsEnabled, role = Role.Button,
+        onClickLabel = "查看歌手") { songNavigation.openArtists(false) }
     val dismiss = {
         queueGestureJob?.cancel()
         queueGestureJob = null
         queueGesture = false
         overlay = PlayerOverlay.NONE
     }
-    LaunchedEffect(overlay, queueGesture, sidePage.active) {
-        onDialogActive(overlay != PlayerOverlay.NONE || queueGesture || sidePage.active)
+    LaunchedEffect(overlay, queueGesture, sidePage.active, songNavigation.dialogActive) {
+        onDialogActive(overlay != PlayerOverlay.NONE || queueGesture || sidePage.active || songNavigation.dialogActive)
     }
     LaunchedEffect(overlay) { if (overlay != PlayerOverlay.AI) vm.ai.close() }
     LaunchedEffect(overlay, songActions.songId) { if (overlay == PlayerOverlay.COMMENTS) vm.loadComments() }
@@ -232,7 +239,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             }
         }
         PlayerSidePageLayout(sidePage,
-            enabled = expanded && !widePlayer && !sideDialog && overlay == PlayerOverlay.NONE && !queueGesture && sheetDrag?.state?.dragging != true,
+            enabled = expanded && !widePlayer && !sideDialog && !songNavigation.dialogActive && overlay == PlayerOverlay.NONE && !queueGesture && sheetDrag?.state?.dragging != true,
             openingDirection = { if (kotlin.math.abs(pager.currentPageOffsetFraction) > .001f) 0f
                 else if (pager.currentPage == 0) 1f else -1f },
             pagerScrolling = { pager.isScrollInProgress },
@@ -242,19 +249,13 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         onBinding = { sidePage.close(); onAiNavigate("user/binding") },
                         onListening = { sidePage.close(); onAiNavigate("user/listening") },
                         onDialogActive = { sideDialog = it })
-                    else PlayerSidePageContent(queue.current,
-                        quality = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else state.audioInfo?.label ?: settings.quality.label,
-                        qualityEnabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true,
-                        onQuality = { overlay = PlayerOverlay.QUALITY },
-                        onEffects = onEqualizer?.let { action -> { sidePage.close(); action() } },
-                        onShare = { overlay = PlayerOverlay.SHARE },
-                        onComments = { overlay = PlayerOverlay.COMMENTS },
-                        onActions = if (actions != null && queue.current != null) ({
-                            queue.current?.let { song ->
-                                if (menuHost == null) overlay = PlayerOverlay.ACTIONS
-                                else menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false))
-                            }
-                        }) else null)
+                    else PlayerSidePageContent(queue.current, songNavigation,
+                        aiEnabled = io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(queue.current) != null,
+                        onAi = {
+                            vm.openAi()
+                            vm.ai.draft("请解读这首歌的创作背景和歌词含义。")
+                            overlay = PlayerOverlay.AI
+                        })
                 }
             }) {
         PlayerBackdrop(queue.current?.cover.orEmpty(), Modifier.matchParentSize(), backgroundImage, appearance.playerBackgroundBlur,
@@ -295,7 +296,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                     snapAnimationSpec = tween(240, easing = LinearOutSlowInEasing))) { page ->
                                 Box(Modifier.fillMaxSize().then(if (pager.currentPage != page && !pager.isScrollInProgress)
                                     Modifier.clearAndSetSemantics {} else Modifier)) {
-                                    if (page == 0) WideControlsContent(vm, onToggle, functions)
+                                    if (page == 0) WideControlsContent(vm, onToggle, functions, artistLink)
                                     else LyricsPanel(vm, Modifier.fillMaxSize()
                                         .onGloballyPositioned { lyricsCoordinates = it },
                                         // Rasterizing the lyric rail competes with the mini-cover flight.
@@ -329,7 +330,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
                                     PlayerSongText(queue.current?.name ?: "还没有选择歌曲", role = PlayerPagerArtworkRole.LYRICS, color = Color.White,
                                         fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                    PlayerSongText(queue.current?.artists.orEmpty(), role = PlayerPagerArtworkRole.LYRICS, subtitle = true, fontSize = 13.sp, color = Color.White.copy(alpha = .55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                    PlayerSongText(queue.current?.artists.orEmpty(), artistLink, role = PlayerPagerArtworkRole.LYRICS, subtitle = true, fontSize = 13.sp, color = Color.White.copy(alpha = .55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
                             }
                             LyricsPanel(vm, Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { lyricsCoordinates = it },
@@ -338,7 +339,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         } else CoverContent(vm, Modifier.fillMaxSize(), transitionTarget = pager.currentPage == 0,
                             active = pager.currentPage == 0 || pager.isScrollInProgress,
                             pagerRole = PlayerPagerArtworkRole.COVER,
-                            immersive = immersiveCover,
+                            immersive = immersiveCover, artistLink = artistLink,
                             onPreviewCoordinates = { previewCoordinates = it })
                         }
                     }
@@ -489,7 +490,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 
 @Composable private fun CoverContent(vm: PlayerViewModel, modifier: Modifier, transitionTarget: Boolean = true,
     active: Boolean = true, pagerRole: PlayerPagerArtworkRole? = null, showPreview: Boolean = true,
-    immersive: Boolean = false,
+    immersive: Boolean = false, artistLink: Modifier = Modifier,
     onPreviewCoordinates: (LayoutCoordinates) -> Unit = {}) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     val song = queue.current
@@ -512,7 +513,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 transitionTarget = transitionTarget, pagerRole = pagerRole)
             Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 PlayerSongText(song?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"), role = pagerRole, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                PlayerSongText(song?.artists.orEmpty(), role = pagerRole, subtitle = true, fontSize = 18.sp, color = Color.White.copy(alpha = .55f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                PlayerSongText(song?.artists.orEmpty(), artistLink, role = pagerRole, subtitle = true, fontSize = 18.sp, color = Color.White.copy(alpha = .55f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             if (showPreview) CoverLyricPreview(vm, Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 8.dp)
                 .onGloballyPositioned(onPreviewCoordinates), active)
@@ -538,7 +539,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 }
 
 @Composable private fun WideControlsContent(vm: PlayerViewModel, onToggle: () -> Unit,
-    functions: @Composable () -> Unit) {
+    functions: @Composable () -> Unit, artistLink: Modifier) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     BoxWithConstraints(Modifier.fillMaxSize().testTag("player_wide_controls")) {
         val compact = maxHeight < 360.dp
@@ -548,7 +549,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 Text(queue.current?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"),
                     color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
-                Text(queue.current?.artists.orEmpty(), Modifier.padding(top = 6.dp).testTag("player_song_artist"),
+                Text(queue.current?.artists.orEmpty(), Modifier.padding(top = 6.dp).then(artistLink),
                     color = Color.White.copy(alpha = .55f), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             PlayerTransport(vm, onToggle, compact = compact)
