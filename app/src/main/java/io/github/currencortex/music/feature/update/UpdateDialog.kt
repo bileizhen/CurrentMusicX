@@ -69,17 +69,24 @@ fun UpdatePage(service: UpdateService, transfer: UpdateTransfer, cover: String =
     }
     val settings by service.settings.state.collectAsStateWithLifecycle()
     UpdatePageHost(visible, shownState, onDismiss = service::dismissDialog,
-        onRetry = { scope.launch { service.check(manual = true) } },
+        onRetry = { scope.launch { service.present(transfer) } },
         onIgnore = { scope.launch { service.ignoreCurrentRelease() } },
         onOpenRelease = { openExternalLink(context, it) }, transferState = download,
         onDownload = { source ->
-            if (BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE && transfer.state.value.download is UpdateDownloadState.Ready) transfer.cancel()
-            transfer.download(source)
+            if (BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE) {
+                if (transfer.state.value.download is UpdateDownloadState.Ready) transfer.cancel()
+                transfer.download(source)
+            } else scope.launch { service.downloadLatest(transfer, source) }
         }, onInstall = transfer::install, onCancel = transfer::cancel,
         onChangeSource = transfer::changeSource, downloadExperience = BuildConfig.UPDATE_DOWNLOAD_EXPERIENCE,
         settings = settings, onAutoCheck = { scope.launch { service.settings.setAutoCheck(it) } },
-        onChannel = { scope.launch { service.settings.setChannel(it); service.check(manual = true) } }, cover = cover,
+        onChannel = { scope.launch { service.settings.setChannel(it); service.present(transfer) } }, cover = cover,
         origin = origin, onPresentedChanged = onPresentedChanged, versionPreview = versionPreview, sourceCheck = sourceCheck,
+        onSourceSelected = { source -> scope.launch {
+            try { service.settings.setDownloadSource(source) }
+            catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { context.showMusicMessage("无法保存下载源，请重试") }
+        } },
         installedNotesState = installedNotes, onRetryInstalledNotes = { scope.launch { service.loadInstalledNotes() } })
     if (!visible) prompt?.let { available ->
         UpdateAvailablePrompt(available, onIgnore = { scope.launch { service.ignoreCurrentRelease() } },

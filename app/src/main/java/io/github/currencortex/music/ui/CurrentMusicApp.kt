@@ -383,9 +383,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         val context = androidx.compose.ui.platform.LocalContext.current
         fun launchUpdates() {
-            if (container.updateTransfer.state.value.download !is io.github.currencortex.music.core.update.UpdateDownloadState.Idle)
-                container.updates.reopenDownload()
-            else scope.launch { container.updates.present() }
+            scope.launch { container.updates.present(container.updateTransfer) }
         }
         val openUpdates: (io.github.currencortex.music.feature.update.UpdatePageOrigin?) -> Unit = { origin ->
             updateLaunchOrigin = origin
