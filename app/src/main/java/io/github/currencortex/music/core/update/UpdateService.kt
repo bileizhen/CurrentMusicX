@@ -112,16 +112,27 @@ class UpdateService(
         }
     }
 
-    suspend fun present() {
-        mutablePrompt.value = null
-        if (mutableState.value is UpdateState.Available && checkedChannel == settings.snapshot().channel) {
-            mutableDialogVisible.value = true
-        } else check(manual = true)
+    suspend fun present(transfer: UpdateTransfer? = null) {
+        if (transfer?.hasActiveDownload == true) {
+            reopenDownload()
+            return
+        }
+        if (transfer?.state?.value?.download is UpdateDownloadState.Failed) transfer.cancel()
+        check(manual = true)
     }
 
-    suspend fun check(manual: Boolean = false) {
+    suspend fun downloadLatest(transfer: UpdateTransfer, source: UpdateSource) {
+        if (transfer.hasActiveDownload || mutableState.value == UpdateState.Checking) return
+        // Drop failed/restored task state before checking so it cannot mask the fresh result.
+        transfer.cancel()
+        val release = check(manual = true) ?: return
+        transfer.selectRelease(release)
+        transfer.download(source)
+    }
+
+    suspend fun check(manual: Boolean = false): AppRelease? {
         if (manual) { mutablePrompt.value = null; mutableDialogVisible.value = true }
-        if (!mutex.tryLock()) return
+        if (!mutex.tryLock()) return null
         promptAllowed = true
         mutableState.value = UpdateState.Checking
         try {
@@ -133,16 +144,17 @@ class UpdateService(
                     logger.info("Update", if (it == null) "Already up to date" else "New release found: ${it.version}")
                 }
             }
-            mutableState.value = if (release == null) UpdateState.UpToDate else UpdateState.Available(release)
             val current = settings.snapshot()
             if (current.channel != channel) {
                 mutableState.value = UpdateState.Idle
                 mutableDialogVisible.value = false
                 mutablePrompt.value = null
-                return
+                return null
             }
+            mutableState.value = if (release == null) UpdateState.UpToDate else UpdateState.Available(release)
             if (!manual) mutablePrompt.value = if (release != null && promptAllowed && !mutableDialogVisible.value &&
                 current.ignoredVersions[channel] != release.version) UpdatePromptState(release, channel) else null
+            return release
         } catch (cancelled: CancellationException) {
             mutableState.value = UpdateState.Idle
             mutableDialogVisible.value = false
@@ -152,6 +164,7 @@ class UpdateService(
             withContext(Dispatchers.IO) { logger.warn("Update", "Update check failed", error) }
             mutableState.value = UpdateState.Failed(error.message ?: error::class.java.simpleName)
             mutablePrompt.value = null
+            return null
         } finally {
             mutex.unlock()
         }

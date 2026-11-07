@@ -68,7 +68,8 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
     onChannel: (UpdateChannel) -> Unit, cover: String, origin: UpdatePageOrigin? = null,
     onPresentedChanged: (Boolean) -> Unit = {}, versionPreview: String = BuildConfig.UPDATE_ANIMATION_PREVIEW_VERSION,
     sourceCheck: UpdateSourceCheck = remember { UpdateSourceProbe() },
-    installedNotesState: InstalledNotesState = InstalledNotesState.Idle, onRetryInstalledNotes: () -> Unit = {}) {
+    installedNotesState: InstalledNotesState = InstalledNotesState.Idle, onRetryInstalledNotes: () -> Unit = {},
+    onSourceSelected: (UpdateSource) -> Unit = {}) {
     var entryCheckFinished by remember(visible) { mutableStateOf(false) }
     LaunchedEffect(visible) {
         if (visible) { delay(2000); entryCheckFinished = true }
@@ -89,6 +90,7 @@ internal fun UpdatePageHost(visible: Boolean, state: UpdateState, onDismiss: () 
             onDownload, onInstall, onCancel, onChangeSource, downloadExperience, settings, onAutoCheck, onChannel,
             cover = cover, backgroundActive = visible,
             versionPreview = if (showResult) versionPreview else "", sourceCheck = sourceCheck,
+            onSourceSelected = onSourceSelected,
             onRetryInstalledNotes = onRetryInstalledNotes.takeIf { installedNotesState == InstalledNotesState.Failed })
     }
 }
@@ -103,7 +105,8 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     settings: UpdateSettings = UpdateSettings(), onAutoCheck: (Boolean) -> Unit = {},
     onChannel: (UpdateChannel) -> Unit = {}, cover: String = "", backgroundActive: Boolean = true,
     versionPreview: String = "", sourceCheck: UpdateSourceCheck = remember { UpdateSourceProbe() },
-    installedVersionName: String = BuildConfig.VERSION_NAME, onRetryInstalledNotes: (() -> Unit)? = null) {
+    installedVersionName: String = BuildConfig.VERSION_NAME, onRetryInstalledNotes: (() -> Unit)? = null,
+    onSourceSelected: (UpdateSource) -> Unit = {}) {
     val release = (state as? UpdateState.Available)?.release
     val installedVersion = installedVersionName.substringBefore('-')
     val displayedVersion = release?.version ?: installedVersionName
@@ -144,11 +147,12 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
         if (!menuDragging) orderedMenuSources = UpdateSource.forChannel(settings.channel).sortedByHealth(sourceHealth)
     }
     var confirmCancel by remember { mutableStateOf(false) }
-    var source by rememberSaveable { mutableStateOf(UpdateSource.default) }
-    LaunchedEffect(settings.channel) {
-        if (source !in UpdateSource.forChannel(settings.channel)) source = UpdateSource.GITHUB
+    var chosenSource by remember(settings.downloadSource, settings.channel) {
+        mutableStateOf(settings.effectiveDownloadSource)
     }
-    LaunchedEffect(transferState.activeSource) { transferState.activeSource?.let { source = it } }
+    // Automatic fallback is task state, not a change to the user's saved preference.
+    val source = if (transferState.download is UpdateDownloadState.Downloading)
+        transferState.activeSource ?: chosenSource else chosenSource
     val settled by animateFloatAsState(if (checking) 0f else 1f, tween(680, easing = FastOutSlowInEasing), label = "update_check_result")
     val detail by animateFloatAsState(if (expanded) 1f else 0f, tween(600, easing = FastOutSlowInEasing), label = "update_details_morph")
     val notesScroll = rememberScrollState()
@@ -347,14 +351,20 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                     GlassMenuItem("update_source_${candidate.name}", candidate.menuLabel, checked = candidate == source,
                         leadingContent = { UpdateSourceBadge(candidate,health) },
                         onClick = {
+                            chosenSource = candidate
+                            onSourceSelected(candidate)
                             if(source != candidate) {
-                                source = candidate
                                 if(currentTransfer.download is UpdateDownloadState.Downloading) onChangeSource(candidate)
                             }
                         })
                 }))
             add(GlassMenuItem("update_menu_action_2", "发布记录", MusicIcons.File,
                 onClick = { onOpenRelease(AppMetadata.RELEASES_URL) }))
+            if (!checking && !transferState.installing &&
+                transferState.download !is UpdateDownloadState.Downloading &&
+                transferState.download !is UpdateDownloadState.Ready)
+                add(GlassMenuItem("update_check_again", "重新检查更新", MusicIcons.Update,
+                    onClick = onRetry))
             if(release != null && transferState.download is UpdateDownloadState.Idle)
                 add(GlassMenuItem("update_menu_action_3", "忽略此版本", MusicIcons.Close,
                     danger = true, separated = true, onClick = onIgnore))
