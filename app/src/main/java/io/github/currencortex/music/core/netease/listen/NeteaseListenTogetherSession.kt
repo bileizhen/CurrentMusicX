@@ -80,7 +80,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
     }
 
     fun create() = operation(ListenTogetherOperation.CREATE) { epoch ->
-        check(active == null && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听或结束投屏" }
+        check(active == null && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听" }
         val expected = repo.captureSession()
         checkEpoch(epoch)
         val original = player.queue.state.value
@@ -111,7 +111,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
     }
 
     fun join(inviteText: String) = operation(ListenTogetherOperation.JOIN) { epoch ->
-        check(active == null && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听或结束投屏" }
+        check(active == null && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听" }
         val expected = repo.captureSession()
         val invitation = repo.resolveInvitation(inviteText)
         checkEpoch(epoch)
@@ -123,7 +123,7 @@ class NeteaseListenTogetherSession internal constructor(private val repo: Listen
     }
 
     fun resume() = operation(ListenTogetherOperation.RESTORE) { epoch ->
-        check(active == null && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听或结束投屏" }
+        check(active == null && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听" }
         val expected = repo.captureSession()
         checkEpoch(epoch)
         val remote = repo.status(expected)

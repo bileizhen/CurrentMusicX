@@ -107,7 +107,7 @@ class EffectsAuditionController internal constructor(private val context: Contex
             return
         }
         if (container.playerController.state.value.mode != PlayerMode.LOCAL) {
-            mutableState.value = EffectsAuditionState(error = "请先退出投屏或一起听，再试听音效")
+            mutableState.value = EffectsAuditionState(error = "请先退出一起听，再试听音效")
             return
         }
         stopInternal(resume = false, forgetSuspension = false)

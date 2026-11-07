@@ -91,8 +91,7 @@ class MusicService : MediaSessionService() {
         container.audioOutput.status.value = if (fallback == null) message else "$message · 已回退 AudioTrack：$fallback"
     }
     private fun reconfigureOutput() {
-        if (container.playerController.state.value.mode == PlayerMode.CAST ||
-            container.playerController.state.value.resolving || player.currentMediaItem == null) return
+        if (container.playerController.state.value.resolving || player.currentMediaItem == null) return
         transitions.cancel(); resetPauseFade()
         if (directOutput()) player.setPlaybackSpeed(1f)
         val position = player.currentPosition
@@ -225,7 +224,6 @@ class MusicService : MediaSessionService() {
                 }
                 val allowed = options.enabled && options.haptics && !directOutput() && source.isPlaying &&
                     !pauseFade.pausedIntent && source.volume > 0f &&
-                    container.playerController.state.value.mode != PlayerMode.CAST &&
                     outputManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC) > 0
                 if (allowed) {
                     val frame = playerSlots[source]?.haptics?.poll(source.currentPosition * 1000, period)
@@ -524,19 +522,8 @@ class MusicService : MediaSessionService() {
                     .add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM).add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM).build())
                 val remote = container.playerController.state.value
                 builder.setVolume(if (userMuted) 0f else userVolume)
-                if (remote.mode != PlayerMode.CAST && pauseFade.pausedIntent)
+                if (pauseFade.pausedIntent)
                     builder.setPlayWhenReady(false, Player.PLAY_WHEN_READY_CHANGE_REASON_USER_REQUEST)
-                if (remote.mode == PlayerMode.CAST && remote.song != null) {
-                    val metadata = MediaItemFactory.create(remote.song, "")
-                    builder.setPlaylist(listOf(SimpleBasePlayer.MediaItemData.Builder("cast-${remote.song.id}")
-                        .setMediaItem(metadata).setMediaMetadata(metadata.mediaMetadata).setDurationUs(remote.durationMs.coerceAtLeast(0) * 1000)
-                        .setIsSeekable(true).build())).setCurrentMediaItemIndex(0).setContentPositionMs(remote.positionMs)
-                        .setPlayWhenReady(remote.playing, Player.PLAY_WHEN_READY_CHANGE_REASON_REMOTE)
-                        .setPlaybackState(Player.STATE_READY).setPlaybackSuppressionReason(Player.PLAYBACK_SUPPRESSION_REASON_NONE)
-                        .setAvailableCommands(state.availableCommands.buildUpon().add(Player.COMMAND_PLAY_PAUSE)
-                            .add(Player.COMMAND_STOP).add(Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM)
-                            .add(Player.COMMAND_SEEK_TO_NEXT).add(Player.COMMAND_SEEK_TO_PREVIOUS).build())
-                }
                 if (remote.mode == PlayerMode.ROOM && !remote.canControlPlayback) {
                     builder.setAvailableCommands(builder.build().availableCommands.buildUpon().removeAll(
                         Player.COMMAND_PLAY_PAUSE, Player.COMMAND_SEEK_IN_CURRENT_MEDIA_ITEM,

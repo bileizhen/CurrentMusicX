@@ -4,8 +4,6 @@ import android.content.ClipData
 import android.content.Intent
 import android.os.Build
 import android.widget.Toast
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -51,6 +49,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import io.github.currencortex.music.ui.component.MusicIcons
+import io.github.currencortex.music.ui.component.LocalDocumentRequests
 import io.github.currencortex.music.ui.component.nativeui.GlassIconButton
 import io.github.currencortex.music.ui.component.nativeui.GlassActionButton
 import io.github.currencortex.music.ui.component.nativeui.LocalGlassBackdrop
@@ -107,20 +106,7 @@ import kotlin.math.absoluteValue
     LaunchedEffect(session) { try { awaitCancellation() } finally { withContext(NonCancellable) { session.close() } } }
     var busy by remember(session) { mutableStateOf(false) }
     var error by remember(session) { mutableStateOf<String?>(null) }
-    var pendingSave by remember { mutableStateOf<File?>(null) }
-    val saveDocument = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
-        val file = pendingSave; pendingSave = null
-        if (uri != null && file != null) scope.launch {
-            try {
-                withContext(Dispatchers.IO) { checkNotNull(context.contentResolver.openOutputStream(uri)).use { output -> file.inputStream().use { it.copyTo(output) } } }
-                Toast.makeText(context, "图片已保存", Toast.LENGTH_SHORT).show()
-            } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { error = "保存失败，请重试" }
-            finally { file.delete() }
-        } else file?.delete()
-    }
-    val lastPendingSave by rememberUpdatedState(pendingSave)
-    DisposableEffect(Unit) { onDispose { lastPendingSave?.delete() } }
+    val documents = LocalDocumentRequests.current
     val carousel = rememberLazyListState()
     var selectedPage by rememberSaveable(kind) { mutableIntStateOf(0) }
     val dragging by carousel.interactionSource.collectIsDraggedAsState()
@@ -134,7 +120,7 @@ import kotlin.math.absoluteValue
     val template = ListeningWallTemplate(selectedPage, kind)
     val selected = choices[template.index] ?: listeningExportCoverIndices(template, covers.size)
     fun export(share: Boolean) {
-        if (busy) return
+        if (busy || documents.busy) return
         if (template.locked(info)) { error = "此网易云模板需要当前账号的会员权限。可以继续选择其他模板。"; return }
         busy = true; error = null
         scope.launch {
@@ -148,7 +134,8 @@ import kotlin.math.absoluteValue
                     } finally { file.delete() }
                     Toast.makeText(context, "已保存到相册 · CurrentMusicX", Toast.LENGTH_SHORT).show()
                 } else {
-                    pendingSave = file; saveDocument.launch("${title}-${template.label}.png")
+                    try { documents.exportFile(file, "${title}-${template.label}.png") }
+                    finally { file.delete() }
                 }
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { error = "导出失败，请检查图片网络连接后重试" }
