@@ -24,7 +24,13 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val lyricsSource: LyricsSource = LyricsSource.AUTO,
                          val lyricsFont: LyricsFont = LyricsFont.SYSTEM, val lyricsFontFile: String = "",
                          val serverMode: CurrentMusicServer = CurrentMusicServer.AUTO,
-                         val customServer: String = "")
+                         val customServer: String = "",
+                         val listeningSource: ListeningSource = ListeningSource.LOCAL)
+
+enum class ListeningSource(val label: String) {
+    LOCAL("CurrentMusicX"), NETEASE("网易云");
+    companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: LOCAL }
+}
 
 enum class LyricsFont(val label: String) {
     SYSTEM("系统字体"), WENKAI("霞鹜文楷"), IMPORTED("导入字体");
@@ -133,6 +139,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val appleBlurStrength = floatPreferencesKey("lyrics.appleMusic.blurStrength")
     private val neteaseMain = booleanPreferencesKey("library.neteaseMain")
     private val likeMode = stringPreferencesKey("music.likeMode")
+    private val listeningSource = stringPreferencesKey("listening.source")
     private val concurrentPlayback = booleanPreferencesKey("music.allowConcurrentPlayback")
     private val transition = stringPreferencesKey("music.transitionMode")
     private val crossfadeSeconds = intPreferencesKey("music.crossfadeSeconds")
@@ -174,7 +181,8 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
         p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), LikeMode.from(p[likeMode]), decodeLyricsSource(p),
         LyricsFont.from(p[lyricsFont]), p[lyricsFontFile].orEmpty(),
         CurrentMusicServer.from(p[serverMode], p[server]),
-        p[customServer] ?: p[server]?.takeIf { CurrentMusicServer.infer(it) == CurrentMusicServer.CUSTOM }.orEmpty())
+        p[customServer] ?: p[server]?.takeIf { CurrentMusicServer.infer(it) == CurrentMusicServer.CUSTOM }.orEmpty(),
+        ListeningSource.from(p[listeningSource]))
     // Read the persisted value directly, without the StateFlow's initial defaults.
     val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: false }.distinctUntilChanged()
     val state = store.data.map(::decode)
@@ -245,6 +253,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     suspend fun setAccount(id: Long, name: String) { store.edit { it[account] = id; it[nickname] = name } }
     suspend fun setNeteaseMainLibrary(value: Boolean) { store.edit { it[neteaseMain] = value } }
     suspend fun setLikeMode(value: LikeMode) { store.edit { it[likeMode] = value.name } }
+    suspend fun setListeningSource(value: ListeningSource) { store.edit { it[listeningSource] = value.name } }
 }
 
 private const val LYRICS_SOURCE_AUTOMATIC_VERSION = 1

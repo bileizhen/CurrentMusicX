@@ -32,8 +32,7 @@ import top.yukonga.miuix.kmp.basic.TextField
         uri?.let(vm::importLxFile)
     }
     val selected = sources.firstOrNull { it.id == provider.lxSourceId }
-    SettingsSection("落雪音源", MusicIcons.File,
-        footer = "支持 .js 文件或链接导入，目前仅使用网易云接口。进入页面时自动检测，结果基于网易云测试曲目的解析和音频读取。音源脚本会向其服务方发送歌曲信息，请仅导入可信来源。") {
+    SettingsSection("落雪音源", MusicIcons.File) {
         if (sources.isNotEmpty()) {
             SettingsOptionsRow("当前音源", selected?.name ?: "请选择", sources.map { source ->
                 SettingsOption("lx_source_${source.id}", source.name, source.id == provider.lxSourceId,

@@ -9,6 +9,7 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -68,6 +69,8 @@ import io.github.currencortex.music.ui.theme.LocalCustomFont
     val animateSubItems:Boolean=false, val checkable:Boolean=false,
     val onExit: () -> Unit = {},
 )
+/** Read-only content shares the menu's anchored container motion and material. */
+@Immutable data class GlassPopupText(val title: String, val text: String)
 @Immutable data class GlassMenuTags(val panel: String = "glass_menu_panel", val dismiss: String = "glass_menu_dismiss",
     val actionPrefix: String = "glass_menu_action")
 @Immutable data class GlassMenuInteraction(val selected: Int, val displacement: Offset, val highlight: Rect)
@@ -234,8 +237,10 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
     onInteractionChanged: (Boolean) -> Unit = {}, menuWidth: Dp? = 192.dp, bottomInset:Dp=0.dp, topInset:Dp=0.dp,
     rootOwner: GlassMenuItem? = null, showDividers: Boolean = true, pullPastEdges: Boolean = true,
     flipRootAtEdges: Boolean = false,
+    description: GlassPopupText? = null,
     parentWidth: Dp? = null, onParentTransition: (Float) -> Unit = {},
     content:@Composable ()->Unit={}, toolbar: @Composable () -> Unit) {
+    require(description == null || (items.isEmpty() && rootOwner == null))
     val scope=rememberCoroutineScope()
     val trigger=remember { GlassMenuTrigger() }
     val motion=remember { GlassPopupMotion() }
@@ -322,7 +327,15 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
         val rootLimit=with(density){16.dp.toPx()+7.5f*(24.dp.toPx()+20.sp.toPx())}
         return (inset*2+content).coerceAtMost(if(level.owner==null)min(heightLimit,rootLimit)else heightLimit)
     }
-    val requestedRootHeight=levelHeight(levels.first())
+    val descriptionStyle = labelStyle.copy(fontSize=14.sp, lineHeight=22.sp)
+    val descriptionTitleStyle = labelStyle.copy(fontWeight=FontWeight.SemiBold)
+    val descriptionHeight = description?.let {
+        val available = Constraints(maxWidth=(rootWidth-40*frameDensity).roundToInt().coerceAtLeast(1))
+        val titleHeight = textMeasurer.measure(AnnotatedString(it.title),descriptionTitleStyle,constraints=available).size.height
+        val bodyHeight = textMeasurer.measure(AnnotatedString(it.text),descriptionStyle,constraints=available).size.height
+        titleHeight + bodyHeight + 48*frameDensity
+    }
+    val requestedRootHeight=descriptionHeight?.coerceAtMost(heightLimit) ?: levelHeight(levels.first())
     val bottomEdge=rootSize.height-safeBottom-16*frameDensity
     val spaceBelow=bottomEdge-(a.top-inset)
     val spaceAbove=a.bottom+inset-safeTop
@@ -634,7 +647,7 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
                 .onGloballyPositioned{if(active)activeRestCoordinates=it}
                 .then(if(!active)Modifier.clearAndSetSemantics{}else Modifier)
                 .then(if(active)Modifier.testTag(tags.panel).semantics {
-                    paneTitle=level.owner?.label ?: "菜单"
+                    paneTitle=description?.title ?: level.owner?.label ?: "菜单"
                     this[GlassMenuDepthKey]=depth
                     this[GlassMenuPathKey]=path.map{it.id}
                     this[GlassMenuUnfoldKey]=unfold.value
@@ -645,7 +658,7 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
                 }else Modifier), enabled=expanded&&active,state=if(active)press else rememberElasticPressState(),observePointer=false) {
                 Box(Modifier.fillMaxSize()
                     .onGloballyPositioned {if(active)activeCoordinates=it}
-                    .then(if(active)Modifier.pointerInput(depth,expanded) {
+                    .then(if(active && description == null)Modifier.pointerInput(depth,expanded) {
                         awaitEachGesture {
                             val down=awaitFirstDown(false,PointerEventPass.Initial)
                             if(!currentOpen||down.isConsumed)return@awaitEachGesture
@@ -672,7 +685,7 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
                                 }while(!cancelled)
                             }finally{cancelAction.value()}
                         }
-                    }else Modifier.clickable(interactionSource=remember{MutableInteractionSource()},indication=null){pop()})
+                    }else if(!active) Modifier.clickable(interactionSource=remember{MutableInteractionSource()},indication=null){pop()} else Modifier)
                 ) {
                     val key=contentKey(level)
                     val currentRows=rememberUpdatedState(level.items)
@@ -761,7 +774,13 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
                     }
                     }
                     }}
-                    content()
+                    if(description != null) {
+                        Column(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures {} }.verticalScroll(scroll).padding(20.dp),
+                            verticalArrangement=Arrangement.spacedBy(8.dp)) {
+                            Text(description.title, style=descriptionTitleStyle, color=ink)
+                            Text(description.text, style=descriptionStyle, color=ink)
+                        }
+                    } else content()
                     if(!active)Box(Modifier.matchParentSize().drawBehind {
                         val receded=(.2f*(covered-1+unfold.value.coerceIn(0f,1f))).coerceIn(0f,.4f)
                         drawOutline(cardShape.createOutline(size,layoutDirection,this),dimColor.copy(alpha=receded))

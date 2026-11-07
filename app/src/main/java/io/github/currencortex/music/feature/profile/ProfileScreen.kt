@@ -222,7 +222,7 @@ import kotlinx.coroutines.launch
                                 .semantics { contentDescription = "编辑资料" } else Modifier),
                             fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                state.profile?.stat?.let { ProfileStatsBlock(it) }
+                state.profile?.stat?.let { ProfileStatsBlock(it, if (own) ({ navigate("user/listening") }) else null) }
             } }
             if (own) {
                 item("library") { ProfileLibrarySection(navigate) }
