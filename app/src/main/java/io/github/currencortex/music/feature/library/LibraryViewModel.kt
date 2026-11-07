@@ -12,7 +12,8 @@ import java.time.LocalDate
 
 data class LibraryHomeState(val loading: Boolean = false, val daily: List<Song> = emptyList(), val forYou: List<Song> = emptyList(),
     val recent: List<Song> = emptyList(), val playlists: List<Playlist> = emptyList(), val errors: Map<String, String> = emptyMap(),
-    val loaded: Boolean = false, val pendingSections: Set<String> = emptySet())
+    val loaded: Boolean = false, val pendingSections: Set<String> = emptySet(),
+    val recommendedPlaylists: List<Playlist> = emptyList())
 
 class LibraryViewModel(val container: AppContainer) : ViewModel() {
     val home = MutableStateFlow(LibraryHomeState())
@@ -44,11 +45,12 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                 .combine(container.neteaseSessions.state.map { it.profile?.uid }.distinctUntilChanged()) { keys, uid -> keys + uid }
                 .collectLatest { keys ->
                     prefetchJob?.cancel()
-                    val nextIdentity = keys.take(2) + keys.last()
+                    // Clear personalized cards when either the project or bound NetEase account changes.
+                    val nextIdentity = keys.take(2) + listOf(keys[4], keys.last())
                     val sameAccount = identity == nextIdentity
                     if (!sameAccount) likes.dismiss()
                     identity = nextIdentity
-                    val pending = setOf("每日推荐", "最近播放", "我的歌单")
+                    val pending = setOf("每日推荐", "每日推荐歌单", "最近播放", "我的歌单")
                     home.value = if (sameAccount) home.value.copy(loading = true, errors = emptyMap(), pendingSections = pending)
                         else LibraryHomeState(loading = true, pendingSections = pending)
                     loadHome()
@@ -64,7 +66,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
     }
     fun refresh() {
         if (home.value.loading) return
-        home.update { it.copy(loading = true, errors = emptyMap(), pendingSections = setOf("每日推荐", "最近播放", "我的歌单")) }
+        home.update { it.copy(loading = true, errors = emptyMap(), pendingSections = setOf("每日推荐", "每日推荐歌单", "最近播放", "我的歌单")) }
         container.libraryRepository.clearReads(); container.neteaseLibrary.invalidate(); refreshRequest.update { it + 1 }
     }
     fun refreshForNewDay() { if (homeDay != LocalDate.now()) refresh() }
@@ -79,6 +81,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         }
         listOf(
             launch { section("每日推荐", { container.libraryRepository.daily() }) { s, d -> s.copy(daily = d.songs, forYou = d.forYou) } },
+            launch { section("每日推荐歌单", { container.neteaseLibrary.recommendedPlaylists() }) { s, d -> s.copy(recommendedPlaylists = d) } },
             launch { section("最近播放", { container.libraryRepository.recent() }) { s, d -> s.copy(recent = d) } },
             launch { section("我的歌单", { container.primaryLibrary.playlists() }) { s, d -> s.copy(playlists = d) } },
         ).joinAll()
