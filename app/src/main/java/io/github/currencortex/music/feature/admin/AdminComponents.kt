@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -27,9 +28,9 @@ import java.util.Date
 import java.util.Locale
 
 @Composable internal fun AdminCard(title: String, subtitle: String? = null, content: @Composable ColumnScope.() -> Unit) {
-    SettingsGroup { Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    SettingsGroup { Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+            Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             subtitle?.let { Text(it, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }
         }
         content()
@@ -45,15 +46,24 @@ internal data class AdminStat(val label: String, val value: String, val hint: St
 @Composable internal fun AdminStats(stats: List<AdminStat>) {
     BoxWithConstraints {
         val columns = if (maxWidth >= 520.dp) 4 else 2
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            stats.chunked(columns).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.height(IntrinsicSize.Max)) {
-                row.forEach { stat -> SettingsGroup(Modifier.weight(1f).fillMaxHeight()) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(stat.label, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                        Text(stat.value, fontSize = 28.sp, fontWeight = FontWeight.SemiBold, lineHeight = 34.sp,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.primary)
-                        if (stat.hint.isNotBlank()) Text(stat.hint, fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        val stacked = LocalDensity.current.fontScale > 1.15f || maxWidth / columns < 140.dp
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            stats.chunked(columns).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.height(IntrinsicSize.Max)) {
+                row.forEach { stat -> Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
+                    .background(MiuixTheme.colorScheme.surfaceContainer).padding(horizontal = 10.dp, vertical = 9.dp),
+                    verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    if (stacked) {
+                        Text(stat.label, fontSize = 11.sp, lineHeight = 14.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                        Text(stat.value, fontSize = 20.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold,
+                            color = MiuixTheme.colorScheme.primary)
+                    } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(stat.label, Modifier.weight(1f), fontSize = 11.sp, lineHeight = 14.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                        Text(stat.value, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold,
+                            color = MiuixTheme.colorScheme.primary)
                     }
+                    if (stat.hint.isNotBlank()) Text(stat.hint, fontSize = 10.sp, lineHeight = 13.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
                 } }
                 repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             } }
