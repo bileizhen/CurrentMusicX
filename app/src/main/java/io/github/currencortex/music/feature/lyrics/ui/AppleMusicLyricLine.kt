@@ -234,7 +234,7 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
             customization.lineHeight) {
             layouts.map { base ->
                 val notes = phoneticAnchors.mapNotNull {
-                    ApplePhoneticInk.create(it, base, measurer, fontSize, family, width, density, direction,
+                    ApplePhoneticInk.create(it, base, measurer, fontSize, family, width, density,
                         customization.lineHeight)
                 }
                 var next = maxOf(base.size.height.toFloat(), notes.filterNot { it.fallback }.maxOfOrNull { it.bottom } ?: 0f) + fontPx * .2f
@@ -243,6 +243,26 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
                     next = note.bottom + fontPx * .2f
                 }
                 notes
+            }
+        }
+        val phoneticInkCache = remember(phoneticLayouts) {
+            mutableStateMapOf<ApplePhoneticInk, AppleMusicWordInk?>()
+        }
+        val preparePhonetics = wordAnimation && !browsing &&
+            (prepareInk || active || visibleEmphasis && phoneticInkCache.isNotEmpty())
+        LaunchedEffect(phoneticInkCache, preparePhonetics, context) {
+            if (!preparePhonetics) return@LaunchedEffect
+            val first = if (active || visibleEmphasis) layoutIndex else 1
+            for (index in listOf(first, 1 - first)) {
+                for (note in phoneticLayouts[index]) {
+                    val size = note.layout.size
+                    if (note.cues.isEmpty() || size.width.toLong() * size.height > 4_000_000 ||
+                        size.width >= 8192 || size.height >= 8192 || phoneticInkCache.containsKey(note)) continue
+                    // The worker owns its paragraph and bitmap. Publish only into this
+                    // layout's cache; cancellation reclaims any unpublished atlas.
+                    phoneticInkCache[note] = prepareAppleMusicWordInk(context, note.layout.layoutInput,
+                        note.cues, List(note.cues.size) { false }, index)
+                }
             }
         }
         val phoneticInk = phoneticLayouts[layoutIndex]
@@ -316,8 +336,8 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
             translate(padding, padding) {
                 val now = phoneticNow.value
                 val blend = weightBlend.value.coerceIn(0f, 1f)
-                if (blend < 1f) phoneticLayouts[0].forEach { it.draw(this, now, wordAnimation && !browsing, 1f - blend) }
-                if (blend > 0f) phoneticLayouts[1].forEach { it.draw(this, now, wordAnimation && !browsing, blend) }
+                if (blend < 1f) phoneticLayouts[0].forEach { it.draw(this, now, wordAnimation && !browsing, 1f - blend, phoneticInkCache[it]) }
+                if (blend > 0f) phoneticLayouts[1].forEach { it.draw(this, now, wordAnimation && !browsing, blend, phoneticInkCache[it]) }
             }
         }
         }
