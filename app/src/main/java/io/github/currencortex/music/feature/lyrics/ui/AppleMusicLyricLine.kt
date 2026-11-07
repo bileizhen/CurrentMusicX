@@ -83,7 +83,7 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
         it.text.isNotBlank() && it.startOffset >= 0 && it.endOffset > it.startOffset && it.endOffset <= line.text.length
     }
     val showTranslation = translation && line.translation.isNotBlank()
-    val roman = if (hasWordPhonetics) "" else line.romanization
+    val roman = if (hasWordPhonetics && appleWordReadingsCoverLine(line)) "" else line.romanization
     val showRomanization = romanization && roman.isNotBlank()
     val auxiliaryInset = with(LocalDensity.current) { (size * if (hasWordPhonetics || hasRuby) .8f else .35f).sp.toDp() }
     val family = currentLyricsFontFamily()
