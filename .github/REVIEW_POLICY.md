@@ -15,7 +15,7 @@
 
 ## PR 合并检查
 
-面向 `main` 的 PR 可以同时验证。`build` 执行仓库的 Python 源码与资源检查，`test` 执行协作脚本测试和 actionlint。两个检查通过后，由维护者按分支保护规则合并。
+面向 `main` 的 PR 可以同时验证。`build` 执行仓库的 Python 源码语法检查，`test` 执行协作脚本语法检查和 actionlint。两个检查通过后，由维护者按分支保护规则合并。
 
 `Update PR branches` 会同步落后的非草稿分支，跳过冲突或带 `bot: skip` 标签的 PR。必要时可从 Actions 手动运行。机器人更新分支后，GitHub 可能要求维护者批准新检查。
 
