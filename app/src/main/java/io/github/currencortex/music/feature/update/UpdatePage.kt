@@ -355,6 +355,11 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 }))
             add(GlassMenuItem("update_menu_action_2", "发布记录", MusicIcons.File,
                 onClick = { onOpenRelease(AppMetadata.RELEASES_URL) }))
+            if (!checking && !transferState.installing &&
+                transferState.download !is UpdateDownloadState.Downloading &&
+                transferState.download !is UpdateDownloadState.Ready)
+                add(GlassMenuItem("update_check_again", "重新检查更新", MusicIcons.Update,
+                    onClick = onRetry))
             if(release != null && transferState.download is UpdateDownloadState.Idle)
                 add(GlassMenuItem("update_menu_action_3", "忽略此版本", MusicIcons.Close,
                     danger = true, separated = true, onClick = onIgnore))
