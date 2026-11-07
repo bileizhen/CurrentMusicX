@@ -57,6 +57,7 @@ object TtmlParser {
         val words = mutableListOf<LyricWord>()
         val translations = mutableListOf<LyricAuxiliary>()
         val romans = mutableListOf<LyricAuxiliary>()
+        val inlineRomans = mutableListOf<LyricAuxiliary>()
         val bgNodes = mutableListOf<TtmlNode>()
         val ruby = mutableListOf<LyricRuby>()
         val bases = mutableListOf<TtmlBaseRange>()
@@ -74,6 +75,8 @@ object TtmlParser {
                     part.hasRole("x-roman") -> if (container === node) {
                         romans.add(LyricAuxiliary(cleanTtmlText(part.text()).trim(), part.attr("lang")))
                         romanTracks.add(ttmlRomanWords(part))
+                    } else {
+                        inlineRomans.add(LyricAuxiliary(cleanTtmlText(part.text()).trim(), part.attr("lang")))
                     }
                     "x-bg" in part.attr("role").orEmpty().split(' ') -> bgNodes.add(part)
                     part.attr("ruby") in setOf("text", "textContainer", "delimiter") -> Unit // Annotation never enters the primary text.
@@ -116,7 +119,6 @@ object TtmlParser {
                         if (ownedRomans.isNotEmpty()) {
                             val owner = words.indexOfFirst { it.startOffset == offset && it.endOffset == text.length }
                             if (owner >= 0) words[owner] = words[owner].copy(romanization = cleanTtmlText(ownedRomans.first().text()).trim())
-                            else ownedRomans.forEach { romans.add(LyricAuxiliary(cleanTtmlText(it.text()).trim(), it.attr("lang"))) }
                         }
                     }
                 }
@@ -134,6 +136,12 @@ object TtmlParser {
             throw LyricsException(LyricsErrorCode.INVALID_TIMELINE, "Ruby timing exceeds its vocal line")
         translations.addAll(TtmlMetadataParser.auxiliary(head, key, background, false))
         romans.addAll(TtmlMetadataParser.auxiliary(head, key, background, true))
+        // Word-owned readings remain available to renderers that only consume a line.
+        // Keep repeated syllables and source order; prefer an explicit full-line track.
+        inlineRomans.filter { it.text.isNotBlank() }.groupBy { it.language }.forEach { (language, readings) ->
+            if (romans.none { it.language == language && it.text.isNotBlank() })
+                romans.add(LyricAuxiliary(readings.joinToString(" ") { it.text }, language))
+        }
         romanTracks.addAll(TtmlMetadataParser.romanWordTracks(head, key, background))
         val auxiliary = translations.filter { it.text.isNotBlank() }.distinct()
         val roman = romans.filter { it.text.isNotBlank() }.distinct()
