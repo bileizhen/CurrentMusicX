@@ -1,5 +1,6 @@
 package io.github.currencortex.music.feature.player
 
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -13,6 +14,15 @@ import io.github.currencortex.music.ui.component.coverRequestUrl
 import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
 import kotlin.math.max
 import kotlin.math.min
+
+// Match the floating header's ease-in/out fade. Sampling once avoids a sharp
+// slope change halfway through the artwork and a visible cutoff at its tail.
+private val ImmersiveCoverFadeStops = CubicBezierEasing(.42f, 0f, .58f, 1f).let { easing ->
+    Array(33) { index ->
+        val fraction = index / 32f
+        fraction to Color.White.copy(alpha = 1 - easing.transform(fraction))
+    }
+}
 
 /** Crops at draw time, so the tall cover can morph into a square without stretching its pixels. */
 @Composable internal fun PlayerImmersiveCover(url: String, modifier: Modifier,
@@ -70,8 +80,6 @@ import kotlin.math.min
                     // The fade narrows to nothing at the compact-cover endpoint. Its
                     // outer edge stays clear even mid-flight, so the cropped image never
                     // ends in a visible strip of the placeholder colour below/beside it.
-                    val mask = listOf(Color.White, Color.White.copy(alpha = 1 - .2f * amount),
-                        Color.Transparent)
                     // The landscape controls and lyrics share the right-hand pane. Clear
                     // the cover by the centre gutter; portrait follows the measured title
                     // so large text and shorter windows cannot move controls onto artwork.
@@ -79,10 +87,10 @@ import kotlin.math.min
                         else contentBoundary()?.takeIf { it.isFinite() }?.let { boundary ->
                             min(imageHeight, rect.height * (1 - amount + boundary.coerceIn(0f, 1f) * amount))
                         } ?: imageHeight
-                    val brush = if (wideViewport) Brush.horizontalGradient(mask,
-                        rect.left + fadeEnd * (1 - .6f * amount), rect.left + fadeEnd)
-                    else Brush.verticalGradient(mask,
-                        rect.top + fadeEnd * (1 - .52f * amount), rect.top + fadeEnd)
+                    val brush = if (wideViewport) Brush.horizontalGradient(*ImmersiveCoverFadeStops,
+                        startX = rect.left + fadeEnd * (1 - .6f * amount), endX = rect.left + fadeEnd)
+                    else Brush.verticalGradient(*ImmersiveCoverFadeStops,
+                        startY = rect.top + fadeEnd * (1 - .52f * amount), endY = rect.top + fadeEnd)
                     // Cover fractional rect edges fully; the outer clip defines the shape.
                     val maskBounds = rect.inflate(1f)
                     drawRect(brush, maskBounds.topLeft, maskBounds.size, blendMode = BlendMode.DstIn)
