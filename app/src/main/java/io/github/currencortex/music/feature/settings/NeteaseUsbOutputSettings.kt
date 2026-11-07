@@ -62,7 +62,5 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }, Modifier.testTag("request_usb_audio_permission"), summary = "系统授权成功后，再手动开始播放")
         }
         message?.let { Text(it, Modifier.padding(20.dp), fontSize = 13.sp, color = hint) }
-        Text("拒绝授权、设备断开或实际输出格式不支持时停止。24-bit 音源需要同采样率、4 字节容器且至少 24 位有效数据的配置；不改变采样率，浮点暂不支持。可导出包含全部候选的音频诊断。",
-            Modifier.padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 12.sp, color = hint)
     } }
 }

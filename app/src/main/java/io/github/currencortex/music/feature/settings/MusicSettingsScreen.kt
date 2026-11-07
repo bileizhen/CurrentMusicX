@@ -33,13 +33,7 @@ import top.yukonga.miuix.kmp.basic.TextField
     var serverDialogOpen by rememberSaveable { mutableStateOf(false) }
     var customServerOpen by rememberSaveable { mutableStateOf(false) }
     SettingsPage("音源与网络", "network_settings") {
-        item("source") { SettingsSection("音乐音源", MusicIcons.Headphones,
-            footer = when (provider.provider) {
-                AudioProvider.NETEASE -> "手机直连网易云，音质与可播放范围取决于本机网易云账号权限。"
-                AudioProvider.LEIZ -> "LeiZ 自动请求超清母带，实际音质以接口返回为准。"
-                AudioProvider.LX -> "使用导入的落雪 JavaScript 音源解析网易云歌曲的播放链接，搜索与歌单保持原有来源。"
-                else -> "使用 CurrentMusic 服务器提供的音乐服务。"
-            }) {
+        item("source") { SettingsSection("音乐音源", MusicIcons.Headphones) {
             SettingsOptionsRow("音源", provider.provider.label, AudioProvider.entries.map { entry ->
                 SettingsOption("audio_provider_${entry.name.lowercase()}", entry.label, provider.provider == entry,
                     onSelect = { audioKey = ""; vm.audioProvider(entry) })
@@ -63,8 +57,7 @@ import top.yukonga.miuix.kmp.basic.TextField
             if (provider.provider != AudioProvider.LX) audioState.message?.let { SettingsHint(it, error = !audioState.busy) }
         } }
         if (provider.provider == AudioProvider.LX) item("lx_sources") { LxSourceSettings(vm) }
-        item("lyrics") { SettingsSection("歌词来源", MusicIcons.File,
-            footer = "独立于音乐音源。单曲手动导入或匹配优先，本地歌曲优先读取内嵌歌词。切换后重新获取歌词。") {
+        item("lyrics") { SettingsSection("歌词来源", MusicIcons.File) {
             SettingsOptionsRow("默认来源", when (settings.lyricsSource) {
                 LyricsSource.AUTO -> "自动择优"
                 LyricsSource.CURRENT_MUSIC -> "CurrentMusic"
@@ -80,8 +73,7 @@ import top.yukonga.miuix.kmp.basic.TextField
                     }, onSelect = { vm.lyricsSource(source) })
             }, Modifier.testTag("lyrics_source"))
         } }
-        item("server") { SettingsSection("CurrentMusic 服务", MusicIcons.Storage,
-            footer = "主站与 CDN 共用账号，用于 CurrentMusic 歌词、聊天和房间等服务。网易云原生音源不使用此线路。切换自定义服务器后需重新登录。") {
+        item("server") { SettingsSection("CurrentMusic 服务", MusicIcons.Storage) {
             MusicDestinationRow("服务器线路", { serverDialogOpen = true }, Modifier.testTag("server_source"),
                 summary = when (settings.serverMode) {
                     CurrentMusicServer.AUTO -> "自动 · ${CurrentMusicServer.presets.firstOrNull { it.url == automatic }?.label.orEmpty()}"

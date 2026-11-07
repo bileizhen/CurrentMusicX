@@ -363,8 +363,6 @@ import kotlinx.serialization.json.*
                             Modifier.testTag("sound_tuning_applied"), fontSize = 13.sp, color = colors.primary)
                         TuningCurve(gains)
                     }
-                    Text("歌曲分析来自网易云，调音由本机完成；与网易云客户端的 AI 音效算法不同。",
-                        color = colors.onSurfaceVariantSummary, fontSize = 12.sp)
                 } }
             }
 
