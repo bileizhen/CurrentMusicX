@@ -1,173 +1,147 @@
 package io.github.currencortex.music.feature.artist
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.core.media.PlaybackMode
 import io.github.currencortex.music.core.media.PlayerMode
-import io.github.currencortex.music.data.library.Album
-import io.github.currencortex.music.data.library.Artist
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.library.LibrarySongActions
 import io.github.currencortex.music.feature.library.LibraryViewModel
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.util.collectAsPageState
-import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
-@Composable private fun ArtistHero(artist: Artist?) {
-    Box(Modifier.fillMaxWidth().height(210.dp).clip(RoundedCornerShape(28.dp)).testTag("artist_hero")) {
-        if (artist == null) MusicPlaceholder(Modifier.matchParentSize())
-        else {
-            MusicCover(artist.cover, Modifier.matchParentSize().clearAndSetSemantics { contentDescription = "${artist.name} 的艺人封面" },
-                900, cornerRadius = 28.dp)
-            Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = .7f)))))
-            Column(Modifier.align(Alignment.BottomStart).padding(22.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(artist.name, Modifier.testTag("artist_name"), fontSize = 30.sp, fontWeight = FontWeight.SemiBold,
-                    color = Color.White, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                if (artist.description.isNotBlank()) Text(artist.description, fontSize = 13.sp, color = Color.White.copy(alpha = .8f),
-                    maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-        }
-    }
-}
-
-@Composable private fun ArtistAlbumCard(album: Album, modifier: Modifier, navigate: (String) -> Unit) {
-    val date = remember(album.publishTime) {
-        if (album.publishTime > 0) Instant.ofEpochMilli(album.publishTime).atZone(ZoneId.systemDefault())
-            .format(DateTimeFormatter.ofPattern("yyyy.MM.dd")) else ""
-    }
-    val caption = listOf(date, if (album.size > 0) "${album.size} 首" else "").filter(String::isNotBlank).joinToString(" · ")
-    MusicArtworkCard(album.cover, album.name, caption, { navigate("lib/album/${album.id}") },
-        modifier.testTag("catalog_entry_${album.id}"), enabled = album.id > 0, pixels = 480)
-}
-
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable fun ArtistScreen(vm: ArtistViewModel, library: LibraryViewModel, onBack: () -> Unit,
     navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit) {
     val state by vm.state.collectAsPageState()
     val playback by vm.container.playerController.state.collectAsPageState()
     val room = LocalRoomSongRequest.current
-    val colors = MiuixTheme.colorScheme
-    var tab by rememberSaveable(vm.id) { mutableStateOf("songs") }
-    LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
-    PreloadMusicCovers(if (tab == "albums") state.albums.take(10).map { it.cover } else state.songs.take(12).map { it.cover })
-    MusicSubpage(state.artist?.name?.ifBlank { "艺人主页" } ?: "艺人主页", "artist_page", onBack, backTag = "artist_back") { topInset ->
-    MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize().testTag("artist_home"), contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item {
-                ArtistHero(state.artist)
-            }
-            state.artist?.let { artist -> item {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text("${maxOf(artist.songTotal, state.songs.size)} 首歌曲 · ${maxOf(artist.albumTotal, state.albums.size)} 张专辑",
-                        Modifier.weight(1f), fontSize = 12.sp, color = colors.onSurface.copy(alpha = .6f))
-                    MusicTextAction("艺人简介 ›", { tab = "about" }, Modifier.testTag("artist_open_about"))
+    var tab by rememberSaveable(vm.id) { mutableStateOf("home") }
+    var encyclopedia by rememberSaveable(vm.id) { mutableStateOf(false) }
+    var filter by rememberSaveable(vm.id) { mutableStateOf("all") }
+    val homeScroll = rememberLazyListState()
+    val songsScroll = rememberLazyListState()
+    val albumsScroll = rememberLazyListState()
+    val mvsScroll = rememberLazyListState()
+    val scroll = when (tab) { "songs" -> songsScroll; "albums" -> albumsScroll; "mvs" -> mvsScroll; else -> homeScroll }
+    val albums = remember(state.albums, filter) { artistAlbumsForDisplay(state.albums, filter) }
+    val hotSongs = state.overview?.songs?.takeIf { it.isNotEmpty() } ?: state.songs.take(50)
+    val previewAlbums = state.overview?.albums?.takeIf { it.isNotEmpty() } ?: state.albums.take(6)
+    val playingSongs = if (tab == "home") hotSongs else state.songs
+    LaunchedEffect(state.songs, hotSongs) { library.refreshStatuses((state.songs + hotSongs).distinctBy { it.id }) }
+    LaunchedEffect(filter, state.albumOrder) { albumsScroll.scrollToItem(0) }
+    BackHandler(encyclopedia) { encyclopedia = false }
+    PreloadMusicCovers(if (tab == "albums") albums.take(10).map { it.cover } else state.songs.take(12).map { it.cover })
+    if (encyclopedia) {
+        ArtistEncyclopedia(state, { encyclopedia = false }, { vm.loadBiography() }, vm::loadProfile)
+        return
+    }
+    MusicSubpage(state.displayArtist?.name?.ifBlank { "艺人主页" } ?: "艺人主页", "artist_page", onBack, backTag = "artist_back") { topInset ->
+        MusicPullToRefresh(state.loading, vm::reload, Modifier.fillMaxSize().padding(top = topInset)) {
+            LazyColumn(Modifier.fillMaxSize().testTag("artist_home"), state = scroll,
+                contentPadding = musicScrollPadding(PaddingValues(16.dp, 8.dp, 16.dp, 32.dp)),
+                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                if (tab == "home") item("hero") { ArtistHero(state.displayArtist, state.fans) { encyclopedia = true } }
+                stickyHeader("tabs") {
+                    MusicCategoryTabs(listOf("home" to "音乐", "songs" to "歌曲", "albums" to "专辑", "mvs" to "MV"),
+                        tab, { tab = it }, "artist_tab", Modifier.background(MiuixTheme.colorScheme.background))
                 }
-            } }
-            state.error?.let { error -> item {
-                Text(error, fontSize = 14.sp)
-                MusicTextAction("重试艺人主页", vm::reload, Modifier.testTag("artist_retry"), enabled = !state.loading)
-            } }
-            item { MusicCategoryTabs(listOf("songs" to "歌曲", "albums" to "专辑", "about" to "简介"), tab, { tab = it }, "artist_tab") }
-            if (state.loading && state.artist == null && tab != "about") item { LoadingSongList(4) }
-            when (tab) {
-                "songs" -> {
-                    if (state.songs.isNotEmpty()) item {
-                        val enabled = room == null && playback.mode == PlayerMode.LOCAL
-                        val start = {
-                            vm.container.playerController.setMode(PlaybackMode.LIST); play(state.songs, 0)
-                        }
-                        Row(Modifier.fillMaxWidth().heightIn(min = 64.dp).clickable(enabled = enabled, role = Role.Button, onClick = start)
-                            .testTag("play_library_all").padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            MusicTransportButton("播放全部", start, Modifier.size(44.dp), prominent = true, enabled = enabled)
-                            Text("播放全部", Modifier.padding(start = 12.dp), fontSize = 17.sp, fontWeight = FontWeight.Medium,
-                                color = colors.onSurface.copy(alpha = if (enabled) 1f else .4f))
+                state.error?.let { error -> item("main_error") { ArtistSectionError(error, "重试艺人主页", vm::reload, state.loading) } }
+                if (state.loading && state.artist == null) item("loading") { LoadingSongList(4) }
+                if (tab == "home" || tab == "songs") {
+                    if (playingSongs.isNotEmpty()) item("play") {
+                        ArtistPlayHeader(if (tab == "home") "播放热门歌曲" else "播放已加载歌曲", playingSongs.size,
+                            room == null && playback.mode == PlayerMode.LOCAL) {
+                            vm.container.playerController.setMode(PlaybackMode.LIST); play(playingSongs, 0)
                         }
                     }
-                    if (room != null) item { Text("点击歌曲，为当前房间点歌", fontSize = 13.sp) }
-                    itemsIndexed(state.songs, key = { _, song -> song.id }) { index, song ->
+                    if (room != null) item("room") { Text("点击歌曲，为当前房间点歌") }
+                    val visibleSongs = if (tab == "home") hotSongs.take(5) else state.songs
+                    itemsIndexed(visibleSongs, key = { _, song -> "song_${song.id}" }) { index, song ->
                         Box(Modifier.testTag("artist_song_${song.id}")) {
-                            SongRow(SongRowUi(song), { play(state.songs, index) }, { vm.container.playerController.add(song, true) },
+                            SongRow(SongRowUi(song), { play(playingSongs, index) }, { vm.container.playerController.add(song, true) },
                                 { vm.container.playerController.add(song) }) { LibrarySongActions(library, song, navigate) }
                         }
                     }
-                    if (state.songsLoading) item { LoadingSongList(2) }
-                    state.songsError?.let { error -> item {
-                        Text(error, fontSize = 13.sp)
-                        MusicTextAction("重试歌曲", vm::moreSongs, Modifier.testTag("artist_songs_retry"))
-                    } }
-                    if (state.moreSongs && state.songsError == null) item {
-                        MusicTextAction("加载更多歌曲", vm::moreSongs, Modifier.fillMaxWidth().testTag("artist_more_songs"), enabled = !state.songsLoading)
+                    if (!state.loading && playingSongs.isEmpty() && state.error == null) item("songs_empty") { ArtistEmpty("暂无歌曲") }
+                    if (tab == "songs") {
+                        if (state.songsLoading) item("songs_loading") { LoadingSongList(2) }
+                        state.songsError?.let { error -> item("songs_error") { ArtistSectionError(error, "重试歌曲", vm::moreSongs, state.songsLoading) } }
+                        if (state.moreSongs && state.songsError == null) item("songs_more") {
+                            MusicTextAction("加载更多歌曲", vm::moreSongs, Modifier.fillMaxWidth().testTag("artist_more_songs"), enabled = !state.songsLoading)
+                        }
+                    } else {
+                        if (state.songs.isNotEmpty()) item("all_songs") {
+                            MusicTextAction("全部 ${maxOf(state.displayArtist?.songTotal ?: 0, state.songs.size)} 首歌曲 ›",
+                                { tab = "songs" }, Modifier.fillMaxWidth().testTag("artist_all_songs"))
+                        }
+                        item("albums_preview") {
+                            ArtistSectionTitle("专辑", "查看全部") { tab = "albums" }
+                            if (state.albumsLoading && previewAlbums.isEmpty()) LoadingTextList(2)
+                            else if (previewAlbums.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(previewAlbums.take(6), key = { it.id }) { ArtistAlbumCard(it, Modifier.width(152.dp), navigate) }
+                            } else if (state.albumsError == null) ArtistEmpty("暂无专辑")
+                            state.albumsError?.let { ArtistSectionError(it, "重试专辑", vm::moreAlbums, state.albumsLoading) }
+                        }
+                        item("mvs_preview") {
+                            ArtistSectionTitle("MV", "查看全部") { tab = "mvs" }
+                            if (state.mvsLoading && state.mvs.isEmpty()) LoadingTextList(2)
+                            else if (state.mvs.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(state.mvs.take(6), key = { it.id }) { ArtistMvCard(it, Modifier.width(256.dp), navigate) }
+                            } else if (state.mvsError == null) ArtistEmpty("暂无 MV")
+                            state.mvsError?.let { ArtistSectionError(it, "重试 MV", vm::moreMvs, state.mvsLoading) }
+                        }
+                        item("encyclopedia") { ArtistBiographyPreview(state) { encyclopedia = true } }
+                        item("similar") {
+                            ArtistSectionTitle("相似艺人")
+                            if (state.similarLoading && state.similar.isEmpty()) LoadingTextList(2)
+                            else if (state.similar.isNotEmpty()) LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                items(state.similar, key = { it.id }) { artist ->
+                                    MusicArtworkCard(artist.cover, artist.name, artist.subtitle,
+                                        { navigate("lib/artist/${artist.id}") }, Modifier.width(144.dp).testTag("artist_similar_${artist.id}"))
+                                }
+                            } else if (state.similarError == null) ArtistEmpty("暂无相似艺人")
+                            state.similarError?.let { ArtistSectionError(it, "重试相似艺人", vm::loadSimilar, state.similarLoading) }
+                        }
                     }
-                    if (!state.loading && state.songs.isEmpty() && state.error == null) item { Text("暂无歌曲", fontSize = 14.sp) }
                 }
-                "albums" -> {
-                    items(state.albums.chunked(2), key = { it.first().id }) { pair ->
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            pair.forEach { ArtistAlbumCard(it, Modifier.weight(1f), navigate) }
-                            if (pair.size == 1) Spacer(Modifier.weight(1f))
-                        }
+                if (tab == "albums") {
+                    item("album_filters") { ArtistAlbumFilters(filter, { filter = it }, state.albumOrder, vm::setAlbumOrder,
+                        albums.size, state.albums.size, state.displayArtist?.albumTotal ?: 0, state.moreAlbums) }
+                    items(albums, key = { "album_${it.id}" }) { ArtistAlbumRow(it, navigate) }
+                    if (state.albumsLoading) item("albums_loading") { LoadingSongList(3) }
+                    state.albumsError?.let { error -> item("albums_error") { ArtistSectionError(error, "重试专辑", vm::moreAlbums, state.albumsLoading) } }
+                    if (!state.albumsLoading && albums.isEmpty() && state.albumsError == null) item("albums_empty") {
+                        ArtistEmpty(if (state.moreAlbums) "已加载的作品中暂无此类型，可继续加载" else "暂无此类型的作品")
                     }
-                    if (state.albumsLoading) item {
-                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                            repeat(2) { LoadingArtworkCard(Modifier.weight(1f)) }
-                        }
+                    if (state.moreAlbums && state.albumsError == null) item("albums_more") {
+                        MusicTextAction("加载更多专辑", vm::moreAlbums, Modifier.fillMaxWidth().testTag("artist_more_albums"), enabled = !state.albumsLoading)
                     }
-                    state.albumsError?.let { error -> item {
-                        Text(error, fontSize = 13.sp)
-                        MusicTextAction("重试专辑", vm::moreAlbums, Modifier.testTag("artist_albums_retry"))
-                    } }
-                    if (state.moreAlbums && state.albumsError == null) item {
-                        MusicTextAction("更多专辑", vm::moreAlbums, Modifier.fillMaxWidth().testTag("artist_more_albums"), enabled = !state.albumsLoading)
-                    }
-                    if (!state.loading && state.albums.isEmpty() && state.error == null) item { Text("暂无专辑", fontSize = 14.sp) }
                 }
-                "about" -> {
-                    if (state.biographyLoading && state.biography == null) item { LoadingTextList(4) }
-                    state.biographyError?.let { error -> item {
-                        Text("简介加载失败：$error", fontSize = 13.sp)
-                        MusicTextAction("重试简介", { vm.loadBiography() }, Modifier.testTag("artist_bio_retry"), enabled = !state.biographyLoading)
-                    } }
-                    state.biography?.briefDesc?.takeIf(String::isNotBlank)?.let { description -> item {
-                        Text(description, fontSize = 15.sp, lineHeight = 25.sp, color = colors.onSurface.copy(alpha = .8f))
-                    } }
-                    items(state.biography?.introduction.orEmpty().filter { it.text.isNotBlank() }) { section ->
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            if (section.title.isNotBlank()) Text(section.title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                            Text(section.text, fontSize = 15.sp, lineHeight = 25.sp, color = colors.onSurface.copy(alpha = .8f))
-                        }
+                if (tab == "mvs") {
+                    items(state.mvs, key = { "mv_${it.id}" }) { ArtistMvCard(it, Modifier.fillMaxWidth(), navigate) }
+                    if (state.mvsLoading) item("mvs_loading") { LoadingTextList(3) }
+                    state.mvsError?.let { error -> item("mvs_error") { ArtistSectionError(error, "重试 MV", vm::moreMvs, state.mvsLoading) } }
+                    if (!state.mvsLoading && state.mvs.isEmpty() && state.mvsError == null) item("mvs_empty") { ArtistEmpty("暂无 MV") }
+                    if (state.moreMvs && state.mvsError == null) item("mvs_more") {
+                        MusicTextAction("加载更多 MV", vm::moreMvs, Modifier.fillMaxWidth().testTag("artist_more_mvs"), enabled = !state.mvsLoading)
                     }
-                    if (!state.biographyLoading && state.biographyError == null && state.biography?.briefDesc.isNullOrBlank() &&
-                        state.biography?.introduction.orEmpty().none { it.text.isNotBlank() }) item { Text("暂无艺人简介", fontSize = 14.sp) }
                 }
             }
         }
-    }
     }
 }

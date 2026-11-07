@@ -56,11 +56,13 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         put("id", raw.long("id")); put("name", raw.text("name")); put("pic", raw.text("picUrl").ifBlank { raw.text("img1v1Url") })
         put("alias", raw.array("alias").mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.joinToString(" / "))
         put("total", raw.long("musicSize")); put("albumTotal", raw.long("albumSize"))
+        put("briefDesc", raw.text("briefDesc")); put("mvTotal", raw.long("mvSize"))
     }
     private fun album(raw: JsonObject, tracks: JsonArray = raw.array("songs")) = buildJsonObject {
         put("id", raw.long("id")); put("name", raw.text("name")); put("pic", raw.text("picUrl"))
         put("artist", raw.obj("artist").text("name")); put("description", raw.text("description"))
         put("publishTime", raw.long("publishTime")); put("company", raw.text("company")); put("size", raw.long("size"))
+        put("type", raw.text("type"))
         put("songs", songs(tracks))
     }
     private fun params(vararg values: Pair<String, JsonElement>) = JsonObject(values.toMap())
@@ -284,17 +286,76 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 val info = async { official("/api/v1/artist/$id", web = true, expected = expected) }
                 val tracks = async { official("/api/v1/artist/songs", data("id" to id, "private_cloud" to "true", "work_type" to "1", "order" to "hot",
                     "offset" to arg("offset", "0"), "limit" to arg("limit", "100")), expected = expected) }
-                val albums = async { official("/api/artist/albums/$id", data("limit" to "6", "offset" to "0", "total" to "true"), web = true, expected = expected) }
-                val raw = info.await(); val page = tracks.await(); val collection = albums.await()
+                // Albums load independently: an optional section must not hide playable songs.
+                val raw = info.await(); val page = tracks.await()
                 buildJsonObject {
                     artist(raw.obj("artist")).forEach { (key, value) -> put(key, value) }
                     put("songs", songs(page.array("songs"))); put("more", page["more"] ?: JsonPrimitive(false)); put("total", page["total"] ?: raw.obj("artist")["musicSize"] ?: JsonPrimitive(0))
-                    put("albums", JsonArray(collection.array("hotAlbums").mapNotNull { it as? JsonObject }.map { album(it) }))
                 }
             }
             "artist/desc" -> return official("/api/artist/introduction", data("id" to id), web = true, expected = expected)
+            "artist/overview" -> {
+                val raw = official("/api/personal/home/page/artist/v2", data("artistId" to id), expected = expected,
+                    clientProfile = NeteaseClientProfile.ANDROID).obj("data")
+                val modules = raw.array("modules").mapNotNull { it as? JsonObject }
+                fun resource(code: String) = modules.firstOrNull { it.text("blockCode") == code }?.obj("resource") ?: buildJsonObject {}
+                val wiki = resource("ARTIST_ENCYCLOPEDIA").obj("encyclopediaData")
+                return buildJsonObject {
+                    put("songs", songs(resource("ARTIST_SONGS").obj("songData").array("songs")))
+                    put("albums", JsonArray(resource("ARTIST_ALBUMS").obj("albumData").array("albums")
+                        .mapNotNull { it as? JsonObject }.map { album(it) }))
+                    put("artists", JsonArray(resource("ARTIST_MORE_ARTISTS").array("moreArtistData")
+                        .mapNotNull { it as? JsonObject }.map(::artist)))
+                    put("awardTitle", wiki.text("awardTitle")); put("awardCount", wiki.long("totalAwardCount"))
+                    put("awardImages", JsonArray(wiki.array("rewardPicUrls").mapNotNull {
+                        (it as? JsonPrimitive)?.contentOrNull?.replace("http:", "https:")?.let(::JsonPrimitive)
+                    }))
+                }
+            }
+            "artist/profile" -> {
+                val raw = official("/api/artist/head/info/get", data("id" to id), expected = expected,
+                    clientProfile = NeteaseClientProfile.ANDROID).obj("data")
+                val profile = raw.obj("artist"); val user = raw.obj("user")
+                if (profile.text("name").isBlank()) throw ApiException(ErrorKind.Parse)
+                return buildJsonObject {
+                    put("name", profile.text("name")); put("cover", profile.text("cover").replace("http:", "https:"))
+                    put("avatar", profile.text("avatar").replace("http:", "https:"))
+                    put("alias", profile.array("alias").mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.joinToString(" / "))
+                    put("identify", raw.obj("identify").text("imageDesc")); put("briefDesc", profile.text("briefDesc"))
+                    put("identities", JsonArray(raw.array("secondaryExpertIdentiy").mapNotNull {
+                        (it as? JsonObject)?.text("expertIdentiyName")?.takeIf(String::isNotBlank)?.let(::JsonPrimitive)
+                    }))
+                    put("gender", user.long("gender")); put("birthday", user.long("birthday"))
+                    put("signature", user.text("signature")); put("createTime", user.long("createTime"))
+                    put("songTotal", profile.long("musicSize")); put("albumTotal", profile.long("albumSize")); put("mvTotal", profile.long("mvSize"))
+                }
+            }
+            "artist/fans" -> {
+                val raw = official("/api/artist/follow/count/get", data("id" to id), expected = expected,
+                    clientProfile = NeteaseClientProfile.ANDROID).obj("data")
+                if ((raw["fansCnt"] as? JsonPrimitive)?.longOrNull == null) throw ApiException(ErrorKind.Parse)
+                return buildJsonObject { put("fans", raw.long("fansCnt")); put("follows", raw.long("followCnt")) }
+            }
+            "artist/mv" -> {
+                val raw = official("/api/artist/mvs", data("artistId" to id, "limit" to arg("limit", "20"),
+                    "offset" to arg("offset", "0"), "total" to "true"), web = true, expected = expected)
+                return buildJsonObject {
+                    put("more", raw["hasMore"] ?: raw["more"] ?: JsonPrimitive(false))
+                    put("mvs", JsonArray(raw.array("mvs").mapNotNull { it as? JsonObject }.map { mv ->
+                        buildJsonObject {
+                            put("id", mv.long("id")); put("name", mv.text("name"))
+                            put("cover", mv.text("imgurl16v9").ifBlank { mv.text("imgurl") }.ifBlank { mv.text("cover") }.replace("http:", "https:"))
+                            put("artistName", mv.text("artistName")); put("duration", mv.long("duration"))
+                        }
+                    }))
+                }
+            }
             "artist/albums" -> {
-                val raw = official("/api/artist/albums/$id", data("limit" to arg("limit", "30"), "offset" to arg("offset", "0"), "total" to "true"), web = true, expected = expected)
+                val body = buildJsonObject {
+                    put("limit", arg("limit", "30")); put("offset", arg("offset", "0")); put("total", "true")
+                    if (arg("order") == "hot") put("order", "score")
+                }
+                val raw = official("/api/artist/albums/$id", body, web = true, expected = expected)
                 return buildJsonObject { put("albums", JsonArray(raw.array("hotAlbums").mapNotNull { it as? JsonObject }.map { album(it) })); put("more", raw["more"] ?: JsonPrimitive(false)) }
             }
             "album" -> { val raw = official("/api/v1/album/$id", web = true, expected = expected); return album(raw.obj("album"), raw.array("songs")) }
