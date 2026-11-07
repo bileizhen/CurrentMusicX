@@ -15,6 +15,11 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import io.github.currencortex.music.R
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
@@ -25,21 +30,20 @@ import androidx.lifecycle.compose.currentStateAsState
     val motion = (rememberCoroutineScope().coroutineContext[MotionDurationScale]?.scaleFactor ?: 1f) > 0f
     if (!enabled || !motion || !lifecycle.isAtLeast(Lifecycle.State.RESUMED)) return null
     return rememberInfiniteTransition(label = "listening light").animateFloat(0f, 1f,
-        infiniteRepeatable(tween(2600, easing = LinearEasing)), label = "listening light travel")
+        infiniteRepeatable(tween(2000, easing = LinearEasing)), label = "listening light travel")
 }
 
 @Composable internal fun ListeningDurationBar(primary: Color, emphasized: Boolean, light: State<Float>?, modifier: Modifier) {
+    val softRed = FootprintSoftRed
+    val ray = ImageBitmap.imageResource(R.drawable.listening_ray)
     Box(modifier.clip(CircleShape).drawWithCache {
-        val base = Brush.verticalGradient(listOf(primary.copy(alpha = if (emphasized) .95f else .40f), primary.copy(alpha = .16f)))
+        val base = Brush.verticalGradient(if (emphasized) listOf(Color(0xFFFF2222), Color(0xFFFF8080)) else listOf(softRed, softRed))
         onDrawBehind {
             drawRect(base)
             light?.let {
-                val band = size.height * .48f
-                val center = size.height + band - it.value * (size.height + band * 2)
-                // A soft diagonal highlight travels up the capsule, fully outside it at both
-                // ends of the loop. No flashing reset, bitmap allocation or offscreen blur.
-                drawRect(Brush.linearGradient(listOf(Color.Transparent, Color.White.copy(alpha = .32f), Color.Transparent),
-                    start = Offset(-size.width, center + band / 2), end = Offset(size.width * 2, center - band / 2)))
+                val band = size.width * (146.667f / 32f)
+                val top = size.height - it.value * band * 2
+                drawImage(ray, dstOffset = IntOffset(0, top.toInt()), dstSize = IntSize(size.width.toInt(), band.toInt()))
             }
         }
     })

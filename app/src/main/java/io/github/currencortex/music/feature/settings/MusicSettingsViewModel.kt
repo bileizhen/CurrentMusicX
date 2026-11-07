@@ -83,6 +83,11 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
         }
     }
     fun preload(value: Boolean) = viewModelScope.launch { container.musicSettings.setPreload(value) }
+    fun listeningSource(value: io.github.currencortex.music.data.settings.ListeningSource) = viewModelScope.launch {
+        try { container.musicSettings.setListeningSource(value) }
+        catch (e: CancellationException) { throw e }
+        catch (_: Exception) { container.errorNotices.show("听歌足迹数据来源保存失败，请重试") }
+    }
     fun lyricsSource(value: io.github.currencortex.music.data.settings.LyricsSource) = viewModelScope.launch {
         try { container.musicSettings.setLyricsSource(value) }
         catch (e: CancellationException) { throw e }
