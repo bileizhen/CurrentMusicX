@@ -244,40 +244,42 @@ internal class PlayerSidePageState(private val scope: CoroutineScope) {
     }
 }
 
-@Composable internal fun PlayerSidePageContent(song: Song?, quality: String, qualityEnabled: Boolean,
-    onQuality: () -> Unit, onEffects: (() -> Unit)?, onShare: () -> Unit, onComments: () -> Unit,
-    onActions: (() -> Unit)?) {
+@Composable internal fun PlayerSidePageContent(song: Song?, navigation: PlayerSongNavigation,
+    aiEnabled: Boolean, onAi: () -> Unit) {
     val colors = MiuixTheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
             .padding(start = maxWidth * (1f - SIDE_TRAVEL)).testTag("player_side_scroll"),
             contentPadding = PaddingValues(start = 12.dp, end = 20.dp, top = 24.dp, bottom = 24.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            item { Text("歌曲信息", fontSize = 24.sp, fontWeight = FontWeight.SemiBold) }
+            item { Text("歌曲详情", fontSize = 24.sp, fontWeight = FontWeight.SemiBold) }
             item { Card { Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 MusicCover(song?.cover.orEmpty(), Modifier.size(64.dp), pixels = 200)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(song?.name ?: "还没有选择歌曲", fontSize = 18.sp, fontWeight = FontWeight.SemiBold,
                         maxLines = 3, overflow = TextOverflow.Ellipsis)
-                    Text(song?.artists.orEmpty(), color = colors.onSurfaceVariantSummary, fontSize = 13.sp)
+                    if (song != null && song.durationMs > 0) {
+                        val seconds = song.durationMs / 1000
+                        Text("时长 ${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}",
+                            color = colors.onSurfaceVariantSummary, fontSize = 13.sp)
+                    }
                 }
             } } }
-            if (!song?.album.isNullOrBlank()) item { Card { Column(Modifier.fillMaxWidth().padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("专辑", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
-                Text(song!!.album, fontSize = 16.sp)
+            if (song != null) item { Card { Column {
+                MusicDestinationRow("歌手", { navigation.openArtists(false) }, summary = song.artists.ifBlank { "暂无歌手信息" },
+                    enabled = navigation.artistsEnabled, modifier = Modifier.testTag("side_open_artist"))
+                MusicDestinationRow("专辑", navigation.openAlbum,
+                    summary = if (navigation.albumLoading) "正在查找专辑…" else song.album.ifBlank { "暂无专辑信息" },
+                    enabled = navigation.albumEnabled && !navigation.albumLoading, modifier = Modifier.testTag("side_open_album"))
             } } }
-            item { Card { Column {
-                MusicDestinationRow("播放音质", onQuality, summary = quality, enabled = qualityEnabled,
-                    modifier = Modifier.testTag("side_open_quality"))
-                onEffects?.let { MusicDestinationRow("音效", it, modifier = Modifier.testTag("side_open_effects")) }
-            } } }
-            item { Card { Column {
-                MusicDestinationRow("歌曲评论", onComments, enabled = song != null, modifier = Modifier.testTag("side_open_comments"))
-                MusicDestinationRow("分享歌曲", onShare, enabled = song != null, modifier = Modifier.testTag("side_share"))
-                onActions?.let { MusicDestinationRow("歌曲操作", it, enabled = song != null,
-                    modifier = Modifier.testTag("side_song_actions")) }
+            if (song != null) item { Card { Column {
+                MusicDestinationRow("歌曲 AI 解读", onAi, enabled = aiEnabled,
+                    summary = if (aiEnabled) "创作背景 · 歌词含义" else "当前歌曲暂不支持 AI 解读",
+                    modifier = Modifier.testTag("side_open_ai"))
+                MusicDestinationRow("艺人百科", { navigation.openArtists(true) }, enabled = navigation.artistsEnabled,
+                    summary = if (playerArtistLinks(song).isNotEmpty()) "艺人简介 · 音乐经历" else "搜索歌手后查看资料",
+                    modifier = Modifier.testTag("side_open_biography"))
             } } }
         }
     }

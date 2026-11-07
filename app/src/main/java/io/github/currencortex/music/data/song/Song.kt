@@ -8,7 +8,8 @@ import kotlinx.serialization.SerialName
                              val artistIds: List<Long> = emptyList(), val video: Boolean = false,
                              val musicSource: MusicSource = MusicSource.NETEASE,
                              val externalIds: SongExternalIds = SongExternalIds(),
-                             val navidrome: NavidromeTrackRef? = null, val videoQuality: Int = 1080, val localUri: String = "", val emby: EmbyTrackRef? = null) {
+                             val navidrome: NavidromeTrackRef? = null, val videoQuality: Int = 1080, val localUri: String = "", val emby: EmbyTrackRef? = null,
+                             val albumId: Long = 0) {
     val privateLibrary get() = musicSource == MusicSource.NAVIDROME || musicSource == MusicSource.EMBY
     val privateIdentity get() = emby?.identity ?: navidrome?.identity
     val originalQualityLabel get() = if (musicSource == MusicSource.EMBY) "Emby 原音质" else "Navidrome 原音质"
@@ -24,8 +25,9 @@ import kotlinx.serialization.SerialName
                                 @SerialName("artist_ids") val artistIds: List<Long> = emptyList(), val lyric: String = "",
                                 @SerialName("lyricMatch") val lyricMatch: String = "",
                                 @SerialName("lyricContext") val lyricContext: List<LyricContextDto> = emptyList(),
-                                val lyricContextStatus: String? = null, val lyricContextRetryable: Boolean = false) {
-    fun toDomain() = Song(id, name, artists, album, pic.replace("http:", "https:"), duration, mv, artistIds)
+                                val lyricContextStatus: String? = null, val lyricContextRetryable: Boolean = false,
+                                @SerialName("album_id") val albumId: Long = 0) {
+    fun toDomain() = Song(id, name, artists, album, pic.replace("http:", "https:"), duration, mv, artistIds, albumId = albumId)
 }
 @Serializable data class SearchDto(val songs: List<SongDto> = emptyList(), val totals: SearchTotals = SearchTotals(), val hasMore: SearchMore = SearchMore(),
     val catalogSongs: List<SongDto> = emptyList())

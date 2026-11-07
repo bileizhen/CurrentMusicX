@@ -222,7 +222,8 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
                 album?.string("picUrl").orEmpty().replace("http:", "https:"),
                 (info["dt"] ?: info["duration"])?.jsonPrimitive?.longOrNull ?: 0,
                 (info["mv"] ?: info["mvid"])?.jsonPrimitive?.longOrNull ?: 0,
-                artists.mapNotNull { it["id"]?.jsonPrimitive?.longOrNull })
+                artists.mapNotNull { it["id"]?.jsonPrimitive?.longOrNull },
+                albumId = album?.get("id")?.jsonPrimitive?.longOrNull ?: 0)
         }
     }
 }
