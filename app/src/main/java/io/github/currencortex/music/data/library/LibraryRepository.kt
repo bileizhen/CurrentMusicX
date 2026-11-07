@@ -124,15 +124,28 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     suspend fun artist(id: Long, offset: Int = 0): Artist {
         val d = api.get<ArtistDto>("ncm/artist", mapOf("id" to "$id", "offset" to "$offset", "limit" to "100"))
         return Artist(id, d.name, d.pic.replace("http:", "https:"), d.alias, d.songs.map(SongDto::toDomain), d.more,
-            d.albums.map(AlbumDto::domain), d.albumTotal, d.total)
+            d.albums.map(AlbumDto::domain), d.albumTotal, d.total, d.briefDesc, d.mvTotal)
+    }
+    suspend fun artistMvs(id: Long, offset: Int = 0): ArtistMvsDto =
+        api.get<ArtistMvsDto>("ncm/artist/mv", mapOf("id" to "$id", "offset" to "$offset", "limit" to "20"))
+    suspend fun artistProfile(id: Long): ArtistProfile = api.get("ncm/artist/profile", mapOf("id" to "$id"))
+    suspend fun artistFans(id: Long): ArtistFans = api.get("ncm/artist/fans", mapOf("id" to "$id"))
+    suspend fun artistOverview(id: Long): ArtistOverview {
+        val d = api.get<ArtistOverviewDto>("ncm/artist/overview", mapOf("id" to "$id"))
+        return ArtistOverview(d.songs.map(SongDto::toDomain).filter { it.id > 0 }.distinctBy { it.id },
+            d.albums.map(AlbumDto::domain).filter { it.id > 0 }.distinctBy { it.id },
+            d.artists.filter { it.id > 0 && it.id != id }.distinctBy { it.id }
+                .map { CatalogEntry(it.id, it.name, it.pic.replace("http:", "https:"), it.alias) },
+            d.awardTitle, d.awardCount, d.awardImages)
     }
     suspend fun artistBiography(id: Long, fresh: Boolean = false): ArtistBiography = backgroundRead("artist-bio/$id", fresh) {
         api.get<ArtistBiography>("ncm/artist/desc", mapOf("id" to "$id")).also {
             if (it.code != 200) throw ApiException(if (it.code == 404) ErrorKind.NotFound else ErrorKind.Server, it.code)
         }
     }
-    suspend fun artistAlbums(id: Long, offset: Int): Pair<List<Album>, Boolean> {
-        val d = api.get<ArtistAlbumsDto>("ncm/artist/albums", mapOf("id" to "$id", "offset" to "$offset", "limit" to "30"))
+    suspend fun artistAlbums(id: Long, offset: Int, order: String = "time"): Pair<List<Album>, Boolean> {
+        require(order in setOf("time", "hot"))
+        val d = api.get<ArtistAlbumsDto>("ncm/artist/albums", mapOf("id" to "$id", "offset" to "$offset", "limit" to "30", "order" to order))
         return d.albums.map(AlbumDto::domain) to d.more
     }
     suspend fun album(id: Long) = api.get<AlbumDto>("ncm/album", mapOf("id" to "$id")).domain().copy(id = id)
