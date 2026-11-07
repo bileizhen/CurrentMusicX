@@ -141,6 +141,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     fun musicSession(authenticated: Boolean = true) = RequestSession(
         accountRepository.server.ifBlank { musicSettings.state.value.server },
         accountRepository.token.takeIf { authenticated }, nativeNetease?.sessions?.state?.value?.revision)
+    /** Community features belong to the project account, independently of the audio provider. */
+    fun projectSession() = RequestSession(
+        accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)
     fun audioSession() = if (audioSettings.access().provider == AudioProvider.NETEASE)
         RequestSession("https://music.163.com/", null, neteaseSessions.state.value.revision)
         else RequestSession(accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)

@@ -46,8 +46,8 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
     val currentSong = queue.map { it.current }.distinctUntilChanged()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), queue.value.current)
     val settings = container.musicSettings.state
-    val ai = PlayerAiController(io.github.currencortex.music.data.profile.PlayerAiRepository(session = { container.audioSession() },
-        routeServer = container.serverRouter::resolve), viewModelScope) { container.audioSession() }
+    val ai = PlayerAiController(io.github.currencortex.music.data.profile.PlayerAiRepository(session = { container.projectSession() },
+        routeServer = container.serverRouter::resolve), viewModelScope) { container.projectSession() }
     fun openAi() { queue.value.current?.let(ai::open) }
     fun playAiCard(card: io.github.currencortex.music.data.profile.PostAttachment) {
         val song = Song(card.id, card.name, card.sub, cover = card.pic)
