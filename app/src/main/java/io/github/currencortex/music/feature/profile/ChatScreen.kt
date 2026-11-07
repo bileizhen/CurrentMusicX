@@ -189,7 +189,7 @@ import java.util.Locale
             }
             if (state.image.isNotEmpty()) SettingsGroup(Modifier.padding(horizontal = 16.dp, vertical = 4.dp)) {
                 SettingsPreference("待发送图片", leading = {
-                    AsyncImage(vm.repository.imageUrl(vm.container.audioSession().server, state.image), "待发送图片",
+                    AsyncImage(vm.repository.imageUrl(vm.container.projectSession().server, state.image), "待发送图片",
                         Modifier.size(48.dp).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Crop)
                 }, trailing = {
                     GlassIconButton(vm::removeImage, "移除图片", enabled = !state.sending, surface = false) {
@@ -318,7 +318,7 @@ import java.util.Locale
                     if (message.streaming) Text(if (message.content.isEmpty()) "正在思考…" else "正在回答…",
                         fontSize = 11.sp, color = color.onSurfaceVariantSummary)
                     validMusicAttachments(message.atts).forEach { card -> MusicAttachmentCard(card) { onCard(card) } }
-                    vm.repository.imageUrl(vm.container.audioSession().server, message.image)?.let { url ->
+                    vm.repository.imageUrl(vm.container.projectSession().server, message.image)?.let { url ->
                         AsyncImage(url, "聊天图片", Modifier.widthIn(max = 230.dp).fillMaxWidth().heightIn(min = 120.dp, max = 240.dp)
                             .clip(RoundedCornerShape(10.dp)).clickable { onImage(url) }, contentScale = ContentScale.Fit)
                     }
