@@ -145,6 +145,7 @@ private fun LegalDocument.route() = 3 + ordinal
 
 @Composable
 fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, launchWindowReady: Boolean = true, openDesktopRequest: Int = 0, openRecognitionRequest: Int = 0) {
+    val documentRequests = rememberDocumentRequests(container)
     var embyNavigation by remember { mutableStateOf<io.github.currencortex.music.feature.emby.EmbyNavigation?>(null) }
     var launchFinished by rememberSaveable { mutableStateOf(!animateLaunch) }
     val launchBrand = remember { LaunchBrandState() }
@@ -256,7 +257,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         // Let Android protect its icons without narrowing the full-bleed cover.
         enforceNavigationBarContrast = playlistPage && sideSystemNavigation &&
             !settings.playlistDepthRibbon && !settings.playlistRecordShelf) {
-        CompositionLocalProvider(io.github.currencortex.music.feature.lyrics.ui.LocalLyricsFont provides lyricsFont,
+        CompositionLocalProvider(LocalDocumentRequests provides documentRequests,
+            io.github.currencortex.music.feature.lyrics.ui.LocalLyricsFont provides lyricsFont,
             io.github.currencortex.music.feature.library.LocalPlaylistStatusBarStyle provides playlistStatusStyle,
             LocalLaunchBrand provides launchBrand, LocalAvatarFlight provides avatarFlight,
             LocalRefreshRatePreference provides settings.refreshRate) {
