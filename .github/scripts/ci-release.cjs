@@ -76,7 +76,7 @@ async function publish({github, context, core, releaseDecision, upstreamRun = co
   const previous = (await github.rest.repos.getLatestRelease(repo)).data;
   const notes = (await github.rest.repos.generateReleaseNotes({...repo,tag_name:tag,target_commitish:run.head_sha,
     previous_tag_name:previous.tag_name,configuration_file_path:'.github/release.yml'})).data.body;
-  const body = `## 更新说明\n\n主线 CI 构建 #${run.run_number}，包含自上次正式版 ${previous.tag_name} 以来的改动。\n\n${notes}\n\n## Installation & Verification\n\n提交 ${run.head_sha}。[Android CI](https://github.com/${fullName}/actions/runs/${run.id}) 已通过；本次签名分发前已完成 Release 构建、单元测试和 Lint。未进行真机验收，不代表正式版稳定性。\n\n使用与正式版相同的签名，可保留数据覆盖安装。切回正式版需等待后续更高版本，不支持降级覆盖。\n\nSHA-256: \`${sha256}\`\n`;
+  const body = `## 更新说明\n\n主线 CI 构建 #${run.run_number}，包含自上次正式版 ${previous.tag_name} 以来的改动。\n\n${notes}\n\n## Installation & Verification\n\n提交 ${run.head_sha}。[Android CI](https://github.com/${fullName}/actions/runs/${run.id}) 已通过；本次签名分发前已完成 Release 构建和 Lint。未进行真机验收，不代表正式版稳定性。\n\n使用与正式版相同的签名，可保留数据覆盖安装。切回正式版需等待后续更高版本，不支持降级覆盖。\n\nSHA-256: \`${sha256}\`\n`;
   const eligible = async () => {
     const decision = await releaseDecision({github, context, sha: run.head_sha});
     core.info(decision.reason);
