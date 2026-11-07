@@ -79,18 +79,7 @@ class NavidromeClient(private val access: () -> NavidromeAccess?) {
     suspend fun request(endpoint: String, params: List<Pair<String, String>> = emptyList(),
         expected: NavidromeAccess = current(), provisional: Boolean = false): JsonObject = withContext(Dispatchers.IO) {
         val call = wire.newCall(Request.Builder().url(url(expected, endpoint, params, true)).build())
-        val response = suspendCancellableCoroutine<Response> { continuation ->
-            continuation.invokeOnCancellation { call.cancel() }
-            call.enqueue(object : Callback {
-                override fun onFailure(call: Call, e: IOException) {
-                    if (continuation.isActive) continuation.resumeWith(Result.failure(IOException("Navidrome 连接失败，请检查网络与服务器")))
-                }
-                override fun onResponse(call: Call, response: Response) {
-                    continuation.resume(response) { _, value, _ -> value.close() }
-                }
-            })
-        }
-        response.use {
+        val root = call.readResponse(connectionFailure = { IOException("Navidrome 连接失败，请检查网络与服务器") }) {
             if (it.code in setOf(401, 403)) throw navidromeUnauthorized(it.code)
             if (!it.isSuccessful) throw ApiException(ErrorKind.Server, it.code)
             val body = it.body ?: throw IOException("Navidrome 响应为空")
@@ -103,9 +92,10 @@ class NavidromeClient(private val access: () -> NavidromeAccess?) {
                 if (code in setOf(40, 41)) throw navidromeUnauthorized(code)
                 throw ApiException(when (code) { 50 -> ErrorKind.Forbidden; 70 -> ErrorKind.NotFound; else -> ErrorKind.Server }, code)
             }
-            if (!provisional) ensure(expected)
             root
         }
+        if (!provisional) ensure(expected)
+        root
     }
     companion object {
         const val MARKER = "_cm_navidrome"
