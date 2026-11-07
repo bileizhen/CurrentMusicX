@@ -105,7 +105,8 @@ class DlnaController(private val player: ExternalPlayer, private val music: Musi
             val volume = rendering?.let { control -> try { control.volume() } catch (e: CancellationException) { throw e } catch (_: Exception) { null } }
             if (valid(epoch)) state.update { it.copy(volume = volume, error = null) }
             if (transportState == "STOPPED" && observedPlaying && position.durationMs > 0 && position.positionMs >= position.durationMs - 2000) {
-                observedPlaying = false; player.queue.next(automatic = true); load(epoch)
+                observedPlaying = false
+                if (player.queue.next(automatic = true)) load(epoch)
             }
         } catch (e: CancellationException) { throw e } catch (_: Exception) {
             if (valid(epoch)) state.update { it.copy(error = "无法读取设备状态，请检查 Wi-Fi 或结束投屏") }
@@ -125,7 +126,7 @@ class DlnaController(private val player: ExternalPlayer, private val music: Musi
         if (sourceUrl == null) load(epoch) else { if (playing) transport.play() else transport.pause(); if (valid(epoch)) player.state.update { it.copy(playing = playing) } }
     }
     override fun seek(position: Long) = command { epoch, transport -> transport.seek(position); if (valid(epoch)) player.state.update { it.copy(positionMs = position) } }
-    override fun next() = command { epoch, _ -> player.queue.next(); load(epoch) }
+    override fun next() = command { epoch, _ -> if (player.queue.next()) load(epoch) }
     override fun previous() = command { epoch, _ -> player.queue.previous(); load(epoch) }
     override fun request(song: Song) { player.queue.add(song) }
     fun volume(value: Int) = command { epoch, _ -> rendering?.volume(value); if (valid(epoch)) state.update { it.copy(volume = value.coerceIn(0, 100)) } }
