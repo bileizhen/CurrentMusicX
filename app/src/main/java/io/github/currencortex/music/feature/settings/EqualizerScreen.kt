@@ -24,7 +24,6 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.data.settings.*
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.*
@@ -35,7 +34,6 @@ import java.util.Locale
 @Composable fun EqualizerScreen(vm: EqualizerViewModel, onBack: (() -> Unit)? = null) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val runtime by vm.runtime.collectAsStateWithLifecycle()
-    val playback by vm.playback.collectAsStateWithLifecycle()
     val soundPreferences by vm.soundPreferences.collectAsStateWithLifecycle()
     val hint = MiuixTheme.colorScheme.onSurfaceVariantSummary
     val accent = MiuixTheme.colorScheme.primary
@@ -43,7 +41,6 @@ import java.util.Locale
     val status = when {
         !runtime.supported -> "此设备未提供均衡器"
         runtime.error != null -> runtime.error!!
-        playback.mode == PlayerMode.CAST -> "投屏音效由接收设备处理"
         soundPreferences.smartEnabled -> "智能调音正在使用；以下为手动参数，调整后切回手动"
         !settings.enabled -> "已关闭，保留你的调节参数"
         runtime.active -> "已连接本机播放器"

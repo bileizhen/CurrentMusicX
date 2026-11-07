@@ -2,7 +2,7 @@ package io.github.currencortex.music.core.media
 
 import io.github.currencortex.music.data.song.*
 
-enum class PlayerMode { LOCAL, CAST, ROOM }
+enum class PlayerMode { LOCAL, ROOM }
 data class ListenTogetherParticipant(val userId: Long, val nickname: String, val avatarUrl: String)
 data class ListenTogetherPair(val participants: List<ListenTogetherParticipant>)
 data class PlayerState(val song: Song? = null, val playing: Boolean = false, val loading: Boolean = false,
@@ -16,7 +16,7 @@ data class PlayerState(val song: Song? = null, val playing: Boolean = false, val
                        val listenTogether: ListenTogetherPair? = null, val audioInfo: AudioStreamInfo? = null) {
     val showPause get() = playing || playRequested
     fun bufferedProgress(duration: Long = durationMs): Float =
-        if (resolving || mode == PlayerMode.CAST || duration <= 0) 0f
+        if (resolving || duration <= 0) 0f
         else if (mode == PlayerMode.LOCAL && audioFullyCached) 1f
         else (bufferedPositionMs.coerceAtLeast(0).toDouble() / duration).coerceIn(0.0, 1.0).toFloat()
 }

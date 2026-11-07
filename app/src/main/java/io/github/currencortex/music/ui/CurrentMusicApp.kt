@@ -142,6 +142,11 @@ private const val DISCOVER_TAB = 1
 private const val ME_TAB = 2
 private const val SETTINGS_TAB = 3
 private fun LegalDocument.route() = 3 + ordinal
+private val NavigationStackSaver = androidx.compose.runtime.saveable.listSaver<List<String>, String>(
+    save = { it },
+    // Old saved navigation stacks may still contain the removed device page.
+    restore = { saved -> saved.filterNot { it == "cast/devices" }.ifEmpty { listOf(ROOT.toString()) } }
+)
 
 @Composable
 fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, launchWindowReady: Boolean = true, openDesktopRequest: Int = 0, openRecognitionRequest: Int = 0) {
@@ -236,7 +241,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val roomLive by container.roomSession.state.collectAsStateWithLifecycle()
     val nativeTogether by container.listenTogether.state.collectAsStateWithLifecycle()
     val tabsState = rememberSaveableStateHolder()
-    var backStack by rememberSaveable { mutableStateOf(listOf(ROOT.toString())) }
+    var backStack by rememberSaveable(stateSaver = NavigationStackSaver) { mutableStateOf(listOf(ROOT.toString())) }
     var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
     val playlistPage = isPlaylistRoute(backStack.last())
     val systemBarDensity = LocalDensity.current
@@ -320,7 +325,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         var playerDialogOpen by remember { mutableStateOf(false) }
         var playerEffectsOpen by rememberSaveable { mutableStateOf(false) }
         var playerEffectsPresented by remember { mutableStateOf(false) }
-        var castDialogOpen by remember { mutableStateOf(false) }
         val pageNavigation=remember {PageContainerNavigation()}
         val pageSceneStrategy=remember(pageNavigation) {PageContainerSceneStrategy(pageNavigation,
             setOf(ROOT.toString(),SETTINGS.toString(),APPEARANCE.toString(),NETWORK.toString(),STORAGE.toString(),ABOUT.toString(),
@@ -331,7 +335,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             if(backStack.lastOrNull()==route)backStack=backStack.dropLast(1)
         }}
         fun navigateBack() {
-            if (roomDialogOpen || castDialogOpen || playerDialogOpen || miniQueueOpen || songMenu != null) return
+            if (roomDialogOpen || playerDialogOpen || miniQueueOpen || songMenu != null) return
             if (backStack.size > 1) {
                 if(pageNavigation.close(backStack.last()))return
                 if (backStack.last() == SEARCH.toString()) { searchFocusManager.clearFocus(); searchKeyboard?.hide() }
@@ -642,10 +646,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     val vm: StorageViewModel = viewModel(key = "storage", factory = viewModelFactory { StorageViewModel(container) })
                     StorageScreen(vm)
                 }
-                entry("cast/devices") {
-                    val vm: io.github.currencortex.music.feature.cast.CastViewModel = viewModel(factory = viewModelFactory { io.github.currencortex.music.feature.cast.CastViewModel(container) })
-                    io.github.currencortex.music.feature.cast.CastScreen(vm, ::navigateBack, { castDialogOpen = it })
-                }
                 entry("room/search") {
                     Box(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
                         SearchScreen(searchVm, container.playerController, actions = { LibrarySongActions(libraryVm, it, ::navigateLibrary) },
@@ -913,7 +913,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             artworkUrl = currentSong?.cover.orEmpty(), predictiveBack = predictiveBack,
             backEnabled = !playerEffectsPresented && !showLogs && pendingPlay == null && !updateDialogVisible && !announcementVisible &&
                 !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null &&
-                !roomDialogOpen && !castDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
+                !roomDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
             // Only the tap target that reverses a closing sheet needs the moving dock bounds.
             miniOpenBounds = if (miniAvailable && playerSheetMotion == PlayerSheetMotion.CLOSE) miniOpenBounds else null,
             onReopen = { if (currentSong?.video == true) navigateLibrary("lib/video") else navigateTo(PLAYER) },
@@ -922,7 +922,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             playerSavedState.SaveableStateProvider(PLAYER) {
                 PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
                     actions = { song -> LibrarySongActions(libraryVm, song, ::navigateLibrary) },
-                    onCast = { navigateLibrary("cast/devices") }, onRoom = { navigateLibrary("room/list") },
+                    onRoom = { navigateLibrary("room/list") },
                     onDialogActive = { playerDialogOpen = it }, onNetwork = { navigateTo(NETWORK) },
                     onLike = if (currentSong?.emby == null) ({ currentSong?.let(libraryVm::choosePlaylist); Unit }) else null, onEqualizer = { playerEffectsOpen = true },
                     onAiNavigate = ::navigateLibrary, roamingRequest = roamingRequest,
@@ -968,7 +968,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !playerPresented && !searchCoversScene && !predictiveBack && !showLogs &&
-                pendingPlay == null && !updateDialogVisible && updatePrompt == null && !announcementVisible && !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && !castDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
+                pendingPlay == null && !updateDialogVisible && updatePrompt == null && !announcementVisible && !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
         ScaleDialog(showScale, settingsVm) { showScale = false }
