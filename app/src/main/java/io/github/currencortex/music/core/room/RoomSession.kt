@@ -47,7 +47,7 @@ class RoomSession(private val repo: RoomRepository, private val sse: RoomSseClie
     private val role get() = state.value.detail?.role(userId())
     val active get() = activeId != null
     fun requireCanJoin() {
-        check(!active && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听或结束投屏" }
+        check(!active && player.state.value.mode == PlayerMode.LOCAL) { "请先退出一起听" }
     }
     suspend fun join(info: RoomInfo, password: String = "", created: Boolean = false, expected: RequestSession = repo.session()) {
         requireCanJoin()

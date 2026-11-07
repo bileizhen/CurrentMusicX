@@ -61,7 +61,7 @@ class StorageStore(private val context: Context, private val audioCache: AudioCa
 
     private fun cacheEntries(): List<File> = context.cacheDir.listFiles().orEmpty()
         .filter { it.name != audioDirName && !it.name.startsWith("audio.") &&
-            it.name !in setOf("song-downloads", "updates") }
+            it.name !in setOf("song-downloads", "mv-downloads", "updates") }
 
     private fun essentialBytes(): Long = runCatching {
         val info = context.applicationInfo
