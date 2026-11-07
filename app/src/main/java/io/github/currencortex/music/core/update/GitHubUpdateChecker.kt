@@ -40,6 +40,10 @@ class GitHubUpdateChecker(
         return try {
             connection.connectTimeout = 10_000
             connection.readTimeout = 10_000
+            // CI releases are replaced and pruned; a cached response can point at a deleted APK.
+            connection.useCaches = false
+            connection.setRequestProperty("Cache-Control", "no-cache, no-store")
+            connection.setRequestProperty("Pragma", "no-cache")
             connection.setRequestProperty("User-Agent", userAgent)
             connection.setRequestProperty("Accept", "application/vnd.github+json")
             if (connection.responseCode == 404) return null
