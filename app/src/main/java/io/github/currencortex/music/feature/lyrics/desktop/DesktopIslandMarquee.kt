@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -52,18 +51,18 @@ internal fun islandPan(elapsedMs: Long, overflow: Float, speed: Float): Float {
     }
     // Observe available width during measure, not subcomposition. A spring resize
     // no longer recomposes the paragraph or removes/readds its mask/layer nodes.
-    val width = natural + with(density) { padding.toPx() * 2 }
+    val canvasWidth = natural + with(density) { padding.roundToPx() } * 2
     val speed = with(density) { 24.dp.toPx() }
-    val viewport = remember { mutableIntStateOf(natural) }
+    val viewport = remember { mutableIntStateOf(canvasWidth) }
     Box(modifier.fillMaxWidth().layout { measurable, constraints ->
         val child = measurable.measure(constraints)
         viewport.intValue = child.width
         layout(child.width, child.height) { child.placeRelative(0, 0) }
     }.graphicsLayer {
         clip = true
-        compositingStrategy = if (width > size.width) CompositingStrategy.Offscreen else CompositingStrategy.Auto
+        compositingStrategy = if (natural > size.width) CompositingStrategy.Offscreen else CompositingStrategy.Auto
     }.drawWithCache {
-        val overflowing = width > size.width
+        val overflowing = natural > size.width
         val edge = minOf(14.dp.toPx(), size.width * .2f) / size.width.coerceAtLeast(1f)
         val fade = Brush.horizontalGradient(0f to Color.Transparent, edge to Color.White,
             (1f - edge) to Color.White, 1f to Color.Transparent)
@@ -73,11 +72,17 @@ internal fun islandPan(elapsedMs: Long, overflow: Float, speed: Float): Float {
         }
     }) {
         Box(Modifier.wrapContentWidth(Alignment.Start, unbounded = true)
-            .width(with(density) { width.toDp() })
+            .width(with(density) { canvasWidth.toDp() })
             .graphicsLayer {
-                val available = viewport.intValue.toFloat()
-                val offset = if (width <= available) (width - available) / 2
-                    else if (motion) islandPan(position.value - startMs, width - available, speed) else 0f
+                val available = viewport.intValue
+                // The glow margin can overflow even when the whole lyric fits.
+                // Keep that text centered and reserve timed panning for clipped text.
+                val excess = (canvasWidth - available).toFloat()
+                val offset = when {
+                    natural <= available -> excess / 2f
+                    motion -> islandPan(position.value - startMs, excess, speed)
+                    else -> 0f
+                }
                 translationX = if (direction == LayoutDirection.Rtl) offset else -offset
             }) { content() }
     }
