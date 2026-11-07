@@ -127,7 +127,6 @@ class AuthViewModel(private val container: AppContainer) : ViewModel() {
     }
     fun switch(key: String) = action("账号已切换") {
         if (container.roomSession.active) container.roomSession.leave()
-        container.dlnaController.stop()
         if (container.playerController.state.value.mode == io.github.currencortex.music.core.media.PlayerMode.LOCAL) container.playerController.pause()
         container.authRepository.switchAccount(key)
     }

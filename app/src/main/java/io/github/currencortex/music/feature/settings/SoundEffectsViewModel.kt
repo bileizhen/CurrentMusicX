@@ -190,7 +190,6 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
     private fun cancelTile() { auditionController.stop(); ++tileGeneration; tileRequest?.cancel(); tileRequest = null; tileLoading.value = null }
     fun useTile(tile: NativeEffectTile) {
         actionError.value = null
-        if (playback.value.mode == io.github.currencortex.music.core.media.PlayerMode.CAST) return
         when (tile.id) {
             104L -> { originalAiMasterEnabled(true); return }
             105L -> { originalSpeakerEnabled(true); return }
@@ -200,7 +199,6 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
         else resolveAndUseOriginal(tile.id, tile.name, tile.membership)
     }
     private fun resolveAndUseOriginal(id: Long, name: String, membership: Int) {
-        if (playback.value.mode == io.github.currencortex.music.core.media.PlayerMode.CAST) return
         cancelTile()
         container.originalSoundEffects.cancelPendingSelection()
         actionError.value = null
@@ -216,7 +214,6 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
                 currentCoroutineContext().ensureActive()
                 if (generation != tileGeneration) return@launch
                 originalEffectUnavailableReason(effect, original.value.copy(unsupported = original.value.unsupported - id))?.let { error(it) }
-                if (playback.value.mode == io.github.currencortex.music.core.media.PlayerMode.CAST) return@launch
                 // Applying must not cancel this successful resolver or fetch the same ID twice.
                 tileRequest = null
                 tileLoading.value = null
@@ -355,7 +352,6 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
         container.originalSpeakerEffects.disable()
     }
     fun originalAiMasterEnabled(enabled: Boolean) {
-        if (enabled && playback.value.mode == io.github.currencortex.music.core.media.PlayerMode.CAST) return
         cancelTile(); localRequest?.cancel(); userSelected = true
         if (enabled) {
             lastSelection.value = SoundEffectSelection(SoundEffectKind.AI_MASTER, "AI 调音大师")
@@ -370,7 +366,6 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
         }) else clearFeedback()
     }
     fun originalSpeakerEnabled(enabled: Boolean) {
-        if (enabled && playback.value.mode == io.github.currencortex.music.core.media.PlayerMode.CAST) return
         cancelTile(); localRequest?.cancel(); userSelected = true
         if (enabled) {
             lastSelection.value = SoundEffectSelection(SoundEffectKind.SPEAKER, "外放音效")
@@ -385,7 +380,6 @@ class SoundEffectsViewModel(private val container: AppContainer) : ViewModel() {
         }) else clearFeedback()
     }
     fun speakerScene(scene: io.github.currencortex.music.data.effects.OriginalSpeakerScene) {
-        if (playback.value.mode == io.github.currencortex.music.core.media.PlayerMode.CAST) return
         container.originalSpeakerEffects.setScene(scene)
     }
     fun originalUnavailableReason(effect: NeteaseSoundEffect): String? =

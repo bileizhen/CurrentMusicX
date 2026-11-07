@@ -102,7 +102,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         QualityRow(AudioQuality.AUTO, selected, enabled, onSelect)
         run {
             Text(if (enabled) "按所选档位请求音源，实际音质取决于歌曲、音源及账号权限。自动最高会优先请求可用高音质。"
-                else "请先退出一起听或结束投屏，再切换音质。",
+                else "请先退出一起听，再切换音质。",
                 Modifier.padding(horizontal = 4.dp, vertical = 8.dp).testTag("quality_note"),
                 fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
         }
