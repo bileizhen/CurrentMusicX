@@ -1,15 +1,28 @@
 package io.github.currencortex.music.feature.admin
 
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.*
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -17,21 +30,21 @@ import androidx.lifecycle.repeatOnLifecycle
 import io.github.currencortex.music.data.admin.*
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import kotlinx.coroutines.awaitCancellation
-import kotlinx.serialization.json.JsonObject
+import kotlinx.coroutines.*
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import java.text.DateFormat
-import java.util.Date
-import java.util.Locale
 
-internal sealed interface AdminDialog {
-    data class User(val user: AdminUser, val action: AdminUserAction? = null) : AdminDialog
-    data class Announcement(val item: AdminAnnouncement? = null) : AdminDialog
-    data class AnnouncementAction(val item: AdminAnnouncement, val action: String, val label: String) : AdminDialog
-    data class Kick(val session: AdminSession) : AdminDialog
-    data object Cache : AdminDialog
+internal sealed interface AdminDestination {
+    data class User(val user: AdminUser) : AdminDestination
+    data class EditUser(val user: AdminUser, val action: AdminUserAction) : AdminDestination
+    data class Announcement(val item: AdminAnnouncement?) : AdminDestination
+}
+internal sealed interface AdminConfirmation {
+    data class User(val user: AdminUser, val action: AdminUserAction) : AdminConfirmation
+    data class Announcement(val item: AdminAnnouncement, val action: String, val label: String) : AdminConfirmation
+    data class Kick(val session: AdminSession) : AdminConfirmation
+    data object Cache : AdminConfirmation
 }
 
 @Composable fun AdminScreen(vm: AdminViewModel, onBack: () -> Unit) {
@@ -46,178 +59,114 @@ internal sealed interface AdminDialog {
     LaunchedEffect(vm, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.refresh(); awaitCancellation() }
     }
-    // Compose forgets all selected users and form fields as soon as a login/server/permission changes.
-    key(identity, settings.server, visible) {
-        var dialog by remember { mutableStateOf<AdminDialog?>(null) }
-        var query by remember { mutableStateOf(state.query) }
-        val enabled = !state.loading && !state.busy
-        MusicSubpage("管理员面板", "admin_screen", onBack, actions = {
-            MusicTextAction(if (state.loading) "加载中" else "刷新", vm::refresh, enabled = enabled)
+    key(identity, settings.server, visible) { AdminPanel(state, visible, vm, onBack) }
+}
+
+@Composable internal fun AdminPanel(state: AdminState, visible: Boolean, actions: AdminActions, onBack: () -> Unit) {
+    var destination by remember { mutableStateOf<AdminDestination?>(null) }
+    var confirmation by remember { mutableStateOf<AdminConfirmation?>(null) }
+    val pager = rememberPagerState(initialPage = state.tab.ordinal) { AdminTab.entries.size }
+    val tabs = rememberLazyListState()
+    val lists = AdminTab.entries.map { rememberLazyListState() }
+    val scope = rememberCoroutineScope()
+    val focus = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
+    fun open(value: AdminDestination) { actions.clearOperationError(); destination = value; focus.clearFocus(); keyboard?.hide() }
+    fun confirm(value: AdminConfirmation) { actions.clearOperationError(); confirmation = value; focus.clearFocus(); keyboard?.hide() }
+    LaunchedEffect(pager.settledPage) { actions.select(AdminTab.entries[pager.settledPage]); focus.clearFocus(); keyboard?.hide() }
+    LaunchedEffect(pager.targetPage) { tabs.animateScrollToItem((pager.targetPage - 1).coerceAtLeast(0)) }
+    LaunchedEffect(state.query, state.sort, state.offset) { lists[AdminTab.USERS.ordinal].scrollToItem(0) }
+    LaunchedEffect(state.message) { if (state.message != null) { delay(4500); actions.dismissMessage() } }
+    BackHandler(state.busy || destination != null) {
+        if (!state.busy) destination = (destination as? AdminDestination.EditUser)?.let { AdminDestination.User(it.user) }
+    }
+    Box(Modifier.fillMaxSize()) {
+        AnimatedContent(destination, transitionSpec = {
+            val forward = targetState != null && (initialState == null || targetState is AdminDestination.EditUser)
+            (fadeIn(tween(180)) + slideInHorizontally(tween(240)) { if (forward) it / 8 else -it / 8 }) togetherWith
+                fadeOut(tween(120))
+        }, label = "admin_detail_navigation") { currentDestination ->
+        if (currentDestination == null) MusicSubpage("管理员面板", "admin_screen", onBack = { if (!state.busy) onBack() }, actions = {
+            GlassIconButton(actions::refresh, if (state.loading) "正在刷新" else "刷新", enabled = !state.loading && !state.busy,
+                modifier = Modifier.testTag("admin_refresh")) { Icon(MusicIcons.Update, null) }
         }) { topInset ->
-            LazyColumn(Modifier.fillMaxSize().testTag("admin_list"),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = topInset + 12.dp,
-                    bottom = LocalMusicBottomInset.current + 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.fillMaxSize().padding(top = topInset)) {
                 if (!visible) {
-                    item { SettingsHint(if (state.loading) "正在验证管理权限…" else state.error ?: "仅管理员可访问，请登录有管理权限的账号") }
+                    if (state.loading) AdminLoading() else AdminEmpty("无法进入管理面板", state.error ?: "请使用有管理权限的账号登录", "重新验证", actions::refresh)
                 } else {
-                    item { Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        AdminTab.entries.forEach { tab -> GlassActionButton(tab.label, { vm.select(tab) },
-                            Modifier.testTag("admin_tab_${tab.name.lowercase()}"), enabled = !state.busy, primary = state.tab == tab, fillWidth = false) }
-                    } }
-                    state.error?.let { item { SettingsHint(it, error = true) } }
-                    state.message?.let { item { SettingsHint(it) } }
-                    if (state.loading) item { SettingsHint("正在更新…") }
-                    when (state.tab) {
-                        AdminTab.OVERVIEW -> overview(state)
-                        AdminTab.USERS -> {
-                            item { SettingsGroup { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                TextField(query, { query = it }, singleLine = true, modifier = Modifier.fillMaxWidth().testTag("admin_user_query"))
-                                Text("搜索用户名、昵称、邮箱或手机号", fontSize = 12.sp)
-                                MusicTextAction("搜索", { vm.search(query) }, enabled = enabled)
-                                Row(Modifier.horizontalScroll(rememberScrollState())) {
-                                    listOf("reg" to "最新注册", "reg_asc" to "最早注册", "name" to "昵称", "active" to "最近活跃",
-                                        "sessions" to "在线设备", "likes" to "点赞", "plays" to "播放", "role" to "角色").forEach { (sort, label) ->
-                                        GlassActionButton(label, { vm.search(query, sort) }, enabled = enabled, primary = state.sort == sort, fillWidth = false)
-                                    }
+                    BoxWithConstraints(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
+                    val tabWidth = ((maxWidth / AdminTab.entries.size).value).coerceAtLeast(50f * LocalDensity.current.fontScale).dp
+                    LazyRow(state = tabs, modifier = Modifier.fillMaxWidth().semantics { selectableGroup() }.testTag("admin_tabs")) {
+                        items(AdminTab.entries) { tab ->
+                            val selected = pager.targetPage == tab.ordinal
+                            Column(Modifier.width(tabWidth).height(48.dp).clip(RoundedCornerShape(12.dp))
+                                .selectable(selected, enabled = !state.busy, role = Role.Tab) {
+                                    focus.clearFocus(); keyboard?.hide(); scope.launch { pager.animateScrollToPage(tab.ordinal) }
+                                }.testTag("admin_tab_${tab.name.lowercase()}"), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                    Text(tab.label, fontSize = 13.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                                        color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary)
                                 }
-                            } } }
-                            state.users?.let { result ->
-                                item { SettingsListHeader("共 ${result.total} 位用户") }
-                                if (result.users.isEmpty()) item { SettingsHint("没有匹配的用户") }
-                                items(result.users, key = { "user-${it.id}" }) { user -> AdminCard(user.name) {
-                                    Text("@${user.username} · ID ${user.id}", fontSize = 13.sp)
-                                    Text(listOfNotNull(if (user.isOwner) "站长" else if (user.isSuper) "超级管理员" else if (user.isAdmin) "管理员" else "普通用户",
-                                        if (user.disabled) "已禁用" else null, user.title.ifBlank { null }).joinToString(" · "), fontSize = 13.sp)
-                                    if (user.email.isNotBlank() || user.phone.isNotBlank()) Text(listOf(user.email, user.phone).filter { it.isNotBlank() }.joinToString(" · "), fontSize = 13.sp)
-                                    Text("${user.points} 积分 · 等级 ${user.level} · ${user.sessions} 台在线设备", fontSize = 13.sp)
-                                    Text("点赞 ${user.likes} · 歌单 ${user.playlists} · 播放 ${user.plays}", fontSize = 13.sp)
-                                    if (AdminUserAction.entries.any { it.allowed(requireNotNull(state.actor), user) })
-                                        MusicTextAction("管理用户", { dialog = AdminDialog.User(user) }, enabled = enabled,
-                                            modifier = Modifier.testTag("admin_manage_${user.id}"))
-                                } }
-                                item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    MusicTextAction("上一页", { vm.page(-1) }, enabled = enabled && state.offset > 0)
-                                    Text("第 ${state.offset / AdminRepository.PAGE_SIZE + 1} 页", Modifier.padding(top = 12.dp), fontSize = 13.sp)
-                                    MusicTextAction("下一页", { vm.page(1) }, enabled = enabled && state.offset + AdminRepository.PAGE_SIZE < result.total)
-                                } }
+                                Box(Modifier.width(22.dp).height(3.dp).clip(RoundedCornerShape(2.dp))
+                                    .background(if (selected) MiuixTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent))
                             }
                         }
-                        AdminTab.ANNOUNCEMENTS -> {
-                            item { MusicTextAction("发布公告", { dialog = AdminDialog.Announcement() }, enabled = enabled) }
-                            state.announcements?.let { rows ->
-                                if (rows.isEmpty()) item { SettingsHint("暂无公告") }
-                                items(rows, key = { "announcement-${it.id}" }) { announcement -> AdminCard(announcement.title) {
-                                    Text("${announcement.author} · ${adminTime(announcement.createdAt)}" +
-                                        if (announcement.removed) " · 已移除" else if (announcement.pinned) " · 置顶" else "", fontSize = 12.sp)
-                                    Text(announcement.body, fontSize = 14.sp, maxLines = 8)
-                                    if (announcement.canEdit) Row(Modifier.horizontalScroll(rememberScrollState())) {
-                                        MusicTextAction("编辑", { dialog = AdminDialog.Announcement(announcement) }, enabled = enabled)
-                                        if (announcement.removed) MusicTextAction("恢复", {
-                                            dialog = AdminDialog.AnnouncementAction(announcement, "restore", "恢复公告") }, enabled = enabled)
-                                        else {
-                                            MusicTextAction(if (announcement.pinned) "取消置顶" else "置顶", {
-                                                dialog = AdminDialog.AnnouncementAction(announcement, "pin", if (announcement.pinned) "取消置顶" else "置顶公告") }, enabled = enabled)
-                                            MusicTextAction("移除", { dialog = AdminDialog.AnnouncementAction(announcement, "remove", "移除公告") }, enabled = enabled, destructive = true)
-                                        }
-                                    }
-                                } }
-                            }
-                        }
-                        AdminTab.DEVICES -> state.sessions?.let { rows ->
-                            item { SettingsHint("${rows.size} 台在线设备（服务器最多返回 100 台）；强制下线会撤销该用户的全部会话。") }
-                            if (rows.isEmpty()) item { SettingsHint("暂无在线设备") }
-                            items(rows, key = { "session-${it.id}" }) { session -> AdminCard(session.nickname.ifBlank { session.username }) {
-                                Text("@${session.username} · ${session.platform}", fontSize = 13.sp)
-                                Text(session.device, fontSize = 14.sp)
-                                Text("登录：${adminTime(session.created_at)}\n最近活跃：${adminTime(session.last_seen)}", fontSize = 12.sp)
-                                MusicTextAction("该用户全部设备下线", { dialog = AdminDialog.Kick(session) },
-                                    enabled = enabled && session.user_id != state.actor?.id, destructive = true)
-                            } }
-                        }
-                        AdminTab.CLIENTS -> state.clients?.let { clients ->
-                            val current = clients.obj("current"); val cmx = clients.obj("cmx"); val apk = cmx.obj("apk")
-                            item { AdminCard("CurrentMusic") {
-                                AdminMetric("版本", current.text("version")); AdminMetric("安装包", adminBytes(current.number("size")))
-                                AdminMetric("发布时间", adminTime(current.number("publishedAt") ?: 0))
-                                AdminMetric("镜像", if (current.flag("mirrored")) "已同步" else "未同步")
-                                if (current.text("changelog").isNotBlank()) Text(current.text("changelog"), fontSize = 13.sp)
-                            } }
-                            item { AdminCard("CurrentMusicX") {
-                                AdminMetric("版本", cmx.text("version")); AdminMetric("安装包", adminBytes(apk.number("size")))
-                                AdminMetric("下载次数", apk.text("downloads")); AdminMetric("镜像", if (apk.flag("mirrored")) "已同步" else "未同步")
-                                AdminMetric("发布时间", adminTime(cmx.number("publishedAt") ?: 0))
-                                if (cmx.text("body").isNotBlank()) Text(cmx.text("body"), fontSize = 13.sp)
-                            } }
-                            item { SettingsListHeader("历史版本") }
-                            items(clients.obj("cmx").rows("history")) { release -> AdminCard("v${release.text("version")}") {
-                                AdminMetric("下载次数", release.text("apkDownloads")); AdminMetric("安装包", adminBytes(release.number("apkSize")))
-                                AdminMetric("发布于", release.text("publishedAt"))
-                            } }
-                        }
-                        AdminTab.SYSTEM -> state.overview?.let { stats ->
-                            item { AdminCard("系统与数据") {
-                                listOf("playlists" to "自建歌单", "tracks" to "歌单曲目", "bindings" to "网易云绑定", "songs" to "歌曲元数据", "cache" to "辅助缓存")
-                                    .forEach { (key, label) -> AdminMetric(label, stats.text(key)) }
-                            } }
-                            item { roleCounts(stats) }
-                            item { AdminCard("缓存维护") {
-                                Text("清理歌词、评论、详情等辅助缓存，不影响音质档位探测缓存。清理后首次访问对应内容可能稍慢。", fontSize = 13.sp)
-                                MusicTextAction("清理辅助缓存", { dialog = AdminDialog.Cache }, enabled = enabled, destructive = true)
-                            } }
-                        }
+                    }
+                    }
+                    AnimatedVisibility(state.message != null) { AdminNotice(state.message.orEmpty(), onDismiss = actions::dismissMessage) }
+                    HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().clipToBounds().testTag("admin_pager"), userScrollEnabled = !state.busy) { index ->
+                        AdminSection(AdminTab.entries[index], state, lists[index], actions, ::open, ::confirm)
                     }
                 }
             }
         }
-        if (visible) dialog?.let { selection -> SettingsUiScope {
-            AdminDialogContent(selection, state, vm, { dialog = it }, { if (!state.busy) dialog = null })
-        } }
+        if (visible && currentDestination != null) {
+            AdminDetail(currentDestination, state, actions, ::open, ::confirm, onBack = {
+                if (!state.busy) { actions.clearOperationError(); destination = null }
+            })
+        }
+        }
+        if (visible) confirmation?.let { current ->
+            AdminConfirmDialog(current, state, actions, close = { if (!state.busy) { confirmation = null; actions.clearOperationError() } },
+                done = { confirmation = null; destination = null })
+        }
     }
 }
 
-private fun LazyListScope.overview(state: AdminState) {
-    state.overview?.let { stats ->
-        item { AdminCard("站点概览") {
-            listOf("users" to "注册用户", "usersToday" to "今日新增", "usersWeek" to "近 7 日新增", "sessions" to "在线设备",
-                "onlineUsers" to "近 1 小时活跃用户", "disabled" to "禁用账号", "plays" to "播放记录", "likes" to "站内点赞", "ncmLikes" to "网易云红心")
-                .forEach { (key, label) -> AdminMetric(label, stats.text(key)) }
-        } }
-        item { roleCounts(stats) }
-        item { AdminCard("站点出站流量") {
-            val traffic = state.traffic
-            if (traffic?.flag("available") == true) {
-                AdminMetric("今日", adminBytes(traffic.number("today"))); AdminMetric("本月", adminBytes(traffic.number("month")))
-                AdminMetric("实时速率（近 5 分钟均值）", adminBytes(traffic.text("rate5m").toDoubleOrNull()?.toLong()) + "/s")
-                traffic.rows("top").forEach { AdminMetric(it.text("path"), adminBytes(it.number("bytes"))) }
-            } else Text(state.trafficError ?: "流量统计暂不可用", fontSize = 13.sp)
-        } }
-        item { AdminCard("近 30 天用户增长") { stats.rows("userDaily").forEach { AdminMetric(it.text("day"), it.text("count") + " 人") } } }
-        item { AdminCard("近 14 天播放活跃") { stats.rows("playDaily").forEach {
-            AdminMetric(it.text("day"), "${it.text("plays")} 次 · ${it.text("users")} 人")
-        } } }
+@Composable private fun AdminSection(tab: AdminTab, state: AdminState, list: LazyListState, actions: AdminActions,
+    open: (AdminDestination) -> Unit, confirm: (AdminConfirmation) -> Unit) {
+    val active = state.tab == tab
+    val loading = active && state.loading
+    val loaded = when (tab) {
+        AdminTab.OVERVIEW, AdminTab.SYSTEM -> state.overview != null
+        AdminTab.USERS -> state.users != null
+        AdminTab.ANNOUNCEMENTS -> state.announcements != null
+        AdminTab.DEVICES -> state.sessions != null
+        AdminTab.CLIENTS -> state.clients != null
     }
-}
-@Composable private fun roleCounts(stats: JsonObject) = AdminCard("角色构成") {
-    listOf("owner" to "站长", "super" to "超级管理员", "admin" to "管理员", "user" to "普通用户")
-        .forEach { (key, label) -> AdminMetric(label, stats.obj("roleCounts").text(key)) }
-}
-@Composable internal fun AdminCard(title: String, content: @Composable ColumnScope.() -> Unit) {
-    SettingsGroup { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-        content()
-    } }
-}
-@Composable internal fun AdminMetric(label: String, value: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(label, Modifier.weight(1f), fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-        Text(value.ifBlank { "—" }, Modifier.weight(1f), fontSize = 13.sp)
+    val error = state.error.takeIf { active }
+    Column(Modifier.fillMaxSize()) {
+        if (tab == AdminTab.USERS) AdminSearch(state, actions)
+        if (tab == AdminTab.ANNOUNCEMENTS) AdminSectionHeading("公告管理", "${state.announcements?.count { !it.removed } ?: 0} 条生效", "发布公告",
+            enabled = !loading && !state.busy) { open(AdminDestination.Announcement(null)) }
+        if (error != null && loaded) AdminNotice(error, error = true, retry = actions::refresh)
+        MusicPullToRefresh(loading, actions::refresh, Modifier.weight(1f).fillMaxWidth(), enabled = active && !state.busy) {
+            LazyColumn(state = list, modifier = Modifier.fillMaxSize().testTag("admin_list_${tab.name.lowercase()}"),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = LocalMusicBottomInset.current + 28.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                when {
+                    !loaded && error != null -> item { AdminEmpty("加载失败", error, "重试", actions::refresh) }
+                    !loaded -> item { AdminLoading() }
+                    else -> when (tab) {
+                        AdminTab.OVERVIEW -> adminOverview(state)
+                        AdminTab.USERS -> adminUsers(state, actions, open)
+                        AdminTab.ANNOUNCEMENTS -> adminAnnouncements(state, open)
+                        AdminTab.DEVICES -> adminDevices(state, confirm)
+                        AdminTab.CLIENTS -> adminClients(state)
+                        AdminTab.SYSTEM -> adminSystem(state, confirm)
+                    }
+                }
+            }
+        }
     }
-}
-internal fun adminTime(value: Long): String = if (value <= 0) "—" else
-    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(if (value < 100_000_000_000L) value * 1000 else value))
-internal fun adminBytes(value: Long?): String {
-    if (value == null) return "—"
-    var size = value.toDouble(); var unit = 0
-    while (size >= 1024 && unit < 4) { size /= 1024; unit++ }
-    return String.format(Locale.getDefault(), "%.1f %s", size, listOf("B", "KB", "MB", "GB", "TB")[unit])
 }

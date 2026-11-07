@@ -15,13 +15,15 @@ data class AdminIdentity(val server: String, val id: Long?, val revision: Long)
 data class AdminState(
     val identity: AdminIdentity? = null, val actor: ProfileUser? = null,
     val tab: AdminTab = AdminTab.OVERVIEW, val loading: Boolean = false, val busy: Boolean = false,
-    val error: String? = null, val message: String? = null, val query: String = "", val sort: String = "reg", val offset: Int = 0,
+    val error: String? = null, val operationError: String? = null, val message: String? = null,
+    val query: String = "", val sort: String = "reg", val offset: Int = 0,
     val overview: JsonObject? = null, val traffic: JsonObject? = null, val trafficError: String? = null,
     val users: AdminUsers? = null, val announcements: List<AdminAnnouncement>? = null,
     val sessions: List<AdminSession>? = null, val clients: JsonObject? = null, val rules: LevelRules? = null,
+    val rulesError: String? = null,
 ) { val authorized get() = actor?.canAdminister == true }
 
-class AdminViewModel(val container: AppContainer) : ViewModel() {
+class AdminViewModel(val container: AppContainer) : ViewModel(), AdminActions {
     private val accounts = container.accountRepository
     private val repository = AdminRepository(container.apiClient)
     val state = MutableStateFlow(AdminState())
@@ -42,15 +44,17 @@ class AdminViewModel(val container: AppContainer) : ViewModel() {
                 }
         }
     }
-    fun select(tab: AdminTab) {
+    override fun clearOperationError() { state.update { it.copy(operationError = null) } }
+    override fun dismissMessage() { state.update { it.copy(message = null) } }
+    override fun select(tab: AdminTab) {
         if (state.value.busy || state.value.tab == tab) return
         state.update { it.copy(tab = tab, error = null, message = null) }; refresh()
     }
-    fun search(query: String, sort: String = state.value.sort) {
+    override fun search(query: String, sort: String) {
         if (state.value.busy) return
         state.update { it.copy(query = query.trim(), sort = sort, offset = 0, users = null) }; refresh()
     }
-    fun page(delta: Int) {
+    override fun page(delta: Int) {
         if (state.value.loading || state.value.busy) return
         val offset = (state.value.offset + delta * AdminRepository.PAGE_SIZE).coerceAtLeast(0)
         if (delta > 0 && offset >= (state.value.users?.total ?: 0)) return
@@ -67,7 +71,7 @@ class AdminViewModel(val container: AppContainer) : ViewModel() {
         if (!actor.canAdminister) throw ApiException(ErrorKind.Forbidden)
         return actor
     }
-    fun refresh() {
+    override fun refresh() {
         if (state.value.busy) return
         readJob?.cancel()
         val id = identity(); val owner = session()
@@ -85,10 +89,13 @@ class AdminViewModel(val container: AppContainer) : ViewModel() {
                 publish { it.copy(actor = actor, identity = id) }
                 val snapshot = state.value
                 when (snapshot.tab) {
-                    AdminTab.OVERVIEW, AdminTab.SYSTEM -> {
+                    AdminTab.OVERVIEW, AdminTab.SYSTEM -> coroutineScope {
+                        val trafficRequest = if (snapshot.tab == AdminTab.OVERVIEW) async {
+                            appResult { repository.read("admin/traffic", owner) }
+                        } else null
                         val overview = repository.read("admin/overview", owner)
                         publish { it.copy(overview = overview) }
-                        if (snapshot.tab == AdminTab.OVERVIEW) when (val traffic = appResult { repository.read("admin/traffic", owner) }) {
+                        if (trafficRequest != null) when (val traffic = trafficRequest.await()) {
                             is AppResult.Success -> publish { it.copy(traffic = traffic.value, trafficError = null) }
                             is AppResult.Failure -> {
                                 if (traffic.kind in setOf(ErrorKind.Unauthorized, ErrorKind.Forbidden)) throw ApiException(traffic.kind)
@@ -99,8 +106,10 @@ class AdminViewModel(val container: AppContainer) : ViewModel() {
                     AdminTab.USERS -> {
                         val users = repository.users(owner, snapshot.query, snapshot.sort, snapshot.offset)
                         publish { it.copy(users = users) }
-                        val rules = LevelsRepository(container.apiClient).rules(owner)
-                        publish { it.copy(rules = rules) }
+                        when (val rules = appResult { LevelsRepository(container.apiClient).rules(owner) }) {
+                            is AppResult.Success -> publish { it.copy(rules = rules.value, rulesError = null) }
+                            is AppResult.Failure -> publish { it.copy(rules = null, rulesError = rules.message) }
+                        }
                     }
                     AdminTab.ANNOUNCEMENTS -> {
                         val rows = repository.announcements(owner).items
@@ -128,7 +137,7 @@ class AdminViewModel(val container: AppContainer) : ViewModel() {
         if (state.value.busy || state.value.loading || !state.value.authorized) return
         val id = identity(); val owner = session()
         if (state.value.identity != id) return
-        state.update { it.copy(busy = true, error = null, message = null) }
+        state.update { it.copy(busy = true, operationError = null, message = null) }
         writeJob = viewModelScope.launch {
             val result = appResult { action(validate(id, owner), owner) }
             ensureActive()
@@ -138,18 +147,20 @@ class AdminViewModel(val container: AppContainer) : ViewModel() {
                     state.update { it.copy(busy = false, message = success) }; done(); refresh()
                 }
                 is AppResult.Failure -> {
-                    state.update { it.copy(busy = false, error = result.message + "；如请求中断，请刷新确认结果后再操作") }
+                    val uncertain = result.kind in setOf(ErrorKind.Network, ErrorKind.Timeout, ErrorKind.Server)
+                    state.update { it.copy(operationError = result.message + if (uncertain) "。操作结果尚未确认，请刷新核对后再试。" else "") }
                     if (result.kind in setOf(ErrorKind.Unauthorized, ErrorKind.Forbidden)) {
                         // A protected target can return 403 while the operator is still an administrator.
                         val actor = appResult { validate(id, owner) }
                         if (current(id, owner) && actor is AppResult.Failure)
                             state.value = AdminState(identity = id, error = "无法确认管理权限，请刷新重试")
                     }
+                    if (current(id, owner)) state.update { it.copy(busy = false) }
                 }
             }
         }
     }
-    fun userAction(target: AdminUser, action: AdminUserAction, value: String, level: Int?, done: () -> Unit) =
+    override fun userAction(target: AdminUser, action: AdminUserAction, value: String, level: Int?, done: () -> Unit) =
         mutate("用户已更新", done) { actor, owner ->
             if (!action.allowed(actor, target)) throw ApiException(ErrorKind.Forbidden)
             val body = buildJsonObject {
@@ -171,11 +182,11 @@ class AdminViewModel(val container: AppContainer) : ViewModel() {
             }
             repository.write("POST", "admin/users/${target.id}/${action.path}", body, owner)
         }
-    fun kick(session: AdminSession, done: () -> Unit) = mutate("该用户的全部设备已下线", done) { actor, owner ->
+    override fun kick(session: AdminSession, done: () -> Unit) = mutate("该用户的全部设备已下线", done) { actor, owner ->
         if (actor.id == session.user_id) throw ApiException(ErrorKind.Forbidden)
         repository.write("POST", "admin/users/${session.user_id}/kick", buildJsonObject {}, owner)
     }
-    fun announcement(item: AdminAnnouncement?, title: String, body: String, link: String, pinned: Boolean, done: () -> Unit) =
+    override fun announcement(item: AdminAnnouncement?, title: String, body: String, link: String, pinned: Boolean, done: () -> Unit) =
         mutate(if (item == null) "公告已发布" else "公告已保存", done) { _, owner ->
             require(title.trim().length in 1..60)
             require(link.isBlank() || runCatching { java.net.URI(link).let { it.scheme in setOf("https", "http") && !it.host.isNullOrBlank() && it.userInfo == null } }.getOrDefault(false))
@@ -183,14 +194,14 @@ class AdminViewModel(val container: AppContainer) : ViewModel() {
             repository.write(if (item == null) "POST" else "PUT", if (item == null) "announcements" else "announcements/${item.id}",
                 buildJsonObject { put("title", title.trim()); put("body", body.trim()); put("link", link.trim()); put("pinned", pinned) }, owner)
         }
-    fun announcementAction(item: AdminAnnouncement, action: String, done: () -> Unit) = mutate("公告已更新", done) { _, owner ->
+    override fun announcementAction(item: AdminAnnouncement, action: String, done: () -> Unit) = mutate("公告已更新", done) { _, owner ->
         require(action in setOf("pin", "restore", "remove"))
         if (!item.canEdit) throw ApiException(ErrorKind.Forbidden)
         repository.write(if (action == "remove") "DELETE" else "POST",
             "announcements/${item.id}" + if (action == "remove") "" else "/$action",
             buildJsonObject { if (action == "pin") put("pinned", !item.pinned) }, owner)
     }
-    fun clearCache(done: () -> Unit) = mutate("辅助缓存已清理", done) { _, owner ->
+    override fun clearCache(done: () -> Unit) = mutate("辅助缓存已清理", done) { _, owner ->
         repository.write("POST", "admin/cache/clear", buildJsonObject { put("scope", "aux") }, owner)
     }
 }
