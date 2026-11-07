@@ -126,7 +126,8 @@ private suspend fun awaitLyricsDisplayFrame(): Long = kotlinx.coroutines.suspend
                     LyricsSynchronizer.seekPositionOrNull(it, lyricsOffsetMs, mediaDurationMs)?.let { target ->
                         onSeek(target); followRequest++
                     }
-                }, translation, romanization, wordAnimation, effects, size, weightMode, display, monetTone = tone)
+                }, translation, romanization, wordAnimation, effects, size, weightMode, display, monetTone = tone,
+                browsing = browsing)
         }
         if (!minimal && interlude != null && browseAnchor == null)
             LyricsInterludeView(interlude!!, effectivePosition, Modifier.align(Alignment.TopStart).padding(16.dp))
