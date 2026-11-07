@@ -462,3 +462,15 @@ its license; the combination is conveyed under GPLv3/AGPLv3 section 13. Correspo
 application source and build instructions are available from the configured GitHub
 source link. AMLL is an independent Apple Music-inspired project; neither it nor this
 native style is an Apple product or a claim of complete parity with Apple's software.
+
+## Outfit listening statistics font
+
+The listening statistics page bundles the Outfit Regular, SemiBold, Bold and Black font resources used by the official listening page (upstream project: https://github.com/Outfitio/Outfit-Fonts). Copyright 2021 The Outfit Project Authors (https://github.com/Outfitio/Outfit-Fonts). The SemiBold WOFF2 container is converted to TTF without changing its glyphs. Licensed under the SIL Open Font License 1.1; see `legal/Outfit-OFL.txt`.
+
+## MiSans listening statistics typography
+
+The listening statistics page uses MiSans Semibold and Bold. Copyright (c) 2020–2021 Beijing Xiaomi Mobile Software Co., Ltd. All Rights Reserved. The unmodified font resources are distributed under the MiSans Intellectual Property License, bundled as `legal/MiSans-license.pdf`. Official information: https://hyperos.mi.com/font/zh/faq/ .
+
+## Listening page reference artwork
+
+The native listening page follows the layout and animation of NetEase Cloud Music’s official listening footprint page (https://sg.music.163.com/st/listen-home/index.html). The TOP stars use the original `icon_top_red.8c1a4229.png` and `icon_top_yellow.aa8fe8de.png`. The period arrows use the original `light_left_enable`, `light_left_disable`, `light_right_enable` and `light_right_disable` PNG assets. The duration information icon is the original `durationTipBtnLight.2276dcce.png`. The light sweep image is the original `rayIconLight.57e5d8a6.png`; badge, annual decoration and report artwork load from their original NetEase HTTPS URLs. These reference assets belong to their respective rights holders; they are not relicensed under this project's license. Account credentials are handled only by the existing native NetEase transport.

@@ -14,6 +14,7 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.settings.LikeMode
+import io.github.currencortex.music.data.settings.ListeningSource
 import io.github.currencortex.music.data.settings.MusicTransitionMode
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.LyricsStyleSelector
@@ -35,6 +36,17 @@ import kotlin.math.roundToInt
     SettingsPage("播放", "playback_settings") {
         item("quality") { SettingsSection("音质", MusicIcons.Headphones) {
             MusicDestinationRow("默认音质", { qualityOpen = true }, Modifier.testTag("default_quality"), summary = settings.quality.label)
+        } }
+        item("listening") { SettingsSection("听歌足迹", MusicIcons.Headphones) {
+            Column(Modifier.testTag("listening_source_setting").semantics { selectableGroup() }) {
+                ListeningSource.entries.forEachIndexed { index, source ->
+                    if(index > 0) SettingsDivider()
+                    SettingsChoiceRow(source.label, settings.listeningSource == source,
+                        { vm.listeningSource(source) }, Modifier.testTag("listening_source_${source.name.lowercase()}"),
+                        summary = if(source == ListeningSource.LOCAL) "统计这台设备在 CurrentMusicX 中的播放记录"
+                            else "查看已绑定网易云账号的云端听歌足迹")
+                }
+            }
         } }
         item("lyrics") { SettingsSection("歌词样式", MusicIcons.File,
             footer = "字体、翻译、罗马音及歌词效果可在播放器的歌词显示选项中调整。") {

@@ -2,6 +2,8 @@ package io.github.currencortex.music.feature.listening
 
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -16,19 +18,29 @@ import kotlinx.coroutines.delay
 import java.time.LocalDate
 import java.time.ZoneId
 
-@Composable internal fun ListeningScreen(container: AppContainer, onBack: () -> Unit, onLogin: () -> Unit) {
-    var sourceName by rememberSaveable { mutableStateOf(ListeningSource.LOCAL.name) }
+@Composable internal fun ListeningScreen(container: AppContainer, onBack: () -> Unit, onLogin: () -> Unit,
+    onNavigate: (String) -> Unit, onPlay: (io.github.currencortex.music.data.song.Song) -> Unit,
+    onPlayList: (List<io.github.currencortex.music.data.song.Song>,Int) -> Unit) {
+    val uriHandler = LocalUriHandler.current
+    val context = LocalContext.current
+    val settings by container.musicSettings.state.collectAsStateWithLifecycle()
     var periodName by rememberSaveable { mutableStateOf(ListeningPeriod.WEEK.name) }
     var anchorText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var selectedText by rememberSaveable { mutableStateOf(LocalDate.now().toString()) }
     var retry by remember { mutableIntStateOf(0) }
-    val source = ListeningSource.valueOf(sourceName)
+    val source = settings.listeningSource
     val period = ListeningPeriod.valueOf(periodName)
     val anchor = LocalDate.parse(anchorText)
     val selected = LocalDate.parse(selectedText)
     val session by container.neteaseSessions.state.collectAsStateWithLifecycle()
+    val playback by container.playerController.state.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var today by remember(source) { mutableStateOf(LocalDate.now(if (source == ListeningSource.NETEASE) ZoneId.of("Asia/Shanghai") else ZoneId.systemDefault())) }
+    LaunchedEffect(source) {
+        retry = 0
+        if (anchor > today) anchorText = today.toString()
+        if (selected > today) selectedText = today.toString()
+    }
     LaunchedEffect(source, lifecycle) { lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
         while (true) {
             today = LocalDate.now(if (source == ListeningSource.NETEASE) ZoneId.of("Asia/Shanghai") else ZoneId.systemDefault())
@@ -37,6 +49,7 @@ import java.time.ZoneId
     } }
     val range = listeningRange(period, anchor)
     val owner = if (source == ListeningSource.NETEASE) session.revision else 0L
+    var cloudSongsToday by rememberSaveable(source.name,period.name,anchorText,owner) { mutableStateOf<Boolean?>(null) }
     var report by remember(source, period, anchor, owner, retry) { mutableStateOf<ListeningDisplay?>(null) }
     var day by remember(source, period, anchor, selected, owner, retry) { mutableStateOf<ListeningDisplay?>(null) }
     var error by remember(source, period, anchor, owner, retry) { mutableStateOf<String?>(null) }
@@ -49,7 +62,20 @@ import java.time.ZoneId
             while (true) {
                 loading = true
                 when (val result = appResult {
-                    if (source == ListeningSource.LOCAL) container.todayListening.history(range.start, range.end).toDisplay()
+                    if (source == ListeningSource.LOCAL) {
+                        val history = container.todayListening.history(range.start, range.end)
+                        val display = history.toDisplay()
+                        if (period != ListeningPeriod.YEAR) display else {
+                            val first = (history.firstRecordedDay?.year ?: today.year).coerceAtMost(today.year)
+                            val years = (today.year downTo first).map { year ->
+                                val annual = if (year == range.start.year) history else
+                                    container.todayListening.history(LocalDate.of(year, 1, 1), LocalDate.of(year, 12, 31))
+                                ListeningFact("$year 年", listeningDuration(annual.durationMs),
+                                    if (annual.detailedDurationMs == 0L && annual.durationMs > 0) "歌曲明细暂无数据" else "收听 ${annual.songCount} 首歌曲")
+                            }
+                            display.copy(yearFacts = years)
+                        }
+                    }
                     else loadCloudListening(container.neteaseListening, period, anchor)
                 }) {
                     is AppResult.Success -> { report = result.value; error = null }
@@ -76,21 +102,62 @@ import java.time.ZoneId
             }
         }
     }
+    val exportInfo=ListeningWallExportInfo(
+        nickname=if(source==ListeningSource.NETEASE) session.profile?.nickname.orEmpty() else "CurrentMusicX",
+        timeline="${range.start.monthValue}.${range.start.dayOfMonth}-${range.end.monthValue}.${range.end.dayOfMonth}",
+        songTitles=report?.tracks.orEmpty().map { it.title },isCloud=source==ListeningSource.NETEASE,
+        cloudVip=report?.cloudVip,superVip=report?.superVip==true)
+    val exportDepth=remember { mutableIntStateOf(0) }
+    CompositionLocalProvider(LocalListeningWallExportInfo provides exportInfo,LocalListeningExportDepth provides exportDepth,
+        LocalListeningMotionEnabled provides (exportDepth.intValue==0)) {
+    ListeningSocialActionsProvider(container,enabled=source==ListeningSource.NETEASE) {
+    CompositionLocalProvider(LocalListeningMotionEnabled provides (exportDepth.intValue==0 && cloudSongsToday==null)) {
+    key(source,owner) {
     ListeningPage(source, period, range, today, selected, report, day, loading, error, signedIn,
         if (source == ListeningSource.NETEASE) loading else dayLoading, dayError,
-        onSource = {
-            sourceName = it.name; retry = 0
-            val newToday = LocalDate.now(if (it == ListeningSource.NETEASE) ZoneId.of("Asia/Shanghai") else ZoneId.systemDefault())
-            if (anchor > newToday) anchorText = newToday.toString()
-            if (selected > newToday) selectedText = newToday.toString()
-        },
         onPeriod = { periodName = it.name; selectedText = minOf(today, listeningRange(it, anchor).end).toString() },
         onMove = { direction ->
             val next = shiftListeningDate(period, anchor, direction)
             if (listeningRange(period, next).start <= today) {
                 anchorText = next.toString(); selectedText = minOf(today, listeningRange(period, next).end).toString()
             }
-        }, onDay = { selectedText = it.toString() }, onRetry = { retry++ }, onLogin = onLogin, onBack = onBack)
+        }, onDay = { selectedText = it.toString() }, onRetry = { retry++ }, onLogin = onLogin, onBack = onBack,
+        onOpenCloudSongs = { cloudSongsToday=it }, onMonthlyAction = { action ->
+            when (action) {
+                is ListeningMonthlyAction.Song -> onPlay(io.github.currencortex.music.data.song.Song(action.id,
+                    action.name.ifBlank { "歌曲" },action.artist,cover=action.cover))
+                is ListeningMonthlyAction.Artist -> onNavigate("lib/artist/${action.id}")
+                is ListeningMonthlyAction.Playlist -> onNavigate("lib/ncmplaylist/${action.id}")
+                is ListeningMonthlyAction.Genre -> onNavigate("lib/style/${action.id}")
+                else -> {
+                    val url = when(action) {
+                        is ListeningMonthlyAction.User -> "https://music.163.com/#/user/home?id=${action.id}"
+                        is ListeningMonthlyAction.VoiceList -> "orpheus://nm/voicelist/detail?id=${action.id}"
+                        is ListeningMonthlyAction.Url -> action.url
+                        else -> error("Unhandled monthly action")
+                    }
+                    try { uriHandler.openUri(url) } catch (_: IllegalArgumentException) {
+                        android.widget.Toast.makeText(context,"暂时无法打开该内容",android.widget.Toast.LENGTH_SHORT).show()
+                    } catch (_: android.content.ActivityNotFoundException) {
+                        android.widget.Toast.makeText(context,"未找到可打开该内容的应用",android.widget.Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        })
+    }
+    }
+    cloudSongsToday?.let { todaySongs ->
+        ListeningCloudSongs(container.neteaseListening,period,anchor,report?.cloudEndTimeMs,todaySongs,
+            dismiss={cloudSongsToday=null}, play={ action ->
+                onPlay(io.github.currencortex.music.data.song.Song(action.id,action.name,action.artist,cover=action.cover))
+            }, playRank={ songs,index ->
+                onPlayList(songs.map { song -> io.github.currencortex.music.data.song.Song(requireNotNull(song.id),
+                    song.name,song.artists,album=song.albumName,cover=song.coverUrl) },index)
+            },currentSongId=playback.song?.takeIf { it.musicSource==io.github.currencortex.music.data.song.MusicSource.NETEASE && !it.video }?.id,
+            playing=playback.playing)
+    }
+    }
+    }
 }
 
 internal fun ListeningHistoryReport.toDisplay(): ListeningDisplay {
