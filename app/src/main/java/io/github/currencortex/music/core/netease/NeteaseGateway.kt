@@ -32,7 +32,8 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         val album = (raw["al"] ?: raw["album"]) as? JsonObject ?: buildJsonObject {}
         put("ncm_id", raw.long("id")); put("name", raw.text("name"))
         put("artists", artists.joinToString(" / ") { it.text("name") }); put("artist_ids", JsonArray(artists.mapNotNull { it["id"] }))
-        put("album", album.text("name")); put("pic", album.text("picUrl").ifBlank { raw.text("picUrl") }.replace("http:", "https:"))
+        put("album", album.text("name")); put("album_id", album.long("id"))
+        put("pic", album.text("picUrl").ifBlank { raw.text("picUrl") }.replace("http:", "https:"))
         put("duration", raw["dt"] ?: raw["duration"] ?: JsonPrimitive(0)); put("mv", raw["mv"] ?: raw["mvid"] ?: JsonPrimitive(0))
     }
     /** Keeps one line of context around the hits, newline-separated, markers preserved for the UI split. */

@@ -773,6 +773,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     playWithPermission { container.playerController.playList(songs, index) }
                                 }
                             }
+                            route.startsWith("lib/artist/") && route.endsWith("/bio") -> {
+                                val artistVm: io.github.currencortex.music.feature.artist.ArtistViewModel = viewModel(key = route,
+                                    factory = viewModelFactory { io.github.currencortex.music.feature.artist.ArtistViewModel(container,
+                                        route.removeSuffix("/bio").substringAfterLast('/').toLongOrNull() ?: 0L) })
+                                val artistState by artistVm.state.collectAsStateWithLifecycle()
+                                io.github.currencortex.music.feature.artist.ArtistEncyclopedia(artistState, ::navigateBack,
+                                    { artistVm.loadBiography() }, artistVm::loadProfile)
+                            }
                             route.startsWith("lib/artist/") -> {
                                 val artistVm: io.github.currencortex.music.feature.artist.ArtistViewModel = viewModel(key = route,
                                     factory = viewModelFactory { io.github.currencortex.music.feature.artist.ArtistViewModel(container,
@@ -792,7 +800,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             route == "lib/video" -> if (currentSong?.video == true) io.github.currencortex.music.feature.mv.MvPlayerScreen(container, ::navigateBack,
                                 onDialogActive = { playerDialogOpen = it })
                                 else PlayerScreen(playerVm, ::navigateBack, { playWithPermission { container.playerController.toggle() } },
-                                    onLike = if (currentSong?.emby == null) ({ currentSong?.let(libraryVm::choosePlaylist); Unit }) else null)
+                                    onLike = if (currentSong?.emby == null) ({ currentSong?.let(libraryVm::choosePlaylist); Unit }) else null,
+                                    onAiNavigate = ::navigateLibrary)
                             route.startsWith("lib/browse/") -> {
                                 val parts = route.split('/')
                                 val catalogVm: CatalogViewModel = viewModel(key = route, factory = viewModelFactory {
