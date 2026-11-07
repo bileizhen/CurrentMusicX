@@ -104,7 +104,7 @@ import kotlin.math.sin
                             }),
                     fontSize = fontSize, translation = translation, romanization = romanization,
                     wordAnimation = wordAnimation, display = display, weightMode = weightMode,
-                    motionEnabled = effects && motionEnabled, browsing = reading, paused = !playbackRunning,
+                    motionEnabled = motionEnabled, browsing = reading, paused = !playbackRunning,
                     held = active.isEmpty() && gap == null && index == target,
                     prepareInk = !reading && (index == readingTarget || index == readingTarget + 1))
             }
