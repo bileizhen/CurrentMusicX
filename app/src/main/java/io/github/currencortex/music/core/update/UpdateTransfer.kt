@@ -28,6 +28,9 @@ class UpdateTransfer(private val downloader: UpdateDownload, private val install
     private var backgroundId: String? = null
     private val selected = MutableStateFlow<AppRelease?>(null)
     val selectedRelease = selected.asStateFlow()
+    val hasActiveDownload: Boolean
+        get() = state.value.let { it.installing || it.download is UpdateDownloadState.Downloading ||
+            it.download is UpdateDownloadState.Ready }
 
     init {
         if (background != null) scope.launch {
