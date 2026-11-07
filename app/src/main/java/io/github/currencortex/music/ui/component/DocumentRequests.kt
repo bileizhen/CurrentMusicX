@@ -66,7 +66,10 @@ private class CreateDocument : ActivityResultContract<DocumentTarget, Uri?>() {
         val current = pending?.let { ApiJson.decodeFromString<DocumentRequest>(it) } ?: return
         if (uri == null) {
             pending = null
-            scope.launch(Dispatchers.IO) { files.discard(current.id) }
+            // Enter cleanup before returning to the lifecycle; recreation must not cancel it.
+            scope.launch(start = CoroutineStart.UNDISPATCHED) {
+                withContext(NonCancellable + Dispatchers.IO) { files.discard(current.id) }
+            }
         } else {
             // Keep access if another recreation happens while the result is being processed.
             val flags = if (current.song == null) Intent.FLAG_GRANT_WRITE_URI_PERMISSION else Intent.FLAG_GRANT_READ_URI_PERMISSION
