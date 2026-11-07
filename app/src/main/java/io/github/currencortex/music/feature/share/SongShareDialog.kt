@@ -7,8 +7,6 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import io.github.currencortex.music.ui.util.showMusicMessage
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -26,6 +24,7 @@ import coil3.compose.AsyncImage
 import io.github.currencortex.music.ui.util.showMusicError
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.MusicDialog
+import io.github.currencortex.music.ui.component.LocalDocumentRequests
 import io.github.currencortex.music.ui.component.nativeui.SettingsSegmentedControl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
@@ -40,7 +39,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var style by rememberSaveable { mutableStateOf(SongShareStyle.SQUARE) }
     var attempt by remember(song) { mutableIntStateOf(0) }
     var saving by remember { mutableStateOf(false) }
-    var pendingSave by remember { mutableStateOf<SongShareFile?>(null) }
+    val documents = LocalDocumentRequests.current
     // A new state holder immediately hides the old file on a song/style/retry change.
     // Otherwise produceState retains its previous value until its new coroutine starts.
     val result by key(song, style, attempt) { produceState<Result<SongShareFile>?>(null) {
@@ -52,17 +51,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val poster = result?.getOrNull()
     fun message(text: String, error: Boolean = false) {
         if (error) context.showMusicError(text) else context.showMusicMessage(text)
-    }
-    val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/png")) { uri ->
-        val selected = pendingSave
-        pendingSave = null
-        if (uri != null && selected != null) scope.launch {
-            saving = true
-            try { SongShareFiles.save(context, selected, uri); message("海报已保存") }
-            catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { message("保存失败，请重新选择位置", error = true) }
-            finally { saving = false }
-        }
     }
     val previewHeight = (LocalConfiguration.current.screenHeightDp * .42f).coerceIn(170f, 420f).dp
     MusicDialog("分享歌曲", onDismiss) {
@@ -84,13 +72,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
             MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MusicDialogButton("保存图片", onClick = {
-                    if (poster != null) {
-                        pendingSave = poster
-                        try { save.launch(poster.content.filename) }
+                    if (poster != null) scope.launch {
+                        saving = true
+                        try { documents.exportFile(poster.file, poster.content.filename) }
                         catch (cancelled: CancellationException) { throw cancelled }
-                        catch (_: Exception) { pendingSave = null; message("无法打开保存位置", error = true) }
+                        catch (_: Exception) { message("无法打开保存位置", error = true) }
+                        finally { saving = false }
                     }
-                }, enabled = poster != null && !saving, modifier = Modifier.weight(1f).testTag("song_share_save"))
+                }, enabled = poster != null && !saving && !documents.busy, modifier = Modifier.weight(1f).testTag("song_share_save"))
                 MusicDialogButton("分享图片", onClick = {
                     if (poster != null) try { context.startActivity(Intent.createChooser(SongShareFiles.shareIntent(context, poster), "分享歌曲海报")) }
                     catch (cancelled: CancellationException) { throw cancelled }
