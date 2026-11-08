@@ -6,6 +6,7 @@ import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 
 /** Adapts official NetEase responses to the app's existing models, without a proxy server. */
 class NeteaseGateway(val transport: NeteaseTransport) {
@@ -210,13 +211,24 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 return official("/api/song/chorus", data("ids" to "[$id]"), expected = expected)
             }
             "song/url", "song/url/v1" -> {
-                val level = arg("level", "auto").let { if (it == "auto") "jymaster" else it }
-                val raw = official("/api/song/enhance/player/url/v1", buildJsonObject {
-                    put("ids", "[$id]"); put("level", level); put("encodeType", "flac")
-                    if (level == "sky") put("immerseType", "c51")
-                }, expected = expected)
-                val track = raw.array("data").mapNotNull { it as? JsonObject }
-                    .firstOrNull { it.long("id").toString() == id } ?: throw ApiException(ErrorKind.Parse)
+                suspend fun trackAt(level: String): JsonObject? {
+                    val raw = official("/api/song/enhance/player/url/v1", buildJsonObject {
+                        put("ids", "[$id]"); put("level", level); put("encodeType", "flac")
+                        if (level == "sky") put("immerseType", "c51")
+                    }, expected = expected)
+                    return raw.array("data").filterIsInstance<JsonObject>().firstOrNull { it.long("id").toString() == id }
+                }
+                val level = arg("level", "auto")
+                if (level == "auto" && arg("supportsDolby") == "1") {
+                    val dolby = try { trackAt("dolby") } catch (e: ApiException) {
+                        if (e.kind !in setOf(ErrorKind.Forbidden, ErrorKind.NotFound, ErrorKind.Server, ErrorKind.Parse, ErrorKind.Unknown)) throw e
+                        null
+                    } catch (_: java.io.IOException) { null }
+                    if (dolby != null && dolby.text("level") == "dolby" && dolby.text("url").toHttpUrlOrNull() != null &&
+                        (dolby["code"] == null || dolby.long("code") == 200L) &&
+                        (dolby["freeTrialInfo"] == null || dolby["freeTrialInfo"] == JsonNull)) return dolby
+                }
+                val track = trackAt(if (level == "auto") "jymaster" else level) ?: throw ApiException(ErrorKind.Parse)
                 if (track.text("url").isBlank()) throw ApiException(ErrorKind.NeteaseAudioUnavailable)
                 return track
             }

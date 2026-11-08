@@ -45,7 +45,8 @@ data class SearchPage(val songs: List<Song>, val total: Int, val hasMore: Boolea
                                   val sr: Int = 0, val ch: Int = 0, val sampleRate: Int = 0, val channelCount: Int = 0, val md5: String = "",
                                   val expi: Long = 0, val source: String = "", val requestedLevel: String = "",
     val matchSource: String = "", val br: Long = 0, val bits: Int = 0, val size: Long = 0,
-    val durationMs: Long = 0, val expectedDurationMs: Long = 0)
+    val durationMs: Long = 0, val expectedDurationMs: Long = 0,
+    val freeTrialInfo: kotlinx.serialization.json.JsonElement? = null)
 @Serializable data class AudioSource(val url: String, val level: String, val sampleRate: Int, val channelCount: Int, val format: String = "", val md5: String = "",
                                     val validForSeconds: Long = 30, val source: String = "", val requestedLevel: String = "",
     val matchSource: String = "", val bitrate: Long = 0, val bits: Int = 0, val size: Long = 0,
