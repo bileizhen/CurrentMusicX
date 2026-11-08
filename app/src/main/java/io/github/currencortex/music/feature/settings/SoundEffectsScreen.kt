@@ -48,7 +48,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
-import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.data.effects.NeteaseSoundEffect
 import io.github.currencortex.music.data.effects.NativeEffectTile
 import io.github.currencortex.music.data.settings.EqualizerPreset
@@ -101,9 +100,8 @@ import kotlinx.serialization.json.*
     LaunchedEffect(expandedCatalog) { if (expandedCatalog) vm.refreshMore() }
     var tileDetails by remember { mutableStateOf<NativeEffectTile?>(null) }
     BackHandler(enabled = LocalMusicPageActive.current && expandedCatalog) { expandedCatalog = false }
-    val canApply = runtime.supported && playback.mode != PlayerMode.CAST
+    val canApply = runtime.supported
     val status = when {
-        playback.mode == PlayerMode.CAST -> "投屏音效由接收设备处理"
         !runtime.supported -> "此设备暂不支持本机均衡器"
         runtime.error != null -> runtime.error!!
         options.smartEnabled -> tuning.message
@@ -119,7 +117,6 @@ import kotlinx.serialization.json.*
     val anyEnabled = masterChosen || speakerChosen || moodChosen || smartChosen || singleChosen || options.smartEnabled || manual.enabled
     val activeStatus = when {
         !anyEnabled -> "保留你的调节，下次随时开启"
-        playback.mode == PlayerMode.CAST -> "投屏由接收设备处理"
         masterChosen -> originalMaster.message
         speakerChosen -> originalSpeaker.message
         moodChosen -> if (originalMood.enabled && !originalMood.loading && !playback.playing)
@@ -164,7 +161,7 @@ import kotlinx.serialization.json.*
                     if (moodChosen) ((originalMood.visualExtra?.get("copywriting") as? JsonObject)
                         ?.get("description") as? JsonPrimitive)?.contentOrNull ?: activeStatus else "按歌曲情绪智能调音，读懂每首歌背后的情感温度",
                     currentSong?.name, visible && animationsActive && selectedEffect == null && tileDetails == null && !showEngine,
-                    playback.mode != PlayerMode.CAST,
+                    true,
                     onMood = { if (moodChosen) vm.turnOff() else vm.originalMoodEnabled(true) },
                     masterChosen = masterChosen, masterReady = originalMaster.enabled && !originalMaster.loading, masterLoading = originalMaster.loading, masterStatus = if (masterChosen) originalMaster.description ?: originalMaster.message
                         else "AI 大模型分析歌曲内容，为每一首歌定制专属音效",
@@ -182,7 +179,7 @@ import kotlinx.serialization.json.*
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(originalMaster.message, Modifier.weight(1f).testTag("sound_master_status"), fontSize = 12.sp,
                         color = colors.onSurfaceVariantSummary)
-                    if (!originalMaster.loading) MusicTextAction("重试", { vm.originalAiMasterEnabled(true) }, enabled = playback.mode != PlayerMode.CAST)
+                    if (!originalMaster.loading) MusicTextAction("重试", { vm.originalAiMasterEnabled(true) })
                     if (!originalMaster.available) MusicTextAction("导入引擎", { showEngine = true })
                 }
             }
@@ -191,7 +188,7 @@ import kotlinx.serialization.json.*
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(originalSpeaker.message, Modifier.weight(1f).testTag("sound_speaker_status"), fontSize = 12.sp,
                         color = colors.onSurfaceVariantSummary)
-                    if (!originalSpeaker.loading) MusicTextAction("重试", { vm.originalSpeakerEnabled(true) }, enabled = playback.mode != PlayerMode.CAST)
+                    if (!originalSpeaker.loading) MusicTextAction("重试", { vm.originalSpeakerEnabled(true) })
                     if (!originalSpeaker.available) MusicTextAction("导入引擎", { showEngine = true })
                 }
             }
@@ -199,8 +196,7 @@ import kotlinx.serialization.json.*
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(originalMood.message, Modifier.weight(1f).testTag("sound_original_mood_status"), fontSize = 12.sp,
                         color = colors.onSurfaceVariantSummary)
-                    MusicTextAction("重试", vm::retryOriginalMood, Modifier.testTag("sound_original_mood_retry"),
-                        enabled = playback.mode != PlayerMode.CAST)
+                    MusicTextAction("重试", vm::retryOriginalMood, Modifier.testTag("sound_original_mood_retry"))
                     if (!originalMood.available) MusicTextAction("导入引擎", { showEngine = true })
                 }
             }
@@ -218,7 +214,7 @@ import kotlinx.serialization.json.*
             if (smartFailed) item {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(originalSmart.message, Modifier.weight(1f), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
-                    MusicTextAction("重试", vm::retryOriginalSmart, Modifier.testTag("sound_original_smart_retry"), enabled = playback.mode != PlayerMode.CAST)
+                    MusicTextAction("重试", vm::retryOriginalSmart, Modifier.testTag("sound_original_smart_retry"))
                     if (!originalSmart.available) MusicTextAction("导入引擎", { showEngine = true })
                 }
             }
@@ -232,7 +228,7 @@ import kotlinx.serialization.json.*
                 NativeSmartBanner(banner, dark, bannerChosen, bannerLoading,
                     if (bannerChosen) activeStatus else if (smartBanner && smartFailed) originalSmart.message else null,
                     visible && animationsActive,
-                    playback.mode != PlayerMode.CAST || bannerChosen,
+                    true,
                     onApply = {
                         if (bannerChosen) vm.turnOff()
                         else if (banner != null) vm.useTile(banner)
@@ -276,7 +272,7 @@ import kotlinx.serialization.json.*
                                     chosen -> if (original.processing && playback.playing) "使用中" else "已选择"
                                     effect.legacyMemberOriginal -> if (effect.memberType == 4) "SVIP" else "VIP"
                                     else -> "免费"
-                                }, enabled = playback.mode != PlayerMode.CAST || chosen,
+                                }, enabled = true,
                                 tile = page.featured.firstOrNull { it.id == effect.id }, dark = dark,
                                 onDetails = {
                                     launchError = null
@@ -305,7 +301,7 @@ import kotlinx.serialization.json.*
                 items(more.featured, key = { "more_${it.id}" }) { tile ->
                     val chosen = tileLoading == tile.id || (if (tile.smart) smartChosen else (original.requestedId ?: original.selectedId) == tile.id)
                     NativeMoreEffectRow(tile, chosen, tileLoading == tile.id || original.loading && chosen,
-                        playback.mode != PlayerMode.CAST || chosen,
+                        true,
                         onDetails = { tileDetails = tile }, onApply = { if (chosen) vm.turnOff() else vm.useTile(tile) })
                 }
             }
@@ -324,7 +320,6 @@ import kotlinx.serialization.json.*
                     original.error?.let { Text(it, Modifier.testTag("sound_original_error"), color = colors.onSurfaceVariantSummary, fontSize = 13.sp) }
                     if (original.selectedId != null) {
                         Text(when {
-                            playback.mode == PlayerMode.CAST -> "投屏由接收设备处理"
                             original.requestedId != null && original.requestedId != original.selectedId ->
                                 "当前仍使用 ${original.selectedName.orEmpty()}，新音效就绪后切换"
                             !playback.playing -> "预设已就绪，开始本机播放后处理"
@@ -372,7 +367,7 @@ import kotlinx.serialization.json.*
     }
     tileDetails?.let { tile -> MusicDialog(tile.name, onDismiss = { tileDetails = null }) {
         Text(tile.description, fontSize = 14.sp)
-        MusicTextAction("使用", { vm.useTile(tile); tileDetails = null }, enabled = playback.mode != PlayerMode.CAST)
+        MusicTextAction("使用", { vm.useTile(tile); tileDetails = null })
         MusicTextAction("返回音效页", { tileDetails = null })
     } }
     if (showEngine) MusicDialog("原版音效引擎", onDismiss = { showEngine = false }) {
@@ -398,13 +393,10 @@ import kotlinx.serialization.json.*
                 "此音效需要有效的网易云${if (effect.memberType == 4) "SVIP" else "黑胶会员"}。使用前会向网易云核验当前账号权益，到期自动关闭；可在“我的 → 网易云账号”登录。选择会保存，重启后重新核验。"
                 else "使用网易云公开的原版预设与原生音效引擎。选择会保存，重启后重新下载并校验；启用后暂时替代本机智能调音和均衡器。",
                 color = colors.onSurfaceVariantSummary, fontSize = 13.sp)
-            if (playback.mode == PlayerMode.CAST) Text("请结束投屏后使用本机原版音效", color = colors.onSurfaceVariantSummary, fontSize = 13.sp)
-            if (playback.mode != PlayerMode.CAST) {
-                MusicTextAction(if (unavailable != null) "重新检查并使用" else if (effect.legacyMemberOriginal) "核验权益并使用" else if (original.selectedId == effect.id) "重新载入原版音效" else "使用原版音效", {
-                    vm.useOriginal(effect)
-                    selectedEffect = null
-                }, Modifier.testTag("sound_use_original"))
-            }
+            MusicTextAction(if (unavailable != null) "重新检查并使用" else if (effect.legacyMemberOriginal) "核验权益并使用" else if (original.selectedId == effect.id) "重新载入原版音效" else "使用原版音效", {
+                vm.useOriginal(effect)
+                selectedEffect = null
+            }, Modifier.testTag("sound_use_original"))
             launchError?.let { Text(it, color = colors.onSurfaceVariantSummary, fontSize = 13.sp) }
             MusicTextAction("前往网易云音效", {
                 try {

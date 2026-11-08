@@ -93,5 +93,5 @@ class ProfileRepository(private val api: ApiClient, private val avatarCache: Ava
         // including reserved characters, instead of restricting it to ASCII.
         return ServerUrl.endpoint(api.routeServer(server), "decor", emptyMap()).newBuilder().addPathSegment("$id.gif").build().toString()
     }
-    fun account(user: ProfileUser) = UserDto(user.id, user.username, user.nickname, user.avatar, user.isAdmin, user.isSuper, user.title, user.level, user.points)
+    fun account(user: ProfileUser) = UserDto(user.id, user.username, user.nickname, user.avatar, user.isAdmin, user.isSuper, user.title, user.level, user.points, user.isOwner)
 }
