@@ -9,6 +9,7 @@ import android.os.SystemClock
 import androidx.media3.ui.PlayerView
 import io.github.currencortex.music.data.song.Song
 import androidx.media3.common.*
+import androidx.media3.exoplayer.ExoPlaybackException
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.session.*
@@ -75,6 +76,9 @@ class MusicService : MediaSessionService() {
         var originalFailed: Pair<NeteaseOriginalPreset, String>? = null)
     private val playerSlots = mutableMapOf<ExoPlayer, PlayerSlot>()
     private val outputManager by lazy { getSystemService(android.media.AudioManager::class.java) }
+    private val playbackAttributes = AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build()
+    private val dolbyPlayback by lazy { DolbyPlaybackSupport(this, playbackAttributes) }
+    private var failedStagedDolby: TransitionOffer? = null
     private fun applyOutputDevice() {
         val requested = container.audioOutput.state.value
         val device = outputManager.preferredOutput(requested.deviceKey)
@@ -85,6 +89,7 @@ class MusicService : MediaSessionService() {
             else if (requested.mode == io.github.currencortex.music.data.settings.AudioOutputMode.AUDIO_TRACK)
                 container.audioDiagnostics.update { it.copy(fallbackReason = reason) }
         }
+        checkDolbyRoute()
     }
     private fun reportOutput(message: String) {
         val fallback = outputRouter.fallbackReason()
@@ -92,8 +97,9 @@ class MusicService : MediaSessionService() {
     }
     private fun reconfigureOutput() {
         if (container.playerController.state.value.resolving || player.currentMediaItem == null) return
-        transitions.cancel(); resetPauseFade()
         if (directOutput()) player.setPlaybackSpeed(1f)
+        if (checkDolbyRoute()) return
+        transitions.cancel(); resetPauseFade()
         val position = player.currentPosition
         val playing = player.playWhenReady
         engine.stop(); engine.seek(position); player.prepare(); player.playWhenReady = playing
@@ -150,10 +156,29 @@ class MusicService : MediaSessionService() {
     private var lastFlush = 0L
     private var videoView: PlayerView? = null
     private val readyForPreload = MutableStateFlow(false)
+    private val dolbyAvailable = MutableStateFlow(false)
     private data class PreloadPlan(val request: AudioRequest, val metered: Boolean)
     private fun currentSession(song: Song? = container.playbackQueue.state.value.current) =
         if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.session() else if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY) container.emby.session() else container.musicSession()
-    private fun audioRequest(song: Song, quality: AudioQuality) = container.audioRequest(song, quality)
+    private fun updateDolbySupport() = dolbyPlayback.supports(container.playerController.state.value.mode,
+        container.audioOutput.state.value).also { dolbyAvailable.value = it }
+    private fun audioRequest(song: Song, quality: AudioQuality, allowDolby: Boolean = dolbyAvailable.value) =
+        container.audioRequest(song, quality, supportsDolby = allowDolby)
+
+    private fun checkDolbyRoute(): Boolean = container.musicSettings.state.value.quality == AudioQuality.AUTO &&
+        !updateDolbySupport() && retryAutoDolby()
+
+    private fun retryAutoDolby(): Boolean {
+        val item = player.currentMediaItem ?: return false
+        val current = container.playbackQueue.state.value.current
+        val sameTrack = current == trackedSong && item.mediaId == current?.id?.toString()
+        val resume = dolbyResume(item.autoDolby, sameTrack, container.playerController.state.value,
+            container.musicSettings.state.value.quality, player.currentPosition, player.playWhenReady && !pauseFade.pausedIntent)
+            ?: return false
+        container.logger.info("Player", "Automatic Dolby playback falling back to regular quality")
+        prepareSong(resume.play, resume.positionMs, retryWithoutDolby = true)
+        return true
+    }
     private fun flushListening() {
         val ms = listening.drain(SystemClock.elapsedRealtime())
         if (trackedSong?.video == false && ms > 0) container.todayListening.add(ms, song = trackedSong)
@@ -192,7 +217,8 @@ class MusicService : MediaSessionService() {
         transitions = PlaybackTransitions(createPlaybackPlayer(probe), probe, scope, ::createPlaybackPlayer,
             ::transitionOffer, resolve = { offer ->
                 val resolved = container.audioSources.resolve(offer.request)
-                MediaItemFactory.create(offer.next, resolved.source.url, resolved.key.takeIf(String::isNotBlank), resolved.source)
+                val autoDolby = offer.request.selectedDolby(resolved.source)
+                if (autoDolby && !updateDolbySupport()) null else resolved.toMediaItem(offer.next, autoDolby)
             }, promote = ::promoteTransition, discard = { playerSlots.remove(it)?.equalizer?.close(); deckVolumes.remove(it) },
             currentSong = { container.playbackQueue.state.value.current },
             readVolume = { deckVolumes[it] ?: 1f }, writeVolume = ::deckVolume)
@@ -279,6 +305,7 @@ class MusicService : MediaSessionService() {
         scope.launch {
             while (isActive) {
                 delay(1500)
+                checkDolbyRoute()
                 val now = SystemClock.elapsedRealtime()
                 updateListening(player.isPlaying)
                 if (now - lastFlush >= 15_000) { flushListening(); lastFlush = now }
@@ -322,6 +349,7 @@ class MusicService : MediaSessionService() {
             .combine(container.neteaseSessions.state) { data, _ -> data }
             .combine(container.navidrome.state) { data, _ -> data }
             .combine(container.emby.state) { data, _ -> data }
+            .combine(dolbyAvailable) { data, _ -> data }
             .combine(container.playerController.state) { (settings, account), state ->
                 val next = if (settings.preloadAudio && state.song?.video != true && (account != null || container.nativeNetease != null || container.navidrome.state.value.configured || container.emby.state.value.configured) && state.mode == PlayerMode.LOCAL && state.playing &&
                     !state.loading && !state.resolving &&
@@ -386,7 +414,7 @@ class MusicService : MediaSessionService() {
             adaptiveReport = { state -> scope.launch { if (primary()) container.adaptiveAudioRuntime.value = state } }))
             .setLoadControl(outputBuffers.createLoadControl())
             .setMediaSourceFactory(DefaultMediaSourceFactory(container.audioCache.dataSourceFactory)).build().apply {
-                setAudioAttributes(AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MUSIC).build(), false)
+                setAudioAttributes(playbackAttributes, false)
                 setHandleAudioBecomingNoisy(true)
                 setWakeMode(C.WAKE_MODE_LOCAL)
                 setPreferredAudioDevice(outputManager.preferredOutput(container.audioOutput.state.value.deviceKey))
@@ -421,6 +449,12 @@ class MusicService : MediaSessionService() {
             }
             override fun onPlaybackStateChanged(state: Int) {
                 if (!::transitions.isInitialized) return
+                if (state == Player.STATE_READY && source.currentMediaItem?.autoDolby == true &&
+                    !source.currentTracks.isTypeSelected(C.TRACK_TYPE_AUDIO)) {
+                    if (primary()) {
+                        if (retryAutoDolby()) return
+                    } else if (transitions.failed(source) { failedStagedDolby = it }) return
+                }
                 if (state == Player.STATE_ENDED && pauseFade.pausedIntent) { pauseFade.finishPause(); return }
                 if (state == Player.STATE_ENDED && transitions.ended(source)) return
                 if (!primary()) return
@@ -433,8 +467,11 @@ class MusicService : MediaSessionService() {
                 }
             }
             override fun onPlayerError(error: PlaybackException) {
+                val failedDolby = source.currentMediaItem?.autoDolby == true && (isDolbyPlaybackFailure(error.errorCode) ||
+                    error is ExoPlaybackException && error.type == ExoPlaybackException.TYPE_RENDERER)
+                if (failedDolby && primary() && retryAutoDolby()) return
                 if (primary() && recoverOutput(error)) return
-                if (!::transitions.isInitialized || transitions.failed(source)) return
+                if (!::transitions.isInitialized || transitions.failed(source) { if (failedDolby) failedStagedDolby = it }) return
                 if (container.audioOutput.state.value.mode.rawPcm)
                     CurrentMusicAudioDiagnostics.record("player.finalState=ERROR errorCode=${error.errorCode}")
                 if (container.audioOutput.state.value.mode.rawPcm &&
@@ -483,6 +520,7 @@ class MusicService : MediaSessionService() {
         return TransitionOffer(from, next, audioRequest(next, container.musicSettings.state.value.quality))
     }
     private fun promoteTransition(song: Song, outgoing: ExoPlayer, incoming: ExoPlayer) {
+        failedStagedDolby = null
         container.audioDiagnostics.resetTrack()
         playerSlots[incoming]?.formats?.publish(container.audioDiagnostics)
         flushListening()
@@ -601,7 +639,8 @@ class MusicService : MediaSessionService() {
         else if (container.playbackQueue.state.value.radioSession != null) container.playerController.onRadioBoundary?.invoke()
     }
     private fun previousSong() { container.playbackQueue.previous(); prepareSong(true, 0) }
-    private fun prepareSong(play: Boolean, position: Long, newPlayback: Boolean = false, refreshSource: Boolean = false) {
+    private fun prepareSong(play: Boolean, position: Long, newPlayback: Boolean = false, refreshSource: Boolean = false,
+        retryWithoutDolby: Boolean = false) {
         if (container.playerController.state.value.mode != PlayerMode.LOCAL) return
         loading?.cancel()
         musicHaptics.close()
@@ -610,26 +649,46 @@ class MusicService : MediaSessionService() {
         player.pause()
         resetPauseFade()
         val song = container.playbackQueue.state.value.current ?: return
+        val stagedFailure = failedStagedDolby?.takeIf { newPlayback && it.from == trackedSong && it.next == song }
+        failedStagedDolby = null
         if (newPlayback || trackedSong?.id != song.id || trackedSong?.musicSource != song.musicSource ||
             trackedSong?.video != song.video || trackedSession != currentSession(song)) {
             flushListening(); trackedSong = song; trackedSession = currentSession(); recorded = false
         }
         container.playerController.state.value = PlayerState(song = song, loading = true, resolving = true,
             playRequested = play, positionMs = position, durationMs = song.durationMs)
+        if (retryWithoutDolby) {
+            container.playbackQueue.state.value = container.playbackQueue.state.value.copy(positionMs = position)
+            player.clearForDolbyRetry()
+        }
         loading = scope.launch {
             audioFocusReady.await()
-            when (val result = appResult { withContext(Dispatchers.IO) {
-                if (song.video) ResolvedAudio(io.github.currencortex.music.data.song.AudioSource(container.libraryRepository.mvSource(song.mv, song.videoQuality), "video", 0, 0), "")
-                else container.audioSources.resolve(audioRequest(song, container.musicSettings.snapshot().quality), refresh = refreshSource)
-            } }) {
+            when (val result = appResult {
+                if (song.video) {
+                    val url = withContext(Dispatchers.IO) { container.libraryRepository.mvSource(song.mv, song.videoQuality) }
+                    ResolvedAudio(io.github.currencortex.music.data.song.AudioSource(url, "video", 0, 0), "") to false
+                } else {
+                    val quality = container.musicSettings.snapshot().quality
+                    val request = audioRequest(song, quality,
+                        allowDolby = !retryWithoutDolby && quality == AudioQuality.AUTO && updateDolbySupport())
+                        .let { if (it == stagedFailure?.request) it.copy(supportsDolby = false) else it }
+                    val resolved = container.audioSources.resolve(request, refresh = refreshSource)
+                    val autoDolby = request.selectedDolby(resolved.source)
+                    // The route can change during a CDN lookup or while the device is unplugged.
+                    if (autoDolby && !updateDolbySupport()) {
+                        container.audioSources.resolve(request.copy(supportsDolby = false), refresh = refreshSource) to false
+                    } else resolved to autoDolby
+                }
+            }) {
                 is AppResult.Failure -> container.playerController.state.value = container.playerController.state.value.copy(playing = false,
                     playRequested = false, loading = false, resolving = false, error = result.kind.message)
                 is AppResult.Success -> {
                     if (container.playbackQueue.state.value.current?.id != song.id) return@launch
-                    val source = result.value.source
+                    val (resolved, autoDolby) = result.value
+                    val source = resolved.source
                     container.playerController.state.value = container.playerController.state.value.copy(resolving = false, error = null,
                         audioFullyCached = source.url.startsWith("cache://audio/"), audioInfo = AudioStreamInfo.from(source))
-                    engine.prepare(MediaItemFactory.create(song, source.url, result.value.key.takeIf(String::isNotBlank), source), position, play)
+                    engine.prepare(resolved.toMediaItem(song, autoDolby), position, play)
                 }
             }
         }
