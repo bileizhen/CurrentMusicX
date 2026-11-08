@@ -112,6 +112,25 @@ class PlaybackQueue {
         val songs = s.songs.toMutableList().apply { add(if (next) (s.index + 1).coerceAtLeast(0) else size, song) }
         state.value = resetHistory(s.copy(songs = songs, index = if (s.index < 0) 0 else s.index))
     }
+    /** Move one occurrence without restarting playback or losing shuffle navigation history. */
+    fun move(from: Int, to: Int, expectedSongs: List<Song>): Boolean {
+        val s = state.value
+        // A drag must not apply stale indices after another queue edit.
+        if (s.songs !== expectedSongs || from !in s.songs.indices || to !in s.songs.indices || from == to) return false
+        fun remap(index: Int): Int = when {
+            index == from -> to
+            from < to && index in (from + 1)..to -> index - 1
+            from > to && index in to until from -> index + 1
+            else -> index
+        }
+        plannedShuffle = null
+        state.value = s.copy(
+            songs = s.songs.toMutableList().apply { add(to, removeAt(from)) },
+            index = remap(s.index),
+            shuffleHistory = s.shuffleHistory.map(::remap),
+        )
+        return true
+    }
     fun remove(index: Int): Boolean {
         val s = state.value
         if (index !in s.songs.indices) return false
