@@ -164,19 +164,23 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val emby = io.github.currencortex.music.data.emby.EmbyRepository(SecureTokenStore(context, ".emby$storageSuffix"), appScope)
     val navidromeMedia = okhttp3.OkHttpClient.Builder().addInterceptor(navidrome.client.mediaInterceptor()).addInterceptor(emby.client.mediaInterceptor()).build()
     val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome, lx = lxSources, emby = emby)
-    fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality): AudioRequest {
+    fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality, supportsDolby: Boolean = false): AudioRequest {
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
             return AudioRequest(song.id, quality, 0L, navidrome.session(), "navidrome:" + navidrome.state.value.identity, song)
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY)
             return AudioRequest(song.id, quality, 0L, emby.session(), "emby:" + emby.state.value.identity, song)
         val access = audioSettings.access()
+        val preferDolby = supportsDolby && quality == AudioQuality.AUTO &&
+            song.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL &&
+            (access.provider == AudioProvider.CURRENT_MUSIC || access.provider == AudioProvider.NETEASE)
         if (access.provider == AudioProvider.NETEASE) {
             // Snapshot UID and revision together so a concurrent account switch cannot mix cache owners.
             val owner = neteaseSessions.state.value
             return AudioRequest(song.id, quality, owner.profile?.uid ?: 0L,
-                RequestSession("https://music.163.com/", null, owner.revision), access.identity, song)
+                RequestSession("https://music.163.com/", null, owner.revision), access.identity, song, supportsDolby = preferDolby)
         }
-        return AudioRequest(song.id, quality, accountRepository.state.value.account?.id ?: 0L, audioSession(), access.identity, song)
+        return AudioRequest(song.id, quality, accountRepository.state.value.account?.id ?: 0L, audioSession(), access.identity, song,
+            supportsDolby = preferDolby)
     }
     val announcements = io.github.currencortex.music.data.announcement.AnnouncementRepository(apiClient)
     val announcementPreferences = io.github.currencortex.music.data.announcement.AnnouncementPreferences(settingsStore)
@@ -215,8 +219,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         } ?: request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY }?.let {
             emby.accepts(it) && request.session == emby.session() && request.providerIdentity == "emby:" + emby.state.value.identity
         } },
-        loadTrack = { request -> request.song?.let { musicRepository.source(it, request.quality, request.session, request.refresh) }
-            ?: musicRepository.source(request.songId, request.quality, request.session, request.refresh) },
+        loadTrack = { request -> request.song?.let {
+            musicRepository.source(it, request.quality, request.session, request.refresh, request.supportsDolby)
+        } ?: musicRepository.source(request.songId, request.quality, request.session, request.refresh, request.supportsDolby) },
         load = { id, quality, session -> musicRepository.source(id, quality, session) })
     val libraryRepository = io.github.currencortex.music.data.library.LibraryRepository(apiClient,
         { accountRepository.state.value.account?.id ?: 0L }, { musicSession() })
