@@ -139,10 +139,10 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
     var target by remember { mutableFloatStateOf(progress) }
     var bounds by remember { mutableStateOf(IntSize.Zero) }
     val glow = remember(tint) { PlayerSeekGlow(tint) }
-    val thickness = animateFloatAsState(if (pressed) 8f else 3f,
-        tween(if (pressed) 100 else 160, easing = CubicBezierEasing(.2f, 0f, 0f, 1f)), label = "seek press")
-    val glowAlpha = animateFloatAsState(if (enabled && !pressed) 1f else 0f,
-        tween(if (pressed || !enabled) 100 else 220, easing = CubicBezierEasing(.2f, 0f, 0f, 1f)), label = "seek glow visibility")
+    val thickness = animateFloatAsState(if (dragging) 6f else 4f,
+        tween(if (dragging) 220 else 280, easing = LinearEasing), label = "seek press")
+    val glowAlpha = animateFloatAsState(if (enabled && !dragging) 1f else 0f,
+        tween(if (dragging || !enabled) 220 else 280, easing = LinearEasing), label = "seek glow visibility")
     val buffered = animateFloatAsState(buffer, tween(180), label = "audio buffer progress")
     Canvas(modifier.fillMaxWidth().height(34.dp).onSizeChanged { bounds = it }.testTag("player_seek").semantics {
         progressBarRangeInfo = ProgressBarRangeInfo(if (pressed) target else progress, 0f..1f)
@@ -218,7 +218,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
         drawLine(Color.White.copy(alpha = .18f), Offset(0f, y), Offset(size.width, y), stroke, StrokeCap.Round)
         if (buffered.value > 0f) drawLine(Color.White.copy(alpha = .42f), Offset(0f, y),
             Offset(size.width * buffered.value, y), stroke, StrokeCap.Round)
-        drawLine(ink, Offset(0f, y), Offset(end, y), stroke, StrokeCap.Round)
+        if (end > 0f) drawLine(ink, Offset(0f, y), Offset(end, y), stroke, StrokeCap.Round)
         if (enabled) with(glow) { drawHighlight(end, stroke) }
         // Draw above the buffer/progress so markers remain visible after playback passes them.
         // Distinct played/unplayed shades preserve the playhead position inside a chorus.
