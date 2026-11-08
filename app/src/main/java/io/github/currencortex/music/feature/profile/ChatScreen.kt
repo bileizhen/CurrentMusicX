@@ -173,7 +173,7 @@ import java.util.Locale
         }
         Column(Modifier.align(Alignment.BottomCenter).elasticRootComponent().fillMaxWidth().pointerInput(Unit) { detectTapGestures {} }.onSizeChanged {
             composerHeight = with(density) { it.height.toDp() }
-        }) {
+        }.navigationBarsPadding()) {
             state.actionError?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), fontSize = 12.sp,
                 color = MiuixTheme.colorScheme.error) }
             state.attachments.forEach { card ->
