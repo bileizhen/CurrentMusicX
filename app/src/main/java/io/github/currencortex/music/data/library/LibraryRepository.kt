@@ -113,13 +113,15 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     suspend fun recordPlay(song: Song, expected: RequestSession = session()) {
         // CurrentMusic statistics must also be updated when the music library uses native Netease.
         if (accountId() != 0L && !song.video && !song.privateLibrary) {
-            api.request("POST", "plays/${song.id}", body = metadata(song), authenticated = true, expectedSession = expected)
+            val body = JsonObject(metadata(song) + ("platform" to JsonPrimitive("x")))
+            api.request("POST", "plays/${song.id}", body = body, authenticated = true, expectedSession = expected)
             revision.update { it + 1 }
         }
     }
     suspend fun listen(song: Song, milliseconds: Long, expected: RequestSession = session()) {
         if (accountId() != 0L && !song.video && !song.privateLibrary && milliseconds > 0) api.request("POST", "plays/${song.id}",
-            body = buildJsonObject { put("ms", milliseconds) }, authenticated = true, expectedSession = expected)
+            body = buildJsonObject { put("ms", milliseconds); put("platform", "x") },
+            authenticated = true, expectedSession = expected)
     }
     suspend fun artist(id: Long, offset: Int = 0): Artist {
         val d = api.get<ArtistDto>("ncm/artist", mapOf("id" to "$id", "offset" to "$offset", "limit" to "100"))

@@ -7,6 +7,8 @@ import kotlinx.serialization.json.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 /** Adapts official NetEase responses to the app's existing models, without a proxy server. */
 class NeteaseGateway(val transport: NeteaseTransport) {
@@ -14,6 +16,9 @@ class NeteaseGateway(val transport: NeteaseTransport) {
     private var listeningOwner: Pair<Long, Long>? = null
     private var listeningMs = 0L
     private var listeningReported = false
+    private var deviceNameRevision: Long? = null
+    private var deviceNameConfirmed = false
+    private var deviceNameAttemptAt = 0L
     val sessions get() = transport.sessions
     // Preserve protected media's selected source. Public lyrics always use NetEase,
     // whose raw YRC/LRC responses never include the project's synthetic word axis.
@@ -439,6 +444,28 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         val raw = official("/api/play-record/song/list", params("limit" to JsonPrimitive(limit)), web = true, expected = expected, authenticated = true)
         return buildJsonObject { put("songs", songs(JsonArray(raw.obj("data").array("list").mapNotNull { (it as? JsonObject)?.get("data") }))) }
     }
+
+    // Called under listeningMutex. Naming is best effort and existing sessions can register
+    // on their next playback. A rejected name must not invalidate the user's login.
+    private suspend fun namePlaybackDevice(expected: NeteaseSession) {
+        val now = System.nanoTime()
+        if (deviceNameRevision == expected.revision &&
+            (deviceNameConfirmed || now - deviceNameAttemptAt < TimeUnit.MINUTES.toNanos(5))) return
+        deviceNameRevision = expected.revision
+        deviceNameAttemptAt = now
+        deviceNameConfirmed = false
+        try {
+            val response = transport.request("/api/deviceinfo/center/upload",
+                data("deviceName" to NETEASE_PLAYBACK_DEVICE_NAME), session = expected, saveCookies = false,
+                clientProfile = NeteaseClientProfile.PLAYBACK, callTimeoutMs = 5_000)
+            deviceNameConfirmed = response.body.long("code") == 200L
+        } catch (_: ApiException) {
+            // The listening report still carries the device name and checks the session.
+        } catch (_: IOException) {
+            // Retry naming on a later playback after the cooldown.
+        }
+    }
+
     suspend fun recordPlay(id: Long, milliseconds: Long? = null, expectedRevision: Long? = null) = listeningMutex.withLock {
         val expected = sessions.snapshot()
         if (expectedRevision != null && expectedRevision != expected.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
@@ -461,7 +488,9 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 if (milliseconds != null) { put("time", listeningMs / 1000); put("end", "playend"); put("download", 0) }
             })
         }
-        official("/api/feedback/weblog", data("logs" to JsonArray(listOf(event)).toString()), clientLog = true, expected = expected, authenticated = true)
+        namePlaybackDevice(expected)
+        official("/api/feedback/weblog", data("logs" to JsonArray(listOf(event)).toString()), clientLog = true,
+            expected = expected, authenticated = true, clientProfile = NeteaseClientProfile.PLAYBACK)
         if (milliseconds != null) listeningReported = true
     }
 }
