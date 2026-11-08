@@ -13,7 +13,8 @@ import io.github.currencortex.music.data.settings.AudioOutputSettings
 import java.nio.ByteBuffer
 
 /** Bypasses DefaultAudioSink's int16/float conversion. Only codec padding is removed;
- * every remaining PCM byte reaches AudioOutput unchanged, including 24/32-bit PCM. */
+ * every remaining PCM byte reaches AudioOutput unchanged, including 24/32-bit PCM.
+ * USB Host applies its own volume in AudioOutput; strict Bit-perfect does not. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
 internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -> AudioOutputSettings,
     private val report: (String) -> Unit,
@@ -33,6 +34,7 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
     private fun selected() = settings().mode.rawPcm
     private val label get() = if (settings().mode == AudioOutputMode.NETEASE_USB) "USB 独占（网易云）" else "Bit-perfect"
     private var active = false
+    private var usbVolume = false
     private var format = Format.Builder().build()
     private var next: AudioSink.AudioSinkConfig? = null
     private var stream: BitPerfectStream? = null
@@ -60,6 +62,7 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
     override fun configure(config: AudioSink.AudioSinkConfig) {
         if (active && stream != null) { next = config; return }
         active = selected()
+        usbVolume = active && settings().mode == AudioOutputMode.NETEASE_USB
         if (!active) { super.configure(config); return }
         format = config.format
         CurrentMusicAudioDiagnostics.format("decodedPcm.sink", format)
@@ -100,9 +103,9 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
                 override fun onUnderrun() { listener?.onUnderrun(0, 0, 0) }
                 override fun onReleased() = Unit
             })
-            // Never scale PCM. Ducking/mute pauses output instead of changing samples.
-            if (playing && volume == 1f) stream!!.output.play()
-            else if (volume != 1f) report("$label 已暂停：静音或音频焦点衰减；请使用 DAC 调节音量")
+            if (usbVolume) stream!!.output.setVolume(volume)
+            if (playing && (usbVolume || volume == 1f)) stream!!.output.play()
+            else if (!usbVolume && volume != 1f) report("$label 已暂停：静音或音频焦点衰减；请使用 DAC 调节音量")
         } catch (error: Exception) { releaseRaw(); fail(error) }
     }
     private fun drain() {
@@ -161,11 +164,12 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
         pending.hasRemaining() || (stream != null && (stream!!.output.positionUs.coerceAtLeast(0) < durationUs()))
     override fun isEnded() = if (!active) super.isEnded() else ending && !hasPendingData()
     override fun handleDiscontinuity() { if (active) discontinuity = true else super.handleDiscontinuity() }
-    override fun play() { playing = true; if (active) { if (volume == 1f) stream?.output?.play() } else super.play() }
+    override fun play() { playing = true; if (active) { if (usbVolume || volume == 1f) stream?.output?.play() } else super.play() }
     override fun pause() { playing = false; if (active) stream?.output?.pause() else super.pause() }
     override fun setVolume(volume: Float) {
         this.volume = volume
         if (!active) { super.setVolume(volume); return }
+        if (usbVolume) { stream?.output?.setVolume(volume); return }
         if (volume != 1f) { stream?.output?.pause(); report("$label 已暂停：静音或音频焦点衰减；请使用 DAC 调节音量") }
         else if (playing) stream?.output?.play()
     }

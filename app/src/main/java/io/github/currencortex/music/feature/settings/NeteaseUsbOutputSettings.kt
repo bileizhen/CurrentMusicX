@@ -46,7 +46,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val hint = MiuixTheme.colorScheme.onSurfaceVariantSummary
     Card { Column(Modifier.padding(vertical = 8.dp).testTag("netease_usb_settings")) {
         Text("USB Host 独占输出", Modifier.padding(horizontal = 20.dp, vertical = 10.dp), fontSize = 18.sp)
-        Text("内置网易云 9.6.15 arm64 USB 驱动，直接访问授权设备。支持 8–192 kHz、单声道或立体声的 PCM 16/24/32-bit 整数；24-bit packed 保留全部样本位扩展至 32-bit。原驱动包含音量与淡入处理，此模式不标为 Bit-perfect。",
+        Text("内置网易云 9.6.15 arm64 USB 驱动，直接访问授权设备。支持 8–192 kHz、单声道或立体声的 PCM 16/24/32-bit 整数；24-bit packed 扩展至 32-bit。音量跟随系统媒体音量，可用手机音量键调节；应用会对 PCM 做音量衰减，原驱动仍包含淡入处理，此模式不标为 Bit-perfect。",
             Modifier.padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 13.sp, color = hint)
         if (devices.isEmpty()) Text("未连接 USB Audio 设备；连接后在此授权。", Modifier.padding(20.dp), fontSize = 14.sp)
         else devices.forEach { device ->
