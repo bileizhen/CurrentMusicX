@@ -36,11 +36,13 @@ class MusicRepository(private val api: ApiClient,
     suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.EMBY) appResult {
         io.github.currencortex.music.feature.lyrics.model.LyricsDocument(metadata = io.github.currencortex.music.feature.lyrics.model.LyricsMetadata(source = "Emby"))
     } else if (song.musicSource == MusicSource.NAVIDROME) appResult { requireNotNull(navidrome).lyrics(song) } else lyricsDocument(song.id)
-    suspend fun source(song: Song, quality: AudioQuality, session: RequestSession? = null, refresh: Boolean = false): AudioSource {
+    suspend fun source(song: Song, quality: AudioQuality, session: RequestSession? = null, refresh: Boolean = false,
+        supportsDolby: Boolean = false): AudioSource {
         if (song.musicSource == MusicSource.NAVIDROME) return requireNotNull(navidrome).source(song, quality)
         if (song.musicSource == MusicSource.EMBY) return requireNotNull(emby).source(song)
         val access = audioAccess()
-        return if (access.provider == AudioProvider.LX) lxSource(song, quality, access) else source(song.id, quality, session, refresh)
+        return if (access.provider == AudioProvider.LX) lxSource(song, quality, access)
+        else source(song.id, quality, session, refresh, supportsDolby)
     }
     private suspend fun lxSource(song: Song, quality: AudioQuality, access: AudioSourceAccess): AudioSource {
         val result = try { requireNotNull(lx) { "落雪音源尚未初始化" }.source(song, quality, access.lxSourceId) }
@@ -179,7 +181,8 @@ class MusicRepository(private val api: ApiClient,
         else if (source == LyricsSource.CURRENT_MUSIC) throw ApiException(ErrorKind.Server)
         else read("ncm/lyric")
     }
-    suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null, refresh: Boolean = false): AudioSource {
+    suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null, refresh: Boolean = false,
+        supportsDolby: Boolean = false): AudioSource {
         val access = audioAccess()
         if (access.provider == AudioProvider.LX) return lxSource(Song(id, ""), quality, access)
         if (access.provider == AudioProvider.LEIZ) {
@@ -189,15 +192,27 @@ class MusicRepository(private val api: ApiClient,
         }
         val query = buildMap {
             put("id", "$id"); put("level", quality.value)
+            if (quality == AudioQuality.AUTO && supportsDolby) put("supportsDolby", "1")
             if (refresh && access.provider == AudioProvider.CURRENT_MUSIC) put("refresh", "1")
         }
-        val dto = if (access.provider == AudioProvider.NETEASE) {
+        suspend fun fetch(params: Map<String, String>): SongUrlDto = if (access.provider == AudioProvider.NETEASE) {
             val gateway = api.netease ?: throw ApiException(ErrorKind.NotFound)
-            ApiJson.decodeFromJsonElement<SongUrlDto>(gateway.request("GET", "ncm/song/url", query, null,
+            ApiJson.decodeFromJsonElement<SongUrlDto>(gateway.request("GET", "ncm/song/url", params, null,
                 expectedRevision = session?.neteaseRevision))
-        } else if (session == null) api.get<SongUrlDto>("ncm/song/url", query, authenticated = true)
-            else ApiJson.decodeFromJsonElement<SongUrlDto>(api.request("GET", "ncm/song/url", query,
+        } else if (session == null) api.get<SongUrlDto>("ncm/song/url", params, authenticated = true)
+            else ApiJson.decodeFromJsonElement<SongUrlDto>(api.request("GET", "ncm/song/url", params,
                 authenticated = true, expectedSession = session))
+        fun SongUrlDto.isDolby() = level == AudioQuality.DOLBY.value
+        fun SongUrlDto.isUsableDolby() = url?.toHttpUrlOrNull() != null &&
+            (freeTrialInfo == null || freeTrialInfo == JsonNull)
+
+        var dto = fetch(query)
+        if (quality == AudioQuality.AUTO && dto.isDolby()) {
+            if (access.provider == AudioProvider.CURRENT_MUSIC && supportsDolby && !dto.isUsableDolby())
+                dto = fetch(query - "supportsDolby")
+            if (dto.isDolby() && (!supportsDolby || !dto.isUsableDolby()))
+                throw ApiException(ErrorKind.NeteaseAudioUnavailable)
+        }
         val url = dto.url?.toHttpUrlOrNull() ?: throw ApiException(ErrorKind.NotFound)
         if (audioAccess().identity != access.identity) throw ApiException(ErrorKind.AudioSourceChanged)
         // Both sources report expi. Bound reuse to five minutes when a server omits it.

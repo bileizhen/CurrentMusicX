@@ -9,8 +9,14 @@ import java.io.IOException
 
 data class AudioRequest(val songId: Long, val quality: AudioQuality, val accountId: Long, val session: RequestSession,
     val providerIdentity: String = "currentmusic", val song: io.github.currencortex.music.data.song.Song? = null,
-    val refresh: Boolean = false) {
-    val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity)
+    val refresh: Boolean = false, val supportsDolby: Boolean = false) {
+    val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity, supportsDolby)
+
+    internal fun accepts(source: AudioSource): Boolean = quality != AudioQuality.AUTO || supportsDolby ||
+        providerIdentity !in setOf("currentmusic", "netease") || source.level != AudioQuality.DOLBY.value
+
+    internal fun selectedDolby(source: AudioSource): Boolean =
+        quality == AudioQuality.AUTO && supportsDolby && source.level == AudioQuality.DOLBY.value
 }
 data class ResolvedAudio(val source: AudioSource, val key: String, val refreshAfterMs: Long = 25_000)
 
@@ -61,7 +67,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
             denied[key]?.takeIf { it.request == request }?.let { throw it.error }
             // Complete, account/provider/quality-scoped audio does not need a CDN URL.
             // Partial cache must still resolve a live URL to read the missing bytes.
-            cache.completeSource(key)?.takeUnless { it.matched || cache.matchedSourceKey(key) != null }?.let {
+            cache.completeSource(key)?.takeIf(request::accepts)?.takeUnless { it.matched || cache.matchedSourceKey(key) != null }?.let {
                 checkRequest(request)
                 return@withContext ResolvedAudio(it, key, refreshAfterMs = Long.MAX_VALUE)
             }
@@ -87,7 +93,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
                 }
                 denied[key]?.takeIf { it.request == request }?.let { throw it.error }
                 val cachedKey = cache.matchedSourceKey(key) ?: key
-                (cache.completeSource(cachedKey)?.takeUnless { cachedKey == key && it.matched } ?: throw e)
+                (cache.completeSource(cachedKey)?.takeIf(request::accepts)?.takeUnless { cachedKey == key && it.matched } ?: throw e)
                     .also { fallbackKey = cachedKey }
             }
             checkRequest(request)
