@@ -10,6 +10,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.Format
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.mediacodec.MediaCodecSelector
 import io.github.currencortex.music.data.settings.AudioOutputMode
@@ -68,6 +69,12 @@ internal fun dolbyResume(autoDolby: Boolean, sameTrack: Boolean, state: PlayerSt
     positionMs: Long, play: Boolean): DolbyResume? {
     if (!autoDolby || !sameTrack || state.mode != PlayerMode.LOCAL || state.resolving || quality != AudioQuality.AUTO) return null
     return DolbyResume(positionMs.coerceAtLeast(0), play)
+}
+
+internal fun Player.clearForDolbyRetry() {
+    // Removing the only prepared item can signal STATE_ENDED and advance the queue.
+    stop()
+    clearMediaItems()
 }
 
 internal fun isDolbyPlaybackFailure(errorCode: Int): Boolean =

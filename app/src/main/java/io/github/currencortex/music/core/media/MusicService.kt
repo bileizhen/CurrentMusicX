@@ -659,7 +659,7 @@ class MusicService : MediaSessionService() {
             playRequested = play, positionMs = position, durationMs = song.durationMs)
         if (retryWithoutDolby) {
             container.playbackQueue.state.value = container.playbackQueue.state.value.copy(positionMs = position)
-            player.clearMediaItems()
+            player.clearForDolbyRetry()
         }
         loading = scope.launch {
             audioFocusReady.await()
