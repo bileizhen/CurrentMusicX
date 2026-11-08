@@ -53,7 +53,7 @@ CurrentMusicX 是 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic) 
 
 歌曲、音质、会员音效及推荐的可用性，以对应服务和账号权限为准。本页介绍当前 `main` 源码；已发布版本的变化与验收范围见 [GitHub Releases](https://github.com/bileizhen/CurrentMusicX/releases)。
 
-[功能一览](#功能一览) · [音源与歌词](#音源与歌词) · [兼容性](#兼容性) · [常见问题](#常见问题) · [构建与测试](#从源码构建与设备测试) · [参与贡献](#issuespr-与版本发布)
+[功能一览](#功能一览) · [音源与歌词](#音源与歌词) · [项目实现原理](#项目实现原理) · [兼容性](#兼容性) · [常见问题](#常见问题) · [构建与测试](#从源码构建与设备测试) · [参与贡献](#issuespr-与版本发布)
 
 ## 功能一览
 
@@ -161,6 +161,20 @@ Emby 可从「设置 → 音源与网络 → 自建曲库 → Emby」连接，�
 此地址用于站内账号、CurrentMusic 音源与歌词、云端绑定、个人资料、社区及服务器房间。网易云原生、LeiZ API、外部音频及歌词来源继续使用各自的地址；Navidrome 音频直接从自己的服务器播放。
 
 </details>
+
+## 项目实现原理
+
+[![CurrentMusic 实现原理图 / CurrentMusic architecture diagram](.github/img/architecture.png)](.github/img/architecture.png)
+
+**匿名 SVIP** 模式下，后端从 `CM_NCM_COOKIE` 指向的文件读取服务端 SVIP Cookie，交给独立部署的 NCM API 请求网易云。用户通过 `/cm/ncm/song/url` 取址时只需登录 CurrentMusic。官方音源的可用性取决于服务端账号的权益和曲目限制。个人歌单、收藏等账号操作使用用户自己的绑定 Cookie。X 端在本机未登录网易云时，部分账号功能可复用服务端绑定。
+
+**Anonymous SVIP** lets signed-in CurrentMusic users request a playback URL at `/cm/ncm/song/url` without linking a personal NetEase account. The engine reads its SVIP cookie from the file configured by `CM_NCM_COOKIE` and passes it to the separately deployed NCM API. Official sources depend on the server account's entitlements and track restrictions. Personal actions such as managing playlists or likes use the user's linked cookie. Some X account features can use that server-side binding when the app has no local NetEase session.
+
+图示以默认 CurrentMusic 音源为主。Web 可选 LeiZ 直接取址，云盘分步上传可将文件直传对象存储。图底的 `ncm-inject` 是部署记录中的独立入口。
+
+The diagram shows the default CurrentMusic source. Web can also resolve playback URLs through LeiZ and upload cloud files directly to object storage. The `ncm-inject` route at the bottom is a separate entry point documented in the deployment notes.
+
+[Web 路由 / Web routing](https://github.com/backrooms-yrc/CurrentMusic/blob/93cd0521264b8762296a20c206d0aa586598008e/web/src/api.js) · [引擎后端 / Engine backend](https://github.com/backrooms-yrc/CurrentMusic/blob/93cd0521264b8762296a20c206d0aa586598008e/backend/README.md) · [播放取址 / Playback URL resolution](https://github.com/backrooms-yrc/CurrentMusic/blob/93cd0521264b8762296a20c206d0aa586598008e/docs/playback-sources.md) · [独立入口 / Separate gateway](https://github.com/backrooms-yrc/CurrentMusic/blob/93cd0521264b8762296a20c206d0aa586598008e/docs/api-5-phase-plan.md#1-实测拓扑)
 
 ## 兼容性
 
