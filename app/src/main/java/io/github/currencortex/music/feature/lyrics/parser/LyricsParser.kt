@@ -90,11 +90,17 @@ object LyricsParser {
         return finish(source.lineSequence().flatMap { row ->
             val stamps = stamp.findAll(row).toList()
             if (stamps.isEmpty()) return@flatMap emptySequence()
-            val rawBody = row.substring(stamps.last().range.last + 1)
-            val body = if (wordStamp.containsMatchIn(rawBody)) rawBody else rawBody.trim()
-            val wordTimes = wordStamp.findAll(body).toList()
-            val text = body.replace(wordStamp, "")
-            stamps.asSequence().map { time ->
+            // Adjacent leading stamps repeat a whole line; text between square stamps
+            // marks word timing, including a final stamp that closes the last word.
+            val bracketWords = stamps.zipWithNext().any { (previous, next) ->
+                row.substring(previous.range.last + 1, next.range.first).isNotBlank()
+            }
+            val wordPattern = if (bracketWords) stamp else wordStamp
+            val rawBody = row.substring(if (bracketWords) stamps.first().range.first else stamps.last().range.last + 1)
+            val body = if (wordPattern.containsMatchIn(rawBody)) rawBody else rawBody.trim()
+            val wordTimes = wordPattern.findAll(body).toList()
+            val text = body.replace(wordPattern, "")
+            (if (bracketWords) stamps.take(1) else stamps).asSequence().map { time ->
                 val start = (millis(time.groupValues[1], time.groupValues[2]) + offset).coerceAtLeast(0)
                 var cursor = wordTimes.firstOrNull()?.range?.first ?: 0
                 val words = wordTimes.mapIndexedNotNull { index, match ->
