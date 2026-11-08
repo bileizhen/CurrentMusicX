@@ -141,6 +141,8 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
     val glow = remember(tint) { PlayerSeekGlow(tint) }
     val thickness = animateFloatAsState(if (pressed) 8f else 3f,
         tween(if (pressed) 100 else 160, easing = CubicBezierEasing(.2f, 0f, 0f, 1f)), label = "seek press")
+    val glowAlpha = animateFloatAsState(if (enabled && !pressed) 1f else 0f,
+        tween(if (pressed || !enabled) 100 else 220, easing = CubicBezierEasing(.2f, 0f, 0f, 1f)), label = "seek glow visibility")
     val buffered = animateFloatAsState(buffer, tween(180), label = "audio buffer progress")
     Canvas(modifier.fillMaxWidth().height(34.dp).onSizeChanged { bounds = it }.testTag("player_seek").semantics {
         progressBarRangeInfo = ProgressBarRangeInfo(if (pressed) target else progress, 0f..1f)
@@ -212,7 +214,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
         val end = size.width * if (pressed) target else progress
         val stroke = thickness.value.dp.toPx()
         val ink = if (enabled) tint else Color.White.copy(alpha = .28f)
-        if (enabled && !pressed) with(glow) { drawHalo(end, stroke) }
+        if (glowAlpha.value > 0f) with(glow) { drawHalo(end, stroke, glowAlpha.value) }
         drawLine(Color.White.copy(alpha = .18f), Offset(0f, y), Offset(size.width, y), stroke, StrokeCap.Round)
         if (buffered.value > 0f) drawLine(Color.White.copy(alpha = .42f), Offset(0f, y),
             Offset(size.width * buffered.value, y), stroke, StrokeCap.Round)
