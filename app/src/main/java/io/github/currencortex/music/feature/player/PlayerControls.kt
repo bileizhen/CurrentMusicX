@@ -231,7 +231,6 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
         }
         // Only the small white tip sits above chorus markers, keeping the playhead readable inside them.
         if (enabled && end > 0f) drawCircle(Color.White, stroke * .5f, Offset(end, y))
-        if (pressed) drawCircle(Color.White.copy(alpha = if (enabled) 1f else .28f), 6.dp.toPx(), Offset(end, y))
     }
 }
 
