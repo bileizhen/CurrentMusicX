@@ -79,7 +79,7 @@ internal class NeteaseUsbStream private constructor(
     private val declared: UsbAudioDescriptorReport, report: (String) -> Unit,
 ) : BitPerfectStream {
     private val closed = AtomicBoolean(false)
-    private val outputImpl = OriginalUsbOutput(session, report, ::close)
+    private val outputImpl = OriginalUsbOutput(session, UsbMediaVolume(context), report, ::close)
     override val output: AudioOutput get() = outputImpl
     fun snapshot(): io.github.currencortex.music.core.media.engine.UsbOutputSnapshot {
         val wire = session.pcm.wireFormat
@@ -131,7 +131,8 @@ internal class NeteaseUsbStream private constructor(
             val permitted = manager.hasPermission(device)
             CurrentMusicAudioDiagnostics.record("usbHost.engine=NetEase9.6.15 adapter=${NeteaseUsbBridge.ADAPTER} abi=arm64 sha256=${NeteaseUsbBridge.SHA256} " +
                 "vendor=${device.vendorId} product=${device.productId} permission=$permitted decoded=$pcm requested=${pcm.wireFormat} AndroidMixer=unused")
-            if (pcm.encoding == 21) CurrentMusicAudioDiagnostics.record("usbHost.pcmAdaptation=packed24_to_signed32_left_aligned exact_integer_expansion=true resample=false bitPerfect=not_claimed")
+            if (pcm.encoding == 21) CurrentMusicAudioDiagnostics.record("usbHost.pcmAdaptation=packed24_to_signed32_left_aligned resample=false bitPerfect=not_claimed")
+            CurrentMusicAudioDiagnostics.record("usbHost.volume=system_media_times_player software_attenuation=true bitPerfect=not_claimed")
             check(permitted) { "[USB_PERMISSION] 请在音频输出设置中授权访问 USB DAC" }
             val connection = manager.openDevice(device) ?: error("[USB_OPEN] Android 无法打开已授权的 USB DAC")
             val declared = try { UsbAudioDescriptorParser.parse(connection.rawDescriptors) }
@@ -151,7 +152,8 @@ internal class NeteaseUsbStream private constructor(
 }
 
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
-private class OriginalUsbOutput(private val session: NeteaseUsbSession, private val report: (String) -> Unit,
+private class OriginalUsbOutput(private val session: NeteaseUsbSession, private val mediaVolume: UsbMediaVolume,
+    private val report: (String) -> Unit,
     private val releaseStream: () -> Unit) : AudioOutput {
     private val listeners = mutableSetOf<AudioOutput.Listener>()
     private var playing = false
@@ -159,6 +161,7 @@ private class OriginalUsbOutput(private val session: NeteaseUsbSession, private 
     private var bytes = 0L
     private var announced = false
     private var released = false
+    private var volume = 1f
     private var lastPosition = 0L
     private var lastAdvance = SystemClock.elapsedRealtime()
     fun verify() {
@@ -171,7 +174,7 @@ private class OriginalUsbOutput(private val session: NeteaseUsbSession, private 
     override fun pause() { session.play(false); playing = false }
     override fun write(buffer: ByteBuffer, encodedAccessUnitCount: Int, presentationTimeUs: Long): Boolean {
         verify()
-        bytes += session.write(buffer)
+        bytes += session.write(buffer, mediaVolume.gain() * volume)
         return !buffer.hasRemaining()
     }
     override fun getPositionUs(): Long {
@@ -198,7 +201,11 @@ private class OriginalUsbOutput(private val session: NeteaseUsbSession, private 
         released = true
         try { releaseStream() } finally { listeners.toList().forEach { it.onReleased() } }
     }
-    override fun setVolume(volume: Float) = Unit // Raw sink pauses on ducking instead of changing PCM.
+    override fun setVolume(volume: Float) {
+        val gain = usbVolumeGain(volume)
+        if (this.volume != gain) CurrentMusicAudioDiagnostics.record("usbHost.playerVolume=$gain")
+        this.volume = gain
+    }
     override fun isOffloadedPlayback() = false
     override fun getAudioSessionId() = C.AUDIO_SESSION_ID_UNSET
     override fun getSampleRate() = session.pcm.rate
