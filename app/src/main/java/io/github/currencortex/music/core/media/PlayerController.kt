@@ -41,7 +41,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         beforeExternal = saved; external = controls
         state.value = state.value.copy(mode = mode, playing = false, playRequested = false, resolving = false, loading = false,
             canControlPlayback = mode != PlayerMode.ROOM, audioInfo = null, bufferedPositionMs = 0, audioFullyCached = false, listenTogether = null)
-        // Await this command before telling a TV to play: it cancels pending source resolution too.
+        // Quiesce local playback before joining a room, including pending source resolution.
         try { connect().sendCustomCommand(SessionCommand(MusicService.QUIESCE, Bundle.EMPTY), Bundle.EMPTY).await() }
         catch (e: Exception) { endExternal(controls); throw e }
         if (epoch != generation) return false
@@ -77,7 +77,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
     }
     private fun localOnly(): Boolean {
         if (state.value.mode == PlayerMode.LOCAL) return true
-        state.value = state.value.copy(error = "请先退出一起听或结束投屏")
+        state.value = state.value.copy(error = "请先退出一起听")
         return false
     }
     fun playVideo(song: Song) {
@@ -122,7 +122,6 @@ class PlayerController(private val context: Context, override val queue: Playbac
         return try { pending.await() } finally { connecting = null }
     }
     internal fun publish(player: Player) {
-        if (state.value.mode == PlayerMode.CAST) return
         val matches = player.currentMediaItem?.mediaId == queue.state.value.current?.id?.toString()
         val old = state.value
         val next = old.copy(song = queue.state.value.current, playing = player.isPlaying && commandIntent != false,
@@ -209,6 +208,7 @@ class PlayerController(private val context: Context, override val queue: Playbac
         controller?.seekTo(target)
     }
     fun add(song: Song, next: Boolean = false) { if (state.value.mode == PlayerMode.ROOM) { external?.enqueue(song, next); return }; queue.add(song, next) }
+    fun move(from: Int, to: Int, expectedSongs: List<Song>) { if (localOnly()) queue.move(from, to, expectedSongs) }
     fun remove(index: Int) { if (!localOnly()) return; if (queue.remove(index)) { if (queue.state.value.current == null) clear() else load(state.value.playing) } }
     fun clear() { if (!localOnly()) return; ++transportGeneration; commandIntent = null; beforeVideo = null; queue.clear(); controller?.stop(); controller?.clearMediaItems(); state.value = PlayerState() }
     fun select(index: Int) { if (!localOnly()) return; queue.select(index); load() }

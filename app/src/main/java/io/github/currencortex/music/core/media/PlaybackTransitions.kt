@@ -155,9 +155,13 @@ internal class PlaybackTransitions(initial: ExoPlayer, initialProbe: TrackEnergy
         if (source === running.outgoing) { finish(running); return true }
         return false
     }
-    fun failed(source: ExoPlayer): Boolean {
+    fun failed(source: ExoPlayer, onStagedFailure: (TransitionOffer) -> Unit = {}): Boolean {
         if (source === player) { cancel(); return false }
-        if (source === staged?.player) { failed = staged?.offer; cancel(); return true }
+        staged?.takeIf { it.player === source }?.let {
+            failed = it.offer
+            onStagedFailure(it.offer)
+            cancel()
+        }
         return true
     }
     fun pauseCompanion() {

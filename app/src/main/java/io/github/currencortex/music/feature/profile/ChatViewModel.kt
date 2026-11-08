@@ -21,7 +21,7 @@ data class ChatState(val messages: List<ChatMessage> = emptyList(), val members:
 
 class ChatViewModel(val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(ChatState())
-    private fun session() = container.audioSession()
+    private fun session() = container.projectSession()
     val repository = ChatRepository(container.apiClient, ::session)
     private val events = ChatEventClient(routeServer = container.serverRouter::resolve)
     private var identity: RequestSession? = null

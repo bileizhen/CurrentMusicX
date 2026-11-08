@@ -20,7 +20,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.data.settings.*
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
 import io.github.currencortex.music.ui.component.MusicIcons
@@ -47,12 +46,11 @@ import kotlin.math.roundToInt
         lifecycle.addObserver(observer)
         onDispose { lifecycle.removeObserver(observer); vm.clearAdaptivePreview() }
     }
-    val bypass = output.mode.bypassProcessing || playback.mode == PlayerMode.CAST
+    val bypass = output.mode.bypassProcessing
     val live = settings.enabled && playback.playing && runtime.processing && !bypass
     val liveEq = live && settings.dynamicEq
     val status = when {
         !settings.enabled -> "已关闭 · 调节参数已保留"
-        playback.mode == PlayerMode.CAST -> "投屏由接收设备处理，本机设置暂不生效"
         output.mode.bypassProcessing -> "${output.mode.label} 已旁路音频处理和马达驱动"
         !playback.playing -> "已开启 · 播放后生效"
         else -> runtime.message

@@ -47,7 +47,7 @@ class OriginalEffectsPageApi(private val container: AppContainer, private val vm
             }
             "playerPlay", "nm.play.playerPlay" -> playerPlay()
             "playerPause", "nm.play.playerPause" -> withContext(Dispatchers.Main.immediate) {
-                if (!container.playerController.state.value.canControlPlayback) fail("当前播放由房主或投屏端控制", 409)
+                if (!container.playerController.state.value.canControlPlayback) fail("当前播放由房主控制", 409)
                 container.playerController.pause(); playerStateJson(container.playerController.state.value)
             }
             "getCurPlayingList", "nm.playingList.getCurPlayingList" -> buildJsonObject {
@@ -340,7 +340,7 @@ class OriginalEffectsPageApi(private val container: AppContainer, private val vm
 
     private suspend fun playerPlay(): JsonObject = withContext(Dispatchers.Main.immediate) {
         val player = container.playerController
-        if (!player.state.value.canControlPlayback) fail("当前播放由房主或投屏端控制", 409)
+        if (!player.state.value.canControlPlayback) fail("当前播放由房主控制", 409)
         if (player.state.value.song == null) fail("当前没有可播放的歌曲", 409)
         if (!player.state.value.showPause) player.toggle().join()
         playerStateJson(player.state.value)
@@ -353,7 +353,7 @@ class OriginalEffectsPageApi(private val container: AppContainer, private val vm
         if (requestedIndex !in 0 until ids.size.toLong()) fail("歌曲位置无效", 400)
         val index = requestedIndex.toInt()
         val player = container.playerController
-        if (!player.state.value.canControlPlayback) fail("当前播放由房主或投屏端控制", 409)
+        if (!player.state.value.canControlPlayback) fail("当前播放由房主控制", 409)
         val known = player.queue.state.value.songs.filter { it.musicSource == MusicSource.NETEASE && !it.video }.associateBy { it.id }
         val songs = ids.map { known[it] ?: container.musicRepository.detail(it) }
         withContext(Dispatchers.Main.immediate) { player.playList(songs, index) }

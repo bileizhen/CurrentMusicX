@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import top.yukonga.miuix.kmp.basic.Text
 import io.github.currencortex.music.data.song.formatNeteaseCount
+import io.github.currencortex.music.data.song.ChorusSegment
 
 internal data class PlayerButtonVisual(val pressed: Boolean, val scale: Float, val glyphProgress: Float, val alpha: Float)
 internal val PlayerButtonVisuals = SemanticsPropertyKey<PlayerButtonVisual>("PlayerButtonVisuals")
@@ -63,7 +64,12 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val actions by vm.actions.collectAsStateWithLifecycle()
-    val knownDuration = state.durationMs.takeIf { it > 0 } ?: queue.current?.durationMs ?: 0
+    // Observe server changes even while the song and playback position are unchanged.
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val chorus = key(settings.server) { rememberPlayerChorus(queue.current, vm.container.musicRepository.insights) }
+    val currentMatches = state.song?.let { it.id == queue.current?.id && it.musicSource == queue.current?.musicSource &&
+        it.privateIdentity == queue.current?.privateIdentity } == true
+    val knownDuration = state.durationMs.takeIf { it > 0 && currentMatches } ?: queue.current?.durationMs ?: 0
     val enabled = state.canControlPlayback && queue.current != null
     var drag by remember(queue.current?.id) { mutableStateOf<Float?>(null) }
     val position = drag?.let { (it * knownDuration).toLong() } ?: state.positionMs
@@ -72,7 +78,8 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
             key(queue.current?.id) { PlayerSeekBar(drag ?: (state.positionMs.toFloat() / knownDuration.coerceAtLeast(1)).coerceIn(0f, 1f),
                 enabled && knownDuration > 0, { drag = it }, {
                     vm.player.seek((it * knownDuration).toLong()); drag = null
-                }, { drag = null }, bufferedValue = if (state.song?.id == queue.current?.id) state.bufferedProgress(knownDuration) else 0f) }
+                }, { drag = null }, bufferedValue = if (currentMatches) state.bufferedProgress(knownDuration) else 0f,
+                chorusSegments = chorus, durationMs = knownDuration) }
             Box(Modifier.fillMaxWidth()) {
                 Text(formatPlayerTime(position), Modifier.align(Alignment.CenterStart),
                     fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
@@ -114,7 +121,12 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
 }
 
 @Composable internal fun PlayerSeekBar(value: Float, enabled: Boolean, onPreview: (Float) -> Unit,
-    onSeek: (Float) -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier, bufferedValue: Float = 0f) {
+    onSeek: (Float) -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier, bufferedValue: Float = 0f,
+    chorusSegments: List<ChorusSegment> = emptyList(), durationMs: Long = 0) {
+    val chorus = remember(chorusSegments, durationMs) { playerChorusSegments(chorusSegments, durationMs) }
+    val chorusDescription = remember(chorus) {
+        chorus.joinToString("；") { "高潮 ${formatPlayerTime(it.startMs)}–${formatPlayerTime(it.endMs)}" }
+    }
     val preview by rememberUpdatedState(onPreview)
     val seek by rememberUpdatedState(onSeek)
     val cancel by rememberUpdatedState(onCancel)
@@ -133,7 +145,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
         contentDescription = "播放进度"
         this[PlayerBufferedProgress] = buffer
         this[PlayerSeekVisuals] = PlayerSeekVisual(pressed, dragging, thickness.value)
-        stateDescription = "已加载 ${(buffer * 100).toInt()}%"
+        stateDescription = "已加载 ${(buffer * 100).toInt()}%" + if (chorus.isEmpty()) "" else "；$chorusDescription"
         if (enabled) setProgress {
             if (!it.isFinite()) false else { seek(it.coerceIn(0f, 1f)); true }
         } else disabled()
@@ -202,6 +214,15 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
         if (buffered.value > 0f) drawLine(Color.White.copy(alpha = .42f), Offset(0f, y),
             Offset(size.width * buffered.value, y), stroke, StrokeCap.Round)
         drawLine(ink, Offset(0f, y), Offset(end, y), stroke, StrokeCap.Round)
+        // Draw above the buffer/progress so markers remain visible after playback passes them.
+        // Distinct played/unplayed shades preserve the playhead position inside a chorus.
+        val gold = Color(0xFFFFD166).copy(alpha = if (enabled) 1f else .4f)
+        chorus.forEach { segment ->
+            val startX = size.width * (segment.startMs.toDouble() / durationMs).toFloat()
+            val endX = size.width * (segment.endMs.toDouble() / durationMs).toFloat()
+            drawLine(gold.copy(alpha = gold.alpha * .5f), Offset(startX, y), Offset(endX, y), stroke, StrokeCap.Butt)
+            if (end > startX) drawLine(gold, Offset(startX, y), Offset(minOf(end, endX), y), stroke, StrokeCap.Butt)
+        }
         if (pressed) drawCircle(ink, 6.dp.toPx(), Offset(end, y))
     }
 }
@@ -234,7 +255,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
     }
 }
 
-internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, CAST, LIKE, COMMENT, ALARM, REPEAT, REPEAT_ONE, SHUFFLE, HEART_MODE }
+internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, LIKE, COMMENT, ALARM, REPEAT, REPEAT_ONE, SHUFFLE, HEART_MODE }
 
 @Composable internal fun PlayerIconButton(icon: PlayerIcon, label: String, onClick: () -> Unit,
     modifier: Modifier = Modifier, selected: Boolean = false, count: Long? = null, showCount: Boolean = false,
@@ -265,7 +286,6 @@ internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, 
             PlayerIcon.EFFECTS -> R.drawable.player_symbol_graphic_eq
             PlayerIcon.LYRICS -> R.drawable.player_symbol_lyrics
             PlayerIcon.QUEUE -> R.drawable.player_symbol_queue_music
-            PlayerIcon.CAST -> R.drawable.player_symbol_airplay
             PlayerIcon.LIKE -> if (selected) R.drawable.player_symbol_favorite_fill1 else R.drawable.player_symbol_favorite
             PlayerIcon.COMMENT -> R.drawable.player_symbol_chat_bubble
             PlayerIcon.ALARM -> R.drawable.player_symbol_alarm

@@ -1,6 +1,7 @@
 package io.github.currencortex.music.feature.player
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.media.*
 import io.github.currencortex.music.data.song.Song
@@ -95,7 +97,8 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         onRemove = { index -> if (shared) displayed.songs.getOrNull(index)?.let { vm.together.removeSong(it.id) } else vm.player.remove(index) },
         onClear = { if (shared) vm.together.clearQueue() else vm.player.clear() },
         onMode = vm::setPlaybackMode, onDismiss = onDismiss, shared = shared, nativeActions = nativeActions,
-        customBackground = background, backgroundBlur = appearance.playerBackgroundBlur)
+        customBackground = background, backgroundBlur = appearance.playerBackgroundBlur,
+        onMove = if (shared) null else vm.player::move)
     }
     NativeQueueCollectionDialog(vm, batch, collecting) { collecting = false }
     io.github.currencortex.music.feature.download.QueueDownloadDialog(vm.container, batch, downloading) { downloading = false }
@@ -106,7 +109,8 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
     heartAvailable: Boolean, error: String?, motion: QueuePageMotion, backdrop: Boolean, tag: String,
     onSelect: (Int) -> Unit, onRemove: (Int) -> Unit, onClear: () -> Unit,
     onMode: (PlaybackMode) -> Unit, onDismiss: () -> Unit, shared: Boolean = false,
-    nativeActions: NativeQueueActions? = null, customBackground: java.io.File? = null, backgroundBlur: Float = 35f) {
+    nativeActions: NativeQueueActions? = null, customBackground: java.io.File? = null, backgroundBlur: Float = 35f,
+    onMove: ((Int, Int, List<Song>) -> Unit)? = null) {
     val transfer = LocalPlayerPagerArtwork.current.takeUnless { backdrop }
     val miniTransfer = LocalMiniQueueTransition.current.takeIf { backdrop }
     SideEffect {
@@ -118,13 +122,17 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
     val dismiss by rememberUpdatedState(onDismiss)
     val list = rememberLazyListState((queue.index - 2).coerceAtLeast(0))
     val rowKeys = remember(queue.songs) {
-        val occurrences = mutableMapOf<Long, Int>()
+        val occurrences = mutableMapOf<String, Int>()
         queue.songs.map { song ->
-            val occurrence = occurrences.getOrDefault(song.id, 0)
-            occurrences[song.id] = occurrence + 1
-            "${song.id}-$occurrence"
+            val identity = "${song.musicSource}:${song.privateIdentity}:${song.id}:${song.video}:${song.localUri}"
+            val occurrence = occurrences.getOrDefault(identity, 0)
+            occurrences[identity] = occurrence + 1
+            "$identity-$occurrence"
         }
     }
+    val reorder = remember(queue.songs, list) { QueueReorderState(rowKeys, list) }
+    val canReorder = editable && !shared && onMove != null && queue.songs.size > 1
+    val reorderGesture = queueReorderGesture(reorder, canReorder) { from, to -> onMove?.invoke(from, to, queue.songs) }
     var modeOpen by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     var settling by remember { mutableStateOf<Job?>(null) }
@@ -146,7 +154,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         }
     }
     fun drag(delta: Float): Float {
-        if (closing || modeOpen || confirmClear) return 0f
+        if (closing || modeOpen || confirmClear || reorder.active) return 0f
         if (motion.dragged == null) {
             settling?.cancel()
             motion.dragged = motion.progress
@@ -166,16 +174,19 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
         }
     }
     LaunchedEffect(queue.current?.id) {
+        reorder.cancel()
         if (queue.index >= 0) list.scrollToItem((queue.index - 2).coerceAtLeast(0))
     }
     DisposableEffect(motion) { onDispose { motion.dragged = null } }
     BackHandler { when {
         confirmClear -> confirmClear = false
         modeOpen -> modeOpen = false
+        reorder.active -> reorder.cancel()
         else -> settle(true)
     } }
     val nested = object : NestedScrollConnection {
         override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+            if (reorder.active) return Offset.Zero
             if (source == NestedScrollSource.UserInput && (motion.dragged != null ||
                     (available.y > 0 && !list.canScrollBackward))) return Offset(0f, drag(available.y))
             return Offset.Zero
@@ -249,21 +260,42 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
             }
             if (queue.songs.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth().then(dragHeader), contentAlignment = Alignment.Center) {
                 Text("播放队列为空", color = Color.White.copy(alpha = .5f), fontSize = 16.sp)
-            } else LazyColumn(Modifier.weight(1f).fillMaxWidth().clipToBounds().testTag("queue_songs").nestedScroll(nested),
+            } else LazyColumn(Modifier.weight(1f).fillMaxWidth().clipToBounds().testTag("queue_songs").nestedScroll(nested).then(reorderGesture),
                 state = list, contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp)) {
-                itemsIndexed(queue.songs, key = { index, _ -> rowKeys[index] }) { index, song ->
-                    Row(Modifier.fillMaxWidth().background(if (index == queue.index) Color.White.copy(alpha = .11f) else Color.Transparent,
-                        RoundedCornerShape(14.dp)).testTag("queue_row_$index").animateItem(), verticalAlignment = Alignment.CenterVertically) {
-                        Column(Modifier.weight(1f).combinedClickable(enabled = editable, interactionSource = remember { MutableInteractionSource() },
+                itemsIndexed(reorder.order, key = { _, source -> rowKeys[source] }) { index, source ->
+                    val song = queue.songs[source]
+                    val lifted = reorder.dragged == source || reorder.returning == source
+                    val lift by animateFloatAsState(if (reorder.dragged == source) 1f else 0f,
+                        spring(dampingRatio = .8f, stiffness = 500f), label = "queue row lift")
+                    val rowBackground by animateColorAsState(
+                        if (reorder.dragged == source) Color(0xFF383B43)
+                        else if (source == queue.index) Color.White.copy(alpha = .11f) else Color.Transparent,
+                        tween(180), label = "queue row background")
+                    Row(Modifier.fillMaxWidth().zIndex(if (lifted) 1f else 0f)
+                        .animateItem(placementSpec = if (lifted) null else spring(dampingRatio = .9f, stiffness = 450f))
+                        .graphicsLayer {
+                            translationY = reorder.translation(source)
+                            scaleX = 1f - .025f * lift; scaleY = 1f + .025f * lift
+                            shadowElevation = 12.dp.toPx() * lift
+                            shape = RoundedCornerShape(14.dp); clip = true
+                        }
+                        .background(rowBackground, RoundedCornerShape(14.dp)).testTag("queue_row_$index"), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f).combinedClickable(enabled = editable && !reorder.active, interactionSource = remember { MutableInteractionSource() },
                             indication = null, onLongClick = nativeActions?.let { { it.onSongMenu(song) } },
-                            onClick = { if (index != queue.index) onSelect(index) })
-                            .semantics { selected = index == queue.index }.testTag("queue_song_$index")
+                            onClick = { if (source != queue.index) onSelect(source) })
+                            .semantics {
+                                selected = source == queue.index
+                                if (canReorder && !reorder.active) customActions = buildList {
+                                    if (source > 0) add(CustomAccessibilityAction("上移") { onMove(source, source - 1, queue.songs); true })
+                                    if (source < queue.songs.lastIndex) add(CustomAccessibilityAction("下移") { onMove(source, source + 1, queue.songs); true })
+                                }
+                            }.testTag("queue_song_$index")
                             .padding(horizontal = 8.dp, vertical = 10.dp)) {
                             Text(song.name, color = Color.White.copy(alpha = .9f), fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(song.queueSummary(), color = Color.White.copy(alpha = .45f), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        Box(Modifier.size(48.dp).testTag("queue_remove_$index").clickable(enabled = editable,
-                            interactionSource = remember { MutableInteractionSource() }, indication = null) { onRemove(index) }
+                        Box(Modifier.size(48.dp).testTag("queue_remove_$index").clickable(enabled = editable && !reorder.active,
+                            interactionSource = remember { MutableInteractionSource() }, indication = null) { onRemove(source) }
                             .semantics { contentDescription = "移除 ${song.name}" }, contentAlignment = Alignment.Center) {
                             Text("−", color = Color.White.copy(alpha = if (editable) .5f else .2f), fontSize = 21.sp)
                         }
@@ -274,13 +306,14 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .07f)))
                 error?.let { Text(it, color = Color.White.copy(alpha = .55f), fontSize = 12.sp,
                     modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 10.dp)) }
-                if (!shared && !editable) Text("请先退出一起听或结束投屏，再编辑队列", color = Color.White.copy(alpha = .55f), fontSize = 12.sp,
+                if (!shared && !editable) Text("请先退出一起听，再编辑队列", color = Color.White.copy(alpha = .55f), fontSize = 12.sp,
                     modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 10.dp))
                 Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     QueueTextAction(queue.mode.label + if (loading) " · 加载中" else "", { modeOpen = true }, editable,
                         Modifier.testTag("open_player_mode"), pill = true)
                     Spacer(Modifier.width(12.dp))
                     Text(if (shared) { if (editable) "双方共享歌单" else "正在同步操作…" }
+                        else if (canReorder) "长按拖动排序 · 下滑返回"
                         else if (backdrop) "向下轻扫关闭队列" else "向下轻扫返回播放界面",
                         Modifier.weight(1f).padding(end = 8.dp), color = Color.White.copy(alpha = .4f), fontSize = 11.sp,
                         maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = androidx.compose.ui.text.style.TextAlign.End)

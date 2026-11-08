@@ -6,6 +6,9 @@ import kotlinx.coroutines.*
 import kotlinx.serialization.json.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import java.io.IOException
+import java.util.concurrent.TimeUnit
 
 /** Adapts official NetEase responses to the app's existing models, without a proxy server. */
 class NeteaseGateway(val transport: NeteaseTransport) {
@@ -13,6 +16,9 @@ class NeteaseGateway(val transport: NeteaseTransport) {
     private var listeningOwner: Pair<Long, Long>? = null
     private var listeningMs = 0L
     private var listeningReported = false
+    private var deviceNameRevision: Long? = null
+    private var deviceNameConfirmed = false
+    private var deviceNameAttemptAt = 0L
     val sessions get() = transport.sessions
     // Preserve protected media's selected source. Public lyrics always use NetEase,
     // whose raw YRC/LRC responses never include the project's synthetic word axis.
@@ -210,13 +216,24 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 return official("/api/song/chorus", data("ids" to "[$id]"), expected = expected)
             }
             "song/url", "song/url/v1" -> {
-                val level = arg("level", "auto").let { if (it == "auto") "jymaster" else it }
-                val raw = official("/api/song/enhance/player/url/v1", buildJsonObject {
-                    put("ids", "[$id]"); put("level", level); put("encodeType", "flac")
-                    if (level == "sky") put("immerseType", "c51")
-                }, expected = expected)
-                val track = raw.array("data").mapNotNull { it as? JsonObject }
-                    .firstOrNull { it.long("id").toString() == id } ?: throw ApiException(ErrorKind.Parse)
+                suspend fun trackAt(level: String): JsonObject? {
+                    val raw = official("/api/song/enhance/player/url/v1", buildJsonObject {
+                        put("ids", "[$id]"); put("level", level); put("encodeType", "flac")
+                        if (level == "sky") put("immerseType", "c51")
+                    }, expected = expected)
+                    return raw.array("data").filterIsInstance<JsonObject>().firstOrNull { it.long("id").toString() == id }
+                }
+                val level = arg("level", "auto")
+                if (level == "auto" && arg("supportsDolby") == "1") {
+                    val dolby = try { trackAt("dolby") } catch (e: ApiException) {
+                        if (e.kind !in setOf(ErrorKind.Forbidden, ErrorKind.NotFound, ErrorKind.Server, ErrorKind.Parse, ErrorKind.Unknown)) throw e
+                        null
+                    } catch (_: java.io.IOException) { null }
+                    if (dolby != null && dolby.text("level") == "dolby" && dolby.text("url").toHttpUrlOrNull() != null &&
+                        (dolby["code"] == null || dolby.long("code") == 200L) &&
+                        (dolby["freeTrialInfo"] == null || dolby["freeTrialInfo"] == JsonNull)) return dolby
+                }
+                val track = trackAt(if (level == "auto") "jymaster" else level) ?: throw ApiException(ErrorKind.Parse)
                 if (track.text("url").isBlank()) throw ApiException(ErrorKind.NeteaseAudioUnavailable)
                 return track
             }
@@ -427,6 +444,28 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         val raw = official("/api/play-record/song/list", params("limit" to JsonPrimitive(limit)), web = true, expected = expected, authenticated = true)
         return buildJsonObject { put("songs", songs(JsonArray(raw.obj("data").array("list").mapNotNull { (it as? JsonObject)?.get("data") }))) }
     }
+
+    // Called under listeningMutex. Naming is best effort and existing sessions can register
+    // on their next playback. A rejected name must not invalidate the user's login.
+    private suspend fun namePlaybackDevice(expected: NeteaseSession) {
+        val now = System.nanoTime()
+        if (deviceNameRevision == expected.revision &&
+            (deviceNameConfirmed || now - deviceNameAttemptAt < TimeUnit.MINUTES.toNanos(5))) return
+        deviceNameRevision = expected.revision
+        deviceNameAttemptAt = now
+        deviceNameConfirmed = false
+        try {
+            val response = transport.request("/api/deviceinfo/center/upload",
+                data("deviceName" to NETEASE_PLAYBACK_DEVICE_NAME), session = expected, saveCookies = false,
+                clientProfile = NeteaseClientProfile.PLAYBACK, callTimeoutMs = 5_000)
+            deviceNameConfirmed = response.body.long("code") == 200L
+        } catch (_: ApiException) {
+            // The listening report still carries the device name and checks the session.
+        } catch (_: IOException) {
+            // Retry naming on a later playback after the cooldown.
+        }
+    }
+
     suspend fun recordPlay(id: Long, milliseconds: Long? = null, expectedRevision: Long? = null) = listeningMutex.withLock {
         val expected = sessions.snapshot()
         if (expectedRevision != null && expectedRevision != expected.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
@@ -449,7 +488,9 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 if (milliseconds != null) { put("time", listeningMs / 1000); put("end", "playend"); put("download", 0) }
             })
         }
-        official("/api/feedback/weblog", data("logs" to JsonArray(listOf(event)).toString()), clientLog = true, expected = expected, authenticated = true)
+        namePlaybackDevice(expected)
+        official("/api/feedback/weblog", data("logs" to JsonArray(listOf(event)).toString()), clientLog = true,
+            expected = expected, authenticated = true, clientProfile = NeteaseClientProfile.PLAYBACK)
         if (milliseconds != null) listeningReported = true
     }
 }
