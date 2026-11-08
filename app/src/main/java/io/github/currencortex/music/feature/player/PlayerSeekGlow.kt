@@ -9,12 +9,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
+import kotlin.math.exp
 
 @Composable internal fun rememberPlayerSeekTint(cover: String): State<Color> {
     val palette by rememberArtworkGlowPalette(cover)
@@ -24,13 +26,27 @@ import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
 
 /** Reuse unit-space brushes as the playhead moves; no blur layer or animation loop is needed. */
 internal class PlayerSeekGlow(tint: Color) {
-    private val halo = Brush.radialGradient(
-        0f to tint.copy(alpha = .38f),
-        .3f to tint.copy(alpha = .26f),
-        .6f to tint.copy(alpha = .10f),
-        1f to tint.copy(alpha = 0f),
-        center = Offset.Zero, radius = 1f,
+    private val halo = Brush.horizontalGradient(
+        0f to tint.copy(alpha = 0f),
+        .2f to tint.copy(alpha = .08f),
+        .5f to lerp(tint, Color.White, .25f).copy(alpha = .38f),
+        .8f to lerp(tint, Color.White, .65f).copy(alpha = .65f),
+        1f to Color.White.copy(alpha = .8f),
+        startX = 0f, endX = 1f,
     )
+    // A beam narrows into the playhead. Nested contours feather its edges without a blur layer.
+    private val beam = Path().apply {
+        moveTo(0f, -1f)
+        cubicTo(.38f, -1f, .78f, -.5f, 1f, 0f)
+        cubicTo(.78f, .5f, .38f, 1f, 0f, 1f)
+        close()
+    }
+    private val feather = List(24) { layer ->
+        val radius = 1f - layer / 24f
+        val previousRadius = radius + 1f / 24f
+        val previous = if (layer == 0) 0f else exp(-4.5f * previousRadius * previousRadius)
+        radius to (exp(-4.5f * radius * radius) - previous) * 1.5f
+    }
     private val highlight = Brush.horizontalGradient(
         0f to Color.White.copy(alpha = 0f),
         .45f to Color.White.copy(alpha = .18f),
@@ -41,15 +57,17 @@ internal class PlayerSeekGlow(tint: Color) {
 
     fun DrawScope.drawHalo(end: Float, stroke: Float, alpha: Float) {
         if (end <= 0f) return
-        val length = minOf(end, 72.dp.toPx())
-        val radiusY = (stroke * .5f + 9.dp.toPx()).coerceAtMost(size.height * .5f)
-        // Keep the haze inside the touch area, including at either end of the track.
-        clipRect(left = 0f, top = 0f, right = size.width, bottom = size.height) {
-            withTransform({
-                translate(end - length * .42f, size.height * .5f)
-                scale(length * .65f, radiusY, pivot = Offset.Zero)
-            }) {
-                drawCircle(halo, radius = 1f, center = Offset.Zero, alpha = alpha)
+        val length = minOf(end, 88.dp.toPx())
+        val radiusY = (stroke * .5f + 14.dp.toPx()).coerceAtMost(size.height * .5f)
+        // The beam ends at the playhead rather than spilling into the unplayed track.
+        clipRect(left = 0f, top = 0f, right = end, bottom = size.height) {
+            feather.forEach { (radius, opacity) ->
+                withTransform({
+                    translate(end - length, size.height * .5f)
+                    scale(length, radiusY * radius, pivot = Offset.Zero)
+                }) {
+                    drawPath(beam, halo, alpha = alpha * opacity)
+                }
             }
         }
     }
