@@ -229,8 +229,6 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
             drawLine(gold.copy(alpha = gold.alpha * .5f), Offset(startX, y), Offset(endX, y), stroke, StrokeCap.Butt)
             if (end > startX) drawLine(gold, Offset(startX, y), Offset(minOf(end, endX), y), stroke, StrokeCap.Butt)
         }
-        // Only the small white tip sits above chorus markers, keeping the playhead readable inside them.
-        if (enabled && end > 0f) drawCircle(Color.White, stroke * .5f, Offset(end, y))
     }
 }
 
