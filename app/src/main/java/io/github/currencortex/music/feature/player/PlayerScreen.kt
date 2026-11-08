@@ -513,7 +513,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 PlayerSongText(song?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"), role = pagerRole, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 PlayerSongText(song?.artists.orEmpty(), artistLink, role = pagerRole, subtitle = true, fontSize = 18.sp, color = Color.White.copy(alpha = .55f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (showPreview) CoverLyricPreview(vm, Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 8.dp)
+            if (showPreview) CoverLyricPreview(vm, Modifier.fillMaxWidth().padding(horizontal = 8.dp)
                 .onGloballyPositioned(onPreviewCoordinates), active)
         }
     }
