@@ -63,6 +63,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
     leadingAction: (@Composable () -> Unit)? = null, trailingAction: (@Composable () -> Unit)? = null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
+    val seekTint by rememberPlayerSeekTint(queue.current?.cover.orEmpty())
     val actions by vm.actions.collectAsStateWithLifecycle()
     // Observe server changes even while the song and playback position are unchanged.
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -79,7 +80,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
                 enabled && knownDuration > 0, { drag = it }, {
                     vm.player.seek((it * knownDuration).toLong()); drag = null
                 }, { drag = null }, bufferedValue = if (currentMatches) state.bufferedProgress(knownDuration) else 0f,
-                chorusSegments = chorus, durationMs = knownDuration) }
+                chorusSegments = chorus, durationMs = knownDuration, tint = seekTint) }
             Box(Modifier.fillMaxWidth()) {
                 Text(formatPlayerTime(position), Modifier.align(Alignment.CenterStart),
                     fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
@@ -122,7 +123,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
 
 @Composable internal fun PlayerSeekBar(value: Float, enabled: Boolean, onPreview: (Float) -> Unit,
     onSeek: (Float) -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier, bufferedValue: Float = 0f,
-    chorusSegments: List<ChorusSegment> = emptyList(), durationMs: Long = 0) {
+    chorusSegments: List<ChorusSegment> = emptyList(), durationMs: Long = 0, tint: Color = Color.White) {
     val chorus = remember(chorusSegments, durationMs) { playerChorusSegments(chorusSegments, durationMs) }
     val chorusDescription = remember(chorus) {
         chorus.joinToString("；") { "高潮 ${formatPlayerTime(it.startMs)}–${formatPlayerTime(it.endMs)}" }
@@ -137,6 +138,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
     var dragging by remember { mutableStateOf(false) }
     var target by remember { mutableFloatStateOf(progress) }
     var bounds by remember { mutableStateOf(IntSize.Zero) }
+    val glow = remember(tint) { PlayerSeekGlow(tint) }
     val thickness = animateFloatAsState(if (pressed) 8f else 3f,
         tween(if (pressed) 100 else 160, easing = CubicBezierEasing(.2f, 0f, 0f, 1f)), label = "seek press")
     val buffered = animateFloatAsState(buffer, tween(180), label = "audio buffer progress")
@@ -209,11 +211,13 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
         val y = size.height / 2
         val end = size.width * if (pressed) target else progress
         val stroke = thickness.value.dp.toPx()
-        val ink = Color.White.copy(alpha = if (enabled) .85f else .28f)
+        val ink = if (enabled) tint else Color.White.copy(alpha = .28f)
+        if (enabled && !pressed) with(glow) { drawHalo(end, stroke) }
         drawLine(Color.White.copy(alpha = .18f), Offset(0f, y), Offset(size.width, y), stroke, StrokeCap.Round)
         if (buffered.value > 0f) drawLine(Color.White.copy(alpha = .42f), Offset(0f, y),
             Offset(size.width * buffered.value, y), stroke, StrokeCap.Round)
         drawLine(ink, Offset(0f, y), Offset(end, y), stroke, StrokeCap.Round)
+        if (enabled) with(glow) { drawHighlight(end, stroke) }
         // Draw above the buffer/progress so markers remain visible after playback passes them.
         // Distinct played/unplayed shades preserve the playhead position inside a chorus.
         val gold = Color(0xFFFFD166).copy(alpha = if (enabled) 1f else .4f)
@@ -223,7 +227,9 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
             drawLine(gold.copy(alpha = gold.alpha * .5f), Offset(startX, y), Offset(endX, y), stroke, StrokeCap.Butt)
             if (end > startX) drawLine(gold, Offset(startX, y), Offset(minOf(end, endX), y), stroke, StrokeCap.Butt)
         }
-        if (pressed) drawCircle(ink, 6.dp.toPx(), Offset(end, y))
+        // Only the small white tip sits above chorus markers, keeping the playhead readable inside them.
+        if (enabled && end > 0f) drawCircle(Color.White, stroke * .5f, Offset(end, y))
+        if (pressed) drawCircle(Color.White.copy(alpha = if (enabled) 1f else .28f), 6.dp.toPx(), Offset(end, y))
     }
 }
 
