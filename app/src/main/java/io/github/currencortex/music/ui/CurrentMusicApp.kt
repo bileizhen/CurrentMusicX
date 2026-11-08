@@ -503,8 +503,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 // Each moving scene must cover the outgoing page and its dim scrim, including
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
                 Box(Modifier.fillMaxSize().background(if (ribbonScene) androidx.compose.ui.graphics.Color(0xFF0A0A0A) else MiuixTheme.colorScheme.background)
-                    .testTag("music_scene_${entry.contentKey}")
-                    .then(if (playlistScene || entry.contentKey in setOf(PLAYER.toString(), "lib/video", EQUALIZER.toString())) Modifier else Modifier.navigationBarsPadding())) {
+                    .testTag("music_scene_${entry.contentKey}")) {
                     // Keep the scene viewport full size so the glass samples page content.
                     // Clearance belongs to the end of each scrollable list, not to its bounds.
                     CompositionLocalProvider(LocalMusicBottomInset provides miniSpace,
