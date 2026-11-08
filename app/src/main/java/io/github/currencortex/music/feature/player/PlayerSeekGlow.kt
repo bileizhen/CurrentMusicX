@@ -39,7 +39,7 @@ internal class PlayerSeekGlow(tint: Color) {
         startX = 0f, endX = 1f,
     )
 
-    fun DrawScope.drawHalo(end: Float, stroke: Float) {
+    fun DrawScope.drawHalo(end: Float, stroke: Float, alpha: Float) {
         if (end <= 0f) return
         val length = minOf(end, 72.dp.toPx())
         val radiusY = (stroke * .5f + 9.dp.toPx()).coerceAtMost(size.height * .5f)
@@ -49,7 +49,7 @@ internal class PlayerSeekGlow(tint: Color) {
                 translate(end - length * .42f, size.height * .5f)
                 scale(length * .65f, radiusY, pivot = Offset.Zero)
             }) {
-                drawCircle(halo, radius = 1f, center = Offset.Zero)
+                drawCircle(halo, radius = 1f, center = Offset.Zero, alpha = alpha)
             }
         }
     }
