@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
@@ -31,6 +32,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -63,6 +65,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
     leadingAction: (@Composable () -> Unit)? = null, trailingAction: (@Composable () -> Unit)? = null) {
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
+    val seekTint by rememberPlayerSeekTint(queue.current?.cover.orEmpty())
     val actions by vm.actions.collectAsStateWithLifecycle()
     // Observe server changes even while the song and playback position are unchanged.
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -79,7 +82,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
                 enabled && knownDuration > 0, { drag = it }, {
                     vm.player.seek((it * knownDuration).toLong()); drag = null
                 }, { drag = null }, bufferedValue = if (currentMatches) state.bufferedProgress(knownDuration) else 0f,
-                chorusSegments = chorus, durationMs = knownDuration) }
+                chorusSegments = chorus, durationMs = knownDuration, tint = seekTint) }
             Box(Modifier.fillMaxWidth()) {
                 Text(formatPlayerTime(position), Modifier.align(Alignment.CenterStart),
                     fontSize = 11.sp, color = Color.White.copy(alpha = .48f))
@@ -122,7 +125,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
 
 @Composable internal fun PlayerSeekBar(value: Float, enabled: Boolean, onPreview: (Float) -> Unit,
     onSeek: (Float) -> Unit, onCancel: () -> Unit, modifier: Modifier = Modifier, bufferedValue: Float = 0f,
-    chorusSegments: List<ChorusSegment> = emptyList(), durationMs: Long = 0) {
+    chorusSegments: List<ChorusSegment> = emptyList(), durationMs: Long = 0, tint: Color = Color.White) {
     val chorus = remember(chorusSegments, durationMs) { playerChorusSegments(chorusSegments, durationMs) }
     val chorusDescription = remember(chorus) {
         chorus.joinToString("；") { "高潮 ${formatPlayerTime(it.startMs)}–${formatPlayerTime(it.endMs)}" }
@@ -137,8 +140,19 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
     var dragging by remember { mutableStateOf(false) }
     var target by remember { mutableFloatStateOf(progress) }
     var bounds by remember { mutableStateOf(IntSize.Zero) }
-    val thickness = animateFloatAsState(if (pressed) 8f else 3f,
-        tween(if (pressed) 100 else 160, easing = CubicBezierEasing(.2f, 0f, 0f, 1f)), label = "seek press")
+    val density = LocalDensity.current
+    val chorusTracks = remember(chorus, durationMs, bounds.width, density) {
+        playerSeekChorusTracks(chorus, durationMs, bounds.width.toFloat(), with(density) { 10.dp.toPx() })
+    }
+    val positionMs = (if (pressed) target else progress).toDouble() * durationMs
+    val inChorus = chorus.any { positionMs >= it.startMs && positionMs < it.endMs }
+    val chorusGlow by animateFloatAsState(if (inChorus) 1f else 0f, tween(280), label = "seek chorus colour")
+    val glowTint = lerp(tint, PlayerSeekChorusGold, chorusGlow)
+    val glow = remember(glowTint) { PlayerSeekGlow(glowTint) }
+    val thickness = animateFloatAsState(if (dragging) 6f else 4f,
+        tween(if (dragging) 220 else 280, easing = LinearEasing), label = "seek press")
+    val glowAlpha = animateFloatAsState(if (enabled && !dragging) 1f else 0f,
+        tween(if (dragging || !enabled) 220 else 280, easing = LinearEasing), label = "seek glow visibility")
     val buffered = animateFloatAsState(buffer, tween(180), label = "audio buffer progress")
     Canvas(modifier.fillMaxWidth().height(34.dp).onSizeChanged { bounds = it }.testTag("player_seek").semantics {
         progressBarRangeInfo = ProgressBarRangeInfo(if (pressed) target else progress, 0f..1f)
@@ -209,21 +223,17 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
         val y = size.height / 2
         val end = size.width * if (pressed) target else progress
         val stroke = thickness.value.dp.toPx()
-        val ink = Color.White.copy(alpha = if (enabled) .85f else .28f)
+        val ink = if (enabled) tint else Color.White.copy(alpha = .28f)
+        if (glowAlpha.value > 0f) with(glow) { drawHalo(end, stroke, glowAlpha.value) }
         drawLine(Color.White.copy(alpha = .18f), Offset(0f, y), Offset(size.width, y), stroke, StrokeCap.Round)
         if (buffered.value > 0f) drawLine(Color.White.copy(alpha = .42f), Offset(0f, y),
             Offset(size.width * buffered.value, y), stroke, StrokeCap.Round)
-        drawLine(ink, Offset(0f, y), Offset(end, y), stroke, StrokeCap.Round)
+        if (end > 0f) drawLine(ink, Offset(0f, y), Offset(end, y), stroke, StrokeCap.Round)
         // Draw above the buffer/progress so markers remain visible after playback passes them.
         // Distinct played/unplayed shades preserve the playhead position inside a chorus.
-        val gold = Color(0xFFFFD166).copy(alpha = if (enabled) 1f else .4f)
-        chorus.forEach { segment ->
-            val startX = size.width * (segment.startMs.toDouble() / durationMs).toFloat()
-            val endX = size.width * (segment.endMs.toDouble() / durationMs).toFloat()
-            drawLine(gold.copy(alpha = gold.alpha * .5f), Offset(startX, y), Offset(endX, y), stroke, StrokeCap.Butt)
-            if (end > startX) drawLine(gold, Offset(startX, y), Offset(minOf(end, endX), y), stroke, StrokeCap.Butt)
-        }
-        if (pressed) drawCircle(ink, 6.dp.toPx(), Offset(end, y))
+        chorusTracks.forEach { track -> with(track) { draw(end, stroke, enabled) } }
+        // Continue the highlight through the gold section and rounded cap without a separate white tip.
+        if (enabled) with(glow) { drawHighlight(end, stroke) }
     }
 }
 
