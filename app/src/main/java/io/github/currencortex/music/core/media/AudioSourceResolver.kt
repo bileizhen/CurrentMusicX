@@ -12,8 +12,17 @@ data class AudioRequest(val songId: Long, val quality: AudioQuality, val account
     val refresh: Boolean = false, val supportsDolby: Boolean = false) {
     val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity, supportsDolby)
 
-    internal fun accepts(source: AudioSource): Boolean = quality != AudioQuality.AUTO || supportsDolby ||
-        providerIdentity !in setOf("currentmusic", "netease") || source.level != AudioQuality.DOLBY.value
+    private val dolbyAuto get() = quality == AudioQuality.AUTO &&
+        (providerIdentity == "currentmusic" || providerIdentity == "netease")
+
+    internal fun accepts(source: AudioSource): Boolean = !dolbyAuto || supportsDolby || source.level != AudioQuality.DOLBY.value
+
+    internal fun offlineAudio(cached: (AudioRequest) -> ResolvedAudio?): Pair<AudioRequest, ResolvedAudio>? {
+        cached(this)?.takeIf { accepts(it.source) }?.let { return this to it }
+        if (!dolbyAuto) return null
+        val alternate = copy(supportsDolby = !supportsDolby)
+        return cached(alternate)?.takeIf { accepts(it.source) }?.let { alternate to it }
+    }
 
     internal fun selectedDolby(source: AudioSource): Boolean =
         quality == AudioQuality.AUTO && supportsDolby && source.level == AudioQuality.DOLBY.value
@@ -92,9 +101,20 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
                     throw e
                 }
                 denied[key]?.takeIf { it.request == request }?.let { throw it.error }
-                val cachedKey = cache.matchedSourceKey(key) ?: key
-                (cache.completeSource(cachedKey)?.takeIf(request::accepts)?.takeUnless { cachedKey == key && it.matched } ?: throw e)
-                    .also { fallbackKey = cachedKey }
+                val (cachedRequest, cachedAudio) = request.offlineAudio { candidate ->
+                    val candidateKey = if (candidate == request) key else candidate.key
+                    if (denied[candidateKey]?.request == candidate) return@offlineAudio null
+                    val cachedKey = cache.matchedSourceKey(candidateKey) ?: candidateKey
+                    cache.completeSource(cachedKey)?.takeUnless { cachedKey == candidateKey && it.matched }
+                        ?.let { ResolvedAudio(it, cachedKey) }
+                } ?: throw e
+                if (cachedRequest != request) {
+                    checkRequest(request)
+                    // A later online lookup should still be able to select the requested preference.
+                    return@withLock cachedAudio.copy(refreshAfterMs = Long.MAX_VALUE)
+                }
+                fallbackKey = cachedAudio.key
+                cachedAudio.source
             }
             checkRequest(request)
             denied.remove(key)
