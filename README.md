@@ -4,6 +4,8 @@
 
 # CurrentMusicX
 
+**简体中文** · [English](README-en.md)
+
 **让封面、歌词与音乐一起流动**
 
 网易云音乐库 · Navidrome / Emby 自建曲库 · 双人一起听
@@ -164,17 +166,29 @@ Emby 可从「设置 → 音源与网络 → 自建曲库 → Emby」连接，�
 
 ## 项目实现原理
 
-[![CurrentMusic 实现原理图 / CurrentMusic architecture diagram](.github/img/architecture.png)](.github/img/architecture.png)
+[![CurrentMusic 实现原理图](.github/img/architecture.png)](.github/img/architecture.png)
 
-**匿名 SVIP** 模式下，后端从 `CM_NCM_COOKIE` 指向的文件读取服务端 SVIP Cookie，交给独立部署的 NCM API 请求网易云。用户通过 `/cm/ncm/song/url` 取址时只需登录 CurrentMusic。官方音源的可用性取决于服务端账号的权益和曲目限制。个人歌单、收藏等账号操作使用用户自己的绑定 Cookie。X 端在本机未登录网易云时，部分账号功能可复用服务端绑定。
+### 客户端怎样分流
 
-**Anonymous SVIP** lets signed-in CurrentMusic users request a playback URL at `/cm/ncm/song/url` without linking a personal NetEase account. The engine reads its SVIP cookie from the file configured by `CM_NCM_COOKIE` and passes it to the separately deployed NCM API. Official sources depend on the server account's entitlements and track restrictions. Personal actions such as managing playlists or likes use the user's linked cookie. Some X account features can use that server-side binding when the app has no local NetEase session.
+- **Web 流声屿**默认把搜索、歌曲详情、歌词、播放取址、账号和社区等业务 API 统一发往流声引擎的 `/cm/`。可选 LeiZ 音源会直接请求 LeiZ。云盘分步上传由引擎申请令牌和登记文件，中间的文件数据可直传对象存储。
+- **CurrentMusicX** 由客户端按功能、音源设置和登录态选择路径。默认音源的播放取址、站内账号和歌单、社区、站内房间以及云端绑定走引擎。搜索、评论和网易云原生双人一起听可直连网易云，已在手机登录网易云时，个人歌单、收藏和推荐通常也走直连。没有本机网易云会话时，部分账号功能可走引擎复用云端绑定。选择「网易云原生」音源后，播放取址也由手机直连，歌词来源可另选。
 
-图示以默认 CurrentMusic 音源为主。Web 可选 LeiZ 直接取址，云盘分步上传可将文件直传对象存储。图底的 `ncm-inject` 是部署记录中的独立入口。
+### 流声引擎怎样处理请求
 
-The diagram shows the default CurrentMusic source. Web can also resolve playback URLs through LeiZ and upload cloud files directly to object storage. The `ncm-inject` route at the bottom is a separate entry point documented in the deployment notes.
+1. HTTPS 反向代理将 `/cm/` 转发给 Python 后端，并写入可信客户端 IP。后端按路由处理登录校验、限流和缓存。公开搜索、详情和歌词可供访客查询，媒体取址要求 CurrentMusic 登录。搜索和播放取址可将可信客户端 IP 传给上游，并据此隔离缓存。
+2. 站内账号、歌单、社区和房间由后端处理，会话和业务数据保存在 SQLite。聊天室和听歌房可用服务器发送事件（SSE）接收更新。需要访问网易云时，后端通过 `CM_NCM_BASE` 调用独立部署的 NCM API（Node.js / api-enhanced），由它向网易云发起协议请求并返回结果。
+3. 网易云个人操作走单独的鉴权路径。引擎校验 CurrentMusic 会话，再读取该用户绑定的网易云 Cookie 来访问其歌单、收藏等数据。X 端完成本机网易云登录后，可通过 `/cm/ncmbind/import` 将凭据同步给引擎，由服务端验证账号归属。引擎保存的 Cookie 只用于服务端请求。
 
-[Web 路由 / Web routing](https://github.com/backrooms-yrc/CurrentMusic/blob/93cd0521264b8762296a20c206d0aa586598008e/web/src/api.js) · [引擎后端 / Engine backend](https://github.com/backrooms-yrc/CurrentMusic/blob/93cd0521264b8762296a20c206d0aa586598008e/backend/README.md) · [播放取址 / Playback URL resolution](https://github.com/backrooms-yrc/CurrentMusic/blob/93cd0521264b8762296a20c206d0aa586598008e/docs/playback-sources.md) · [独立入口 / Separate gateway](https://github.com/backrooms-yrc/CurrentMusic/blob/93cd0521264b8762296a20c206d0aa586598008e/docs/api-5-phase-plan.md#1-实测拓扑)
+### 匿名 SVIP 怎样取址
+
+1. 用户登录 **CurrentMusic** 后，以站内令牌请求 `GET /cm/ncm/song/url`，提交歌曲 ID 和音质档位。这里的「匿名」指取址可以省略个人网易云绑定。
+2. 后端读取 `CM_NCM_COOKIE` 指向的文件，将服务器配置的网易云 SVIP Cookie 注入发往 NCM API 的官方取址请求 `/song/url/v1`。网易云按该服务端账号的权益、曲目限制和请求档位返回结果。站内令牌用于引擎鉴权，服务端 Cookie 用于上游鉴权。
+3. 引擎选择可用音质，探测最终官方地址的音频头。官方取址失败或只返回试听时，可经部署好的匹配器查找候选音源，并校验音频和时长。匹配请求使用公开歌曲资料，发往匹配器的请求不携带这两类网易云 Cookie。
+4. 后端返回播放地址和可验证的音频信息。常规播放时，Web 和 X 直接从返回的 CDN 或匹配音源地址读取音频。歌词走独立接口。引擎优先使用官方 YRC，缺少逐字数据时可由 LDDC 补全，最后回退到 LRC 并标记估算的逐字时间。X 可独立选择本机直连或自动多源匹配。
+
+部署记录还记载了一个独立的 `ncm-inject` 入口。它对符合注入规则且调用方未带 Cookie 的请求补上服务端 SVIP Cookie，再交给 NCM API。上图的 Web 与 X 默认请求链使用的是 `/cm/`。
+
+[X 端请求路由](app/src/main/java/io/github/currencortex/music/core/network/ApiClient.kt) · [引擎后端](https://github.com/backrooms-yrc/CurrentMusic/tree/main/backend) · [播放取址](https://github.com/backrooms-yrc/CurrentMusic/blob/main/docs/playback-sources.md) · [账号绑定](https://github.com/backrooms-yrc/CurrentMusic/blob/main/docs/third-party-ncm-sync.md) · [部署记录](https://github.com/backrooms-yrc/CurrentMusic/blob/main/docs/api-5-phase-plan.md#1-实测拓扑)
 
 ## 兼容性
 
@@ -255,7 +269,7 @@ Release 启用 R8 与资源压缩，仍发布一个包含现有 ABI 的通用 AP
 
 ## Issues、PR 与版本发布
 
-使用 [Issue 表单](https://github.com/bileizhen/CurrentMusicX/issues/new/choose)报告问题或提出建议；PR 按[仓库模板](.github/PULL_REQUEST_TEMPLATE.md)说明变化与验证。完整解决问题时用 `Fixes #编号`，仅关联讨论时用 `Refs #编号`。
+使用 [Issue 表单](https://github.com/bileizhen/CurrentMusicX/issues/new/choose)报告问题或提出建议；PR 按[仓库模板](.github/pull_request_template.md)说明变化与验证。完整解决问题时用 `Fixes #编号`，仅关联讨论时用 `Refs #编号`。
 
 开发流程：**独立功能分支 → PR → CI → 合并 `main`**。一个 PR 对应一个明确改动，功能分支使用 `bileizhen/` 前缀、推送到 `releases`，目标为 `bileizhen/CurrentMusicX:main`。保留原子提交，版本号等发布准备另开最后一个 PR。
 
