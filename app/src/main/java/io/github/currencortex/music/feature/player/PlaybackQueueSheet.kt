@@ -132,7 +132,8 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
     }
     val reorder = remember(queue.songs, list) { QueueReorderState(rowKeys, list) }
     val canReorder = editable && !shared && onMove != null && queue.songs.size > 1
-    val reorderGesture = queueReorderGesture(reorder, canReorder) { from, to -> onMove?.invoke(from, to, queue.songs) }
+    val horizontalInset = 24.dp
+    val reorderGesture = queueReorderGesture(reorder, canReorder, horizontalInset) { from, to -> onMove?.invoke(from, to, queue.songs) }
     var modeOpen by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
     var settling by remember { mutableStateOf<Job?>(null) }
@@ -208,9 +209,9 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
             customBackground, backgroundBlur)
         Box(Modifier.fillMaxSize().graphicsLayer { translationY = size.height * (1 - motion.progress) }
             .onGloballyPositioned { transfer?.queuePage = it; transfer?.updateBounds(); miniTransfer?.page = it }) {
-        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().padding(horizontal = 24.dp)
+        Column(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
             .align(Alignment.TopCenter)) {
-            Column(Modifier.fillMaxWidth().then(dragHeader).testTag("queue_drag_handle")) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = horizontalInset).then(dragHeader).testTag("queue_drag_handle")) {
                 queue.current?.let { song ->
                     Row(Modifier.fillMaxWidth().testTag("queue_current_song")
                         .clickable(interactionSource = interactions, indication = null) { settle(true) }
@@ -258,10 +259,13 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                     }
                 }
             }
+            // Keep the viewport full-width so lifted rows can cast their shadows into
+            // the side gutters. Content padding preserves the resting row alignment;
+            // the viewport still clips vertically at the header and footer.
             if (queue.songs.isEmpty()) Box(Modifier.weight(1f).fillMaxWidth().then(dragHeader), contentAlignment = Alignment.Center) {
                 Text("播放队列为空", color = Color.White.copy(alpha = .5f), fontSize = 16.sp)
             } else LazyColumn(Modifier.weight(1f).fillMaxWidth().clipToBounds().testTag("queue_songs").nestedScroll(nested).then(reorderGesture),
-                state = list, contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp)) {
+                state = list, contentPadding = PaddingValues(horizontal = horizontalInset, vertical = 8.dp)) {
                 itemsIndexed(reorder.order, key = { _, source -> rowKeys[source] }) { index, source ->
                     val song = queue.songs[source]
                     val lifted = reorder.dragged == source || reorder.returning == source
@@ -302,7 +306,7 @@ internal val QueuePageProgress = SemanticsPropertyKey<Float>("QueuePageProgress"
                     }
                 }
             }
-            Column(Modifier.fillMaxWidth().then(dragHeader).padding(bottom = 12.dp)) {
+            Column(Modifier.fillMaxWidth().padding(horizontal = horizontalInset).then(dragHeader).padding(bottom = 12.dp)) {
                 Box(Modifier.fillMaxWidth().height(1.dp).background(Color.White.copy(alpha = .07f)))
                 error?.let { Text(it, color = Color.White.copy(alpha = .55f), fontSize = 12.sp,
                     modifier = Modifier.padding(start = 8.dp, end = 8.dp, top = 10.dp)) }
