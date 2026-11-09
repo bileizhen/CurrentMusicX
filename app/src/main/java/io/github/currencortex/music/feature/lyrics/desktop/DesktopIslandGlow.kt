@@ -72,8 +72,8 @@ import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
             val strength = .09f + audio * .38f
             val travel = position.floatValue * .31f
             clipPath(outline) {
-                islandGlowPool(left, .5f + travel, .86f, .34f + beat.floatValue * .09f, 1.12f, strength)
-                islandGlowPool(right, .5f - travel, .94f, .39f, .92f + audio * .38f, strength * .8f)
+                islandGlowPool(left, .5f + travel, .5f, .34f + beat.floatValue * .09f, .78f, strength)
+                islandGlowPool(right, .5f - travel, .5f, .39f, .68f + audio * .18f, strength * .8f)
             }
         }
     }
