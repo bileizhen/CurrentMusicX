@@ -14,10 +14,9 @@ data class AboutSection(val title: String, val members: List<AboutMember>)
 object AboutCredits {
     val sections = listOf(
         AboutSection("开发组", listOf(
-            AboutMember("3140014249", "bileizhen", "开发 · 设计 · 维护",
-                detail = "负责 CurrentMusicX 的功能开发、界面设计与日常维护，完善构建、更新和发布流程。\n" +
-                    "接入 Emby 曲库、邮箱与密保登录及原生通行密钥入口，完善一起听房间归档恢复、听歌足迹和管理员面板。\n" +
-                    "完善桌面歌词灵动岛光效与舞台动画，修复 AI 音效高采样率播放卡住、USB 独占模式音量不可调等问题。",
+            AboutMember("3140014249", "bileizhen", "总开发 · 设计 · 维护",
+                detail = "CurrentMusicX 总开发，负责项目整体开发、架构与界面设计。\n" +
+                    "统筹功能迭代与贡献整合，持续维护应用体验、版本发布和项目协作。",
                 githubUrl = "https://github.com/bileizhen"),
             AboutMember("1945826346", "Rcst20", "原项目开发 · 音源与播放适配",
                 detail = "开发 CurrentMusic 原项目，并参与 CurrentMusicX 的音源与播放适配。\n" +
