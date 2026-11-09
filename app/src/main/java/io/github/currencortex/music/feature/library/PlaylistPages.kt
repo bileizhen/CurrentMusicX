@@ -18,6 +18,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -163,6 +165,9 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val room = LocalRoomSongRequest.current
     val editable = vm.editable(state.playlist, account.account?.id ?: 0)
     val removable = vm.removable(state.playlist, account.account?.id ?: 0)
+    val subscribable = vm.subscribable(state.playlist)
+    val subscribed = state.playlist?.nativeSubscribed == true
+    fun subscribe() { library.action("已收藏歌单") { vm.subscribe() } }
     val cover = remember(state.cover, state.songs) {
         state.cover.ifBlank { state.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() }
     }
@@ -325,6 +330,11 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                             if (localMusic != null) PlaylistPill(if (localMusic.allowed) "扫描音乐" else "选择范围", Icons.Default.Refresh,
                                 ::refresh, Modifier.weight(1f).testTag(if (localMusic.allowed) "local_music_refresh" else "local_music_permission"),
                                 enabled = !state.loading && !state.refreshing)
+                            else if (subscribable) PlaylistPill(if (subscribed) "已收藏" else "收藏歌单",
+                                if (subscribed) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                { if (subscribed) onDelete() else subscribe() },
+                                Modifier.weight(1f).testTag("playlist_subscribe"),
+                                enabled = !busy && !state.loading && !state.refreshing)
                             else PlaylistPill("${collectionKind}信息", Icons.Default.Info, { infoOpen = true }, Modifier.weight(1f).testTag("playlist_info"))
                         }
                     }
@@ -414,6 +424,11 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                 importOpen = true
             }, enabled = !state.loading && state.songs.isNotEmpty(),
                 modifier = Modifier.testTag("playlist_import_netease_likes"), chevron = false)
+        }
+        if (subscribable && !subscribed) {
+            MusicDestinationRow("收藏歌单", { menuOpen = false; subscribe() },
+                enabled = !busy && !state.loading && !state.refreshing,
+                modifier = Modifier.testTag("playlist_menu_subscribe"), chevron = false)
         }
         if (editable) {
             MusicDestinationRow("重命名", { menuOpen = false; onRename() }, enabled = !busy, modifier = Modifier.testTag("rename_playlist"), chevron = false)
