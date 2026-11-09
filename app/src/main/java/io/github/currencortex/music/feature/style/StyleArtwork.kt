@@ -37,11 +37,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable internal fun StyleArtwork(cover: String, modifier: Modifier, tint: MutableState<Color?>, pixels: Int = 360,
-    pending: Boolean = false, contentDescription: String = "第一首歌曲封面") {
+    pending: Boolean = false, contentDescription: String = "第一首歌曲封面",
+    onArtworkReady: ((Boolean) -> Unit)? = null) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var loading by remember(cover) { mutableStateOf(cover.isNotBlank()) }
     var failed by remember(cover) { mutableStateOf(cover.isBlank()) }
+    SideEffect { onArtworkReady?.invoke(!loading && !pending) }
     Box(modifier.background(MiuixTheme.colorScheme.onSurface.copy(alpha = .06f)), contentAlignment = Alignment.Center) {
         if (loading || pending) MusicPlaceholder(Modifier.matchParentSize())
         if (failed && !pending) Text("♪", fontSize = 32.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .22f))
