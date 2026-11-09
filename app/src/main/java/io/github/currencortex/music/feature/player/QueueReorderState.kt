@@ -11,6 +11,7 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.isActive
 
@@ -118,13 +119,14 @@ internal class QueueReorderState(val keys: List<String>, private val list: LazyL
 }
 
 @Composable
-internal fun queueReorderGesture(state: QueueReorderState, enabled: Boolean,
+internal fun queueReorderGesture(state: QueueReorderState, enabled: Boolean, horizontalContentPadding: Dp = 0.dp,
     onMove: (Int, Int) -> Unit): Modifier {
     val haptics = LocalHapticFeedback.current
     val density = LocalDensity.current
     val edge = with(density) { 64.dp.toPx() }
     val maximumSpeed = with(density) { 650.dp.toPx() }
     val removeWidth = with(density) { 48.dp.toPx() }
+    val horizontalInset = with(density) { horizontalContentPadding.toPx() }
     val move by rememberUpdatedState(onMove)
     var released by remember(state) { mutableIntStateOf(0) }
     LaunchedEffect(state, enabled, released) {
@@ -145,10 +147,10 @@ internal fun queueReorderGesture(state: QueueReorderState, enabled: Boolean,
         }
     }
     DisposableEffect(state) { onDispose { state.cancel() } }
-    return if (!enabled) Modifier else Modifier.pointerInput(state) {
+    return if (!enabled) Modifier else Modifier.pointerInput(state, horizontalInset, removeWidth) {
         detectDragGesturesAfterLongPress(
             onDragStart = { point ->
-                if (point.x < size.width - removeWidth && state.start(point.y))
+                if (point.x >= horizontalInset && point.x < size.width - horizontalInset - removeWidth && state.start(point.y))
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             },
             onDrag = { change, amount -> if (state.dragged != null) { change.consume(); state.drag(amount.y) } },
