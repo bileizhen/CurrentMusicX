@@ -47,7 +47,8 @@ import kotlinx.coroutines.flow.StateFlow
     togglePlayback: () -> Unit = {}, onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     defaultFpsMode: Boolean = false, noticeOnly: Boolean = false,
     effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = remember { kotlinx.coroutines.flow.MutableStateFlow(null) },
-    installUpdate: () -> Unit = {}) {
+    installUpdate: () -> Unit = {},
+    audioLevel: io.github.currencortex.music.core.media.DockAudioLevel? = null) {
     val recognitionActive by io.github.currencortex.music.feature.recognition.RecognitionDesktopSession.attached.collectAsStateWithLifecycle()
     val recognition by io.github.currencortex.music.feature.recognition.RecognitionDesktopSession.state.collectAsStateWithLifecycle()
     val recognitionOptions by preferences.collectAsStateWithLifecycle()
@@ -155,6 +156,8 @@ import kotlinx.coroutines.flow.StateFlow
             durationMs = player.durationMs.takeIf { it > 0 } ?: player.song?.durationMs ?: 0L, transition = coverTransition,
             coverPlaying = player.showPause, onCoverBounds = onCoverBounds, material = false,
             listenTogether = player.listenTogether,
+            backgroundEffect = if (audioLevel != null && player.song != null) rememberDesktopIslandGlow(
+                player.song?.cover.orEmpty(), songKey, player.playing, audioLevel, motion, active = effectNotice == null) else Modifier,
             onCoverTap = { if (player.song != null && player.canControlPlayback) togglePlayback() }) {
             DesktopIslandDisplay(fpsMode, motion, lyrics = {
                 if (line != null) {
