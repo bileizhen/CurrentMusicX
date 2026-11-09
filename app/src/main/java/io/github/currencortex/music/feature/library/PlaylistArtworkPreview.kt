@@ -3,7 +3,7 @@ package io.github.currencortex.music.feature.library
 import androidx.compose.runtime.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Star
+
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.network.AppResult
 import io.github.currencortex.music.core.network.appResult
@@ -38,7 +38,7 @@ import io.github.currencortex.music.ui.component.nativeui.MusicArtworkPreview
         actions = buildList {
             add(GlassMenuItem("play", "播放全部", MusicIcons.Play, enabled = canPlay, onClick = { onPlay(false) }))
             if (canSubscribe) add(GlassMenuItem("subscribe", if (subscribed) "已收藏" else "收藏",
-                if (subscribed) Icons.Default.Star else Icons.Outlined.Star,
+                if (subscribed) Icons.Default.Star else MusicIcons.Star,
                 enabled = target != null && !busy && binding?.bound == true && binding?.stale == false,
                 keepOpen = true, onClick = {
                     vm.action(if (subscribed) "已取消收藏歌单" else "已收藏歌单") {
