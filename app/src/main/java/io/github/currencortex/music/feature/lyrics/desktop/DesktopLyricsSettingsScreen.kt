@@ -120,7 +120,7 @@ import kotlin.math.roundToInt
             item("style") { SettingsSection("显示样式", MusicIcons.Font) {
                 SettingsOptionsRow("动画效果", options.effect.label, DesktopEffect.entries.map { mode ->
                     SettingsOption("desktop_effect_${mode.name}", mode.label, options.effect == mode,
-                        summary = if (mode == DesktopEffect.PRECISE) "轻柔切换 · 细腻辉光" else "延音辉光 · 微幅上提",
+                        summary = if (mode == DesktopEffect.PRECISE) "轻柔切换 · 细腻辉光" else "延音辉光 · 上提归位",
                         onSelect = { edit { it.copy(effect = mode) } })
                 }, Modifier.testTag("desktop_effect"))
                 SettingsDivider()
