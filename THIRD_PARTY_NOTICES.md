@@ -462,3 +462,26 @@ its license; the combination is conveyed under GPLv3/AGPLv3 section 13. Correspo
 application source and build instructions are available from the configured GitHub
 source link. AMLL is an independent Apple Music-inspired project; neither it nor this
 native style is an Apple product or a claim of complete parity with Apple's software.
+
+## Enhanced LRC parsing and embedded lyric extensions
+
+The LRC parser's syntax/semantic separation and explicit vocal markers reference
+Gramophone by nift4, the Akane Foundation and contributors, GPL-3.0-or-later:
+https://github.com/FoedusProgramme/Gramophone/blob/e6fa468f7a1e3e1c832afbd0dc67ef2966146e96/app/src/main/java/org/akanework/gramophone/logic/utils/SemanticLyrics.kt
+The CurrentMusic implementation uses its existing lyric model, retains only supplied
+word intervals, and bounds repeated-line expansion. The GPL text is bundled at
+`legal/GPL-3.0.txt`.
+
+SpotiFLAC/Mornye's optional LRC annotation format is supported with reference to
+Mornye and contributors, LGPL-3.0, commit
+`45df9860661e9c4e731ef26a60c44b2b5d8cf125`:
+https://github.com/mornyeapp/Mornye/tree/45df9860661e9c4e731ef26a60c44b2b5d8cf125/rust_backend/crates/mobile/src/native_lyrics
+and `rust_backend/crates/core/src/lyrics/lrc.rs` at the same revision. The Kotlin
+adapter decodes `x-romaji`, `x-translation` and `x-romaji-words`, preserves exact
+source timestamps, and does not associate ambiguous simultaneous voices or infer
+word readings. The LGPL text is bundled at `legal/LGPL-3.0.txt`.
+
+These adaptations were made for CurrentMusic in November 2026. Original authors
+retain their copyright. Reference players, their renderers and their runtimes are
+not bundled. Corresponding modified source and build instructions are available
+from this application's configured GitHub source link.

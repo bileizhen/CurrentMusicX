@@ -5,8 +5,6 @@ import kotlinx.serialization.json.*
 
 /** Accepts CurrentMusic's normalized response and upstream raw lyrics without inventing timing. */
 object LyricsParser {
-    private val stamp = Regex("\\[(\\d+):(\\d+(?:\\.\\d+)?)\\]")
-    private val wordStamp = Regex("<(\\d+):(\\d+(?:\\.\\d+)?)>")
     private val yrcLine = Regex("^\\[(\\d+),(\\d+)\\](.*)$")
     private val yrcWord = Regex("\\((\\d+),(\\d+),\\d+\\)([^()]*)")
 
@@ -85,39 +83,7 @@ object LyricsParser {
             obj.string("trans"), obj.string("romanization").ifBlank { obj.string("roma") })
     })
 
-    fun lrc(source: String): LyricsDocument {
-        val offset = Regex("\\[offset:([+-]?\\d+)\\]", RegexOption.IGNORE_CASE).find(source)?.groupValues?.get(1)?.toLongOrNull() ?: 0
-        return finish(source.lineSequence().flatMap { row ->
-            val stamps = stamp.findAll(row).toList()
-            if (stamps.isEmpty()) return@flatMap emptySequence()
-            // Adjacent leading stamps repeat a whole line; text between square stamps
-            // marks word timing, including a final stamp that closes the last word.
-            val bracketWords = stamps.zipWithNext().any { (previous, next) ->
-                row.substring(previous.range.last + 1, next.range.first).isNotBlank()
-            }
-            val wordPattern = if (bracketWords) stamp else wordStamp
-            val rawBody = row.substring(if (bracketWords) stamps.first().range.first else stamps.last().range.last + 1)
-            val body = if (wordPattern.containsMatchIn(rawBody)) rawBody else rawBody.trim()
-            val wordTimes = wordPattern.findAll(body).toList()
-            val text = body.replace(wordPattern, "")
-            (if (bracketWords) stamps.take(1) else stamps).asSequence().map { time ->
-                val start = (millis(time.groupValues[1], time.groupValues[2]) + offset).coerceAtLeast(0)
-                var cursor = wordTimes.firstOrNull()?.range?.first ?: 0
-                val words = wordTimes.mapIndexedNotNull { index, match ->
-                    val token = body.substring(match.range.last + 1, wordTimes.getOrNull(index + 1)?.range?.first ?: body.length)
-                    val begin = millis(match.groupValues[1], match.groupValues[2]) + offset
-                    val end = wordTimes.getOrNull(index + 1)?.let { millis(it.groupValues[1], it.groupValues[2]) + offset }
-                    val at = cursor
-                    cursor += token.length
-                    // Empty/whitespace intervals delimit silence, not fabricated lyric words.
-                    if (token.isBlank() || end == null || end <= begin || begin < 0) null else LyricWord(token, begin, end, at, cursor)
-                }
-                val closing = wordTimes.lastOrNull()?.takeIf { body.substring(it.range.last + 1).isBlank() }
-                    ?.let { millis(it.groupValues[1], it.groupValues[2]) + offset }
-                LyricLine(start, closing ?: 0, text, words)
-            }
-        }.toList())
-    }
+    fun lrc(source: String): LyricsDocument = LrcParser.parse(source)
 
     fun yrc(source: String): LyricsDocument = finish(source.lineSequence().mapNotNull { row ->
         val line = yrcLine.matchEntire(row.trim()) ?: return@mapNotNull null
@@ -135,13 +101,6 @@ object LyricsParser {
         LyricLine(start, start + duration, text.toString(), words)
     }.toList())
 
-    private fun millis(minutes: String, seconds: String): Long {
-        // Decimal timestamps are exact: floating-point truncation turns 01.001 into
-        // 1000 ms and can incorrectly pair distinct original/translation lines.
-        val whole = seconds.substringBefore('.').toLongOrNull() ?: 0
-        val fraction = seconds.substringAfter('.', "").take(3).padEnd(3, '0').toLongOrNull() ?: 0
-        return (minutes.toLongOrNull() ?: 0) * 60000 + whole * 1000 + fraction
-    }
     private fun finish(lines: List<LyricLine>): LyricsDocument {
         val sorted = lines.map { it.withInlineTranslationBlocks() }.filter { it.text.isNotBlank() }
             .distinctBy { it.startTimeMs to it.text }.sortedBy { it.startTimeMs }
