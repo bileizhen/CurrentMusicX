@@ -1,7 +1,10 @@
 package io.github.currencortex.music.feature.player
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.EnterExitState
 import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -13,6 +16,7 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
@@ -61,7 +65,7 @@ internal fun playerCoverArcFrames(outgoing: Boolean, travel: Int, lift: Int) = k
         val travel = with(density) { minOf(64.dp, maxWidth * .22f).roundToPx() }
         val lift = with(density) { minOf(36.dp, maxHeight * .12f).roundToPx() }
         if (motion?.active == true && motion.song != null) {
-            // AnimatedContent retains outgoing faces and retargets interrupted slides/fades.
+            // AnimatedContent retains outgoing faces and retargets the slide, fade and turn together.
             // Leaving this branch immediately cancels motion when the player hides or changes page.
             AnimatedContent(motion.song, Modifier.fillMaxSize(), contentKey = { it.coverMotionKey() },
                 label = "player cover arc", transitionSpec = {
@@ -70,7 +74,21 @@ internal fun playerCoverArcFrames(outgoing: Boolean, travel: Int, lift: Int) = k
                         (slideOut(playerCoverArcFrames(true, travel, lift)) { IntOffset(-travel, 0) } +
                             fadeOut(tween(320, delayMillis = 100))) using SizeTransform(clip = false)
                 }) { song ->
-                MusicCover(song.cover, Modifier.fillMaxSize().then(artworkModifier), pixels, cornerRadius)
+                val turn = transition.animateFloat(
+                    transitionSpec = { tween(COVER_ARC_DURATION, easing = LinearEasing) },
+                    label = "player cover turn") { phase ->
+                    when (phase) {
+                        EnterExitState.PreEnter -> -90f
+                        EnterExitState.Visible -> 0f
+                        EnterExitState.PostExit -> 90f
+                    }
+                }
+                MusicCover(song.cover, Modifier.fillMaxSize().graphicsLayer {
+                    // Turn about the screen's vertical axis, outside the existing record rotation.
+                    // Keep interrupted turns front-facing even if a spring briefly overshoots.
+                    rotationY = turn.value.coerceIn(-90f, 90f)
+                    cameraDistance = 12f * size.maxDimension
+                }.then(artworkModifier), pixels, cornerRadius)
             }
         } else MusicCover(url, Modifier.fillMaxSize().then(artworkModifier), pixels, cornerRadius)
     }
