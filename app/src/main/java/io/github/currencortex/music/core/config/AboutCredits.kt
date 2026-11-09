@@ -30,6 +30,8 @@ object AboutCredits {
                 detail = "修复歌词拖动时的高亮跟随与回弹跳变，改善快速拖动和返回当前演唱行的连续滑移体验。\n" +
                     "为歌词搜索增加命中句及前后文展示、匹配词高亮与缺失上下文补齐，并优化搜索结果布局。",
                 githubUrl = "https://github.com/KelierAndes"),
+            AboutMember("2711058826", "十三", "开发",
+                githubUrl = "https://github.com/WhiteXero"),
         )),
         AboutSection("CDN 组", listOf(
             AboutMember("2536843865", "Hutao_felicity", "CDN · currentmusic.geekertao.com",
