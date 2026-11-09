@@ -71,7 +71,8 @@ import androidx.compose.ui.graphics.Color
                     coverPlaying = playback.showPause,
                     listenTogether = playback.listenTogether,
                     backgroundEffect = if (playback.song != null) rememberDesktopIslandGlow(
-                        playback.song?.cover.orEmpty(), songKey, playback.playing, container.dockAudioLevel, motion) else Modifier,
+                        playback.song?.cover.orEmpty(), songKey, playback.playing, container.dockAudioLevel, motion,
+                        playbackRate = playback.playbackSpeed) else Modifier,
                     onCoverTap = { if (playback.song != null && playback.canControlPlayback) container.playerController.toggle() }) {
                     DesktopIslandDisplay(fpsMode, motion, lyrics = {
                         if (line != null) {
