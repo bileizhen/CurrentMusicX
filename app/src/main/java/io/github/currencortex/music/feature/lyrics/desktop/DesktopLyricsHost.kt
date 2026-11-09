@@ -43,7 +43,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private val effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = MutableStateFlow(null),
     private val installUpdate: () -> Unit = {},
     private val pageHidden: StateFlow<Boolean> = MutableStateFlow(false),
-    private val musicSettings: StateFlow<io.github.currencortex.music.data.settings.MusicSettings> = MutableStateFlow(io.github.currencortex.music.data.settings.MusicSettings())) : AutoCloseable {
+    private val musicSettings: StateFlow<io.github.currencortex.music.data.settings.MusicSettings> = MutableStateFlow(io.github.currencortex.music.data.settings.MusicSettings()),
+    private val audioLevel: io.github.currencortex.music.core.media.DockAudioLevel? = null) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val visual = if (Build.VERSION.SDK_INT >= 30) context.createDisplayContext(context.getSystemService(DisplayManager::class.java).getDisplay(Display.DEFAULT_DISPLAY))
         .createWindowContext(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, null) else context
@@ -158,7 +159,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                     io.github.currencortex.music.feature.lyrics.ui.LocalLyricsFont provides lyricFont) {
                 Box(Modifier.musicRefreshRate(config.refreshRate), propagateMinConstraints = true) {
                 val inApp by appForeground.collectAsState()
-                DesktopLyricsSurface(lyrics, playback, preferences.state, effectNotices = effectNotices, installUpdate = installUpdate, noticeOnly = inApp,
+                DesktopLyricsSurface(lyrics, playback, preferences.state, audioLevel = audioLevel, effectNotices = effectNotices, installUpdate = installUpdate, noticeOnly = inApp,
                 lock = { scope.launch { preferences.edit { it.copy(locked = true) } } },
                 close = { scope.launch { preferences.edit { it.copy(enabled = false) } } }, settings = {
                     context.startActivity(settingsIntent(context))
