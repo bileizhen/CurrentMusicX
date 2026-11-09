@@ -36,10 +36,17 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
         }
         // Local metadata belongs to this exact recording and works without an online reference.
         // Manual imports above remain authoritative. Read afresh so edited file tags are visible.
+        val issues = mutableListOf<LyricsIssue>()
+        fun issue(code: LyricsErrorCode, detail: String) { issues.add(LyricsIssue(code, detail)); log("$code: $detail") }
+        var localFailure: String? = null
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL) {
             val local = try { localLyrics?.invoke(song) }
             catch (e: CancellationException) { throw e }
-            catch (e: Exception) { log("Local lyrics: ${e.javaClass.simpleName}"); null }
+            catch (e: Exception) {
+                localFailure = if (e is EmbeddedLyricsDecodeException) "本地内嵌歌词格式暂不支持" else "本地内嵌歌词暂时无法读取"
+                issue(LyricsErrorCode.PARSE_ERROR, "$localFailure (${e.javaClass.simpleName})")
+                null
+            }
             local?.takeIf { it.document.lines.isNotEmpty() }?.let {
                 return@withLock LyricsResult(it.document, origin = it.origin, sourceDocument = it.document)
             }
@@ -50,8 +57,6 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
             LyricsOrigin("Emby", "emby") else if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
             LyricsOrigin("Navidrome", "navidrome") else selected?.origin
         val memoryKey = (selected?.identity.orEmpty() + listOf(selected?.automatic == true, SongLyricsStore.identity(song))) to keys
-        val issues = mutableListOf<LyricsIssue>()
-        fun issue(code: LyricsErrorCode, detail: String) { issues.add(LyricsIssue(code, detail)); log("$code: $detail") }
         fun remember(document: LyricsDocument, origin: LyricsOrigin? = selectedOrigin,
             source: LyricsDocument? = null, alignment: LyricsTimingAlignment? = null,
             expiresAtMillis: Long? = null): LyricsResult {
@@ -74,7 +79,7 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
             issue(LyricsErrorCode.NETWORK_ERROR, "Automatic matching: ${e.javaClass.simpleName}")
             null
         }
-        fun unavailable() = LyricsResult(error = if (automaticFailed) "歌词暂时无法读取，请稍后重试" else "暂无歌词",
+        fun unavailable() = LyricsResult(error = localFailure ?: if (automaticFailed) "歌词暂时无法读取，请稍后重试" else "暂无歌词",
             issues = issues.toList())
         // Automatic selection is a fresh comparison on every load. A previous
         // provider/cache result must not take precedence over the current winner.
