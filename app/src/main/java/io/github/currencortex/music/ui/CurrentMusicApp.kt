@@ -243,6 +243,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val nativeTogether by container.listenTogether.state.collectAsStateWithLifecycle()
     val tabsState = rememberSaveableStateHolder()
     var backStack by rememberSaveable(stateSaver = NavigationStackSaver) { mutableStateOf(listOf(ROOT.toString())) }
+    var listenInvitationUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var listenInvitationId by rememberSaveable { mutableStateOf<String?>(null) }
     var miniQueueOpen by rememberSaveable { mutableStateOf(false) }
     val playlistPage = isPlaylistRoute(backStack.last())
     val systemBarDensity = LocalDensity.current
@@ -432,6 +434,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         selected = HOME_TAB
                     }
                     is io.github.currencortex.music.core.links.MusicWebLink.Page -> navigateLibrary(target.route)
+                    is io.github.currencortex.music.core.links.MusicWebLink.ListenTogether -> {
+                        listenInvitationUrl = target.invitation.shareUrl()
+                        listenInvitationId = request.id
+                        navigateLibrary("room/invitation")
+                    }
                     is io.github.currencortex.music.core.links.MusicWebLink.Song -> {
                         val song = container.musicRepository.detail(target.id)
                         if (container.playerController.state.value.mode != PlayerMode.LOCAL) {
@@ -706,6 +713,16 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     val vm: RoomViewModel = viewModel(factory = viewModelFactory { RoomViewModel(container) })
                     RoomScreen(vm, ::navigateBack, { navigateLibrary("room/search") }, { navigateTo(PLAYER) }, { roomDialogOpen = it },
                         onBinding = { navigateLibrary("user/binding") })
+                }
+                entry("room/invitation") {
+                    key(listenInvitationId) {
+                        io.github.currencortex.music.ui.component.nativeui.SettingsUiScope {
+                            io.github.currencortex.music.feature.room.NeteaseListenTogetherScreen(container,
+                                onBack = ::navigateBack, onSearch = { navigateLibrary("room/search") },
+                                onPlayer = { navigateTo(PLAYER) }, onBinding = { navigateLibrary("user/binding") },
+                                onDialogActive = { roomDialogOpen = it }, initialInvitation = listenInvitationUrl)
+                        }
+                    }
                 }
                 entry(APPEARANCE.toString()) {
                     Box(Modifier.fillMaxSize().navigationBarsPadding()) {
