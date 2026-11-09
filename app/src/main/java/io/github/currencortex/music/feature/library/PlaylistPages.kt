@@ -19,7 +19,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.Star
+
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -326,7 +326,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                             if (localMusic != null) PlaylistPill("扫描范围", Icons.Default.Search,
                                 localMusic.chooseScope, Modifier.weight(1f).testTag("local_music_scope"))
                             else if (subscribable) PlaylistPill(if (subscribed) "已收藏" else "收藏歌单",
-                                if (subscribed) Icons.Default.Star else Icons.Outlined.Star,
+                                if (subscribed) Icons.Default.Star else MusicIcons.Star,
                                 { if (subscribed) onDelete() else subscribe() },
                                 Modifier.weight(1f).testTag("playlist_subscribe"),
                                 enabled = !busy && !state.loading && !state.refreshing)
