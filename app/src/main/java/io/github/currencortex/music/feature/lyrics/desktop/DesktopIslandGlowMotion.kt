@@ -41,7 +41,8 @@ internal class DesktopIslandGlowMotion {
             return
         }
         // Fixed maximum substep keeps rebounds stable on both 60/120 Hz screens and dropped frames.
-        val motionSeconds = dt * speed / .75f
+        // Half the original island pace; keep the same relative response to the music.
+        val motionSeconds = dt * speed / 1.5f
         val steps = ceil(motionSeconds / (1f / 120f)).toInt().coerceAtLeast(1)
         val step = motionSeconds / steps
         repeat(steps) {
