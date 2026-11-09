@@ -58,11 +58,52 @@
             android:foregroundServiceType="microphone|mediaProjection" android:stopWithTask="true" />
         <activity
             android:name=".MainActivity"
+            android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- Site owners must publish common.handle_all_urls for the release certificate. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:host="music.20110208.xyz" />
+                <data android:host="cm.bileizhen.top" />
+                <data android:host="currentmusic.geekertao.com" />
+                <data android:host="music.ctcehs.com" />
+                <data android:path="/" />
+                <data android:path="/app" />
+                <data android:pathPrefix="/app/" />
+            </intent-filter>
+            <!-- Third-party domains require the user's approval in Android link settings. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:host="music.163.com" />
+                <data android:host="y.music.163.com" />
+                <data android:path="/" />
+                <data android:pathPrefix="/song" />
+                <data android:pathPrefix="/playlist" />
+                <data android:pathPrefix="/album" />
+                <data android:pathPrefix="/artist" />
+                <data android:pathPrefix="/mv" />
+                <data android:pathPrefix="/m/" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" />
+                <data android:scheme="http" />
+                <data android:host="163cn.tv" />
             </intent-filter>
         </activity>
     </application>

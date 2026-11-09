@@ -32,6 +32,7 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
                    updateTransfer: io.github.currencortex.music.core.update.UpdateTransferState = io.github.currencortex.music.core.update.UpdateTransferState(),
                    onNavigateFrom: ((PageContainerOrigin, () -> Unit) -> Unit)? = null,
                    onBack: (() -> Unit)? = null, onSupport: () -> Unit = {}) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     CompositionLocalProvider(LocalPageContainerSource provides (onNavigateFrom ?: LocalPageContainerSource.current)) {
     SettingsUiScope {
     SettingsScrollLayout(Modifier.fillMaxSize(), topBar = {
@@ -83,6 +84,11 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
         }
         item {
             SettingsListSection("应用") {
+                SettingsPreference("默认打开链接", "在系统中允许打开网易云和 CurrentMusic 网站链接", Modifier.testTag("open_app_links"),
+                    leading = { SettingIcon(MusicIcons.Info) },
+                    trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp)) },
+                    onClick = { io.github.currencortex.music.ui.util.openAppLinkSettings(context) })
+                SettingsDivider(52.dp)
                 SettingsPagePreference("存储空间", "缓存与下载占用", MusicIcons.Storage,"open_storage",onStorage)
                 SettingsDivider(52.dp)
                 SettingsPreference("导出日志", "保存或分享脱敏诊断文件", Modifier.testTag("open_logs"),
