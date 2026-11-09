@@ -81,6 +81,15 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
         }
         return ids.mapNotNull(found::get)
     }
+    suspend fun playlistInfo(id: Long): Playlist {
+        val expected = session()
+        val uid = owner()
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+        val response = request("playlist/detail", mapOf("id" to "$id", "s" to "0"), expected)
+        val info = (response["playlist"] as? JsonObject)?.toPlaylist(uid) ?: throw ApiException(ErrorKind.Parse)
+        if (info.id != id) throw ApiException(ErrorKind.Parse)
+        return info
+    }
     suspend fun playlist(id: Long, fresh: Boolean = false): Playlist = withContext(Dispatchers.Default) {
         val expectedOwner = session()
         val uid = owner(fresh)

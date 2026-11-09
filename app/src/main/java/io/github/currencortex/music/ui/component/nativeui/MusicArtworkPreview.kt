@@ -142,7 +142,8 @@ import kotlin.math.abs
             submenu = item
             submenuOpen = true
             item.onEnter()
-        } else currentClose(item.onClick)
+        } else if (item.keepOpen) item.onClick()
+        else currentClose(item.onClick)
     }
     val currentActivate by rememberUpdatedState<(GlassMenuItem) -> Unit>(::activate)
     fun hit(position: Offset): GlassMenuItem? {
