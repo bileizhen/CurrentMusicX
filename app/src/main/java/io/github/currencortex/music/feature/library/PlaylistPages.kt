@@ -168,8 +168,10 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val subscribable = vm.subscribable(state.playlist)
     val subscribed = state.playlist?.nativeSubscribed == true
     fun subscribe() { library.action("已收藏歌单") { vm.subscribe() } }
-    val cover = remember(state.cover, state.songs) {
-        state.cover.ifBlank { state.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() }
+    val sharedMotion = LocalPlaylistContainerMotion.current
+    val cover = remember(state.cover, state.songs, sharedMotion) {
+        state.cover.ifBlank { sharedMotion?.cover.orEmpty() }
+            .ifBlank { state.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() }
     }
     val tint = rememberStyleTint(cover)
     val surface = MiuixTheme.colorScheme.background
@@ -253,7 +255,8 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     } else null
     val albumPage = vm.route.startsWith("lib/album/")
     val collectionKind = if (albumPage) "专辑" else "歌单"
-    val title = state.title.ifBlank { if (state.loading) "正在加载$collectionKind" else collectionKind }
+    val title = state.title.ifBlank { sharedMotion?.title.orEmpty() }
+        .ifBlank { if (state.loading) "正在加载$collectionKind" else collectionKind }
     val origin = when {
         albumPage -> state.description.lineSequence().firstOrNull { it.isNotBlank() } ?: "专辑"
         localMusic != null -> "本地曲库 · ${state.songs.size} 首歌曲"
@@ -311,10 +314,13 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                     Column(Modifier.fillMaxWidth().onSizeChanged { heroHeightPx = it.height }
                         .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp).testTag("playlist_hero")) {
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                            StyleArtwork(cover, Modifier.size(128.dp).clip(RoundedCornerShape(16.dp)).testTag("playlist_cover"), tint,
-                                pixels = 420, pending = state.loading && state.songs.isEmpty(), contentDescription = "歌单封面")
+                            StyleArtwork(cover, Modifier.size(128.dp).then(playlistMotionElement(sharedMotion, 0, destination = true))
+                                .clip(RoundedCornerShape(16.dp)).testTag("playlist_cover"), tint,
+                                pixels = 420, pending = state.loading && cover.isBlank(), contentDescription = "歌单封面",
+                                onArtworkReady = { sharedMotion?.artworkReady = it })
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Text(title, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
+                                Text(title, modifier = playlistMotionElement(sharedMotion, 1, destination = true),
+                                    fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, color = Color.White,
                                     maxLines = 3, overflow = TextOverflow.Ellipsis)
                                 Text(heroOrigin, fontSize = 12.sp, color = Color.White.copy(alpha = .72f), maxLines = 2)
                                 if (heroDescription.isNotBlank()) Text(heroDescription,

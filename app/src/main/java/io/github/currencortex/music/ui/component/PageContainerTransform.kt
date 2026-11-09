@@ -32,7 +32,8 @@ internal val LocalPageContainerSettled = compositionLocalOf { true }
 /** A live source coordinate is converted into the destination's local space, including UI scaling. */
 data class PageContainerOrigin(val coordinates: LayoutCoordinates, val color: Color,
     val title: String, val summary: String, val icon: androidx.compose.ui.graphics.vector.ImageVector? = MusicIcons.Download,
-    val currentColor: State<Color>? = null, val sourceLayer: GraphicsLayer? = null)
+    val currentColor: State<Color>? = null, val sourceLayer: GraphicsLayer? = null,
+    val playlistMotion: PlaylistContainerMotion? = null)
 
 internal data class PageContainerFrame(val progress: Float, val bounds: Rect, val radius: Float)
 internal val PageContainerGeometry = SemanticsPropertyKey<PageContainerFrame>("PageContainerGeometry")
@@ -57,6 +58,11 @@ private class ContainerClip(private val frame: PageContainerFrame) : Shape {
     SideEffect { report(presented) }
     DisposableEffect(Unit) { onDispose { report(false) } }
     var destination by remember { mutableStateOf<LayoutCoordinates?>(null) }
+    val playlistMotion = origin?.playlistMotion
+    SideEffect { playlistMotion?.let { it.progress = progress; it.viewport = destination } }
+    DisposableEffect(playlistMotion) {
+        onDispose { playlistMotion?.let { it.progress = null; it.viewport = null } }
+    }
     var lastOrigin by remember { mutableStateOf<CapturedOrigin?>(null) }
     var captured by remember(visible) { mutableStateOf<CapturedOrigin?>(null) }
     // Freeze each direction independently. Appearance can resize/recolour the retained source
@@ -74,7 +80,7 @@ private class ContainerClip(private val frame: PageContainerFrame) : Shape {
     } ?: if (!visible) lastOrigin else null
     SideEffect { if (captured == null) { captured = source; if(visible)lastOrigin = source } }
     val density = LocalDensity.current
-    val radius = with(density) { 26.dp.toPx() }
+    val radius = with(density) { (if (playlistMotion != null) 20.dp else 26.dp).toPx() }
     fun frame(size: Size): PageContainerFrame {
         val p = progress.value
         val end = Rect(Offset.Zero, size)
@@ -92,7 +98,13 @@ private class ContainerClip(private val frame: PageContainerFrame) : Shape {
                     destination?.size?.height?.toFloat() ?: 1f)) }
                 .graphicsLayer {
                     clip = true; shape = ContainerClip(frame(size))
-                    alpha = if (source == null) progress.value else 1f
+                    alpha = when {
+                        // The real card owns the zero-progress frame, even if the
+                        // navigation pop/disposal has not reached this node yet.
+                        playlistMotion != null && progress.value <= 0f -> 0f
+                        source == null -> progress.value
+                        else -> 1f
+                    }
                 }
                 .pointerInput(Unit) {
                     awaitEachGesture {
@@ -106,7 +118,8 @@ private class ContainerClip(private val frame: PageContainerFrame) : Shape {
                 Box(Modifier.fillMaxSize().graphicsLayer {
                     alpha = if (source == null) 1f else ((progress.value - .12f) / .5f).coerceIn(0f, 1f)
                 }) {
-                    CompositionLocalProvider(LocalPageContainerSettled provides (parentSettled && settled)) { content() }
+                    CompositionLocalProvider(LocalPageContainerSettled provides (parentSettled && settled),
+                        LocalPlaylistContainerMotion provides playlistMotion) { content() }
                 }
                 source?.let { entry -> entry.layer?.let { layer ->
                     // Reuse the real row's glyphs and layout. A reconstructed ArrowPreference
@@ -126,6 +139,8 @@ private class ContainerClip(private val frame: PageContainerFrame) : Shape {
                     }
                 } }
             }
+            // Shared artwork may bow outside the expanding container's clipping bounds.
+            playlistMotion?.let { PlaylistMotionOverlay(it) }
         }
     }
     // Consume repeated back presses until the source card has finished returning.
