@@ -157,7 +157,8 @@ import kotlinx.coroutines.flow.StateFlow
             coverPlaying = player.showPause, onCoverBounds = onCoverBounds, material = false,
             listenTogether = player.listenTogether,
             backgroundEffect = if (audioLevel != null && player.song != null) rememberDesktopIslandGlow(
-                player.song?.cover.orEmpty(), songKey, player.playing, audioLevel, motion, active = effectNotice == null) else Modifier,
+                player.song?.cover.orEmpty(), songKey, player.playing, audioLevel, motion,
+                active = effectNotice == null, playbackRate = player.playbackSpeed) else Modifier,
             onCoverTap = { if (player.song != null && player.canControlPlayback) togglePlayback() }) {
             DesktopIslandDisplay(fpsMode, motion, lyrics = {
                 if (line != null) {

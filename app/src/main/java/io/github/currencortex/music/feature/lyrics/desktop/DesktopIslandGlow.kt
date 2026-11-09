@@ -23,7 +23,7 @@ import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
 
 /** Draw behind the content without clipping the flying cover or changing the island's hit bounds. */
 @Composable internal fun rememberDesktopIslandGlow(cover: String, songKey: String?, playing: Boolean,
-    meter: DockAudioLevel, motion: Boolean, active: Boolean = true): Modifier {
+    meter: DockAudioLevel, motion: Boolean, active: Boolean = true, playbackRate: Float = 1f): Modifier {
     val lifecycle by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     // Overlay WindowOwner is STARTED while visible; it has no Activity resume event.
     val visible = active && lifecycle.isAtLeast(Lifecycle.State.STARTED)
@@ -34,6 +34,7 @@ import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
     val position = remember { mutableFloatStateOf(0f) }
     val energy = remember { mutableFloatStateOf(0f) }
     val beat = remember { mutableFloatStateOf(0f) }
+    val rate by rememberUpdatedState(playbackRate)
     DisposableEffect(meter, running, playing) {
         val subscription = if (running && playing) meter.acquire() else null
         onDispose { subscription?.close() }
@@ -53,7 +54,7 @@ import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
                 val sample = meter.sample.takeIf {
                     playing && it.timestampNanos >= started && System.nanoTime() - it.timestampNanos in 0L..500_000_000L
                 }
-                dynamics.update(sample, seconds)
+                dynamics.update(sample, seconds, rate, playing)
                 position.floatValue = dynamics.position
                 energy.floatValue = dynamics.energy
                 beat.floatValue = dynamics.beat
