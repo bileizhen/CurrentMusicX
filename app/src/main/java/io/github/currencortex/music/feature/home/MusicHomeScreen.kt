@@ -195,7 +195,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
             onDismiss = { artworkPreview = null })
     }
     playlistPreview?.let { (playlist, bounds) ->
-        PlaylistArtworkPreview(playlist, bounds, canPlay = playlistPlayback.enabled,
+        PlaylistArtworkPreview(vm, playlist, bounds, canPlay = playlistPlayback.enabled,
             onPlay = { shuffle -> playlistPlayback.play(playlist, shuffle) },
             onOpen = { navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}") },
             onDismiss = { playlistPreview = null })

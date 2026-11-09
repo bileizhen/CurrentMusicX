@@ -18,8 +18,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -125,7 +125,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     }
     playlistPreview?.let { (playlist, bounds) ->
-        PlaylistArtworkPreview(playlist, bounds, canPlay = playlistPlayback.enabled,
+        PlaylistArtworkPreview(vm, playlist, bounds, canPlay = playlistPlayback.enabled,
             onPlay = { shuffle -> playlistPlayback.play(playlist, shuffle) },
             onOpen = { navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}") },
             onDismiss = { playlistPreview = null })
@@ -325,16 +325,18 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                         Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             if (localMusic != null) PlaylistPill("扫描范围", Icons.Default.Search,
                                 localMusic.chooseScope, Modifier.weight(1f).testTag("local_music_scope"))
+                            else if (subscribable) PlaylistPill(if (subscribed) "已收藏" else "收藏歌单",
+                                if (subscribed) Icons.Default.Star else Icons.Outlined.Star,
+                                { if (subscribed) onDelete() else subscribe() },
+                                Modifier.weight(1f).testTag("playlist_subscribe"),
+                                enabled = !busy && !state.loading && !state.refreshing)
                             else PlaylistPill("分享", Icons.Default.Share, ::share, Modifier.weight(1f).testTag("playlist_share"), enabled = state.title.isNotBlank())
                             PlaylistPill("随机播放", Icons.Default.PlayArrow, { start(true) }, Modifier.weight(1f).testTag("playlist_shuffle"), enabled = canPlay && songs.isNotEmpty(), emphasized = true)
                             if (localMusic != null) PlaylistPill(if (localMusic.allowed) "扫描音乐" else "选择范围", Icons.Default.Refresh,
                                 ::refresh, Modifier.weight(1f).testTag(if (localMusic.allowed) "local_music_refresh" else "local_music_permission"),
                                 enabled = !state.loading && !state.refreshing)
-                            else if (subscribable) PlaylistPill(if (subscribed) "已收藏" else "收藏歌单",
-                                if (subscribed) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                                { if (subscribed) onDelete() else subscribe() },
-                                Modifier.weight(1f).testTag("playlist_subscribe"),
-                                enabled = !busy && !state.loading && !state.refreshing)
+                            else if (subscribable) PlaylistPill("分享", Icons.Default.Share, ::share,
+                                Modifier.weight(1f).testTag("playlist_share"), enabled = state.title.isNotBlank())
                             else PlaylistPill("${collectionKind}信息", Icons.Default.Info, { infoOpen = true }, Modifier.weight(1f).testTag("playlist_info"))
                         }
                     }
