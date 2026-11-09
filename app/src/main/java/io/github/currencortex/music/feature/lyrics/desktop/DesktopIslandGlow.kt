@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.currentStateAsState
@@ -65,6 +66,9 @@ import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
         val outline = Path().apply { addRoundRect(RoundRect(0f, 0f, size.width, size.height, CornerRadius(size.height / 2f))) }
         val left = islandGlowBrush(primary.value)
         val right = islandGlowBrush(secondary.value)
+        // A taller lyric capsule needs a broader bright region, not just a stretched
+        // narrow core between its two lines. Keep compact pills at their existing spread.
+        val verticalSpread = (size.height / 32.dp.toPx()).coerceIn(1f, 1.6f)
         onDrawBehind {
             if (!visible || size.width <= 0f || size.height <= 0f) return@onDrawBehind
             val audio = (energy.floatValue * .72f + beat.floatValue * .28f).coerceIn(0f, 1f)
@@ -72,8 +76,8 @@ import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
             val strength = .09f + audio * .38f
             val travel = position.floatValue * .31f
             clipPath(outline) {
-                islandGlowPool(left, .5f + travel, .5f, .34f + beat.floatValue * .09f, .78f, strength)
-                islandGlowPool(right, .5f - travel, .5f, .39f, .68f + audio * .18f, strength * .8f)
+                islandGlowPool(left, .5f + travel, .5f, .34f + beat.floatValue * .09f, .78f * verticalSpread, strength)
+                islandGlowPool(right, .5f - travel, .5f, .39f, (.68f + audio * .18f) * verticalSpread, strength * .8f)
             }
         }
     }
@@ -86,6 +90,6 @@ private fun islandGlowBrush(color: Color) = Brush.radialGradient(
 private fun DrawScope.islandGlowPool(brush: Brush, x: Float, y: Float, width: Float, height: Float, opacity: Float) {
     withTransform({
         translate(size.width * x, size.height * y)
-        scale(size.width * width, size.height * height, pivot = Offset.Zero)
+        scale(maxOf(size.width * width, size.height * 1.5f), size.height * height, pivot = Offset.Zero)
     }) { drawCircle(brush, radius = 1f, center = Offset.Zero, alpha = opacity) }
 }
