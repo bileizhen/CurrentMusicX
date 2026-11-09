@@ -12,7 +12,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
@@ -181,36 +180,34 @@ private fun PlayerState.miniTransport() =
                 progressBarRangeInfo = if (loading) ProgressBarRangeInfo.Indeterminate else ProgressBarRangeInfo(progress, 0f..1f)
                 stateDescription = if (loading) "正在加载音乐" else "播放进度"
             }, enabled) { ink ->
-                val stroke = Stroke(1.6.dp.toPx())
-                drawCircle(ink.copy(alpha = .2f), radius = size.minDimension * .45f, style = stroke)
-                val buffered = if (currentMatches) playback.value.bufferedProgress(duration) else 0f
-                if (buffered > 0f) drawArc(ink.copy(alpha = .42f), startAngle = -90f,
-                    sweepAngle = 360f * buffered, useCenter = false,
-                    topLeft = Offset(size.width * .05f, size.height * .05f), size = Size(size.width * .9f, size.height * .9f),
-                    style = stroke)
-                if (loading || progress > 0f) drawArc(ink, startAngle = if (loading) loadingAngle.value - 90f else -90f,
-                    sweepAngle = if (loading) 100f else 360f * progress, useCenter = false,
-                    topLeft = Offset(size.width * .05f, size.height * .05f), size = Size(size.width * .9f, size.height * .9f),
-                    style = Stroke(1.6.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
-                if (state.showPause) {
-                    drawRect(ink, Offset(size.width * .34f, size.height * .29f), Size(size.width * .1f, size.height * .42f))
-                    drawRect(ink, Offset(size.width * .56f, size.height * .29f), Size(size.width * .1f, size.height * .42f))
-                } else drawPath(Path().apply { moveTo(size.width * .4f, size.height * .28f); lineTo(size.width * .7f, size.height * .5f); lineTo(size.width * .4f, size.height * .72f); close() }, ink)
+                Canvas(Modifier.size(25.dp)) {
+                    val stroke = Stroke(1.6.dp.toPx())
+                    drawCircle(ink.copy(alpha = .2f), radius = size.minDimension * .45f, style = stroke)
+                    val buffered = if (currentMatches) playback.value.bufferedProgress(duration) else 0f
+                    if (buffered > 0f) drawArc(ink.copy(alpha = .42f), startAngle = -90f,
+                        sweepAngle = 360f * buffered, useCenter = false,
+                        topLeft = Offset(size.width * .05f, size.height * .05f), size = Size(size.width * .9f, size.height * .9f),
+                        style = stroke)
+                    if (loading || progress > 0f) drawArc(ink, startAngle = if (loading) loadingAngle.value - 90f else -90f,
+                        sweepAngle = if (loading) 100f else 360f * progress, useCenter = false,
+                        topLeft = Offset(size.width * .05f, size.height * .05f), size = Size(size.width * .9f, size.height * .9f),
+                        style = Stroke(1.6.dp.toPx(), cap = androidx.compose.ui.graphics.StrokeCap.Round))
+                }
+                PlayerSharedControlIcon(PlayerSharedControl.TOGGLE, ink, Modifier.size(18.dp),
+                    playing = state.showPause, mini = true)
             }
             MiniControl("播放队列", onQueue, Modifier.testTag("mini_queue")) { ink ->
-                val line = 1.8.dp.toPx()
-                listOf(.25f, .5f, .75f).forEach { y -> drawLine(ink, Offset(size.width * .42f, size.height * y), Offset(size.width * .9f, size.height * y), line) }
-                drawPath(Path().apply { moveTo(size.width * .06f, size.height * .15f); lineTo(size.width * .32f, size.height * .3f); lineTo(size.width * .06f, size.height * .45f); close() }, ink)
+                PlayerSharedControlIcon(PlayerSharedControl.QUEUE, ink, Modifier.size(24.dp), mini = true)
             }
         }
     }
 }
 
 @Composable private fun MiniControl(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
-    draw: androidx.compose.ui.graphics.drawscope.DrawScope.(androidx.compose.ui.graphics.Color) -> Unit) {
+    content: @Composable BoxScope.(androidx.compose.ui.graphics.Color) -> Unit) {
     val ink = MiuixTheme.colorScheme.onSurface.copy(alpha = if (enabled) .9f else .3f)
     Box(modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .semantics { contentDescription = label; if (!enabled) disabled() }, contentAlignment = Alignment.Center) {
-        Canvas(Modifier.size(25.dp)) { draw(ink) }
+        content(ink)
     }
 }

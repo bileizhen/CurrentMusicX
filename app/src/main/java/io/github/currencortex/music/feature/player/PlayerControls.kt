@@ -255,10 +255,7 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
         }) {
             val ink = Color.White.copy(alpha = if (enabled) 1f else .28f)
             if (direction == 0) {
-                Image(painterResource(R.drawable.player_symbol_play_arrow_fill1), null,
-                    Modifier.fillMaxSize().graphicsLayer { alpha = 1 - glyph.value }, colorFilter = ColorFilter.tint(ink))
-                Image(painterResource(R.drawable.player_symbol_pause_fill1), null,
-                    Modifier.fillMaxSize().graphicsLayer { alpha = glyph.value }, colorFilter = ColorFilter.tint(ink))
+                PlayerSharedControlIcon(PlayerSharedControl.TOGGLE, ink, Modifier.fillMaxSize(), playing = playing)
             } else Image(painterResource(if (direction < 0) R.drawable.player_symbol_skip_previous_fill1 else R.drawable.player_symbol_skip_next_fill1),
                 null, Modifier.fillMaxSize(), colorFilter = ColorFilter.tint(ink))
         }
@@ -289,6 +286,8 @@ internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, 
         val iconModifier = Modifier.size(24.dp).graphicsLayer { scaleX = scale.value; scaleY = scaleX }
         if (loading) Canvas(iconModifier) {
             drawArc(ink, rotation, 270f, false, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+        } else if (icon == PlayerIcon.QUEUE) {
+            PlayerSharedControlIcon(PlayerSharedControl.QUEUE, ink, iconModifier)
         } else Image(painterResource(when (icon) {
             PlayerIcon.COLLAPSE -> R.drawable.player_symbol_keyboard_arrow_down
             PlayerIcon.MORE -> R.drawable.player_symbol_more_horiz

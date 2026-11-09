@@ -85,6 +85,7 @@ internal fun playerSheetElementArc(start: Rect, end: Rect, progress: Float, anch
 /** Destination coordinates remain full-size; the sheet translation is removed for the flight. */
 internal class PlayerArtworkTransition(val progress: () -> Float) {
     val text = PlayerSheetTextTransition(progress)
+    val controls = PlayerSheetControlsTransition(progress)
     var origin by mutableStateOf<PlayerArtworkOrigin?>(null)
     var target by mutableStateOf<LayoutCoordinates?>(null)
     var destination by mutableStateOf<(() -> Rect?)?>(null)
@@ -186,6 +187,7 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
         }
         PlayerArtworkFlight(artwork, artworkUrl, viewport)
         PlayerSheetSongTextFlight(artwork.text, viewport)
+        PlayerSheetControlFlights(artwork.controls, viewport)
         // The shrinking player still owns its full touch layer. Keep the mini's opening
         // area above it so the next press reverses the close immediately, before release
         // (the old layer may otherwise disappear between that press and release).
@@ -256,7 +258,7 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
             shape = SheetClip(frame.bounds.width, frame.bounds.height, frame.radius); clip = true
         }) {
         // Measure in the content coordinate space, inside the moving graphics layer.
-        Box(Modifier.fillMaxSize().onGloballyPositioned { artwork?.sheet = it; artwork?.text?.sheet = it }) {
+        Box(Modifier.fillMaxSize().onGloballyPositioned { artwork?.sheet = it; artwork?.text?.sheet = it; artwork?.controls?.sheet = it }) {
             CompositionLocalProvider(LocalPlayerSheetOffset provides { frame.bounds.topLeft }) { content() }
         }
     }
