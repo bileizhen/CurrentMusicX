@@ -134,7 +134,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
                         { navigate("lib/ncmplaylist/${playlist.id}") },
                         Modifier.width(artworkCardWidth).testTag("home_recommended_playlist_${playlist.id}"),
                         onLongClick = { bounds -> playlistPreview = playlist to bounds },
-                        longClickLabel = "预览歌单与操作")
+                        longClickLabel = "预览歌单与操作", playlistTransition = true)
                 }
             } }
             if (!recommendedPlaylistsLoading && (home.recommendedPlaylists.isEmpty() || home.errors["每日推荐歌单"] != null)) item(key = "recommended-playlists-status") {
@@ -167,7 +167,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
                             navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}")
                         }, Modifier.width(artworkCardWidth).testTag("home_playlist_${playlist.source}_${playlist.id}"),
                             onLongClick = { bounds -> playlistPreview = playlist to bounds },
-                            longClickLabel = "预览歌单与操作")
+                            longClickLabel = "预览歌单与操作", playlistTransition = true)
                 }
             } }
             if ((!account.loading || direct) && "我的歌单" !in home.pendingSections && home.playlists.isEmpty() && home.errors["我的歌单"] == null)
