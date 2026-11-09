@@ -149,7 +149,8 @@ private val NavigationStackSaver = androidx.compose.runtime.saveable.listSaver<L
 )
 
 @Composable
-fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, launchWindowReady: Boolean = true, openDesktopRequest: Int = 0, openRecognitionRequest: Int = 0) {
+fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, launchWindowReady: Boolean = true, openDesktopRequest: Int = 0, openRecognitionRequest: Int = 0,
+    webLinkRequest: io.github.currencortex.music.core.links.WebLinkRequest? = null, onWebLinkConsumed: (String) -> Unit = {}) {
     val documentRequests = rememberDocumentRequests(container)
     var embyNavigation by remember { mutableStateOf<io.github.currencortex.music.feature.emby.EmbyNavigation?>(null) }
     var launchFinished by rememberSaveable { mutableStateOf(!animateLaunch) }
@@ -400,6 +401,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             else launchUpdates()
         }
         var pendingPlay by remember { mutableStateOf<(() -> Unit)?>(null) }
+        var pendingWebLinkId by remember { mutableStateOf<String?>(null) }
         var explained by rememberSaveable { mutableStateOf(false) }
         val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             val action = pendingPlay
@@ -411,6 +413,51 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 ContextCompat.checkSelfPermission(context, android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)
                 pendingPlay = action
             else action()
+        }
+        val webLinkResolver = remember { io.github.currencortex.music.core.links.MusicWebLinkResolver() }
+        LaunchedEffect(webLinkRequest?.id, launchFinished, startupRouted) {
+            val request = webLinkRequest ?: return@LaunchedEffect
+            if (!launchFinished || !startupRouted) return@LaunchedEffect
+            if (pendingWebLinkId != null) {
+                pendingPlay = null
+                pendingWebLinkId = null
+            }
+            // Startup routing must finish first, so a cold link cannot be overwritten by restoration.
+            container.sessionRestored.await()
+            try {
+                when (val target = webLinkResolver.resolve(request.url)) {
+                    io.github.currencortex.music.core.links.MusicWebLink.Home -> {
+                        playerSheetMotion = PlayerSheetMotion.NONE
+                        backStack = listOf(ROOT.toString())
+                        selected = HOME_TAB
+                    }
+                    is io.github.currencortex.music.core.links.MusicWebLink.Page -> navigateLibrary(target.route)
+                    is io.github.currencortex.music.core.links.MusicWebLink.Song -> {
+                        val song = container.musicRepository.detail(target.id)
+                        if (container.playerController.state.value.mode != PlayerMode.LOCAL) {
+                            libraryVm.message.value = "请先退出一起听，再打开歌曲链接"
+                        } else {
+                            pendingWebLinkId = request.id
+                            playWithPermission {
+                                pendingWebLinkId = null
+                                if (container.playerController.state.value.mode == PlayerMode.LOCAL) {
+                                    container.playerController.playSong(song)
+                                    navigateTo(PLAYER)
+                                } else libraryVm.message.value = "请先退出一起听，再打开歌曲链接"
+                                onWebLinkConsumed(request.id)
+                            }
+                            // Keep the request through recreation until the notification prompt is answered.
+                            return@LaunchedEffect
+                        }
+                    }
+                    else -> libraryVm.message.value = "暂不支持此链接，请在浏览器中打开"
+                }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                libraryVm.message.value = "链接打开失败，请检查网络后重试"
+            }
+            onWebLinkConsumed(request.id)
         }
         fun requestSong(song: Song) {
             if (song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME, io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.LOCAL)) { libraryVm.message.value = "本地或私有曲库歌曲不能提交到一起听房间"; return }
@@ -1011,6 +1058,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         if (pendingPlay != null) MusicDialog("后台播放通知", onDismiss = {
             pendingPlay = null
+            pendingWebLinkId?.let(onWebLinkConsumed)
+            pendingWebLinkId = null
         }) {
             Text("允许通知后，可从通知栏控制播放；锁屏和蓝牙媒体控制也由播放服务提供。")
             MusicDialogButton("允许通知并播放", onClick = {
