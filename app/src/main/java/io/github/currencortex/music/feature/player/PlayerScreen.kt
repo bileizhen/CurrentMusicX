@@ -179,7 +179,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         val widePlayer = maxWidth > maxHeight
         val immersiveCover = appearance.playerCoverStyle == io.github.currencortex.music.data.settings.PlayerCoverStyle.IMMERSIVE &&
             !(roaming.active && roaming.choice.code == "PUZZLE_MODE_RCMD")
-        val coverFlip = rememberPlayerCoverFlip(queue.current, enabled = expanded && !immersiveCover &&
+        val coverMotion = rememberPlayerCoverMotion(queue.current, enabled = expanded && !immersiveCover &&
             !(roaming.active && roaming.choice.code == "PUZZLE_MODE_RCMD") &&
             (widePlayer || pager.currentPage == 0) && !pager.isScrollInProgress &&
             queueMotion.progress == 0f && overlay == PlayerOverlay.NONE && !sidePage.active)
@@ -271,7 +271,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         // The artwork viewport uses light ink; dialogs below inherit the app appearance.
         MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
         CompositionLocalProvider(LocalIndication provides indication) {
-        CompositionLocalProvider(LocalPlayerPagerArtwork provides pagerArtwork, LocalPlayerCoverFlip provides coverFlip) {
+        CompositionLocalProvider(LocalPlayerPagerArtwork provides pagerArtwork, LocalPlayerCoverMotion provides coverMotion) {
         Box(Modifier.fillMaxSize().onGloballyPositioned { pagerArtwork.root = it; pagerArtwork.updateBounds() }) {
         if (immersiveCover && !widePlayer) PlayerPagerArtwork(pagerArtwork, queue.current, drawText = false)
         Box(Modifier.fillMaxSize().graphicsLayer { translationY = -size.height * queueMotion.progress }
