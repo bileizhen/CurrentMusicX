@@ -51,7 +51,9 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
     val shape = RoundedCornerShape(50)
     val reveal = presentation.coerceIn(0f, 1f)
     val coverTransition = transition ?: rememberIslandCoverTransition(song, motion)
-    BoxWithConstraints(modifier.padding(2.dp).testTag("desktop_island")) {
+    // Only a self-painted pill needs room for its shadow. A shared morph shell already
+    // owns that room; insetting its content would cut the glow off inside the shell.
+    BoxWithConstraints(modifier.padding(if (material) 2.dp else 0.dp).testTag("desktop_island")) {
         val fullMetadata = (metadata ?: 120.dp).coerceIn(28.dp, maxOf(28.dp, maxWidth - 10.dp))
         val infoWidth = (fullMetadata - 28.dp) * (1f - reveal)
         // A single-line cue has height independent of available width. Measure its
