@@ -354,6 +354,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     // the retained dock mid-transition can move the cover and panel suddenly.
                     artworkTransition.origin = miniArtworkOrigin?.invoke()
                     artworkTransition.text.captureOrigin()
+                    artworkTransition.controls.captureOrigin()
                 }
                 playerSheetMotion = PlayerSheetMotion.OPEN
             }
@@ -470,7 +471,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             LocalSongDownload provides { song -> downloadSongJson = io.github.currencortex.music.core.network.ApiJson.encodeToString(Song.serializer(), song) },
             LocalRoomSongRequest provides roomRequest,
             LocalPlayerSheetDrag provides playerDrag, LocalPlayerArtworkRotation provides artworkRotation,
-            LocalPlayerSheetText provides artworkTransition.text, LocalMiniQueueTransition provides miniQueueTransition,
+            LocalPlayerSheetText provides artworkTransition.text, LocalPlayerSheetControls provides artworkTransition.controls,
+            LocalMiniQueueTransition provides miniQueueTransition,
             LocalRecordFlightTarget provides { miniArtworkOrigin?.invoke()?.bounds }) {
         BoxWithConstraints(Modifier.fillMaxSize().musicDialogBackdropSource().testTag("music_window")
             .onGloballyPositioned { navigationBounds = it.boundsInRoot() }) {
