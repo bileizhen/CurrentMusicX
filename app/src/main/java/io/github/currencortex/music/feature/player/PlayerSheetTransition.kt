@@ -100,6 +100,7 @@ internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtwo
     transitionTarget: Boolean = true, pagerRole: PlayerPagerArtworkRole? = null) {
     val transfer = LocalPlayerArtworkTransition.current
     val pager = LocalPlayerPagerArtwork.current
+    val coverMotion = LocalPlayerCoverMotion.current.takeIf { pagerRole == null || pagerRole == PlayerPagerArtworkRole.COVER }
     val rotation = LocalPlayerArtworkRotation.current
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     DisposableEffect(transfer, transitionTarget) { onDispose { if (transfer?.target === coordinates) transfer?.target = null } }
@@ -125,10 +126,11 @@ internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtwo
         }.semantics {
             if (pagerRole != null && pager?.ready == true) hideFromAccessibility()
         }) {
-        MusicCover(url, Modifier.matchParentSize().graphicsLayer {
+        PlayerSongCover(url, Modifier.matchParentSize().graphicsLayer {
             alpha = if (transfer?.moving == true || (pagerRole != null && pager?.ready == true)) 0f else 1f
+        }, artworkModifier = Modifier.graphicsLayer {
             rotationZ = if (pagerRole == PlayerPagerArtworkRole.QUEUE) 0f else rotation?.value ?: 0f
-        }.then(if (pagerRole == PlayerPagerArtworkRole.QUEUE) Modifier else Modifier.playerCoverShadow()).clip(if (pagerRole == PlayerPagerArtworkRole.QUEUE) RoundedCornerShape(8.dp) else CircleShape), pixels,
+        }.then(if (pagerRole == PlayerPagerArtworkRole.QUEUE) Modifier else Modifier.playerCoverShadow()).clip(if (pagerRole == PlayerPagerArtworkRole.QUEUE) RoundedCornerShape(8.dp) else CircleShape), motion = coverMotion, pixels = pixels,
             cornerRadius = if (pagerRole == PlayerPagerArtworkRole.QUEUE) 8.dp else 0.dp)
     }
 }
