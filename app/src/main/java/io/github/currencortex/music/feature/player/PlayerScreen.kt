@@ -107,6 +107,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val artistLink = Modifier.testTag("player_song_artist").clickable(
         enabled = songNavigation.artistsEnabled, role = Role.Button,
         onClickLabel = "查看歌手") { songNavigation.openArtists(false) }
+    val albumLink = Modifier.testTag("player_song_title").clickable(
+        enabled = songNavigation.albumEnabled && !songNavigation.albumLoading, role = Role.Button,
+        onClickLabel = "查看所在专辑", onClick = songNavigation.openAlbum)
     val dismiss = {
         queueGestureJob?.cancel()
         queueGestureJob = null
@@ -296,7 +299,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                     snapAnimationSpec = tween(240, easing = LinearOutSlowInEasing))) { page ->
                                 Box(Modifier.fillMaxSize().then(if (pager.currentPage != page && !pager.isScrollInProgress)
                                     Modifier.clearAndSetSemantics {} else Modifier)) {
-                                    if (page == 0) WideControlsContent(vm, onToggle, functions, artistLink)
+                                    if (page == 0) WideControlsContent(vm, onToggle, functions, artistLink, albumLink)
                                     else LyricsPanel(vm, Modifier.fillMaxSize()
                                         .onGloballyPositioned { lyricsCoordinates = it },
                                         // Rasterizing the lyric rail competes with the mini-cover flight.
@@ -328,7 +331,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                                 PlayerArtwork(queue.current?.cover.orEmpty(), Modifier.size(46.dp).testTag("player_lyrics_cover"), pixels = 800,
                                     pagerRole = PlayerPagerArtworkRole.LYRICS)
                                 Column(Modifier.weight(1f).padding(start = 12.dp)) {
-                                    PlayerSongText(queue.current?.name ?: "还没有选择歌曲", role = PlayerPagerArtworkRole.LYRICS, color = Color.White,
+                                    PlayerSongText(queue.current?.name ?: "还没有选择歌曲", albumLink, role = PlayerPagerArtworkRole.LYRICS, color = Color.White,
                                         fontWeight = FontWeight.SemiBold, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                     PlayerSongText(queue.current?.artists.orEmpty(), artistLink, role = PlayerPagerArtworkRole.LYRICS, subtitle = true, fontSize = 13.sp, color = Color.White.copy(alpha = .55f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 }
@@ -339,7 +342,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         } else CoverContent(vm, Modifier.fillMaxSize(), transitionTarget = pager.currentPage == 0,
                             active = pager.currentPage == 0 || pager.isScrollInProgress,
                             pagerRole = PlayerPagerArtworkRole.COVER,
-                            immersive = immersiveCover, artistLink = artistLink,
+                            immersive = immersiveCover, artistLink = artistLink, albumLink = albumLink,
                             onPreviewCoordinates = { previewCoordinates = it })
                         }
                     }
@@ -488,7 +491,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 
 @Composable private fun CoverContent(vm: PlayerViewModel, modifier: Modifier, transitionTarget: Boolean = true,
     active: Boolean = true, pagerRole: PlayerPagerArtworkRole? = null, showPreview: Boolean = true,
-    immersive: Boolean = false, artistLink: Modifier = Modifier,
+    immersive: Boolean = false, artistLink: Modifier = Modifier, albumLink: Modifier = Modifier,
     onPreviewCoordinates: (LayoutCoordinates) -> Unit = {}) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     val song = queue.current
@@ -510,7 +513,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             } else PlayerArtwork(song?.cover.orEmpty(), Modifier.size(coverSize).testTag("player_cover"),
                 transitionTarget = transitionTarget, pagerRole = pagerRole)
             Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 8.dp, top = 16.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                PlayerSongText(song?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"), role = pagerRole, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                PlayerSongText(song?.name ?: "还没有选择歌曲", albumLink, role = pagerRole, color = Color.White, fontSize = 25.sp, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 PlayerSongText(song?.artists.orEmpty(), artistLink, role = pagerRole, subtitle = true, fontSize = 18.sp, color = Color.White.copy(alpha = .55f), maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
             if (showPreview) CoverLyricPreview(vm, Modifier.fillMaxWidth().padding(horizontal = 8.dp)
@@ -537,14 +540,14 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 }
 
 @Composable private fun WideControlsContent(vm: PlayerViewModel, onToggle: () -> Unit,
-    functions: @Composable () -> Unit, artistLink: Modifier) {
+    functions: @Composable () -> Unit, artistLink: Modifier, albumLink: Modifier) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     BoxWithConstraints(Modifier.fillMaxSize().testTag("player_wide_controls")) {
         val compact = maxHeight < 360.dp
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 8.dp),
             verticalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 24.dp, Alignment.CenterVertically)) {
             Column(Modifier.fillMaxWidth().padding(horizontal = 8.dp)) {
-                Text(queue.current?.name ?: "还没有选择歌曲", Modifier.testTag("player_song_title"),
+                Text(queue.current?.name ?: "还没有选择歌曲", albumLink,
                     color = Color.White, fontSize = 22.sp, fontWeight = FontWeight.Bold,
                     maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text(queue.current?.artists.orEmpty(), Modifier.padding(top = 6.dp).then(artistLink),
