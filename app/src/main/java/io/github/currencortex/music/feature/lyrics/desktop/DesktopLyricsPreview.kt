@@ -49,7 +49,7 @@ import androidx.compose.ui.graphics.Color
     val font = options.displayFontSize
     val context = LocalContext.current
     val maximum = remember(context) { if (Build.VERSION.SDK_INT >= 31) context.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch else .8f }
-    val alpha = desktopWindowAlpha(options.displayOpacity, options.locked, maximum)
+    val alpha = desktopWindowAlpha(options.displayOpacity, true, maximum)
     val size = rememberIslandSize(playback.song, if (fpsMode) "000.0 FPS" else line?.text.orEmpty(), font, fpsMode, false,
         line?.translation?.takeIf { options.translation && !fpsMode }, listeningPair = playback.listenTogether != null)
     val reveal = rememberIslandPresentation(songKey, fpsMode || (!content.loading && content.matches(playback.song)), motion).value
@@ -64,12 +64,17 @@ import androidx.compose.ui.graphics.Color
             }
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
                 .background(Brush.linearGradient(listOf(Color(0xFF303646), Color(0xFF161A25)))).padding(12.dp), contentAlignment = Alignment.Center) {
-                DesktopIslandFrame(playback.song, Modifier.islandAnimatedWidth(width).fillMaxWidth().padding(vertical = desktopIslandDrawingSpace)
-                    .graphicsLayer { this.alpha = alpha }.pointerInput(Unit) { detectTapGestures(onTap = { toggle() }) },
+                DesktopIslandEffectTransition(null, Modifier.padding(vertical = desktopIslandDrawingSpace)
+                    .graphicsLayer { this.alpha = alpha }) {
+                DesktopIslandFrame(playback.song, Modifier.islandAnimatedWidth(width).fillMaxWidth()
+                    .pointerInput(Unit) { detectTapGestures(onTap = { toggle() }) },
                     metadata = size.metadata, presentation = reveal, coverPosition = clock, motion = motion,
                     durationMs = playback.durationMs.takeIf { it > 0 } ?: playback.song?.durationMs ?: 0L,
-                    coverPlaying = playback.showPause,
+                    coverPlaying = playback.showPause, material = false,
                     listenTogether = playback.listenTogether,
+                    backgroundEffect = if (playback.song != null) rememberDesktopIslandGlow(
+                        playback.song?.cover.orEmpty(), songKey, playback.playing, container.dockAudioLevel, motion,
+                        playbackRate = playback.playbackSpeed) else Modifier,
                     onCoverTap = { if (playback.song != null && playback.canControlPlayback) container.playerController.toggle() }) {
                     DesktopIslandDisplay(fpsMode, motion, lyrics = {
                         if (line != null) {
@@ -79,6 +84,7 @@ import androidx.compose.ui.graphics.Color
                             }
                         }
                     }, fps = { DesktopIslandFrameRate(frameRate.rate, font, Color(options.textColor.toInt())) })
+                }
                 }
             }
             Text("可先调整样式，再开启悬浮窗。", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)

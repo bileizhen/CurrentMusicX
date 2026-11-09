@@ -7,6 +7,17 @@ internal const val LYRIC_GLYPH_RISE_MS = 160L
 internal fun lyricGlyphLift(now: Long, start: Long): Float =
     ((now - start).toFloat() / LYRIC_GLYPH_RISE_MS).coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
 
+internal const val LYRIC_GLYPH_RETURN_MS = 240L
+/** Desktop stage: rise during the word, then settle on its original baseline after it ends. */
+internal fun lyricGlyphLiftAndReturn(now: Long, start: Long, end: Long): Float {
+    if (end <= start || now <= start) return 0f
+    fun smooth(value: Float) = value.coerceIn(0f, 1f).let { it * it * (3f - 2f * it) }
+    // Even a short syllable gets a complete eased rise instead of a one-frame jump.
+    val returnAt = maxOf(end, start + LYRIC_GLYPH_RISE_MS)
+    return if (now < returnAt) smooth((now - start).toFloat() / LYRIC_GLYPH_RISE_MS)
+        else 1f - smooth((now - returnAt).toFloat() / LYRIC_GLYPH_RETURN_MS)
+}
+
 internal const val LYRIC_PERSPECTIVE_ANGLE = -32f
 
 private val vowelGroups = Regex("[aeiouy]+", RegexOption.IGNORE_CASE)
