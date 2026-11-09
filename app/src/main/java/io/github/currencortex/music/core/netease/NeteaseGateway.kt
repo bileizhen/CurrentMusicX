@@ -387,9 +387,12 @@ class NeteaseGateway(val transport: NeteaseTransport) {
             "playlist/name/update" -> return official("/api/playlist/update/name", data("id" to id, "name" to arg("name")), expected = expected, authenticated = true)
             "playlist/delete" -> return official("/api/playlist/remove", data("ids" to "[$id]"), web = true, expected = expected, authenticated = true)
             "playlist/subscribe" -> {
-                // Only cancellation is exposed by the library's removal action.
-                require(arg("t") == "2")
-                return official("/api/playlist/unsubscribe", data("id" to id), expected = expected, authenticated = true)
+                val action = when (arg("t")) {
+                    "1" -> "subscribe"
+                    "2" -> "unsubscribe"
+                    else -> throw IllegalArgumentException("Invalid playlist subscription action")
+                }
+                return official("/api/playlist/$action", data("id" to id), expected = expected, authenticated = true)
             }
         }
         // Unmapped routes fail immediately; music requests never fall back to CurrentMusic.

@@ -295,6 +295,17 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
             } == true
         else it.editable(accountId)
     } == true
+    fun subscribable(playlist: Playlist?) = playlist?.let {
+        it.source == "netease" && !it.nativeOwned && !it.nativeLiked &&
+            container.bindingRepository.state.value?.let { binding ->
+                binding.bound && !binding.stale && (binding.profile?.uid ?: 0L) > 0
+            } == true
+    } == true
+    suspend fun subscribe() {
+        val playlist = state.value.playlist ?: throw ApiException(ErrorKind.NotFound)
+        if (!subscribable(playlist)) throw ApiException(ErrorKind.Forbidden)
+        container.neteaseLibrary.subscribe(playlist.id)
+    }
     suspend fun rename(name: String) {
         if (state.value.playlist?.source == "netease") container.neteaseLibrary.rename(id, name)
         else container.libraryRepository.rename(id, name)
