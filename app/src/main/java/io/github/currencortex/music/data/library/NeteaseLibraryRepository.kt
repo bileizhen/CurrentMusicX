@@ -81,6 +81,15 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
         }
         return ids.mapNotNull(found::get)
     }
+    suspend fun playlistInfo(id: Long): Playlist {
+        val expected = session()
+        val uid = owner()
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+        val response = request("playlist/detail", mapOf("id" to "$id", "s" to "0"), expected)
+        val info = (response["playlist"] as? JsonObject)?.toPlaylist(uid) ?: throw ApiException(ErrorKind.Parse)
+        if (info.id != id) throw ApiException(ErrorKind.Parse)
+        return info
+    }
     suspend fun playlist(id: Long, fresh: Boolean = false): Playlist = withContext(Dispatchers.Default) {
         val expectedOwner = session()
         val uid = owner(fresh)
@@ -165,6 +174,21 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
     suspend fun delete(id: Long) = writeMutex.withLock {
         val expected = session(); editable(id, expected)
         request("playlist/delete", mapOf("id" to "$id"), expected); invalidate()
+    }
+    suspend fun subscribe(id: Long) = writeMutex.withLock {
+        require(id > 0)
+        val expected = session()
+        val uid = owner(fresh = true)
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+        val response = request("playlist/detail", mapOf("id" to "$id", "s" to "0"), expected)
+        val target = (response["playlist"] as? JsonObject)?.toPlaylist(uid)
+            ?: throw ApiException(ErrorKind.Parse)
+        if (target.id != id) throw ApiException(ErrorKind.Parse)
+        if (target.nativeOwned || target.nativeLiked) throw ApiException(ErrorKind.Forbidden)
+        if (!target.nativeSubscribed) {
+            request("playlist/subscribe", mapOf("id" to "$id", "t" to "1"), expected)
+        }
+        invalidate()
     }
     suspend fun unsubscribe(id: Long) = writeMutex.withLock {
         val expected = session()

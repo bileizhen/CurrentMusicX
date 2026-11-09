@@ -18,6 +18,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Star
+
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
@@ -123,7 +125,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     }
     playlistPreview?.let { (playlist, bounds) ->
-        PlaylistArtworkPreview(playlist, bounds, canPlay = playlistPlayback.enabled,
+        PlaylistArtworkPreview(vm, playlist, bounds, canPlay = playlistPlayback.enabled,
             onPlay = { shuffle -> playlistPlayback.play(playlist, shuffle) },
             onOpen = { navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}") },
             onDismiss = { playlistPreview = null })
@@ -163,6 +165,9 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val room = LocalRoomSongRequest.current
     val editable = vm.editable(state.playlist, account.account?.id ?: 0)
     val removable = vm.removable(state.playlist, account.account?.id ?: 0)
+    val subscribable = vm.subscribable(state.playlist)
+    val subscribed = state.playlist?.nativeSubscribed == true
+    fun subscribe() { library.action("已收藏歌单") { vm.subscribe() } }
     val cover = remember(state.cover, state.songs) {
         state.cover.ifBlank { state.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() }
     }
@@ -320,11 +325,18 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                         Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             if (localMusic != null) PlaylistPill("扫描范围", Icons.Default.Search,
                                 localMusic.chooseScope, Modifier.weight(1f).testTag("local_music_scope"))
+                            else if (subscribable) PlaylistPill(if (subscribed) "已收藏" else "收藏歌单",
+                                if (subscribed) Icons.Default.Star else MusicIcons.Star,
+                                { if (subscribed) onDelete() else subscribe() },
+                                Modifier.weight(1f).testTag("playlist_subscribe"),
+                                enabled = !busy && !state.loading && !state.refreshing)
                             else PlaylistPill("分享", Icons.Default.Share, ::share, Modifier.weight(1f).testTag("playlist_share"), enabled = state.title.isNotBlank())
                             PlaylistPill("随机播放", Icons.Default.PlayArrow, { start(true) }, Modifier.weight(1f).testTag("playlist_shuffle"), enabled = canPlay && songs.isNotEmpty(), emphasized = true)
                             if (localMusic != null) PlaylistPill(if (localMusic.allowed) "扫描音乐" else "选择范围", Icons.Default.Refresh,
                                 ::refresh, Modifier.weight(1f).testTag(if (localMusic.allowed) "local_music_refresh" else "local_music_permission"),
                                 enabled = !state.loading && !state.refreshing)
+                            else if (subscribable) PlaylistPill("分享", Icons.Default.Share, ::share,
+                                Modifier.weight(1f).testTag("playlist_share"), enabled = state.title.isNotBlank())
                             else PlaylistPill("${collectionKind}信息", Icons.Default.Info, { infoOpen = true }, Modifier.weight(1f).testTag("playlist_info"))
                         }
                     }
@@ -414,6 +426,11 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                 importOpen = true
             }, enabled = !state.loading && state.songs.isNotEmpty(),
                 modifier = Modifier.testTag("playlist_import_netease_likes"), chevron = false)
+        }
+        if (subscribable && !subscribed) {
+            MusicDestinationRow("收藏歌单", { menuOpen = false; subscribe() },
+                enabled = !busy && !state.loading && !state.refreshing,
+                modifier = Modifier.testTag("playlist_menu_subscribe"), chevron = false)
         }
         if (editable) {
             MusicDestinationRow("重命名", { menuOpen = false; onRename() }, enabled = !busy, modifier = Modifier.testTag("rename_playlist"), chevron = false)
