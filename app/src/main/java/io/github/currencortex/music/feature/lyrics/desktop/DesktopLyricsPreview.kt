@@ -49,7 +49,7 @@ import androidx.compose.ui.graphics.Color
     val font = options.displayFontSize
     val context = LocalContext.current
     val maximum = remember(context) { if (Build.VERSION.SDK_INT >= 31) context.getSystemService(InputManager::class.java).maximumObscuringOpacityForTouch else .8f }
-    val alpha = desktopWindowAlpha(options.displayOpacity, options.locked, maximum)
+    val alpha = desktopWindowAlpha(options.displayOpacity, true, maximum)
     val size = rememberIslandSize(playback.song, if (fpsMode) "000.0 FPS" else line?.text.orEmpty(), font, fpsMode, false,
         line?.translation?.takeIf { options.translation && !fpsMode }, listeningPair = playback.listenTogether != null)
     val reveal = rememberIslandPresentation(songKey, fpsMode || (!content.loading && content.matches(playback.song)), motion).value
