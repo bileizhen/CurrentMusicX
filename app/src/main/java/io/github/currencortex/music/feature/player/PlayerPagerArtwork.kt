@@ -240,7 +240,8 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
     }
     val width = transfer.cover!!.size.width
     if (width <= 0) return
-    MusicCover(song?.cover.orEmpty(), Modifier.requiredSize(with(density) { width.toDp() }).testTag("player_pager_artwork")
+    val flip = LocalPlayerCoverFlip.current
+    MusicCover(flip?.cover ?: song?.cover.orEmpty(), Modifier.requiredSize(with(density) { width.toDp() }).testTag("player_pager_artwork")
         .playerMotionDiagnostics {
             geometry.value?.let { this[PlayerPagerArtworkGeometry] = it.copy(rotation = rotation?.value ?: 0f) }
             this[CoverRotation] = rotation?.value ?: 0f
@@ -252,7 +253,7 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
             translationX = (frame?.bounds?.left ?: 0f) + transfer.paneOffset.x
             translationY = (frame?.bounds?.top ?: 0f) + transfer.paneOffset.y
             scaleX = (frame?.bounds?.width ?: 0f) / width; scaleY = scaleX
-        }.playerCoverShadow() {
+        }.playerCoverFlip(flip).playerCoverShadow() {
             1f - if (transfer.queueReady) transfer.queueProgress().coerceIn(0f, 1f) else 0f
         }.graphicsLayer {
             val frame = geometry.value
