@@ -4,6 +4,7 @@
 
 - 网易云 `music.163.com`、`y.music.163.com` 的歌曲、歌单、专辑、歌手、MV；支持 `/#/song?id=…`、`/song?id=…`、`/m/song?id=…` 等形式。
 - `163cn.tv` 短链接：匿名请求，最多跟随 5 次 HTTP 重定向，逐跳检查域名；不执行网页脚本，不访问任意跳转目标。
+- 网易云一起听邀请：`https://st.music.163.com/listen-together/share/index.html?roomId=…&inviterId=…`，以及重定向到该地址的 `163cn.tv` 短链接。打开“双人一起听”并预填邀请，用户确认后加入；未登录时先登录，已在其他会话时先退出。`st.music.163.com` 也需要用户在系统默认打开设置中允许。
 - CurrentMusic 四个内置站点的 `/app/#/song/…`、`/app/#/ncmpl/…`、`/app/#/pl/…`、`/app/#/album/…`、`/app/#/artist/…`、`/app/#/mv/…`，以及首页。站点根目录的同类 hash 链接也受支持。
 
 歌曲链接读取歌曲信息后播放并展开播放器；歌单、专辑、歌手和 MV 打开对应详情页。链接不会登录、修改服务器或自动加入房间；一起听期间不替换当前歌曲。未支持的路由显示提示。
@@ -41,5 +42,6 @@ adb shell pm get-app-links com.bileizhen.currentmusic
 - `https://y.music.163.com/m/album?id=32311`
 - `https://music.20110208.xyz/app/#/song/347230`
 - `https://cm.bileizhen.top/app/#/ncmpl/3778678`
+- 使用仍有效的网易云一起听邀请测试：确认打开后仅预填、不自动加入；登录后返回、旋转、连续打开不同邀请仍显示正确内容。正在其他会话时退出后仍保留新邀请；过期邀请的失败由现有加入流程提示。
 
 指定包名的 `adb shell am start -a android.intent.action.VIEW -d 'URL' -p com.bileizhen.currentmusic` 只能验证应用处理流程，不能证明系统默认分发或域名验证通过。真机验收需额外使用不指定包名的链接打开操作。
