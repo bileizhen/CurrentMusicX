@@ -94,10 +94,8 @@ import kotlin.math.roundToInt
         action.connecting -> "正在连接播放服务，可关闭以取消"
         !permitted -> "首次开启需要授予悬浮窗权限"
         !options.enabled -> "已关闭，样式与位置会保留"
-        status.visible && options.locked -> "已锁定 · 可点击切换与左右滑动切歌"
-        status.visible -> "点击切换歌词与帧率 · 左右切歌 · 长按编辑"
+        status.visible -> "点击切换歌词与帧率 · 左右滑动切歌"
         playback.song == null -> "已开启 · 播放音乐后同步显示"
-        options.locked -> "已开启 · 返回桌面显示，窗口已锁定"
         else -> "已开启 · 返回桌面显示居中灵动岛"
     }
 
@@ -122,7 +120,7 @@ import kotlin.math.roundToInt
             item("style") { SettingsSection("显示样式", MusicIcons.Font) {
                 SettingsOptionsRow("动画效果", options.effect.label, DesktopEffect.entries.map { mode ->
                     SettingsOption("desktop_effect_${mode.name}", mode.label, options.effect == mode,
-                        summary = if (mode == DesktopEffect.PRECISE) "轻柔切换 · 细腻辉光" else "延音辉光 · 微幅上提",
+                        summary = if (mode == DesktopEffect.PRECISE) "轻柔切换 · 细腻辉光" else "延音辉光 · 上提归位",
                         onSelect = { edit { it.copy(effect = mode) } })
                 }, Modifier.testTag("desktop_effect"))
                 SettingsDivider()
@@ -139,7 +137,7 @@ import kotlin.math.roundToInt
                 DesktopSlider("不透明度", "${(opacity * 100).roundToInt()}%", opacity, .35f..1f, "desktop_opacity",
                     { opacity = (it * 100).roundToInt() / 100f }, { saveOpacity(opacity) },
                     { value -> opacity = value; saveOpacity(value) })
-                if (options.enabled && (options.locked || !status.editing) && status.alpha > 0 && options.displayOpacity > status.alpha + .005f)
+                if (options.enabled && status.alpha > 0 && options.displayOpacity > status.alpha + .005f)
                     SettingsHint("触摸穿透时，实际不透明度上限为 ${(status.alpha * 100).roundToInt()}%。")
             } }
             item("glow") { SettingsSection("辉光", MusicIcons.Sun) {
@@ -170,9 +168,6 @@ import kotlin.math.roundToInt
                     reset = { islandHeight = DESKTOP_ISLAND_HEIGHT; saveIslandHeight(islandHeight) },
                     resetVisible = islandHeight != DESKTOP_ISLAND_HEIGHT, resetTag = "desktop_island_height_reset")
                 SettingsHint("0% 屏幕顶部 · 100% 屏幕底部")
-                SettingsDivider()
-                SettingsSwitch("锁定窗口", options.locked, { value -> edit { it.copy(locked = value) } },
-                    Modifier.testTag("desktop_lock"), enabled = ready && options.enabled, summary = "固定位置，保留切换与切歌手势")
             } }
             item("sync") { SettingsSection("歌词同步", MusicIcons.Update) {
                 val range = maxOf(3000f, abs(offset))

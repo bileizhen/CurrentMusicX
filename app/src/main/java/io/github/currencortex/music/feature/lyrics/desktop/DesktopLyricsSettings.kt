@@ -12,16 +12,17 @@ internal const val DESKTOP_DEFAULT_GLOW_COLOR: Long = 0xFFE0E0E0L
 internal const val DESKTOP_DEFAULT_FONT_SIZE: Float = 20f
 internal const val DESKTOP_ISLAND_FONT_SIZE: Float = 14f
 internal const val DESKTOP_ISLAND_HEIGHT: Float = .05f
-data class DesktopLyricsSettings(val enabled: Boolean = false, val locked: Boolean = false,
+data class DesktopLyricsSettings(val enabled: Boolean = false, val locked: Boolean = true,
     val effect: DesktopEffect = DesktopEffect.PRECISE, val appearance: DesktopAppearance = DesktopAppearance.ISLAND,
     val translation: Boolean = true, val fontSize: Float = DESKTOP_DEFAULT_FONT_SIZE, val opacity: Float = .85f,
     val offsetMs: Long = 0, val x: Float = .5f, val y: Float = .2f, val snapEdges: Boolean = false,
     val glowEnabled: Boolean = true, val glowStrength: Float = 1f, val glowSpread: Float = 1f,
     val textColor: Long = 0xFFFFFFFFL, val glowColor: Long = DESKTOP_DEFAULT_GLOW_COLOR, val islandFontSize: Float = DESKTOP_ISLAND_FONT_SIZE, val islandY: Float = DESKTOP_ISLAND_HEIGHT, val islandOpacity: Float = .85f) {
+    // locked is a legacy payload slot; the island always uses locked interactions.
     // fontSize/opacity/x/y/snapEdges are legacy payload slots, never active controls.
     val displayOpacity: Float get() = islandOpacity
     val displayFontSize: Float get() = islandFontSize
-    fun normalized() = copy(islandY = islandY.finite(DESKTOP_ISLAND_HEIGHT).coerceIn(0f, 1f), islandFontSize = islandFontSize.finite(DESKTOP_ISLAND_FONT_SIZE).coerceIn(12f, 24f), fontSize = fontSize.finite(DESKTOP_DEFAULT_FONT_SIZE).coerceIn(18f, 38f),
+    fun normalized() = copy(locked = true, islandY = islandY.finite(DESKTOP_ISLAND_HEIGHT).coerceIn(0f, 1f), islandFontSize = islandFontSize.finite(DESKTOP_ISLAND_FONT_SIZE).coerceIn(12f, 24f), fontSize = fontSize.finite(DESKTOP_DEFAULT_FONT_SIZE).coerceIn(18f, 38f),
         opacity = opacity.finite(.85f).coerceIn(.35f, .95f), islandOpacity = islandOpacity.finite(.85f).coerceIn(.35f, 1f), offsetMs = offsetMs.coerceIn(-60000, 60000),
         x = x.finite(.5f).coerceIn(0f, 1f), y = y.finite(.2f).coerceIn(0f, 1f),
         glowStrength = glowStrength.finite(1f).coerceIn(0f, 2f), glowSpread = glowSpread.finite(1f).coerceIn(.5f, 2f),
@@ -55,7 +56,7 @@ class DesktopLyricsPreferences(private val store: DataStore<Preferences>, scope:
     private fun decode(raw: String?): DesktopLyricsSettings {
         val fields = raw?.split('|').orEmpty()
         return DesktopLyricsSettings(fields.getOrNull(0)?.toBooleanStrictOrNull() ?: false,
-            fields.getOrNull(1)?.toBooleanStrictOrNull() ?: false,
+            true, // Preserve the legacy slot index, but ignore saved unlocked state.
             DesktopEffect.entries.firstOrNull { it.name == fields.getOrNull(2) } ?: DesktopEffect.PRECISE,
             DesktopAppearance.ISLAND,
             fields.getOrNull(4)?.toBooleanStrictOrNull() ?: true, fields.getOrNull(5)?.toFloatOrNull() ?: DESKTOP_DEFAULT_FONT_SIZE,
@@ -81,7 +82,7 @@ data class DesktopSafeArea(val left: Int, val top: Int, val right: Int, val bott
 }
 data class DesktopPlacement(val x: Int, val y: Int, val width: Int, val height: Int)
 
-/** Space for editing chrome, two lyric lines and the largest effect notice.
+/** Space for two lyric lines, cover motion and the largest effect notice.
  * Depends on display configuration only, never on an animated content measurement.
  */
 internal fun desktopIslandSurfaceHeight(density: Float, fontScale: Float, safeHeight: Int): Int =

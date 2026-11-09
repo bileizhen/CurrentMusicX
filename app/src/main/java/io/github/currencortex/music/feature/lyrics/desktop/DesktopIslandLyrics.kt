@@ -39,7 +39,7 @@ import io.github.currencortex.music.feature.lyrics.ui.*
                 fontSize = font, fontWeight = FontWeight.Medium, reservedFontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center, singleLine = true, effectPadding = padding, prepareDrawResources = true,
                 forceLineAnimation = false, glow = motion && options.glowEnabled && options.glowStrength > 0f,
-                wordLift = motion && stage, accurateWordLift = true, glowOpacity = opacity, baseOpacity = base,
+                wordLift = motion && stage, wordLiftReturns = stage, accurateWordLift = true, glowOpacity = opacity, baseOpacity = base,
                 color = color, glowColor = Color(options.glowColor.toInt()),
                 glowRadiusScale = desktopGlowSpread(options.glowSpread),
                 untimedLineGlow = options.glowEnabled && options.glowStrength > 0f)

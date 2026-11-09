@@ -46,11 +46,14 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
     onCoverBounds: (Rect) -> Unit = {}, material: Boolean = true,
     listenTogether: ListenTogetherPair? = null,
     leading: (@Composable (Modifier) -> Unit)? = null,
+    backgroundEffect: Modifier = Modifier,
     content: @Composable () -> Unit) {
     val shape = RoundedCornerShape(50)
     val reveal = presentation.coerceIn(0f, 1f)
     val coverTransition = transition ?: rememberIslandCoverTransition(song, motion)
-    BoxWithConstraints(modifier.padding(2.dp).testTag("desktop_island")) {
+    // Only a self-painted pill needs room for its shadow. A shared morph shell already
+    // owns that room; insetting its content would cut the glow off inside the shell.
+    BoxWithConstraints(modifier.padding(if (material) 2.dp else 0.dp).testTag("desktop_island")) {
         val fullMetadata = (metadata ?: 120.dp).coerceIn(28.dp, maxOf(28.dp, maxWidth - 10.dp))
         val infoWidth = (fullMetadata - 28.dp) * (1f - reveal)
         // A single-line cue has height independent of available width. Measure its
@@ -62,6 +65,7 @@ internal val DesktopIslandReveal = SemanticsPropertyKey<Float>("DesktopIslandRev
                 .background(Brush.verticalGradient(listOf(Color(0xFF11141B), Color(0xFF080B10))), shape)
                 .border(.6.dp, Brush.verticalGradient(listOf(Color.White.copy(.16f), Color.White.copy(.035f))), shape)
                 else Modifier)
+            .then(backgroundEffect)
             // Cover radius + 5 dp inset equals the pill end radius: concentric.
             .padding(start = 5.dp, end = 5.dp, top = 1.dp, bottom = 1.dp),
             content = {

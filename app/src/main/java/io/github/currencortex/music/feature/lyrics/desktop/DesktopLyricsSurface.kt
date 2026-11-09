@@ -1,59 +1,46 @@
 package io.github.currencortex.music.feature.lyrics.desktop
 
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.repeatOnLifecycle
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.feature.lyrics.data.PlaybackLyricsState
 import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
 import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
 import io.github.currencortex.music.feature.lyrics.ui.rememberLyricsPosition
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 
 @Composable internal fun DesktopLyricsSurface(lyrics: StateFlow<PlaybackLyricsState>, playback: StateFlow<PlayerState>,
-    preferences: StateFlow<DesktopLyricsSettings>, lock: () -> Unit, close: () -> Unit, settings: () -> Unit,
-    maxIslandWidth: () -> Float = { 640f }, editRequest: Int = 0, onEditingChanged: (Boolean) -> Unit = {},
+    preferences: StateFlow<DesktopLyricsSettings>, maxIslandWidth: () -> Float = { 640f },
     onIslandSize: (IntSize) -> Unit = {}, islandTapRequest: Int = 0, onIslandModeChanged: (Boolean) -> Unit = {},
     changeSong: (Int) -> Unit = {}, onIslandTop: (Int) -> Unit = {},
     togglePlayback: () -> Unit = {}, onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     defaultFpsMode: Boolean = false, noticeOnly: Boolean = false,
     effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = remember { kotlinx.coroutines.flow.MutableStateFlow(null) },
-    installUpdate: () -> Unit = {}) {
+    installUpdate: () -> Unit = {},
+    audioLevel: io.github.currencortex.music.core.media.DockAudioLevel? = null) {
     val recognitionActive by io.github.currencortex.music.feature.recognition.RecognitionDesktopSession.attached.collectAsStateWithLifecycle()
     val recognition by io.github.currencortex.music.feature.recognition.RecognitionDesktopSession.state.collectAsStateWithLifecycle()
     val recognitionOptions by preferences.collectAsStateWithLifecycle()
     val recognitionContext = androidx.compose.ui.platform.LocalContext.current
     if (recognitionActive) {
-        SideEffect { onEditingChanged(false); onCoverBounds(androidx.compose.ui.geometry.Rect.Zero) }
+        SideEffect { onCoverBounds(androidx.compose.ui.geometry.Rect.Zero) }
         RecognitionIslandContent(recognition, recognitionOptions, maxIslandWidth(), onIslandSize, onIslandTop,
             { io.github.currencortex.music.feature.recognition.RecognitionDesktopService.islandAction(recognitionContext) },
             { io.github.currencortex.music.feature.recognition.RecognitionDesktopService.stop(recognitionContext) })
@@ -82,22 +69,8 @@ import kotlinx.coroutines.flow.StateFlow
     val motion = rememberDesktopMotion()
     val coverTransition = rememberIslandCoverTransition(player.song, motion && player.listenTogether == null)
     val coverFlying by remember(coverTransition) { derivedStateOf { coverTransition.progress.value < 1f } }
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
-    var controlsWanted by remember { mutableStateOf(true) }
-    var touching by remember { mutableStateOf(false) }
-    var interaction by remember { mutableIntStateOf(0) }
-    fun revealControls() { controlsWanted = true; interaction++ }
-    LaunchedEffect(options.locked, editRequest) { if (!options.locked) revealControls() }
-    LaunchedEffect(lifecycle, options.locked, touching, interaction, controlsWanted) {
-        if (options.locked || touching || !controlsWanted) return@LaunchedEffect
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { delay(3000); controlsWanted = false }
-    }
-    val chromeAlpha by animateFloatAsState(if (controlsWanted && !options.locked) 1f else 0f,
-        tween(if (motion) 180 else 0), label = "desktop chrome")
-    val showChrome = !noticeOnly && !options.locked && (controlsWanted || chromeAlpha > 0f)
-    SideEffect { onEditingChanged(showChrome) }
     val font = options.displayFontSize
-    val size = rememberIslandSize(player.song, if (fpsMode) "000.0 FPS" else line?.text.orEmpty(), font, fpsMode, showChrome,
+    val size = rememberIslandSize(player.song, if (fpsMode) "000.0 FPS" else line?.text.orEmpty(), font, fpsMode, false,
         line?.translation?.takeIf { options.translation && !fpsMode }, listeningPair = player.listenTogether != null)
     val reveal = rememberIslandPresentation(songKey, fpsMode || (!content.loading && content.matches(player.song)), motion).value
     val introWidth = size.headingWidth.coerceAtMost(maxIslandWidth())
@@ -111,27 +84,13 @@ import kotlinx.coroutines.flow.StateFlow
     val density = LocalDensity.current
     val morphEnvelope = if (reveal > 0f && reveal < 1f) {
         with(density) { (font * 1.2f + if (options.translation && !line?.translation.isNullOrBlank()) desktopSubtitleSize(font) * 1.2f else 0f).sp.toDp() } +
-            28.dp + if (showChrome) 56.dp else 0.dp
+            28.dp
     } else 0.dp
     val drawingEnvelope = with(density) { (if (coverFlying) coverTransition.startDrawingHeight else 0).toDp() }
     // Hold the native buffer during the flight; only the visible pill resizes.
     Column(Modifier.fillMaxWidth().heightIn(min = maxOf(morphEnvelope, drawingEnvelope))
         .onSizeChanged { coverTransition.drawingHeight = it.height }
-        .pointerInput(options.locked) {
-            if (!options.locked) try {
-                while (true) awaitPointerEventScope {
-                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                    touching = event.changes.any { it.pressed }
-                    if (touching) interaction++
-                }
-            } finally { touching = false }
-        }.testTag("desktop_lyrics_window"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (showChrome) Row(Modifier.fillMaxWidth().testTag("desktop_edit_toolbar").graphicsLayer { alpha = chromeAlpha }
-            .background(Color(0xEB161A25), RoundedCornerShape(16.dp)).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            BasicText("灵动岛", Modifier.weight(1f).heightIn(min = 48.dp).wrapContentHeight(Alignment.CenterVertically),
-                style = TextStyle(fontSize = 12.sp, color = Color.White.copy(.75f)))
-            DesktopAction("设置", settings); DesktopAction("锁定", lock); DesktopAction("关闭", close)
-        }
+        .testTag("desktop_lyrics_window"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LaunchedEffect(effectNotice?.id) { if (effectNotice != null) onCoverBounds(androidx.compose.ui.geometry.Rect.Zero) }
         DesktopIslandEffectTransition(effectNotice, Modifier.align(Alignment.CenterHorizontally)
             .widthIn(max = maxIslandWidth().dp).padding(vertical = desktopIslandDrawingSpace)
@@ -144,7 +103,7 @@ import kotlinx.coroutines.flow.StateFlow
         if (noticeOnly) Spacer(Modifier.width(112.dp).height(rememberIslandFpsHeight(font)))
         else
         DesktopIslandFrame(player.song, Modifier.islandAnimatedWidth(width).fillMaxWidth()
-            .pointerInput(options.locked) { detectTapGestures(onTap = { toggle() }, onLongPress = { if (!options.locked) revealControls() }) }
+            .pointerInput(Unit) { detectTapGestures(onTap = { toggle() }) }
             .pointerInput(Unit) {
                 var dx = 0f; var dy = 0f
                 val threshold = 32.dp.toPx()
@@ -155,6 +114,9 @@ import kotlinx.coroutines.flow.StateFlow
             durationMs = player.durationMs.takeIf { it > 0 } ?: player.song?.durationMs ?: 0L, transition = coverTransition,
             coverPlaying = player.showPause, onCoverBounds = onCoverBounds, material = false,
             listenTogether = player.listenTogether,
+            backgroundEffect = if (audioLevel != null && player.song != null) rememberDesktopIslandGlow(
+                player.song?.cover.orEmpty(), songKey, player.playing, audioLevel, motion,
+                active = effectNotice == null, playbackRate = player.playbackSpeed) else Modifier,
             onCoverTap = { if (player.song != null && player.canControlPlayback) togglePlayback() }) {
             DesktopIslandDisplay(fpsMode, motion, lyrics = {
                 if (line != null) {
@@ -167,10 +129,4 @@ import kotlinx.coroutines.flow.StateFlow
         }
         }
     }
-}
-
-@Composable private fun DesktopAction(label: String, click: () -> Unit) {
-    BasicText(label, Modifier.clickable(role = Role.Button, onClick = click).heightIn(min = 48.dp)
-        .wrapContentHeight(Alignment.CenterVertically).padding(horizontal = 8.dp),
-        style = TextStyle(fontSize = 12.sp, color = Color.White.copy(.85f)))
 }
