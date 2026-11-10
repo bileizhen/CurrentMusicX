@@ -2,12 +2,14 @@ package io.github.currencortex.music.core.links
 
 import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
+import io.github.currencortex.music.data.netease.listen.ListenTogetherInvitation
 
 sealed interface MusicWebLink {
     data object Home : MusicWebLink
     data class Song(val id: Long) : MusicWebLink
     data class Page(val route: String) : MusicWebLink
     data class ShortLink(val url: HttpUrl) : MusicWebLink
+    data class ListenTogether(val invitation: ListenTogetherInvitation) : MusicWebLink
 
     companion object {
         private val projectHosts = setOf("music.20110208.xyz", "cm.bileizhen.top",
@@ -17,10 +19,14 @@ sealed interface MusicWebLink {
         /** Only public content routes are accepted; URLs cannot change servers or account state. */
         fun parse(raw: String): MusicWebLink? {
             if (raw.length > 8192) return null
-            val url = raw.toHttpUrlOrNull() ?: return null
+            val url = raw.trim().toHttpUrlOrNull() ?: return null
             if (url.username.isNotEmpty() || url.password.isNotEmpty() ||
                 url.port != HttpUrl.defaultPort(url.scheme)) return null
             if (url.host == "163cn.tv") return ShortLink(url.newBuilder().scheme("https").build())
+            if (url.host == "st.music.163.com") {
+                if (url.encodedPath != "/listen-together/share/index.html") return null
+                return ListenTogetherInvitation.parse(url.toString())?.let(::ListenTogether)
+            }
             if (url.host in projectHosts) {
                 if (url.encodedPath !in setOf("/", "/app", "/app/", "/app/index.html")) return null
                 val fragment = url.encodedFragment.orEmpty()
