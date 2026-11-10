@@ -23,6 +23,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
     val availablePlaylists = MutableStateFlow<List<Playlist>>(emptyList())
     val playlistError = MutableStateFlow<String?>(null)
     val primaryLikeBusy = MutableStateFlow(false)
+    val batchFavorites = MutableStateFlow(BatchFavoriteState())
     val statuses = container.libraryRepository.statuses
     val likes = io.github.currencortex.music.data.song.SongLikeController(container.libraryRepository,
         container.neteaseSongActions, viewModelScope) { container.musicSession() }
@@ -143,6 +144,57 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         }
     }
     private var likeUndoNotice: Long? = null
+    fun clearBatchFavoriteResult() {
+        if (!batchFavorites.value.running) batchFavorites.value = BatchFavoriteState()
+    }
+
+    fun setSelectedFavorites(songs: List<Song>, liked: Boolean, onSuccess: () -> Unit) {
+        if (primaryLikeBusy.value || songs.isEmpty() || songs.any { !supportsBatchFavorite(it) }) return
+        val selected = songs.distinctBy(::favoriteSelectionKey)
+        val expected = container.musicSession()
+        val likeMode = container.musicSettings.state.value.likeMode
+        primaryLikeBusy.value = true
+        batchFavorites.value = BatchFavoriteState(running = true, total = selected.size)
+        likeUndoNotice?.let(container.errorNotices::clear); likeUndoNotice = null
+        viewModelScope.launch {
+            try {
+                when (val result = appResult {
+                    val native = container.primaryLibrary.resolveLikeNetease()
+                    val uid = if (native) container.neteaseSongActions.boundUid(expected) else null
+                    val outcome = setBatchFavorites(selected, liked, checkOwner = {
+                        currentCoroutineContext().ensureActive()
+                        if (expected != container.musicSession() || likeMode != container.musicSettings.state.value.likeMode ||
+                            native != container.primaryLibrary.resolveLikeNetease())
+                            throw ApiException(ErrorKind.NeteaseSessionChanged)
+                    }, write = { song, desired ->
+                        if (native) {
+                            val id = io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song)
+                                ?: throw ApiException(ErrorKind.NotFound)
+                            container.neteaseSongActions.setLiked(id, desired, expected, song, expectedUid = uid)
+                        } else when (val write = container.libraryRepository.setLiked(song, desired, expected)) {
+                            is AppResult.Success -> Unit
+                            is AppResult.Failure -> throw ApiException(write.kind)
+                        }
+                    }, progress = { count -> batchFavorites.update { it.copy(completed = count) } })
+                    when (outcome) {
+                        is AppResult.Success -> Unit
+                        is AppResult.Failure -> throw ApiException(outcome.kind)
+                    }
+                }) {
+                    is AppResult.Success -> if (expected == container.musicSession()) {
+                        message.value = "已${if (liked) "收藏" else "取消收藏"} ${selected.size} 首歌曲"
+                        onSuccess()
+                    }
+                    is AppResult.Failure -> batchFavorites.update { it.copy(error = result.kind.message) }
+                }
+            } finally {
+                container.libraryRepository.invalidate()
+                batchFavorites.update { it.copy(running = false) }
+                primaryLikeBusy.value = false
+            }
+        }
+    }
+
     fun togglePrimaryLike(song: Song, undoable: Boolean = false) {
         if (primaryLikeBusy.value || song.video) return
         primaryLikeBusy.value = true

@@ -1,7 +1,10 @@
 package io.github.currencortex.music.ui.component
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.background
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
@@ -46,21 +49,29 @@ fun coverRequestUrl(url: String, pixels: Int): String {
 @Composable fun SongRow(row: SongRowUi, onPlay: () -> Unit, onNext: () -> Unit, onQueue: () -> Unit,
     extraActions: (@Composable () -> Unit)? = null) {
     var menu by remember { mutableStateOf<SongMenu?>(null) }
+    var coverBounds by remember { mutableStateOf(Rect.Zero) }
     val host = LocalSongMenu.current
     val request = LocalRoomSongRequest.current.takeUnless { row.song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME, io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.LOCAL) }
     val primary = { if (request != null) request.request(row.song) else onPlay() }
-    Row(Modifier.fillMaxWidth().clickable(enabled = request?.pending?.invoke(row.song.id) != true, onClick = primary).padding(vertical = 8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
-            MusicCover(row.song.cover, Modifier.size(52.dp))
+    fun openMenu(previewAnchor: Rect?) {
+        val value = SongMenu(row.song, primary, onNext, onQueue, request != null, extraActions, previewAnchor = previewAnchor)
+        if (host == null) menu = value else host(value)
+    }
+    val pending = request?.pending?.invoke(row.song.id) == true
+    Row(Modifier.fillMaxWidth().testTag("song_row_${row.song.id}").combinedClickable(enabled = !pending, onClick = primary,
+        onLongClickLabel = "预览歌曲与操作", onLongClick = { if (!coverBounds.isEmpty) openMenu(coverBounds) }).padding(vertical = 8.dp),
+        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            MusicCover(row.song.cover, Modifier.size(52.dp).onGloballyPositioned { coordinates ->
+                coverBounds = Rect(coordinates.localToWindow(Offset.Zero),
+                    coordinates.localToWindow(Offset(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())))
+            })
             Column(Modifier.weight(1f).padding(horizontal = 12.dp)) {
                 Text(row.title, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(if (request?.pending?.invoke(row.song.id) == true) "正在提交点歌…" else row.subtitle,
+                Text(if (pending) "正在提交点歌…" else row.subtitle,
                     fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (row.song.mv != 0L) Text("MV", fontSize = 10.sp, color = MiuixTheme.colorScheme.primary)
             }
-            MusicTextAction("⋯", onClick = {
-                val value = SongMenu(row.song, primary, onNext, onQueue, request != null, extraActions)
-                if (host == null) menu = value else host(value)
-            }, modifier = Modifier.testTag("song_menu_${row.song.id}"), enabled = request?.pending?.invoke(row.song.id) != true)
+            MusicTextAction("⋯", onClick = { openMenu(null) }, modifier = Modifier.testTag("song_menu_${row.song.id}"), enabled = !pending)
     }
     menu?.let { SongActionsSheet(it) { menu = null } }
 }

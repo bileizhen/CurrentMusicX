@@ -59,10 +59,12 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
         }
     }
     suspend fun toggleLike(song: Song): AppResult<Unit> = changeLike(song, null)
-    suspend fun setLiked(song: Song, liked: Boolean): AppResult<Unit> = changeLike(song, liked)
-    private suspend fun changeLike(song: Song, desired: Boolean?): AppResult<Unit> = mutationMutex.withLock {
+    suspend fun setLiked(song: Song, liked: Boolean, expectedSession: RequestSession? = null): AppResult<Unit> =
+        changeLike(song, liked, expectedSession)
+    private suspend fun changeLike(song: Song, desired: Boolean?, expectedSession: RequestSession? = null): AppResult<Unit> = mutationMutex.withLock {
         if (accountId() == 0L) return@withLock AppResult.Failure(ErrorKind.Unauthorized)
         val expected = session()
+        if (expectedSession != null && expectedSession != expected) return@withLock AppResult.Failure(ErrorKind.Unauthorized)
         // Read before toggling: a default false must not invert an existing server true.
         val loaded = appResult { refreshStatus(listOf(song.id)) }
         if (loaded is AppResult.Failure) return@withLock loaded
