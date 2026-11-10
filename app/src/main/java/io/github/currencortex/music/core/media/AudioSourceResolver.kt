@@ -136,6 +136,6 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
     }
 }
 
-/** Matched files never share byte ranges with the official file or a different candidate. */
+/** Resolved candidates never share byte ranges with a different recording or plugin URL. */
 internal fun sourceCacheKey(requestKey: String, source: AudioSource): String =
-    if (source.matched) "$requestKey:match:${source.cacheIdentity}" else requestKey
+    if (source.matched || source.source.startsWith("lx:")) "$requestKey:match:${source.cacheIdentity}" else requestKey

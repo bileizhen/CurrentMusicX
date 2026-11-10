@@ -25,7 +25,8 @@ internal fun lxNeteaseCapabilities(sources: List<LxCapability>): List<LxCapabili
     val summary get() = (if (lxNeteaseCapabilities(capabilities).isEmpty()) "未声明网易云接口" else "网易云") +
         version.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()
 }
-@Serializable internal class LxStoredSource(val info: LxSourceInfo, val script: String) {
+@Serializable internal class LxStoredSource(val info: LxSourceInfo, val script: String,
+    val performance: LxSourcePerformance = LxSourcePerformance()) {
     override fun toString() = "LxStoredSource(${info.id}, script=[private])"
 }
 class LxSourceException(message: String, val qualityUnavailable: Boolean = false) : java.io.IOException(message)
