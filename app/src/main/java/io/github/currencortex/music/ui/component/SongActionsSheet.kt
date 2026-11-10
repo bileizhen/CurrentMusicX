@@ -14,7 +14,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 data class SongMenu(val song: Song, val play: () -> Unit, val next: () -> Unit, val queue: () -> Unit,
     val roomRequest: Boolean = false, val extra: (@Composable () -> Unit)? = null, val transport: Boolean = true,
-    val previewAnchor: androidx.compose.ui.geometry.Rect? = null, val shareInitially: Boolean = false)
+    val previewAnchor: androidx.compose.ui.geometry.Rect? = null, val shareInitially: Boolean = false,
+    val onMultiSelect: (() -> Unit)? = null)
 data class RoomSongRequest(val request: (Song) -> Unit, val pending: (Long) -> Boolean)
 val LocalSongMenu = staticCompositionLocalOf<((SongMenu) -> Unit)?> { null }
 val LocalSongDownload = staticCompositionLocalOf<((Song) -> Unit)?> { null }
@@ -42,6 +43,10 @@ val LocalRoomSongRequest = staticCompositionLocalOf<RoomSongRequest?> { null }
             if (!menu.song.video && menu.song.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL) MusicDestinationRow("分享歌曲", { sharing = true },
                 modifier = Modifier.testTag("song_share"), summary = "生成海报、保存图片或复制链接", chevron = false)
             CompositionLocalProvider(LocalDismissSongMenu provides onDismiss) { menu.extra?.invoke() }
+            menu.onMultiSelect?.let { select ->
+                MusicDestinationRow("多选", { onDismiss(); select() },
+                    modifier = Modifier.testTag("playlist_multi_select"), chevron = false)
+            }
         }
     }
 }

@@ -4,6 +4,8 @@ import android.content.Intent
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.geometry.Rect
@@ -44,6 +46,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -151,6 +155,18 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val neteaseLikes by vm.container.neteaseSongActions.likedState.collectAsStateWithLifecycle()
     val navidromeLikes by vm.container.navidrome.likes.collectAsStateWithLifecycle()
     val likeBusy by library.primaryLikeBusy.collectAsStateWithLifecycle()
+    val batch by library.batchFavorites.collectAsStateWithLifecycle()
+    val musicSettings by vm.container.musicSettings.state.collectAsStateWithLifecycle()
+    val binding by vm.container.bindingRepository.state.collectAsStateWithLifecycle()
+    val selectionAllowed = localMusic == null && playlistSupportsMultiSelect(vm.route)
+    var selecting by remember(vm.route, account.account?.id, binding?.profile?.uid, musicSettings.server, musicSettings.likeMode) { mutableStateOf(false) }
+    var selectedKeys by remember(vm.route, account.account?.id, binding?.profile?.uid, musicSettings.server, musicSettings.likeMode) { mutableStateOf(emptySet<String>()) }
+    fun exitSelection() { selecting = false; selectedKeys = emptySet() }
+    BackHandler(selecting) { if (!batch.running) exitSelection() }
+    LaunchedEffect(state.songs) {
+        val available = state.songs.filter(::supportsBatchFavorite).map(::favoriteSelectionKey).toSet()
+        selectedKeys = selectedKeys.intersect(available)
+    }
     val playback = vm.container.playerController.state.collectAsStateWithLifecycle()
     val queue = vm.container.playbackQueue.state.collectAsStateWithLifecycle()
     val playbackMode by remember(playback) { derivedStateOf(structuralEqualityPolicy()) { playback.value.mode } }
@@ -294,7 +310,8 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     }
     PlaylistPageLayout(cover, list, heroHeightPx,
         if (localMusic != null) "local_music_screen" else "library_detail", toolbar = { progress ->
-            GlassSearchToolbar(title, ((progress - .35f) / .65f).coerceIn(0f, 1f), onBack,
+            GlassSearchToolbar(title, ((progress - .35f) / .65f).coerceIn(0f, 1f),
+                { if (selecting) { if (!batch.running) exitSelection() } else onBack() },
                 searching, { searching = it }, query, { query = it },
                 action = GlassToolbarAction(MusicIcons.Image, "CD 唱片架", {
                     scope.launch { vm.container.settings.edit { it.copy(playlistRecordShelf = true, playlistDepthRibbon = false) } }
@@ -365,6 +382,27 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
 
                     }
                 }
+                if (selecting) item(key = "selection") {
+                    Column(Modifier.fillMaxWidth().background(surface).padding(16.dp).testTag("playlist_selection"),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("已选择 ${selectedKeys.size} 首", fontWeight = FontWeight.Medium)
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            MusicTextAction("全选", { selectedKeys = selectedKeys + songs.filter(::supportsBatchFavorite).map(::favoriteSelectionKey) },
+                                Modifier.testTag("playlist_select_all"), enabled = !batch.running)
+                            MusicTextAction("取消", ::exitSelection, Modifier.testTag("playlist_selection_cancel"), enabled = !batch.running)
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            listOf(true to "收藏", false to "取消收藏").forEach { (liked, label) ->
+                                GlassActionButton(label, {
+                                    library.setSelectedFavorites(state.songs.filter { favoriteSelectionKey(it) in selectedKeys }, liked, ::exitSelection)
+                                }, Modifier.weight(1f).testTag(if (liked) "playlist_batch_favorite" else "playlist_batch_unfavorite"),
+                                    enabled = selectedKeys.isNotEmpty() && !likeBusy)
+                            }
+                        }
+                        if (batch.running) Text("正在处理 ${batch.completed} / ${batch.total} 首", fontSize = 13.sp)
+                        else batch.error?.let { Text("已完成 ${batch.completed} / ${batch.total} 首，$it。可重试或取消。", fontSize = 13.sp) }
+                    }
+                }
                 if (resume != null) item(key = "resume") {
                     Row(Modifier.fillMaxWidth().playlistPullSurface(pullMotion).background(surface).clickable(role = Role.Button) { vm.container.playerController.toggle() }
                         .padding(horizontal = 20.dp, vertical = 12.dp).testTag("playlist_resume"), verticalAlignment = Alignment.CenterVertically) {
@@ -394,7 +432,17 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                         CompositionLocalProvider(LocalGlassBackdrop provides trackBackdrop) {
                             PlaylistTrack(song, selected = currentSong?.id == song.id && currentSong?.musicSource == song.musicSource,
                                 liked = localMusic == null && (if (neteaseMain) song.id in neteaseLikes else statuses[song.id]?.liked == true), play = { play(songs, index) },
-                                next = { vm.container.playerController.add(song, true) }, enqueue = { vm.container.playerController.add(song) }) {
+                                next = { vm.container.playerController.add(song, true) }, enqueue = { vm.container.playerController.add(song) },
+                                onMultiSelect = if (selectionAllowed && supportsBatchFavorite(song)) ({
+                                    library.clearBatchFavoriteResult()
+                                    selectedKeys = setOf(favoriteSelectionKey(song)); selecting = true
+                                    scope.launch { list.animateScrollToItem(1) }
+                                }) else null,
+                                selectionMode = selecting, selectionChecked = favoriteSelectionKey(song) in selectedKeys,
+                                selectionEnabled = !batch.running && supportsBatchFavorite(song), onSelect = {
+                                    val key = favoriteSelectionKey(song)
+                                    selectedKeys = if (key in selectedKeys) selectedKeys - key else selectedKeys + key
+                                }) {
                                 LibrarySongActions(library, song, navigate)
                                 val dismiss = LocalDismissSongMenu.current
                                 if (editable) MusicDestinationRow("移出歌单", {
@@ -467,22 +515,30 @@ internal fun playlistDurationLabel(songs: List<Song>): String {
 }
 
 @Composable internal fun PlaylistTrack(song: Song, selected: Boolean, liked: Boolean, play: () -> Unit,
-    next: () -> Unit, enqueue: () -> Unit, extra: @Composable () -> Unit) {
+    next: () -> Unit, enqueue: () -> Unit, onMultiSelect: (() -> Unit)? = null,
+    selectionMode: Boolean = false, selectionChecked: Boolean = false, selectionEnabled: Boolean = true,
+    onSelect: () -> Unit = {}, extra: @Composable () -> Unit) {
     val host = LocalSongMenu.current
     var menu by remember(song.id) { mutableStateOf<SongMenu?>(null) }
     val room = LocalRoomSongRequest.current.takeUnless { song.privateLibrary || song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL }
     val pending = room?.pending?.invoke(song.id) == true
-    val primary = { if (room != null) room.request(song) else play() }
+    val primary = { if (selectionMode) onSelect() else if (room != null) room.request(song) else play() }
     var coverBounds by remember(song.id, song.musicSource) { mutableStateOf(Rect.Zero) }
     fun openMenu(preview: Boolean) {
         val value = SongMenu(song, primary, next, enqueue, room != null, extra,
-            previewAnchor = coverBounds.takeIf { preview && !it.isEmpty })
+            previewAnchor = coverBounds.takeIf { preview && !it.isEmpty }, onMultiSelect = onMultiSelect)
         if (host != null) host(value) else menu = value
     }
     Row(Modifier.fillMaxWidth().testTag("playlist_song_${song.id}").combinedClickable(
-        enabled = !pending, role = Role.Button, onClick = primary,
-        onLongClickLabel = "预览歌曲与操作", onLongClick = { openMenu(preview = true) })
+        enabled = if (selectionMode) selectionEnabled else !pending,
+        role = if (selectionMode) Role.Checkbox else Role.Button, onClick = primary,
+        onLongClickLabel = "预览歌曲与操作", onLongClick = if (selectionMode) null else ({ openMenu(preview = true) }))
+        .semantics { if (selectionMode) toggleableState = ToggleableState(selectionChecked) }
         .padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (selectionMode) Box(Modifier.padding(end = 12.dp).size(24.dp).border(1.dp, MiuixTheme.colorScheme.primary, CircleShape),
+            contentAlignment = Alignment.Center) {
+            if (selectionChecked) Icon(MusicIcons.Check, "已选择", Modifier.size(18.dp), tint = MiuixTheme.colorScheme.primary)
+        }
         MusicCover(song.cover, Modifier.size(48.dp).onGloballyPositioned { coordinates ->
             coverBounds = Rect(coordinates.localToWindow(Offset.Zero),
                 coordinates.localToWindow(Offset(coordinates.size.width.toFloat(), coordinates.size.height.toFloat())))
@@ -498,7 +554,7 @@ internal fun playlistDurationLabel(songs: List<Song>): String {
             }
             if (song.mv > 0) Text("MV", fontSize = 10.sp, color = MiuixTheme.colorScheme.primary)
         }
-        PlaylistIconAction(Icons.Default.MoreVert, "歌曲操作", {
+        if (!selectionMode) PlaylistIconAction(Icons.Default.MoreVert, "歌曲操作", {
             openMenu(preview = false)
         }, Modifier.testTag("song_menu_${song.id}"), ink = MiuixTheme.colorScheme.onSurface.copy(alpha = .4f),
             background = Color.Transparent, enabled = !pending)
