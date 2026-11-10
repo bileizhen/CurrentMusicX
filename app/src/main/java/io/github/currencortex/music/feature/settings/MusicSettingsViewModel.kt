@@ -21,6 +21,7 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
     val audioState = MutableStateFlow(NetworkSettingsState())
     val lxSources = container.lxSources.state
     val lxHealth = container.lxSources.health
+    val lxResolveTimes = container.lxSources.resolveTimes
     suspend fun checkLxSources() {
         val selected = audioProvider.value.lxSourceId
         lxSources.value.sortedBy { if (it.id == selected) 0 else 1 }.forEach { container.lxSources.checkAvailability(it.id) }
@@ -64,6 +65,7 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
     fun audioProvider(value: AudioProvider) = audioEdit { container.audioSettings.select(value) }
     fun audioKey(value: String) = audioEdit { container.audioSettings.saveKey(value) }
     fun clearAudioKey() = audioEdit { container.audioSettings.clearKey() }
+    fun lxSmartSwitch(enabled: Boolean) = audioEdit { container.audioSettings.setLxSmartSwitch(enabled) }
     fun selectLxSource(id: String) = audioEdit { container.audioSettings.selectLxSource(id) }
     fun importLxFile(uri: android.net.Uri) = audioEdit {
         container.audioSettings.selectLxSource(container.lxSources.importFile(uri).id)

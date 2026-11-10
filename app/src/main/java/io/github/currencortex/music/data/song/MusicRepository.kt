@@ -45,7 +45,7 @@ class MusicRepository(private val api: ApiClient,
         else source(song.id, quality, session, refresh, supportsDolby)
     }
     private suspend fun lxSource(song: Song, quality: AudioQuality, access: AudioSourceAccess): AudioSource {
-        val result = try { requireNotNull(lx) { "落雪音源尚未初始化" }.source(song, quality, access.lxSourceId) }
+        val result = try { requireNotNull(lx) { "落雪音源尚未初始化" }.source(song, quality, access.lxSourceId, access.lxSmartSwitch) }
             catch (e: io.github.currencortex.music.data.lx.LxSourceException) { throw ApiException(ErrorKind.Server, userMessage = e.message) }
         if (audioAccess().identity != access.identity) throw ApiException(ErrorKind.AudioSourceChanged)
         return result

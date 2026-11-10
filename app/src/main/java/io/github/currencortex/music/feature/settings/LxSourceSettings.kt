@@ -22,6 +22,7 @@ import top.yukonga.miuix.kmp.basic.TextField
     val provider by vm.audioProvider.collectAsStateWithLifecycle()
     val state by vm.audioState.collectAsStateWithLifecycle()
     val health by vm.lxHealth.collectAsStateWithLifecycle()
+    val resolveTimes by vm.lxResolveTimes.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(sources.map { it.id }, provider.lxSourceId, lifecycle) {
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.checkLxSources() }
@@ -32,11 +33,13 @@ import top.yukonga.miuix.kmp.basic.TextField
         uri?.let(vm::importLxFile)
     }
     val selected = sources.firstOrNull { it.id == provider.lxSourceId }
+    fun timeSuffix(id: String): String = resolveTimes[id]?.let { "，取链 $it ms" } ?: ""
     SettingsSection("落雪音源", MusicIcons.File) {
         if (sources.isNotEmpty()) {
-            SettingsOptionsRow("当前音源", selected?.name ?: "请选择", sources.map { source ->
+            SettingsOptionsRow(if (provider.lxSmartSwitch) "默认音源" else "当前音源", selected?.name ?: "请选择", sources.map { source ->
                 SettingsOption("lx_source_${source.id}", source.name, source.id == provider.lxSourceId,
-                    summary = source.summary, leadingContent = { LxHealthBadge(vm, source.id) }, onSelect = { vm.selectLxSource(source.id) })
+                    summary = source.summary + timeSuffix(source.id),
+                    leadingContent = { LxHealthBadge(vm, source.id) }, onSelect = { vm.selectLxSource(source.id) })
             }, Modifier.testTag("lx_source_select"), enabled = !state.busy,
                 valueLeading = selected?.let { source -> { LxHealthBadge(vm, source.id) } })
             selected?.let { source ->
@@ -46,9 +49,14 @@ import top.yukonga.miuix.kmp.basic.TextField
                     SettingsHint(source.capabilities.joinToString("；") { capability ->
                         "网易云 · ${capability.qualities.joinToString(" / ")}"
                     })
+                    resolveTimes[source.id]?.let { SettingsHint("最近成功取链 · $it ms") }
                     health[source.id]?.message?.let { SettingsHint(it) }
                 }
             }
+            SettingsDivider()
+            SettingsSwitch("多音源智能切换", provider.lxSmartSwitch, vm::lxSmartSwitch,
+                Modifier.testTag("lx_smart_switch"), summary = "优先使用取链更快的插件，失败时自动尝试其他已导入音源。",
+                enabled = !state.busy)
             SettingsDivider()
         } else SettingsHint("尚未导入音源")
         SettingsPreference(if (state.busy) "正在处理音源…" else "从文件导入", "选择落雪自定义音源 .js 文件",
