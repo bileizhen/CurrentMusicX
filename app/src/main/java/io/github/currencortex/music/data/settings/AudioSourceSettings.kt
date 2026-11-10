@@ -11,15 +11,15 @@ import java.security.MessageDigest
 
 enum class AudioProvider(val label: String) { CURRENT_MUSIC("CurrentMusic"), NETEASE("网易云原生"), LEIZ("LeiZ API"), LX("落雪音源") }
 data class AudioProviderState(val provider: AudioProvider = AudioProvider.CURRENT_MUSIC,
-    val keyConfigured: Boolean = false, val identity: String = "currentmusic", val lxSourceId: String = "")
+    val keyConfigured: Boolean = false, val identity: String = "currentmusic", val lxSourceId: String = "", val lxSmartSwitch: Boolean = false)
 
 /** Immutable request credentials. Never include credentials in generated toString/equals/logs. */
-class AudioSourceAccess(val provider: AudioProvider, internal val key: String = "", val lxSourceId: String = "") {
+class AudioSourceAccess(val provider: AudioProvider, internal val key: String = "", val lxSourceId: String = "", val lxSmartSwitch: Boolean = false) {
     val identity = when (provider) {
         AudioProvider.CURRENT_MUSIC -> "currentmusic"
         AudioProvider.NETEASE -> "netease"
         AudioProvider.LEIZ -> "leiz:" + MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
-        AudioProvider.LX -> "lx:$lxSourceId"
+        AudioProvider.LX -> if (lxSmartSwitch) "lx:$lxSourceId:smart" else "lx:$lxSourceId"
     }
     override fun toString() = "AudioSourceAccess($provider, key=[redacted])"
 }
@@ -27,6 +27,8 @@ class AudioSourceAccess(val provider: AudioProvider, internal val key: String = 
 class AudioSourceSettings(private val store: DataStore<Preferences>, private val vault: TokenStore, scope: CoroutineScope) {
     private val preference = stringPreferencesKey("music.audioProvider")
     private val lxPreference = stringPreferencesKey("music.lxSourceId")
+    private val smartPreference = booleanPreferencesKey("music.lxSmartSwitch")
+    private var savedSmartSwitch = false
     private val lock = Mutex()
     @Volatile private var current = AudioSourceAccess(AudioProvider.CURRENT_MUSIC)
     private var savedKey = ""
@@ -37,6 +39,7 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
         lock.withLock {
             savedKey = runCatching { vault.read().orEmpty() }.getOrDefault("")
             savedLxSource = store.data.first()[lxPreference].orEmpty().takeIf { it.matches(Regex("[a-f0-9]{64}")) }.orEmpty()
+            savedSmartSwitch = store.data.first()[smartPreference] ?: false
             val provider = runCatching { AudioProvider.valueOf(store.data.first()[preference].orEmpty()) }
                 .getOrDefault(AudioProvider.CURRENT_MUSIC)
             publish(provider)
@@ -45,8 +48,8 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
     } }
     fun access() = current
     private fun publish(provider: AudioProvider) {
-        current = AudioSourceAccess(provider, savedKey, savedLxSource)
-        state.value = AudioProviderState(provider, savedKey.isNotBlank(), current.identity, savedLxSource)
+        current = AudioSourceAccess(provider, savedKey, savedLxSource, savedSmartSwitch)
+        state.value = AudioProviderState(provider, savedKey.isNotBlank(), current.identity, savedLxSource, savedSmartSwitch)
     }
     suspend fun select(provider: AudioProvider) {
         ready.await()
@@ -58,6 +61,14 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
         lock.withLock {
             store.edit { it[lxPreference] = id }
             savedLxSource = id
+            publish(current.provider)
+        }
+    }
+    suspend fun setLxSmartSwitch(enabled: Boolean) {
+        ready.await()
+        lock.withLock {
+            store.edit { it[smartPreference] = enabled }
+            savedSmartSwitch = enabled
             publish(current.provider)
         }
     }
