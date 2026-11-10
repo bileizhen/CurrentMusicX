@@ -28,6 +28,8 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,7 +100,18 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     var queueGestureJob by remember { mutableStateOf<Job?>(null) }
     var controlsRevealed by rememberSaveable { mutableStateOf(false) }
     var controlsHidden by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(settings.lyricsDisplay.hideControls) { controlsRevealed = false; controlsHidden = false }
+    var controlsAutoHidden by rememberSaveable { mutableStateOf(false) }
+    var controlsInteraction by remember { mutableIntStateOf(0) }
+    var controlsTouching by remember { mutableStateOf(false) }
+    LaunchedEffect(settings.lyricsDisplay.hideControls) {
+        controlsRevealed = false
+        controlsHidden = false
+        controlsAutoHidden = false
+    }
+    LaunchedEffect(pager.settledPage, queue.current?.id) {
+        controlsRevealed = false
+        controlsAutoHidden = false
+    }
     val menuHost = LocalSongMenu.current
     val songNavigation = rememberPlayerSongNavigation(queue.current, vm.container.musicRepository, settings.server) {
         sidePage.close()
@@ -200,7 +213,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             }
         }
         val hideControls = animateFloatAsState(
-            if ((settings.lyricsDisplay.hideControls || controlsHidden) && !controlsRevealed) 1f else 0f,
+            if ((controlsHidden || (settings.lyricsDisplay.hideControls && controlsAutoHidden)) && !controlsRevealed) 1f else 0f,
             tween(260, easing = LinearOutSlowInEasing), label = "lyricsControls")
         // The neighbour page used to mount its complete Apple rail on the first drag frame.
         // Prepare it after the opening flight and other player transitions have settled,
@@ -212,6 +225,16 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     overlay == PlayerOverlay.NONE && sheetDrag?.state?.dragging != true &&
                     (hideControls.value <= .0001f || hideControls.value >= .9999f)
             }
+        }
+        LaunchedEffect(settings.lyricsDisplay.hideControls, pager.settledPage, pager.isScrollInProgress, expanded,
+            idleForLyrics, controlsRevealed, controlsHidden, controlsAutoHidden, controlsInteraction, controlsTouching,
+            overlay, queue.current?.id, widePlayer) {
+            if (!settings.lyricsDisplay.hideControls || pager.settledPage != PlayerContent.LYRICS.ordinal ||
+                pager.isScrollInProgress || !expanded || !idleForLyrics || controlsHidden || controlsAutoHidden ||
+                controlsTouching || overlay != PlayerOverlay.NONE || widePlayer) return@LaunchedEffect
+            delay(3_000)
+            controlsAutoHidden = true
+            controlsRevealed = false
         }
         val appleLyrics = settings.lyricsDisplay.style == LyricsStyle.APPLE_MUSIC
         var lyricsPrepared by remember { mutableStateOf(false) }
@@ -316,7 +339,27 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     }
                     PlayerIconButton(PlayerIcon.MORE, "播放与歌词设置", { overlay = PlayerOverlay.OPTIONS },
                         Modifier.align(Alignment.TopEnd).testTag("lyrics_options"))
-                } else Column(Modifier.fillMaxSize()) {
+                } else Column(Modifier.fillMaxSize().pointerInput(settings.lyricsDisplay.hideControls) {
+                    if (settings.lyricsDisplay.hideControls) {
+                        try {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    if (event.changes.any { it.pressed && !it.previousPressed }) {
+                                        controlsTouching = true
+                                        controlsInteraction++
+                                    }
+                                    if (event.changes.any { !it.pressed && it.previousPressed }) {
+                                        controlsInteraction++
+                                        controlsTouching = false
+                                    }
+                                }
+                            }
+                        } finally {
+                            controlsTouching = false
+                        }
+                    }
+                }) {
                     Box(Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { pagerArtwork.container = it; pagerArtwork.updateBounds() }) {
                     HorizontalPager(pager, Modifier.fillMaxSize().testTag("player_content_pager")
                         .semantics { this[PlayerPagePosition] = pager.currentPage + pager.currentPageOffsetFraction },
@@ -342,7 +385,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                             }
                             LyricsPanel(vm, Modifier.weight(1f).fillMaxWidth().onGloballyPositioned { lyricsCoordinates = it },
                                 active = pager.currentPage == 1 || pager.isScrollInProgress,
-                                expandLyricsWindow = controlsHidden, prepare = appleLyrics && lyricsPrepared)
+                                expandLyricsWindow = controlsHidden ||
+                                    (settings.lyricsDisplay.hideControls && controlsAutoHidden && !controlsRevealed),
+                                prepare = appleLyrics && lyricsPrepared)
                         } else CoverContent(vm, Modifier.fillMaxSize(), transitionTarget = pager.currentPage == 0,
                             active = pager.currentPage == 0 || pager.isScrollInProgress,
                             pagerRole = PlayerPagerArtworkRole.COVER,
@@ -372,7 +417,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
                         Text("显示控制面板", color = Color.White.copy(alpha = .65f), fontSize = 12.sp,
                             modifier = Modifier.testTag("lyrics_reveal_controls").clickable(role = Role.Button) {
-                                controlsHidden = false; controlsRevealed = true
+                                controlsHidden = false; controlsAutoHidden = false; controlsRevealed = true
                             }
                                 .padding(horizontal = 24.dp, vertical = 14.dp))
                     }
@@ -428,7 +473,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                             animationSpec = tween(260, easing = LinearOutSlowInEasing)) }
                     })
                 if (controlsRevealed && settings.lyricsDisplay.hideControls && content == PlayerContent.LYRICS)
-                    MusicDestinationRow("隐藏控制面板", modifier = Modifier.testTag("lyrics_conceal_controls"), onClick = { controlsRevealed = false; dismiss() })
+                    MusicDestinationRow("隐藏控制面板", modifier = Modifier.testTag("lyrics_conceal_controls"),
+                        onClick = { controlsAutoHidden = true; controlsRevealed = false; dismiss() })
                 if (actions != null && queue.current != null) MusicDestinationRow("歌曲操作", onClick = {
                     val song = queue.current ?: return@MusicDestinationRow
                     if (menuHost == null) overlay = PlayerOverlay.ACTIONS
@@ -584,7 +630,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             settings.lyricsDisplay.translation, settings.lyricsDisplay.romanization, settings.lyricsDisplay.wordAnimation,
             settings.lyricsDisplay.blur, if (minimal) settings.lyricsFontSize * .75f else settings.lyricsFontSize,
             settings.lyricsWeight, settings.lyricsOffsetMs - lyrics.songOffsetMs,
-            settings.lyricsDisplay.copy(hideControls = settings.lyricsDisplay.hideControls || expandLyricsWindow),
+            settings.lyricsDisplay.copy(hideControls = expandLyricsWindow),
             minimal = minimal, perspective = settings.lyricsDisplay.perspective, cover = player.song?.cover.orEmpty(),
             mediaDurationMs = player.durationMs, playbackRunning = active && player.playing && !player.loading)
     } else Box(modifier.testTag("lyrics_panel"), contentAlignment = Alignment.Center) {

@@ -103,8 +103,8 @@ import kotlin.math.roundToInt
         if (classic) MusicDestinationRow("卡拉OK（逐字）歌词动画兼容策略",
             summary = display.karaokeScope.label,
             onClick = onKaraokeScope, modifier = Modifier.testTag("open_karaoke_scope"))
-        LyricsToggle("隐藏歌词界面控制面板", display.hideControls, { value -> onDisplay { it.copy(hideControls = value) } },
-            "lyrics_hide_controls", "歌词页底部可随时恢复控制")
+        LyricsToggle("歌词页自动隐藏控制面板", display.hideControls, { value -> onDisplay { it.copy(hideControls = value) } },
+            "lyrics_hide_controls", "3 秒无操作后隐藏，点击底部按钮可恢复")
     }
 }
 
