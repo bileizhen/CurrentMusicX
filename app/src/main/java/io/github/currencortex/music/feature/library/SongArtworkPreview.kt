@@ -16,7 +16,7 @@ import io.github.currencortex.music.ui.component.nativeui.*
 @Composable internal fun SongArtworkPreview(vm: LibraryViewModel, song: Song, anchor: Rect,
     play: () -> Unit, queue: () -> Unit, roomRequest: Boolean, playEnabled: Boolean = true,
     playVersion: (Song) -> Unit, navigate: (String) -> Unit, share: (Song) -> Unit,
-    download: ((Song) -> Unit)?, onDismiss: () -> Unit) {
+    download: ((Song) -> Unit)?, onDismiss: () -> Unit, onMultiSelect: (() -> Unit)? = null) {
     val libraryActions = librarySongMenuItems(vm, song, navigate)
     val like = libraryActions.firstOrNull { it.id == "song_like_${song.id}" }
     val nativeLikes by vm.container.neteaseSongActions.likedState.collectAsStateWithLifecycle()
@@ -54,6 +54,7 @@ import io.github.currencortex.music.ui.component.nativeui.*
                 add(GlassMenuItem("queue", "加入队列", MusicIcons.List, onClick = queue))
             }
         }, destinations = buildList {
+            onMultiSelect?.let { add(GlassMenuItem("playlist_multi_select", "多选", onClick = it)) }
             if (song.artists.isNotBlank()) add(GlassMenuItem("artist", "查看歌手",
                 onClick = { navigate(song.artistIds.singleOrNull()?.let { "lib/artist/$it" } ?: catalogRoute(false, song.artists)) }))
             if (song.album.isNotBlank()) add(GlassMenuItem("album", "查看专辑", onClick = { navigate(catalogRoute(true, song.album)) }))

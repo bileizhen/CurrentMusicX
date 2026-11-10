@@ -47,6 +47,7 @@ import io.github.currencortex.music.ui.component.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -1020,7 +1021,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 playVersion = { song -> if (menu.roomRequest) requestSong(song)
                     else playWithPermission { container.playerController.playSong(song) } },
                 navigate = ::navigateLibrary, share = { songMenu = menu.copy(previewAnchor = null, shareInitially = true) },
-                download = download, onDismiss = { songMenu = null })
+                download = download, onDismiss = { songMenu = null }, onMultiSelect = menu.onMultiSelect)
             else SongActionsSheet(menu, onDismiss = { songMenu = null }, onDownload = download)
         }
         downloadSongJson?.let { raw ->
