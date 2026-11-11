@@ -278,7 +278,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
             }
             // Track rows form the tail of the list. Include every optional header.
             val headers = (list.layoutInfo.totalItemsCount - songs.size).coerceAtLeast(0)
-            list.animateScrollToItem(headers + index)
+            list.locatePlaylistSong(headers + index)
         }
     }
     val resume = if (canPlay && pausedWithProgress) remember(state.songs, currentSong) {
