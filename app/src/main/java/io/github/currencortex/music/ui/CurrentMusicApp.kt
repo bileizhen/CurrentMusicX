@@ -579,9 +579,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 }
             }
         }
-        // Retained container scenes still own back callbacks. Keep their dispatcher alive,
-        // but stop it receiving gestures while the player above them owns navigation.
-        val pageBackOwner = rememberNavigationEventDispatcherOwner(enabled = !playerPresented)
+        // Retained container scenes still own back callbacks. Keep their dispatcher active
+        // only when predictive back is enabled, and stop it while the player owns navigation.
+        // The legacy NavigationBackHandler below handles ordinary back when this is off.
+        val pageBackOwner = rememberNavigationEventDispatcherOwner(enabled = predictiveBack && !playerPresented)
         val pageContent: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize().then(if (launchBrand.active || launchPreview != null || playerPresented || miniQueueOpen || updateDialogVisible) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
         Column(Modifier.fillMaxSize().then(if (searchCoversScene) Modifier else Modifier.imePadding())) {
