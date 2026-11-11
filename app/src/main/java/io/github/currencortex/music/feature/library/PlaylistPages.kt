@@ -61,6 +61,7 @@ import io.github.currencortex.music.feature.style.StyleArtwork
 import io.github.currencortex.music.feature.style.rememberStyleTint
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collectLatest
 import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -266,6 +267,20 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         return
     }
     val songKeys = remember(songs) { playlistSongKeys(songs) }
+    val locateRequests = LocalCurrentSongLocateRequests.current
+    val pageActive = LocalMusicPageActive.current
+    LaunchedEffect(locateRequests, pageActive, songs, currentSong) {
+        if (pageActive) locateRequests?.collectLatest {
+            val index = playlistCurrentSongIndex(songs, currentSong)
+            if (index < 0) {
+                vm.container.errorNotices.show("当前歌曲不在此列表中")
+                return@collectLatest
+            }
+            // Track rows form the tail of the list. Include every optional header.
+            val headers = (list.layoutInfo.totalItemsCount - songs.size).coerceAtLeast(0)
+            list.locatePlaylistSong(headers + index)
+        }
+    }
     val resume = if (canPlay && pausedWithProgress) remember(state.songs, currentSong) {
         currentSong?.takeIf { current -> state.songs.any { it.id == current.id && it.musicSource == current.musicSource } }
     } else null
