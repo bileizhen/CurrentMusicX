@@ -295,6 +295,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val artworkRotation = rememberPlayerArtworkRotation(playerVm)
         val artworkTransition = remember { PlayerArtworkTransition(playerExpansion::value) }
         val miniQueueTransition = remember { MiniQueueTransition() }
+        val currentSongLocateRequests = remember {
+            kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1,
+                onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
+        }
         var miniArtworkOrigin by remember { mutableStateOf<(() -> PlayerArtworkOrigin?)?>(null) }
         val playerOpen = backStack.last() == PLAYER.toString()
         val playerPresented by remember(playerOpen) { derivedStateOf { playerOpen || playerExpansion.value > .0001f } }
@@ -528,6 +532,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             LocalPlayerSheetDrag provides playerDrag, LocalPlayerArtworkRotation provides artworkRotation,
             LocalPlayerSheetText provides artworkTransition.text, LocalPlayerSheetControls provides artworkTransition.controls,
             LocalMiniQueueTransition provides miniQueueTransition,
+            LocalCurrentSongLocateRequests provides currentSongLocateRequests,
             LocalRecordFlightTarget provides { miniArtworkOrigin?.invoke()?.bounds }) {
         BoxWithConstraints(Modifier.fillMaxSize().musicDialogBackdropSource().testTag("music_window")
             .onGloballyPositioned { navigationBounds = it.boundsInRoot() }) {
@@ -935,7 +940,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             } },
             onSurfaceBounds = { miniBounds = it }, active = showMini, onSurfaceCoordinates = { miniCoordinates = it },
             onArtworkOrigin = { miniArtworkOrigin = it }, artworkVisible = { !artworkTransition.moving && !miniQueueTransition.coverMoving },
-            onOpenBounds = { miniOpenBounds = it }, glow = if (!unifiedDock && !glowOnStandardBar) glow else null)
+            onOpenBounds = { miniOpenBounds = it }, glow = if (!unifiedDock && !glowOnStandardBar) glow else null,
+            onLocateCurrentSong = { currentSongLocateRequests.tryEmit(Unit) })
         }
         if (unifiedDock) {
             val glassNavigation = LocalMusicDockNavigation.current
