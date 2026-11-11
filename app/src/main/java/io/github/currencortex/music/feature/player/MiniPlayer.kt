@@ -3,6 +3,7 @@ package io.github.currencortex.music.feature.player
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -82,7 +83,8 @@ private fun PlayerState.miniTransport() =
     onSurfaceBounds: (Rect) -> Unit = {}, active: Boolean = true,
     onSurfaceCoordinates: (androidx.compose.ui.layout.LayoutCoordinates) -> Unit = {},
     onArtworkOrigin: (() -> PlayerArtworkOrigin?) -> Unit = {}, artworkVisible: () -> Boolean = { true },
-    onOpenBounds: (Rect) -> Unit = {}, glow: (@Composable (Modifier) -> Unit)? = null) {
+    onOpenBounds: (Rect) -> Unit = {}, glow: (@Composable (Modifier) -> Unit)? = null,
+    onLocateCurrentSong: (() -> Unit)? = null) {
     val playback = vm.state.collectAsStateWithLifecycle()
     val queue = vm.queue.collectAsStateWithLifecycle()
     val state by remember(playback) { derivedStateOf(structuralEqualityPolicy()) { playback.value.miniTransport() } }
@@ -145,11 +147,13 @@ private fun PlayerState.miniTransport() =
                 }
             }) {
             if (pair != null) ListeningPairArtwork(pair, Modifier.fillMaxSize().testTag("mini_pair_artwork")
-                .clickable(onClick = onOpen))
+                .combinedClickable(onClick = onOpen, onLongClick = onLocateCurrentSong,
+                    onLongClickLabel = if (onLocateCurrentSong != null) "定位当前歌曲" else null))
             else MusicCover(song?.cover.orEmpty(), Modifier.size(42.dp).testTag("mini_cover")
                 .playerMotionDiagnostics { this[CoverRotation] = rotation.value }
                 .graphicsLayer { rotationZ = rotation.value; alpha = if (artworkVisible()) 1f else 0f }.clip(CircleShape)
-                .border(2.dp, coverBorder, CircleShape).clickable(onClick = onOpen))
+                .border(2.dp, coverBorder, CircleShape).combinedClickable(onClick = onOpen, onLongClick = onLocateCurrentSong,
+                    onLongClickLabel = if (onLocateCurrentSong != null) "定位当前歌曲" else null))
             }
             Column(Modifier.weight(1f).heightIn(min = 48.dp).padding(horizontal = 8.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
                 .onGloballyPositioned { reportOpenArea(1, it) }
@@ -161,7 +165,8 @@ private fun PlayerState.miniTransport() =
                             val offset = dragged; dragged = 0f
                             if (allowed && abs(offset) >= threshold) { if (offset < 0f) next() else previous() }
                         })
-                }.clickable(onClick = onOpen).semantics {
+                }.combinedClickable(onClick = onOpen, onLongClick = onLocateCurrentSong,
+                    onLongClickLabel = if (onLocateCurrentSong != null) "定位当前歌曲" else null).semantics {
                     if (enabled) customActions = listOf(CustomAccessibilityAction("上一首") { previous(); true }, CustomAccessibilityAction("下一首") { next(); true })
                 }, verticalArrangement = Arrangement.Center) {
                 val artistColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f)
