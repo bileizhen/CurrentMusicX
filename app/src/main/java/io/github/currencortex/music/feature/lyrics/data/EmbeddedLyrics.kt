@@ -91,6 +91,66 @@ private fun decodeUntimedEmbeddedLyrics(raw: String, durationMs: Long): LyricsDo
 
 private const val MAX_EMBEDDED_CANDIDATES = 16
 private val EMBEDDED_LYRIC_KEYS = setOf("LYRICS", "UNSYNCEDLYRICS", "SYNCEDLYRICS")
+
+/**
+ * Read FLAC lyric comments straight from the VORBIS_COMMENT block. jaudiotagger decodes the
+ * PICTURE block with javax.imageio while constructing FlacTag, which Android does not provide,
+ * so tagged FLACs with cover art fail there even though the lyrics are perfectly readable.
+ */
+internal fun flacEmbeddedLyricsCandidates(file: java.io.File): List<String> {
+    val candidates = linkedSetOf<String>()
+    try {
+        java.io.RandomAccessFile(file, "r").use { raf ->
+            val magic = ByteArray(4)
+            raf.readFully(magic)
+            if (!magic.contentEquals("fLaC".toByteArray(Charsets.US_ASCII))) return emptyList()
+            while (candidates.size < MAX_EMBEDDED_CANDIDATES) {
+                val header = raf.read()
+                if (header < 0) break
+                val last = header and 0x80 != 0
+                val type = header and 0x7F
+                val length = (raf.read() shl 16) or (raf.read() shl 8) or raf.read()
+                if (length < 0 || length > LyricsFileCodec.MAX_BYTES) break
+                if (type == 4) {
+                    val data = ByteArray(length)
+                    raf.readFully(data)
+                    readVorbisLyrics(data, candidates)
+                } else {
+                    raf.seek(raf.filePointer + length)
+                }
+                if (last) break
+            }
+        }
+    } catch (_: Exception) {
+        return candidates.toList()
+    }
+    return candidates.toList()
+}
+
+private fun readVorbisLyrics(data: ByteArray, candidates: LinkedHashSet<String>) {
+    var offset = 0
+    fun le32(): Int {
+        if (offset + 4 > data.size) throw IOException("truncated vorbis comment")
+        val value = (data[offset].toInt() and 255) or ((data[offset + 1].toInt() and 255) shl 8) or
+            ((data[offset + 2].toInt() and 255) shl 16) or ((data[offset + 3].toInt() and 255) shl 24)
+        offset += 4
+        return value
+    }
+    val vendorLength = le32()
+    offset += vendorLength
+    val count = le32()
+    repeat(count) {
+        val length = le32()
+        if (length < 0 || offset + length > data.size) throw IOException("truncated vorbis comment")
+        val entry = String(data, offset, length, Charsets.UTF_8)
+        offset += length
+        val key = entry.substringBefore('=').uppercase(Locale.ROOT)
+        if (key in EMBEDDED_LYRIC_KEYS && candidates.size < MAX_EMBEDDED_CANDIDATES) {
+            val value = entry.substringAfter('=', "")
+            if (value.isNotBlank()) candidates.add(value)
+        }
+    }
+}
 private val timedEmbeddedMarkup = Regex(
     "(?:\\[|<)\\d+[:,]|\\[bg:|<(?:[\\w.-]+:)?tt(?:\\s|>)|WEBVTT|LyricContent=", RegexOption.IGNORE_CASE,
 )
