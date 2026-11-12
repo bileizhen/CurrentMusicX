@@ -4,7 +4,10 @@ import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.binding.BindingState
 import io.github.currencortex.music.data.library.LibraryRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
@@ -26,6 +29,8 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
     val revision = MutableStateFlow(0L)
     val likedState = MutableStateFlow<Set<Long>>(emptySet())
     private val reads = SessionReadCache(session, { 0L })
+    private val likeWriteMutex = Mutex()
+    private var lastLikeWriteAt: Long? = null
     private data class LikedSnapshot(val uid: Long, val ids: Set<Long>)
     private data class WriteKey(val session: RequestSession, val uid: Long, val id: Long)
     private data class ConfirmedLike(val liked: Boolean, val until: Long)
@@ -36,6 +41,7 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
         val code = (value as? JsonObject)?.get("code")?.jsonPrimitive?.intOrNull
         if (code != null && code != 200) throw ApiException(when {
             code in listOf(301, 401) -> ErrorKind.NeteaseBindingRequired
+            code == 405 -> ErrorKind.NeteaseRateLimited
             code == 429 -> ErrorKind.RateLimited
             code == 403 -> ErrorKind.Forbidden
             path == "playmode/intelligence/list" && code == 400 &&
@@ -152,9 +158,16 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
     }
     suspend fun boundUid(expected: RequestSession = session()): Long = binding(expected).profile!!.uid
     suspend fun setLiked(id: Long, liked: Boolean, expected: RequestSession = session(), song: Song? = null,
-        expectedUid: Long? = null) {
+        expectedUid: Long? = null) = likeWriteMutex.withLock {
         val bound = binding(expected)
         if (expectedUid != null && expectedUid != bound.profile!!.uid) throw ApiException(ErrorKind.NeteaseSessionChanged)
+        // Single-song and batch actions share the same NetEase write interval.
+        lastLikeWriteAt?.let { previous ->
+            val remaining = 1_500_000_000L - (now() - previous)
+            if (remaining > 0) delay((remaining + 999_999L) / 1_000_000L)
+        }
+        if (expected != session()) throw ApiException(ErrorKind.NeteaseSessionChanged)
+        lastLikeWriteAt = now()
         val response = try {
             api.request("POST", "ncmbind/like/$id", query = mapOf("timestamp" to "${System.currentTimeMillis()}"), body = buildJsonObject {
                 LibraryRepository.metadata(song ?: Song(id, "")).forEach { (key, value) -> put(key, value) }
@@ -168,6 +181,7 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
         val code = (response as? JsonObject)?.get("code")?.jsonPrimitive?.intOrNull
         if (code != null && code != 200) throw ApiException(when (code) {
             301, 401 -> ErrorKind.NeteaseBindingRequired
+            405 -> ErrorKind.NeteaseRateLimited
             403 -> ErrorKind.Forbidden
             429 -> ErrorKind.RateLimited
             else -> ErrorKind.Server

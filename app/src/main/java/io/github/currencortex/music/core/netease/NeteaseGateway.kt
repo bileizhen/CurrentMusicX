@@ -89,7 +89,8 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         if (code != 200) {
             if (code in setOf(301, 401) && authenticated) sessions.markStale(owner)
             throw ApiException(when (code) { 301, 401 -> ErrorKind.NeteaseBindingRequired; 403 -> ErrorKind.Forbidden
-                404 -> ErrorKind.NotFound; 406, 429 -> ErrorKind.RateLimited; else -> ErrorKind.Server }, code)
+                404 -> ErrorKind.NotFound; 405 -> ErrorKind.NeteaseRateLimited
+                406, 429 -> ErrorKind.RateLimited; else -> ErrorKind.Server }, code)
         }
         return raw
     }
