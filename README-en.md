@@ -129,9 +129,9 @@ Set audio and lyric sources independently in **Settings → Sources & Network**.
 | **CurrentMusic (default)** | Resolve playback through the configured CurrentMusic server using a CurrentMusic account. |
 | Native NetEase | Connect directly with the local NetEase account's entitlements. This mode keeps playback resolution on the direct route. |
 | LeiZ API | Configure an API key for this service. The app stores it encrypted on the device. |
-| LX Music source | Import a `.js` file or link. It resolves tracks with a valid NetEase ID. Search and playlists keep their original sources. |
+| LX Music source | Import one or more `.js` files or links. With **Smart source switching** enabled, the app prefers the script that resolves fastest and falls back to other imported sources on failure. It resolves tracks with a valid NetEase ID. Search and playlists keep their original sources. |
 
-LX Music scripts send track information to their service. Import scripts from sources you trust. Connect Navidrome under **Settings → Sources & Network → Self-hosted libraries** to play audio directly from your server.
+LX Music scripts send track information to their service. Import scripts from sources you trust. Smart-switch retries send the same track information to other imported scripts' services. Connect Navidrome under **Settings → Sources & Network → Self-hosted libraries** to play audio directly from your server.
 
 Connect Emby under **Settings → Sources & Network → Self-hosted libraries → Emby**. The library appears under **Me → Music services**. It opens on Songs, with the bottom bar switching between Songs, Artists, Playlists, and Favorites. Albums are available from the artist page. Search and refresh sit together at the top. Enter the server URL, which can include a reverse proxy subpath, and your username and password. The app stores the encrypted token after sign-in. Albums, songs, artists, playlists, and favorites load 40 items at a time. The library supports track search, server favorites, queue playback, original-quality caching, and preloading. Playlists are read-only, and downloads follow server permissions. Emby playback currently uses the original stream on the device. Lyrics use the app's automatic matching, manual matching, and local imports.
 
