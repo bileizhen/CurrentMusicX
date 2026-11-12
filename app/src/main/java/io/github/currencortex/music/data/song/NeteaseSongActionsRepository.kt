@@ -4,7 +4,6 @@ import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.binding.BindingState
 import io.github.currencortex.music.data.library.LibraryRepository
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -30,7 +29,6 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
     val likedState = MutableStateFlow<Set<Long>>(emptySet())
     private val reads = SessionReadCache(session, { 0L })
     private val likeWriteMutex = Mutex()
-    private var lastLikeWriteAt: Long? = null
     private data class LikedSnapshot(val uid: Long, val ids: Set<Long>)
     private data class WriteKey(val session: RequestSession, val uid: Long, val id: Long)
     private data class ConfirmedLike(val liked: Boolean, val until: Long)
@@ -161,13 +159,7 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
         expectedUid: Long? = null) = likeWriteMutex.withLock {
         val bound = binding(expected)
         if (expectedUid != null && expectedUid != bound.profile!!.uid) throw ApiException(ErrorKind.NeteaseSessionChanged)
-        // Single-song and batch actions share the same NetEase write interval.
-        lastLikeWriteAt?.let { previous ->
-            val remaining = 1_500_000_000L - (now() - previous)
-            if (remaining > 0) delay((remaining + 999_999L) / 1_000_000L)
-        }
         if (expected != session()) throw ApiException(ErrorKind.NeteaseSessionChanged)
-        lastLikeWriteAt = now()
         val response = try {
             api.request("POST", "ncmbind/like/$id", query = mapOf("timestamp" to "${System.currentTimeMillis()}"), body = buildJsonObject {
                 LibraryRepository.metadata(song ?: Song(id, "")).forEach { (key, value) -> put(key, value) }
