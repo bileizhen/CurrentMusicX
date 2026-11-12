@@ -18,7 +18,8 @@ enum class ErrorKind(val message: String) {
     NeteaseAudioUnavailable("网易云未提供可播放音源，请检查账号权限或歌曲可用地区"),
     NeteaseSessionChanged("网易云账号已切换，请重试"),
     NeteaseLikedPlaylistUnavailable("无法读取网易云“我喜欢的音乐”歌单，请检查网易云绑定"),
-    NeteaseHeartNoRecommendations("暂时没有心动推荐，请换一首歌再试")
+    NeteaseHeartNoRecommendations("暂时没有心动推荐，请换一首歌再试"),
+    NeteaseSongAlreadyInPlaylist("该歌曲已存在")
 }
 class ApiException(val kind: ErrorKind, val status: Int = 0, val userMessage: String? = null) : IOException(userMessage ?: kind.message)
 sealed interface AppResult<out T> {

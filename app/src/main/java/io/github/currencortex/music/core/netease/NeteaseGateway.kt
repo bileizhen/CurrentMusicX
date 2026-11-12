@@ -84,6 +84,8 @@ class NeteaseGateway(val transport: NeteaseTransport) {
             clientLog -> NeteaseEncoding.LOG; web -> NeteaseEncoding.WEB; else -> NeteaseEncoding.DESKTOP
         }, session = owner, clientProfile = clientProfile, saveCookies = saveCookies).body
         val code = (raw["code"] as? JsonPrimitive)?.intOrNull ?: 200
+        if (code == 502 && path == "/api/playlist/manipulate/tracks" && body.text("op") == "add")
+            throw ApiException(ErrorKind.NeteaseSongAlreadyInPlaylist, 502)
         if (code != 200) {
             if (code in setOf(301, 401) && authenticated) sessions.markStale(owner)
             throw ApiException(when (code) { 301, 401 -> ErrorKind.NeteaseBindingRequired; 403 -> ErrorKind.Forbidden
