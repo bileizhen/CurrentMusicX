@@ -2,6 +2,8 @@ name: PR source checks
 on:
   pull_request:
     branches: [main]
+    # ready_for_review re-runs the Android gate that drafts skip.
+    types: [opened, synchronize, reopened, ready_for_review]
 permissions:
   contents: read
 concurrency:
@@ -11,6 +13,7 @@ jobs:
   # Keep the status context required by main's branch protection.
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
         with:
@@ -23,3 +26,33 @@ jobs:
           for path in Path('scripts').glob('*.py'):
               ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
           PY
+      # Compile and lint before merge: Android CI is a main-branch batch
+      # pipeline, so without this gate a broken build only surfaces there.
+      - uses: actions/setup-java@v5
+        if: github.event.pull_request.draft != true
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+        if: github.event.pull_request.draft != true
+        with:
+          cmdline-tools-version: '12266719'
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
+      # Keep the SDK set identical to Android CI so configuration and caches match main.
+      - name: Install Android SDK
+        if: github.event.pull_request.draft != true
+        run: sdkmanager "platforms;android-37.0" "build-tools;35.0.0" "ndk;30.0.16248370" "cmake;4.1.2"
+      - uses: gradle/actions/setup-gradle@v5
+        if: github.event.pull_request.draft != true
+      - name: Compile and lint PR source
+        if: github.event.pull_request.draft != true
+        run: ./gradlew :app:compileReleaseKotlin :app:lintRelease -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace
+      - name: Upload lint report
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: lint-report
+          path: app/build/reports/lint-results-*
+          if-no-files-found: ignore
+          retention-days: 7
