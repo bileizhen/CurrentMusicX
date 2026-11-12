@@ -102,8 +102,12 @@ class LocalLyricsProvider(private val context: Context) {
         if (DocumentsContract.isDocumentUri(context, uri)) {
             return runCatching {
                 val docId = DocumentsContract.getDocumentId(uri)
-                val parent = docId.substringBeforeLast('/', "")
-                if (parent.isEmpty()) return@runCatching null
+                // Document ids are provider-defined; opaque ids ("msf:42") have no path parent.
+                val parent = runCatching {
+                    DocumentsContract.findDocumentPath(resolver, uri)?.path
+                        ?.takeIf { it.size >= 2 }?.let { it[it.size - 2] }
+                }.getOrNull() ?: docId.substringBeforeLast('/', "").takeIf { it.isNotEmpty() && it != docId }
+                if (parent == null) return@runCatching null
                 val tree = DocumentsContract.buildTreeDocumentUri(uri.authority, DocumentsContract.getTreeDocumentId(uri))
                 val children = DocumentsContract.buildChildDocumentsUriUsingTree(tree, parent)
                 resolver.query(children, arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME,
@@ -114,9 +118,7 @@ class LocalLyricsProvider(private val context: Context) {
                         val display = cursor.getString(nameColumn).orEmpty()
                         if (names.any { it.equals(display, ignoreCase = true) }) {
                             val child = DocumentsContract.buildDocumentUriUsingTree(tree, cursor.getString(idColumn))
-                            return@runCatching resolver.openInputStream(child)?.use { input ->
-                                input.readBytes().takeIf { it.size <= LyricsFileCodec.MAX_BYTES }
-                            }
+                            return@runCatching resolver.openInputStream(child)?.use { readBounded(it) }
                         }
                     }
                     null
@@ -138,6 +140,19 @@ class LocalLyricsProvider(private val context: Context) {
             val file = File(parent, name)
             if (file.isFile && file.length() <= LyricsFileCodec.MAX_BYTES) runCatching { file.readBytes() }.getOrNull() else null
         }
+}
+
+/** Reject oversized streams as soon as they exceed the limit instead of materializing them. */
+internal fun readBounded(input: java.io.InputStream): ByteArray? {
+    val buffer = java.io.ByteArrayOutputStream()
+    val chunk = ByteArray(64 * 1024)
+    while (true) {
+        val count = input.read(chunk)
+        if (count < 0) break
+        buffer.write(chunk, 0, count)
+        if (buffer.size() > LyricsFileCodec.MAX_BYTES) return null
+    }
+    return buffer.toByteArray()
 }
 
 /** Same-base-name lyric sidecars, case variants included; blank names yield nothing. */
