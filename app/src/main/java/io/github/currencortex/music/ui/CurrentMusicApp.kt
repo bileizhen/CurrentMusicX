@@ -1048,7 +1048,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         // BackHandlers inside the playlist page never fire and the legacy pop above would
         // exit the page. Registered after it, this closes the overlay first instead.
         androidx.activity.compose.BackHandler(enabled = !predictiveBack && !playerPresented &&
-            isPlaylistRoute(sceneStack.last()) && (settings.playlistDepthRibbon || settings.playlistRecordShelf)) {
+            isPlaylistRoute(sceneStack.last()) && (settings.playlistDepthRibbon || settings.playlistRecordShelf) &&
+            io.github.currencortex.music.feature.library.PlaylistOverlayVisibility.visible[sceneStack.last()] == true) {
             scope.launch { container.settings.edit { it.copy(playlistDepthRibbon = false, playlistRecordShelf = false) } }
         }
         ScaleDialog(showScale, settingsVm) { showScale = false }
