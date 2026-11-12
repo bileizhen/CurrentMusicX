@@ -266,7 +266,8 @@ internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, 
 
 @Composable internal fun PlayerIconButton(icon: PlayerIcon, label: String, onClick: () -> Unit,
     modifier: Modifier = Modifier, selected: Boolean = false, count: Long? = null, showCount: Boolean = false,
-    enabled: Boolean = true, loading: Boolean = false, onLongClick: (() -> Unit)? = null) {
+    enabled: Boolean = true, loading: Boolean = false, onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String = "选择其他歌单") {
     val interactions = remember { MutableInteractionSource() }
     val pressed by interactions.collectIsPressedAsState()
     val scale = animateFloatAsState(if (pressed && enabled) .88f else 1f,
@@ -276,7 +277,7 @@ internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, 
         infiniteRepeatable(tween(900, easing = LinearEasing)), label = "action spinner").value else 0f
     Box(modifier.size(48.dp).combinedClickable(enabled = enabled, role = Role.Button, interactionSource = interactions,
         indication = null, onClick = onClick, onLongClick = onLongClick,
-        onLongClickLabel = if (onLongClick != null) "选择其他歌单" else null).semantics {
+        onLongClickLabel = if (onLongClick != null) onLongClickLabel else null).semantics {
             contentDescription = label + if (count != null) "，网易云数量 $count" else ""; this.selected = selected
             if (!enabled) disabled()
             this[PlayerButtonVisuals] = PlayerButtonVisual(pressed, scale.value, 0f, opacity.value)
