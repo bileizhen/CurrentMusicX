@@ -50,8 +50,19 @@ class LocalLyricsProvider(private val context: Context) {
                     }
                     embeddedAudioExtension(header.copyOf(length))
                 } ?: return@use emptyList()
-                val audio = AudioFileIO.readAs(file, container)
-                embeddedLyricsCandidates(audio.tag)
+                if (container == "flac") {
+                    // FlacTag construction decodes cover art through javax.imageio, absent on
+                    // Android; read the lyric comments directly and only fall back when empty.
+                    val direct = flacEmbeddedLyricsCandidates(file)
+                    if (direct.isNotEmpty()) direct else try {
+                        embeddedLyricsCandidates(AudioFileIO.readAs(file, container).tag)
+                    } catch (e: CancellationException) { throw e }
+                    catch (_: Exception) { emptyList() }
+                    catch (_: LinkageError) { emptyList() }
+                } else {
+                    val audio = AudioFileIO.readAs(file, container)
+                    embeddedLyricsCandidates(audio.tag)
+                }
             } ?: throw IOException("Content provider returned no file descriptor")
         } catch (e: CancellationException) { throw e }
         catch (e: Exception) { throw EmbeddedLyricsReadException(e) }
