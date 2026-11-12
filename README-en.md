@@ -73,7 +73,7 @@ Track, quality, member effects, and recommendation availability depend on the se
 - **Local audio.** Under **Local Music → Scan scope → Choose folder**, scan the selected directory and its subdirectories. The app remembers the location and asks again if access expires. A device-wide scan requires explicit selection and audio permission. Changing scan scope preserves the active queue.
 - **Discovery.** Search by category or lyrics, browse suggestions, daily recommendations, trends, and genres. Personal FM supports default, familiar, exploration, mix, and dynamic scenes. Your previous queue can be restored after a session.
 - **Two-person listening.** Use native NetEase invites and short links, a shared queue, synchronized track changes, and reconnection. Browse history, rankings, session recaps, and compatibility reports.
-- **Accounts and community.** Multiple accounts, profiles, password changes and email recovery, listening stats, announcements, posts, public chat, and AI conversations. The optional NetEase task center and foreground check-ins are off by default.
+- **Accounts and community.** Multiple accounts, account levels and growth with level trials, profiles, password changes and email recovery. Sign-in also supports email codes, security questions, and passkeys (Android 9+), with authenticator and security-question protection management. **Me → Listening time** combines on-device and NetEase footprints with weekly, monthly, and yearly reports plus record-wall export. Announcements, posts, public chat, and AI conversations. The optional NetEase task center and foreground check-ins are off by default.
 
 ### Appearance
 
@@ -107,7 +107,7 @@ Choose light, dark, or pure black themes with Monet colors. Use circular or imme
 <details>
 <summary>Libraries, search, and shared listening</summary>
 
-- First sign in to CurrentMusic, then use a QR code or SMS verification to sign in to NetEase. With a local NetEase session, search, playlists, likes, recommendations, and comments use direct NetEase requests. Some features can use an existing cloud binding when the local session is absent. The server keeps its copy of the credential.
+- CurrentMusic accounts sign in with a password, email code, security question, or passkey; see [README-ANDROID-PASSKEYS.md](README-ANDROID-PASSKEYS.md) for the server-side passkey setup. First sign in to CurrentMusic, then use a QR code or SMS verification to sign in to NetEase. With a local NetEase session, search, playlists, likes, recommendations, and comments use direct NetEase requests. Some features can use an existing cloud binding when the local session is absent. The server keeps its copy of the credential.
 - **Use NetEase as main library** changes the default library shortcut. **Settings → Playback → Default like destination** controls where likes go. Navidrome favorites go to the connected server.
 - Search, sort, create, and manage playlists. The CD shelf can collapse search, pick tracks at random, preview a chorus or full track, loop, and advance. Undo a removed like from the island. CurrentMusic playlists can import NetEase Liked Songs. Switching libraries preserves existing playlists.
 - Search offers collapsible history, two-column suggestions, and a horizontal NetEase trends list, including ACG and Japanese categories. Tap a suggestion to search. The **Lyrics** category returns tracks with matching lyric excerpts.
