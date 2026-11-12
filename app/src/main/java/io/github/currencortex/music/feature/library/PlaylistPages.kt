@@ -137,6 +137,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
 }
 
+/** Routes whose playlist overlay is actually rendered; empty lists keep the flag but show no overlay. */
+object PlaylistOverlayVisibility {
+    val visible = mutableStateMapOf<String, Boolean>()
+}
+
 internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: () -> Unit,
     val requestPermission: () -> Unit, val openSettings: () -> Unit, val permissionMessage: String? = null,
     val chooseScope: () -> Unit = requestPermission)
@@ -223,6 +228,10 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     // A shelf is another view of the current list, including its order and filter.
     // Keep the empty-result view reachable so its close action can return to that filter.
     if (appearance.playlistRecordShelf && state.songs.isNotEmpty()) {
+        DisposableEffect(vm.route) {
+            PlaylistOverlayVisibility.visible[vm.route] = true
+            onDispose { PlaylistOverlayVisibility.visible.remove(vm.route) }
+        }
         val previewContext = androidx.compose.ui.platform.LocalContext.current
         val previewLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
         val preview = remember(vm.container) { RecordShelfPreview(previewContext, vm.container) }
@@ -261,6 +270,10 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         return
     }
     if (appearance.playlistDepthRibbon && songs.isNotEmpty()) {
+        DisposableEffect(vm.route) {
+            PlaylistOverlayVisibility.visible[vm.route] = true
+            onDispose { PlaylistOverlayVisibility.visible.remove(vm.route) }
+        }
         PlaylistDepthRibbon(songs, canPlay, onPlay = { index -> play(songs, index) },
             onPrepare = { index -> val job = vm.preloadForPlayback(songs[index]); { job.cancel() } },
             onClose = { scope.launch { vm.container.settings.edit { it.copy(playlistDepthRibbon = false) } } })
