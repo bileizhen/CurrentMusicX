@@ -579,9 +579,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 }
             }
         }
-        // Retained container scenes still own back callbacks. Keep their dispatcher alive,
-        // but stop it receiving gestures while the player above them owns navigation.
-        val pageBackOwner = rememberNavigationEventDispatcherOwner(enabled = !playerPresented)
+        // Retained container scenes still own back callbacks. Keep their dispatcher active
+        // only when predictive back is enabled, and stop it while the player owns navigation.
+        // The legacy NavigationBackHandler below handles ordinary back when this is off.
+        val pageBackOwner = rememberNavigationEventDispatcherOwner(enabled = predictiveBack && !playerPresented)
         val pageContent: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize().then(if (launchBrand.active || launchPreview != null || playerPresented || miniQueueOpen || updateDialogVisible) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
         Column(Modifier.fillMaxSize().then(if (searchCoversScene) Modifier else Modifier.imePadding())) {
@@ -1043,6 +1044,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 pendingPlay == null && !updateDialogVisible && updatePrompt == null && !announcementVisible && !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
+        // With predictive back off the page dispatcher is disabled, so the ribbon/shelf
+        // BackHandlers inside the playlist page never fire and the legacy pop above would
+        // exit the page. Registered after it, this closes the overlay first instead.
+        androidx.activity.compose.BackHandler(enabled = !predictiveBack && !playerPresented &&
+            isPlaylistRoute(sceneStack.last()) && (settings.playlistDepthRibbon || settings.playlistRecordShelf) &&
+            io.github.currencortex.music.feature.library.PlaylistOverlayVisibility.visible[sceneStack.last()] == true) {
+            scope.launch { container.settings.edit { it.copy(playlistDepthRibbon = false, playlistRecordShelf = false) } }
+        }
         ScaleDialog(showScale, settingsVm) { showScale = false }
         MemberDetailDialog(show = memberFocus != null, focus = shownMember, onDismiss = { memberFocus = null })
         LogExportDialog(showLogs, container.logger) { showLogs = false }
