@@ -29,6 +29,8 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
             ?: throw ApiException(ErrorKind.Parse)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         val code = response["code"]?.jsonPrimitive?.intOrNull
+        if (code == 502 && path == "playlist/tracks" && query["op"] == "add")
+            throw ApiException(ErrorKind.NeteaseSongAlreadyInPlaylist, 502)
         if (code != null && code != 200) throw ApiException(if (code in listOf(301, 401)) ErrorKind.NeteaseBindingRequired else ErrorKind.Server, code)
         return response
     }
