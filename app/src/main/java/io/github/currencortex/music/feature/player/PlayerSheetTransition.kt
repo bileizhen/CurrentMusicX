@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.launch
+import kotlin.math.round
 import kotlin.math.roundToInt
 
 internal const val PLAYER_SHEET_DURATION = 420
@@ -272,6 +273,19 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
     }
 }
 
+/** Normalize once per flight, then unwrap each playback step across full turns. */
+internal class PlayerArtworkFlightAngle(initialAngle: Float) {
+    private var previousAngle = initialAngle
+    private var continuousAngle = initialAngle - 360f * round(initialAngle / 360f)
+
+    fun rotation(angle: Float, progress: Float): Float {
+        val delta = angle - previousAngle
+        continuousAngle += delta - 360f * round(delta / 360f)
+        previousAngle = angle
+        return continuousAngle * (1 - progress)
+    }
+}
+
 /** Shared artwork follows the same progress as the sheet, including direct dragging. */
 @Composable private fun PlayerArtworkFlight(transfer: PlayerArtworkTransition, url: String,
     viewport: Rect?) {
@@ -286,7 +300,12 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
     val density = LocalDensity.current
     val rotation = LocalPlayerArtworkRotation.current
     val lastDestination = remember(transfer, target, sheet) { arrayOfNulls<Rect>(1) }
-    val frame by remember(transfer, target, source, sheet, window, rotation) { derivedStateOf {
+    val moving by remember(transfer) { derivedStateOf { transfer.moving } }
+    // Reversing a drag retains the same angle history until the flight reaches an endpoint.
+    val flightAngle = remember(transfer, source, rotation, moving) {
+        PlayerArtworkFlightAngle(rotation?.value ?: source.rotation)
+    }
+    val frame by remember(transfer, target, source, sheet, window, rotation, flightAngle) { derivedStateOf {
         val p = transfer.progress().coerceIn(0f, 1f)
         // Relative coordinates cancel the sheet's moving layer transform without relying
         // on which graphics layer happened to update first in this frame.
@@ -300,10 +319,9 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
         // Measured from the supplied recording: horizontal travel eases out, while the
         // vertical travel and diameter ease in. This rolls inward before lifting up.
         val angle = rotation?.value ?: source.rotation
-        val flightRotation = if (transfer.squareArtwork) ((angle + 180f) % 360f - 180f) * (1 - p) else angle
+        val flightRotation = if (transfer.squareArtwork) flightAngle.rotation(angle, p) else angle
         PlayerArtworkFrame(p, playerSheetElementArc(start, destination, p), flightRotation)
     } }
-    val moving by remember(transfer) { derivedStateOf { transfer.moving } }
     if (moving) MusicCover(url, Modifier.requiredSize(with(density) { targetSize.width.toDp() })
         .testTag("player_artwork_flight").playerMotionDiagnostics { this[PlayerArtworkGeometry] = frame }
         .graphicsLayer {
