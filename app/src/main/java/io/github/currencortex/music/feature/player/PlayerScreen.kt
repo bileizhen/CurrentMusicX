@@ -196,7 +196,14 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             !(roaming.active && roaming.choice.code == "PUZZLE_MODE_RCMD") &&
             (widePlayer || pager.currentPage == 0) && !pager.isScrollInProgress &&
             queueMotion.progress == 0f && overlay == PlayerOverlay.NONE && !sidePage.active)
-        SideEffect { pagerArtwork.immersive = immersiveCover && !widePlayer; pagerArtwork.updateBounds() }
+        val squareCover = appearance.playerCoverStyle == io.github.currencortex.music.data.settings.PlayerCoverStyle.SQUARE
+        val artworkTransition = LocalPlayerArtworkTransition.current
+        SideEffect {
+            pagerArtwork.square = squareCover
+            artworkTransition?.squareArtwork = squareCover
+            pagerArtwork.immersive = immersiveCover && !widePlayer
+            pagerArtwork.updateBounds()
+        }
         PlayerSystemBars(immersive = widePlayer)
         val density = LocalDensity.current
         val layoutDirection = LocalLayoutDirection.current

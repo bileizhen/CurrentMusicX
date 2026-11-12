@@ -61,6 +61,7 @@ internal fun playerElementArc(start: Rect, end: Rect, progress: Float, bend: Flo
 
 internal class PlayerPagerArtworkTransition(val progress: () -> Float, val queueProgress: () -> Float = { 0f }) {
     var immersive by mutableStateOf(false)
+    var square by mutableStateOf(false)
     var root by mutableStateOf<LayoutCoordinates?>(null)
     var mainPage by mutableStateOf<LayoutCoordinates?>(null)
     var queuePage by mutableStateOf<LayoutCoordinates?>(null)
@@ -145,7 +146,7 @@ internal class PlayerPagerArtworkTransition(val progress: () -> Float, val queue
     }
     fun cornerRadius(bounds: Rect, queueRadius: Float): Float {
         val q = if (queueReady) queueProgress().coerceIn(0f, 1f) else 0f
-        return bounds.size.minDimension / 2 * (1 - immersion()) * (1 - q) + queueRadius * q
+        return bounds.size.minDimension * (if (square) .05f else .5f) * (1 - immersion()) * (1 - q) + queueRadius * q
     }
 }
 internal val LocalPlayerPagerArtwork = staticCompositionLocalOf<PlayerPagerArtworkTransition?> { null }
@@ -241,8 +242,8 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
     if (width <= 0) return
     PlayerSongCover(song?.cover.orEmpty(), Modifier.requiredSize(with(density) { width.toDp() }).testTag("player_pager_artwork")
         .playerMotionDiagnostics {
-            geometry.value?.let { this[PlayerPagerArtworkGeometry] = it.copy(rotation = rotation?.value ?: 0f) }
-            this[CoverRotation] = rotation?.value ?: 0f
+            geometry.value?.let { this[PlayerPagerArtworkGeometry] = it.copy(rotation = if (transfer.square) 0f else rotation?.value ?: 0f) }
+            this[CoverRotation] = if (transfer.square) 0f else rotation?.value ?: 0f
         }
         .graphicsLayer {
             alpha = if (sheet?.moving == true) 0f else playerSheetContentAlpha(sheetProgress())
@@ -251,15 +252,15 @@ internal fun Modifier.playerSharedText(role: PlayerPagerArtworkRole?, subtitle: 
             translationX = (frame?.bounds?.left ?: 0f) + transfer.paneOffset.x
             translationY = (frame?.bounds?.top ?: 0f) + transfer.paneOffset.y
             scaleX = (frame?.bounds?.width ?: 0f) / width; scaleY = scaleX
-        }, artworkModifier = Modifier.playerCoverShadow() {
+        }, artworkModifier = Modifier.playerCoverShadow(square = transfer.square) {
             1f - if (transfer.queueReady) transfer.queueProgress().coerceIn(0f, 1f) else 0f
         }.graphicsLayer {
             val frame = geometry.value
             val scale = (frame?.bounds?.width ?: 0f) / width
             val q = if (transfer.queueReady) transfer.queueProgress().coerceIn(0f, 1f) else 0f
-            val angle = rotation?.value ?: 0f
+            val angle = if (transfer.square) 0f else rotation?.value ?: 0f
             rotationZ = if (q == 0f) angle else (angle - round(angle / 360f) * 360f) * (1 - q)
-            val radius = (frame?.bounds?.width ?: 0f) / 2 * (1 - q) + with(density) { 8.dp.toPx() } * q
+            val radius = frame?.bounds?.let { transfer.cornerRadius(it, with(density) { 8.dp.toPx() }) } ?: 0f
             shape = RoundedCornerShape(with(density) { (radius / scale.coerceAtLeast(.001f)).toDp() })
             clip = true
         }, motion = LocalPlayerCoverMotion.current, pixels = 800, cornerRadius = 0.dp)

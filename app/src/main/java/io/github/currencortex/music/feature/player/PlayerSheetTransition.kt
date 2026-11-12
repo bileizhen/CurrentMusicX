@@ -91,6 +91,7 @@ internal class PlayerArtworkTransition(val progress: () -> Float) {
     var destination by mutableStateOf<(() -> Rect?)?>(null)
     var sheet by mutableStateOf<LayoutCoordinates?>(null)
     var immersiveArtwork by mutableStateOf<PlayerPagerArtworkTransition?>(null)
+    var squareArtwork by mutableStateOf(false)
     var viewport by mutableStateOf<Rect?>(null)
     val moving: Boolean get() = origin != null && target?.isAttached == true && sheet?.isAttached == true && progress() > 0f && progress() < 1f
 }
@@ -102,6 +103,7 @@ internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtwo
     val pager = LocalPlayerPagerArtwork.current
     val coverMotion = LocalPlayerCoverMotion.current.takeIf { pagerRole == null || pagerRole == PlayerPagerArtworkRole.COVER }
     val rotation = LocalPlayerArtworkRotation.current
+    val square = transfer?.squareArtwork == true
     var coordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     DisposableEffect(transfer, transitionTarget) { onDispose { if (transfer?.target === coordinates) transfer?.target = null } }
     DisposableEffect(pager, pagerRole) { onDispose {
@@ -121,7 +123,7 @@ internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtwo
         if (pagerRole != null) pager?.updateBounds()
     }
         .playerMotionDiagnostics {
-            this[CoverRotation] = rotation?.value ?: 0f
+            this[CoverRotation] = if (square) 0f else rotation?.value ?: 0f
             this[PlayerArtworkVisible] = transfer?.moving != true && !(pagerRole != null && pager?.ready == true)
         }.semantics {
             if (pagerRole != null && pager?.ready == true) hideFromAccessibility()
@@ -129,8 +131,12 @@ internal val LocalPlayerArtworkTransition = staticCompositionLocalOf<PlayerArtwo
         PlayerSongCover(url, Modifier.matchParentSize().graphicsLayer {
             alpha = if (transfer?.moving == true || (pagerRole != null && pager?.ready == true)) 0f else 1f
         }, artworkModifier = Modifier.graphicsLayer {
-            rotationZ = if (pagerRole == PlayerPagerArtworkRole.QUEUE) 0f else rotation?.value ?: 0f
-        }.then(if (pagerRole == PlayerPagerArtworkRole.QUEUE) Modifier else Modifier.playerCoverShadow()).clip(if (pagerRole == PlayerPagerArtworkRole.QUEUE) RoundedCornerShape(8.dp) else CircleShape), motion = coverMotion, pixels = pixels,
+            rotationZ = if (square || pagerRole == PlayerPagerArtworkRole.QUEUE) 0f else rotation?.value ?: 0f
+        }.then(if (pagerRole == PlayerPagerArtworkRole.QUEUE) Modifier else Modifier.playerCoverShadow(square = square)).clip(when {
+            pagerRole == PlayerPagerArtworkRole.QUEUE -> RoundedCornerShape(8.dp)
+            square -> RoundedCornerShape(5)
+            else -> CircleShape
+        }), motion = coverMotion, pixels = pixels,
             cornerRadius = if (pagerRole == PlayerPagerArtworkRole.QUEUE) 8.dp else 0.dp)
     }
 }
@@ -266,7 +272,7 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
     }
 }
 
-/** Shared circular artwork follows the same progress as the sheet, including direct dragging. */
+/** Shared artwork follows the same progress as the sheet, including direct dragging. */
 @Composable private fun PlayerArtworkFlight(transfer: PlayerArtworkTransition, url: String,
     viewport: Rect?) {
     // The immersive cover flies below its controls, inside the sheet, using the same arc.
@@ -293,7 +299,9 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
         } else lastDestination[0] ?: start
         // Measured from the supplied recording: horizontal travel eases out, while the
         // vertical travel and diameter ease in. This rolls inward before lifting up.
-        PlayerArtworkFrame(p, playerSheetElementArc(start, destination, p), rotation?.value ?: source.rotation)
+        val angle = rotation?.value ?: source.rotation
+        val flightRotation = if (transfer.squareArtwork) ((angle + 180f) % 360f - 180f) * (1 - p) else angle
+        PlayerArtworkFrame(p, playerSheetElementArc(start, destination, p), flightRotation)
     } }
     val moving by remember(transfer) { derivedStateOf { transfer.moving } }
     if (moving) MusicCover(url, Modifier.requiredSize(with(density) { targetSize.width.toDp() })
@@ -303,10 +311,22 @@ private data class SheetClip(val width: Float, val height: Float, val radius: Fl
             transformOrigin = TransformOrigin(0f, 0f)
             translationX = f.bounds.left; translationY = f.bounds.top
             scaleX = f.bounds.width / targetSize.width; scaleY = scaleX
-        }.graphicsLayer { rotationZ = frame.rotation }.playerCoverShadow() { frame.progress }.clip(CircleShape)
+        }.graphicsLayer { rotationZ = frame.rotation }
+        .playerCoverShadow(square = transfer.squareArtwork) { frame.progress }
+        .graphicsLayer {
+            val fraction = .5f * (1 - frame.progress) + (if (transfer.squareArtwork) .05f else .5f) * frame.progress
+            shape = RoundedCornerShape(with(density) { (size.minDimension * fraction).toDp() })
+            clip = true
+        }
         .drawWithContent {
             drawContent()
             val stroke = 2.dp.toPx() * (1 - frame.progress) / (frame.bounds.width / targetSize.width)
-            if (stroke > 0f) drawCircle(source.borderColor, radius = size.width / 2 - stroke / 2, style = Stroke(stroke))
-        }, pixels = 800)
+            if (stroke > 0f) {
+                val fraction = .5f * (1 - frame.progress) + (if (transfer.squareArtwork) .05f else .5f) * frame.progress
+                drawRoundRect(source.borderColor, topLeft = Offset(stroke / 2, stroke / 2),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    cornerRadius = CornerRadius((size.minDimension * fraction - stroke / 2).coerceAtLeast(0f)),
+                    style = Stroke(stroke))
+            }
+        }, pixels = 800, cornerRadius = 0.dp)
 }
