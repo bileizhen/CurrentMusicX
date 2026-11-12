@@ -61,7 +61,7 @@ Track, quality, member effects, and recommendation availability depend on the se
 
 ### Playback
 
-- **Player controls.** Background playback, notification, lock screen, and Bluetooth controls. Use a queue, repeat, shuffle, Heartbeat mode, a sleep timer, and music videos.
+- **Player controls.** Background playback, notification, lock screen, and Bluetooth controls. Use a queue, repeat, shuffle, Heartbeat mode, a sleep timer, and music videos. Long-press the mini player to scroll the open playlist to the current track.
 - **Lyrics and effects.** Automatic matching across six sources, word-by-word highlighting, translations, and romanization. Choose Monet animation, flowing smoke, stardust, or perspective effects. Apply per-track offsets, import several formats, and export FIA or LRC.
 - **Audio effects and transitions.** Local EQ, original standard and smart effects, AI Mood Tuner, AI Tuning Master, and speaker presets. Choose smart transitions or fades.
 - **Downloads and sharing.** Select quality and destination, track background progress, cancel, or retry. Downloads can include tags, artwork, and lyrics. Generate posters, playback links, and QR codes.
@@ -69,11 +69,11 @@ Track, quality, member effects, and recommendation availability depend on the se
 
 ### Your library and shared listening
 
-- **Libraries.** Manage NetEase likes and playlists, create CurrentMusic playlists, and browse Navidrome or Emby albums and artists. Search, favorite, and play at original quality.
+- **Libraries.** Manage NetEase likes and playlists, subscribe to other people's NetEase playlists, create CurrentMusic playlists, and browse Navidrome or Emby albums and artists. Search, favorite, and play at original quality.
 - **Local audio.** Under **Local Music → Scan scope → Choose folder**, scan the selected directory and its subdirectories. The app remembers the location and asks again if access expires. A device-wide scan requires explicit selection and audio permission. Changing scan scope preserves the active queue.
 - **Discovery.** Search by category or lyrics, browse suggestions, daily recommendations, trends, and genres. Personal FM supports default, familiar, exploration, mix, and dynamic scenes. Your previous queue can be restored after a session.
 - **Two-person listening.** Use native NetEase invites and short links, a shared queue, synchronized track changes, and reconnection. Browse history, rankings, session recaps, and compatibility reports.
-- **Accounts and community.** Multiple accounts, profiles, password changes and email recovery, listening stats, announcements, posts, public chat, and AI conversations. The optional NetEase task center and foreground check-ins are off by default.
+- **Accounts and community.** Multiple accounts, account levels and growth with level trials, profiles, password changes and email recovery. Sign-in also supports email codes, security questions, and passkeys (Android 9+), with authenticator and security-question protection management. **Me → Listening time** combines on-device and NetEase footprints with weekly, monthly, and yearly reports plus record-wall export. Announcements, posts, public chat, and AI conversations. The optional NetEase task center and foreground check-ins are off by default.
 
 ### Appearance
 
@@ -98,7 +98,7 @@ Choose light, dark, or pure black themes with Monet colors. Use circular or imme
 - Choose either smart transitions or fades for automatic track changes. Both start off. Fades range from 1 to 12 seconds. Playback alongside other apps has its own setting.
 - Use **Player menu → Playback background** to choose a system image and preview 0–100% blur. The image stays on the device across restarts. You can restore the artwork-derived background.
 - Enable **Me → NetEase account → NetEase tasks** to add a task shortcut. A local NetEase session is required. Automatic daily and Yunbei check-ins have a separate switch and run in the foreground. NetEase confirms progress and rewards based on actual listening records.
-- The lyrics view prefers genuine word timings and filters server estimates. Set karaoke compatibility to **Always** to generate approximate highlighting for line-by-line lyrics on the device.
+- The lyrics view prefers genuine word timings and filters server estimates. Set karaoke compatibility to **Always** to generate approximate highlighting for line-by-line lyrics on the device. **Auto-hide the lyrics control panel** is off by default; when enabled, the lyrics page hides its controls after 3 seconds of inactivity and a bottom button brings them back.
 - Audio effects use native Compose and a bundled ARM64 engine. The server verifies member entitlements. The app identifies unavailable algorithms. Speaker presets apply for the current session.
 - The in-app island shows temporary feedback for effects, downloads, and errors. Desktop lyrics require system overlay permission. The window stays locked. Settings control height, font size, and translation. Taps can toggle the view, and horizontal swipes change tracks.
 
@@ -107,11 +107,12 @@ Choose light, dark, or pure black themes with Monet colors. Use circular or imme
 <details>
 <summary>Libraries, search, and shared listening</summary>
 
-- First sign in to CurrentMusic, then use a QR code or SMS verification to sign in to NetEase. With a local NetEase session, search, playlists, likes, recommendations, and comments use direct NetEase requests. Some features can use an existing cloud binding when the local session is absent. The server keeps its copy of the credential.
+- CurrentMusic accounts sign in with a password, email code, security question, or passkey; see [README-ANDROID-PASSKEYS.md](README-ANDROID-PASSKEYS.md) for the server-side passkey setup. First sign in to CurrentMusic, then use a QR code or SMS verification to sign in to NetEase. With a local NetEase session, search, playlists, likes, recommendations, and comments use direct NetEase requests. Some features can use an existing cloud binding when the local session is absent. The server keeps its copy of the credential.
 - **Use NetEase as main library** changes the default library shortcut. **Settings → Playback → Default like destination** controls where likes go. Navidrome favorites go to the connected server.
-- Search, sort, create, and manage playlists. The CD shelf can collapse search, pick tracks at random, preview a chorus or full track, loop, and advance. Undo a removed like from the island. CurrentMusic playlists can import NetEase Liked Songs. Switching libraries preserves existing playlists.
+- Search, sort, create, and manage playlists. Playlist and Likes pages support multi-selecting tracks to favorite or unfavorite in batch, and other people's NetEase playlists can be subscribed. The CD shelf can collapse search, pick tracks at random, preview a chorus or full track, loop, and advance. Undo a removed like from the island. CurrentMusic playlists can import NetEase Liked Songs. Switching libraries preserves existing playlists.
 - Search offers collapsible history, two-column suggestions, and a horizontal NetEase trends list, including ACG and Japanese categories. Tap a suggestion to search. The **Lyrics** category returns tracks with matching lyric excerpts.
 - The **Playlists** search category shows cover artwork, creators, and track counts, with pagination and retry. Playlist details use the existing view. Switching categories or navigating back preserves results and scroll position.
+- Tapping NetEase links for songs, playlists, albums, artists, or MVs, `163cn.tv` short links, listen-together invites, or CurrentMusic site `/app/` links in chat or a browser opens them in the app: song links resolve and play the track, other links open the matching page, and invites only prefill until confirmed. CurrentMusic domains depend on site app-link verification; NetEase domains need to be allowed under the system default-open-links setting.
 - Native NetEase listening shares the existing search and playback queue. It supports recommendations based on both listeners' tastes, removal, clearing, queue downloads, and likes. NetEase controls access to recommendations, history, rankings, and reports.
 - On cold start, the app checks for an interrupted NetEase session and can restore it. Starting other playback cancels restoration. The recap appears after NetEase confirms the session ended. You can like songs and export a share poster.
 - CurrentMusic rooms support passwords, song approval, and member permissions. Navidrome and Emby libraries are currently for playback on the device.
@@ -129,9 +130,9 @@ Set audio and lyric sources independently in **Settings → Sources & Network**.
 | **CurrentMusic (default)** | Resolve playback through the configured CurrentMusic server using a CurrentMusic account. |
 | Native NetEase | Connect directly with the local NetEase account's entitlements. This mode keeps playback resolution on the direct route. |
 | LeiZ API | Configure an API key for this service. The app stores it encrypted on the device. |
-| LX Music source | Import a `.js` file or link. It resolves tracks with a valid NetEase ID. Search and playlists keep their original sources. |
+| LX Music source | Import one or more `.js` files or links. With **Smart source switching** enabled, the app prefers the script that resolves fastest and falls back to other imported sources on failure. It resolves tracks with a valid NetEase ID. Search and playlists keep their original sources. |
 
-LX Music scripts send track information to their service. Import scripts from sources you trust. Connect Navidrome under **Settings → Sources & Network → Self-hosted libraries** to play audio directly from your server.
+LX Music scripts send track information to their service. Import scripts from sources you trust. Smart-switch retries send the same track information to other imported scripts' services. Connect Navidrome under **Settings → Sources & Network → Self-hosted libraries** to play audio directly from your server.
 
 Connect Emby under **Settings → Sources & Network → Self-hosted libraries → Emby**. The library appears under **Me → Music services**. It opens on Songs, with the bottom bar switching between Songs, Artists, Playlists, and Favorites. Albums are available from the artist page. Search and refresh sit together at the top. Enter the server URL, which can include a reverse proxy subpath, and your username and password. The app stores the encrypted token after sign-in. Albums, songs, artists, playlists, and favorites load 40 items at a time. The library supports track search, server favorites, queue playback, original-quality caching, and preloading. Playlists are read-only, and downloads follow server permissions. Emby playback currently uses the original stream on the device. Lyrics use the app's automatic matching, manual matching, and local imports.
 
