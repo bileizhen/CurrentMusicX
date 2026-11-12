@@ -58,6 +58,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         if (storageNamespace.isEmpty()) io.github.currencortex.music.core.update.WorkManagerUpdateBackground(context) else null)
     val logger = AppLogger(context)
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
+    internal val localMusic = io.github.currencortex.music.feature.library.LocalMusicRepository(
+        java.io.File(context.filesDir, "local-music$storageSuffix.json"))
     val serverRouter = CurrentMusicServerRouter(serverCheck)
     fun updateAssetUrl(release: io.github.currencortex.music.core.update.AppRelease,
         source: io.github.currencortex.music.core.update.UpdateSource): String = source.url(release,
