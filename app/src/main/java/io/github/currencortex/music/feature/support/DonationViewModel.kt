@@ -15,6 +15,13 @@ data class DonationState(val signedIn: Boolean = false, val loading: Boolean = f
 
 class DonationViewModel(private val repository: DonationApi, owners: Flow<RequestSession>) : ViewModel() {
     val state = MutableStateFlow(DonationState())
+    private val pendingQrSave = MutableStateFlow<ByteArray?>(null)
+    val qrSavePending: StateFlow<ByteArray?> = pendingQrSave.asStateFlow()
+
+    // Keep the requested public image until the picker returns, across UI recreation or refresh.
+    fun beginQrSave(bytes: ByteArray): Boolean = pendingQrSave.compareAndSet(null, bytes)
+    fun takePendingQrSave(): ByteArray? = pendingQrSave.getAndUpdate { null }
+
     private var owner: RequestSession? = null
     private var revision = 0L
     private var action: Job? = null

@@ -37,11 +37,11 @@ import java.time.format.DateTimeFormatter
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var fileBusy by remember { mutableStateOf(false) }
-    var pendingSave by remember { mutableStateOf<ByteArray?>(null) }
+    val pendingSave by vm.qrSavePending.collectAsStateWithLifecycle()
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("image/jpeg")) { uri ->
-        val bytes = pendingSave
-        pendingSave = null
-        if (uri != null && bytes != null) scope.launch {
+        val bytes = vm.takePendingQrSave()
+        if (uri != null && bytes == null) context.showMusicError("捐赠码保存状态已丢失，请重新保存")
+        else if (uri != null && bytes != null) scope.launch {
             fileBusy = true
             try {
                 SupportFiles.saveOfficial(context, bytes, uri)
@@ -104,10 +104,9 @@ import java.time.format.DateTimeFormatter
                                         onError = { decodeFailed = true; decoded = false })
                                     if (decodeFailed) SettingsHint("捐赠码无法显示，请重新获取", error = true)
                                     GlassActionButton("保存捐赠码", {
-                                        if (!fileBusy && pendingSave == null) {
-                                            pendingSave = bytes
+                                        if (!fileBusy && vm.beginQrSave(bytes)) {
                                             try { save.launch("currentmusic-official-donation.jpg") }
-                                            catch (_: Exception) { pendingSave = null; context.showMusicError("未找到可以保存图片的应用") }
+                                            catch (_: Exception) { vm.takePendingQrSave(); context.showMusicError("未找到可以保存图片的应用") }
                                         }
                                     }, Modifier.testTag("donation_save_qr"), enabled = decoded && !fileBusy && pendingSave == null)
                                     GlassActionButton("分享捐赠码", {
