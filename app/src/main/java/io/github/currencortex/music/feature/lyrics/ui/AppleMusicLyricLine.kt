@@ -82,7 +82,9 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
     val hasRuby = romanization && line.ruby.ifEmpty { line.words.flatMap { it.ruby } }.any {
         it.text.isNotBlank() && it.startOffset >= 0 && it.endOffset > it.startOffset && it.endOffset <= line.text.length
     }
-    val showTranslation = translation && line.translation.isNotBlank()
+    // Ruby-only annotations keep the translation available.
+    val showTranslation = translation && line.translation.isNotBlank() &&
+        !(hasWordPhonetics || (romanization && line.romanization.isNotBlank()))
     val roman = if (hasWordPhonetics && appleWordReadingsCoverLine(line)) "" else line.romanization
     val showRomanization = romanization && roman.isNotBlank()
     val auxiliaryInset = with(LocalDensity.current) { (size * if (hasWordPhonetics || hasRuby) .8f else .35f).sp.toDp() }

@@ -72,7 +72,8 @@ private data class SmokeFlight(val from: Int, val topFraction: Float)
         }
         Box(Modifier.fillMaxWidth().padding(horizontal = 8.dp).clipToBounds()) {
             key(target) {
-                LyricsAuxiliaryText(line.translation, position, translation && focused, fontSize * .6f,
+                LyricsAuxiliaryText(line.translation, position, translation && focused &&
+                    !(romanization && line.romanization.isNotBlank()), fontSize * .6f,
                     auxiliaryWeight, TextAlign.Center, "lyric_translation", .65f, reserveSpace = true)
             }
         }

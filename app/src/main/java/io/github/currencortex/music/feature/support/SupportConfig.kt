@@ -6,6 +6,7 @@ import java.net.URI
 object SupportConfig {
     const val afdianUrl = "https://afdian.com/a/bi1eizhen"
     const val route = "support-developer"
+    const val donationRoute = "official-donation"
 }
 
 internal fun supportHttpsUrl(value: String): String? = runCatching {

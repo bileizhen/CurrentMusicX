@@ -3,6 +3,7 @@
 package io.github.currencortex.music.ui
 
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.emitAll
 
 import android.os.Build
 import io.github.currencortex.music.BuildConfig
@@ -337,7 +338,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val pageSceneStrategy=remember(pageNavigation) {PageContainerSceneStrategy(pageNavigation,
             setOf(ROOT.toString(),SETTINGS.toString(),APPEARANCE.toString(),NETWORK.toString(),STORAGE.toString(),ABOUT.toString(),
                 "user/security","user/binding","user/netease-tasks","user/playlist-import","user/decorations",
-                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome","emby",SupportConfig.route)+
+                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome","emby",SupportConfig.route,SupportConfig.donationRoute)+
                 LegalDocument.entries.map {it.route().toString()})}
         SideEffect {pageNavigation.onClosed={route->
             if(backStack.lastOrNull()==route)backStack=backStack.dropLast(1)
@@ -752,7 +753,21 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         onOpenMember = { member, group -> memberFocus = MemberFocus(member, group) },
                         onSupport = { navigateLibrary(SupportConfig.route) })
                 }
-                entry(SupportConfig.route) { SupportScreen(onBack = ::navigateBack) }
+                entry(SupportConfig.route) { SupportScreen(onBack = ::navigateBack,
+                    onOfficialDonation = { navigateLibrary(SupportConfig.donationRoute) }) }
+                entry(SupportConfig.donationRoute) {
+                    val vm: io.github.currencortex.music.feature.support.DonationViewModel = viewModel(factory = viewModelFactory {
+                        io.github.currencortex.music.feature.support.DonationViewModel(
+                            io.github.currencortex.music.data.support.DonationRepository(container.apiClient),
+                            kotlinx.coroutines.flow.flow {
+                                container.sessionRestored.await()
+                                emitAll(kotlinx.coroutines.flow.combine(container.accountRepository.sessionRevision,
+                                    container.musicSettings.state.map { it.server }) { _, _ -> container.projectSession() })
+                            })
+                    })
+                    io.github.currencortex.music.feature.support.OfficialDonationScreen(vm, ::navigateBack,
+                        onLogin = { authVm.begin(); navigateLibrary("user/login") })
+                }
                 LegalDocument.entries.forEach { document ->
                     entry(document.route().toString()) {
                         Box(Modifier.fillMaxSize().navigationBarsPadding()) {
