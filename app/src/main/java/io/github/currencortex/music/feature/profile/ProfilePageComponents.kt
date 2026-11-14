@@ -75,6 +75,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         SettingsDivider(52.dp)
         ProfileDestination("歌单", "创建与收藏的歌单", MusicIcons.List, "open_playlists") { navigate("lib/playlists") }
         SettingsDivider(52.dp)
+        ProfileDestination("音乐云盘", "网易云音乐个人云盘", MusicIcons.Storage, "open_cloud_drive") { navigate("lib/cloud") }
+        SettingsDivider(52.dp)
         ProfileDestination("最近播放", "回顾听过的歌曲", MusicIcons.Update, "open_recent") { navigate("lib/recent") }
         SettingsDivider(52.dp)
         ProfileDestination("听歌时长", "本机与网易云听歌足迹", MusicIcons.Headphones, "open_listening") { navigate("user/listening") }

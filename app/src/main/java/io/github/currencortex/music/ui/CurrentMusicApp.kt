@@ -127,7 +127,7 @@ import io.github.currencortex.music.feature.binding.*
 import io.github.currencortex.music.feature.room.*
 
 private fun isPlaylistRoute(route: String) = route == "lib/local" || route.startsWith("lib/playlist/") || route.startsWith("lib/ncmplaylist/") || route.startsWith("lib/album/") ||
-    route in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent")
+    route in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent", "lib/cloud")
 
 private val UnifiedMiniScrollClearance = 36.dp
 private const val ROOT = 0

@@ -212,7 +212,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val songs = remember(state.songs, query, order) {
         val filtered = if (query.isBlank()) state.songs else {
             val needle = MusicSearchQuery(query)
-            state.songs.filter { needle.matches(it.name, it.artists, it.album) }
+            state.songs.filter { needle.matches(*it.displayNames.toTypedArray(), it.artists, it.album) }
         }
         if (order == 1 || order == 2) {
             val collator = java.text.Collator.getInstance(java.util.Locale.SIMPLIFIED_CHINESE).apply {
@@ -311,6 +311,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         vm.route == "lib/daily" -> "每日为你推荐"
         vm.route == "lib/foryou" -> "根据你的音乐喜好推荐"
         vm.route == "lib/recent" -> "最近听过的音乐"
+        vm.route == "lib/cloud" -> "网易云音乐"
         else -> "CurrentMusic 歌单"
     }
     val heroOrigin = if (state.playlist?.source == "ncm") "网易云音乐" else origin
@@ -448,10 +449,16 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                             modifier = Modifier.testTag("local_music_open_app_settings"))
                     }
                 }
-                state.error?.let { error -> item { Column(Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(20.dp)) { Text(error); TextButton("重试", onClick = ::refresh) } } }
+                state.error?.let { error -> item { Column(Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(20.dp)) {
+                    Text(error)
+                    if (vm.route == "lib/cloud" && error == io.github.currencortex.music.core.network.ErrorKind.NeteaseBindingRequired.message)
+                        TextButton("登录网易云", onClick = { navigate("user/binding") })
+                    else TextButton("重试", onClick = ::refresh)
+                } } }
                 if (room != null && localMusic == null) item { Text("点击歌曲，为当前房间点歌", Modifier.playlistPullSurface(pullMotion).padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 13.sp) }
                 if (!state.loading && songs.isEmpty() && state.error == null && localMusic?.allowed != false) item {
-                    Text(if (query.isNotBlank()) "没有找到匹配的歌曲" else if (localMusic != null) "未找到音乐文件，下拉重新扫描" else "这里还没有歌曲，可在搜索结果中加入歌单",
+                    Text(if (query.isNotBlank()) "没有找到匹配的歌曲" else if (localMusic != null) "未找到音乐文件，下拉重新扫描"
+                        else if (vm.route == "lib/cloud") "云盘里还没有歌曲，请先在网易云音乐上传音乐。" else "这里还没有歌曲，可在搜索结果中加入歌单",
                         Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(24.dp), fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
                 }
                 itemsIndexed(songs, key = { index, _ -> songKeys[index] }, contentType = { _, _ -> "track" }) { index, song ->
