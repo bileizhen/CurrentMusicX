@@ -58,7 +58,7 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
                 "音源数量或总大小已达上限，请先移除不使用的音源"
             }
             val capabilities = runtime.inspect(info, script)
-            val complete = info.copy(capabilities = capabilities)
+            val complete = info.copy(capabilities = capabilities, capabilityVersion = LX_CAPABILITY_VERSION)
             save(entries + LxStoredSource(complete, script))
             complete
         }
@@ -110,7 +110,8 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
             throw cancelled
         } finally { probeLock.unlock() }
     }
-    suspend fun source(song: Song, quality: AudioQuality, id: String, smartSwitch: Boolean = false): AudioSource {
+    suspend fun source(song: Song, quality: AudioQuality, id: String, smartSwitch: Boolean = false,
+        excludeIds: Set<String> = emptySet()): AudioSource {
         ready.await()
         // Exclude time queued behind another playback/probe from the performance measurement.
         return resolveLock.withLock {
@@ -118,33 +119,48 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
                 if (smartSwitch) lxOrderedSources(entries, id, System.currentTimeMillis())
                 else listOf(entries.firstOrNull { it.info.id == id }
                     ?: throw LxSourceException("请先在音源与网络中导入并选择落雪音源"))
-            }
+            }.filterNot { it.info.id in excludeIds }
+            if (candidates.isEmpty()) throw LxSourceException("没有其他可尝试的落雪音源")
             lxTrySources(candidates) { source ->
+                val current = refreshCapabilities(source)
                 val started = android.os.SystemClock.elapsedRealtime()
                 try {
                     val audio = if (smartSwitch) {
-                        try { withTimeout(12_000) { resolveSource(song, quality, source) } }
+                        try { withTimeout(12_000) { resolveSource(song, quality, current) } }
                         catch (_: TimeoutCancellationException) {
                             currentCoroutineContext().ensureActive()
                             throw LxSourceException("落雪音源解析超时，请重试或更换音源")
                         }
-                    } else resolveSource(song, quality, source)
-                    recordPerformance(source.info.id, android.os.SystemClock.elapsedRealtime() - started)
+                    } else resolveSource(song, quality, current)
+                    recordPerformance(current.info.id, android.os.SystemClock.elapsedRealtime() - started)
                     audio
                 } catch (cancelled: CancellationException) { throw cancelled }
                 catch (error: LxSourceException) {
-                    recordPerformance(source.info.id, null)
+                    recordPerformance(current.info.id, null)
                     throw error
                 }
             }
         }
     }
+    suspend fun reportPlaybackFailure(id: String) = recordPerformance(id, null)
+    private suspend fun refreshCapabilities(source: LxStoredSource): LxStoredSource {
+        if (source.info.capabilityVersion >= LX_CAPABILITY_VERSION) return source
+        val capabilities = lxNeteaseCapabilities(runtime.inspect(source.info, source.script))
+        val updated = LxStoredSource(source.info.copy(capabilities = capabilities, capabilityVersion = LX_CAPABILITY_VERSION),
+            source.script, source.performance)
+        lock.withLock {
+            if (entries.none { it.info.id == updated.info.id }) return source
+            entries = entries.map { if (it.info.id == updated.info.id) updated else it }
+            save(entries)
+        }
+        return updated
+    }
     private suspend fun resolveSource(song: Song, quality: AudioQuality, source: LxStoredSource): AudioSource {
         val (request, url) = lxResolveTrack(song, quality, source.info.capabilities) { data ->
             runtime.resolve(source.info, source.script, data)
         }
-        val level = when (request.quality) { "flac24bit" -> "hires"; "flac" -> "lossless"; "320k" -> "exhigh"; else -> "standard" }
-        return AudioSource(url, level, 0, 0, if (request.quality.startsWith("flac")) "flac" else "mp3", validForSeconds = 30, source = "lx:${source.info.id}")
+        return AudioSource(url, lxQualityLevel(request.quality), 0, 0, lxQualityFormat(request.quality),
+            validForSeconds = 30, source = "lx:${source.info.id}")
     }
     private suspend fun recordPerformance(id: String, elapsedMs: Long?) = withContext(Dispatchers.IO) {
         lock.withLock {

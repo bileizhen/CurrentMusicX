@@ -12,6 +12,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import io.github.currencortex.music.data.lx.lxQualityLabel
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.TextField
@@ -47,7 +48,7 @@ import top.yukonga.miuix.kmp.basic.TextField
                     if (source.description.isNotBlank()) SettingsHint(source.description.take(500))
                     if (source.author.isNotBlank()) SettingsHint("作者 · ${source.author.take(100)}")
                     SettingsHint(source.capabilities.joinToString("；") { capability ->
-                        "网易云 · ${capability.qualities.joinToString(" / ")}"
+                        "网易云 · ${capability.qualities.joinToString(" / ") { lxQualityLabel(it) }}"
                     })
                     resolveTimes[source.id]?.let { SettingsHint("最近成功取链 · $it ms") }
                     health[source.id]?.message?.let { SettingsHint(it) }
@@ -55,7 +56,7 @@ import top.yukonga.miuix.kmp.basic.TextField
             }
             SettingsDivider()
             SettingsSwitch("多音源智能切换", provider.lxSmartSwitch, vm::lxSmartSwitch,
-                Modifier.testTag("lx_smart_switch"), summary = "优先使用取链更快的插件，失败时自动尝试其他已导入音源。",
+                Modifier.testTag("lx_smart_switch"), summary = "优先使用取链更快的插件，取链或播放失败时自动尝试其他已导入音源。",
                 enabled = !state.busy)
             SettingsDivider()
         } else SettingsHint("尚未导入音源")
