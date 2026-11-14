@@ -84,23 +84,30 @@ class MusicRepository(private val api: ApiClient,
             if (!api.hasLocalNeteaseLogin) return emptyList()
             val native = api.netease ?: return emptyList()
             val nativeQuery = mapOf("keywords" to value, "offset" to "0", "limit" to "100", "type" to "song")
-            return runCatching {
-                val raw = native.request("GET", "ncm/search", nativeQuery, null, expectedRevision = revision)
-                if (owner != api.publicSession()) throw ApiException(ErrorKind.Unauthorized)
-                val code = (raw as? JsonObject)?.get("code")?.jsonPrimitive?.intOrNull
-                if (code != null && code != 200) throw ApiException(ErrorKind.Server, code)
-                api.decode<SearchDto>(raw).songs.map(SongDto::toDomain)
-            }.getOrElse { emptyList() }
+            return withTimeoutOrNull(SEARCH_NAME_ENRICHMENT_TIMEOUT_MS) {
+                when (val result = appResult {
+                    val raw = native.request("GET", "ncm/search", nativeQuery, null, expectedRevision = revision)
+                    if (owner != api.publicSession()) throw ApiException(ErrorKind.Unauthorized)
+                    val code = (raw as? JsonObject)?.get("code")?.jsonPrimitive?.intOrNull
+                    if (code != null && code != 200) throw ApiException(ErrorKind.Server, code)
+                    api.decode<SearchDto>(raw).songs.map(SongDto::toDomain)
+                }) {
+                    is AppResult.Success -> result.value
+                    is AppResult.Failure -> emptyList()
+                }
+            } ?: emptyList()
         }
         // Pin the transport after the first page: offsets from two search indexes cannot be mixed.
-        if (backend != null) return@appResult read(backend)
-        when (val result = appResult { read(SearchBackend.PROJECT) }) {
-            is AppResult.Success -> if (type == "song" && api.hasLocalNeteaseLogin) result.value.copy(songs =
-                mergeNativeSearchNames(result.value.songs, readNativeNames(keyword))) else result.value
+        val page = if (backend != null) read(backend) else when (val result = appResult { read(SearchBackend.PROJECT) }) {
+            is AppResult.Success -> result.value
             is AppResult.Failure -> if (offset == 0 && api.netease != null && result.kind in setOf(
                     ErrorKind.NotFound, ErrorKind.Network, ErrorKind.Timeout, ErrorKind.Server)) read(SearchBackend.NATIVE)
                 else throw ApiException(result.kind, result.status, result.message)
         }
+        val enriched = if (page.backend == SearchBackend.PROJECT && type == "song" && api.hasLocalNeteaseLogin)
+            page.copy(songs = mergeNativeSearchNames(page.songs, readNativeNames(keyword))) else page
+        if (owner != api.publicSession()) throw ApiException(ErrorKind.Unauthorized)
+        enriched
     }
     /** Matching sources are explicit: the media-source setting never reroutes this search. */
     suspend fun searchForLyricsMatching(keyword: String, source: LyricsSource): AppResult<SearchPage> = appResult {
@@ -239,6 +246,7 @@ class MusicRepository(private val api: ApiClient,
     }
 }
 
+private const val SEARCH_NAME_ENRICHMENT_TIMEOUT_MS = 1_000L
 private const val LYRICS_MATCH_SEARCH_TIMEOUT_MS = 3_500L
 private const val LYRICS_MATCH_LOAD_TIMEOUT_MS = 5_000L
 
