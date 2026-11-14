@@ -9,10 +9,15 @@ import kotlinx.serialization.SerialName
                              val musicSource: MusicSource = MusicSource.NETEASE,
                              val externalIds: SongExternalIds = SongExternalIds(),
                              val navidrome: NavidromeTrackRef? = null, val videoQuality: Int = 1080, val localUri: String = "", val emby: EmbyTrackRef? = null,
-                             val albumId: Long = 0) {
+                             val albumId: Long = 0, val translatedName: String = "",
+                             val aliases: List<String> = emptyList(), val neteaseCloud: Boolean = false) {
     val privateLibrary get() = musicSource == MusicSource.NAVIDROME || musicSource == MusicSource.EMBY
     val privateIdentity get() = emby?.identity ?: navidrome?.identity
     val originalQualityLabel get() = if (musicSource == MusicSource.EMBY) "Emby 原音质" else "Navidrome 原音质"
+    /** Names a Chinese search result may carry besides its original title. */
+    val alternateNames get() = (listOf(translatedName) + aliases).map(String::trim)
+        .filter { it.isNotBlank() && !it.equals(name, ignoreCase = true) }.distinct()
+    val displayNames get() = listOf(name) + alternateNames
 }
 @Serializable enum class MusicSource { NETEASE, QQ_MUSIC, APPLE_MUSIC, SPOTIFY, NAVIDROME, LOCAL, EMBY }
 @Serializable data class NavidromeTrackRef(val id: String, val identity: String, val format: String = "",
@@ -26,8 +31,29 @@ import kotlinx.serialization.SerialName
                                 @SerialName("lyricMatch") val lyricMatch: String = "",
                                 @SerialName("lyricContext") val lyricContext: List<LyricContextDto> = emptyList(),
                                 val lyricContextStatus: String? = null, val lyricContextRetryable: Boolean = false,
-                                @SerialName("album_id") val albumId: Long = 0) {
-    fun toDomain() = Song(id, name, artists, album, pic.replace("http:", "https:"), duration, mv, artistIds, albumId = albumId)
+                                @SerialName("album_id") val albumId: Long = 0,
+                                val tns: List<String> = emptyList(), val transNames: List<String> = emptyList(),
+                                val alias: List<String> = emptyList(), val alia: List<String> = emptyList(),
+                                val cloud: Boolean = false) {
+    fun toDomain() = Song(id, name, artists, album, pic.replace("http:", "https:"), duration, mv, artistIds, albumId = albumId,
+        translatedName = NeteaseSongNames.translated(tns + transNames), aliases = NeteaseSongNames.aliases(alia + alias, name),
+        neteaseCloud = cloud)
+}
+
+internal object NeteaseSongNames {
+    fun translated(values: List<String>) = values.map(String::trim).filter(String::isNotBlank).distinct().firstOrNull().orEmpty()
+    fun aliases(values: List<String>, name: String) = values.map(String::trim).filter(String::isNotBlank)
+        .filterNot { it.equals(name, ignoreCase = true) }.distinct()
+}
+
+/** Restore translated/alias titles omitted by the project search adapter. Original metadata wins. */
+internal fun mergeNativeSearchNames(project: List<Song>, native: List<Song>): List<Song> {
+    val byId = native.associateBy(Song::id)
+    return project.map { song ->
+        val enrichment = byId[song.id] ?: return@map song
+        song.copy(translatedName = song.translatedName.ifBlank { enrichment.translatedName },
+            aliases = (song.aliases + enrichment.aliases).distinct())
+    }
 }
 @Serializable data class SearchDto(val songs: List<SongDto> = emptyList(), val totals: SearchTotals = SearchTotals(), val hasMore: SearchMore = SearchMore(),
     val catalogSongs: List<SongDto> = emptyList())

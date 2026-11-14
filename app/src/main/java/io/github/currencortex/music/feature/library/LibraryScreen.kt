@@ -155,7 +155,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     if (vm.route.startsWith("lib/mv/")) {
         io.github.currencortex.music.feature.mv.MvDetailScreen(state, vm.container, onBack, playMv,
             onArtist = { navigate("lib/artist/$it") }, onRefresh = { vm.reload(force = true) }, onDialogActive = onDialogActive)
-    } else if (vm.route.split('/').getOrNull(1) in setOf("playlist", "ncmplaylist", "album", "likes", "daily", "foryou", "recent")) {
+    } else if (vm.route.split('/').getOrNull(1) in setOf("playlist", "ncmplaylist", "album", "likes", "daily", "foryou", "recent", "cloud")) {
         PlaylistDetailBody(state, vm, library, onBack, navigate, play,
             onRename = { name = state.title; rename = true }, onDelete = { delete = true })
     } else {

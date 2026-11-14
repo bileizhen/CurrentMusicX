@@ -229,8 +229,17 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
                 (info["dt"] ?: info["duration"])?.jsonPrimitive?.longOrNull ?: 0,
                 (info["mv"] ?: info["mvid"])?.jsonPrimitive?.longOrNull ?: 0,
                 artists.mapNotNull { it["id"]?.jsonPrimitive?.longOrNull },
-                albumId = album?.get("id")?.jsonPrimitive?.longOrNull ?: 0)
+                albumId = album?.get("id")?.jsonPrimitive?.longOrNull ?: 0,
+                translatedName = names(info, "tns", "transNames").firstOrNull().orEmpty(),
+                aliases = names(info, "alia", "alias").filterNot { it.equals(name, ignoreCase = true) })
         }
+        private fun names(info: JsonObject, vararg keys: String) = keys.flatMap { key ->
+            when (val value = info[key]) {
+                is JsonArray -> value.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+                is JsonPrimitive -> listOfNotNull(value.contentOrNull)
+                else -> emptyList()
+            }
+        }.map(String::trim).filter(String::isNotBlank).distinct()
     }
 }
 

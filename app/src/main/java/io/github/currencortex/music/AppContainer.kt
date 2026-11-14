@@ -171,6 +171,12 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             return AudioRequest(song.id, quality, 0L, navidrome.session(), "navidrome:" + navidrome.state.value.identity, song)
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY)
             return AudioRequest(song.id, quality, 0L, emby.session(), "emby:" + emby.state.value.identity, song)
+        if (song.neteaseCloud) {
+            val owner = neteaseSessions.state.value
+            return AudioRequest(song.id, quality, owner.profile?.uid ?: 0L,
+                RequestSession("https://music.163.com/", null, owner.revision), "netease-cloud", song,
+                supportsDolby = supportsDolby && quality == AudioQuality.AUTO)
+        }
         val access = audioSettings.access()
         val preferDolby = supportsDolby && quality == AudioQuality.AUTO &&
             song.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL &&
@@ -220,6 +226,11 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             navidrome.accepts(it) && request.session == navidrome.session() && request.providerIdentity == "navidrome:" + navidrome.state.value.identity
         } ?: request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY }?.let {
             emby.accepts(it) && request.session == emby.session() && request.providerIdentity == "emby:" + emby.state.value.identity
+        } ?: request.song?.takeIf { it.neteaseCloud }?.let {
+            val owner = neteaseSessions.state.value
+            owner.loggedIn && !owner.stale && request.accountId == owner.profile?.uid &&
+                request.session == RequestSession("https://music.163.com/", null, owner.revision) &&
+                request.providerIdentity == "netease-cloud"
         } },
         loadTrack = { request -> request.song?.let {
             musicRepository.source(it, request.quality, request.session, request.refresh, request.supportsDolby)
