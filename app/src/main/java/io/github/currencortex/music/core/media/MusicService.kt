@@ -662,7 +662,12 @@ class MusicService : MediaSessionService() {
             lxRetrySources.clear()
         }
         lxRetrySources += failedId
-        if (container.lxSources.state.value.none { it.id !in lxRetrySources }) return false
+        if (container.lxSources.state.value.none { it.id !in lxRetrySources }) {
+            lxRetryExhausted = true
+            container.audioSources.invalidate()
+            scope.launch { container.lxSources.reportPlaybackFailure(failedId) }
+            return false
+        }
         val position = player.currentPosition.coerceAtLeast(0)
         val play = player.playWhenReady && !pauseFade.pausedIntent
         player.pause()
@@ -674,8 +679,9 @@ class MusicService : MediaSessionService() {
         val job = scope.launch {
             try {
                 container.lxSources.reportPlaybackFailure(failedId)
+                val quality = container.musicSettings.snapshot().quality
                 val fallback = withContext(Dispatchers.IO) {
-                    container.lxSources.source(song, container.musicSettings.snapshot().quality, access.lxSourceId,
+                    container.lxSources.source(song, quality, access.lxSourceId,
                         smartSwitch = true, excludeIds = lxRetrySources.toSet())
                 }
                 if (container.audioSettings.access().identity != access.identity) return@launch
@@ -683,10 +689,11 @@ class MusicService : MediaSessionService() {
                     container.playerController.state.value.mode != PlayerMode.LOCAL) return@launch
                 if (failedPlayer.currentMediaItem?.lxSourceId != failedId) return@launch
                 lxRetryExhausted = false
+                val resolved = container.audioSources.register(audioRequest(song, quality), fallback)
                 container.playerController.state.value = container.playerController.state.value.copy(
                     playing = false, loading = false, resolving = false, error = null, playRequested = play,
-                    audioFullyCached = fallback.url.startsWith("cache://audio/"), audioInfo = AudioStreamInfo.from(fallback))
-                engine.prepare(MediaItemFactory.create(song, fallback.url, null, fallback), position, play)
+                    audioFullyCached = resolved.source.url.startsWith("cache://audio/"), audioInfo = AudioStreamInfo.from(resolved.source))
+                engine.prepare(resolved.toMediaItem(song, false), position, play)
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (failure: Exception) {
