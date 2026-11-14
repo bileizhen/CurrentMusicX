@@ -150,7 +150,7 @@ import kotlinx.serialization.json.*
             if (!expandedCatalog) {
             item {
                 Card(Modifier.padding(horizontal = 16.dp)) {
-                    SettingsPreference("音频处理系统", if (adaptive.enabled) "已开启 · 动态 EQ / 虚拟低频 / 马达驱动" else "动态 EQ · 虚拟低频 · 马达驱动",
+                    SettingsPreference("流声音频系统", if (adaptive.enabled) "已开启 · 动态 EQ / 虚拟低频 / 马达驱动" else "动态 EQ · 虚拟低频 · 马达驱动",
                         Modifier.testTag("open_adaptive_audio"), onClick = onAdaptive)
                 }
             }

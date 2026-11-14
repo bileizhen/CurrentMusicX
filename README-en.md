@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src=".github/img/icon.svg" width="88" height="88" alt="CurrentMusicX blue music-note icon">
+<img src=".github/img/icon.svg" width="88" height="88" alt="CurrentMusicX (流声音乐) blue music-note icon">
 
-# CurrentMusicX
+# CurrentMusicX (流声音乐)
 
 [简体中文](README.md) · **English**
 
@@ -22,7 +22,7 @@ Native Android client built with Kotlin, Jetpack Compose, and Miuix
 
 </div>
 
-CurrentMusicX is the native Android client for [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic). Circular artwork, dynamic colors, word-by-word lyrics, and a floating player connect your library, discovery, and playback across portrait, landscape, and wide layouts.
+CurrentMusicX is the native Android client for [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic). The installed Chinese display name is 流声音乐; the English product name remains CurrentMusic. Circular artwork, dynamic colors, word-by-word lyrics, and a floating player connect your library, discovery, and playback across portrait, landscape, and wide layouts.
 
 ## Screenshots
 
@@ -63,7 +63,7 @@ Track, quality, member effects, and recommendation availability depend on the se
 
 - **Player controls.** Background playback, notification, lock screen, and Bluetooth controls. Use a queue, repeat, shuffle, Heartbeat mode, a sleep timer, and music videos. Long-press the mini player to scroll the open playlist to the current track.
 - **Lyrics and effects.** Automatic matching across six sources, word-by-word highlighting, translations, and romanization. Choose Monet animation, flowing smoke, stardust, or perspective effects. Apply per-track offsets, import several formats, and export FIA or LRC.
-- **Audio effects and transitions.** Local EQ, original standard and smart effects, AI Mood Tuner, AI Tuning Master, and speaker presets. Choose smart transitions or fades.
+- **流声音频系统 and transitions.** Use **Settings → Sound Effects → 流声音频系统** for the 10-band EQ, dynamic EQ, virtual bass, and haptic drive. Original standard and smart effects, AI Mood Tuner, AI Tuning Master, and speaker presets are also available, with smart transitions or fades.
 - **Downloads and sharing.** Select quality and destination, track background progress, cancel, or retry. Downloads can include tags, artwork, and lyrics. Generate posters, playback links, and QR codes.
 - **Quality tiers.** Hi-Res (`hires`), HD Premium (`jyeffect`), and Premium Spatial (`vivid`) have separate labels. Higher Quality and Dolby Atmos are also selectable. The tier is a request to the source. Actual files and device output depend on the source, track, and account entitlements.
 

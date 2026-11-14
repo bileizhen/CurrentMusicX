@@ -1,8 +1,8 @@
 <div align="center">
 
-<img src=".github/img/icon.svg" width="88" height="88" alt="CurrentMusicX 蓝色圆润音符图标">
+<img src=".github/img/icon.svg" width="88" height="88" alt="流声音乐（CurrentMusicX）蓝色圆润音符图标">
 
-# CurrentMusicX
+# 流声音乐（CurrentMusicX）
 
 **简体中文** · [English](README-en.md)
 
@@ -22,7 +22,7 @@ Kotlin / Jetpack Compose / Miuix 原生 Android 客户端
 
 </div>
 
-CurrentMusicX 是 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic) 的原生 Android 客户端。圆形封面、动态取色、逐字歌词与悬浮播放器，让音乐库、发现和播放自然衔接，适配竖屏、横屏与宽屏布局。
+流声音乐（CurrentMusicX）是 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic) 的原生 Android 客户端。应用中文显示名为「流声音乐」，英文名仍为 CurrentMusic。圆形封面、动态取色、逐字歌词与悬浮播放器，让音乐库、发现和播放自然衔接，适配竖屏、横屏与宽屏布局。
 
 ## 界面预览
 
@@ -63,7 +63,7 @@ CurrentMusicX 是 [CurrentMusic](https://github.com/backrooms-yrc/CurrentMusic) 
 
 - **播放与控制**：后台、通知栏、锁屏和蓝牙控制；队列、循环、随机、心动模式、定时关闭及 MV；长按迷你播放器可在当前歌单中定位正在播放的歌曲。
 - **歌词与动效**：六源自动匹配，逐字高亮、翻译与罗马音；莫奈动画、流烟、星尘与透视效果；单曲偏移、多格式导入及 FIA / LRC 导出。
-- **音效与衔接**：本机均衡器、原版标准及智能音效、AI 情绪调音师、AI 调音大师与外放场景；智能过渡或淡入淡出。
+- **流声音频系统与衔接**：在「设置 → 音效 → 流声音频系统」调节十段均衡器、动态 EQ、虚拟低频与马达驱动；另有原版标准及智能音效、AI 情绪调音师、AI 调音大师与外放场景，以及智能过渡或淡入淡出。
 - **下载与分享**：音质与目录选择、后台进度、取消与重试；写入音频标签、封面和歌词；生成海报、播放链接与二维码。
 - **音质档位**：Hi-Res（`hires`）、高清臻音（`jyeffect`）和臻音全景声（`vivid`）分别显示；可选较高及杜比全景声。所选档位是向音源请求的质量，不代表最终文件或设备输出已达到该质量，实际可用性取决于音源、歌曲与账号权限。
 

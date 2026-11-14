@@ -62,14 +62,14 @@ import kotlin.math.roundToInt
     }
     SettingsUiScope {
         SettingsScrollLayout(Modifier.fillMaxSize().testTag("adaptive_audio_screen"), topBar = {
-            SettingsTopBar("音频处理", onBack = { vm.clearAdaptivePreview(); onBack() })
+            SettingsTopBar("流声音频系统", onBack = { vm.clearAdaptivePreview(); onBack() })
         }) { topInset ->
             LazyColumn(Modifier.fillMaxSize().testTag("adaptive_audio_list"), contentPadding = musicScrollPadding(PaddingValues(
                 start = 16.dp, end = 16.dp, top = topInset, bottom = 24.dp)),
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 item("master") {
                     SettingsGroup {
-                        SettingsToggle("启用音频处理", settings.enabled, { value -> vm.editAdaptive { it.copy(enabled = value) } },
+                        SettingsToggle("启用流声音频系统", settings.enabled, { value -> vm.editAdaptive { it.copy(enabled = value) } },
                             Modifier.testTag("adaptive_enabled"))
                         Row(Modifier.fillMaxWidth().background(MiuixTheme.colorScheme.primary.copy(alpha = if (live) .08f else .03f))
                             .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
