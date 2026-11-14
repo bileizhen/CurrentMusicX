@@ -110,7 +110,15 @@
     if (typeof fn !== 'function' || tasks.size >= 64) throw Error('Invalid timer');
     const id = ++sequence; tasks.set(id, { at: clock + Math.max(0, Number(timeout) || 0), fn: () => fn(...args) }); return id;
   };
+  globalThis.setInterval = (fn, timeout = 0, ...args) => {
+    if (typeof fn !== 'function' || tasks.size >= 64) throw Error('Invalid timer');
+    const delay = Math.max(1, Number(timeout) || 0),
+      id = ++sequence;
+    tasks.set(id, { at: clock + delay, delay, fn: () => fn(...args) });
+    return id;
+  };
   globalThis.clearTimeout = id => tasks.delete(id);
+  globalThis.clearInterval = id => tasks.delete(id);
   const EVENT_NAMES = Object.freeze({ request: 'request', inited: 'inited', updateAlert: 'updateAlert' });
   const utils = Object.freeze({ buffer: Object.freeze({ from, bufToString }),
     crypto: Object.freeze({ md5: input => C.MD5(typeof input === 'string' ? input : word(input)).toString(), aesEncrypt, rsaEncrypt, randomBytes }),
@@ -152,7 +160,11 @@
     },
     take(now) {
       clock = now;
-      for (const [id, task] of Array.from(tasks)) if (task.at <= clock && tasks.has(id)) { tasks.delete(id); try { task.fn(); } catch (error) { failure = String(error.message || error); } }
+      for (const [id, task] of Array.from(tasks)) if (task.at <= clock && tasks.has(id)) {
+        if (task.delay) task.at = clock + task.delay;
+        else tasks.delete(id);
+        try { task.fn(); } catch (error) { failure = String(error.message || error); }
+      }
       const result = JSON.stringify({ requests: queued, cancelled, initialized, answer, failure });
       queued = []; cancelled = []; return result;
     },

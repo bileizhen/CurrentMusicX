@@ -20,6 +20,8 @@ import io.github.currencortex.music.CurrentMusicApplication
 import io.github.currencortex.music.MainActivity
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.local.QueueSnapshotEntity
+import io.github.currencortex.music.data.lx.LxSourceException
+import io.github.currencortex.music.data.settings.AudioProvider
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -149,6 +151,10 @@ class MusicService : MediaSessionService() {
     private var desktopLyrics: AutoCloseable? = null
     private var session: MediaSession? = null
     private var loading: Job? = null
+    private var lxRetrySongId: Long? = null
+    private val lxRetrySources = mutableSetOf<String>()
+    private var lxRetryJob: Job? = null
+    private var lxRetryExhausted = false
     private val listening = ListeningTracker()
     private var trackedSong: Song? = null
     private var trackedSession = RequestSession("", null)
@@ -472,6 +478,7 @@ class MusicService : MediaSessionService() {
                 if (failedDolby && primary() && retryAutoDolby()) return
                 if (primary() && recoverOutput(error)) return
                 if (!::transitions.isInitialized || transitions.failed(source) { if (failedDolby) failedStagedDolby = it }) return
+                if (retryFailedLxSource(source, error)) return
                 if (container.audioOutput.state.value.mode.rawPcm)
                     CurrentMusicAudioDiagnostics.record("player.finalState=ERROR errorCode=${error.errorCode}")
                 if (container.audioOutput.state.value.mode.rawPcm &&
@@ -639,10 +646,82 @@ class MusicService : MediaSessionService() {
         else if (container.playbackQueue.state.value.radioSession != null) container.playerController.onRadioBoundary?.invoke()
     }
     private fun previousSong() { container.playbackQueue.previous(); prepareSong(true, 0) }
+    private fun retryFailedLxSource(failedPlayer: ExoPlayer, error: PlaybackException): Boolean {
+        if (failedPlayer !== player || container.playerController.state.value.mode != PlayerMode.LOCAL) return false
+        val access = container.audioSettings.access()
+        if (access.provider != AudioProvider.LX || !access.lxSmartSwitch) return false
+        if (lxRetryExhausted) return false
+        if (lxRetryJob?.isActive == true) return true
+        if (error.errorCode in setOf(PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED,
+                PlaybackException.ERROR_CODE_AUDIO_TRACK_WRITE_FAILED)) return false
+        val song = container.playbackQueue.state.value.current ?: return false
+        if (song.video) return false
+        val failedId = player.currentMediaItem?.lxSourceId ?: return false
+        if (lxRetrySongId != song.id) {
+            lxRetrySongId = song.id
+            lxRetrySources.clear()
+        }
+        lxRetrySources += failedId
+        if (container.lxSources.state.value.none { it.id !in lxRetrySources }) {
+            lxRetryExhausted = true
+            container.audioSources.invalidate()
+            scope.launch { container.lxSources.reportPlaybackFailure(failedId) }
+            return false
+        }
+        val position = player.currentPosition.coerceAtLeast(0)
+        val play = player.playWhenReady && !pauseFade.pausedIntent
+        player.pause()
+        resetPauseFade()
+        container.audioSources.invalidate()
+        container.playerController.state.value = container.playerController.state.value.copy(
+            playing = false, loading = true, resolving = true, playRequested = play, positionMs = position, error = null)
+        container.logger.info("Player", "LX source playback failed; trying another imported source")
+        val job = scope.launch {
+            try {
+                container.lxSources.reportPlaybackFailure(failedId)
+                val quality = container.musicSettings.snapshot().quality
+                val fallback = withContext(Dispatchers.IO) {
+                    container.lxSources.source(song, quality, access.lxSourceId,
+                        smartSwitch = true, excludeIds = lxRetrySources.toSet())
+                }
+                if (container.audioSettings.access().identity != access.identity) return@launch
+                if (container.playbackQueue.state.value.current?.id != song.id ||
+                    container.playerController.state.value.mode != PlayerMode.LOCAL) return@launch
+                if (failedPlayer.currentMediaItem?.lxSourceId != failedId) return@launch
+                lxRetryExhausted = false
+                val resolved = container.audioSources.register(audioRequest(song, quality), fallback)
+                container.playerController.state.value = container.playerController.state.value.copy(
+                    playing = false, loading = false, resolving = false, error = null, playRequested = play,
+                    audioFullyCached = resolved.source.url.startsWith("cache://audio/"), audioInfo = AudioStreamInfo.from(resolved.source))
+                engine.prepare(resolved.toMediaItem(song, false), position, play)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                if (container.playbackQueue.state.value.current?.id != song.id) return@launch
+                if (container.audioSettings.access().identity != access.identity) return@launch
+                lxRetryExhausted = true
+                player.playWhenReady = false
+                pauseFade.finishPause()
+                container.playerController.state.value = container.playerController.state.value.copy(
+                    playing = false, playRequested = false, loading = false, resolving = false,
+                    error = (failure as? LxSourceException)?.message ?: "已尝试其他落雪音源，仍无法播放")
+                container.logger.warn("Player", "LX source fallback failed")
+            }
+        }
+        lxRetryJob = job
+        loading = job
+        job.invokeOnCompletion { if (lxRetryJob === job) lxRetryJob = null }
+        return true
+    }
     private fun prepareSong(play: Boolean, position: Long, newPlayback: Boolean = false, refreshSource: Boolean = false,
         retryWithoutDolby: Boolean = false) {
         if (container.playerController.state.value.mode != PlayerMode.LOCAL) return
         loading?.cancel()
+        lxRetryJob?.cancel()
+        lxRetryJob = null
+        lxRetrySongId = null
+        lxRetrySources.clear()
+        lxRetryExhausted = false
         musicHaptics.close()
         container.adaptiveAudioRuntime.value = AdaptiveAudioRuntime()
         transitions.cancel()
