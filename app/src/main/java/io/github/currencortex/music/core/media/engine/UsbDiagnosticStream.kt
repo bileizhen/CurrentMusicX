@@ -7,12 +7,12 @@ import java.nio.ByteBuffer
 
 /** Authorized USB FD and descriptor declarations do not establish the DAC's active clock/format. */
 internal data class UsbOutputSnapshot(val deviceLabel: String, val requestedWireFormat: AudioPcmFormat,
-    val declaredCapabilities: String)
+    val declaredCapabilities: String, val softwareBufferFrames: Long)
 
 internal fun usbDiagnostics(previous: AudioDiagnosticsSnapshot, snapshot: UsbOutputSnapshot) = previous.copy(
     backend = "USB Host / 网易云原生引擎", device = snapshot.deviceLabel,
     // UsbDevice.deviceId and AudioDeviceInfo.id are different namespaces.
-    deviceId = null, output = AudioPcmFormat(), softwareBufferFrames = null,
+    deviceId = null, output = AudioPcmFormat(), softwareBufferFrames = snapshot.softwareBufferFrames,
     deviceBufferFrames = null, capacityFrames = null, underruns = null, latencyMs = null,
     latencyEvidence = "驱动未提供可验证的 DAC 时间戳或输出延迟",
     usbCapabilities = snapshot.declaredCapabilities,
