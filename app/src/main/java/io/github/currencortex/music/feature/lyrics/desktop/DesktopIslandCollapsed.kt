@@ -47,9 +47,12 @@ internal fun desktopIslandTouchBounds(surfaceX: Int, surfaceY: Int, surfaceWidth
     val progress = remember { Animatable(if (collapsed) 1f else 0f) }
     LaunchedEffect(collapsed, motion) {
         onTransition(true)
-        if (motion) progress.animateTo(if (collapsed) 1f else 0f, tween(320, easing = FastOutSlowInEasing))
-        else progress.snapTo(if (collapsed) 1f else 0f)
-        onTransition(false)
+        try {
+            if (motion) progress.animateTo(if (collapsed) 1f else 0f, tween(320, easing = FastOutSlowInEasing))
+            else progress.snapTo(if (collapsed) 1f else 0f)
+        } finally {
+            onTransition(false)
+        }
     }
     return progress.asState()
 }
