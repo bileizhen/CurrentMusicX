@@ -1,6 +1,6 @@
 {
   "engineVersion": "NetEase 9.6.15",
-  "adapterRevision": "ncm-usb-v3-status-init",
+  "adapterRevision": "ncm-usb-v4-high-rate-write-retry",
   "abi": "arm64-v8a",
   "sourceApkSha256": "e2b52565f3ca037277ba9850d61750d28102c03abba02219b9839f0136ed06c9",
   "library": "libncmusbaudio.so",
