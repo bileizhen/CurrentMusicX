@@ -66,7 +66,7 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
     suspend fun remove(id: String) {
         ready.await()
         withContext(Dispatchers.IO) { lock.withLock { save(entries.filterNot { it.info.id == id }) } }
-        runtime.close()
+        runtime.closeSafely()
         health.update { it - id }
     }
     /** Called by the visible settings page; no timer or background polling. */
