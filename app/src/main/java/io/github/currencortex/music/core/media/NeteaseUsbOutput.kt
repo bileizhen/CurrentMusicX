@@ -13,7 +13,6 @@ import androidx.media3.common.Format
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.audio.AudioOutput
 import androidx.media3.exoplayer.audio.AudioOutputProvider
-import io.github.currencortex.music.BuildConfig
 import io.github.currencortex.music.data.settings.AudioOutputSettings
 import java.io.File
 import java.nio.ByteBuffer
@@ -28,8 +27,8 @@ internal object NeteaseUsbBridge {
     private var loaded = false
     @Synchronized fun load(context: Context) {
         if (loaded) return
-        check(BuildConfig.NETEASE_ORIGINAL_EFFECTS && android.os.Build.SUPPORTED_ABIS.firstOrNull() == "arm64-v8a") {
-            "[USB_ABI] 本构建未内置 arm64 网易云 USB 引擎"
+        check(android.os.Build.SUPPORTED_ABIS.firstOrNull() == "arm64-v8a") {
+            "[USB_ABI] 当前设备不支持 arm64 网易云 USB 引擎"
         }
         val binary = File(context.applicationInfo.nativeLibraryDir, "libncmusbaudio.so")
         check(binary.isFile && binary.inputStream().use { input ->

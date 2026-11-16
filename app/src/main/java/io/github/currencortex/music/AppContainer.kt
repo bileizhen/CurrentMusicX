@@ -2,6 +2,7 @@ package io.github.currencortex.music
 
 import android.content.Context
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStoreFile
 import io.github.currencortex.music.core.config.AppMetadata
 import io.github.currencortex.music.core.logging.AppLogger
@@ -18,10 +19,13 @@ import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.core.media.*
 import io.github.currencortex.music.core.security.SecureTokenStore
 import io.github.currencortex.music.data.auth.*
+import io.github.currencortex.music.data.effects.NeteaseEffectsAssetRepository
+import io.github.currencortex.music.data.effects.NeteaseEffectsInstallState
 import io.github.currencortex.music.data.song.MusicRepository
 import io.github.currencortex.music.data.local.MusicDatabase
 import io.github.currencortex.music.data.settings.MusicSettingsRepository
 import io.github.currencortex.music.data.settings.AudioProvider
+import io.github.currencortex.music.data.settings.OriginalEffectPreferenceKeys
 import androidx.room.Room
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -30,6 +34,9 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.CancellationException
 import io.github.currencortex.music.core.netease.*
 
 class AppContainer(context: Context, storageNamespace: String = "", externalPlayer: ExternalPlayer? = null,
@@ -99,14 +106,84 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val originalMoodSettings = io.github.currencortex.music.data.settings.OriginalMoodSettingsRepository(settingsStore, appScope)
     val originalAiMasterSettings = io.github.currencortex.music.data.settings.OriginalAiMasterSettingsRepository(settingsStore, appScope)
     private val originalEngineContext = context.applicationContext
+    private val originalEngineHttpClient = okhttp3.OkHttpClient.Builder()
+        .connectTimeout(15, java.util.concurrent.TimeUnit.SECONDS)
+        .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+        .followSslRedirects(false)
+        .build()
+    val originalEffectsAssets = NeteaseEffectsAssetRepository(originalEngineContext, originalEngineHttpClient)
     init { NeteaseNativeEngine.configure(originalEngineContext) }
-    suspend fun importOriginalApk(uri: android.net.Uri) = importOriginal { NeteaseNativeEngine.installFromApk(originalEngineContext, uri) }
-    suspend fun importInstalledOriginal() = importOriginal { NeteaseNativeEngine.installFromInstalled(originalEngineContext) }
-    private suspend fun importOriginal(action: suspend () -> Unit) {
-        try { action() } finally {
-            // APK extraction may finish after the settings page is dismissed.
-            kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable + Dispatchers.Main.immediate) {
+    private val effectsInstall = MutableStateFlow(NeteaseEffectsInstallState())
+    internal val originalEffectsInstall = effectsInstall.asStateFlow()
+
+    fun importOriginalApk(uri: android.net.Uri) = installOriginal("正在校验音效引擎…") {
+        NeteaseNativeEngine.installFromApk(originalEngineContext, uri)
+    }
+
+    fun importInstalledOriginal() = installOriginal("正在校验音效引擎…") {
+        NeteaseNativeEngine.installFromInstalled(originalEngineContext)
+    }
+
+    fun downloadOriginalEffects() = installOriginal("正在准备下载…") {
+        check("arm64-v8a" in android.os.Build.SUPPORTED_ABIS) { "此设备暂不支持网易云音效" }
+        val source = updateSettings.snapshot().effectiveDownloadSource
+        val engineBytes = if (originalEffectsEngineReady.value) 0L else NeteaseEngineLibraries.DOWNLOAD_SIZE
+        val assetBytes = if (originalEffectsAssets.state.value.available) 0L else NeteaseEffectsAssetRepository.PACKAGE_SIZE
+        val total = engineBytes + assetBytes
+        fun progress(message: String, received: Long) {
+            effectsInstall.value = NeteaseEffectsInstallState(loading = true, message = message,
+                progress = (received * 100 / total).toInt().coerceIn(0, 100))
+        }
+        if (engineBytes > 0) {
+            progress("正在下载音效引擎…", 0)
+            NeteaseNativeEngine.installFromRepository(originalEngineContext, originalEngineHttpClient, source) { received, _ ->
+                progress("正在下载音效引擎…", received)
+            }
+        }
+        if (assetBytes > 0) {
+            progress("正在下载界面素材…", engineBytes)
+            originalEffectsAssets.install(source) { received, assetTotal ->
+                progress(if (received == assetTotal) "正在校验并解压素材…" else "正在下载界面素材…",
+                    engineBytes + received)
+            }
+        }
+    }
+
+    fun removeOriginalEffects() = installOriginal("正在移除音效包…", removing = true) {
+        effectsReady.value = false
+        originalSoundEffects.clear()
+        originalSmartEffects.disable()
+        disableOriginalMood()
+        disableOriginalAdditional()
+        settingsStore.edit { preferences ->
+            OriginalEffectPreferenceKeys.clearSingle(preferences)
+            OriginalEffectPreferenceKeys.clearSmart(preferences)
+            OriginalEffectPreferenceKeys.clearMood(preferences)
+            OriginalEffectPreferenceKeys.clearMaster(preferences)
+        }
+        try {
+            originalEffectsAssets.remove()
+        } finally {
+            NeteaseEngineLibraries.remove(originalEngineContext)
+        }
+    }
+
+    private fun installOriginal(message: String, removing: Boolean = false, action: suspend () -> Unit) {
+        if (effectsInstall.value.loading) return
+        effectsInstall.value = NeteaseEffectsInstallState(loading = true, message = message, removing = removing)
+        playerScope.launch {
+            var result = NeteaseEffectsInstallState()
+            try {
+                action()
+                if (removing) result = NeteaseEffectsInstallState(message = "网易云音效包已移除")
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                val fallback = if (removing) "移除失败，请重试" else "安装失败，请重试"
+                result = NeteaseEffectsInstallState(message = failure.message?.take(160) ?: fallback, failed = true)
+            } finally {
                 refreshOriginalEngine()
+                effectsInstall.value = result
             }
         }
     }
@@ -355,16 +432,20 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             .stateIn(playerScope, SharingStarted.Eagerly, audioSettings.access().identity))
     val smartTuning = SmartTuningController(equalizerSettings.state, soundEffectsSettings.state,
         playerController.state.map { it.song }, neteaseSoundEffects::analyze, playerScope)
-    val originalSoundEffects: OriginalSoundEffectsController = OriginalSoundEffectsController(neteaseSoundEffects, neteaseSessions, originalEffectsSettings, playerScope) {
+    private val engineReady = MutableStateFlow(NeteaseNativeEngine.available() && NeteaseEngineLibraries.moodAvailable())
+    internal val originalEffectsEngineReady = engineReady.asStateFlow()
+    private val effectsReady = MutableStateFlow(engineReady.value && originalEffectsAssets.state.value.available)
+    internal val originalEffectsReady = effectsReady.asStateFlow()
+    val originalSoundEffects: OriginalSoundEffectsController = OriginalSoundEffectsController(neteaseSoundEffects,
+        neteaseSessions, originalEffectsSettings, playerScope, engineAvailable = { effectsReady.value }) {
         disableOriginalSmart()
         disableOriginalMood()
         disableOriginalAdditional()
         soundEffectsSettings.setSmartEnabled(false)
         smartTuning.clearManualPreview()
     }
-    private val originalEngineStatus = kotlinx.coroutines.flow.MutableStateFlow(NeteaseNativeEngine.available())
     val originalSmartEffects: OriginalSmartEffectsController = OriginalSmartEffectsController(neteaseSoundEffects, neteaseSessions,
-        originalSmartSettings, playerController.state.map { it.song }, originalEngineStatus, playerScope,
+        originalSmartSettings, playerController.state.map { it.song }, originalEffectsReady, playerScope,
         beforeEnable = {
             originalSoundEffects.clear()
             disableOriginalMood()
@@ -374,9 +455,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         }, definition = NeteaseNativeEngine::smartDefinition)
     private fun disableOriginalSmart() = originalSmartEffects.disable()
     private fun disableOriginalMood() = originalMoodEffects.disable()
-    private val originalMoodEngineStatus = kotlinx.coroutines.flow.MutableStateFlow(NeteaseEngineLibraries.moodAvailable())
     val originalMoodEffects: OriginalMoodEffectsController = OriginalMoodEffectsController(originalMoodModels, neteaseSessions,
-        originalMoodSettings, playerController.state.map { it.song }, originalMoodEngineStatus, playerScope,
+        originalMoodSettings, playerController.state.map { it.song }, originalEffectsReady, playerScope,
         beforeEnable = {
             originalSoundEffects.clear()
             originalSmartEffects.disable()
@@ -390,7 +470,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     }
     val originalAiMasterEffects: OriginalAiMasterEffectsController = OriginalAiMasterEffectsController(
         originalAiMasterRepository, neteaseSessions, originalAiMasterSettings, playerController.state.map { it.song },
-        originalEngineStatus, playerScope, beforeEnable = {
+        originalEffectsReady, playerScope, beforeEnable = {
             originalSoundEffects.clear()
             originalSmartEffects.disable()
             originalMoodEffects.disable()
@@ -400,7 +480,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         }, definition = { originalEngineContext.assets.open("netease-ai-master-codec.js").use { it.readBytes() } })
     val originalSpeakerEffects: OriginalSpeakerEffectsController = OriginalSpeakerEffectsController(
         originalSpeakerRepository, neteaseSessions, OriginalSpeakerEnvironmentObserver(originalEngineContext).state,
-        originalEngineStatus, playerScope, beforeEnable = {
+        originalEffectsReady, playerScope, beforeEnable = {
             originalSoundEffects.clear()
             originalSmartEffects.disable()
             originalMoodEffects.disable()
@@ -411,11 +491,12 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val originalProcessingPreset = combine(originalSoundEffects.selection, originalSmartEffects.selection,
         originalMoodEffects.selection, originalAiMasterEffects.selection, originalSpeakerEffects.selection) { single, smart, mood, master, speaker ->
         speaker ?: master ?: mood ?: smart ?: single
-    }.stateIn(playerScope, SharingStarted.Eagerly, null)
+    }.combine(originalEffectsReady) { preset, ready -> preset.takeIf { ready } }
+        .stateIn(playerScope, SharingStarted.Eagerly, null)
     internal fun createEffectsAudition(scope: CoroutineScope) = EffectsAuditionController(originalEngineContext, this, scope)
     fun refreshOriginalEngine() {
-        originalEngineStatus.value = NeteaseNativeEngine.available()
-        originalMoodEngineStatus.value = originalEngineStatus.value && NeteaseEngineLibraries.moodAvailable()
+        engineReady.value = NeteaseNativeEngine.available() && NeteaseEngineLibraries.moodAvailable()
+        effectsReady.value = engineReady.value && originalEffectsAssets.state.value.available
         originalSoundEffects.refreshAvailability()
         originalSmartEffects.refresh()
         originalMoodEffects.refresh()

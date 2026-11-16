@@ -57,7 +57,7 @@ class EffectsAuditionController internal constructor(private val context: Contex
 
     fun speaker(scene: OriginalSpeakerScene) = start(processed = true, scene = scene) {
         check(OriginalSpeakerEnvironmentObserver(context).snapshot().speaker) { "请使用手机扬声器试听外放音效" }
-        check(NeteaseNativeEngine.available()) { "请先导入兼容的原版音效引擎" }
+        check(NeteaseNativeEngine.available()) { "请先下载兼容的网易云原版音效引擎" }
         val owner = container.neteaseSessions.snapshot()
         val permission = container.originalSpeakerRepository.entitlement()
         check(permission.userId == owner.credential.profile?.uid && permission.canUse && permission.expiresAt > System.currentTimeMillis()) {
@@ -81,7 +81,7 @@ class EffectsAuditionController internal constructor(private val context: Contex
         val owner = container.neteaseSessions.snapshot()
         var deadline = Long.MAX_VALUE
         val effect = if (processed) {
-            check(NeteaseNativeEngine.available()) { "请先导入兼容的原版音效引擎" }
+            check(NeteaseNativeEngine.available()) { "请先下载兼容的网易云原版音效引擎" }
             val permission = container.originalAiMasterRepository.entitlement()
             check(permission.userId == owner.credential.profile?.uid && permission.canUse && permission.expiresAt > System.currentTimeMillis()) {
                 "试听 AI 调音大师需要当前账号有效的 SVIP 权益"
@@ -135,7 +135,7 @@ class EffectsAuditionController internal constructor(private val context: Contex
                     originalPreset = { preset }, originalProcessing = { _ -> scope.launch {
                         if (token == generation && !state.value.processing) mutableState.value = state.value.copy(processing = true)
                     } }, originalFailure = { _, _ -> scope.launch {
-                        if (token == generation) fail("原版音效试听处理失败，请重新导入兼容引擎")
+                        if (token == generation) fail("原版音效试听处理失败，请重新下载兼容引擎")
                     } }, outputSampleRate = { container.audioOutput.state.value.sampleRate },
                     outputSettings = { container.audioOutput.state.value },
                     outputStatus = { container.audioOutput.status.value = it }))

@@ -280,8 +280,9 @@ class MusicService : MediaSessionService() {
                 wasExternal = external
             }
         }
-        scope.launch { combine(container.smartTuning.effective, container.originalProcessingPreset, container.originalSpeakerEffects.state) { settings, original, speaker ->
-            if (original == null && !speaker.requestedEnabled) settings else settings.copy(enabled = false)
+        scope.launch { combine(container.smartTuning.effective, container.originalProcessingPreset, container.originalSpeakerEffects.state,
+            container.originalEffectsReady) { settings, original, speaker, ready ->
+            if (original == null && !(ready && speaker.requestedEnabled)) settings else settings.copy(enabled = false)
         }.combine(container.audioOutput.state) { settings, output ->
             if (output.mode != io.github.currencortex.music.data.settings.AudioOutputMode.AUDIO_TRACK) settings.copy(enabled = false) else settings
         }.collect { settings ->
@@ -385,7 +386,9 @@ class MusicService : MediaSessionService() {
         val secondaryEqualizer = PlaybackEqualizer().apply {
             val settings = container.smartTuning.effective.value
             configure(if (container.audioOutput.state.value.mode == io.github.currencortex.music.data.settings.AudioOutputMode.AUDIO_TRACK &&
-                container.originalProcessingPreset.value == null && !container.originalSpeakerEffects.state.value.requestedEnabled) settings else settings.copy(enabled = false))
+                container.originalProcessingPreset.value == null &&
+                !(container.originalEffectsReady.value && container.originalSpeakerEffects.state.value.requestedEnabled)) settings
+            else settings.copy(enabled = false))
         }
         val source = ExoPlayer.Builder(this, DockRenderersFactory(this, meter, probe,
             originalPreset = { container.originalProcessingPreset.value },
