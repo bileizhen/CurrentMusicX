@@ -198,7 +198,8 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val scope = rememberCoroutineScope()
     var searching by rememberSaveable(vm.route) { mutableStateOf(false) }
     var query by rememberSaveable(vm.route) { mutableStateOf("") }
-    var order by rememberSaveable(vm.route) { mutableIntStateOf(0) }
+    // Sort choice survives leaving the page (and process restarts), per playlist.
+    val order = appearance.playlistOrders[vm.route] ?: 0
     var sortOpen by rememberSaveable(vm.route) { mutableStateOf(false) }
     var menuOpen by rememberSaveable(vm.route) { mutableStateOf(false) }
     var infoOpen by rememberSaveable(vm.route) { mutableStateOf(false) }
@@ -473,8 +474,10 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     SettingsUiScope {
     if (sortOpen) MusicChoiceDialog("歌曲排序", onDismiss = { sortOpen = false }) {
         listOf("默认顺序", "歌名 A–Z", "歌手 A–Z").forEachIndexed { index, label ->
-            MusicDialogChoiceRow(label, order == index, { order = index; sortOpen = false },
-                modifier = Modifier.testTag("playlist_order_$index"))
+            MusicDialogChoiceRow(label, order == index, {
+                sortOpen = false
+                scope.launch { vm.container.settings.edit { it.copy(playlistOrders = it.playlistOrders + (vm.route to index)) } }
+            }, modifier = Modifier.testTag("playlist_order_$index"))
         }
     }
     if (menuOpen) MusicChoiceDialog("${collectionKind}操作", onDismiss = { menuOpen = false }) {
