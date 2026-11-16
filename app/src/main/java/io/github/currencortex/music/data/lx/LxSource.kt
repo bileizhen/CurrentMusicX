@@ -9,7 +9,7 @@ import java.security.MessageDigest
 
 internal const val LX_MAX_SCRIPT_BYTES = 1024 * 1024
 internal const val LX_MAX_RESPONSE_BYTES = 2 * 1024 * 1024
-internal const val LX_CAPABILITY_VERSION = 1
+internal const val LX_CAPABILITY_VERSION = 2
 internal val lxQualities = listOf(
     "128k", "320k", "flac", "flac24bit", "hires",
     "atmos", "atmos_plus", "master", "nac", "dtsx", "dolby",
@@ -98,11 +98,15 @@ internal fun lxQualityFormat(quality: String) = when (quality) {
     else -> "flac"
 }
 
-private fun LxPlatform.qualities(sources: List<LxCapability>): List<String> {
-    val declared = sources.asSequence().filter { it.platform == key }
+private fun LxPlatform.declaredQualities(sources: List<LxCapability>): List<String> =
+    sources.asSequence().filter { it.platform == key }
         .flatMap { it.qualities.asSequence() }
-        .map(::lxCanonicalQuality)
-        .toSet()
+        .filter { lxCanonicalQuality(it) in lxQualities }
+        .distinct()
+        .toList()
+
+private fun LxPlatform.qualities(sources: List<LxCapability>): List<String> {
+    val declared = declaredQualities(sources).map(::lxCanonicalQuality).toSet()
     return lxQualities.filter { it in declared }
 }
 
@@ -116,7 +120,7 @@ internal fun lxNeteaseCapabilities(sources: List<LxCapability>): List<LxCapabili
 
 internal fun lxNormalizeCapabilities(sources: List<LxCapability>): List<LxCapability> =
     LxPlatform.entries.mapNotNull { platform ->
-        platform.qualities(sources).takeIf { it.isNotEmpty() }?.let { LxCapability(platform.key, it) }
+        platform.declaredQualities(sources).takeIf { it.isNotEmpty() }?.let { LxCapability(platform.key, it) }
     }
 
 @Serializable data class LxCapability(val platform: String, val qualities: List<String>)
@@ -168,19 +172,21 @@ internal fun lxCapabilities(value: JsonObject): List<LxCapability> {
 internal data class LxTrackRequest(val platform: String, val quality: String, val data: JsonObject)
 private val lxQqMid = Regex("[a-zA-Z0-9]{1,64}")
 
-private data class LxSongTarget(val id: String, val platform: LxPlatform, val supported: List<String>)
+private data class LxSongTarget(val id: String, val platform: LxPlatform,
+    val supported: List<String>, val declared: List<String>)
 
 private fun lxSongTarget(song: Song, sources: List<LxCapability>): LxSongTarget {
     val platform = LxPlatform.from(song)
     val supported = lxPlatformCapabilities(sources, platform).firstOrNull()?.qualities
         ?: throw LxSourceException("此音源没有声明${platform.label}播放接口，请切换音源")
+    val declared = platform.declaredQualities(sources)
     val id = when (platform) {
         LxPlatform.NETEASE -> song.externalIds.neteaseId?.takeIf { (it.toLongOrNull() ?: 0) > 0 }
             ?: song.id.takeIf { song.musicSource == MusicSource.NETEASE && it > 0 }?.toString()
         LxPlatform.QQ_MUSIC -> song.qqMusic?.mid?.takeIf(lxQqMid::matches)
             ?: song.externalIds.qqMusicId?.takeIf(lxQqMid::matches)
     } ?: throw LxSourceException("歌曲缺少有效${platform.label} ID")
-    return LxSongTarget(id, platform, supported)
+    return LxSongTarget(id, platform, supported, declared)
 }
 
 private val lxQualityPreferences: Map<AudioQuality, List<String>> = mapOf(
@@ -202,12 +208,19 @@ private val lxQualityPreferences: Map<AudioQuality, List<String>> = mapOf(
     AudioQuality.AUTO to listOf("master", "atmos", "hires", "flac24bit", "flac", "atmos_plus", "dolby", "dtsx", "nac", "320k", "128k"),
 )
 
+private val lxLossyFallbacks = listOf("320k", "128k")
+
 private fun lxSelectedQuality(quality: AudioQuality, supported: List<String>): String =
-    lxQualityPreferences[quality].orEmpty().firstOrNull { it in supported } ?: supported.first()
+    (lxQualityPreferences[quality].orEmpty() + lxLossyFallbacks).firstOrNull { it in supported }
+        ?: supported.first()
 
 private fun lxTrackRequest(song: Song, target: LxSongTarget, selected: String): LxTrackRequest {
-    val types = JsonArray(target.supported.map { buildJsonObject { put("type", it) } })
-    val typeMap = buildJsonObject { target.supported.forEach { put(it, buildJsonObject { put("type", it) }) } }
+    val pluginQualities = target.declared.ifEmpty { target.supported }
+    val pluginQuality = pluginQualities.firstOrNull { it == selected }
+        ?: pluginQualities.firstOrNull { lxCanonicalQuality(it) == selected }
+        ?: selected
+    val types = JsonArray(pluginQualities.map { buildJsonObject { put("type", it) } })
+    val typeMap = buildJsonObject { pluginQualities.forEach { put(it, buildJsonObject { put("type", it) }) } }
     val isQq = target.platform == LxPlatform.QQ_MUSIC
     val mediaMid = song.qqMusic?.mediaMid?.takeIf(lxQqMid::matches) ?: target.id
     val albumMid = song.qqMusic?.albumMid?.takeIf(lxQqMid::matches)
@@ -215,7 +228,7 @@ private fun lxTrackRequest(song: Song, target: LxSongTarget, selected: String): 
     return LxTrackRequest(target.platform.key, selected, buildJsonObject {
         put("source", target.platform.key); put("action", "musicUrl")
         put("info", buildJsonObject {
-            put("type", selected)
+            put("type", pluginQuality)
             put("musicInfo", buildJsonObject {
                 put("source", target.platform.key); put("songmid", target.id); put("name", song.name)
                 put("singer", song.artists); put("albumName", song.album); put("img", song.cover)
