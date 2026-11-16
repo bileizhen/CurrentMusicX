@@ -108,7 +108,7 @@ Choose light, dark, or pure black themes with Monet colors. Use circular or imme
 <summary>Libraries, search, and shared listening</summary>
 
 - CurrentMusic accounts sign in with a password, email code, security question, or passkey; see [README-ANDROID-PASSKEYS.md](README-ANDROID-PASSKEYS.md) for the server-side passkey setup. First sign in to CurrentMusic, then use a QR code or SMS verification to sign in to NetEase. With a local NetEase session, search, playlists, likes, recommendations, and comments use direct NetEase requests. Some features can use an existing cloud binding when the local session is absent. The server keeps its copy of the credential.
-- **Use NetEase as main library** changes the default library shortcut. **Settings → Playback → Default like destination** controls where likes go. Navidrome favorites go to the connected server.
+- **Use NetEase as main library** only changes the default library shortcut. Likes always go to the song's platform, NetEase or QQ Music; there is no CurrentMusic like-target setting. Navidrome favorites go to the connected server.
 - Search, sort, create, and manage playlists. Playlist and Likes pages support multi-selecting tracks to favorite or unfavorite in batch, and other people's NetEase playlists can be subscribed. The CD shelf can collapse search, pick tracks at random, preview a chorus or full track, loop, and advance. Undo a removed like from the island. CurrentMusic playlists can import NetEase Liked Songs. Switching libraries preserves existing playlists.
 - Search offers collapsible history, two-column suggestions, and a horizontal NetEase trends list, including ACG and Japanese categories. Tap a suggestion to search. The **Lyrics** category returns tracks with matching lyric excerpts.
 - The **Playlists** search category shows cover artwork, creators, and track counts, with pagination and retry. Playlist details use the existing view. Switching categories or navigating back preserves results and scroll position.
@@ -127,9 +127,7 @@ Set audio and lyric sources independently in **Settings → Sources & Network**.
 
 | Source | How it works |
 | --- | --- |
-| **CurrentMusic (default)** | Resolve playback through the configured CurrentMusic server using a CurrentMusic account. |
-| Native NetEase | Connect directly with the local NetEase account's entitlements. This mode keeps playback resolution on the direct route. |
-| Direct QQ Music | Tap **Current Music** at the top left, switch platforms, and sign in with a QR code. The phone calls QQ Music directly instead of routing through CurrentMusic. |
+| **Platform direct (default)** | Resolve playback directly against the current platform's official NetEase or QQ Music service. Switch platforms and sign in with a QR code for QQ Music. Playback never falls back to a CurrentMusic server. |
 | LeiZ API | Configure an API key for this service. The app stores it encrypted on the device. |
 | LX Music source | Import one or more `.js` files or links. With **Smart source switching** enabled, the app prefers the script that resolves fastest and falls back to other imported sources on failure. It resolves tracks with a valid NetEase or QQ Music ID for the active platform. Search and playlists keep their original sources. |
 
@@ -143,7 +141,7 @@ Connect Emby under **Settings → Sources & Network → Self-hosted libraries �
 - **Specific source.** Choose CurrentMusic with server-side LDDC data, direct NetEase YRC / LRC, or embedded lyrics.
 - **Per track.** Search, preview, save, or import from **Player → Manage lyrics**. Manually saved or imported lyrics and embedded lyrics take priority over automatic matching.
 
-**To use direct NetEase for both audio and lyrics, select Native NetEase audio and NetEase lyrics.** The local NetEase library and native two-person listening also connect to NetEase directly.
+**To use direct NetEase for both audio and lyrics, keep Platform direct selected on the NetEase platform, then choose NetEase lyrics.** The local NetEase library and two-person listening also connect to NetEase directly.
 
 <details>
 <summary>Lyric matching, offsets, imports, and exports</summary>
@@ -161,7 +159,7 @@ Connect Emby under **Settings → Sources & Network → Self-hosted libraries �
 
 Under **Settings → Sources & Network → CurrentMusic server**, the list shows Auto, `music.20110208.xyz`, `cm.bileizhen.top`, `currentmusic.geekertao.com`, `music.ctcehs.com`, and Custom in a fixed order with announcement endpoint latency. New installs start with Auto, which probes presets at startup and selects a faster available route. You can probe again manually. Existing selections are retained. Switching between the primary host and CDNs preserves sign-in. Custom addresses are saved independently. Switching to a separate server requires signing in again. The full API path is `/cm/`. The CurrentMusic update mirror follows the selected built-in CDN. Probes and downloads use the same route, and the app verifies package size and SHA-256 against GitHub release information.
 
-The address applies to CurrentMusic accounts, audio and lyrics, cloud bindings, profiles, the community, and rooms. Native NetEase, LeiZ, other audio and lyric providers, and self-hosted libraries use their respective addresses.
+The address applies to CurrentMusic accounts, CurrentMusic lyrics, cloud bindings, profiles, the community, and rooms. Platform direct, LeiZ, other audio and lyric providers, and self-hosted libraries use their respective addresses.
 
 </details>
 
@@ -172,7 +170,7 @@ The address applies to CurrentMusic accounts, audio and lyrics, cloud bindings, 
 ### How the clients route requests
 
 - **CurrentMusic Web** sends application API requests for search, track details, lyrics, playback URLs, accounts, and community features to the engine at `/cm/` by default. Selecting LeiZ sends playback URL requests directly to LeiZ. The cloud upload flow obtains a token and registers the file through the engine, while the browser can send the file itself directly to object storage.
-- **CurrentMusicX** routes each request by feature, audio source, and sign-in state. Playback URL resolution with the default source, CurrentMusic accounts and playlists, the community, CurrentMusic rooms, and cloud account linking go through the engine. Search, comments, and NetEase's native two-person listening can go directly to NetEase. With a local NetEase session, personal playlists, likes, and recommendations generally go directly as well. With no local session, selected account features can use the engine's saved NetEase binding. Selecting the native NetEase audio source makes the phone resolve playback URLs directly. Lyrics have their own source setting.
+- **CurrentMusicX** routes each request by feature, audio source, and sign-in state. Platform direct resolves playback on the phone against the active platform; LeiZ and LX use their own services. CurrentMusic accounts and playlists, the community, CurrentMusic rooms, cloud account linking, and CurrentMusic lyrics go through the engine. Search, comments, and two-person listening can go directly to NetEase. With a local NetEase session, personal playlists, likes, and recommendations generally go directly as well. With no local session, selected account features can use the engine's saved NetEase binding. Lyrics have their own source setting.
 
 ### How the engine handles requests
 

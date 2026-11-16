@@ -13,7 +13,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.currencortex.music.data.settings.LikeMode
 import io.github.currencortex.music.data.settings.ListeningSource
 import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.data.settings.MusicTransitionMode
@@ -102,17 +101,6 @@ import kotlin.math.roundToInt
             SettingsDivider()
             SettingsSwitch("允许计费网络预加载", settings.preloadMetered, vm::preloadMetered,
                 summary = "包括移动网络，会额外消耗流量", enabled = settings.preloadAudio, modifier = Modifier.testTag("preload_metered"))
-        } }
-        item("likes") { SettingsSection("红心与点赞", MusicIcons.Heart) {
-            SettingsOptionsRow("默认红心位置", settings.likeMode.label, LikeMode.entries.map { mode ->
-                SettingsOption("like_mode_${mode.name}", mode.label, mode == settings.likeMode,
-                    summary = when (mode) {
-                        LikeMode.AUTO -> "已绑定网易云则同步，否则使用 CurrentMusic"
-                        LikeMode.NETEASE -> "未绑定网易云时使用 CurrentMusic"
-                        LikeMode.CURRENT_MUSIC -> "仅存入本站，不影响网易云账号"
-                    },
-                    onSelect = { vm.likeMode(mode) })
-            }, Modifier.testTag("like_mode"))
         } }
     }
     if (qualityOpen) {

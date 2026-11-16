@@ -36,14 +36,10 @@ import top.yukonga.miuix.kmp.basic.TextField
     var customServerOpen by rememberSaveable { mutableStateOf(false) }
     SettingsPage("音源与网络", "network_settings") {
         item("source") { SettingsSection("音乐音源", MusicIcons.Headphones) {
-            val displayedProvider = if (settings.musicPlatform == MusicPlatform.QQ_MUSIC) AudioProvider.QQ_MUSIC else provider.provider
-            SettingsOptionsRow("音源", displayedProvider.label, AudioProvider.entries.map { entry ->
-                SettingsOption("audio_provider_${entry.name.lowercase()}", entry.label, displayedProvider == entry,
+            SettingsOptionsRow("音源", provider.provider.label, AudioProvider.entries.map { entry ->
+                SettingsOption("audio_provider_${entry.name.lowercase()}", entry.label, provider.provider == entry,
                     onSelect = { audioKey = ""; vm.audioProvider(entry) })
             }, Modifier.testTag("audio_provider"), enabled = !audioState.busy)
-            if (displayedProvider == AudioProvider.QQ_MUSIC) {
-                SettingsHint("直连 QQ 音乐官方 musicu.fcg、musics.fcg 与播放 CDN，不经 CurrentMusic 服务中转。实际可用性以账号权限为准。")
-            }
             AnimatedVisibility(provider.provider == AudioProvider.LEIZ,
                 enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {

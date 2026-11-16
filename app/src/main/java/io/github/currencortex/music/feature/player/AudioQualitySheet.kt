@@ -58,6 +58,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var visible by remember { mutableStateOf(true) }
     var afterDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
     val dismiss by rememberUpdatedState(onDismiss)
+    var songQualities by remember(song?.id, song?.musicSource) { mutableStateOf<Set<AudioQuality>?>(null) }
+    LaunchedEffect(isQq, song?.id, song?.musicSource, container) {
+        songQualities = if (isQq && song != null && container != null)
+            (appResult { container.qqMusic.qualities(song) } as? AppResult.Success)?.value else null
+    }
+    val effectiveAvailable = if (isQq) songQualities ?: available ?: qqAudioQualities(container) else null
+    LaunchedEffect(effectiveAvailable, selected) {
+        if (isQq && effectiveAvailable != null && selected != AudioQuality.AUTO && selected !in effectiveAvailable)
+            onSelect(AudioQuality.AUTO)
+    }
     MusicBottomSheet(show = visible, title = title,
         modifier = Modifier.testTag("audio_quality_sheet"),
         onDismissRequest = { visible = false },
@@ -68,7 +78,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 visible = false
             }
         }, enabled, onNetwork?.let { action -> { afterDismiss = action; visible = false } },
-            available = if (isQq) available ?: qqAudioQualities(container) else null, isQq = isQq, extraContent = {
+            available = effectiveAvailable, isQq = isQq, extraContent = {
             if (isQq && onEffects != null) {
                 Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     MusicTextAction("搭配音效 ›", {
@@ -133,8 +143,9 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
     available: Collection<AudioQuality>? = null, isQq: Boolean = false,
     extraContent: @Composable () -> Unit = {}) {
     val colors = MiuixTheme.colorScheme
-    val regularOptions = available ?: listOf(AudioQuality.VIVID, AudioQuality.DOLBY, AudioQuality.JYEFFECT,
-        AudioQuality.HIRES, AudioQuality.LOSSLESS, AudioQuality.EXHIGH, AudioQuality.HIGHER, AudioQuality.STANDARD)
+    val regularOptions = (available ?: listOf(AudioQuality.VIVID, AudioQuality.DOLBY, AudioQuality.JYEFFECT,
+        AudioQuality.HIRES, AudioQuality.LOSSLESS, AudioQuality.EXHIGH, AudioQuality.HIGHER, AudioQuality.STANDARD))
+        .filter { it != AudioQuality.AUTO }
     // This is a fixed, short list. Compose it before the native entrance starts instead of
     // subcomposing every text row during the first animated layout pass.
     // Let the native sheet supply the available screen height. Keep the safe-area spacing

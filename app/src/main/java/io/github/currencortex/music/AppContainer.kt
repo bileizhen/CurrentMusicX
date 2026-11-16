@@ -147,8 +147,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     /** Community features belong to the project account, independently of the audio provider. */
     fun projectSession() = RequestSession(
         accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)
-    fun audioSession() = if (audioSettings.access().provider == AudioProvider.NETEASE)
+    private fun directNeteaseSession() =
         RequestSession("https://music.163.com/", null, neteaseSessions.state.value.revision)
+    fun audioSession() = if (audioSettings.access().provider == AudioProvider.NETEASE)
+        directNeteaseSession()
         else RequestSession(accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)
     val apiClient = ApiClient(
         server = { accountRepository.server.ifBlank { musicSettings.state.value.server } },
@@ -156,7 +158,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         log = { logger.info("Network", it) },
         client = apiHttpClient ?: ApiClient.defaultHttpClient(),
         netease = nativeNetease,
-        nativeMedia = { audioSettings.access().provider == AudioProvider.NETEASE },
+        nativeMedia = {
+            val session = neteaseSessions.state.value
+            audioSettings.access().provider == AudioProvider.NETEASE && session.loggedIn && !session.stale
+        },
         currentMusicAccountReady = { accountRepository.state.value.account != null && !accountRepository.token.isNullOrBlank() },
         currentMusicSessionRevision = { accountRepository.sessionRevision.value },
         routeServer = serverRouter::resolve,
@@ -197,14 +202,16 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 supportsDolby = supportsDolby && quality == AudioQuality.AUTO)
         }
         val access = audioSettings.access()
+        val directNetease = access.provider == AudioProvider.NETEASE
         val preferDolby = supportsDolby && quality == AudioQuality.AUTO &&
             song.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL &&
-            (access.provider == AudioProvider.CURRENT_MUSIC || access.provider == AudioProvider.NETEASE)
-        if (access.provider == AudioProvider.NETEASE) {
+            directNetease
+        if (directNetease) {
             // Snapshot UID and revision together so a concurrent account switch cannot mix cache owners.
             val owner = neteaseSessions.state.value
             return AudioRequest(song.id, quality, owner.profile?.uid ?: 0L,
-                RequestSession("https://music.163.com/", null, owner.revision), access.identity, song, supportsDolby = preferDolby)
+                RequestSession("https://music.163.com/", null, owner.revision),
+                AudioSourceAccess(AudioProvider.NETEASE).identity, song, supportsDolby = preferDolby)
         }
         return AudioRequest(song.id, quality, accountRepository.state.value.account?.id ?: 0L, audioSession(), access.identity, song,
             supportsDolby = preferDolby)
@@ -492,14 +499,6 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val ready = CompletableDeferred<Unit>()
     val sessionRestored = CompletableDeferred<Unit>()
     init {
-        appScope.launch {
-            musicSettings.state.map { it.musicPlatform }.distinctUntilChanged().collect { platform ->
-                audioSettings.selectForPlatform(
-                    if (platform == io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC)
-                        io.github.currencortex.music.data.settings.AudioProvider.QQ_MUSIC else null,
-                )
-            }
-        }
         if (storageNamespace.isEmpty() && externalPlayer == null) playerScope.launch {
             ready.await()
             sessionRestored.await()
@@ -586,10 +585,6 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             }
         }
         appScope.launch { audioSettings.state.collect { audioSources.invalidate() } }
-        appScope.launch { audioSettings.state.map { it.provider }.distinctUntilChanged().collect {
-            bindingRepository.clearSession(); neteaseLibrary.invalidate(); neteaseSongActions.clearSession()
-            libraryRepository.clearReads()
-        } }
         appScope.launch {
             bindingRepository.state.map { it?.profile?.uid to it?.bound }.distinctUntilChanged().collect {
                 neteaseSongActions.clearSession(); neteaseLibrary.invalidate()

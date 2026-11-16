@@ -1,5 +1,6 @@
 package io.github.currencortex.music.data.qqmusic
 
+import android.os.Build
 import io.github.currencortex.music.core.network.ApiClient
 import io.github.currencortex.music.core.network.ApiException
 import io.github.currencortex.music.core.network.ApiJson
@@ -50,6 +51,7 @@ class QqDirectMusicClient(
         const val DEFAULT_GUID = "abcdef1234567890abcdef1234567890"
         const val STREAM_ORIGIN = "https://isure.stream.qqmusic.qq.com/"
         const val USER_AGENT = "QQMusic 2005000982(android 15) (Phone)"
+        const val ANDROID_USER_AGENT = "QQMusic 14090008(android 10)"
         val JSON = "application/json; charset=utf-8".toMediaType()
         val PLAIN_TEXT = "text/plain; charset=utf-8".toMediaType()
         val REQUEST_KEY = byteArrayOf(
@@ -174,6 +176,29 @@ class QqDirectMusicClient(
         .build()
     private val cgiCookieJar = MemoryCookieJar()
     private val cgiHttp = http.newBuilder().cookieJar(cgiCookieJar).build()
+    private data class AndroidDevice(
+        val openUdid: String,
+        val androidId: String,
+        val osRelease: String,
+        val model: String,
+        val sdk: Int,
+        val fingerprint: String,
+    )
+    private data class AndroidSession(val uid: String, val sid: String)
+    private val androidDevice by lazy {
+        AndroidDevice(
+            openUdid = DEFAULT_GUID,
+            androidId = runCatching {
+                Build.FINGERPRINT.hashCode().toUInt().toString(16).padStart(16, '0')
+            }.getOrDefault("0000000000000000"),
+            osRelease = runCatching { Build.VERSION.RELEASE }.getOrDefault(""),
+            model = runCatching { Build.MODEL }.getOrDefault(""),
+            sdk = runCatching { Build.VERSION.SDK_INT }.getOrDefault(0),
+            fingerprint = runCatching { Build.FINGERPRINT }.getOrDefault(""),
+        )
+    }
+    @Volatile private var androidSession: AndroidSession? = null
+    @Volatile private var androidSessionAt = 0L
 
     fun isCredential(raw: String?): Boolean = DirectCredential.parse(raw)?.valid == true
 
@@ -207,6 +232,8 @@ class QqDirectMusicClient(
                 route == "search/suggest" -> suggestions(query)
                 route == "search/hot" -> hotSearch()
                 route == "song/detail" -> songDetail(query)
+                route == "song/qualities" -> songQualities(query)
+                route == "song/favorite-count" -> songFavoriteCount(query)
                 route == "song/url" -> songUrl(query, credential)
                 route == "lyric" -> lyric(query)
                 route == "playlist" -> playlist(query)
@@ -252,9 +279,16 @@ class QqDirectMusicClient(
                 route == "user/listening-rank" -> recentListening(requireNotNull(credential))
                 route == "recommend/toplists" -> topLists()
                 route == "recommend/toplist" -> topList(query)
-                route == "comment/new" -> newComments(query)
+                route == "comment/new" -> comments(query, credential)
+                route == "comment/list" -> comments(query, credential)
+                route == "comment/replies" -> commentReplies(query, credential)
+                route == "comment/send" -> addComment(body ?: buildJsonObject {}, requireNotNull(credential))
+                route == "comment/delete" -> deleteComment(body ?: buildJsonObject {}, requireNotNull(credential))
+                route == "comment/like" -> likeComment(body ?: buildJsonObject {}, requireNotNull(credential))
                 route == "album" -> album(query)
+                route == "album/songs" -> albumSongs(query)
                 route == "artist" -> artist(query)
+                route == "artist/songs" -> artistSongs(query)
                 route == "artist/albums" -> artistAlbums(query)
                 route == "user/vip" -> vip(requireNotNull(credential))
                 route == "user/albums" -> favoriteAlbums(requireNotNull(credential), query)
@@ -767,6 +801,53 @@ class QqDirectMusicClient(
         return wrapped(buildJsonObject { put("songs", JsonArray(tracks)) })
     }
 
+    private fun songQualities(query: Map<String, String>): JsonObject {
+        val mid = query["mid"].orEmpty()
+        if (!mid.matches(Regex("[A-Za-z0-9]{1,64}"))) throw ApiException(ErrorKind.NotFound)
+        // ct=24 is the client identity that returns the full quality size table; the
+        // default ct=11 shape zeroes out 320k/FLAC even when the files exist.
+        val data = cgi("music.pf_song_detail_svr", "get_song_detail_yqq",
+            buildJsonObject { put("song_mid", mid) }, null,
+            commOverride = buildJsonObject {
+                put("ct", 24)
+                put("cv", 0)
+                put("format", "json")
+            })
+        val track = data["track_info"] as? JsonObject
+        val file = track?.get("file") as? JsonObject ?: JsonObject(emptyMap())
+        fun size(key: String): Long = file.firstLong(key)
+        val newSizes = file.array("size_new").mapNotNull { (it as? JsonPrimitive)?.longOrNull }
+        fun new(index: Int): Boolean = newSizes.getOrNull(index)?.let { it > 0 } == true
+        val available = buildJsonObject {
+            put("standard", size("size_128mp3") > 0 || size("size_96aac") > 0 || size("size_48aac") > 0)
+            put("exhigh", size("size_320mp3") > 0 || size("size_192aac") > 0 ||
+                size("size_192ogg") > 0 || new(3))
+            put("lossless", size("size_flac") > 0 || new(5))
+            put("hires", size("size_hires") > 0)
+            put("dolby", size("size_dolby") > 0)
+            put("qq_dts_x", size("size_dts") > 0 || new(9))
+            put("qq_master", new(0) || size("size_ape") > 0)
+            put("qq_surround", new(1))
+            put("qq_studio", new(2))
+            put("qq_nac", new(7))
+        }
+        return wrapped(buildJsonObject { put("available", available) })
+    }
+
+    private fun songFavoriteCount(query: Map<String, String>): JsonObject {
+        val mid = query["mid"].orEmpty()
+        if (!mid.matches(Regex("[A-Za-z0-9]{1,64}"))) throw ApiException(ErrorKind.NotFound)
+        val data = cgi("music.musicasset.SongFavRead", "GetSongFansNumberByMid", buildJsonObject {
+            put("v_songMid", buildJsonArray { add(JsonPrimitive(mid)) })
+        }, null)
+        val count = ((data["m_numbers"] as? JsonObject)?.get(mid) as? JsonPrimitive)?.longOrNull ?: 0L
+        val display = ((data["m_show"] as? JsonObject)?.get(mid) as? JsonPrimitive)?.contentOrNull.orEmpty()
+        return wrapped(buildJsonObject {
+            put("count", count)
+            put("display", display)
+        })
+    }
+
     private fun songUrl(query: Map<String, String>, credential: DirectCredential?): JsonObject {
         val mid = query["id"].orEmpty()
         if (!mid.matches(Regex("[A-Za-z0-9]{1,64}"))) throw ApiException(ErrorKind.NotFound)
@@ -1020,18 +1101,41 @@ class QqDirectMusicClient(
             return wrapped(buildJsonObject { put("items", JsonArray(items)) })
         }
         if (type == "album") {
-            val favorites = favoriteAlbums(credential, mapOf("offset" to "0", "limit" to "500"))
-            val data = favorites["data"] as? JsonObject ?: JsonObject(emptyMap())
-            val subscribed = data.array("albums").mapNotNull { value ->
-                val row = value as? JsonObject ?: return@mapNotNull null
-                row.identifier("albummid", "albumMid", "mid", "id")
-            }.toSet()
+            val subscribed = mutableSetOf<String>()
+            var offset = 0
+            var total = 0L
+            var complete = false
+            for (page in 0 until 20) {
+                val favorites = favoriteAlbums(credential, mapOf("offset" to "$offset", "limit" to "100"))
+                val data = favorites["data"] as? JsonObject ?: JsonObject(emptyMap())
+                val ids = data.array("albums", "albumList", "albumlist", "list").mapNotNull { value ->
+                    (value as? JsonObject)?.identifier("albummid", "albumMid", "mid", "id")
+                        ?.takeIf(String::isNotBlank)
+                }
+                subscribed += ids
+                total = maxOf(total, data.firstLong("total"))
+                // A full page without explicit paging metadata is not proof that the
+                // favorite list has ended. Preserve an unknown result rather than
+                // reporting an album beyond the first page as not subscribed.
+                val more = data.flag("hasmore") ||
+                    (total > 0 && offset + ids.size < total) ||
+                    (total == 0L && ids.size >= 100)
+                if (!more || ids.isEmpty()) {
+                    complete = true
+                    break
+                }
+                offset += ids.size
+            }
             return wrapped(buildJsonObject {
                 put("items", buildJsonArray {
                     ids.forEach { id ->
                         add(buildJsonObject {
                             put("id", id)
-                            put("status", if (id in subscribed) "subscribed" else "not-subscribed")
+                            put("status", when {
+                                id in subscribed -> "subscribed"
+                                complete -> "not-subscribed"
+                                else -> "unknown"
+                            })
                         })
                     }
                 })
@@ -1071,7 +1175,19 @@ class QqDirectMusicClient(
         }, credential)
         val fans = data["m_fan"] as? JsonObject ?: return emptyMap()
         return unique.associateWith { mid ->
-            (fans[mid] as? JsonPrimitive)?.booleanOrNull
+            val raw = fans[mid]
+            log("QQ favorite state $mid type=${raw?.let { it::class.simpleName }} value=${raw?.toString()?.take(80)}")
+            fun JsonPrimitive.flag(): Boolean? =
+                booleanOrNull ?: when (contentOrNull?.lowercase()) {
+                    "1", "true" -> true
+                    "0", "false" -> false
+                    else -> null
+                }
+            when (val value = raw) {
+                is JsonPrimitive -> value.flag()
+                is JsonObject -> (value["v_fan"] as? JsonPrimitive)?.flag()
+                else -> null
+            }
         }
     }
 
@@ -1105,16 +1221,16 @@ class QqDirectMusicClient(
             throw ApiException(ErrorKind.Server, userMessage = "QQ 音乐未返回完整收藏状态，请重试")
         if (current == liked) return wrapped(buildJsonObject { put("liked", liked) })
         val method = if (liked) "AddSonglist" else "DelSonglist"
-        val data = cgiSigned("music.musicasset.PlaylistDetailWrite", method, buildJsonObject {
+        val acknowledgement = cgiAndroidWrite("music.musicasset.PlaylistDetailWrite", method, buildJsonObject {
             put("dirId", 201)
-            put("tid", 0)
-            put("bFmtUtf8", true)
             put("v_songInfo", buildJsonArray {
                 add(buildJsonObject { put("songId", id); put("songType", type) })
             })
         }, credential)
-        val success = data.firstLong("retCode").toInt().let { it == 0 || it == 80092 }
-        if (!success) throw ApiException(ErrorKind.Server, data.firstLong("retCode").toInt(), "QQ 音乐未确认收藏变更")
+        val retCode = acknowledgement.firstLong("retCode", "code").toInt()
+        log("QQ direct $method retCode=$retCode")
+        if (retCode != 0 && retCode != 80092)
+            throw ApiException(ErrorKind.Server, retCode, "QQ 音乐未确认收藏变更")
         val stillLiked = songFavoriteStatuses(credential, listOf(mid))[mid]
             ?: throw ApiException(ErrorKind.Server, userMessage = "QQ 音乐未返回收藏变更结果")
         if (stillLiked != liked) throw ApiException(ErrorKind.Server, userMessage = "QQ 音乐收藏状态未同步，请刷新后重试")
@@ -1220,8 +1336,8 @@ class QqDirectMusicClient(
         val id = body.firstLong("tid")
         val subscribed = body.flag("subscribed")
         val method = if (subscribed) "FavPlaylist" else "CancelFavPlaylist"
-        val data = cgi("music.musicasset.PlaylistFavWrite", method, buildJsonObject {
-            put("uin", credential.encryptUin)
+        val data = cgiAndroidWrite("music.musicasset.PlaylistFavWrite", method, buildJsonObject {
+            put("uin", credential.stringMusicId.ifBlank { credential.musicId.toString() })
             put("v_playlistId", buildJsonArray { add(JsonPrimitive(id)) })
         }, credential)
         val failed = data.array("v_failedPlaylistId").any {
@@ -1236,11 +1352,16 @@ class QqDirectMusicClient(
         val id = body.firstText("id")
         if (!id.matches(Regex("[A-Za-z0-9]{1,64}"))) throw ApiException(ErrorKind.NotFound)
         val subscribed = body.flag("subscribed")
-        cgi("music.musicasset.AlbumFavWrite", if (subscribed) "FavAlbum" else "CancelFavAlbum",
+        val data = cgiAndroidWrite("music.musicasset.AlbumFavWrite", if (subscribed) "FavAlbum" else "CancelFavAlbum",
             buildJsonObject {
-                put("euin", credential.encryptUin)
+                put("uin", credential.stringMusicId.ifBlank { credential.musicId.toString() })
                 put("v_albumMid", buildJsonArray { add(JsonPrimitive(id)) })
             }, credential)
+        val failed = data.array("v_failedAlbumId").isNotEmpty() || data.array("v_failedAlbumMid").isNotEmpty()
+        val result = data.firstLong("result")
+        log("QQ album subscribe result=$result failed=$failed")
+        if (result != 0L || failed)
+            throw ApiException(ErrorKind.Server, userMessage = "QQ 音乐未确认专辑收藏变更")
         return wrapped(buildJsonObject { put("subscribed", subscribed) })
     }
 
@@ -1465,37 +1586,181 @@ class QqDirectMusicClient(
         })
     }
 
-    private fun newComments(query: Map<String, String>): JsonObject {
+    private fun comments(query: Map<String, String>, credential: DirectCredential?): JsonObject {
         val id = query["id"].orEmpty().takeIf { it.matches(Regex("[1-9][0-9]{0,14}")) }
             ?: throw ApiException(ErrorKind.NotFound)
-        val offset = query["offset"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
-        val limit = query["limit"]?.toIntOrNull()?.coerceIn(1, 50) ?: 30
-        val data = cgi("music.globalComment.CommentRead", "GetNewCommentList", buildJsonObject {
+        val page = query["page"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+        val limit = query["limit"]?.toIntOrNull()?.coerceIn(1, 25) ?: 20
+        val seq = query["seq"].orEmpty()
+        val sort = query["sort"].orEmpty().ifBlank { "latest" }
+        val parameters = buildJsonObject {
             put("BizType", 1)
+            put("BizSubType", 2)
             put("BizId", id)
-            put("LastCommentSeqNo", "")
+            put("LastCommentSeqNo", seq)
             put("PageSize", limit)
-            put("PageNum", offset / limit)
-            put("FromCommentId", "")
-            put("WithHot", 0)
+            put("PageNum", page - 1)
             put("PicEnable", 1)
-        }, null)
+            when (sort) {
+                "recommended" -> {
+                    put("Flag", 1)
+                    put("CmListUIVer", 1)
+                    put("AudioEnable", 1)
+                }
+                "hot" -> {
+                    put("HotType", 1)
+                    put("WithAirborne", 0)
+                }
+                else -> {
+                    put("HashTagID", "")
+                    put("SelfSeeEnable", 1)
+                    put("AudioEnable", 1)
+                }
+            }
+        }
+        val method = when (sort) {
+            "recommended" -> "GetRecCommentList"
+            "hot" -> "GetHotCommentList"
+            else -> "GetNewCommentList"
+        }
+        val data = try {
+            cgi("music.globalComment.CommentRead", method, parameters, credential)
+        } catch (failure: ApiException) {
+            if (sort != "latest" || failure.status != 10000 && failure.kind != ErrorKind.Server) throw failure
+            legacyComments(id, (page - 1) * limit, limit)
+        }
+        return commentPage(data)
+    }
+
+    private fun commentReplies(query: Map<String, String>, credential: DirectCredential?): JsonObject {
+        val id = query["id"].orEmpty().takeIf { it.matches(Regex("[1-9][0-9]{0,14}")) }
+            ?: throw ApiException(ErrorKind.NotFound)
+        val parent = query["parent"].orEmpty().takeIf(String::isNotBlank)
+            ?: throw ApiException(ErrorKind.NotFound)
+        val page = query["page"]?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+        val limit = query["limit"]?.toIntOrNull()?.coerceIn(1, 25) ?: 20
+        val data = cgi("music.globalComment.CommentReadServer", "GetReplyCommentList", buildJsonObject {
+            put("BizType", 1)
+            put("BizSubType", 2)
+            put("BizId", id)
+            put("RootCmId", parent)
+            put("CmId", parent)
+            put("LastCommentSeqNo", query["seq"].orEmpty())
+            put("PageSize", limit)
+            put("PageNum", page - 1)
+            put("PicEnable", 1)
+        }, credential)
+        return commentPage(data)
+    }
+
+    private fun commentPage(data: JsonObject): JsonObject {
         val list = (data["CommentList"] as? JsonObject) ?: JsonObject(emptyMap())
+        var lastSeq = ""
         val comments = list.array("Comments").mapNotNull { value ->
             val row = value as? JsonObject ?: return@mapNotNull null
+            lastSeq = row.firstText("SeqNo")
+            val quoted = row.array("RepliedComments").firstOrNull() as? JsonObject
+            fun body(value: JsonObject, vararg keys: String): String =
+                value.firstText(*keys).replace("\\r\\n", "\n").replace("\\n", "\n")
             buildJsonObject {
                 put("id", row.firstText("CmId"))
-                put("content", row.firstText("Content"))
+                put("seqNo", row.firstText("SeqNo"))
+                put("content", body(row, "Content"))
                 put("nick", row.firstText("Nick"))
                 put("avatar", row.firstText("Avatar"))
                 put("praiseCount", row.firstLong("PraiseNum"))
                 put("time", row.firstLong("PubTime"))
+                put("likedByMe", row.firstLong("IsPraised") == 1L)
+                put("isMine", row.firstLong("IsSelf") == 1L)
+                put("replyCount", row.firstLong("ReplyCnt"))
+                put("quotedNickname", quoted?.firstText("Nick").orEmpty())
+                quoted?.let { body(it, "Content") }?.takeIf(String::isNotBlank)?.let { put("quotedContent", it) }
             }
         }
+        val total = list.firstLong("Total").takeIf { it > 0 }
+            ?: data.firstLong("TotalCmNum").takeIf { it > 0 }
+            ?: comments.size.toLong()
         return wrapped(buildJsonObject {
             put("comments", JsonArray(comments))
-            put("total", list.firstLong("Total"))
-            put("more", list.flag("HasMore"))
+            put("total", total)
+            put("more", list.flag("HasMore") || list.firstLong("NextOffset") > 0)
+            put("nextSeq", lastSeq)
+        })
+    }
+
+    private fun addComment(body: JsonObject, credential: DirectCredential): JsonObject {
+        val id = body.firstLong("songId")
+        val content = body.firstText("content").trim()
+        require(content.isNotEmpty() && content.length <= 1000)
+        val data = cgi("music.globalComment.CommentWriteServer", "AddComment", buildJsonObject {
+            put("Content", content)
+            put("BizType", 1)
+            put("BizSubType", 2)
+            put("BizId", id.toString())
+            body.firstText("replyTo").takeIf(String::isNotBlank)?.let { put("RepliedCmId", it) }
+        }, credential)
+        val subCode = data.firstLong("SubCode", "subCode").toInt()
+        if (subCode != 0) throw ApiException(ErrorKind.Server, subCode, data.firstText("Msg", "msg"))
+        val commentId = data.firstText("CommentId", "AddedCmId", "CmId")
+        return wrapped(buildJsonObject {
+            put("commentId", commentId)
+            put("verified", commentId.isNotBlank())
+        })
+    }
+
+    private fun deleteComment(body: JsonObject, credential: DirectCredential): JsonObject {
+        val id = body.firstText("commentId").takeIf(String::isNotBlank)
+            ?: throw ApiException(ErrorKind.NotFound)
+        val data = cgi("music.globalComment.CommentWriteServer", "DelComment",
+            buildJsonObject { put("CommentId", id) }, credential)
+        val subCode = data.firstLong("SubCode", "subCode").toInt()
+        if (subCode != 0) throw ApiException(ErrorKind.Server, subCode, data.firstText("Msg", "msg"))
+        return wrapped(buildJsonObject { put("deleted", true) })
+    }
+
+    private fun likeComment(body: JsonObject, credential: DirectCredential): JsonObject {
+        val id = body.firstText("commentId").takeIf(String::isNotBlank)
+            ?: throw ApiException(ErrorKind.NotFound)
+        val liked = body.flag("liked")
+        webCgi("/base/fcgi-bin/fcg_global_comment_praise_h5.fcg", mapOf(
+            "g_tk" to hash33(credential.musicKey),
+            "loginUin" to credential.stringMusicId,
+            "hostUin" to 0,
+            "cmd" to if (liked) 1 else 2,
+            "reqtype" to 2,
+            "commentid" to id,
+        ), credential)
+        return wrapped(buildJsonObject { put("liked", liked) })
+    }
+
+    private fun legacyComments(id: String, offset: Int, limit: Int): JsonObject {
+        val data = webCgi("/base/fcgi-bin/fcg_global_comment_h5.fcg", mapOf(
+            "cid" to 205360772,
+            "reqtype" to 2,
+            "biztype" to 1,
+            "topid" to id,
+            "cmd" to 8,
+            "needmusiccrit" to 0,
+            "pagenum" to offset / limit,
+            "pagesize" to limit,
+        ))
+        val list = (data["comment"] as? JsonObject) ?: data
+        val comments = list.array("commentlist", "comments").mapNotNull { value ->
+            val row = value as? JsonObject ?: return@mapNotNull null
+            buildJsonObject {
+                put("id", row.firstText("commentid", "commentId", "CmId"))
+                put("content", row.firstText("rootcommentcontent", "content", "Content"))
+                put("nick", row.firstText("nick", "Nick", "nickname"))
+                put("avatar", row.firstText("avatarurl", "Avatar", "avatar"))
+                put("praiseCount", row.firstLong("praisenum", "PraiseNum", "praiseCount"))
+                put("time", row.firstLong("time", "PubTime"))
+            }
+        }
+        val total = list.firstLong("total", "commenttotal", "Total").takeIf { it > 0 } ?: (offset + comments.size).toLong()
+        return wrapped(buildJsonObject {
+            put("comments", JsonArray(comments))
+            put("total", total)
+            put("more", offset + comments.size < total)
         })
     }
 
@@ -1590,7 +1855,7 @@ class QqDirectMusicClient(
         val id = query["id"].orEmpty()
         val data = cgi("music.musichallAlbum.AlbumInfoServer", "GetAlbumDetail",
             buildJsonObject { put("albumMid", id) }, null)
-        val album = (data["album"] as? JsonObject) ?: data
+        val basic = (data["basicInfo"] as? JsonObject) ?: (data["album"] as? JsonObject) ?: data
         val songData = cgi("music.musichallAlbum.AlbumSongList", "GetAlbumSongList", buildJsonObject {
             put("albumMid", id)
             put("begin", 0)
@@ -1598,30 +1863,129 @@ class QqDirectMusicClient(
         }, null)
         val songs = songData.array("songList", "songlist", "songs", "list")
             .ifEmpty { data.array("songList", "songlist", "songs", "list") }
+        val total = songData.firstLong("totalNum", "total_song_num", "total_num", "total", "song_num")
+            .takeIf { it > 0 } ?: songs.size.toLong()
+        val albumMid = basic.firstText("albumMid", "albumMID", "mid").ifBlank { id }
+        val singerList = (data["singer"] as? JsonObject)?.array("singerList", "singers", "list")
+            ?.takeIf { it.isNotEmpty() } ?: data.array("singerList", "singers")
+        val company = data["company"] as? JsonObject
+        val album = buildJsonObject {
+            basic.forEach { (key, value) -> put(key, value) }
+            put("mid", albumMid)
+            put("albumMid", albumMid)
+            put("name", basic.firstText("albumName", "name", "title"))
+            put("albumName", basic.firstText("albumName", "name", "title"))
+            put("tranName", basic.firstText("tranName", "transName"))
+            put("desc", basic.firstText("desc", "description", "intro"))
+            put("publishDate", basic.firstText("publishDate", "time_public", "releaseDate"))
+            put("language", basic.firstText("language"))
+            put("albumType", basic.firstText("albumType", "typeName"))
+            put("cover", basic.firstText("cover", "pic", "picurl", "picUrl", "albumPic")
+                .ifBlank { "https://y.gtimg.cn/music/photo_new/T002R500x500M000$albumMid.jpg" })
+            put("singerList", JsonArray(singerList))
+            company?.let { value ->
+                put("company", value)
+                put("companyName", value.firstText("name"))
+            }
+        }
         return wrapped(buildJsonObject {
             put("album", album)
-            album.forEach { (key, value) -> if (key !in setOf("album")) put(key, value) }
             put("songs", JsonArray(songs))
+            put("totalSongs", total)
+            put("hasMoreSongs", songs.size < total)
         })
     }
+
+    private fun albumSongs(query: Map<String, String>): JsonObject {
+        val id = query["id"].orEmpty()
+        val offset = query["offset"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val limit = query["limit"]?.toIntOrNull()?.coerceIn(1, 300) ?: 300
+        val data = cgi("music.musichallAlbum.AlbumSongList", "GetAlbumSongList", buildJsonObject {
+            put("albumMid", id)
+            put("begin", offset)
+            put("num", limit)
+        }, null)
+        val songs = data.array("songList", "songlist", "songs", "list")
+        val total = data.firstLong("totalNum", "total_song_num", "total_num", "total", "song_num")
+            .takeIf { it > 0 } ?: (offset + songs.size).toLong()
+        return wrapped(buildJsonObject {
+            put("songs", JsonArray(songs))
+            put("total", total)
+            put("more", data.flag("hasmore") || offset + songs.size < total)
+        })
+    }
+
+    private fun singerPage(id: String, offset: Int, limit: Int): JsonObject =
+        cgi("music.web_singer_info_svr", "get_singer_detail_info", buildJsonObject {
+            put("sort", 5)
+            put("singermid", id)
+            put("sin", offset)
+            put("num", limit)
+        }, null)
 
     private fun artist(query: Map<String, String>): JsonObject {
         val id = query["id"].orEmpty()
         val offset = query["offset"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
         val limit = query["limit"]?.toIntOrNull()?.coerceIn(1, 100) ?: 30
-        val singer = cgi("music.web_singer_info_svr", "get_singer_detail_info",
-            buildJsonObject { put("singerMid", id) }, null)
-        val songs = cgi("musichall.song_list_server", "GetSingerSongList", buildJsonObject {
-            put("singerMid", id); put("begin", offset); put("num", limit)
-        }, null)
-        val albums = cgi("music.musichallAlbum.AlbumListServer", "GetAlbumList", buildJsonObject {
-            put("singerMid", id); put("begin", 0); put("num", 20)
-        }, null)
+        val data = singerPage(id, offset, limit)
+        val songs = data.array("songlist", "songs", "list")
+        val info = (data["singer_info"] as? JsonObject)
+            ?: (data["singer"] as? JsonObject)
+            ?: (data["artist"] as? JsonObject)
+            ?: JsonObject(emptyMap())
+        // Album failures must not hide the singer's playable songs or biography.
+        val albumPage = runCatching {
+            cgi("music.musichallAlbum.AlbumListServer", "GetAlbumList", buildJsonObject {
+                put("singerMid", id)
+                put("begin", 0)
+                put("num", 20)
+            }, null)
+        }.getOrNull()
+        val albums = albumPage?.array("albumList", "albumlist", "albums", "list").orEmpty()
+        val totalSong = data.firstLong("total_song", "totalSong", "total").takeIf { it > 0 }
+            ?: info.firstLong("song_total", "songNum", "songnum").takeIf { it > 0 } ?: 0L
+        val totalAlbum = data.firstLong("total_album", "totalAlbum").takeIf { it > 0 }
+            ?: info.firstLong("album_total", "albumNum", "albumnum").takeIf { it > 0 } ?: 0L
+        val totalMv = data.firstLong("total_mv", "totalMv").takeIf { it > 0 }
+            ?: info.firstLong("mv_total", "mvNum", "mvnum").takeIf { it > 0 } ?: 0L
+        val mid = info.firstText("mid", "singermid").ifBlank { id }
         return wrapped(buildJsonObject {
-            put("artist", (singer["singer"] as? JsonObject) ?: singer)
-            put("songs", JsonArray(songs.array("songlist", "songs", "list")))
-            put("albums", JsonArray(albums.array("albumlist", "albums", "list")))
-            put("more", songs.flag("hasmore"))
+            put("artist", buildJsonObject {
+                info.forEach { (key, value) -> put(key, value) }
+                put("mid", mid)
+                put("name", info.firstText("name", "title", "singerName"))
+                put("alias", info.firstText("other_name", "otherName", "alias"))
+                put("fans", info.firstLong("fans", "fansNum", "fans_num"))
+                put("cover", info.firstText("cover", "pic", "avatar", "avatarUrl")
+                    .ifBlank { "https://y.gtimg.cn/music/photo_new/T001R500x500M000$mid.jpg" })
+            })
+            put("songs", JsonArray(songs))
+            put("albums", JsonArray(albums))
+            put("brief", data.firstText("singer_brief", "brief", "desc"))
+            put("fans", info.firstLong("fans", "fansNum", "fans_num"))
+            put("totalSong", totalSong)
+            put("totalAlbum", totalAlbum)
+            put("totalMv", totalMv)
+            put("moreSongs", data.flag("hasmore") ||
+                (totalSong > 0 && offset + songs.size < totalSong))
+            put("moreAlbums", totalAlbum > 0 && albums.size < totalAlbum)
+            put("albumsFailed", albumPage == null)
+        })
+    }
+
+    private fun artistSongs(query: Map<String, String>): JsonObject {
+        val id = query["id"].orEmpty()
+        val offset = query["offset"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val limit = query["limit"]?.toIntOrNull()?.coerceIn(1, 100) ?: 30
+        val data = singerPage(id, offset, limit)
+        val songs = data.array("songlist", "songs", "list")
+        val total = data.firstLong("total_song", "totalSong", "total").takeIf { it > 0 } ?: 0L
+        return wrapped(buildJsonObject {
+            put("songs", JsonArray(songs))
+            put("total", total)
+            put("more", data.flag("hasmore") ||
+                (total > 0 && offset + songs.size < total) ||
+                (total == 0L && songs.size >= limit))
         })
     }
 
@@ -1632,11 +1996,13 @@ class QqDirectMusicClient(
         val data = cgi("music.musichallAlbum.AlbumListServer", "GetAlbumList", buildJsonObject {
             put("singerMid", id); put("begin", offset); put("num", limit)
         }, null)
-        val albums = data.array("albumlist", "albums", "list")
+        val albums = data.array("albumList", "albumlist", "albums", "list")
+        val total = data.firstLong("total", "total_num", "total_album")
+            .takeIf { it > 0 } ?: (offset + albums.size).toLong()
         return wrapped(buildJsonObject {
             put("albums", JsonArray(albums))
-            put("total", data.firstLong("total", "total_num").takeIf { it > 0 } ?: (offset + albums.size))
-            put("more", data.flag("hasmore"))
+            put("total", total)
+            put("more", data.flag("hasmore") || offset + albums.size < total)
         })
     }
 
@@ -1657,15 +2023,134 @@ class QqDirectMusicClient(
     private fun favoriteAlbums(credential: DirectCredential, query: Map<String, String>): JsonObject {
         val offset = query["offset"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
         val limit = query["limit"]?.toIntOrNull()?.coerceIn(1, 100) ?: 30
-        val data = cgi("music.musicasset.AlbumFavRead", "CgiGetAlbumFavInfo", buildJsonObject {
-            put("euin", credential.encryptUin); put("offset", offset); put("size", limit)
-        }, credential)
-        val albums = data.array("albums", "albumlist", "list")
+        // musicu AlbumFavRead returns a zero-filled struct; the legacy profile
+        // asset CGI is the endpoint that actually lists favourited albums.
+        val data = webCgi("/fav/fcgi-bin/fcg_get_profile_order_asset.fcg", mapOf(
+            "ct" to 20,
+            "cid" to 205360956,
+            "userid" to credential.stringMusicId.ifBlank { credential.musicId.toString() },
+            "reqtype" to 2,
+            "sin" to offset,
+            "ein" to (offset + limit - 1).coerceAtLeast(offset),
+        ), credential)
+        val albums = data.array("albumlist", "albums", "albumList", "list")
+        val total = data.firstLong("totalalbum", "total").takeIf { it > 0 }
+            ?: (offset + albums.size).toLong()
         return wrapped(buildJsonObject {
             put("albums", JsonArray(albums))
-            put("total", data.firstLong("total").takeIf { it > 0 } ?: (offset + albums.size))
-            put("more", data.flag("hasmore"))
+            put("total", total)
+            put("more", data.flag("has_more", "hasmore") || offset + albums.size < total)
         })
+    }
+
+    private fun androidComm(credential: DirectCredential?, session: AndroidSession?,
+        includeAuth: Boolean = credential?.valid == true): JsonObject = buildJsonObject {
+        put("ct", 11)
+        put("cv", 14_090_008)
+        put("v", 14_090_008)
+        put("chid", "10003505")
+        put("tmeAppID", "qqmusic")
+        put("QIMEI", "")
+        put("QIMEI36", FALLBACK_QIMEI36)
+        put("OpenUDID", androidDevice.openUdid)
+        put("udid", androidDevice.openUdid)
+        put("OpenUDID2", androidDevice.openUdid)
+        put("aid", androidDevice.androidId)
+        put("os_ver", androidDevice.osRelease)
+        put("phonetype", androidDevice.model)
+        put("devicelevel", androidDevice.sdk.toString())
+        put("newdevicelevel", androidDevice.sdk.toString())
+        put("rom", androidDevice.fingerprint)
+        session?.uid?.takeIf(String::isNotBlank)?.let { put("uid", it) }
+        session?.sid?.takeIf(String::isNotBlank)?.let { put("sid", it) }
+        if (includeAuth && credential?.valid == true) {
+            put("qq", credential.stringMusicId.ifBlank { credential.musicId.toString() })
+            put("authst", credential.musicKey)
+            put("tmeLoginType", credential.loginType)
+        }
+    }
+
+    private fun musicuAndroid(module: String, method: String, param: JsonObject,
+        comm: JsonObject, cookie: String?, gTk: Int = 5381, userAgent: String = ANDROID_USER_AGENT): JsonObject {
+        val root = buildJsonObject {
+            put("comm", comm)
+            put("req_0", buildJsonObject {
+                put("module", module)
+                put("method", method)
+                put("param", param)
+            })
+        }
+        val url = CGI.toHttpUrl().newBuilder()
+            .addQueryParameter("format", "json")
+            .addQueryParameter("g_tk", gTk.toString())
+            .build()
+        val request = Request.Builder().url(url)
+            .header("User-Agent", userAgent)
+            .header("Referer", "https://y.qq.com/")
+            .apply { cookie?.takeIf(String::isNotBlank)?.let { header("Cookie", it) } }
+            .post(root.toString().toRequestBody(JSON))
+            .build()
+        val response = execute(cgiHttp, request)
+        val text = response.body?.string().orEmpty()
+        log("QQ direct android POST $module/$method HTTP ${response.code}")
+        if (response.code !in 200..299)
+            throw ApiException(ErrorKind.Server, response.code, "QQ 音乐客户端请求失败（HTTP ${response.code}）")
+        val json = parseJson(text)
+        val rootCode = json.firstLong("code", "ret").toInt()
+        if (rootCode != 0) {
+            log("QQ direct android $module/$method business code $rootCode")
+            throw cgiError(rootCode, json)
+        }
+        val node = json["req_0"] as? JsonObject
+            ?: throw ApiException(ErrorKind.Parse, userMessage = "QQ 音乐响应缺少 req_0")
+        val nodeCode = node.firstLong("code", "ret").toInt()
+        if (nodeCode != 0) {
+            log("QQ direct android $module/$method node code $nodeCode")
+            throw cgiError(nodeCode, node)
+        }
+        return (node["data"] as? JsonObject) ?: node
+    }
+
+    private fun androidSession(): AndroidSession? {
+        val cached = androidSession
+        if (cached != null && System.currentTimeMillis() - androidSessionAt < 6 * 60 * 60 * 1000L) return cached
+        val comm = buildJsonObject {
+            androidComm(null, null, includeAuth = false).forEach { (key, value) -> put(key, value) }
+            put("uin", "0")
+            put("format", "json")
+            put("platform", "yqq.json")
+        }
+        val data = runCatching {
+            musicuAndroid("music.getSession.session", "GetSession", buildJsonObject {
+                put("uid", "")
+                put("vkey", 0)
+                put("caller", 0)
+            }, comm, null)
+        }.getOrElse {
+            log("QQ direct android session unavailable: ${it.message}")
+            return null
+        }
+        val session = data["session"] as? JsonObject ?: return null
+        val uid = session.firstText("uid")
+        val sid = session.firstText("sid")
+        if (uid.isBlank() || sid.isBlank()) return null
+        return AndroidSession(uid, sid).also {
+            androidSession = it
+            androidSessionAt = System.currentTimeMillis()
+        }
+    }
+
+    private fun cgiAndroidWrite(module: String, method: String, param: JsonObject,
+        credential: DirectCredential): JsonObject {
+        val session = androidSession()
+        val comm = androidComm(credential, session)
+        val cookie = buildString {
+            append("uin=").append(credential.stringMusicId.ifBlank { credential.musicId.toString() })
+            append("; qqmusic_uin=").append(credential.stringMusicId.ifBlank { credential.musicId.toString() })
+            append("; qm_keyst=").append(credential.musicKey)
+            append("; qqmusic_key=").append(credential.musicKey)
+        }
+        return musicuAndroid(module, method, param, comm, cookie)
     }
 
     private fun cgiSigned(module: String, method: String, param: JsonObject,
@@ -1679,9 +2164,14 @@ class QqDirectMusicClient(
                 put("g_tk", token)
                 put("g_tk_new_20200303", token)
                 put("uci", credential.stringMusicId)
+                put("uin", credential.stringMusicId)
                 put("qq", credential.stringMusicId)
                 put("authst", credential.musicKey)
                 put("tmeLoginType", credential.loginType)
+                put("tmeAppID", "qqmusic")
+                put("QIMEI36", FALLBACK_QIMEI36)
+                put("nettype", "NETWORK_WIFI")
+                put("format", "json")
                 put("inCharset", "utf-8")
                 put("outCharset", "utf-8")
                 put("notice", 0)
@@ -1721,11 +2211,17 @@ class QqDirectMusicClient(
         val decodedText = String(decoded, Charsets.UTF_8)
         val root = parseJson(decodedText)
         val rootCode = root.firstLong("code", "ret").toInt()
-        if (rootCode != 0) throw cgiError(rootCode, root)
+        if (rootCode != 0) {
+            log("QQ direct signed $module/$method root code $rootCode")
+            throw cgiError(rootCode, root)
+        }
         val node = root["playlist"] as? JsonObject
             ?: throw ApiException(ErrorKind.Parse, userMessage = "QQ 音乐签名响应缺少 playlist")
         val nodeCode = node.firstLong("code", "ret").toInt()
-        if (nodeCode != 0) throw cgiError(nodeCode, node)
+        if (nodeCode != 0) {
+            log("QQ direct signed $module/$method node code $nodeCode")
+            throw cgiError(nodeCode, node)
+        }
         return (node["data"] as? JsonObject) ?: node
     }
 
@@ -1772,7 +2268,7 @@ class QqDirectMusicClient(
         return (node["data"] as? JsonObject) ?: node
     }
 
-    private fun webCgi(path: String, params: Map<String, Any>): JsonObject {
+    private fun webCgi(path: String, params: Map<String, Any>, credential: DirectCredential? = null): JsonObject {
         val url = ("https://c.y.qq.com" + path).toHttpUrl().newBuilder()
             .addQueryParameter("format", "json")
             .addQueryParameter("outCharset", "utf-8")
@@ -1782,6 +2278,7 @@ class QqDirectMusicClient(
             .header("User-Agent", USER_AGENT)
             .header("Referer", "https://y.qq.com/")
             .header("Accept", "application/json")
+            .apply { credential?.cookieHeader()?.let { header("Cookie", it) } }
             .get()
             .build())
         log("QQ direct GET ${url.encodedPath} HTTP ${response.code}")

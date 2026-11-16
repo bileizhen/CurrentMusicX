@@ -129,7 +129,12 @@ import io.github.currencortex.music.feature.room.*
 private fun isPlaylistRoute(route: String) = route == "lib/local" ||
     route.startsWith("lib/playlist/") || route.startsWith("lib/ncmplaylist/") ||
     route.startsWith("lib/album/") || route.startsWith("qq/playlist/") ||
+    route.startsWith("qq/album/") ||
     route in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent", "lib/cloud", "qq/likes", "qq/recent")
+
+/** QQ albums use the playlist artwork chrome but do not implement its shelf/ribbon overlays. */
+private fun supportsPlaylistOverlay(route: String) =
+    isPlaylistRoute(route) && !route.startsWith("qq/album/")
 
 private val UnifiedMiniScrollClearance = 36.dp
 private const val ROOT = 0
@@ -234,7 +239,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     LaunchedEffect(sessionRevision) { profileVm.dialog.value = null; profileVm.avatar.value = null; profileVm.message.value = null }
     val libraryMessage by libraryVm.message.collectAsStateWithLifecycle()
     val libraryDialogSong by libraryVm.selectedSong.collectAsStateWithLifecycle()
-    val likeSelection by libraryVm.likes.state.collectAsStateWithLifecycle()
     // Position and loading updates belong to the player, not the entire navigation tree.
     val playerState by playerVm.navigation.collectAsStateWithLifecycle()
     val currentSong by playerVm.currentSong.collectAsStateWithLifecycle()
@@ -330,7 +334,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val miniRetainedAvailable = currentSong != null || playerState.mode == PlayerMode.ROOM
         val miniAvailable = !keyboardOpen && miniRetainedAvailable
         val showMini = miniAvailable && !hideDockForChat && !playerPresented && sceneStack.last() !in setOf("lib/video", "appearance-font") &&
-            !(settings.playlistRecordShelf && isPlaylistRoute(sceneStack.last()))
+            !(settings.playlistRecordShelf && supportsPlaylistOverlay(sceneStack.last()))
         PreloadMusicCovers(listOf(currentSong?.cover.orEmpty()), 800)
         LaunchedEffect(sessionRevision) { songMenu = null; roomPending = emptySet() }
         var roomDialogOpen by remember { mutableStateOf(false) }
@@ -572,7 +576,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         // Update layout values without replacing the decorator that retains each page.
         val sceneInsets = remember {
             NavEntryDecorator<String> { entry ->
-                val playlistScene = isPlaylistRoute(entry.contentKey.toString())
+                val playlistScene = supportsPlaylistOverlay(entry.contentKey.toString())
                 val ribbonScene = ribbonEnabled.value && playlistScene
                 val miniSpace = if (availableMini.value && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video", "appearance-font")) miniInset.value else 0.dp
                 // Each moving scene must cover the outgoing page and its dim scrim, including
@@ -677,7 +681,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     }
                     }
                     io.github.currencortex.music.feature.search.SearchSheetHost(searchOpen, searchSheet, predictiveBack,
-                        backEnabled = backStack.last() == SEARCH.toString() && !playerPresented && songMenu == null && !miniQueueOpen && libraryDialogSong == null && likeSelection.song == null,
+                        backEnabled = backStack.last() == SEARCH.toString() && !playerPresented && songMenu == null && !miniQueueOpen && libraryDialogSong == null,
                         onBack = ::navigateBack) {
                         CompositionLocalProvider(LocalMusicBottomInset provides if (miniAvailable) miniHeight else 0.dp) {
                             SearchScreen(searchVm, container.playerController,
@@ -876,9 +880,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                 }
                                 route.startsWith("user/profile/") -> {
                                     val id = route.substringAfterLast('/').toLongOrNull() ?: 0L
-                                    val vm: ProfileViewModel = if (id == account.account?.id) profileVm else viewModel(key = route,
+                                    val vm: ProfileViewModel = viewModel(key = route,
                                         factory = viewModelFactory { ProfileViewModel(container, id) })
-                                    ProfileScreen(vm, ::navigateLibrary, { songs, index -> playWithPermission { container.playerController.playList(songs, index) } }, onBack = ::navigateBack)
+                                    ProfileScreen(vm, ::navigateLibrary,
+                                        { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
+                                        onBack = ::navigateBack, platform = lyricsFontSettings.musicPlatform)
                                 }
                             }
                         }
@@ -982,7 +988,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         val dockVisible by remember(keyboardOpen, sceneStack, settings.playlistRecordShelf, hideDockForChat) { derivedStateOf {
             !hideDockForChat && sceneStack.last() !in setOf("lib/video", "appearance-font") && playerExpansion.value < .9999f &&
-                !(settings.playlistRecordShelf && isPlaylistRoute(sceneStack.last()))
+                !(settings.playlistRecordShelf && supportsPlaylistOverlay(sceneStack.last()))
         } }
         val miniOverlay: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit = {
         KeyboardDockOverlay(keyboardOpen) {
@@ -1056,7 +1062,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             origin = playerOrigin, viewport = navigationBounds, artwork = artworkTransition,
             artworkUrl = currentSong?.cover.orEmpty(), predictiveBack = predictiveBack,
             backEnabled = !playerEffectsPresented && !showLogs && pendingPlay == null && !updateDialogVisible && !announcementVisible &&
-                !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null &&
+                !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null &&
                 !roomDialogOpen && songMenu == null && !playerDialogOpen && !miniQueueOpen,
             // Only the tap target that reverses a closing sheet needs the moving dock bounds.
             miniOpenBounds = if (miniAvailable && playerSheetMotion == PlayerSheetMotion.CLOSE) miniOpenBounds else null,
@@ -1112,14 +1118,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         NavigationBackHandler(
             state = rememberNavigationEventState(NavigationEventInfo.None),
             isBackEnabled = backStack.size > 1 && !playerPresented && !searchCoversScene && !predictiveBack && !showLogs &&
-                pendingPlay == null && !updateDialogVisible && updatePrompt == null && !announcementVisible && !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
+                pendingPlay == null && !updateDialogVisible && updatePrompt == null && !announcementVisible && !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && profileDialog == null && profileMessage == null && !roomDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
         // With predictive back off the page dispatcher is disabled, so the ribbon/shelf
         // BackHandlers inside the playlist page never fire and the legacy pop above would
         // exit the page. Registered after it, this closes the overlay first instead.
         androidx.activity.compose.BackHandler(enabled = !predictiveBack && !playerPresented &&
-            isPlaylistRoute(sceneStack.last()) && (settings.playlistDepthRibbon || settings.playlistRecordShelf) &&
+            supportsPlaylistOverlay(sceneStack.last()) && (settings.playlistDepthRibbon || settings.playlistRecordShelf) &&
             io.github.currencortex.music.feature.library.PlaylistOverlayVisibility.visible[sceneStack.last()] == true) {
             scope.launch { container.settings.edit { it.copy(playlistDepthRibbon = false, playlistRecordShelf = false) } }
         }

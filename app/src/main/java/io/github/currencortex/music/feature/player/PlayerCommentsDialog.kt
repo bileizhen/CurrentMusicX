@@ -48,7 +48,8 @@ import kotlinx.coroutines.flow.drop
 @Composable internal fun PlayerCommentsDialog(state: PlayerComments, dismiss: () -> Unit, reload: () -> Unit, more: () -> Unit,
     composer: PlayerCommentComposer = PlayerCommentComposer(), edit: () -> Unit = {}, reply: (NeteaseComment?) -> Unit = {}, send: () -> Unit = {},
     sort: (CommentSort) -> Unit = {}, replies: (NeteaseComment, Boolean) -> Unit = { _, _ -> },
-    like: (NeteaseComment) -> Unit = {}, delete: (NeteaseComment) -> Unit = {}) {
+    like: (NeteaseComment) -> Unit = {}, delete: (NeteaseComment) -> Unit = {},
+    title: String = "网易云评论", fallbackUser: String = "网易云用户") {
     val colors = io.github.currencortex.music.ui.component.musicDialogColors()
     val indication = LocalIndication.current
     val density = LocalDensity.current
@@ -80,7 +81,7 @@ import kotlinx.coroutines.flow.drop
         CompositionLocalProvider(LocalContentColor provides colors.onSurface, LocalIndication provides indication) {
         Column(Modifier.fillMaxWidth().heightIn(max = maxHeight), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("网易云评论", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                Text(title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                 state.total?.let { Text(" $it", Modifier.weight(1f), fontSize = 13.sp, color = colors.onSurfaceVariantSummary) }
                     ?: Spacer(Modifier.weight(1f))
                 CommentAction(if (state.loading) "刷新中…" else "刷新", "refresh_comments", !state.loading && !composer.sending && state.busy.isEmpty(), reload)
@@ -116,7 +117,7 @@ import kotlinx.coroutines.flow.drop
                     var expandedReplies by rememberSaveable(state.songId, state.sort, comment.id) { mutableStateOf(false) }
                     val actionsEnabled = !composer.sending && !state.loading && state.busy.isEmpty() && state.replies.values.none { it.loading }
                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        CommentContent(comment, enabled = !composer.sending,
+                        CommentContent(comment, enabled = !composer.sending, fallbackUser = fallbackUser,
                             enhanced = state.enhanced == true, busy = !actionsEnabled || comment.id in state.busy,
                             own = state.meUid != 0L && state.meUid == comment.userId,
                             like = { like(comment) }, delete = { deleting = comment }) { reply(comment); focusReply++ }
@@ -129,7 +130,7 @@ import kotlinx.coroutines.flow.drop
                                 val floor = state.replies[comment.id]
                                 if (floor == null) CommentAction("加载回复", "load_replies_${comment.id}", !state.loading && state.busy.isEmpty()) { replies(comment, false) }
                                 floor?.comments?.forEach { child -> key(child.id) {
-                                    CommentContent(child, !composer.sending, enhanced = true,
+                                    CommentContent(child, !composer.sending, enhanced = true, fallbackUser = fallbackUser,
                                         busy = !actionsEnabled || child.id in state.busy,
                                         own = state.meUid != 0L && state.meUid == child.userId,
                                         like = { like(child) }, delete = { deleting = child }) { reply(child); focusReply++ }
@@ -173,7 +174,7 @@ import kotlinx.coroutines.flow.drop
                 Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.onSurface.copy(alpha = .04f)).padding(start = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("回复 ${comment.user.nickname.ifBlank { "网易云用户" }}", fontSize = 12.sp, color = colors.primary)
+                        Text("回复 ${comment.user.nickname.ifBlank { fallbackUser }}", fontSize = 12.sp, color = colors.primary)
                         Text(comment.content, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.onSurfaceVariantSummary)
                     }
                     CommentAction("取消", "cancel_comment_reply", !composer.sending) { reply(null) }
@@ -225,7 +226,8 @@ import kotlinx.coroutines.flow.drop
 }
 
 @Composable private fun CommentContent(comment: NeteaseComment, enabled: Boolean, enhanced: Boolean = false,
-    busy: Boolean = false, own: Boolean = false, like: () -> Unit = {}, delete: () -> Unit = {}, reply: () -> Unit) {
+    busy: Boolean = false, own: Boolean = false, fallbackUser: String = "网易云用户",
+    like: () -> Unit = {}, delete: () -> Unit = {}, reply: () -> Unit) {
     val colors = io.github.currencortex.music.ui.component.musicDialogColors()
     var expanded by rememberSaveable(comment.id) { mutableStateOf(false) }
     var overflow by remember(comment.content) { mutableStateOf(false) }
@@ -236,7 +238,7 @@ import kotlinx.coroutines.flow.drop
         DecoratedAvatar(comment.user.avatarUrl.takeIf { it.isNotBlank() }, null, size = 34.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(comment.user.nickname.ifBlank { "网易云用户" }, Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                Text(comment.user.nickname.ifBlank { fallbackUser }, Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium,
                     color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (enhanced) CommentAction("${if (comment.likedByMe) "已赞" else "赞"} ${comment.likedCount}",
                     "like_comment_${comment.id}", !busy, like)
@@ -248,7 +250,7 @@ import kotlinx.coroutines.flow.drop
             }
             if (overflow || expanded) CommentAction(if (expanded) "收起" else "展开全文", "expand_comment_${comment.id}") { expanded = !expanded }
             comment.beReplied.firstOrNull()?.let { quote ->
-                Text("${quote.user?.nickname?.ifBlank { "网易云用户" } ?: "网易云用户"}：${quote.content ?: "原评论已删除"}",
+                Text("${quote.user?.nickname?.ifBlank { fallbackUser } ?: fallbackUser}：${quote.content ?: "原评论已删除"}",
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.onSurface.copy(alpha = .04f)).padding(10.dp),
                     fontSize = 12.sp, lineHeight = 18.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, color = colors.onSurfaceVariantSummary)
             }

@@ -9,16 +9,14 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.security.MessageDigest
 
-enum class AudioProvider(val label: String) { CURRENT_MUSIC("CurrentMusic"), NETEASE("网易云原生"), QQ_MUSIC("QQ 音乐直连"), LEIZ("LeiZ API"), LX("落雪音源") }
-data class AudioProviderState(val provider: AudioProvider = AudioProvider.CURRENT_MUSIC,
-    val keyConfigured: Boolean = false, val identity: String = "currentmusic", val lxSourceId: String = "", val lxSmartSwitch: Boolean = false)
+enum class AudioProvider(val label: String) { NETEASE("平台直连"), LEIZ("LeiZ API"), LX("落雪音源") }
+data class AudioProviderState(val provider: AudioProvider = AudioProvider.NETEASE,
+    val keyConfigured: Boolean = false, val identity: String = "netease", val lxSourceId: String = "", val lxSmartSwitch: Boolean = false)
 
 /** Immutable request credentials. Never include credentials in generated toString/equals/logs. */
 class AudioSourceAccess(val provider: AudioProvider, internal val key: String = "", val lxSourceId: String = "", val lxSmartSwitch: Boolean = false) {
     val identity = when (provider) {
-        AudioProvider.CURRENT_MUSIC -> "currentmusic"
         AudioProvider.NETEASE -> "netease"
-        AudioProvider.QQ_MUSIC -> "qqmusic"
         AudioProvider.LEIZ -> "leiz:" + MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
         AudioProvider.LX -> if (lxSmartSwitch) "lx:$lxSourceId:smart" else "lx:$lxSourceId"
     }
@@ -32,11 +30,9 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
     private val smartPreference = booleanPreferencesKey("music.lxSmartSwitch")
     private var savedSmartSwitch = false
     private val lock = Mutex()
-    @Volatile private var current = AudioSourceAccess(AudioProvider.CURRENT_MUSIC)
+    @Volatile private var current = AudioSourceAccess(AudioProvider.NETEASE)
     private var savedKey = ""
     private var savedLxSource = ""
-    private var platformMusicProvider: AudioProvider? = null
-    private var resumeProvider: AudioProvider? = null
     val state = MutableStateFlow(AudioProviderState())
     val ready = CompletableDeferred<Unit>()
     init { scope.launch(Dispatchers.IO) {
@@ -45,11 +41,21 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
             savedKey = runCatching { vault.read().orEmpty() }.getOrDefault("")
             savedLxSource = preferences[lxPreference].orEmpty().takeIf { it.matches(Regex("[a-f0-9]{64}")) }.orEmpty()
             savedSmartSwitch = preferences[smartPreference] ?: false
-            resumeProvider = runCatching {
-                AudioProvider.valueOf(preferences[resumePreference].orEmpty())
-            }.getOrNull()?.takeUnless { it == AudioProvider.QQ_MUSIC }
-            val provider = runCatching { AudioProvider.valueOf(preferences[preference].orEmpty()) }
-                .getOrDefault(AudioProvider.CURRENT_MUSIC)
+            val savedProvider = preferences[preference]
+            val provider = decodeAudioProvider(savedProvider) ?: AudioProvider.NETEASE
+            val providerChanged = savedProvider != null && savedProvider != provider.name
+            val resumeStale = preferences[resumePreference] != null
+            if (providerChanged || resumeStale) {
+                try {
+                    store.edit { settings ->
+                        if (providerChanged) settings[preference] = provider.name
+                        if (resumeStale) settings.remove(resumePreference)
+                    }
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Exception) {
+                }
+            }
             publish(provider)
             ready.complete(Unit)
         }
@@ -62,31 +68,6 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
     suspend fun select(provider: AudioProvider) {
         ready.await()
         lock.withLock { store.edit { it[preference] = provider.name }; publish(provider) }
-    }
-    suspend fun selectForPlatform(provider: AudioProvider?) {
-        ready.await()
-        lock.withLock {
-            if (provider == null) {
-                platformMusicProvider = null
-                val restored = resumeProvider ?: AudioProvider.CURRENT_MUSIC
-                store.edit { settings ->
-                    settings[preference] = restored.name
-                    settings.remove(resumePreference)
-                }
-                resumeProvider = null
-                publish(restored)
-            } else {
-                if (platformMusicProvider == null) {
-                    resumeProvider = current.provider.takeUnless { it == provider } ?: resumeProvider
-                }
-                platformMusicProvider = provider
-                store.edit { settings ->
-                    settings[preference] = provider.name
-                    resumeProvider?.let { settings[resumePreference] = it.name } ?: settings.remove(resumePreference)
-                }
-                publish(provider)
-            }
-        }
     }
     suspend fun selectLxSource(id: String) {
         require(id.isEmpty() || id.matches(Regex("[a-f0-9]{64}"))) { "请选择有效的落雪音源" }
@@ -115,4 +96,9 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
         ready.await()
         withContext(Dispatchers.IO) { lock.withLock { vault.clear(); savedKey = ""; publish(current.provider) } }
     }
+}
+
+internal fun decodeAudioProvider(value: String?): AudioProvider? = when (value) {
+    "CURRENT_MUSIC", "QQ_MUSIC" -> AudioProvider.NETEASE
+    else -> value?.let { runCatching { AudioProvider.valueOf(it) }.getOrNull() }
 }

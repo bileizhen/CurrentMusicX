@@ -265,7 +265,8 @@ internal val PlayerSeekVisuals = SemanticsPropertyKey<PlayerSeekVisual>("PlayerS
 internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, LIKE, COMMENT, ALARM, REPEAT, REPEAT_ONE, SHUFFLE, HEART_MODE }
 
 @Composable internal fun PlayerIconButton(icon: PlayerIcon, label: String, onClick: () -> Unit,
-    modifier: Modifier = Modifier, selected: Boolean = false, count: Long? = null, showCount: Boolean = false,
+    modifier: Modifier = Modifier, selected: Boolean = false, count: Long? = null, countLabel: String? = null,
+    showCount: Boolean = false,
     enabled: Boolean = true, loading: Boolean = false, onLongClick: (() -> Unit)? = null,
     onLongClickLabel: String = "选择其他歌单") {
     val interactions = remember { MutableInteractionSource() }
@@ -278,7 +279,7 @@ internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, 
     Box(modifier.size(48.dp).combinedClickable(enabled = enabled, role = Role.Button, interactionSource = interactions,
         indication = null, onClick = onClick, onLongClick = onLongClick,
         onLongClickLabel = if (onLongClick != null) onLongClickLabel else null).semantics {
-            contentDescription = label + if (count != null) "，网易云数量 $count" else ""; this.selected = selected
+            contentDescription = label + (countLabel ?: count?.toString())?.let { "，数量 $it" }.orEmpty(); this.selected = selected
             if (!enabled) disabled()
             this[PlayerButtonVisuals] = PlayerButtonVisual(pressed, scale.value, 0f, opacity.value)
         }, contentAlignment = Alignment.Center) {
@@ -304,7 +305,7 @@ internal enum class PlayerIcon { COLLAPSE, MORE, SHARE, EFFECTS, LYRICS, QUEUE, 
             PlayerIcon.SHUFFLE -> R.drawable.player_symbol_shuffle
             PlayerIcon.HEART_MODE -> R.drawable.player_symbol_ecg_heart
         }), null, iconModifier, colorFilter = ColorFilter.tint(ink))
-        if (showCount) Text(count?.let(::formatNeteaseCount) ?: "—", fontSize = 9.sp,
+        if (showCount) Text(countLabel ?: count?.let(::formatNeteaseCount) ?: "—", fontSize = 9.sp,
             color = Color.White.copy(alpha = .8f), maxLines = 1,
             modifier = Modifier.align(Alignment.TopEnd).padding(top = 2.dp).testTag("${icon.name.lowercase()}_count"))
     }

@@ -182,7 +182,9 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
             ?: throw ApiException(ErrorKind.Forbidden)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         try {
-            if (target.nativeLiked) tracks.forEach { (songId, song) -> actions.setLiked(songId, true, expected, song) }
+            if (target.nativeLiked) tracks.forEach { (songId, song) ->
+                actions.setLiked(songId, true, expected, song, expectedUid = uid)
+            }
             else request("playlist/tracks", mapOf("pid" to "$id", "tracks" to tracks.keys.joinToString(","), "op" to "add", "confirm" to "1"), expected)
         } finally { invalidate() }
     }
@@ -257,10 +259,9 @@ class PrimaryMusicLibrary(private val current: LibraryRepository, private val ne
     }.stateIn(scope, SharingStarted.Eagerly, Triple(false, 0L, false))
     val usesNetease = identity.map { it.first }.stateIn(scope, SharingStarted.Eagerly, false)
     suspend fun resolveNetease(): Boolean = settings.snapshot().neteaseMainLibrary && binding.cachedStatus().bound
-    val likesUseNetease = combine(binding.state, settings.state.map { it.likeMode }.distinctUntilChanged()) { bound, mode ->
-        mode.useNetease(bound?.bound == true)
-    }.stateIn(scope, SharingStarted.Eagerly, false)
-    suspend fun resolveLikeNetease(): Boolean = settings.snapshot().likeMode.useNetease(binding.cachedStatus().bound)
+    val likesUseNetease = binding.state.map { it?.let { value -> value.bound && !value.stale } == true }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+    suspend fun resolveLikeNetease(): Boolean = binding.cachedStatus().let { it.bound && !it.stale }
     suspend fun playlists(fresh: Boolean = false): List<Playlist> = coroutineScope {
         if (fresh) current.clearReads()
         // Imported NetEase playlists are snapshots with CurrentMusic IDs. Once the live
@@ -281,5 +282,5 @@ class PrimaryMusicLibrary(private val current: LibraryRepository, private val ne
         }
         combined.distinctBy { it.source to it.id }
     }
-    suspend fun likedPlaylist(fresh: Boolean = false): Playlist? = if (resolveNetease()) netease.likedPlaylist(fresh) else null
+    suspend fun likedPlaylist(fresh: Boolean = false): Playlist? = if (resolveLikeNetease()) netease.likedPlaylist(fresh) else null
 }
