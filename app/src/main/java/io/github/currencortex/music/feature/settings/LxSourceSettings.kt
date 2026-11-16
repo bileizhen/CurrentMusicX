@@ -54,7 +54,7 @@ import top.yukonga.miuix.kmp.basic.TextField
                     if (source.author.isNotBlank()) SettingsHint("作者 · ${source.author.take(100)}")
                     val qualities = source.qualities(platform)
                     SettingsHint(if (qualities.isEmpty()) platform.label else
-                        "${platform.label} · ${qualities.joinToString(" / ") { lxQualityLabel(it) }}")
+                        "${platform.label} · ${qualities.joinToString(" / ") { lxQualityLabel(platform, it) }}")
                     resolveTimes[platform to source.id]?.let { SettingsHint("最近成功取链 · $it ms") }
                     health[platform to source.id]?.message?.let { SettingsHint(it) }
                 }

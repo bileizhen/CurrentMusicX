@@ -59,9 +59,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var afterDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
     val dismiss by rememberUpdatedState(onDismiss)
     var songQualities by remember(song?.id, song?.musicSource) { mutableStateOf<Set<AudioQuality>?>(null) }
-    LaunchedEffect(isQq, song?.id, song?.musicSource, container) {
-        songQualities = if (isQq && song != null && container != null)
-            (appResult { container.qqMusic.qualities(song) } as? AppResult.Success)?.value else null
+    val nativeQqQualitiesEnabled = qqNativeQualitiesEnabled(container)
+    LaunchedEffect(isQq, song?.id, song?.musicSource, container, nativeQqQualitiesEnabled) {
+        songQualities = if (isQq && song != null && container != null && nativeQqQualitiesEnabled)
+            (appResult { container.qqMusic.qualities(song) } as? AppResult.Success)?.value?.takeIf { it.isNotEmpty() }
+        else null
     }
     val effectiveAvailable = if (isQq) songQualities ?: available ?: qqAudioQualities(container) else null
     LaunchedEffect(effectiveAvailable, selected) {
@@ -105,6 +107,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
 }
 
+@Composable private fun qqNativeQualitiesEnabled(container: AppContainer?): Boolean {
+    if (container == null) return false
+    val access by container.audioSettings.state.collectAsStateWithLifecycle()
+    return access.provider != AudioProvider.LX
+}
+
 @Composable private fun qqAudioQualities(container: AppContainer?): Set<AudioQuality> {
     if (container == null) return qqNativeQualities
     val access by container.audioSettings.state.collectAsStateWithLifecycle()
@@ -127,14 +135,21 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
             "128k" -> AudioQuality.STANDARD
             "320k" -> AudioQuality.EXHIGH
             "flac" -> AudioQuality.LOSSLESS
-            "flac24bit" -> AudioQuality.HIRES
+            "flac24bit", "hires" -> AudioQuality.HIRES
+            "atmos" -> AudioQuality.QQ_STUDIO
+            "atmos_plus" -> AudioQuality.QQ_SURROUND
+            "master" -> AudioQuality.QQ_MASTER
+            "nac" -> AudioQuality.QQ_NAC
+            "dtsx" -> AudioQuality.QQ_DTS_X
+            "dolby" -> AudioQuality.DOLBY
             else -> null
         } }.toSet()
     val available = linkedSetOf<AudioQuality>()
-    if (AudioQuality.STANDARD in supported) available += AudioQuality.STANDARD
-    if (AudioQuality.EXHIGH in supported) available += AudioQuality.EXHIGH
-    if (AudioQuality.LOSSLESS in supported) available += AudioQuality.LOSSLESS
-    if (AudioQuality.HIRES in supported) available += AudioQuality.HIRES
+    listOf(
+        AudioQuality.STANDARD, AudioQuality.EXHIGH, AudioQuality.LOSSLESS, AudioQuality.HIRES,
+        AudioQuality.QQ_STUDIO, AudioQuality.QQ_SURROUND, AudioQuality.QQ_MASTER,
+        AudioQuality.DOLBY, AudioQuality.QQ_DTS_X, AudioQuality.QQ_NAC,
+    ).forEach { if (it in supported) available += it }
     return available
 }
 
