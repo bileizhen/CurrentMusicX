@@ -53,7 +53,9 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
         }
         val keys = LyricsMatcher.candidates(song)
         val selected = selection?.invoke()
-        val selectedOrigin = if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY)
+        val qqMusic = song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC
+        val selectedOrigin = if (qqMusic) LyricsOrigin("QQ 音乐", "qq_music", song.externalIds.qqMusicId.orEmpty())
+            else if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY)
             LyricsOrigin("Emby", "emby") else if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
             LyricsOrigin("Navidrome", "navidrome") else selected?.origin
         val memoryKey = (selected?.identity.orEmpty() + listOf(selected?.automatic == true, SongLyricsStore.identity(song))) to keys
@@ -83,7 +85,7 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
             issues = issues.toList())
         // Automatic selection is a fresh comparison on every load. A previous
         // provider/cache result must not take precedence over the current winner.
-        if (selected?.automatic == true) return@withLock matchAutomatically() ?: unavailable()
+        if (selected?.automatic == true && !qqMusic) return@withLock matchAutomatically() ?: unavailable()
         memory[memoryKey]?.takeIf { keys.isNotEmpty() }?.let { entry ->
             val at = now()
             if (entry.expiresAtMillis == null || at >= entry.savedAtMillis && at < entry.expiresAtMillis)
@@ -104,7 +106,7 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
                 try { cache.remove(key) } catch (e: Exception) { issue(LyricsErrorCode.PARSE_ERROR, "Cache removal: ${e.javaClass.simpleName}") }
             } catch (e: Exception) { issue(LyricsErrorCode.PARSE_ERROR, "Cache read: ${e.javaClass.simpleName}") }
         }
-        for (provider in selected?.let { listOf(it.provider) } ?: listOf(ttml, fallback)) {
+        for (provider in if (qqMusic) listOf(ttml, fallback) else selected?.let { listOf(it.provider) } ?: listOf(ttml, fallback)) {
             val result = try { provider.findLyrics(song) }
             catch (e: CancellationException) { throw e }
             catch (e: Exception) { issue(LyricsErrorCode.NETWORK_ERROR, "Provider: ${e.javaClass.simpleName}"); continue }

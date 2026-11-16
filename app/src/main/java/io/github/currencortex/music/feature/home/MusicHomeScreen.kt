@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.feature.library.*
+import io.github.currencortex.music.feature.qqmusic.MusicPlatformScrollLayout
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.data.library.Playlist
 import io.github.currencortex.music.data.profile.ProfileUser
@@ -75,8 +76,9 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     SettingsUiScope {
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val artworkCardWidth = (maxWidth.coerceAtMost(840.dp) - 64.dp) / 2.5f
-    SettingsScrollLayout(Modifier.widthIn(max = 840.dp).fillMaxSize().align(Alignment.TopCenter), glassOverContent = false, topBar = {
-        SettingsRootTopBar("Current Music", Modifier.testTag("home_root_toolbar"), titleContent = { HomeBrandTitle() }) {
+    MusicPlatformScrollLayout(vm.container, Modifier.widthIn(max = 840.dp).fillMaxSize().align(Alignment.TopCenter),
+        glassOverContent = false, topBar = { platformTitle ->
+        SettingsRootTopBar("Current Music", Modifier.testTag("home_root_toolbar"), titleContent = platformTitle) {
             HomeProfileAvatar(avatarUrl, (!account.loading || direct) && home.loaded, onProfile,
                 decorationUrl = decorationUrl, decorationScale = scales[decoration] ?: 1.0)
         }
@@ -203,13 +205,13 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     sharingSong?.let { song -> io.github.currencortex.music.feature.share.SongShareDialog(song) { sharingSong = null } }
 }
 
-@Composable private fun HomeSectionHeader(title: String, action: String, onClick: () -> Unit) {
+@Composable internal fun HomeSectionHeader(title: String, action: String, onClick: () -> Unit) {
     SettingsListHeader(title) {
         GlassActionButton(action, onClick, fillWidth = false, minHeight = 36.dp)
     }
 }
 
-@Composable private fun HomePersonalRoamingEntry(onOpen: () -> Unit) {
+@Composable internal fun HomePersonalRoamingEntry(onOpen: () -> Unit) {
     SettingsGroup {
         SettingsPreference("私人漫游", "按你的喜好，连续听点好音乐",
             Modifier.testTag("open_personal_roaming"), onClick = onOpen,

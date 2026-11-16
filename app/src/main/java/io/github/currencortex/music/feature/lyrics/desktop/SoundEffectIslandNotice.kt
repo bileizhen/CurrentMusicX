@@ -177,7 +177,8 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
  */
 @Composable internal fun DesktopIslandEffectTransition(notice: SoundEffectNotice?, modifier: Modifier = Modifier,
     effectHeight: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE,
-    onUpdateInstall: () -> Unit = {}, normal: @Composable () -> Unit) {
+    onUpdateInstall: () -> Unit = {}, collapseProgress: androidx.compose.runtime.State<Float> = remember { mutableFloatStateOf(0f) },
+    normal: @Composable () -> Unit) {
     val motion = rememberDesktopMotion()
     var retained by remember { mutableStateOf(notice) }
     SideEffect { if (notice != null) retained = notice }
@@ -189,7 +190,7 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
     val retainedReady = (notice ?: retained)?.phase == SoundEffectNoticePhase.READY
     val intensity = animateFloatAsState(if (ready) 1f else 0f, tween(if (motion) 400 else 0), label = "island material strength")
     val shape = RoundedCornerShape(50)
-    Layout(modifier = modifier.shadow(2.dp, shape, clip = false)
+    Layout(modifier = modifier.shadow((2.dp * (1f - collapseProgress.value)), shape, clip = false)
         .drawWithCache {
             val base = Brush.verticalGradient(listOf(Color(0xFF11141B), Color(0xFF080B10)))
             val neutralBorder = Brush.verticalGradient(listOf(Color.White.copy(alpha = .16f), Color.White.copy(alpha = .035f)))

@@ -75,7 +75,8 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
     private fun likeOwner(): List<Any?> = listOf(queue.value.current?.id, queue.value.current?.musicSource,
         queue.value.current?.privateIdentity, container.musicSession(), settings.value.likeMode,
         container.emby.state.value.revision.takeIf { queue.value.current?.emby != null },
-        usesNeteaseLibrary.value, container.primaryLibrary.identity.value.second)
+        usesNeteaseLibrary.value, container.primaryLibrary.identity.value.second,
+        container.qqMusic.audioIdentity.takeIf { queue.value.current?.musicSource == MusicSource.QQ_MUSIC })
     private var actionEpoch = 0L
     private var commentsJob: Job? = null
     private var commentSendJob: Job? = null
@@ -91,13 +92,14 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
         viewModelScope.launch { container.accountRepository.sessionRevision.drop(1).collect { ai.close() } }
         viewModelScope.launch { settings.map { it.server }.distinctUntilChanged().drop(1).collect { ai.close() } }
         viewModelScope.launch {
-            combine(queue.map { if (it.current?.privateLibrary == true) it.current?.id else NeteaseSongActionsRepository.songId(it.current) }.distinctUntilChanged(),
+            combine(queue.map { if (it.current?.privateLibrary == true || it.current?.musicSource == MusicSource.QQ_MUSIC) it.current?.id else NeteaseSongActionsRepository.songId(it.current) }.distinctUntilChanged(),
                 container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server to it.likeMode }.distinctUntilChanged(),
                 netease.revision, container.libraryRepository.revision, container.primaryLibrary.identity,
                 container.navidrome.likes.map { if (queue.value.current?.musicSource == MusicSource.NAVIDROME) it else emptyMap() }.distinctUntilChanged(),
                 container.navidrome.state.map { if (queue.value.current?.musicSource == MusicSource.NAVIDROME) it.revision else "" }.distinctUntilChanged(),
                 container.emby.likes, container.emby.state.map { it.revision }.distinctUntilChanged(),
-                container.neteaseSessions.state.map { it.revision }.distinctUntilChanged()) { values ->
+                container.neteaseSessions.state.map { it.revision }.distinctUntilChanged(),
+                container.qqMusic.state, container.qqMusic.likedState) { values ->
                     values.first() as Long? to values.drop(1)
                 }.collectLatest { (id, _) ->
                 actionEpoch++
@@ -116,6 +118,13 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
                 }
                 actionsOwner = nextOwner
                 if (id == null) return@collectLatest
+                if (queue.value.current?.musicSource == MusicSource.QQ_MUSIC) {
+                    val song = queue.value.current!!
+                    val result = appResult { container.qqMusic.refreshLiked(song) }
+                    if (nextOwner == likeOwner()) _actions.value = PlayerSongActions(songId = id,
+                        liked = (result as? AppResult.Success)?.value, error = (result as? AppResult.Failure)?.message)
+                    return@collectLatest
+                }
                 if (queue.value.current?.musicSource == MusicSource.EMBY) {
                     val song = queue.value.current!!
                     val result = if (id !in container.emby.likes.value) appResult { container.emby.detail(song) } else null
@@ -165,9 +174,11 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
             _actions.update { it.copy(liked = pending.desired, liking = true, error = null) }
             return
         }
-        val actionId = if (song.privateLibrary) song.id else NeteaseSongActionsRepository.songId(song)
+        val qqMusic = song.musicSource == MusicSource.QQ_MUSIC
+        val actionId = if (song.privateLibrary || qqMusic) song.id else NeteaseSongActionsRepository.songId(song)
+        if (qqMusic && _actions.value.takeIf { it.songId == actionId }?.liked == null) return
         if (song.musicSource == MusicSource.EMBY && _actions.value.takeIf { it.songId == actionId }?.liked == null) return
-        val before = if (song.privateLibrary || usesNeteaseLibrary.value)
+        val before = if (song.privateLibrary || qqMusic || usesNeteaseLibrary.value)
             _actions.value.takeIf { it.songId == actionId }?.liked == true else libraryStatuses.value[song.id]?.liked == true
         val write = LikeWrite(song, owner, if (song.emby != null) container.emby.session() else container.musicSession(), settings.value.likeMode, before, !before)
         likeWrite = write
@@ -184,6 +195,11 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
                                 throw ApiException(ErrorKind.Unauthorized)
                             if (song.musicSource == MusicSource.EMBY) return@appResult container.emby.setLiked(song, desired)
                             if (song.musicSource == MusicSource.NAVIDROME) return@appResult container.navidrome.setLiked(song, desired)
+                            if (qqMusic) {
+                                if (owner != likeOwner()) throw ApiException(ErrorKind.Unauthorized)
+                                container.qqMusic.setLiked(song, desired)
+                                return@appResult desired
+                            }
                             val native = container.primaryLibrary.resolveLikeNetease()
                             if (write.session != (if (song.emby != null) container.emby.session() else container.musicSession()) || write.likeMode != settings.value.likeMode)
                                 throw ApiException(ErrorKind.Unauthorized)
@@ -403,7 +419,7 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
         }
     }
     fun quality(value: io.github.currencortex.music.core.media.AudioQuality) = viewModelScope.launch {
-        container.musicSettings.setQuality(value)
+        container.musicSettings.setQuality(value, qq = queue.value.current?.musicSource == MusicSource.QQ_MUSIC)
         player.qualityChanged()
     }
     fun lyricsFontSize(value: Float) = viewModelScope.launch { container.musicSettings.setLyricsFontSize(value) }
