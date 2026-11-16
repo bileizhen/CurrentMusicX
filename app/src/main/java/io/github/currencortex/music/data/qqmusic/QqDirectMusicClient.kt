@@ -1623,13 +1623,12 @@ class QqDirectMusicClient(
             "hot" -> "GetHotCommentList"
             else -> "GetNewCommentList"
         }
-        val data = try {
-            cgi("music.globalComment.CommentRead", method, parameters, credential)
+        return try {
+            commentPage(cgi("music.globalComment.CommentRead", method, parameters, credential))
         } catch (failure: ApiException) {
             if (sort != "latest" || failure.status != 10000 && failure.kind != ErrorKind.Server) throw failure
             legacyComments(id, (page - 1) * limit, limit)
         }
-        return commentPage(data)
     }
 
     private fun commentReplies(query: Map<String, String>, credential: DirectCredential?): JsonObject {
