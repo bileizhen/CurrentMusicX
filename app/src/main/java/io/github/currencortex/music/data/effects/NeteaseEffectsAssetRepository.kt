@@ -167,16 +167,17 @@ class NeteaseEffectsAssetRepository(
         require(File(staged, "resource-manifest.json").isFile) { "素材包缺少资源清单" }
         File(staged, MARKER_NAME).writeText(PACKAGE_SHA256)
 
-        var restored = false
         if (target.isDirectory) check(target.renameTo(retired)) { "无法替换音效素材目录" }
         try {
             check(staged.renameTo(target)) { "无法保存音效素材目录" }
         } catch (failure: Exception) {
-            restored = retired.isDirectory && retired.renameTo(target)
+            // Preserve the last working package if a rollback also fails.
+            if (retired.isDirectory && !retired.renameTo(target)) {
+                throw IOException("音效素材安装失败，原有素材备份保留在：${retired.absolutePath}", failure)
+            }
             throw failure
-        } finally {
-            if (!restored) retired.deleteRecursively()
         }
+        retired.deleteRecursively()
     }
 
     private fun sha256(file: File): String {
