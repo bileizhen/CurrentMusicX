@@ -35,8 +35,9 @@ import io.github.currencortex.music.ui.component.nativeui.*
         MusicSource.QQ_MUSIC -> song.id in qqLikes
         MusicSource.EMBY -> embyLikes[song.id] == true
         MusicSource.NAVIDROME -> navidromeLikes[song.id] == true
-        else -> if (likesUseNetease) NeteaseSongActionsRepository.songId(song) in nativeLikes
-            else statuses[song.id]?.liked == true
+        else -> if (song.musicSource == MusicSource.NETEASE)
+            NeteaseSongActionsRepository.songId(song) in nativeLikes
+        else statuses[song.id]?.liked == true
     }
     val insights = songInsightsMenuItems(vm.container.musicRepository.insights, song, playVersion)
     val more = buildList {

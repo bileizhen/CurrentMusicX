@@ -191,18 +191,19 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
     val qqLikes by vm.container.qqMusic.likedState.collectAsStateWithLifecycle()
     val qqKnownLikes by vm.container.qqMusic.knownLikeState.collectAsStateWithLifecycle()
     val qqAccount by vm.container.qqMusic.state.collectAsStateWithLifecycle()
-    val native by vm.container.primaryLibrary.likesUseNetease.collectAsStateWithLifecycle()
     val liking by vm.primaryLikeBusy.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     val liked = when {
         song.musicSource == MusicSource.QQ_MUSIC -> song.id in qqLikes
-        native -> song.id in nativeLikes
+        song.musicSource == MusicSource.NETEASE ->
+            io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) in nativeLikes
         else -> statuses[song.id]?.liked == true
     }
     if (showLike) {
         val qqStateUnknown = song.musicSource == MusicSource.QQ_MUSIC && qqAccount.loggedIn &&
             song.id !in qqKnownLikes
-        val pending = song.musicSource != MusicSource.QQ_MUSIC && statuses[song.id]?.pending == true
+        val pending = song.musicSource !in setOf(MusicSource.QQ_MUSIC, MusicSource.NETEASE) &&
+            statuses[song.id]?.pending == true
         SearchResultIconAction(if (liked) Icons.Default.Favorite else MusicIcons.Heart,
             if (liked) "取消喜欢：${song.name}" else "喜欢：${song.name}",
             Modifier.testTag("search_like_${song.id}").semantics { stateDescription = if (liked) "已喜欢" else "未喜欢" },

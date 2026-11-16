@@ -15,6 +15,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.network.AppResult
 import io.github.currencortex.music.core.network.appResult
@@ -24,7 +25,7 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.data.song.formatNeteaseCount
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import kotlinx.coroutines.CancellationException
+import io.github.currencortex.music.ui.util.viewModelFactory
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
@@ -58,7 +59,7 @@ private data class QqPage(
     val songs: List<Song> = emptyList(), val playlists: List<Playlist> = emptyList(),
     val entries: List<QqCatalogEntry> = emptyList(),
     val more: Boolean = false, val playlist: Playlist? = null, val nextRadioPage: Int? = null,
-    val rankCounts: Map<Long, Long> = emptyMap(), val albumSubscribed: Boolean? = null,
+    val rankCounts: Map<Long, Long> = emptyMap(),
 )
 private fun qqSongSubtitle(song: Song, listenCount: Long?): String =
     listOfNotNull(
@@ -87,6 +88,21 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
     }
     if (route.startsWith("qq/mv/")) {
         QqMvScreen(container, routeId(route), onBack ?: {})
+        return
+    }
+    if (route.startsWith("qq/artist/") || route.startsWith("qq/artist-albums/")) {
+        val mid = routeId(route)
+        val vm: QqArtistViewModel = viewModel(key = "qq_artist_$mid",
+            factory = viewModelFactory { QqArtistViewModel(container, mid) })
+        QqArtistScreen(vm, libraryVm, onBack ?: {}, navigate, play,
+            initialTab = if (route.startsWith("qq/artist-albums/")) "albums" else "home")
+        return
+    }
+    if (route.startsWith("qq/album/")) {
+        val mid = routeId(route)
+        val vm: QqAlbumViewModel = viewModel(key = "qq_album_$mid",
+            factory = viewModelFactory { QqAlbumViewModel(container, mid) })
+        QqAlbumScreen(vm, libraryVm, onBack ?: {}, navigate, play)
         return
     }
     val repository = container.qqMusic
@@ -146,7 +162,6 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
         }
         // Never retain personalized cards or another search page across an owner change.
         if (offset == 0 || !(isSearch || route.startsWith("qq/genre/") ||
-                route.startsWith("qq/artist/") || route.startsWith("qq/artist-albums/") ||
                 route in setOf("qq/albums", "qq/favorite-albums"))) page = QqPage()
         when (val result = appResult {
             when {
@@ -194,25 +209,6 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
                 route.startsWith("qq/chart/") -> repository.chart(routeId(route)).let {
                     QqPage(it.name, it.description, it.cover, it.songs)
                 }
-                route.startsWith("qq/album/") -> {
-                    val id = routeId(route)
-                    val detail = repository.album(id)
-                    val subscribed = if (account.loggedIn) try {
-                        repository.albumSubscription(id)
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (_: Exception) {
-                        null
-                    } else null
-                    QqPage(detail.entry.name, detail.entry.subtitle, detail.entry.cover, detail.songs,
-                        albumSubscribed = subscribed)
-                }
-                route.startsWith("qq/artist/") -> repository.artist(routeId(route), offset).let {
-                    QqPage(it.entry.name, it.entry.subtitle, it.entry.cover, it.songs, entries = it.albums, more = it.hasMore)
-                }
-                route.startsWith("qq/artist-albums/") -> repository.artistAlbums(routeId(route), offset).let {
-                    QqPage("歌手专辑", entries = it.entries, more = it.hasMore)
-                }
                 route.startsWith("qq/genre/") -> {
                     val categoryId = routeId(route)
                     val category = repository.categories().firstOrNull { it.id == categoryId }
@@ -225,7 +221,6 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
             }
         }) {
             is AppResult.Success -> page = if (offset > 0 && (isSearch || route.startsWith("qq/genre/") ||
-                    route.startsWith("qq/artist/") || route.startsWith("qq/artist-albums/") ||
                     route in setOf("qq/albums", "qq/favorite-albums")))
                 result.value.copy(songs = (page.songs + result.value.songs).distinctBy { it.id },
                     entries = (page.entries + result.value.entries).distinctBy { it.type to it.id },
@@ -275,6 +270,19 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
                     )
                 }
             }, enabled = !busy, chevron = false)
+        }
+        song.qqMusic?.singerMids?.forEachIndexed { index, mid ->
+            val artist = song.artists.split(" / ").getOrNull(index).orEmpty()
+            MusicDestinationRow(if (artist.isBlank()) "查看歌手" else "歌手 · $artist", {
+                dismiss()
+                navigate(qqRoute("artist", mid))
+            }, chevron = false)
+        }
+        song.qqMusic?.albumMid?.takeIf(String::isNotBlank)?.let { mid ->
+            MusicDestinationRow("查看专辑", {
+                dismiss()
+                navigate(qqRoute("album", mid))
+            }, chevron = false)
         }
         MusicDestinationRow("评论", {
             dismiss()
@@ -381,21 +389,6 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
                     }, enabled = !busy)
                 }
             } }
-            if (route.startsWith("qq/album/")) item {
-                when {
-                    !account.loggedIn -> MusicTextAction("登录后收藏专辑", { navigate("qq/account") })
-                    page.albumSubscribed == null -> MusicTextAction("刷新专辑收藏状态", { refresh++ }, enabled = !loading)
-                    page.albumSubscribed == true -> MusicTextAction("取消收藏专辑", {
-                        action("已取消收藏专辑") { repository.subscribeAlbum(routeId(route), false) }
-                    }, enabled = !busy, destructive = true)
-                    else -> MusicTextAction("收藏专辑", {
-                        action("已收藏专辑") { repository.subscribeAlbum(routeId(route), true) }
-                    }, enabled = !busy)
-                }
-            }
-            if (route.startsWith("qq/artist/")) item {
-                MusicTextAction("全部专辑 ›", { navigate(qqRoute("artist-albums", routeId(route))) })
-            }
             page.playlist?.takeIf { it.count > page.songs.size }?.let { playlist -> item {
                 SettingsHint("已加载 ${page.songs.size} 首，共 ${playlist.count} 首")
             } }

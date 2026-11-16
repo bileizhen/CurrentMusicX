@@ -262,10 +262,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         val openQueue: () -> Unit = { scope.launch { queueMotion.animation.snapTo(0f); overlay = PlayerOverlay.QUEUE } }
         val functions: @Composable () -> Unit = {
             PlayerSongActionsBar(vm, {
-                val song = queue.current
-                if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
-                    song.externalIds.qqMusicId?.let { onAiNavigate("qq/comments/$it") }
-                else overlay = PlayerOverlay.COMMENTS
+                overlay = PlayerOverlay.COMMENTS
             }, openQueue,
                 { overlay = PlayerOverlay.SLEEP }, onLike, onEffects = onEqualizer,
                 onOptions = if (widePlayer) null else ({ overlay = PlayerOverlay.OPTIONS }))
@@ -458,7 +455,11 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlayerOverlay.SHARE -> queue.current?.let { io.github.currencortex.music.feature.share.SongShareDialog(it, dismiss) }
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) },
                 commentComposer, vm::onCommentEdited, vm::replyTo, vm::sendComment,
-                vm::selectCommentSort, vm::loadCommentReplies, vm::likeComment, vm::deleteComment)
+                vm::selectCommentSort, vm::loadCommentReplies, vm::likeComment, vm::deleteComment,
+                title = if (queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
+                    "QQ 音乐评论" else "网易云评论",
+                fallbackUser = if (queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
+                    "QQ 音乐用户" else "网易云用户")
             PlayerOverlay.QUEUE -> Unit
             PlayerOverlay.ROAMING -> io.github.currencortex.music.feature.roaming.PersonalRoamingDialog(vm.container, dismiss) {
                 onAiNavigate("user/binding")

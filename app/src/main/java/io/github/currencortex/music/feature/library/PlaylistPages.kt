@@ -173,17 +173,17 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val statuses by library.statuses.collectAsStateWithLifecycle()
     val likesUseNetease by vm.container.primaryLibrary.likesUseNetease.collectAsStateWithLifecycle()
-    val neteaseMain by vm.container.primaryLibrary.usesNetease.collectAsStateWithLifecycle()
     val neteaseLikes by vm.container.neteaseSongActions.likedState.collectAsStateWithLifecycle()
     val qqLikes by vm.container.qqMusic.likedState.collectAsStateWithLifecycle()
     val navidromeLikes by vm.container.navidrome.likes.collectAsStateWithLifecycle()
+    val embyLikes by vm.container.emby.likes.collectAsStateWithLifecycle()
     val likeBusy by library.primaryLikeBusy.collectAsStateWithLifecycle()
     val batch by library.batchFavorites.collectAsStateWithLifecycle()
     val musicSettings by vm.container.musicSettings.state.collectAsStateWithLifecycle()
     val binding by vm.container.bindingRepository.state.collectAsStateWithLifecycle()
     val selectionAllowed = localMusic == null && playlistSupportsMultiSelect(vm.route)
-    var selecting by remember(vm.route, account.account?.id, binding?.profile?.uid, musicSettings.server, musicSettings.likeMode) { mutableStateOf(false) }
-    var selectedKeys by remember(vm.route, account.account?.id, binding?.profile?.uid, musicSettings.server, musicSettings.likeMode) { mutableStateOf(emptySet<String>()) }
+    var selecting by remember(vm.route, account.account?.id, binding?.profile?.uid, musicSettings.server) { mutableStateOf(false) }
+    var selectedKeys by remember(vm.route, account.account?.id, binding?.profile?.uid, musicSettings.server) { mutableStateOf(emptySet<String>()) }
     fun exitSelection() { selecting = false; selectedKeys = emptySet() }
     BackHandler(selecting) { if (!batch.running) exitSelection() }
     LaunchedEffect(state.songs) {
@@ -281,7 +281,10 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
             nextPreviewRequests = preview.nextRequests,
             isSaved = { song -> when {
                 song.navidrome != null -> navidromeLikes[song.id] == true
-                likesUseNetease -> io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) in neteaseLikes
+                song.emby != null -> embyLikes[song.id] == true
+                song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC -> song.id in qqLikes
+                song.musicSource == io.github.currencortex.music.data.song.MusicSource.NETEASE ->
+                    io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) in neteaseLikes
                 else -> statuses[song.id]?.liked == true
             } },
             onSave = if (localMusic != null) null else { song -> library.togglePrimaryLike(song, undoable = true) }, saveEnabled = !likeBusy,
@@ -479,7 +482,8 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                 }
                 state.error?.let { error -> item { Column(Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(20.dp)) {
                     Text(error)
-                    if (vm.route == "lib/cloud" && error == io.github.currencortex.music.core.network.ErrorKind.NeteaseBindingRequired.message)
+                    if (vm.route in setOf("lib/cloud", "lib/likes") &&
+                        error == io.github.currencortex.music.core.network.ErrorKind.NeteaseBindingRequired.message)
                         TextButton("登录网易云", onClick = { navigate("user/binding") })
                     else TextButton("重试", onClick = ::refresh)
                 } } }
@@ -496,8 +500,14 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                         .playlistPullSurface(pullMotion).background(surface).padding(horizontal = 16.dp)) {
                         CompositionLocalProvider(LocalGlassBackdrop provides trackBackdrop) {
                             PlaylistTrack(song, selected = currentSong?.id == song.id && currentSong?.musicSource == song.musicSource,
-                                liked = localMusic == null && (if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) song.id in qqLikes
-                                    else if (neteaseMain) song.id in neteaseLikes else statuses[song.id]?.liked == true), play = { play(songs, index) },
+                                liked = localMusic == null && when (song.musicSource) {
+                                    io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC -> song.id in qqLikes
+                                    io.github.currencortex.music.data.song.MusicSource.NETEASE ->
+                                        io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(song) in neteaseLikes
+                                    io.github.currencortex.music.data.song.MusicSource.NAVIDROME -> navidromeLikes[song.id] == true
+                                    io.github.currencortex.music.data.song.MusicSource.EMBY -> embyLikes[song.id] == true
+                                    else -> statuses[song.id]?.liked == true
+                                }, play = { play(songs, index) },
                                 next = { vm.container.playerController.add(song, true) }, enqueue = { vm.container.playerController.add(song) },
                                 onMultiSelect = if (selectionAllowed && supportsBatchFavorite(song)) ({
                                     library.clearBatchFavoriteResult()

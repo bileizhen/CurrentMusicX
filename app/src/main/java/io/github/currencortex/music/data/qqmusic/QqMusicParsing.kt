@@ -93,13 +93,165 @@ internal object QqMusicParsing {
     }
 
     fun entry(value: JsonElement, type: String): QqCatalogEntry? {
-        val o = value as? JsonObject ?: return null
-        val id = if (type == "mv") o.identifier("vid") else o.identifier("id", "mid", "tid", "albumMID", "albumMid", "singerMID", "singerMid", "dissid")
+        val outer = value as? JsonObject ?: return null
+        val o = when (type) {
+            "artist" -> (outer["artist"] as? JsonObject) ?: (outer["singer_info"] as? JsonObject) ?: outer
+            "album" -> albumObject(outer)
+            else -> outer
+        }
+        val id = when (type) {
+            "mv" -> o.identifier("vid")
+            "artist" -> o.identifier("mid", "singerMid", "singerMID", "singermid", "id")
+            "album" -> o.identifier("albumMid", "albumMID", "mid", "albumID", "id")
+            else -> o.identifier("id", "mid", "tid", "albumMID", "albumMid", "singerMID", "singerMid", "dissid")
+        }
         if (id.isBlank()) return null
+        val cover = o.text("cover", "pic", "albumPic", "albumCover", "picurl", "picUrl", "logo", "avatar")
+            .ifBlank {
+                when (type) {
+                    "album" -> "https://y.gtimg.cn/music/photo_new/T002R500x500M000$id.jpg"
+                    "artist" -> "https://y.gtimg.cn/music/photo_new/T001R500x500M000$id.jpg"
+                    else -> ""
+                }
+            }
+        val subtitle = when (type) {
+            "album" -> listOf(
+                singers(o).ifEmpty {
+                    o.text("singerName").split('/').map(String::trim).filter(String::isNotBlank)
+                }.joinToString(" / "),
+                o.text("albumType", "typeName"),
+                o.text("publishDate", "time_public", "releaseDate"),
+            ).filter(String::isNotBlank).joinToString(" · ")
+            else -> o.text("subtitle", "artist", "creator", "intro", "desc", "alias")
+        }
         return QqCatalogEntry(id, o.text("name", "title", "albumName", "singerName", "dissname").decodeHtmlEntities(),
-            o.text("cover", "pic", "picurl", "picUrl", "logo").https(),
-            o.text("subtitle", "artist", "creator", "intro", "desc", "alias").decodeHtmlEntities(), type)
+            cover.https(), subtitle.decodeHtmlEntities(), type)
     }
+
+    fun artistDetail(value: JsonObject): QqArtistDetail {
+        val artist = (value["artist"] as? JsonObject)
+            ?: (value["singer_info"] as? JsonObject)
+            ?: (value["singer"] as? JsonObject)
+            ?: JsonObject(emptyMap())
+        val mid = artist.identifier("mid", "singerMid", "singermid").ifBlank {
+            artist.identifier("id")
+        }
+        val songs = songs(value)
+        val albums = value.array("albums").mapNotNull { entry(it, "album") }
+        val totalSong = value.number("totalSong", "total_song").takeIf { it > 0 }?.toInt()
+            ?: artist.number("songTotal", "song_total", "songNum", "songnum").toInt()
+        val totalAlbum = value.number("totalAlbum", "total_album").takeIf { it > 0 }?.toInt()
+            ?: artist.number("albumTotal", "album_total", "albumNum", "albumnum").toInt()
+        val totalMv = value.number("totalMv", "total_mv").takeIf { it > 0 }?.toInt()
+            ?: artist.number("mvTotal", "mv_total", "mvNum", "mvnum").toInt()
+        return QqArtistDetail(
+            mid = mid,
+            name = artist.text("name", "title", "singerName").decodeHtmlEntities(),
+            cover = artist.text("cover", "pic", "avatar", "avatarUrl").ifBlank {
+                mid.takeIf(String::isNotBlank)?.let {
+                    "https://y.gtimg.cn/music/photo_new/T001R500x500M000$it.jpg"
+                }.orEmpty()
+            }.https(),
+            alias = artist.text("alias", "other_name", "otherName").decodeHtmlEntities(),
+            brief = value.text("brief", "singer_brief").ifBlank {
+                artist.text("brief", "briefDesc", "desc")
+            }.decodeHtmlEntities(),
+            fans = value.number("fans", "fansNum", "fans_num").takeIf { it > 0 }
+                ?: artist.number("fans", "fansNum", "fans_num"),
+            totalSong = totalSong,
+            totalAlbum = totalAlbum,
+            totalMv = totalMv,
+            songs = songs,
+            albums = albums,
+            hasMoreSongs = value.flag("moreSongs", "more") ||
+                (totalSong > 0 && songs.size < totalSong),
+            hasMoreAlbums = value.flag("albumsFailed", "moreAlbums") ||
+                (totalAlbum > 0 && albums.size < totalAlbum),
+            albumsFailed = value.flag("albumsFailed"),
+        )
+    }
+
+    fun albumDetail(value: JsonObject): QqAlbumDetail {
+        val album = albumObject(value)
+        val basic = (album["basicInfo"] as? JsonObject) ?: album
+        val singerRows = singerObjects(album, value)
+        val mid = basic.identifier("albumMid", "albumMID", "mid")
+            .ifBlank { value.identifier("albumMid", "albumMID", "mid") }
+        val songs = songs(value)
+        val singerNames = singerRows.mapNotNull { it["name"] }.filter(String::isNotBlank)
+            .ifEmpty { songs.firstOrNull()?.artists?.split(" / ").orEmpty().map(String::trim) }
+        val singerMids = singerRows.mapNotNull { it["mid"] }.filter(String::isNotBlank)
+            .ifEmpty { songs.firstOrNull()?.qqMusic?.singerMids.orEmpty() }
+        val company = when (val raw = album["company"] ?: value["company"]) {
+            is JsonObject -> raw.text("name", "title", "companyName")
+            is JsonPrimitive -> raw.contentOrNull.orEmpty()
+            else -> ""
+        }
+        val totalSongs = value.number("totalSongs", "totalNum", "total_song_num", "total_num", "total", "song_num")
+            .takeIf { it > 0 }?.toInt() ?: songs.size
+        return QqAlbumDetail(
+            mid = mid,
+            title = basic.text("albumName", "name", "title").decodeHtmlEntities(),
+            singerNames = singerNames.joinToString(" / ").decodeHtmlEntities(),
+            singerMids = singerMids.distinct(),
+            cover = basic.text("cover", "pic", "picurl", "picUrl", "albumPic", "albumCover")
+                .ifBlank {
+                    mid.takeIf(String::isNotBlank)?.let {
+                        "https://y.gtimg.cn/music/photo_new/T002R500x500M000$it.jpg"
+                    }.orEmpty()
+                }.https(),
+            description = basic.text("desc", "description", "intro").decodeHtmlEntities(),
+            publishDate = basic.text("publishDate", "time_public", "releaseDate"),
+            company = company.decodeHtmlEntities(),
+            language = basic.text("language", "lan"),
+            albumType = basic.text("albumType", "typeName"),
+            songs = songs,
+            totalSongs = totalSongs,
+            hasMoreSongs = value.flag("hasMoreSongs", "moreSongs", "more") || songs.size < totalSongs,
+        )
+    }
+
+    fun artistSongPage(value: JsonObject): QqSongPage {
+        val songs = songs(value)
+        val total = value.number("total", "totalSong", "total_song")
+        return QqSongPage(songs,
+            hasMore = value.flag("more", "hasMore", "moreSongs") ||
+                (total > 0 && songs.size < total))
+    }
+
+    fun albumSongPage(value: JsonObject): QqSongPage {
+        val songs = songs(value)
+        val total = value.number("total", "totalSongs", "totalNum", "total_song_num", "total_num")
+        return QqSongPage(songs,
+            hasMore = value.flag("more", "hasMore", "hasMoreSongs") ||
+                (total > 0 && songs.size < total))
+    }
+
+    private fun albumObject(value: JsonObject): JsonObject =
+        (value["album"] as? JsonObject)
+            ?: (value["basicInfo"] as? JsonObject)
+            ?: value
+
+    private fun singerObjects(vararg roots: JsonObject): List<Map<String, String>> {
+        val rows = roots.flatMap { root ->
+            when (val raw = root["singer"]) {
+                is JsonArray -> raw.toList()
+                is JsonObject -> raw.array("singerList", "singers", "list", "singer").toList()
+                else -> root.array("singerList", "singers", "singersList")
+            }
+        }
+        return rows.mapNotNull { row ->
+            parseLegacySinger(row)?.takeIf(Map<String, String>::isNotEmpty)
+        }
+    }
+
+    private fun singers(value: JsonObject): List<String> =
+        singerObjects(value).mapNotNull { it["name"] }.filter(String::isNotBlank)
+            .ifEmpty {
+                value.array("singer").mapNotNull { row ->
+                    (row as? JsonObject)?.text("name", "title")?.takeIf(String::isNotBlank)
+                }
+            }
 
     fun categories(value: JsonObject): List<QqMusicCategory> = value.array("groups").flatMap { groupValue ->
         val group = groupValue as? JsonObject ?: return@flatMap emptyList()

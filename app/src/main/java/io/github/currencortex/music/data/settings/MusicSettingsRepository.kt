@@ -21,7 +21,7 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val neteaseMainLibrary: Boolean = true,
                          val allowConcurrentPlayback: Boolean = false,
                          val transitionMode: MusicTransitionMode = MusicTransitionMode.OFF,
-                         val crossfadeSeconds: Int = 5, val likeMode: LikeMode = LikeMode.AUTO,
+                         val crossfadeSeconds: Int = 5,
                          val lyricsSource: LyricsSource = LyricsSource.AUTO,
                          val lyricsFont: LyricsFont = LyricsFont.SYSTEM, val lyricsFontFile: String = "",
                          val serverMode: CurrentMusicServer = CurrentMusicServer.AUTO,
@@ -50,12 +50,6 @@ enum class LyricsFont(val label: String) {
 
 enum class LyricsSource(val label: String) {
     AUTO("自动择优 · 逐字优先"), CURRENT_MUSIC("CurrentMusic 歌词"), NETEASE("网易云歌词"), LOCAL("本地内嵌歌词");
-    companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: AUTO }
-}
-
-enum class LikeMode(val label: String) {
-    AUTO("自动"), NETEASE("网易云 · 我喜欢"), CURRENT_MUSIC("CurrentMusic · 我喜欢");
-    fun useNetease(bound: Boolean) = bound && this != CURRENT_MUSIC
     companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: AUTO }
 }
 
@@ -151,7 +145,6 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val appleGlowIntensity = floatPreferencesKey("lyrics.appleMusic.glowIntensity")
     private val appleBlurStrength = floatPreferencesKey("lyrics.appleMusic.blurStrength")
     private val neteaseMain = booleanPreferencesKey("library.neteaseMain")
-    private val likeMode = stringPreferencesKey("music.likeMode")
     private val listeningSource = stringPreferencesKey("listening.source")
     private val concurrentPlayback = booleanPreferencesKey("music.allowConcurrentPlayback")
     private val transition = stringPreferencesKey("music.transitionMode")
@@ -191,7 +184,7 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             p[translation] ?: true, p[romanization] ?: false, p[wordAnimation] ?: true,
             p[perspective] ?: false, p[glow] ?: true, p[wordLift] ?: true, p[smoke] ?: false, p[particles] ?: false,
             LyricsStyle.from(p[lyricsStyle]), decodeAppleMusic(p)).normalized(), p[neteaseMain] ?: true,
-        p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), LikeMode.from(p[likeMode]), decodeLyricsSource(p),
+        p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), decodeLyricsSource(p),
         LyricsFont.from(p[lyricsFont]), p[lyricsFontFile].orEmpty(),
         CurrentMusicServer.from(p[serverMode], p[server]),
         p[customServer] ?: p[server]?.takeIf { CurrentMusicServer.infer(it) == CurrentMusicServer.CUSTOM }.orEmpty(),
@@ -281,7 +274,6 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     suspend fun setAccount(id: Long, name: String) { store.edit { it[account] = id; it[nickname] = name } }
     suspend fun setNeteaseMainLibrary(value: Boolean) { store.edit { it[neteaseMain] = value } }
     suspend fun setMusicPlatform(value: MusicPlatform) { store.edit { it[platform] = value.name } }
-    suspend fun setLikeMode(value: LikeMode) { store.edit { it[likeMode] = value.name } }
     suspend fun setListeningSource(value: ListeningSource) { store.edit { it[listeningSource] = value.name } }
 }
 

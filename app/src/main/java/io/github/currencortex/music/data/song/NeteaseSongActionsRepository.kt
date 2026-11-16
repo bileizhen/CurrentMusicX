@@ -149,9 +149,10 @@ class NeteaseSongActionsRepository(private val api: ApiClient, private val now: 
     suspend fun isLiked(id: Long, fresh: Boolean = false): Boolean = id in likedIds(fresh)
     suspend fun toggleLiked(id: Long, song: Song? = null): Boolean {
         val expected = session()
+        val uid = boundUid(expected)
         val desired = !isLiked(id, fresh = true)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
-        setLiked(id, desired, expected, song)
+        setLiked(id, desired, expected, song, expectedUid = uid)
         return desired
     }
     suspend fun boundUid(expected: RequestSession = session()): Long = binding(expected).profile!!.uid

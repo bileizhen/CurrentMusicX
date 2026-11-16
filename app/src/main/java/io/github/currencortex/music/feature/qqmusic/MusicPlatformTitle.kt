@@ -52,10 +52,6 @@ import top.yukonga.miuix.kmp.blur.layerBackdrop
             onClick = {
                 if (option != platform) scope.launch {
                     container.musicSettings.setMusicPlatform(option)
-                    container.audioSettings.selectForPlatform(
-                        if (option == MusicPlatform.QQ_MUSIC) io.github.currencortex.music.data.settings.AudioProvider.QQ_MUSIC
-                        else null,
-                    )
                 }
             })
     }

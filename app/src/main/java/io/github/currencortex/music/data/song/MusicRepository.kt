@@ -11,7 +11,7 @@ import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
 import kotlinx.coroutines.withTimeoutOrNull
 
 class MusicRepository(private val api: ApiClient,
-    private val audioAccess: () -> AudioSourceAccess = { AudioSourceAccess(AudioProvider.CURRENT_MUSIC) },
+    private val audioAccess: () -> AudioSourceAccess = { AudioSourceAccess(AudioProvider.NETEASE) },
     private val leiz: LeizAudioClient = LeizAudioClient(),
     private val navidrome: io.github.currencortex.music.data.navidrome.NavidromeRepository? = null,
     private val lx: io.github.currencortex.music.data.lx.LxSourceStore? = null,
@@ -125,7 +125,7 @@ class MusicRepository(private val api: ApiClient,
             .replace(Regex("\\s+"), " ").trim().take(200)
         if (query.isBlank()) throw ApiException(ErrorKind.Parse, userMessage = "请输入歌名或歌手")
         val gateway = if (source == LyricsSource.NETEASE) api.netease
-            ?: throw ApiException(ErrorKind.NotFound, userMessage = "网易云原生歌词接口未启用") else null
+            ?: throw ApiException(ErrorKind.NotFound, userMessage = "网易云直连歌词接口未启用") else null
         val nativeRevision = gateway?.sessions?.state?.value?.revision
         withTimeoutOrNull(LYRICS_MATCH_SEARCH_TIMEOUT_MS) {
             val parameters = mapOf("keywords" to query, "offset" to "0", "limit" to "30", "type" to "song")
@@ -145,7 +145,7 @@ class MusicRepository(private val api: ApiClient,
         require(source != LyricsSource.AUTO) { "自动择优需要选择器处理，请指定具体歌词来源" }
         if (id <= 0) throw ApiException(ErrorKind.NotFound)
         val gateway = if (source == LyricsSource.NETEASE) api.netease
-            ?: throw ApiException(ErrorKind.NotFound, userMessage = "网易云原生歌词接口未启用") else null
+            ?: throw ApiException(ErrorKind.NotFound, userMessage = "网易云直连歌词接口未启用") else null
         val nativeRevision = gateway?.sessions?.state?.value?.revision
         withTimeoutOrNull(LYRICS_MATCH_LOAD_TIMEOUT_MS) {
             suspend fun read(path: String): LyricsDocument {
@@ -225,26 +225,16 @@ class MusicRepository(private val api: ApiClient,
         val query = buildMap {
             put("id", "$id"); put("level", quality.value)
             if (quality == AudioQuality.AUTO && supportsDolby) put("supportsDolby", "1")
-            if (refresh && access.provider == AudioProvider.CURRENT_MUSIC) put("refresh", "1")
         }
-        suspend fun fetch(params: Map<String, String>): SongUrlDto = if (nativeCloud || access.provider == AudioProvider.NETEASE) {
-            val gateway = api.netease ?: throw ApiException(ErrorKind.NotFound)
-            ApiJson.decodeFromJsonElement<SongUrlDto>(gateway.request("GET", "ncm/song/url", params, null,
-                expectedRevision = session?.neteaseRevision))
-        } else if (session == null) api.get<SongUrlDto>("ncm/song/url", params, authenticated = true)
-            else ApiJson.decodeFromJsonElement<SongUrlDto>(api.request("GET", "ncm/song/url", params,
-                authenticated = true, expectedSession = session))
         fun SongUrlDto.isDolby() = level == AudioQuality.DOLBY.value
         fun SongUrlDto.isUsableDolby() = url?.toHttpUrlOrNull() != null &&
             (freeTrialInfo == null || freeTrialInfo == JsonNull)
 
-        var dto = fetch(query)
-        if (quality == AudioQuality.AUTO && dto.isDolby()) {
-            if (!nativeCloud && access.provider == AudioProvider.CURRENT_MUSIC && supportsDolby && !dto.isUsableDolby())
-                dto = fetch(query - "supportsDolby")
-            if (dto.isDolby() && (!supportsDolby || !dto.isUsableDolby()))
-                throw ApiException(ErrorKind.NeteaseAudioUnavailable)
-        }
+        val gateway = api.netease ?: throw ApiException(ErrorKind.NotFound)
+        val dto = ApiJson.decodeFromJsonElement<SongUrlDto>(gateway.request("GET", "ncm/song/url", query, null,
+            expectedRevision = session?.neteaseRevision))
+        if (quality == AudioQuality.AUTO && dto.isDolby() && (!supportsDolby || !dto.isUsableDolby()))
+            throw ApiException(ErrorKind.NeteaseAudioUnavailable)
         val url = dto.url?.toHttpUrlOrNull() ?: throw ApiException(ErrorKind.NotFound)
         if (!nativeCloud && audioAccess().identity != access.identity) throw ApiException(ErrorKind.AudioSourceChanged)
         // Both sources report expi. Bound reuse to five minutes when a server omits it.

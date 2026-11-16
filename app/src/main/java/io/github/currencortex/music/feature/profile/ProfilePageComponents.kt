@@ -70,14 +70,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
 }
 
-@Composable internal fun ProfileLibrarySection(navigate: (String) -> Unit, platform: MusicPlatform = MusicPlatform.NETEASE) {
+@Composable internal fun ProfileLibrarySection(navigate: (String) -> Unit, platform: MusicPlatform = MusicPlatform.NETEASE,
+    showLikes: Boolean = true) {
     val qq = platform == MusicPlatform.QQ_MUSIC
     SettingsListSection("我的音乐") {
-        ProfileDestination("我喜欢", "收藏的歌曲", MusicIcons.Heart, "open_likes") {
-            val route = if (qq) "qq/likes" else "lib/likes"
-            navigate(route)
+        if (showLikes) {
+            ProfileDestination("我喜欢", "收藏的歌曲", MusicIcons.Heart, "open_likes") {
+                navigate(if (qq) "qq/likes" else "lib/likes")
+            }
+            SettingsDivider(52.dp)
         }
-        SettingsDivider(52.dp)
         ProfileDestination("歌单", "创建与收藏的歌单", MusicIcons.List, "open_playlists") {
             navigate(if (qq) "qq/playlists" else "lib/playlists")
         }
@@ -158,14 +160,18 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @OptIn(ExperimentalLayoutApi::class)
-@Composable internal fun ProfileStatsBlock(stats: ProfileStats, onListening: (() -> Unit)? = null) {
+@Composable internal fun ProfileStatsBlock(stats: ProfileStats, likesLabel: String = "点赞",
+    likesValue: String = "${stats.likes}", onLikes: (() -> Unit)? = null, onListening: (() -> Unit)? = null) {
     val muted = MiuixTheme.colorScheme.onSurfaceVariantSummary
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp).testTag("profile_stats"),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            listOf("点赞" to "${stats.likes}", "收藏" to "${stats.favs}", "歌单" to "${stats.playlists}").forEach { (label, value) ->
-                Column(Modifier.weight(1f).semantics(mergeDescendants = true) {},
+            listOf(Triple(likesLabel, likesValue, onLikes), Triple("收藏", "${stats.favs}", null),
+                Triple("歌单", "${stats.playlists}", null)).forEach { (label, value, action) ->
+                Column(Modifier.weight(1f).semantics(mergeDescendants = true) {}
+                    .then(if (action != null) Modifier.clickable(role = Role.Button, onClick = action)
+                        .testTag("profile_platform_likes") else Modifier),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text(value, fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold)
                     Text(label, fontSize = 12.sp, lineHeight = 16.sp, color = muted)

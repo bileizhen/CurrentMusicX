@@ -608,6 +608,12 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
             result
         }
     }
+    suspend fun likedSongCount(): Int {
+        val expected = audioSnapshot()
+        val raw = native("user/liked-songs", mapOf("offset" to "0", "limit" to "1"), requiresSession = true)
+        if (audioSnapshot() != expected) throw ApiException(ErrorKind.AudioSourceChanged)
+        return raw.number("total").coerceAtLeast(0).toInt()
+    }
     private suspend fun refreshLikedLocked(targets: List<Song>, expected: AudioSnapshot) {
         if (audioSnapshot() != expected) throw ApiException(ErrorKind.AudioSourceChanged)
         val unknown = synchronized(this) { targets.filter { it.id !in knownLikes } }
@@ -676,6 +682,17 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
             setLikedLocked(song, liked, expected)
         }
     }
+    suspend fun favoriteCount(song: Song): QqFavoriteCount {
+        val raw = native("song/favorite-count", mapOf("mid" to mid(song)))
+        return QqFavoriteCount(raw.number("count").coerceAtLeast(0), raw.text("display"))
+    }
+    suspend fun qualities(song: Song): Set<AudioQuality> {
+        val available = native("song/qualities", mapOf("mid" to mid(song)))["available"] as? JsonObject
+            ?: return emptySet()
+        return AudioQuality.entries.filter { quality ->
+            quality == AudioQuality.AUTO || available.flag(quality.value)
+        }.toSet()
+    }
     private fun playlistName(name: String): String = name.trim().also { require(it.isNotEmpty() && it.codePointCount(0, it.length) <= 20) }
     suspend fun createPlaylist(name: String): String = withWriteOwner {
         val raw = write("user/playlist/create", buildJsonObject { put("name", playlistName(name)) })
@@ -722,28 +739,107 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
         if (!raw.flag("changed") && verifiedStatus != expectedStatus)
             throw ApiException(ErrorKind.Server, userMessage = "QQ 音乐未确认歌单变更，请刷新歌单查看")
     }
-    suspend fun album(id: String): QqCatalogDetail {
+    suspend fun albumDetail(id: String): QqAlbumDetail {
         val raw = payload(call("album", mapOf("id" to remoteId(id))))
-        return QqCatalogDetail(QqMusicParsing.entry(raw, "album") ?: throw ApiException(ErrorKind.Parse), QqMusicParsing.songs(raw))
+        return QqMusicParsing.albumDetail(raw)
+    }
+    suspend fun album(id: String): QqCatalogDetail {
+        val detail = albumDetail(id)
+        return QqCatalogDetail(
+            QqCatalogEntry(detail.mid, detail.title, detail.cover,
+                listOf(detail.singerNames, detail.publishDate).filter(String::isNotBlank).joinToString(" · "),
+                "album"),
+            detail.songs,
+        )
+    }
+    suspend fun albumSongs(id: String, offset: Int = 0, limit: Int = 300): QqSongPage {
+        require(offset in 0..10_000)
+        require(limit in 1..300)
+        val raw = payload(call("album/songs", mapOf(
+            "id" to remoteId(id),
+            "offset" to "$offset",
+            "limit" to "$limit",
+        )))
+        return QqMusicParsing.albumSongPage(raw)
+    }
+    suspend fun artistDetail(id: String, offset: Int = 0, limit: Int = 30): QqArtistDetail {
+        require(offset in 0..10_000)
+        val raw = payload(call("artist", mapOf(
+            "id" to remoteId(id),
+            "offset" to "$offset",
+            "limit" to "${limit.coerceIn(1, 100)}",
+        )))
+        return QqMusicParsing.artistDetail(raw)
     }
     suspend fun artist(id: String, offset: Int = 0): QqCatalogDetail {
         require(offset in 0..10000)
-        val raw = payload(call("artist", mapOf("id" to remoteId(id), "offset" to "$offset", "limit" to "30")))
-        return QqCatalogDetail(QqMusicParsing.entry(raw, "artist") ?: throw ApiException(ErrorKind.Parse), QqMusicParsing.songs(raw),
-            raw.array("albums").mapNotNull { QqMusicParsing.entry(it, "album") }, raw.flag("more"))
+        val detail = artistDetail(id, offset, 30)
+        val entry = QqCatalogEntry(detail.mid, detail.name, detail.cover, detail.alias, "artist")
+        return QqCatalogDetail(entry, detail.songs, detail.albums, detail.hasMoreSongs)
+    }
+    suspend fun artistSongs(id: String, offset: Int = 0, limit: Int = 30): QqSongPage {
+        require(offset in 0..10_000)
+        val raw = payload(call("artist/songs", mapOf(
+            "id" to remoteId(id),
+            "offset" to "$offset",
+            "limit" to "${limit.coerceIn(1, 100)}",
+        )))
+        return QqMusicParsing.artistSongPage(raw)
     }
     suspend fun artistAlbums(id: String, offset: Int = 0): QqCatalogPage {
         val raw = payload(call("artist/albums",
             mapOf("id" to remoteId(id), "offset" to "$offset", "limit" to "30")))
-        return QqCatalogPage(raw.array("albums").mapNotNull { QqMusicParsing.entry(it, "album") },
-            raw.number("albumTotal", "total").toInt(), raw.flag("more"))
+        val entries = raw.array("albums").mapNotNull { QqMusicParsing.entry(it, "album") }
+        val total = raw.number("albumTotal", "total").takeIf { it > 0 }?.toInt()
+            ?: (offset + entries.size)
+        return QqCatalogPage(entries, total, raw.flag("more", "hasMore") || offset + entries.size < total)
     }
-    suspend fun comments(song: Song, offset: Int = 0): QqCommentsPage {
+    suspend fun comments(song: Song, sort: String = "latest", page: Int = 1, seq: String = "", limit: Int = 20): QqCommentsPage {
         val id = numericSong(song).qqMusic?.songId?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.Parse)
-        val raw = native("comment/new", mapOf("id" to "$id", "offset" to "$offset", "limit" to "30"))
+        val raw = native("comment/list", mapOf("id" to "$id", "sort" to sort, "page" to "$page",
+            "seq" to seq, "limit" to "${limit.coerceIn(1, 25)}"))
         return QqCommentsPage(raw.array("comments").mapNotNull { value -> (value as? JsonObject)?.let {
-            QqComment(it.text("id"), it.text("content", "text"), it.text("nick", "nickname"), it.text("avatar"), it.number("praiseCount", "likes"), it.number("time") * 1000)
-        } }, raw.number("total").toInt(), raw.flag("more"))
+            QqComment(it.text("id"), it.text("content", "text"), it.text("nick", "nickname"), it.text("avatar"),
+                it.number("praiseCount", "likes"), it.number("time") * 1000,
+                it.flag("likedByMe"), it.flag("isMine"), it.number("replyCount").toInt(), it.text("seqNo"),
+                it.text("quotedNickname"), it.text("quotedContent").takeIf(String::isNotBlank))
+        } }, raw.number("total").toInt(), raw.flag("more"), raw.text("nextSeq"))
+    }
+    suspend fun commentReplies(song: Song, parentId: String, page: Int = 1, seq: String = "", limit: Int = 20): QqCommentsPage {
+        val id = numericSong(song).qqMusic?.songId?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.Parse)
+        val raw = native("comment/replies", mapOf("id" to "$id", "parent" to parentId, "page" to "$page",
+            "seq" to seq, "limit" to "${limit.coerceIn(1, 25)}"))
+        return QqCommentsPage(raw.array("comments").mapNotNull { value -> (value as? JsonObject)?.let {
+            QqComment(it.text("id"), it.text("content", "text"), it.text("nick", "nickname"), it.text("avatar"),
+                it.number("praiseCount", "likes"), it.number("time") * 1000,
+                it.flag("likedByMe"), it.flag("isMine"), it.number("replyCount").toInt(), it.text("seqNo"),
+                it.text("quotedNickname"), it.text("quotedContent").takeIf(String::isNotBlank))
+        } }, raw.number("total").toInt(), raw.flag("more"), raw.text("nextSeq"))
+    }
+    suspend fun commentCount(song: Song): Int {
+        return comments(song, page = 1, limit = 1).total
+    }
+    suspend fun sendComment(song: Song, content: String, replyTo: String? = null): String {
+        val id = numericSong(song).qqMusic?.songId?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.Parse)
+        val raw = write("comment/send", buildJsonObject {
+            put("songId", id)
+            put("content", content.trim())
+            replyTo?.takeIf(String::isNotBlank)?.let { put("replyTo", it) }
+        }, audioSnapshot())
+        if (!raw.flag("verified")) throw ApiException(ErrorKind.Server, userMessage = "QQ 音乐未确认评论发送结果")
+        return raw.text("commentId")
+    }
+    suspend fun deleteComment(song: Song, commentId: String) {
+        require(commentId.isNotBlank())
+        write("comment/delete", buildJsonObject { put("commentId", commentId) }, audioSnapshot())
+    }
+    suspend fun setCommentLiked(song: Song, commentId: String, liked: Boolean): Boolean {
+        require(commentId.isNotBlank())
+        val raw = write("comment/like", buildJsonObject {
+            put("commentId", commentId)
+            put("liked", liked)
+        }, audioSnapshot())
+        return raw.flag("liked")
     }
     suspend fun songMvs(song: Song): List<QqCatalogEntry> {
         val id = numericSong(song).qqMusic?.songId?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.Parse)

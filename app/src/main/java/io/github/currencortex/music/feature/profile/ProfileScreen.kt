@@ -154,6 +154,7 @@ import kotlinx.coroutines.launch
     onBack: (() -> Unit)? = null, onSettings: (() -> Unit)? = null,
     platform: MusicPlatform = MusicPlatform.NETEASE) {
     val state = vm.state.collectAsPageState().value
+    val platformLikedCount by vm.platformLikedCount.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val tasksEnabled by vm.container.neteaseTasksEnabled.collectAsStateWithLifecycle()
     val navidromeAccount by vm.container.navidrome.state.collectAsStateWithLifecycle()
@@ -169,6 +170,7 @@ import kotlinx.coroutines.launch
             isAdmin = it.isAdmin, isSuper = it.isSuper, title = it.title, level = it.level, points = it.points, isOwner = it.isOwner)
     }
     val own = user != null && user.id == account.account?.id
+    val privateOwnProfile = own && onBack == null
     val bottomInset = LocalMusicBottomInset.current
     val listState = rememberLazyListState()
     val avatarFlight = LocalAvatarFlight.current.takeIf { onBack == null }
@@ -221,22 +223,28 @@ import kotlinx.coroutines.launch
                     }
                 }
                 Text(if (state.loading && state.profile == null) "正在加载资料…" else user.bio.ifBlank { "还没有填写简介" },
-                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp).then(if (own) Modifier.testTag("edit_profile")
+                            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp).then(if (privateOwnProfile) Modifier.testTag("edit_profile")
                                 .clickable(enabled = !busy && state.profile != null, role = Role.Button) { vm.dialog.value = "edit" }
                                 .semantics { contentDescription = "编辑资料" } else Modifier),
                             fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
                             color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                state.profile?.stat?.let { ProfileStatsBlock(it, if (own) ({ navigate("user/listening") }) else null) }
+                state.profile?.stat?.let { stats ->
+                    ProfileStatsBlock(stats,
+                        likesLabel = if (privateOwnProfile) "喜欢" else "点赞",
+                        likesValue = if (privateOwnProfile) platformLikedCount?.toString() ?: "—" else "${stats.likes}",
+                        onLikes = if (privateOwnProfile) ({ navigate(if (platform == MusicPlatform.QQ_MUSIC) "qq/likes" else "lib/likes") }) else null,
+                        onListening = if (privateOwnProfile) ({ navigate("user/listening") }) else null)
+                }
             } }
-            if (own) {
-                item("library") { ProfileLibrarySection(navigate, platform) }
+            if (privateOwnProfile) {
+                item("library") { ProfileLibrarySection(navigate, platform, showLikes = !privateOwnProfile) }
                 item("services") { ProfileServicesSection(navigate, tasksEnabled == true,
                     navidromeConfigured = navidromeAccount.configured, embyConfigured = embyAccount.configured,
                     platform = platform, qqBound = qqAccount.loggedIn) }
                 item("account") { ProfileAccountSection(navigate, administrator = !account.loading && !account.offline &&
                     account.account?.let { it.isAdmin || it.isSuper || it.isOwner } == true) }
             }
-            if (platform == MusicPlatform.NETEASE || !own) {
+            if (platform == MusicPlatform.NETEASE || !privateOwnProfile) {
                 state.profile?.current?.let { song -> item { SettingsListHeader("当前在听")
                     SongRow(SongRowUi(song.toDomain()), { play(listOf(song.toDomain()), 0) },
                         { vm.container.playerController.add(song.toDomain(), true) },
@@ -250,7 +258,7 @@ import kotlinx.coroutines.launch
                         { vm.container.playerController.add(song) })
                 }
                 val lists = state.profile?.playlists.orEmpty()
-                if (lists.isNotEmpty()) item { SettingsListHeader(if (own) "我的歌单" else "公开歌单") }
+                if (lists.isNotEmpty()) item { SettingsListHeader(if (privateOwnProfile) "我的歌单" else "公开歌单") }
                 items(lists, key = { "playlist-${it.source}-${it.id}" }) { list ->
                     SettingsGroup(Modifier.padding(bottom = 12.dp)) {
                         SettingsUiScope {
@@ -274,8 +282,8 @@ import kotlinx.coroutines.launch
     }
     if (avatarPreview && user != null) AvatarPreviewDialog(user, vm.container,
         onDismiss = { avatarPreview = false },
-        onChange = if (own && !busy) ({ picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) else null,
-        onDecorations = if (own) ({ avatarPreview = false; navigate("user/decorations") }) else null)
+        onChange = if (privateOwnProfile && !busy) ({ picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) else null,
+        onDecorations = if (privateOwnProfile) ({ avatarPreview = false; navigate("user/decorations") }) else null)
 }
 
 /** Accounts and security are one page: switching accounts and changing credentials are the same job. */

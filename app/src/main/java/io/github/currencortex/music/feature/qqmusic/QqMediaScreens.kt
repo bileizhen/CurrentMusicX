@@ -30,20 +30,23 @@ import top.yukonga.miuix.kmp.basic.Text
     val settings by container.musicSettings.state.collectAsStateWithLifecycle()
     val identity = "$revision|${qqAccount.revision}|${settings.server}"
     var comments by remember(mid, identity) { mutableStateOf<List<QqComment>>(emptyList()) }
-    var offset by remember(mid, identity) { mutableIntStateOf(0) }
+    var page by remember(mid, identity) { mutableIntStateOf(0) }
+    var seq by remember(mid, identity) { mutableStateOf("") }
     var total by remember(mid, identity) { mutableIntStateOf(0) }
     var more by remember(mid, identity) { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var refresh by remember { mutableIntStateOf(0) }
-    LaunchedEffect(mid, identity, offset, refresh) {
+    LaunchedEffect(mid, identity, page, refresh) {
         loading = true
         error = null
-        when (val result = appResult { container.qqMusic.comments(container.qqMusic.detail(mid), offset) }) {
+        when (val result = appResult { container.qqMusic.comments(container.qqMusic.detail(mid),
+            page = page + 1, seq = seq, limit = 25) }) {
             is AppResult.Success -> {
-                comments = (if (offset == 0) result.value.comments else comments + result.value.comments).distinctBy { it.id }
+                comments = (if (page == 0) result.value.comments else comments + result.value.comments).distinctBy { it.id }
                 total = result.value.total.toInt()
                 more = result.value.hasMore
+                seq = result.value.nextSeq
             }
             is AppResult.Failure -> error = result.message
         }
@@ -63,7 +66,7 @@ import top.yukonga.miuix.kmp.basic.Text
                 }
             }
             if (loading) item { LoadingTextList(4) }
-            if (more) item { MusicTextAction("加载更多", { offset += 30 }, enabled = !loading) }
+            if (more) item { MusicTextAction("加载更多", { page += 1 }, enabled = !loading) }
             if (!loading && error == null && comments.isEmpty()) item { SettingsHint("暂无评论") }
         }
     }

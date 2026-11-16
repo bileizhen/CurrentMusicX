@@ -8,12 +8,11 @@ import kotlinx.coroutines.sync.withLock
 import java.io.IOException
 
 data class AudioRequest(val songId: Long, val quality: AudioQuality, val accountId: Long, val session: RequestSession,
-    val providerIdentity: String = "currentmusic", val song: io.github.currencortex.music.data.song.Song? = null,
+    val providerIdentity: String = "netease", val song: io.github.currencortex.music.data.song.Song? = null,
     val refresh: Boolean = false, val supportsDolby: Boolean = false) {
     val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity, supportsDolby)
 
-    private val dolbyAuto get() = quality == AudioQuality.AUTO &&
-        (providerIdentity == "currentmusic" || providerIdentity == "netease")
+    private val dolbyAuto get() = quality == AudioQuality.AUTO && providerIdentity == "netease"
 
     internal fun accepts(source: AudioSource): Boolean = !dolbyAuto || supportsDolby || source.level != AudioQuality.DOLBY.value
 
@@ -33,7 +32,7 @@ data class ResolvedAudio(val source: AudioSource, val key: String, val refreshAf
 /** Short-lived URL reuse for prefetched tracks; persisted bytes have a separate lifetime. */
 class AudioSourceResolver(private val cache: AudioCache, private val currentSession: () -> RequestSession,
     private val now: () -> Long = System::nanoTime,
-    private val currentProvider: () -> String = { "currentmusic" },
+    private val currentProvider: () -> String = { "netease" },
     private val validateRequest: (AudioRequest) -> Boolean? = { null },
     private val loadTrack: (suspend (AudioRequest) -> AudioSource)? = null,
     private val load: suspend (Long, AudioQuality, RequestSession) -> AudioSource) {

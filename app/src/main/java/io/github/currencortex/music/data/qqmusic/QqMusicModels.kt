@@ -27,14 +27,48 @@ data class QqMusicCategory(val id: String, val name: String, val group: String,
 data class QqCategoryPlaylistPage(val playlists: List<Playlist> = emptyList(), val total: Int = 0,
     val hasMore: Boolean = false)
 data class QqCatalogEntry(val id: String, val name: String, val cover: String = "", val subtitle: String = "", val type: String = "playlist")
+data class QqFavoriteCount(val count: Long, val display: String = "")
 data class QqCatalogPage(val entries: List<QqCatalogEntry> = emptyList(), val total: Int = 0, val hasMore: Boolean = false)
 data class QqCatalogDetail(val entry: QqCatalogEntry, val songs: List<Song> = emptyList(),
     val albums: List<QqCatalogEntry> = emptyList(), val hasMore: Boolean = false)
+data class QqArtistDetail(
+    val mid: String,
+    val name: String,
+    val cover: String = "",
+    val alias: String = "",
+    val brief: String = "",
+    val fans: Long = 0,
+    val totalSong: Int = 0,
+    val totalAlbum: Int = 0,
+    val totalMv: Int = 0,
+    val songs: List<Song> = emptyList(),
+    val albums: List<QqCatalogEntry> = emptyList(),
+    val hasMoreSongs: Boolean = false,
+    val hasMoreAlbums: Boolean = false,
+    val albumsFailed: Boolean = false,
+)
+data class QqAlbumDetail(
+    val mid: String,
+    val title: String,
+    val singerNames: String = "",
+    val singerMids: List<String> = emptyList(),
+    val cover: String = "",
+    val description: String = "",
+    val publishDate: String = "",
+    val company: String = "",
+    val language: String = "",
+    val albumType: String = "",
+    val songs: List<Song> = emptyList(),
+    val totalSongs: Int = 0,
+    val hasMoreSongs: Boolean = false,
+)
 data class QqSearchPage(val songs: List<Song> = emptyList(), val entries: List<QqCatalogEntry> = emptyList(),
     val total: Int = 0, val hasMore: Boolean = false)
 data class QqComment(val id: String, val text: String, val nickname: String = "", val avatar: String = "",
-    val likes: Long = 0, val time: Long = 0)
-data class QqCommentsPage(val comments: List<QqComment> = emptyList(), val total: Int = 0, val hasMore: Boolean = false)
+    val likes: Long = 0, val time: Long = 0, val likedByMe: Boolean = false, val isMine: Boolean = false,
+    val replyCount: Int = 0, val seqNo: String = "", val quotedNickname: String = "", val quotedContent: String? = null)
+data class QqCommentsPage(val comments: List<QqComment> = emptyList(), val total: Int = 0,
+    val hasMore: Boolean = false, val nextSeq: String = "")
 data class QqSongPage(val songs: List<Song>, val hasMore: Boolean = false, val nextPage: Int? = null)
 data class QqListeningRankEntry(val song: Song, val listenCount: Long = 0)
 data class QqListeningRankPage(

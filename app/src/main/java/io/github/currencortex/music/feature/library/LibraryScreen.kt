@@ -100,8 +100,6 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 }
 
 @Composable fun LibraryDialogs(vm: LibraryViewModel) {
-    val likes by vm.likes.state.collectAsStateWithLifecycle()
-    if (likes.song != null) SongLikeSheet(likes, vm.likes::toggle, vm.likes::dismiss)
     val song by vm.selectedSong.collectAsStateWithLifecycle()
     val lists by vm.availablePlaylists.collectAsStateWithLifecycle()
     val playlistError by vm.playlistError.collectAsStateWithLifecycle()
