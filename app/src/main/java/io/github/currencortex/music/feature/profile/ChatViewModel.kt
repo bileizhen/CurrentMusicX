@@ -97,7 +97,8 @@ class ChatViewModel(val container: AppContainer) : ViewModel() {
     private fun accept(event: ChatLiveEvent, expected: RequestSession) {
         if (!current(expected) || event.seq <= state.value.seq) return
         val messages = applyChatEvent(state.value.messages, event)
-        state.update { it.copy(messages = messages, seq = event.seq, error = null) }
+        state.update { it.copy(messages = messages, seq = event.seq, error = null,
+            quoting = quotingAfterEvent(it.quoting, event)) }
     }
     fun retry() { if (!state.value.loaded) state.update { it.copy(error = null) }; refresh.update { it + 1 } }
     fun loadOlder() {
@@ -220,3 +221,13 @@ internal fun applyChatEvent(messages: List<ChatMessage>, event: ChatLiveEvent): 
 internal fun chatMentions(content: String, members: List<ProfileUser>) = members.filter {
     it.id > 0 && it.nickname.isNotBlank() && Regex("@${Regex.escape(it.nickname)}(?=\\s|$)").containsMatchIn(content)
 }.map { it.id }.distinct().take(10)
+
+/** A live deletion of the quoted target must drop the pending quote, not just the list row. */
+internal fun quotingAfterEvent(quoting: ChatMessage?, event: ChatLiveEvent): ChatMessage? =
+    if (event.type == "delete" && quoting != null &&
+        event.payload.jsonObject["id"]?.jsonPrimitive?.longOrNull == quoting.id) null else quoting
+
+/** Single-line bounded preview so multiline quotes cannot squeeze the composer. */
+internal fun quotePreview(content: String, image: String): String =
+    content.ifBlank { if (image.isNotEmpty()) "[图片]" else "[消息]" }
+        .replace(Regex("\\s+"), " ").trim().take(100)

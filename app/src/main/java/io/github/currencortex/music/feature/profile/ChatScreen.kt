@@ -189,7 +189,7 @@ import java.util.Locale
             state.quoting?.let { q ->
                 SettingsGroup(Modifier.padding(horizontal = 16.dp, vertical = 4.dp).testTag("chat_quoting")) {
                     SettingsPreference("引用 ${q.user?.nickname?.ifBlank { q.user.username } ?: "成员"}",
-                        q.content.ifBlank { if (q.image.isNotEmpty()) "[图片]" else "[消息]" }.take(100),
+                        quotePreview(q.content, q.image),
                         trailing = {
                             GlassIconButton(vm::cancelQuote, "取消引用", enabled = !state.sending,
                                 modifier = Modifier.testTag("chat_cancel_quote"), surface = false) {
