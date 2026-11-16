@@ -299,12 +299,8 @@ import kotlinx.coroutines.launch
             accounts.forEachIndexed { index, saved ->
                 if (index > 0) SettingsDivider(68.dp)
                 val active = saved.id == account.account?.id && saved.server == container.accountRepository.server
-                // Registration keeps a username besides the nickname; surface it in the account area.
-                val usernameLine = saved.username.takeIf {
-                    saved.nickname.isNotBlank() && it.isNotBlank() && it != saved.nickname
-                }?.let { "用户名 $it" }
                 SettingsPreference(saved.nickname.ifBlank { saved.username },
-                    listOfNotNull(usernameLine, saved.server).joinToString(" · "),
+                    accountRowSubtitle(saved.nickname, saved.username, saved.server),
                     leading = { UserAvatar(ProfileUser(id = saved.id, avatar = saved.avatar), container, 40.dp, reserveOverlay = false) },
                     trailing = {
                         if (active) SettingsSelectionCheck(true, Modifier.testTag("current_account_${saved.id}"))
@@ -385,4 +381,11 @@ import kotlinx.coroutines.launch
         }
     }
 }
+}
+
+/** The account row keeps the nickname as title; the username joins the subtitle only when distinct. */
+internal fun accountRowSubtitle(nickname: String, username: String, server: String): String {
+    val usernameLine = username.takeIf { nickname.isNotBlank() && it.isNotBlank() && it != nickname }
+        ?.let { "用户名 $it" }
+    return listOfNotNull(usernameLine, server).joinToString(" · ")
 }
