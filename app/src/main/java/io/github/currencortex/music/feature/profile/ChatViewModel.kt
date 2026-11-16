@@ -145,7 +145,15 @@ class ChatViewModel(val container: AppContainer) : ViewModel() {
     }
     fun attach(card: PostAttachment) { state.update { it.copy(attachments = validMusicAttachments(it.attachments + card)) } }
     fun removeAttachment(card: PostAttachment) { if (!state.value.sending) state.update { it.copy(attachments = it.attachments - card) } }
-    fun quote(message: ChatMessage) { if (!state.value.sending) state.update { it.copy(quoting = message, actionError = null) } }
+    fun quote(message: ChatMessage) {
+        if (state.value.sending) return
+        state.update {
+            // The menu capture can outlive a live deletion (menu callback delay); re-resolve
+            // against the current list so a removed target never becomes a pending quote.
+            val target = resolveQuoteTarget(it.messages, message) ?: return@update it
+            it.copy(quoting = target, actionError = null)
+        }
+    }
     fun cancelQuote() { if (!state.value.sending) state.update { it.copy(quoting = null) } }
     fun mention(user: ProfileUser) {
         if (user.nickname.isBlank()) return
@@ -226,6 +234,10 @@ internal fun chatMentions(content: String, members: List<ProfileUser>) = members
 internal fun quotingAfterEvent(quoting: ChatMessage?, event: ChatLiveEvent): ChatMessage? =
     if (event.type == "delete" && quoting != null &&
         event.payload.jsonObject["id"]?.jsonPrimitive?.longOrNull == quoting.id) null else quoting
+
+/** Re-resolve a menu-captured quote target against the live list; null once it is gone. */
+internal fun resolveQuoteTarget(messages: List<ChatMessage>, captured: ChatMessage): ChatMessage? =
+    messages.firstOrNull { it.id == captured.id }
 
 /** Single-line bounded preview so multiline quotes cannot squeeze the composer. */
 internal fun quotePreview(content: String, image: String): String =
