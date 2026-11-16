@@ -1,0 +1,52 @@
+# Dependabot version updates. Security alerts/updates are managed separately
+# in Settings > Advanced Security and are never auto-merged here.
+version: 2
+updates:
+  # Android/Kotlin dependencies (including Gradle wrapper).
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "04:00"
+      timezone: "Asia/Tokyo"
+    # Limits only routine version-update PRs, not security-update PRs.
+    open-pull-requests-limit: 2
+    commit-message:
+      prefix: "deps"
+    groups:
+      # Keep unrelated Kotlin/AGP/KSP/R8 upgrades independently reviewable.
+      androidx-version-updates:
+        applies-to: "version-updates"
+        patterns:
+          - "androidx.*"
+        update-types:
+          - "minor"
+          - "patch"
+      androidx-security-updates:
+        applies-to: "security-updates"
+        patterns:
+          - "androidx.*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Update only the actions used in .github/workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "04:30"
+      timezone: "Asia/Tokyo"
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: "deps"
+    groups:
+      actions-version-updates:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
