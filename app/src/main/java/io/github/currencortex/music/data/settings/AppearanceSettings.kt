@@ -43,6 +43,7 @@ data class AppearanceSettings(
     val navigationGlow: Boolean = true,
     val playlistDepthRibbon: Boolean = false,
     val playlistRecordShelf: Boolean = false,
+    val playlistOrders: Map<String, Int> = emptyMap(),
     val recordShelfPreviewMode: RecordShelfPreviewMode = RecordShelfPreviewMode.ONCE,
     val recordShelfFullPreview: Boolean = false,
     val refreshRate: RefreshRatePreference = RefreshRatePreference.SYSTEM,
