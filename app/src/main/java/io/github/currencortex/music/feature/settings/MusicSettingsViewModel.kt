@@ -6,7 +6,10 @@ import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.auth.UserDto
+import io.github.currencortex.music.data.lx.LxPlatform
 import io.github.currencortex.music.data.settings.AudioProvider
+import io.github.currencortex.music.data.settings.MusicPlatform
+import io.github.currencortex.music.data.song.MusicSource
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -20,11 +23,13 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
     val audioProvider = container.audioSettings.state
     val audioState = MutableStateFlow(NetworkSettingsState())
     val lxSources = container.lxSources.state
-    val lxHealth = container.lxSources.health
-    val lxResolveTimes = container.lxSources.resolveTimes
-    suspend fun checkLxSources() {
+    internal val lxHealth = container.lxSources.health
+    internal val lxResolveTimes = container.lxSources.resolveTimes
+    internal suspend fun checkLxSources(platform: LxPlatform) {
         val selected = audioProvider.value.lxSourceId
-        lxSources.value.sortedBy { if (it.id == selected) 0 else 1 }.forEach { container.lxSources.checkAvailability(it.id) }
+        lxSources.value.sortedBy { it.id != selected }.forEach {
+            container.lxSources.checkAvailability(it.id, platform)
+        }
     }
     fun lxSupported() = container.lxSources.supported()
     val serverHealth = container.serverRouter.health
@@ -163,8 +168,11 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
         })
     }
     fun quality(value: AudioQuality) = viewModelScope.launch {
-        container.musicSettings.setQuality(value)
-        if (container.playbackQueue.state.value.current != null) container.playerController.qualityChanged()
+        val qq = settings.value.musicPlatform == MusicPlatform.QQ_MUSIC
+        container.musicSettings.setQuality(value, qq = qq)
+        val current = container.playbackQueue.state.value.current
+        if (current != null && (current.musicSource == MusicSource.QQ_MUSIC) == qq)
+            container.playerController.qualityChanged()
     }
     fun restore(value: Boolean) = viewModelScope.launch { container.musicSettings.setRestore(value) }
     fun concurrentPlayback(value: Boolean) = viewModelScope.launch { container.musicSettings.setConcurrentPlayback(value) }

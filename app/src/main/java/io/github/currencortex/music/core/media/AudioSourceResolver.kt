@@ -25,7 +25,8 @@ data class AudioRequest(val songId: Long, val quality: AudioQuality, val account
     }
 
     internal fun selectedDolby(source: AudioSource): Boolean =
-        quality == AudioQuality.AUTO && supportsDolby && source.level == AudioQuality.DOLBY.value
+        quality in setOf(AudioQuality.AUTO, AudioQuality.DOLBY) && supportsDolby &&
+            source.level == AudioQuality.DOLBY.value
 }
 data class ResolvedAudio(val source: AudioSource, val key: String, val refreshAfterMs: Long = 25_000)
 
