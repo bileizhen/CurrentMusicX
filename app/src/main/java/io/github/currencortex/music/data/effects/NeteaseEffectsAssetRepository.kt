@@ -142,10 +142,18 @@ class NeteaseEffectsAssetRepository(
         val target = directory(context)
         val staged = File(context.filesDir, "netease-effects-ui-9.5.30.staging")
         val retired = File(context.filesDir, "netease-effects-ui-9.5.30.retired")
-        staged.deleteRecursively()
-        retired.deleteRecursively()
-        staged.mkdirs()
-        check(staged.isDirectory) { "无法创建音效素材目录" }
+        // A previous failed rollback may have left the only good copy in
+        // retired. Recover it before preparing a fresh installation.
+        if (retired.exists()) {
+            if (!target.exists()) {
+                check(retired.renameTo(target)) { "此前的音效素材备份尚未恢复：${retired.absolutePath}" }
+            } else {
+                check(refreshState().available) { "检测到待恢复的音效素材备份，请先检查安装目录" }
+                check(retired.deleteRecursively()) { "无法清理旧音效素材备份" }
+            }
+        }
+        check(staged.deleteRecursively()) { "无法清理旧音效素材临时目录" }
+        check(staged.mkdirs()) { "无法创建音效素材目录" }
         var entries = 0
         var totalBytes = 0L
         ZipFile(archive).use { zip ->
