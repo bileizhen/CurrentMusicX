@@ -216,6 +216,12 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
             try {
                 when (val result = appResult {
                     if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
+                        val qqIdentity = container.qqMusic.audioIdentity
+                        restore = {
+                            if (qqIdentity != container.qqMusic.audioIdentity) throw ApiException(ErrorKind.Unauthorized)
+                            container.qqMusic.toggleLiked(song, true)
+                            Unit
+                        }
                         return@appResult container.qqMusic.toggleLiked(song, desiredLiked)
                     }
                     if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY) {

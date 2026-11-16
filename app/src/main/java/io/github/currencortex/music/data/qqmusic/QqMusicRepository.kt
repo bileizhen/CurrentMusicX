@@ -383,6 +383,7 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
         ?: throw ApiException(ErrorKind.NotFound)
     suspend fun source(song: Song, quality: AudioQuality): AudioSource {
         val requestedLevel = when (quality) {
+            AudioQuality.STANDARD -> "standard"
             AudioQuality.HIGHER -> "higher"
             AudioQuality.EXHIGH -> "exhigh"
             AudioQuality.LOSSLESS -> "lossless"
@@ -689,6 +690,7 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
     suspend fun renamePlaylist(id: String, name: String) = withWriteOwner {
         val raw = write("user/playlist/rename", buildJsonObject { put("tid", remoteId(id)); put("name", playlistName(name)) })
         if (!raw.flag("verified")) throw ApiException(ErrorKind.Server, userMessage = "QQ 音乐未确认歌单重命名结果，请刷新后重试")
+        playlistSubscriptions.remove(id)
         playlistMetadata[id]?.let { playlistMetadata[id] = it.copy(name = name.trim()) }
         Unit
     }

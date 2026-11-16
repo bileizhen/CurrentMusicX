@@ -25,7 +25,8 @@ internal fun LxStoredSource.performanceFor(platform: LxPlatform): LxSourcePerfor
 internal fun lxOrderedSources(
     sources: List<LxStoredSource>, selected: String, now: Long, platform: LxPlatform = LxPlatform.NETEASE,
 ): List<LxStoredSource> =
-    sources.sortedWith(compareBy<LxStoredSource> { it.performanceFor(platform).coolingDown(now) }
+    sources.sortedWith(compareBy<LxStoredSource> { it.info.qualities(platform).isEmpty() }
+        .thenBy { it.performanceFor(platform).coolingDown(now) }
         .thenBy { it.performanceFor(platform).recentTime(now) ?: Long.MAX_VALUE }
         .thenBy { it.info.id != selected })
 

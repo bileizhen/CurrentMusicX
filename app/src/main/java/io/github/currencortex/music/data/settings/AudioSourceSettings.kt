@@ -27,6 +27,7 @@ class AudioSourceAccess(val provider: AudioProvider, internal val key: String = 
 
 class AudioSourceSettings(private val store: DataStore<Preferences>, private val vault: TokenStore, scope: CoroutineScope) {
     private val preference = stringPreferencesKey("music.audioProvider")
+    private val resumePreference = stringPreferencesKey("music.audioProviderResume")
     private val lxPreference = stringPreferencesKey("music.lxSourceId")
     private val smartPreference = booleanPreferencesKey("music.lxSmartSwitch")
     private var savedSmartSwitch = false
@@ -40,10 +41,14 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
     val ready = CompletableDeferred<Unit>()
     init { scope.launch(Dispatchers.IO) {
         lock.withLock {
+            val preferences = store.data.first()
             savedKey = runCatching { vault.read().orEmpty() }.getOrDefault("")
-            savedLxSource = store.data.first()[lxPreference].orEmpty().takeIf { it.matches(Regex("[a-f0-9]{64}")) }.orEmpty()
-            savedSmartSwitch = store.data.first()[smartPreference] ?: false
-            val provider = runCatching { AudioProvider.valueOf(store.data.first()[preference].orEmpty()) }
+            savedLxSource = preferences[lxPreference].orEmpty().takeIf { it.matches(Regex("[a-f0-9]{64}")) }.orEmpty()
+            savedSmartSwitch = preferences[smartPreference] ?: false
+            resumeProvider = runCatching {
+                AudioProvider.valueOf(preferences[resumePreference].orEmpty())
+            }.getOrNull()?.takeUnless { it == AudioProvider.QQ_MUSIC }
+            val provider = runCatching { AudioProvider.valueOf(preferences[preference].orEmpty()) }
                 .getOrDefault(AudioProvider.CURRENT_MUSIC)
             publish(provider)
             ready.complete(Unit)
@@ -63,12 +68,22 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
         lock.withLock {
             if (provider == null) {
                 platformMusicProvider = null
-                resumeProvider?.let { store.edit { settings -> settings[preference] = it.name }; publish(it) }
+                val restored = resumeProvider ?: AudioProvider.CURRENT_MUSIC
+                store.edit { settings ->
+                    settings[preference] = restored.name
+                    settings.remove(resumePreference)
+                }
                 resumeProvider = null
+                publish(restored)
             } else {
-                if (platformMusicProvider == null) resumeProvider = current.provider.takeUnless { it == provider }
+                if (platformMusicProvider == null) {
+                    resumeProvider = current.provider.takeUnless { it == provider } ?: resumeProvider
+                }
                 platformMusicProvider = provider
-                store.edit { it[preference] = provider.name }
+                store.edit { settings ->
+                    settings[preference] = provider.name
+                    resumeProvider?.let { settings[resumePreference] = it.name } ?: settings.remove(resumePreference)
+                }
                 publish(provider)
             }
         }

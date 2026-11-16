@@ -232,6 +232,8 @@ class QqDirectMusicClient(
                     requireNotNull(credential), body ?: buildJsonObject {})
                 route == "user/playlist/delete" -> deletePlaylist(
                     requireNotNull(credential), body ?: buildJsonObject {})
+                route == "user/playlist/rename" -> renamePlaylist(
+                    requireNotNull(credential), body ?: buildJsonObject {})
                 route == "user/playlist/tracks" -> editPlaylistTracks(
                     requireNotNull(credential), body ?: buildJsonObject {})
                 route == "user/playlist/subscribe" -> subscribePlaylist(
@@ -245,10 +247,12 @@ class QqDirectMusicClient(
                 route == "recommend/categories/all" -> musicCategories()
                 route == "recommend/category-playlists/sorted" -> categoryPlaylists(query, credential)
                 route == "user/guess-you-like" -> guessYouLike(requireNotNull(credential))
+                route == "user/personal-fm" -> personalFm(query, requireNotNull(credential))
                 route == "user/daily-songs" -> dailySongs(requireNotNull(credential))
                 route == "user/listening-rank" -> recentListening(requireNotNull(credential))
                 route == "recommend/toplists" -> topLists()
                 route == "recommend/toplist" -> topList(query)
+                route == "comment/new" -> newComments(query)
                 route == "album" -> album(query)
                 route == "artist" -> artist(query)
                 route == "artist/albums" -> artistAlbums(query)
@@ -853,6 +857,7 @@ class QqDirectMusicClient(
         val id = query["id"].orEmpty()
         if (!id.matches(Regex("[A-Za-z0-9_-]{1,100}"))) throw ApiException(ErrorKind.NotFound)
         val numeric = id.toLongOrNull()
+        val requestedDirectory = ownedPlaylistDirectories[id]?.toLongOrNull()
         val authComm = credential?.takeIf { compactAuthComm }?.let {
             buildJsonObject {
                 put("uin", it.stringMusicId.ifBlank { it.musicId.toString() })
@@ -863,7 +868,7 @@ class QqDirectMusicClient(
             }
         } ?: JsonObject(emptyMap())
         val dailyRequest = query["daily"] == "1"
-        val playlistNumeric = query["dirid"]?.toLongOrNull() ?: numeric
+        val playlistNumeric = query["dirid"]?.toLongOrNull() ?: requestedDirectory ?: numeric
         val rows = mutableListOf<JsonElement>()
         var info: JsonObject? = null
         var total = 0L
@@ -875,7 +880,7 @@ class QqDirectMusicClient(
                     if (credential != null || aiDissInfo || mobileAi || dailyRequest) put("new_format", 1)
                     if (playlistNumeric != null) put("disstid", JsonPrimitive(playlistNumeric))
                     else put("disstid", id)
-                    put("dirid", JsonPrimitive(query["dirid"]?.toLongOrNull() ?: 0L))
+                    put("dirid", JsonPrimitive(query["dirid"]?.toLongOrNull() ?: requestedDirectory ?: 0L))
                     put("tag", true)
                     put("song_begin", (currentPage - 1) * 100)
                     put("song_num", 100)
@@ -1132,6 +1137,56 @@ class QqDirectMusicClient(
         return wrapped(buildJsonObject { put("verified", data.firstLong("code", "retCode") == 0L) })
     }
 
+    private fun renamePlaylist(credential: DirectCredential, body: JsonObject): JsonObject {
+        val tid = body.firstLong("tid").takeIf { it > 0 } ?: throw ApiException(ErrorKind.NotFound)
+        val name = body.firstText("name").trim()
+        if (name.isBlank() || name.codePointCount(0, name.length) > 20) throw IllegalArgumentException("歌单名称无效")
+        var directory = ownedPlaylistDirectories[tid.toString()]
+        if (directory.isNullOrBlank()) {
+            userPlaylists(credential)
+            directory = ownedPlaylistDirectories[tid.toString()]
+        }
+        val dirId = directory?.toLongOrNull()?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.NotFound,
+            userMessage = "找不到 QQ 音乐歌单目录，请刷新后重试")
+        fun read(): JsonObject {
+            val data = cgi("music.srfDissInfo.aiDissInfo", "uniform_get_Dissinfo", buildJsonObject {
+                put("dirid", dirId)
+                put("optype", 3)
+                put("tag", 1)
+                put("userinfo", 0)
+                put("pic_dpi", 300)
+            }, credential)
+            return (data["dirinfo"] as? JsonObject) ?: data
+        }
+        val before = read()
+        val tagIds = before.array("tag").mapNotNull {
+            (it as? JsonObject)?.identifier("id")?.takeIf(String::isNotBlank)
+        }
+        val dirShow = before.firstLong("dir_show").toInt().takeIf { it in 1..2 } ?: 1
+        cgi("music.musicasset.PlaylistBaseWrite", "EditPlaylist", buildJsonObject {
+            put("dirId", dirId)
+            put("mask", 95)
+            put("dirNewName", name)
+            put("dirNewDesc", before.firstText("desc"))
+            put("dirNewPicUrl", before.firstText("picurl"))
+            put("dirNewPicUrl2", before.firstText("picurl2"))
+            put("dirNewtaglist", tagIds.joinToString(","))
+            put("dirShow", dirShow)
+        }, credential)
+        val after = read()
+        val afterTagIds = after.array("tag").mapNotNull {
+            (it as? JsonObject)?.identifier("id")?.takeIf(String::isNotBlank)
+        }
+        val verified = after.firstText("title", "name") == name &&
+            after.firstText("desc") == before.firstText("desc") &&
+            after.firstText("picurl") == before.firstText("picurl") &&
+            after.firstText("picurl2") == before.firstText("picurl2") &&
+            afterTagIds == tagIds &&
+            after.firstLong("dir_show").toInt() == dirShow
+        if (!verified) throw ApiException(ErrorKind.Server, userMessage = "QQ 音乐未确认歌单重命名结果，请刷新后重试")
+        return wrapped(buildJsonObject { put("tid", tid); put("name", name); put("verified", true) })
+    }
+
     private fun editPlaylistTracks(credential: DirectCredential, body: JsonObject): JsonObject {
         val tid = body.firstLong("tid")
         val operation = body.firstText("op")
@@ -1307,6 +1362,25 @@ class QqDirectMusicClient(
         return wrapped(buildJsonObject { put("songs", JsonArray(rows)) })
     }
 
+    private fun personalFm(query: Map<String, String>, credential: DirectCredential): JsonObject {
+        val page = query["page"]?.toIntOrNull()?.coerceIn(1, 100) ?: 1
+        val limit = 30
+        val data = cgi("music.radioProxy.MbTrackRadioSvr", "get_radio_track", buildJsonObject {
+            put("id", 99)
+            put("num", limit)
+            put("from", (page - 1) * limit)
+            put("scene", 0)
+            put("song_ids", JsonArray(emptyList()))
+        }, credential)
+        val rows = data.array("tracks", "songlist", "songs", "list")
+        val more = rows.size >= limit && page < 100
+        return wrapped(buildJsonObject {
+            put("songs", JsonArray(rows))
+            put("more", more)
+            if (more) put("nextPage", page + 1)
+        })
+    }
+
     private fun dailySongs(credential: DirectCredential): JsonObject {
         val feed = cgi("music.recommend.RecommendFeed", "get_recommend_feed", buildJsonObject {
             put("direction", 0)
@@ -1388,6 +1462,40 @@ class QqDirectMusicClient(
             put("items", JsonArray(items))
             put("from", "")
             put("token", "")
+        })
+    }
+
+    private fun newComments(query: Map<String, String>): JsonObject {
+        val id = query["id"].orEmpty().takeIf { it.matches(Regex("[1-9][0-9]{0,14}")) }
+            ?: throw ApiException(ErrorKind.NotFound)
+        val offset = query["offset"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0
+        val limit = query["limit"]?.toIntOrNull()?.coerceIn(1, 50) ?: 30
+        val data = cgi("music.globalComment.CommentRead", "GetNewCommentList", buildJsonObject {
+            put("BizType", 1)
+            put("BizId", id)
+            put("LastCommentSeqNo", "")
+            put("PageSize", limit)
+            put("PageNum", offset / limit)
+            put("FromCommentId", "")
+            put("WithHot", 0)
+            put("PicEnable", 1)
+        }, null)
+        val list = (data["CommentList"] as? JsonObject) ?: JsonObject(emptyMap())
+        val comments = list.array("Comments").mapNotNull { value ->
+            val row = value as? JsonObject ?: return@mapNotNull null
+            buildJsonObject {
+                put("id", row.firstText("CmId"))
+                put("content", row.firstText("Content"))
+                put("nick", row.firstText("Nick"))
+                put("avatar", row.firstText("Avatar"))
+                put("praiseCount", row.firstLong("PraiseNum"))
+                put("time", row.firstLong("PubTime"))
+            }
+        }
+        return wrapped(buildJsonObject {
+            put("comments", JsonArray(comments))
+            put("total", list.firstLong("Total"))
+            put("more", list.flag("HasMore"))
         })
     }
 
