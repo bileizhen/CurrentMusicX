@@ -175,6 +175,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val likesUseNetease by vm.container.primaryLibrary.likesUseNetease.collectAsStateWithLifecycle()
     val neteaseLikes by vm.container.neteaseSongActions.likedState.collectAsStateWithLifecycle()
     val qqLikes by vm.container.qqMusic.likedState.collectAsStateWithLifecycle()
+    val qqAccount by vm.container.qqMusic.state.collectAsStateWithLifecycle()
     val navidromeLikes by vm.container.navidrome.likes.collectAsStateWithLifecycle()
     val embyLikes by vm.container.emby.likes.collectAsStateWithLifecycle()
     val likeBusy by library.primaryLikeBusy.collectAsStateWithLifecycle()
@@ -336,6 +337,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         vm.route == "lib/foryou" -> "根据你的音乐喜好推荐"
         vm.route == "lib/recent" -> "最近听过的音乐"
         vm.route == "lib/cloud" -> "网易云音乐"
+        vm.route == "qq/daily" -> "QQ 音乐 · ${if (qqAccount.loggedIn) "每日推荐" else "新歌推荐"}"
         else -> "CurrentMusic 歌单"
     }
     val heroOrigin = when (state.playlist?.source) {
@@ -491,6 +493,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                 if (!state.loading && songs.isEmpty() && state.error == null && localMusic?.allowed != false) item {
                     Text(if (query.isNotBlank()) "没有找到匹配的歌曲" else if (localMusic != null) "未找到音乐文件，下拉重新扫描"
                         else if (vm.route == "lib/cloud") "云盘里还没有歌曲，请先在网易云音乐上传音乐。"
+                        else if (vm.route == "qq/daily") "今天暂时没有推荐，稍后再来看看"
                         else if (vm.route == "qq/recent") "本周暂无常听记录，播放 QQ 音乐后再来看看"
                         else "这里还没有歌曲，可在搜索结果中加入歌单",
                         Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(24.dp), fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
