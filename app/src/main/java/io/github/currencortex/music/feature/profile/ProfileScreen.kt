@@ -299,7 +299,12 @@ import kotlinx.coroutines.launch
             accounts.forEachIndexed { index, saved ->
                 if (index > 0) SettingsDivider(68.dp)
                 val active = saved.id == account.account?.id && saved.server == container.accountRepository.server
-                SettingsPreference(saved.nickname.ifBlank { saved.username }, saved.server,
+                // Registration keeps a username besides the nickname; surface it in the account area.
+                val usernameLine = saved.username.takeIf {
+                    saved.nickname.isNotBlank() && it.isNotBlank() && it != saved.nickname
+                }?.let { "用户名 $it" }
+                SettingsPreference(saved.nickname.ifBlank { saved.username },
+                    listOfNotNull(usernameLine, saved.server).joinToString(" · "),
                     leading = { UserAvatar(ProfileUser(id = saved.id, avatar = saved.avatar), container, 40.dp, reserveOverlay = false) },
                     trailing = {
                         if (active) SettingsSelectionCheck(true, Modifier.testTag("current_account_${saved.id}"))
