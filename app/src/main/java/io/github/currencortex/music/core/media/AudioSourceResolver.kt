@@ -25,7 +25,8 @@ data class AudioRequest(val songId: Long, val quality: AudioQuality, val account
     }
 
     internal fun selectedDolby(source: AudioSource): Boolean =
-        quality == AudioQuality.AUTO && supportsDolby && source.level == AudioQuality.DOLBY.value
+        quality in setOf(AudioQuality.AUTO, AudioQuality.DOLBY) && supportsDolby &&
+            source.level == AudioQuality.DOLBY.value
 }
 data class ResolvedAudio(val source: AudioSource, val key: String, val refreshAfterMs: Long = 25_000)
 
@@ -63,6 +64,27 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
         val remainingMs = (entry.until - now()) / 1_000_000
         val advanceMs = minOf(30_000, entry.source.validForSeconds.coerceIn(1, 600) * 200)
         return ResolvedAudio(entry.source, entry.cacheKey, (remainingMs - advanceMs).coerceAtLeast(250))
+    }
+    /** Keep a source selected outside [resolve], such as an LX fallback, on the normal cache path. */
+    suspend fun register(request: AudioRequest, source: AudioSource): ResolvedAudio = withContext(Dispatchers.IO) {
+        checkRequest(request)
+        val started = now()
+        val sourceKey = sourceCacheKey(request.key, source)
+        runCatching {
+            cache.rememberSource(sourceKey, source)
+            cache.rememberSelection(request.key, sourceKey)
+        }
+        store(request, source, sourceKey, started)
+    }
+    private fun store(request: AudioRequest, source: AudioSource, sourceKey: String, started: Long): ResolvedAudio {
+        // Bound reuse, reserve expiry headroom, and include the time spent resolving.
+        // A memo hit never extends the original URL's lifetime.
+        val seconds = source.validForSeconds.coerceIn(1, 600)
+        val lifetime = seconds * 1_000_000_000L
+        val entry = Entry(request, source, started + lifetime - minOf(lifetime / 10, 30_000_000_000L), sourceKey)
+        memo[request.key] = entry
+        if (memo.size > 24) memo.entries.minByOrNull { it.value.until }?.let { memo.remove(it.key, it.value) }
+        return result(entry)
     }
     suspend fun resolve(request: AudioRequest, refresh: Boolean = false): ResolvedAudio = withContext(Dispatchers.IO) {
         request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL }?.let { song ->
@@ -124,14 +146,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
                 cache.rememberSource(sourceKey, source)
                 cache.rememberSelection(key, sourceKey)
             }
-            // Bound reuse, reserve expiry headroom, and include the time spent resolving.
-            // A memo hit never extends the original URL's lifetime.
-            val seconds = source.validForSeconds.coerceIn(1, 600)
-            val lifetime = seconds * 1_000_000_000L
-            val entry = Entry(request, source, started + lifetime - minOf(lifetime / 10, 30_000_000_000L), sourceKey)
-            memo[key] = entry
-            if (memo.size > 24) memo.entries.minByOrNull { it.value.until }?.let { memo.remove(it.key, it.value) }
-            result(entry)
+            store(request, source, sourceKey, started)
         }
     }
 }

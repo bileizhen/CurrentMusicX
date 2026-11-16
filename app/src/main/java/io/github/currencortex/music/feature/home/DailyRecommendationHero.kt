@@ -55,7 +55,8 @@ import kotlinx.coroutines.launch
     songs: List<Song>, loading: Boolean, error: String?, discovery: Boolean,
     playback: PlayerState, onPlay: (Int) -> Unit, onOpen: () -> Unit, onRetry: () -> Unit,
     onConnect: () -> Unit, modifier: Modifier = Modifier, dateLabel: String = "",
-    room: RoomSongRequest? = null,
+    room: RoomSongRequest? = null, discoveryProvider: String = "网易云",
+    connectTag: String = "home_connect_netease",
 ) {
     val colors = MiuixTheme.colorScheme
     var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -108,15 +109,15 @@ import kotlinx.coroutines.launch
                 horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(MusicIcons.List, null, Modifier.size(34.dp), tint = colors.primary.copy(alpha = .55f))
                 Text(if (error != null) "推荐暂时没加载出来" else "今日推荐还没有内容", fontSize = 16.sp)
-                Text(error ?: if (discovery) "连接网易云，发现适合你的音乐" else "稍后刷新，再来听点新歌",
+                Text(error ?: if (discovery) "连接$discoveryProvider，发现适合你的音乐" else "稍后刷新，再来听点新歌",
                     Modifier.padding(horizontal = 12.dp), fontSize = 12.sp, textAlign = TextAlign.Center,
                     color = colors.onSurface.copy(alpha = .55f))
-                MusicTextAction(if (discovery && error == null) "连接网易云 ›" else "重新加载",
+                MusicTextAction(if (discovery && error == null) "连接$discoveryProvider ›" else "重新加载",
                     if (discovery && error == null) onConnect else onRetry, Modifier.testTag("home_daily_retry"))
             }
         }
-        if (discovery && songs.isNotEmpty()) MusicTextAction("连接网易云，获取你的专属推荐 ›", onConnect,
-            Modifier.align(Alignment.CenterHorizontally).testTag("home_connect_netease"))
+        if (discovery && songs.isNotEmpty()) MusicTextAction("登录$discoveryProvider，获取你的专属推荐 ›", onConnect,
+            Modifier.align(Alignment.CenterHorizontally).testTag(connectTag))
     }
 }
 

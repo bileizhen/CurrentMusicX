@@ -9,12 +9,20 @@ import kotlinx.serialization.SerialName
                              val musicSource: MusicSource = MusicSource.NETEASE,
                              val externalIds: SongExternalIds = SongExternalIds(),
                              val navidrome: NavidromeTrackRef? = null, val videoQuality: Int = 1080, val localUri: String = "", val emby: EmbyTrackRef? = null,
-                             val albumId: Long = 0) {
+                              val albumId: Long = 0, val translatedName: String = "",
+                              val aliases: List<String> = emptyList(), val neteaseCloud: Boolean = false,
+                              val qqMusic: QqMusicTrackRef? = null) {
     val privateLibrary get() = musicSource == MusicSource.NAVIDROME || musicSource == MusicSource.EMBY
     val privateIdentity get() = emby?.identity ?: navidrome?.identity
     val originalQualityLabel get() = if (musicSource == MusicSource.EMBY) "Emby 原音质" else "Navidrome 原音质"
+    /** Names a Chinese search result may carry besides its original title. */
+    val alternateNames get() = (listOf(translatedName) + aliases).map(String::trim)
+        .filter { it.isNotBlank() && !it.equals(name, ignoreCase = true) }.distinct()
+    val displayNames get() = listOf(name) + alternateNames
 }
 @Serializable enum class MusicSource { NETEASE, QQ_MUSIC, APPLE_MUSIC, SPOTIFY, NAVIDROME, LOCAL, EMBY }
+@Serializable data class QqMusicTrackRef(val mid: String, val songId: Long = 0, val albumMid: String = "",
+    val singerMids: List<String> = emptyList(), val mediaMid: String = "")
 @Serializable data class NavidromeTrackRef(val id: String, val identity: String, val format: String = "",
     val sampleRate: Int = 0, val channels: Int = 0)
 @Serializable data class SongExternalIds(val neteaseId: String? = null, val qqMusicId: String? = null,
@@ -26,8 +34,29 @@ import kotlinx.serialization.SerialName
                                 @SerialName("lyricMatch") val lyricMatch: String = "",
                                 @SerialName("lyricContext") val lyricContext: List<LyricContextDto> = emptyList(),
                                 val lyricContextStatus: String? = null, val lyricContextRetryable: Boolean = false,
-                                @SerialName("album_id") val albumId: Long = 0) {
-    fun toDomain() = Song(id, name, artists, album, pic.replace("http:", "https:"), duration, mv, artistIds, albumId = albumId)
+                                @SerialName("album_id") val albumId: Long = 0,
+                                val tns: List<String> = emptyList(), val transNames: List<String> = emptyList(),
+                                val alias: List<String> = emptyList(), val alia: List<String> = emptyList(),
+                                val cloud: Boolean = false) {
+    fun toDomain() = Song(id, name, artists, album, pic.replace("http:", "https:"), duration, mv, artistIds, albumId = albumId,
+        translatedName = NeteaseSongNames.translated(tns + transNames), aliases = NeteaseSongNames.aliases(alia + alias, name),
+        neteaseCloud = cloud)
+}
+
+internal object NeteaseSongNames {
+    fun translated(values: List<String>) = values.map(String::trim).filter(String::isNotBlank).distinct().firstOrNull().orEmpty()
+    fun aliases(values: List<String>, name: String) = values.map(String::trim).filter(String::isNotBlank)
+        .filterNot { it.equals(name, ignoreCase = true) }.distinct()
+}
+
+/** Restore translated/alias titles omitted by the project search adapter. Original metadata wins. */
+internal fun mergeNativeSearchNames(project: List<Song>, native: List<Song>): List<Song> {
+    val byId = native.associateBy(Song::id)
+    return project.map { song ->
+        val enrichment = byId[song.id] ?: return@map song
+        song.copy(translatedName = song.translatedName.ifBlank { enrichment.translatedName },
+            aliases = (song.aliases + enrichment.aliases).distinct())
+    }
 }
 @Serializable data class SearchDto(val songs: List<SongDto> = emptyList(), val totals: SearchTotals = SearchTotals(), val hasMore: SearchMore = SearchMore(),
     val catalogSongs: List<SongDto> = emptyList())
@@ -52,15 +81,17 @@ data class SearchPage(val songs: List<Song>, val total: Int, val hasMore: Boolea
     val matchSource: String = "", val bitrate: Long = 0, val bits: Int = 0, val size: Long = 0,
     val durationMs: Long = 0, val expectedDurationMs: Long = 0) {
     val matched get() = level == "matched" || source == "netease-match"
-    val qualityLabel get() = if (matched) "匹配音源" else
-        io.github.currencortex.music.core.media.AudioQuality.entries.firstOrNull { it.value == level }?.label ?: "未知音质"
+    val qualityLabel get() = if (matched) "匹配音源" else when (level) {
+        "flac24bit" -> "24bit"
+        else -> io.github.currencortex.music.core.media.AudioQuality.entries.firstOrNull { it.value == level }?.label ?: "未知音质"
+    }
     // Without a file digest, two signed URLs may point to different recordings.
     val cacheIdentity: String get() = if (!matched && !source.startsWith("lx:")) "" else md5.takeIf { it.matches(Regex("[a-fA-F0-9]{32}")) }
         ?.lowercase() ?: java.security.MessageDigest.getInstance("SHA-256").digest(url.toByteArray(Charsets.UTF_8))
             .joinToString("") { "%02x".format(it) }
     val highSpec get() = sampleRate > 48000 || channelCount > 2 ||
         // Some audio providers omit numeric specifications for these high-spec levels.
-        ((sampleRate <= 0 || channelCount <= 0) && level in setOf("hires", "jymaster", "sky", "jyeffect"))
+        ((sampleRate <= 0 || channelCount <= 0) && level in setOf("hires", "jymaster", "sky", "jyeffect", "flac24bit"))
 }
 @Serializable data class LyricDto(val lines: List<LyricLine> = emptyList())
 @Serializable data class LyricLine(val t: Long, val txt: String, val trans: String = "")

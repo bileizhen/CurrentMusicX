@@ -15,7 +15,7 @@ data class Daily(val songs: List<Song>, val forYou: List<Song>, val artists: Lis
 }
 data class Playlist(val id: Long, val name: String, val description: String, val cover: String, val source: String,
     val ownerId: Long, val count: Int, val songs: List<Song>, val nativeOwned: Boolean = false, val nativeLiked: Boolean = false, val remoteId: String = "",
-    val nativeSubscribed: Boolean = false) {
+    val nativeSubscribed: Boolean = false, val nativeSubscriptionKnown: Boolean = true, val playCount: Long = 0) {
     fun editable(accountId: Long) = source !in setOf("ncm", "netease") && ownerId == accountId && accountId > 0
 }
 @Serializable data class PlaylistsDto(val playlists: List<PlaylistDto> = emptyList())
@@ -55,7 +55,10 @@ data class ArtistOverview(val songs: List<Song>, val albums: List<Album>, val ar
     val hasMore: CatalogMore = CatalogMore(), val totals: CatalogTotals = CatalogTotals())
 @Serializable data class CatalogMore(val artist: Boolean = false, val album: Boolean = false, val playlist: Boolean = false)
 @Serializable data class CatalogTotals(val artist: Int = 0, val album: Int = 0, val playlist: Int = 0)
-data class CatalogEntry(val id: Long, val name: String, val cover: String, val subtitle: String = "")
+data class CatalogEntry(val id: Long, val name: String, val cover: String, val subtitle: String = "",
+    val remoteId: String = "") {
+    val stableId get() = remoteId.ifBlank { id.toString() }
+}
 data class CatalogPage(val entries: List<CatalogEntry>, val more: Boolean, val total: Int = 0)
 @Serializable data class MvDto(val id: Long = 0, val name: String = "", val cover: String = "", val artistName: String = "",
     val artistId: Long = 0, val desc: String? = null, val duration: Long = 0)

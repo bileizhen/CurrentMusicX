@@ -85,7 +85,8 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
     }
     private fun fail(error: Exception): Nothing {
         val message = "$label 已停止：${error.message ?: "输出条件已改变"}"
-        CurrentMusicAudioDiagnostics.record("finalState=FAILED reason=${error.javaClass.simpleName} detail=${error.message?.take(600)}")
+        val cause = error.cause?.let { " cause=${it.javaClass.simpleName}:${it.message?.take(400)}" }.orEmpty()
+        CurrentMusicAudioDiagnostics.record("finalState=FAILED reason=${error.javaClass.simpleName} detail=${error.message?.take(600)}$cause")
         report(message)
         throw AudioSink.InitializationException(message, 0, format, false, error)
     }

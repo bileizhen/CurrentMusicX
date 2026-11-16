@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.profile.ProfileStats
 import io.github.currencortex.music.data.profile.listeningDuration
+import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.ui.component.rememberPageNavigationSource
 import io.github.currencortex.music.ui.component.LocalRootTabSwipe
 import io.github.currencortex.music.ui.component.MusicIcons
@@ -69,15 +70,30 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
 }
 
-@Composable internal fun ProfileLibrarySection(navigate: (String) -> Unit) {
+@Composable internal fun ProfileLibrarySection(navigate: (String) -> Unit, platform: MusicPlatform = MusicPlatform.NETEASE) {
+    val qq = platform == MusicPlatform.QQ_MUSIC
     SettingsListSection("我的音乐") {
-        ProfileDestination("我喜欢", "收藏的歌曲", MusicIcons.Heart, "open_likes") { navigate("lib/likes") }
+        ProfileDestination("我喜欢", "收藏的歌曲", MusicIcons.Heart, "open_likes") {
+            val route = if (qq) "qq/likes" else "lib/likes"
+            navigate(route)
+        }
         SettingsDivider(52.dp)
-        ProfileDestination("歌单", "创建与收藏的歌单", MusicIcons.List, "open_playlists") { navigate("lib/playlists") }
+        ProfileDestination("歌单", "创建与收藏的歌单", MusicIcons.List, "open_playlists") {
+            navigate(if (qq) "qq/playlists" else "lib/playlists")
+        }
         SettingsDivider(52.dp)
-        ProfileDestination("最近播放", "回顾听过的歌曲", MusicIcons.Update, "open_recent") { navigate("lib/recent") }
+        if (qq) {
+            ProfileDestination("本周常听", "本周播放次数最多的歌曲", MusicIcons.Update, "open_recent") {
+                navigate("qq/recent")
+            }
+        } else {
+            ProfileDestination("音乐云盘", "网易云音乐个人云盘", MusicIcons.Storage, "open_cloud_drive") { navigate("lib/cloud") }
+            SettingsDivider(52.dp)
+            ProfileDestination("最近播放", "回顾听过的歌曲", MusicIcons.Update, "open_recent") { navigate("lib/recent") }
+        }
         SettingsDivider(52.dp)
-        ProfileDestination("听歌时长", "本机与网易云听歌足迹", MusicIcons.Headphones, "open_listening") { navigate("user/listening") }
+        ProfileDestination("听歌时长", if (qq) "本机与 QQ 音乐听歌足迹" else "本机与网易云听歌足迹",
+            MusicIcons.Headphones, "open_listening") { navigate("user/listening") }
         SettingsDivider(52.dp)
         ProfileDestination("本地音乐", "手机上的歌曲", MusicIcons.Device, "open_local_music") { navigate("lib/local") }
     }
@@ -86,16 +102,32 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 /** Native and CurrentMusic accounts share destinations and the same list geometry. */
 @Composable internal fun ProfileServicesSection(navigate: (String) -> Unit, tasks: Boolean,
     native: Boolean = false, bound: Boolean = true,
-    navidromeConfigured: Boolean = false, embyConfigured: Boolean = false) {
+    navidromeConfigured: Boolean = false, embyConfigured: Boolean = false,
+    platform: MusicPlatform = MusicPlatform.NETEASE, qqBound: Boolean = false) {
     SettingsListSection("音乐服务") {
-        ProfileDestination(if (native && !bound) "登录网易云" else "网易云账号",
-            if (native && !bound) "需先注册并登录 CurrentMusic" else "绑定账号、同步歌单", MusicIcons.Account, "open_binding") { navigate("user/binding") }
-        if (tasks) {
+        if (platform == MusicPlatform.QQ_MUSIC) {
+            ProfileDestination(if (qqBound) "QQ 音乐账号" else "登录 QQ 音乐",
+                if (qqBound) "已连接，管理个人收藏、歌单与推荐" else "扫码登录后访问个人音乐库与推荐",
+                MusicIcons.Account, "open_qq_binding") { navigate("qq/account") }
+            SettingsDivider(52.dp)
+            ProfileDestination("收藏的专辑", "管理 QQ 音乐收藏专辑", MusicIcons.List, "open_qq_albums") {
+                navigate("qq/albums")
+            }
+        } else {
+            ProfileDestination(if (native && !bound) "登录网易云" else "网易云账号",
+                if (native && !bound) "需先注册并登录 CurrentMusic" else "绑定账号、同步歌单",
+                MusicIcons.Account, "open_binding") { navigate("user/binding") }
+        }
+        if (tasks && platform == MusicPlatform.NETEASE) {
             SettingsDivider(52.dp)
             ProfileDestination("网易云任务", "签到、云贝与会员成长", MusicIcons.Check, "open_netease_tasks") { navigate("user/netease-tasks") }
         }
-        SettingsDivider(52.dp)
-        ProfileDestination("导入歌单", "链接、文字、图片与本地歌曲", MusicIcons.Transfer, "profile_playlist_import") { navigate("user/playlist-import") }
+        if (platform == MusicPlatform.NETEASE) {
+            SettingsDivider(52.dp)
+            ProfileDestination("导入歌单", "链接、文字、图片与本地歌曲", MusicIcons.Transfer, "profile_playlist_import") {
+                navigate("user/playlist-import")
+            }
+        }
         if (navidromeConfigured) {
             SettingsDivider(52.dp)
             ProfileDestination("Navidrome 曲库", "自己的音乐服务器", MusicIcons.Storage, "profile_navidrome") { navigate("navidrome") }

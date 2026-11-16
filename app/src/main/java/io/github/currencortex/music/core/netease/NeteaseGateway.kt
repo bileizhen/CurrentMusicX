@@ -41,7 +41,16 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         put("album", album.text("name")); put("album_id", album.long("id"))
         put("pic", album.text("picUrl").ifBlank { raw.text("picUrl") }.replace("http:", "https:"))
         put("duration", raw["dt"] ?: raw["duration"] ?: JsonPrimitive(0)); put("mv", raw["mv"] ?: raw["mvid"] ?: JsonPrimitive(0))
+        put("tns", names(raw, "tns", "transNames"))
+        put("alia", names(raw, "alia", "alias"))
     }
+    private fun names(raw: JsonObject, vararg keys: String) = JsonArray(keys.flatMap { key ->
+        when (val value = raw[key]) {
+            is JsonArray -> value.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+            is JsonPrimitive -> listOfNotNull(value.contentOrNull)
+            else -> emptyList()
+        }
+    }.map(String::trim).filter(String::isNotBlank).distinct().map(::JsonPrimitive))
     /** Keeps one line of context around the hits, newline-separated, markers preserved for the UI split. */
     private fun searchLyric(raw: JsonObject): String {
         val value = raw["lyrics"]
@@ -288,6 +297,13 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 web = true, expected = expected, authenticated = true)
             "user/playlist" -> return official("/api/user/playlist", data("uid" to arg("uid"), "limit" to arg("limit", "100"),
                 "offset" to arg("offset", "0"), "includeVideo" to "true"), web = true, expected = expected, authenticated = true)
+            "user/cloud" -> {
+                val limit = page("limit", 100, min = 1, max = 1000)
+                val offset = page("offset", 0, min = 0, max = 100_000)
+                val raw = official("/api/v1/cloud/get", data("limit" to "$limit", "offset" to "$offset"),
+                    web = true, expected = expected, authenticated = true)
+                return mapCloudPage(raw, offset, limit)
+            }
             "playlist/detail" -> return official("/api/v6/playlist/detail", data("id" to id, "n" to "100000", "s" to arg("s", "0")), expected = expected)
             "playlist/tracks" -> return official("/api/playlist/manipulate/tracks", data("op" to arg("op"), "pid" to arg("pid"),
                 "trackIds" to JsonArray(arg("tracks").split(',').map(::JsonPrimitive)).toString(), "imme" to "true"), expected = expected, authenticated = true)

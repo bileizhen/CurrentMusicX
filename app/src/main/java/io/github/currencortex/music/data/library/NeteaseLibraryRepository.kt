@@ -10,6 +10,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
 
+data class CloudDrivePage(val songs: List<Song>, val total: Int, val more: Boolean, val nextOffset: Int)
+
 /** Upstream IDs stay separate from CurrentMusic's imported playlist IDs. */
 class NeteaseLibraryRepository(private val api: ApiClient, private val binding: BindingRepository,
     private val actions: NeteaseSongActionsRepository, private val session: () -> RequestSession) {
@@ -72,6 +74,33 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
                 }
             }.distinctBy { it.id }
         }
+    }
+    /** Cloud-drive entries carry their own playable song IDs. */
+    suspend fun cloudSongs(offset: Int = 0, limit: Int = 100, fresh: Boolean = false): CloudDrivePage = withContext(Dispatchers.Default) {
+        val expected = session()
+        owner(fresh)
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+        val response = request("user/cloud", mapOf("offset" to "$offset", "limit" to "$limit"), expected)
+        val rows = response["data"] as? JsonArray ?: throw ApiException(ErrorKind.Parse)
+        val songs = rows.mapNotNull { (it as? JsonObject)?.let(NeteaseSongActionsRepository::nativeSong) }
+        val count = response["count"]?.jsonPrimitive?.intOrNull ?: songs.size
+        val hasMore = response["hasMore"]?.jsonPrimitive?.booleanOrNull ?: (offset + songs.size < count)
+        val nextOffset = response["nextOffset"]?.jsonPrimitive?.intOrNull ?: (offset + rows.size)
+        CloudDrivePage(songs, maxOf(count, nextOffset), hasMore, nextOffset)
+    }
+    suspend fun cloudLibrary(fresh: Boolean = false): List<Song> {
+        val expected = session()
+        val songs = mutableListOf<Song>()
+        var offset = 0
+        do {
+            val page = cloudSongs(offset, fresh = fresh && offset == 0)
+            if (expected != session()) throw ApiException(ErrorKind.NeteaseSessionChanged)
+            songs += page.songs
+            if (!page.more) break
+            if (page.nextOffset <= offset) throw ApiException(ErrorKind.Parse)
+            offset = page.nextOffset
+        } while (true)
+        return songs.distinctBy(Song::id)
     }
     private suspend fun songs(ids: List<Long>, expected: RequestSession, known: List<Song> = emptyList()): List<Song> {
         val found = known.associateByTo(mutableMapOf()) { it.id }
