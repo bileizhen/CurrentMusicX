@@ -176,9 +176,6 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
                     }
                     QqPage(if (account.loggedIn) "每日推荐" else "新歌推荐", songs = dailySongs, playlists = lists)
                 }
-                route == "qq/daily" -> repository.daily().let {
-                    QqPage(if (account.loggedIn) "每日推荐" else "新歌推荐", "今天的专属歌单", songs = it.songs)
-                }
                 route == "qq/foryou" -> QqPage("猜你喜欢", "沿着喜欢的旋律继续探索",
                     songs = if (account.loggedIn) repository.guessYouLike() else emptyList())
                 route == "qq/recent" -> if (account.loggedIn) repository.listeningRankPage().let {
