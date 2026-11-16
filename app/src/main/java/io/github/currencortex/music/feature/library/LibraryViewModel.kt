@@ -344,6 +344,8 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
     private val kind = route.split('/')[1]
     val id = route.substringAfterLast('/').toLongOrNull() ?: 0
     private val qqPlaylist = route in setOf("qq/likes", "qq/recent") || kind == "playlist" && route.startsWith("qq/")
+    private val qqDaily = route == "qq/daily"
+    private val qqNative = qqPlaylist || qqDaily
     private val qqLikedSongs = route == "qq/likes"
     val remotePlaylistId = java.net.URLDecoder.decode(route.substringAfterLast('/'), "UTF-8")
     fun editable(playlist: Playlist?, accountId: Long) = playlist?.let {
@@ -412,14 +414,14 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
             combine(container.accountRepository.state.map { it.account?.id }.distinctUntilChanged(),
                 container.musicSettings.state.map { it.server }.distinctUntilChanged(), container.libraryRepository.revision,
                 container.primaryLibrary.identity, container.neteaseLibrary.revision,
-                container.qqMusic.state.map { if (qqPlaylist) it.revision else 0L }.distinctUntilChanged(),
+                container.qqMusic.state.map { if (qqNative) it.revision else 0L }.distinctUntilChanged(),
                 container.accountRepository.sessionRevision,
                 // Native heart changes update the row icons directly. They do not change
                 // a CurrentMusic playlist's membership, including during bulk imports.
                 container.neteaseSongActions.revision.map { if (kind == "playlist") 0L else it }.distinctUntilChanged()) { keys -> keys.toList() }
                 .combine(container.neteaseSessions.state.map { it.profile?.uid }.distinctUntilChanged()) { keys, uid -> keys + uid }
                 .collectLatest { keys ->
-                    val nextIdentity = if (qqPlaylist) keys + container.qqMusic.audioIdentity
+                    val nextIdentity = if (qqNative) keys + container.qqMusic.audioIdentity
                     else keys.take(2) + listOfNotNull(keys[5], keys.last())
                     if (identity != nextIdentity) {
                         task?.cancel()
@@ -434,13 +436,20 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
         // Repeated pulls share the in-flight request; refresh only this resource's cache.
         if (force && task?.isActive == true) return
         task?.cancel()
-        val expectedQqIdentity = if (qqPlaylist) container.qqMusic.audioIdentity else null
+        val expectedQqIdentity = if (qqNative) container.qqMusic.audioIdentity else null
         val previous = state.value
         state.value = previous.copy(loading = !previous.loaded || more,
             refreshing = previous.loaded && !more, error = null, refreshError = null)
         task = viewModelScope.launch {
             when (val result = appResult {
                 when (kind) {
+                    "daily" if qqDaily -> {
+                        val songs = container.qqMusic.daily().songs
+                        previous.copy(title = if (container.qqMusic.state.value.loggedIn) "每日推荐" else "新歌推荐",
+                            description = if (container.qqMusic.state.value.loggedIn) "今天的专属歌单" else "QQ 音乐新歌推荐",
+                            cover = songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty(),
+                            songs = songs)
+                    }
                     "daily", "foryou" -> container.libraryRepository.daily(fresh = force).let { previous.copy(title = if (kind == "daily") "每日推荐" else "猜你喜欢", songs = if (kind == "daily") it.songs else it.forYou) }
                     "likes" if qqLikedSongs -> {
                         val songs = container.qqMusic.likedSongs()

@@ -130,7 +130,8 @@ private fun isPlaylistRoute(route: String) = route == "lib/local" ||
     route.startsWith("lib/playlist/") || route.startsWith("lib/ncmplaylist/") ||
     route.startsWith("lib/album/") || route.startsWith("qq/playlist/") ||
     route.startsWith("qq/album/") ||
-    route in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent", "lib/cloud", "qq/likes", "qq/recent")
+    route in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent", "lib/cloud",
+        "qq/daily", "qq/likes", "qq/recent")
 
 /** QQ albums use the playlist artwork chrome but do not implement its shelf/ribbon overlays. */
 private fun supportsPlaylistOverlay(route: String) =
@@ -900,7 +901,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             "qq/community-profile" -> MeScreen(profileVm, authVm, ::navigateLibrary, { selectTab(SETTINGS_TAB) },
                                 play = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
                                 platform = io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC)
-                            else if (route.startsWith("qq/playlist/") || route in setOf("qq/likes", "qq/recent")) -> {
+                            else if (route.startsWith("qq/playlist/") || route in setOf("qq/daily", "qq/likes", "qq/recent")) -> {
                                 val detailVm: LibraryDetailViewModel = viewModel(key = route,
                                     factory = viewModelFactory { LibraryDetailViewModel(container, route) })
                                 LibraryDetailScreen(detailVm, libraryVm, ::navigateBack, ::navigateLibrary,
