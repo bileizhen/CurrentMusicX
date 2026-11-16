@@ -10,6 +10,8 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
 
+data class CloudDrivePage(val songs: List<Song>, val total: Int, val more: Boolean, val nextOffset: Int)
+
 /** Upstream IDs stay separate from CurrentMusic's imported playlist IDs. */
 class NeteaseLibraryRepository(private val api: ApiClient, private val binding: BindingRepository,
     private val actions: NeteaseSongActionsRepository, private val session: () -> RequestSession) {
@@ -29,6 +31,8 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
             ?: throw ApiException(ErrorKind.Parse)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         val code = response["code"]?.jsonPrimitive?.intOrNull
+        if (code == 502 && path == "playlist/tracks" && query["op"] == "add")
+            throw ApiException(ErrorKind.NeteaseSongAlreadyInPlaylist, 502)
         if (code != null && code != 200) throw ApiException(if (code in listOf(301, 401)) ErrorKind.NeteaseBindingRequired else ErrorKind.Server, code)
         return response
     }
@@ -70,6 +74,33 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
                 }
             }.distinctBy { it.id }
         }
+    }
+    /** Cloud-drive entries carry their own playable song IDs. */
+    suspend fun cloudSongs(offset: Int = 0, limit: Int = 100, fresh: Boolean = false): CloudDrivePage = withContext(Dispatchers.Default) {
+        val expected = session()
+        owner(fresh)
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+        val response = request("user/cloud", mapOf("offset" to "$offset", "limit" to "$limit"), expected)
+        val rows = response["data"] as? JsonArray ?: throw ApiException(ErrorKind.Parse)
+        val songs = rows.mapNotNull { (it as? JsonObject)?.let(NeteaseSongActionsRepository::nativeSong) }
+        val count = response["count"]?.jsonPrimitive?.intOrNull ?: songs.size
+        val hasMore = response["hasMore"]?.jsonPrimitive?.booleanOrNull ?: (offset + songs.size < count)
+        val nextOffset = response["nextOffset"]?.jsonPrimitive?.intOrNull ?: (offset + rows.size)
+        CloudDrivePage(songs, maxOf(count, nextOffset), hasMore, nextOffset)
+    }
+    suspend fun cloudLibrary(fresh: Boolean = false): List<Song> {
+        val expected = session()
+        val songs = mutableListOf<Song>()
+        var offset = 0
+        do {
+            val page = cloudSongs(offset, fresh = fresh && offset == 0)
+            if (expected != session()) throw ApiException(ErrorKind.NeteaseSessionChanged)
+            songs += page.songs
+            if (!page.more) break
+            if (page.nextOffset <= offset) throw ApiException(ErrorKind.Parse)
+            offset = page.nextOffset
+        } while (true)
+        return songs.distinctBy(Song::id)
     }
     private suspend fun songs(ids: List<Long>, expected: RequestSession, known: List<Song> = emptyList()): List<Song> {
         val found = known.associateByTo(mutableMapOf()) { it.id }
@@ -151,7 +182,9 @@ class NeteaseLibraryRepository(private val api: ApiClient, private val binding: 
             ?: throw ApiException(ErrorKind.Forbidden)
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         try {
-            if (target.nativeLiked) tracks.forEach { (songId, song) -> actions.setLiked(songId, true, expected, song) }
+            if (target.nativeLiked) tracks.forEach { (songId, song) ->
+                actions.setLiked(songId, true, expected, song, expectedUid = uid)
+            }
             else request("playlist/tracks", mapOf("pid" to "$id", "tracks" to tracks.keys.joinToString(","), "op" to "add", "confirm" to "1"), expected)
         } finally { invalidate() }
     }
@@ -226,10 +259,9 @@ class PrimaryMusicLibrary(private val current: LibraryRepository, private val ne
     }.stateIn(scope, SharingStarted.Eagerly, Triple(false, 0L, false))
     val usesNetease = identity.map { it.first }.stateIn(scope, SharingStarted.Eagerly, false)
     suspend fun resolveNetease(): Boolean = settings.snapshot().neteaseMainLibrary && binding.cachedStatus().bound
-    val likesUseNetease = combine(binding.state, settings.state.map { it.likeMode }.distinctUntilChanged()) { bound, mode ->
-        mode.useNetease(bound?.bound == true)
-    }.stateIn(scope, SharingStarted.Eagerly, false)
-    suspend fun resolveLikeNetease(): Boolean = settings.snapshot().likeMode.useNetease(binding.cachedStatus().bound)
+    val likesUseNetease = binding.state.map { it?.let { value -> value.bound && !value.stale } == true }
+        .stateIn(scope, SharingStarted.Eagerly, false)
+    suspend fun resolveLikeNetease(): Boolean = binding.cachedStatus().let { it.bound && !it.stale }
     suspend fun playlists(fresh: Boolean = false): List<Playlist> = coroutineScope {
         if (fresh) current.clearReads()
         // Imported NetEase playlists are snapshots with CurrentMusic IDs. Once the live
@@ -250,5 +282,5 @@ class PrimaryMusicLibrary(private val current: LibraryRepository, private val ne
         }
         combined.distinctBy { it.source to it.id }
     }
-    suspend fun likedPlaylist(fresh: Boolean = false): Playlist? = if (resolveNetease()) netease.likedPlaylist(fresh) else null
+    suspend fun likedPlaylist(fresh: Boolean = false): Playlist? = if (resolveLikeNetease()) netease.likedPlaylist(fresh) else null
 }

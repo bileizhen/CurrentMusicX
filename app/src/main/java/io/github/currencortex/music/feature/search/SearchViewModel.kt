@@ -9,6 +9,7 @@ import io.github.currencortex.music.data.local.SearchHistoryEntity
 import io.github.currencortex.music.data.song.SearchLyricContext
 import io.github.currencortex.music.data.song.SearchBackend
 import io.github.currencortex.music.data.song.Song
+import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.data.settings.LyricsSource
 import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
 import kotlinx.coroutines.*
@@ -37,13 +38,34 @@ data class SearchUiState(val query: String = "", val submitted: String = "", val
     val error get() = page.error
 }
 
+internal fun searchCategoriesFor(platform: MusicPlatform, roomSearch: Boolean = false): List<SearchCategory> =
+    if (roomSearch) listOf(SearchCategory.SONG, SearchCategory.LYRIC)
+    else if (platform == MusicPlatform.QQ_MUSIC)
+        listOf(SearchCategory.SONG, SearchCategory.PLAYLIST, SearchCategory.ALBUM, SearchCategory.ARTIST)
+    else SearchCategory.entries
+
+internal fun SearchCategory.labelFor(platform: MusicPlatform): String =
+    if (platform == MusicPlatform.QQ_MUSIC && this == SearchCategory.ARTIST) "歌手" else label
+
 data class HotSearchWord(val text: String, val description: String = "", val displayText: String = text)
 data class SearchLandingState(val words: List<HotSearchWord> = emptyList(), val loading: Boolean = false, val loaded: Boolean = false, val error: String? = null)
 
 data class SearchSuggestions(val query: String = "", val words: List<String> = emptyList(), val loading: Boolean = false)
 
+private data class SearchOwner(val server: String, val platform: MusicPlatform, val qqRevision: Long)
+
 class SearchViewModel(private val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(SearchUiState())
+    private var activeOwner = SearchOwner(
+        container.musicSettings.state.value.server,
+        container.musicSettings.state.value.musicPlatform,
+        container.qqMusic.state.value.revision,
+    )
+    private val mutablePlatform = MutableStateFlow(activeOwner.platform)
+    val platform: StateFlow<MusicPlatform> = mutablePlatform.asStateFlow()
+    private var neteaseRoomMode = false
+    private val mutableOwnerRevision = MutableStateFlow(0L)
+    val ownerRevision: StateFlow<Long> = mutableOwnerRevision.asStateFlow()
     val suggestions = MutableStateFlow(SearchSuggestions())
     private var suggestionJob: Job? = null
     val charts = MutableStateFlow(SearchChartsState())
@@ -59,14 +81,52 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
     private var generation = 0
     init { viewModelScope.launch {
         container.ready.await()
-        container.musicSettings.state.map { it.server }.distinctUntilChanged().drop(1).collect {
+        var previousOwner: SearchOwner? = null
+        combine(
+            container.musicSettings.state.map { it.server to it.musicPlatform }.distinctUntilChanged(),
+            container.qqMusic.state.map { it.revision }.distinctUntilChanged(),
+        ) { settings, qqRevision ->
+            SearchOwner(settings.first, settings.second, qqRevision)
+        }.distinctUntilChanged().collect { owner ->
+            val previous = previousOwner
+            previousOwner = owner
+            if (previous == null) {
+                activeOwner = owner
+                mutablePlatform.value = currentPlatform()
+                return@collect
+            }
+            val platformChanged = previous.platform != owner.platform
+            val serverChanged = previous.server != owner.server
+            val qqRevisionChanged = previous.qqRevision != owner.qqRevision
+            if (!platformChanged && !serverChanged && !qqRevisionChanged) return@collect
             cancelRequests()
             suggestionJob?.cancel(); suggestions.value = SearchSuggestions()
             landingJob?.cancel(); landing.value = SearchLandingState()
             chartsJob?.cancel(); chartJobs.values.forEach(Job::cancel); chartJobs.clear(); charts.value = SearchChartsState()
-            state.value = SearchUiState(query = state.value.query, category = state.value.category)
+            val resetCategory = platformChanged ||
+                (owner.platform == MusicPlatform.QQ_MUSIC && qqRevisionChanged)
+            state.value = SearchUiState(query = state.value.query,
+                category = if (resetCategory) SearchCategory.SONG else state.value.category)
+            // Publish the new owner only after stale work and results have been cleared. The
+            // screen can then restart landing work without racing this collector.
+            activeOwner = owner
+            mutablePlatform.value = currentPlatform()
+            mutableOwnerRevision.value++
         }
     } }
+    private fun currentPlatform() = if (neteaseRoomMode) MusicPlatform.NETEASE else activeOwner.platform
+    private fun currentOwner() = activeOwner
+    fun setNeteaseRoomMode(enabled: Boolean) {
+        if (neteaseRoomMode == enabled) return
+        neteaseRoomMode = enabled
+        cancelRequests()
+        suggestionJob?.cancel(); suggestions.value = SearchSuggestions()
+        landingJob?.cancel(); landing.value = SearchLandingState()
+        chartsJob?.cancel(); chartJobs.values.forEach(Job::cancel); chartJobs.clear(); charts.value = SearchChartsState()
+        state.value = SearchUiState()
+        mutablePlatform.value = currentPlatform()
+        mutableOwnerRevision.value++
+    }
     private fun cancelRequests() {
         ++generation
         requests.values.forEach(Job::cancel)
@@ -87,15 +147,22 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
         suggestionJob = viewModelScope.launch {
             delay(250)
             container.ready.await()
-            val server = container.musicSettings.state.value.server
+            val expectedOwner = currentOwner()
+            val platform = currentPlatform()
             suggestions.value = SearchSuggestions(query, loading = true)
-            val result = container.musicRepository.searchSuggestions(query)
+            val result = if (platform == MusicPlatform.QQ_MUSIC)
+                appResult { container.qqMusic.suggestions(query).distinct().take(8) }
+            else container.musicRepository.searchSuggestions(query)
             ensureActive()
-            if (state.value.query.trim() == query && server == container.musicSettings.state.value.server)
+            if (state.value.query.trim() == query && expectedOwner == currentOwner() && platform == currentPlatform())
                 suggestions.value = SearchSuggestions(query, (result as? AppResult.Success)?.value.orEmpty())
         }
     }
     fun loadCharts(retry: Boolean = false) {
+        if (currentPlatform() == MusicPlatform.QQ_MUSIC) {
+            if (retry || !charts.value.loaded) charts.value = SearchChartsState(loaded = true)
+            return
+        }
         if (chartsJob?.isActive == true || (charts.value.loaded && !retry)) return
         charts.value = charts.value.copy(loading = true, error = null)
         chartsJob = viewModelScope.launch {
@@ -113,6 +180,7 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
     fun loadChart(id: String, retry: Boolean = false) {
+        if (currentPlatform() == MusicPlatform.QQ_MUSIC) return
         if (chartJobs[id]?.isActive == true || (charts.value.pages[id]?.loaded == true && !retry)) return
         charts.update { it.copy(pages = it.pages + (id to SearchChartPage(loading = true))) }
         chartJobs[id] = viewModelScope.launch {
@@ -131,13 +199,18 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
     fun loadLanding(retry: Boolean = false) {
-        loadCharts(retry)
+        val expectedOwner = currentOwner()
+        val platform = currentPlatform()
+        if (platform == MusicPlatform.QQ_MUSIC) {
+            if (retry || !charts.value.loaded) charts.value = SearchChartsState(loaded = true)
+        } else loadCharts(retry)
         if (landingJob?.isActive == true || (landing.value.loaded && !retry)) return
         landing.value = landing.value.copy(loading = true, error = null)
         landingJob = viewModelScope.launch {
             container.ready.await()
-            val server = container.musicSettings.state.value.server
-            val result = appResult {
+            val result = if (platform == MusicPlatform.QQ_MUSIC) appResult {
+                container.qqMusic.hotSearch().distinct().map { HotSearchWord(it) }
+            } else appResult {
                 val expected = container.musicSession()
                 val data = container.apiClient.request("GET", "ncm/search/hot/detail", authenticated = expected.token != null, expectedSession = expected).jsonObject
                 if (data["code"]?.jsonPrimitive?.intOrNull?.let { it != 200 } == true) throw ApiException(ErrorKind.Server)
@@ -146,7 +219,8 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
                     word.takeIf(String::isNotBlank)?.let { HotSearchWord(it, item.jsonObject["content"]?.jsonPrimitive?.contentOrNull.orEmpty()) }
                 }.distinctBy { it.text }
             }
-            if (server != container.musicSettings.state.value.server) return@launch
+            ensureActive()
+            if (expectedOwner != currentOwner() || platform != currentPlatform()) return@launch
             landing.value = when (result) {
                 is AppResult.Success -> SearchLandingState(words = result.value, loaded = true)
                 is AppResult.Failure -> SearchLandingState(loaded = true, error = result.kind.message)
@@ -154,31 +228,50 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
         }
     }
     fun select(category: SearchCategory) {
-        if (category == state.value.category) return
-        state.update { it.copy(category = category) }
-        val page = state.value.pages[category]
+        val target = category.takeIf { it in searchCategoriesFor(currentPlatform()) } ?: return
+        if (target == state.value.category) return
+        state.update { it.copy(category = target) }
+        val page = state.value.pages[target]
         // A tab uses the submitted keyword, never a half-edited search field.
-        if (state.value.searched && page == null) load(category)
+        if (state.value.searched && page == null) load(target)
     }
     fun search(value: String = state.value.query, more: Boolean = false) {
+        val platform = currentPlatform()
+        val category = state.value.category.takeIf { it in searchCategoriesFor(platform) } ?: SearchCategory.SONG
         if (more) {
             val before = state.value
-            if (before.searched && before.more && !before.loading) load(before.category, append = true)
+            val target = before.category.takeIf { it in searchCategoriesFor(platform) } ?: SearchCategory.SONG
+            if (before.searched && before.more && !before.loading) load(target, append = true)
             return
         }
         val query = value.trim()
         if (query.isBlank()) return
         cancelRequests()
         suggestionJob?.cancel(); suggestions.value = SearchSuggestions()
-        state.update { SearchUiState(query = query, submitted = query, category = it.category) }
+        state.update { SearchUiState(query = query, submitted = query, category = category) }
         load(state.value.category, rememberHistory = true)
     }
     fun retry() {
         val before = state.value
-        if (before.searched && !before.loading) load(before.category, append = before.page.loaded && before.more)
+        val category = before.category.takeIf { it in searchCategoriesFor(currentPlatform()) } ?: SearchCategory.SONG
+        if (before.searched && !before.loading) load(category, append = before.page.loaded && before.more)
     }
-    private suspend fun fetch(category: SearchCategory, query: String, offset: Int, backend: SearchBackend?): AppResult<SearchCategoryPage> =
-        if (category == SearchCategory.SONG || category == SearchCategory.LYRIC) when (val result =
+    private suspend fun fetch(category: SearchCategory, query: String, offset: Int, backend: SearchBackend?,
+        platform: MusicPlatform): AppResult<SearchCategoryPage> =
+        if (platform == MusicPlatform.QQ_MUSIC) when (val result = appResult {
+            container.qqMusic.search(query, offset, category.route)
+        }) {
+            is AppResult.Success -> AppResult.Success(SearchCategoryPage(
+                songs = result.value.songs,
+                entries = result.value.entries.map { entry ->
+                    CatalogEntry(0L, entry.name, entry.cover, entry.subtitle, entry.id)
+                },
+                total = result.value.total,
+                nextOffset = offset + 30,
+                more = result.value.hasMore,
+            ))
+            is AppResult.Failure -> result
+        } else if (category == SearchCategory.SONG || category == SearchCategory.LYRIC) when (val result =
             if (category == SearchCategory.LYRIC) container.musicRepository.searchLyrics(query, offset, backend) else container.musicRepository.search(query, offset, backend)) {
             is AppResult.Success -> AppResult.Success(SearchCategoryPage(songs = result.value.songs,
                 total = result.value.total, nextOffset = offset + result.value.upstreamCount, more = result.value.hasMore,
@@ -193,25 +286,27 @@ class SearchViewModel(private val container: AppContainer) : ViewModel() {
             is AppResult.Failure -> result
         }
     private fun load(category: SearchCategory, append: Boolean = false, rememberHistory: Boolean = false) {
+        val platform = currentPlatform()
+        val target = category.takeIf { it in searchCategoriesFor(platform) } ?: SearchCategory.SONG
         val before = state.value
-        if (before.submitted.isBlank() || requests[category]?.isActive == true) return
-        val old = if (append) before.pages[category] ?: SearchCategoryPage() else SearchCategoryPage()
+        if (before.submitted.isBlank() || requests[target]?.isActive == true) return
+        val old = if (append) before.pages[target] ?: SearchCategoryPage() else SearchCategoryPage()
         val requestGeneration = generation
-        state.update { it.copy(pages = it.pages + (category to old.copy(loading = true, error = null))) }
-        requests[category] = viewModelScope.launch {
+        state.update { it.copy(category = target, pages = it.pages + (target to old.copy(loading = true, error = null))) }
+        requests[target] = viewModelScope.launch {
             container.ready.await()
             if (rememberHistory) container.database.music().remember(SearchHistoryEntity(before.submitted, System.currentTimeMillis()))
-            val result = fetch(category, before.submitted, old.nextOffset, old.backend)
+            val result = fetch(target, before.submitted, old.nextOffset, old.backend, platform)
             ensureActive()
             if (requestGeneration != generation) return@launch
             state.update { current ->
                 // Backfills may finish while fetch is suspended. Merge against the latest page,
                 // including on failure, rather than restoring the pre-request snapshot.
-                val latest = current.pages[category] ?: old
+                val latest = current.pages[target] ?: old
                 val page = completeSearchPage(latest, result, append)
-                current.copy(pages = current.pages + (category to page))
+                current.copy(pages = current.pages + (target to page))
             }
-            if (category == SearchCategory.LYRIC && result is AppResult.Success) {
+            if (target == SearchCategory.LYRIC && result is AppResult.Success) {
                 result.value.songs.forEach { lyricOffsets[it.id] = old.nextOffset }
                 backfillLyricContexts(before.submitted, requestGeneration, result.value.songs, result.value.matchedLyrics)
             }
@@ -277,7 +372,7 @@ internal fun completeSearchPage(current: SearchCategoryPage, result: AppResult<S
             val previous = if (append) current else SearchCategoryPage()
             val incoming = result.value
             val songs = (previous.songs + incoming.songs).distinctBy(Song::id)
-            val entries = (previous.entries + incoming.entries).distinctBy(CatalogEntry::id)
+            val entries = (previous.entries + incoming.entries).distinctBy(CatalogEntry::stableId)
             val lyrics = previous.matchedLyrics.toMutableMap()
             incoming.matchedLyrics.forEach { (id, context) ->
                 val existing = lyrics[id]?.takeIf { context.status == null && it.matched == context.matched }

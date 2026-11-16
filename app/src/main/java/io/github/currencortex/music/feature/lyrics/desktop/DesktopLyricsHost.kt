@@ -59,6 +59,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private var composition: ComposeView? = null
     private var islandTouchView: View? = null
     private var islandTouchParams: WindowManager.LayoutParams? = null
+    private var islandTouching = false
     private var islandSize = androidx.compose.ui.unit.IntSize.Zero
     private var islandTop: Int? = null
     private var coverBounds = androidx.compose.ui.geometry.Rect.Zero
@@ -70,6 +71,8 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
     private val recognizing get() = RecognitionDesktopSession.attached.value
     private val islandMaximumWidth = androidx.compose.runtime.mutableFloatStateOf(640f)
     private val islandTapRequest = androidx.compose.runtime.mutableIntStateOf(0)
+    private val islandCollapsed = MutableStateFlow(false)
+    private var collapseTransitioning = false
     private var effectTransitioning = effectNotices.value != null
     private var current = DesktopLyricsSettings()
     private var refreshRate = appearance.value.refreshRate
@@ -151,11 +154,17 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                 val lyricFont = io.github.currencortex.music.feature.lyrics.ui.rememberLyricsFont(lyricSettings)
                 androidx.compose.runtime.CompositionLocalProvider(io.github.currencortex.music.ui.theme.LocalCustomFont provides customFont,
                     io.github.currencortex.music.feature.lyrics.ui.LocalLyricsFont provides lyricFont) {
-                Box(Modifier.musicRefreshRate(config.refreshRate), propagateMinConstraints = true) {
+                Box(Modifier.musicRefreshRate(config.refreshRate), propagateMinConstraints = false) {
                 val inApp by appForeground.collectAsState()
+                val collapsed by islandCollapsed.collectAsState()
                 DesktopLyricsSurface(lyrics, playback, preferences.state, audioLevel = audioLevel, effectNotices = effectNotices, installUpdate = installUpdate, noticeOnly = inApp,
                 maxIslandWidth = { islandMaximumWidth.floatValue },
                 islandTapRequest = islandTapRequest.intValue,
+                collapsed = collapsed,
+                onCollapseTransition = { animating ->
+                    collapseTransitioning = animating
+                    if (!animating) updateIslandTouchWindow()
+                },
                 changeSong = changeSong,
                 togglePlayback = togglePlayback,
                 onCoverBounds = { coverBounds = it },
@@ -254,10 +263,12 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
             !status.value.visible || islandTop == null || islandSize.width <= 0 || islandSize.height <= 0) {
             removeIslandTouchWindow(); return
         }
-        val width = islandSize.width.coerceAtMost(visualParams.width)
-        val height = islandSize.height.coerceAtMost(root.height).coerceAtLeast(1)
-        val x = visualParams.x + (visualParams.width - width) / 2
-        val y = visualParams.y + contentTop.coerceIn(0, (root.height - height).coerceAtLeast(0))
+        val bounds = desktopIslandTouchBounds(visualParams.x, visualParams.y, visualParams.width, contentTop,
+            islandSize, root.height, if (islandCollapsed.value) 48 else 0, visual.resources.displayMetrics.density)
+        val width = bounds.width()
+        val height = bounds.height()
+        val x = bounds.left
+        val y = bounds.top
         val target = islandTouchView
         if (target == null) {
             val input = View(visual).apply {
@@ -265,6 +276,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                     if (recognizing) RecognitionDesktopService.islandAction(context)
                     else if (effectNotices.value?.action != null) effectNotices.value?.action?.invoke?.invoke()
                     else if (effectNotices.value.isUpdateInstallNotice()) installUpdate()
+                    else if (islandCollapsed.value) setIslandCollapsed(false)
                     else if (effectNotices.value == null) islandTapRequest.intValue++
                 }
                 setOnLongClickListener {
@@ -285,6 +297,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                             if (effectNotices.value.isActionableIslandNotice()) performClick()
                             return true
                         }
+                        if (islandCollapsed.value) { performClick(); return true }
                         val origin = params ?: return false
                         if (coverBounds.contains(androidx.compose.ui.geometry.Offset(e.rawX - origin.x,
                                 e.rawY - origin.y - (composition?.top ?: 0)))) {
@@ -294,21 +307,45 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                         return performClick()
                     }
                     override fun onLongPress(e: MotionEvent) { held = true; performLongClick() }
+                    override fun onFling(first: MotionEvent?, last: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
+                        if (recognizing || effectNotices.value != null) return false
+                        val threshold = 32 * resources.displayMetrics.density
+                        val dy = if (first == null) 0f else last.rawY - first.rawY
+                        val dx = if (first == null) 0f else last.rawX - first.rawX
+                        when (desktopIslandGesture(dx, dy, threshold, islandCollapsed.value)) {
+                            DesktopIslandGesture.COLLAPSE -> setIslandCollapsed(true)
+                            DesktopIslandGesture.EXPAND -> setIslandCollapsed(false)
+                            else -> return false
+                        }
+                        held = true
+                        return true
+                    }
                     override fun onScroll(first: MotionEvent?, last: MotionEvent, dx: Float, dy: Float) = true
                 }).apply { setOnDoubleTapListener(null) }
                 setOnTouchListener { _, event ->
+                    if (event.actionMasked == MotionEvent.ACTION_DOWN) islandTouching = true
                     // A transient effect result never controls the song or changes the saved display mode.
                     if (!recognizing && effectNotices.value != null && !effectNotices.value.isActionableIslandNotice()) return@setOnTouchListener true
                     gestures.onTouchEvent(event)
                     if (event.actionMasked == MotionEvent.ACTION_UP && !held) {
                         val dx = event.rawX - startX; val dy = event.rawY - startY
-                        if (!recognizing && effectNotices.value == null && kotlin.math.abs(dx) >= 32 * resources.displayMetrics.density &&
-                            kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.25f && playback.value.song != null && playback.value.canControlPlayback)
-                            changeSong(if (dx < 0f) 1 else -1)
+                        if (!recognizing && effectNotices.value == null) {
+                            when (desktopIslandGesture(dx, dy, 32 * resources.displayMetrics.density, islandCollapsed.value)) {
+                                DesktopIslandGesture.COLLAPSE -> setIslandCollapsed(true)
+                                DesktopIslandGesture.EXPAND -> setIslandCollapsed(false)
+                                DesktopIslandGesture.PREVIOUS -> if (playback.value.song != null && playback.value.canControlPlayback) changeSong(-1)
+                                DesktopIslandGesture.NEXT -> if (playback.value.song != null && playback.value.canControlPlayback) changeSong(1)
+                                DesktopIslandGesture.NONE -> Unit
+                            }
+                        }
+                    }
+                    if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) {
+                        islandTouching = false
+                        updateIslandTouchWindow()
                     }
                     true
                 }
-                contentDescription = "灵动岛：点击封面播放或暂停，点击歌词切换帧率，左右滑动切歌"
+                contentDescription = islandContentDescription()
             }
             val p = WindowManager.LayoutParams(width, height, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
@@ -322,7 +359,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
                 status.value = status.value.copy(islandTouchable = true)
             }
             catch (failure: RuntimeException) { android.util.Log.w("DesktopLyrics", "Cannot add island tap target", failure) }
-        } else islandTouchParams?.let { p ->
+        } else if (!islandTouching && !collapseTransitioning) islandTouchParams?.let { p ->
             if (p.x != x || p.y != y || p.width != width || p.height != height) {
                 p.x = x; p.y = y; p.width = width; p.height = height
                 try { window.updateViewLayout(target, p) } catch (_: RuntimeException) { removeIslandTouchWindow() }
@@ -331,8 +368,15 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         islandTouchView?.contentDescription = if (recognizing) "${io.github.currencortex.music.feature.recognition.recognitionIslandTitle(RecognitionDesktopSession.state.value)}，听歌识曲，点击识别或查看结果，长按关闭"
             else if (effectNotices.value?.action != null) "${effectNotices.value?.message}，点击${effectNotices.value?.action?.label}"
             else if (effectNotices.value.isUpdateInstallNotice()) "CurrentMusic 更新下载完成，点击查看"
-            else "灵动岛：点击封面播放或暂停，点击歌词切换帧率，左右滑动切歌"
+            else islandContentDescription()
     }
+    private fun setIslandCollapsed(collapsed: Boolean) {
+        if (islandCollapsed.value == collapsed) return
+        islandCollapsed.value = collapsed
+        updateIslandTouchWindow()
+    }
+    private fun islandContentDescription() = if (islandCollapsed.value) "桌面歌词已收起，点击或下滑展开"
+        else "灵动岛：点击封面播放或暂停，点击歌词切换帧率，左右滑动切歌，上滑收起"
     private fun placement(area: DesktopSafeArea, width: Int, height: Int): DesktopPlacement {
         // The pill may cross bar and cutout insets; only the physical bounds keep it on screen.
         val bounds = if (Build.VERSION.SDK_INT >= 30) window.maximumWindowMetrics.bounds else null
@@ -395,7 +439,7 @@ class DesktopLyricsHost(private val context: Context, private val lyrics: StateF
         val open = PendingIntent.getActivity(context, 813, settingsIntent(context), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notice = NotificationCompat.Builder(context, CHANNEL).setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle("桌面歌词")
-            .setContentText("点击切换歌词与帧率 · 左右滑动切歌 · 点击通知调整高度")
+            .setContentText("点击切换歌词与帧率 · 左右切歌 · 上滑收起 · 点击通知调整高度")
             .setContentIntent(open).setOngoing(true).setOnlyAlertOnce(true).setSilent(true)
             .addAction(0, "设置", open).addAction(0, "关闭", command(CLOSE, 812)).build()
         try { notifications.notify(NOTICE, notice) } catch (_: SecurityException) { /* The settings page can still disable the overlay. */ }

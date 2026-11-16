@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 @androidx.annotation.Keep
 internal object NeteaseUsbBridge {
-    const val ADAPTER = "ncm-usb-v3-status-init"
+    const val ADAPTER = "ncm-usb-v4-high-rate-write-retry"
     const val SHA256 = "150daa62df3b2f5a9b9bb5d54a3108e90495e50853c4b5ac7df3f63137f70a7a"
     private var loaded = false
     @Synchronized fun load(context: Context) {
@@ -49,6 +49,7 @@ internal object NeteaseUsbBridge {
     external fun diagnostics(): String
     external fun testFormatSelection(): Boolean
     external fun testTransferState(raw: Int, detached: Boolean): Boolean
+    external fun testWritePolicy(): Boolean
     external fun write(handle: Long, buffer: ByteBuffer, offset: Int, bytes: Int): Int
     external fun play(handle: Long, playing: Boolean)
     external fun position(handle: Long): Long
@@ -94,7 +95,8 @@ internal class NeteaseUsbStream private constructor(
             "描述符声明 ${declared.formats.size} 个 PCM alternate：${entries.ifBlank { "无可解析声明" }}；实际接受能力未验证"
         }
         return io.github.currencortex.music.core.media.engine.UsbOutputSnapshot(deviceLabel,
-            io.github.currencortex.music.core.media.engine.AudioPcmFormat(wire.rate, wire.encoding, wire.channels), capability)
+            io.github.currencortex.music.core.media.engine.AudioPcmFormat(wire.rate, wire.encoding, wire.channels), capability,
+            outputImpl.bufferSizeInFrames)
     }
     private val detached = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -208,7 +210,7 @@ private class OriginalUsbOutput(private val session: NeteaseUsbSession, private 
     override fun isOffloadedPlayback() = false
     override fun getAudioSessionId() = C.AUDIO_SESSION_ID_UNSET
     override fun getSampleRate() = session.pcm.rate
-    override fun getBufferSizeInFrames() = sampleRate / 10L
+    override fun getBufferSizeInFrames() = sampleRate * session.pcm.bufferDurationMs / 1000L
     override fun getPlaybackParameters() = PlaybackParameters.DEFAULT
     override fun isStalled() = false
     override fun addListener(listener: AudioOutput.Listener) { listeners += listener }

@@ -48,9 +48,13 @@ class ApiClient(
     suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
                         body: JsonElement? = null, authenticated: Boolean = false, expectedSession: RequestSession? = null,
                         retryConnection: Boolean = true, callTimeoutMillis: Long? = null,
-                        projectOnly: Boolean = false, passkeyOrigin: String? = null): JsonElement = withContext(Dispatchers.IO) {
+                        projectOnly: Boolean = false, passkeyOrigin: String? = null,
+                        extraHeaders: Map<String, String> = emptyMap()): JsonElement = withContext(Dispatchers.IO) {
+        require(extraHeaders.keys.all { it.equals("X-QQ-Session", ignoreCase = true) } &&
+            (extraHeaders.isEmpty() || path.startsWith("qqmusic/")))
         val session = RequestSession(server(), if (authenticated) token() else null)
-        val requiresAccount = path == "ncmbind/import" || path.startsWith("ncmbind/qr/") || path.startsWith("ncmbind/phone/") || path == "ncm/captcha/sent/v1"
+        val requiresAccount = path == "ncmbind/import" || path.startsWith("ncmbind/qr/") || path.startsWith("ncmbind/phone/") || path == "ncm/captcha/sent/v1" ||
+            (authenticated && path.startsWith("qqmusic/"))
         val loginOwner = RequestSession(server(), token())
         val loginRevision = currentMusicSessionRevision()
         fun checkLoginOwner() {
@@ -88,6 +92,7 @@ class ApiClient(
             else routeServer(session.server), path, query)
         val request = Request.Builder().url(url).tag(RequestSession::class.java, session)
             .header("Accept", "application/json")
+            .apply { extraHeaders.forEach { (key, value) -> header(key, value) } }
             .apply { if (passkeyOrigin != null) header("Origin", passkeyOrigin) }
             .method(method, if (method == "GET") null else (body?.toString() ?: "{}").toRequestBody("application/json".toMediaType()))
             .build()
@@ -106,16 +111,17 @@ class ApiClient(
             // Older NCM gateway also uses 401 for missing NCM binding. Only a project-session
             // rejection should invalidate the account.
             val errorText = raw
-            if (code == 401 && authenticated && !errorText.contains("绑定")) onUnauthorized(session)
+            if (code == 401 && authenticated && !path.startsWith("qqmusic/") && !errorText.contains("绑定")) onUnauthorized(session)
             // Account validation is user-facing upstream text, not a generic HTTP failure.
             // Other routes and server failures retain their existing bounded error mapping.
-            val accountError = if (code in 400..499 && path in setOf("auth/login", "auth/2fa/login", "auth/security-question/login",
+            val accountError = if (code in 400..499 && (path.startsWith("qqmusic/") || path in setOf("auth/login", "auth/2fa/login", "auth/security-question/login",
                     "auth/login/email", "auth/login/email/code", "auth/2fa/setup", "auth/2fa/enable", "auth/2fa/disable",
                     "auth/security-question", "auth/passkeys/login/options", "auth/passkeys/login/verify",
                     "auth/register", "auth/email/code", "auth/phone/code",
-                    "auth/password/code", "auth/password/reset", "profile/password/code", "profile/password"))
+                    "auth/password/code", "auth/password/reset", "profile/password/code", "profile/password")))
                 runCatching {
-                    (ApiJson.parseToJsonElement(errorText).jsonObject["error"] as? JsonPrimitive)
+                    val error = ApiJson.parseToJsonElement(errorText).jsonObject
+                    ((error["error"] ?: error["message"]) as? JsonPrimitive)
                         ?.takeIf { value -> value.isString }?.content?.trim()?.takeIf { value -> value.isNotEmpty() }?.take(240)
                 }.getOrNull() else null
             throw ApiException(when (code) {

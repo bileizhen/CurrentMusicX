@@ -13,9 +13,12 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.github.currencortex.music.data.settings.LikeMode
 import io.github.currencortex.music.data.settings.ListeningSource
+import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.data.settings.MusicTransitionMode
+import io.github.currencortex.music.feature.player.AudioQualitySheet
+import io.github.currencortex.music.feature.player.qqAudioQualities
+import io.github.currencortex.music.feature.player.qualityLabel
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.LyricsStyleSelector
 import io.github.currencortex.music.ui.component.AppleMusicLyricsControls
@@ -29,13 +32,15 @@ import kotlin.math.roundToInt
 
 @Composable fun PlaybackSettingsScreen(vm: MusicSettingsViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val isQq = settings.musicPlatform == MusicPlatform.QQ_MUSIC
+    val quality = if (isQq) settings.qqQuality else settings.quality
     var qualityOpen by rememberSaveable { mutableStateOf(false) }
     var appleLyricsOpen by rememberSaveable { mutableStateOf(false) }
     var seconds by remember(settings.crossfadeSeconds) { mutableFloatStateOf(settings.crossfadeSeconds.toFloat()) }
     val modes = mapOf(MusicTransitionMode.OFF to "关闭", MusicTransitionMode.SMART to "智能过渡", MusicTransitionMode.CROSSFADE to "淡入淡出")
     SettingsPage("播放", "playback_settings") {
         item("quality") { SettingsSection("音质", MusicIcons.Headphones) {
-            MusicDestinationRow("默认音质", { qualityOpen = true }, Modifier.testTag("default_quality"), summary = settings.quality.label)
+            MusicDestinationRow("默认音质", { qualityOpen = true }, Modifier.testTag("default_quality"), summary = quality.qualityLabel(isQq))
         } }
         item("listening") { SettingsSection("听歌足迹", MusicIcons.Headphones) {
             Column(Modifier.testTag("listening_source_setting").semantics { selectableGroup() }) {
@@ -97,20 +102,15 @@ import kotlin.math.roundToInt
             SettingsSwitch("允许计费网络预加载", settings.preloadMetered, vm::preloadMetered,
                 summary = "包括移动网络，会额外消耗流量", enabled = settings.preloadAudio, modifier = Modifier.testTag("preload_metered"))
         } }
-        item("likes") { SettingsSection("红心与点赞", MusicIcons.Heart) {
-            SettingsOptionsRow("默认红心位置", settings.likeMode.label, LikeMode.entries.map { mode ->
-                SettingsOption("like_mode_${mode.name}", mode.label, mode == settings.likeMode,
-                    summary = when (mode) {
-                        LikeMode.AUTO -> "已绑定网易云则同步，否则使用 CurrentMusic"
-                        LikeMode.NETEASE -> "未绑定网易云时使用 CurrentMusic"
-                        LikeMode.CURRENT_MUSIC -> "仅存入本站，不影响网易云账号"
-                    },
-                    onSelect = { vm.likeMode(mode) })
-            }, Modifier.testTag("like_mode"))
-        } }
     }
-    if (qualityOpen) io.github.currencortex.music.feature.player.AudioQualitySheet(settings.quality, vm::quality,
-        { qualityOpen = false }, title = "默认播放音质")
+    if (qualityOpen) {
+        val available = if (isQq) {
+            val provider by vm.audioProvider.collectAsStateWithLifecycle()
+            val sources by vm.lxSources.collectAsStateWithLifecycle()
+            qqAudioQualities(provider, sources)
+        } else null
+        AudioQualitySheet(quality, vm::quality, { qualityOpen = false }, title = "默认播放音质", isQq = isQq, available = available)
+    }
     if (appleLyricsOpen) MusicDialog("Apple Music 歌词", { appleLyricsOpen = false }) {
         Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
             .testTag("apple_lyrics_settings")) {

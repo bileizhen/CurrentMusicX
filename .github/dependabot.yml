@@ -1,0 +1,64 @@
+# Keep Dependabot useful without flooding development PRs.
+# Security updates are managed separately by GitHub and are NOT limited by
+# open-pull-requests-limit or cooldown; never auto-merge dependencies.
+version: 2
+updates:
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "04:00"
+      timezone: "Asia/Shanghai"
+    # One routine Gradle version-update PR at a time.
+    # Security updates have a separate GitHub limit.
+    open-pull-requests-limit: 1
+    # Let newly released normal versions settle. Does not delay security fixes.
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps"
+    # AGP major upgrades need a planned Kotlin/KSP/R8/NDK compatibility review.
+    # This does not prevent patch/minor upgrades of the current AGP line.
+    ignore:
+      - dependency-name: "com.android.application"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "com.android.test"
+        update-types: ["version-update:semver-major"]
+    groups:
+      # Match specific AndroidX updates before generic patch updates.
+      androidx-version-updates:
+        applies-to: "version-updates"
+        patterns:
+          - "androidx.*"
+        update-types: ["minor", "patch"]
+      routine-patches:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+        update-types: ["patch"]
+      # Keep relevant security fixes grouped without blocking unrelated CVEs.
+      androidx-security-updates:
+        applies-to: "security-updates"
+        patterns:
+          - "androidx.*"
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "tuesday"
+      time: "04:30"
+      timezone: "Asia/Shanghai"
+    open-pull-requests-limit: 1
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "deps"
+    groups:
+      actions-version-updates:
+        applies-to: "version-updates"
+        patterns:
+          - "*"
+        update-types: ["minor", "patch"]

@@ -12,8 +12,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.network.CurrentMusicServer
+import io.github.currencortex.music.data.lx.LxPlatform
 import io.github.currencortex.music.data.settings.AudioProvider
 import io.github.currencortex.music.data.settings.LyricsSource
+import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.MusicTextAction
@@ -56,7 +58,10 @@ import top.yukonga.miuix.kmp.basic.TextField
             }
             if (provider.provider != AudioProvider.LX) audioState.message?.let { SettingsHint(it, error = !audioState.busy) }
         } }
-        if (provider.provider == AudioProvider.LX) item("lx_sources") { LxSourceSettings(vm) }
+        if (provider.provider == AudioProvider.LX) item("lx_sources") {
+            val platform = if (settings.musicPlatform == MusicPlatform.QQ_MUSIC) LxPlatform.QQ_MUSIC else LxPlatform.NETEASE
+            LxSourceSettings(vm, platform)
+        }
         item("lyrics") { SettingsSection("歌词来源", MusicIcons.File) {
             SettingsOptionsRow("默认来源", when (settings.lyricsSource) {
                 LyricsSource.AUTO -> "自动择优"

@@ -129,7 +129,10 @@ class LxHttpClient(private val allowPrivateForTests: Boolean = false) {
                     if (hop == 5) throw LxSourceException("音源重定向次数过多")
                     val next = url(request.url.resolve(target)?.toString() ?: throw LxSourceException("音源重定向地址无效"))
                     val builder = request.newBuilder().url(next)
-                    if (next.host != request.url.host || next.scheme != request.url.scheme || next.port != request.url.port) {
+                    val sameOrigin = next.host == request.url.host && next.scheme == request.url.scheme && next.port == request.url.port
+                    val secureUpgrade = request.url.scheme == "http" && next.scheme == "https" &&
+                        next.host == request.url.host && request.url.port == 80 && next.port == 443
+                    if (!sameOrigin && !secureUpgrade) {
                         builder.removeHeader("Authorization"); builder.removeHeader("Cookie"); builder.removeHeader("Proxy-Authorization")
                     }
                     if (response.code == 303 || (response.code in setOf(301, 302) && request.method == "POST")) builder.method("GET", null)

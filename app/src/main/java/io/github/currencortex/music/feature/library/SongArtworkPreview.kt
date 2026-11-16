@@ -20,6 +20,7 @@ import io.github.currencortex.music.ui.component.nativeui.*
     val libraryActions = librarySongMenuItems(vm, song, navigate)
     val like = libraryActions.firstOrNull { it.id == "song_like_${song.id}" }
     val nativeLikes by vm.container.neteaseSongActions.likedState.collectAsStateWithLifecycle()
+    val qqLikes by vm.container.qqMusic.likedState.collectAsStateWithLifecycle()
     val likesUseNetease by vm.container.primaryLibrary.likesUseNetease.collectAsStateWithLifecycle()
     val statuses by vm.statuses.collectAsStateWithLifecycle()
     val embyLikes by vm.container.emby.likes.collectAsStateWithLifecycle()
@@ -27,13 +28,16 @@ import io.github.currencortex.music.ui.component.nativeui.*
     val likeBusy by vm.primaryLikeBusy.collectAsStateWithLifecycle()
     LaunchedEffect(song.id, song.musicSource, likesUseNetease) {
         if (song.musicSource == MusicSource.EMBY) appResult { vm.container.emby.detail(song) }
+        else if (song.musicSource == MusicSource.QQ_MUSIC) appResult { vm.container.qqMusic.refreshLiked(song) }
         else vm.refreshSearchLikes(listOf(song))
     }
     val liked = when (song.musicSource) {
+        MusicSource.QQ_MUSIC -> song.id in qqLikes
         MusicSource.EMBY -> embyLikes[song.id] == true
         MusicSource.NAVIDROME -> navidromeLikes[song.id] == true
-        else -> if (likesUseNetease) NeteaseSongActionsRepository.songId(song) in nativeLikes
-            else statuses[song.id]?.liked == true
+        else -> if (song.musicSource == MusicSource.NETEASE)
+            NeteaseSongActionsRepository.songId(song) in nativeLikes
+        else statuses[song.id]?.liked == true
     }
     val insights = songInsightsMenuItems(vm.container.musicRepository.insights, song, playVersion)
     val more = buildList {
@@ -55,9 +59,18 @@ import io.github.currencortex.music.ui.component.nativeui.*
             }
         }, destinations = buildList {
             onMultiSelect?.let { add(GlassMenuItem("playlist_multi_select", "多选", onClick = it)) }
+            if (song.musicSource == MusicSource.QQ_MUSIC) {
+                song.qqMusic?.singerMids?.firstOrNull()?.let { mid ->
+                    add(GlassMenuItem("artist", "查看歌手", onClick = { navigate("qq/artist/$mid") }))
+                }
+                song.qqMusic?.albumMid?.takeIf { it.isNotBlank() }?.let { mid ->
+                    add(GlassMenuItem("album", "查看专辑", onClick = { navigate("qq/album/$mid") }))
+                }
+            } else {
             if (song.artists.isNotBlank()) add(GlassMenuItem("artist", "查看歌手",
                 onClick = { navigate(song.artistIds.singleOrNull()?.let { "lib/artist/$it" } ?: catalogRoute(false, song.artists)) }))
             if (song.album.isNotBlank()) add(GlassMenuItem("album", "查看专辑", onClick = { navigate(catalogRoute(true, song.album)) }))
+            }
             if (more.isNotEmpty()) add(GlassMenuItem("more", "更多操作", children = more))
         }, onDismiss = onDismiss)
 }
