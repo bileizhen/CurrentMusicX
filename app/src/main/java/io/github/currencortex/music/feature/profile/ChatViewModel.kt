@@ -17,7 +17,8 @@ data class ChatState(val messages: List<ChatMessage> = emptyList(), val members:
     val draft: String = "", val image: String = "", val sending: Boolean = false, val uploading: Boolean = false,
     val error: String? = null, val actionError: String? = null, val deleting: Long? = null,
     val scrollRequest: Long = 0, val attachments: List<PostAttachment> = emptyList(),
-    val suggestions: List<ProfileUser> = emptyList(), val references: List<PostAttachment> = emptyList(), val referenceBusy: Boolean = false)
+    val suggestions: List<ProfileUser> = emptyList(), val references: List<PostAttachment> = emptyList(), val referenceBusy: Boolean = false,
+    val quoting: ChatMessage? = null)
 
 class ChatViewModel(val container: AppContainer) : ViewModel() {
     val state = MutableStateFlow(ChatState())
@@ -143,6 +144,8 @@ class ChatViewModel(val container: AppContainer) : ViewModel() {
     }
     fun attach(card: PostAttachment) { state.update { it.copy(attachments = validMusicAttachments(it.attachments + card)) } }
     fun removeAttachment(card: PostAttachment) { if (!state.value.sending) state.update { it.copy(attachments = it.attachments - card) } }
+    fun quote(message: ChatMessage) { if (!state.value.sending) state.update { it.copy(quoting = message, actionError = null) } }
+    fun cancelQuote() { if (!state.value.sending) state.update { it.copy(quoting = null) } }
     fun mention(user: ProfileUser) {
         if (user.nickname.isBlank()) return
         state.update {
@@ -172,11 +175,12 @@ class ChatViewModel(val container: AppContainer) : ViewModel() {
         val mentions = chatMentions(value.draft, value.members)
         state.update { it.copy(sending = true, actionError = null) }
         action = viewModelScope.launch {
-            when (val result = appResult { repository.send(value.draft, value.image, mentions, expected, value.attachments) }) {
+            when (val result = appResult { repository.send(value.draft, value.image, mentions, expected, value.attachments, value.quoting?.id ?: 0) }) {
                 is AppResult.Success -> if (current(expected)) state.update { it.copy(sending = false,
                     messages = (it.messages + result.value).distinctBy(ChatMessage::id).sortedBy(ChatMessage::id),
                     draft = if (it.draft == value.draft) "" else it.draft, image = if (it.image == value.image) "" else it.image,
                     attachments = if (it.attachments == value.attachments) emptyList() else it.attachments,
+                    quoting = if (it.quoting?.id == value.quoting?.id) null else it.quoting,
                     scrollRequest = it.scrollRequest + 1) }
                 is AppResult.Failure -> if (current(expected)) state.update { it.copy(sending = false,
                     actionError = "${result.kind.message}，草稿已保留，请确认后重试") }
@@ -189,7 +193,9 @@ class ChatViewModel(val container: AppContainer) : ViewModel() {
         state.update { it.copy(deleting = message.id, actionError = null) }
         viewModelScope.launch {
             when (val result = appResult { repository.delete(message.id, expected) }) {
-                is AppResult.Success -> if (current(expected)) state.update { it.copy(deleting = null, messages = it.messages.filterNot { m -> m.id == message.id }) }
+                is AppResult.Success -> if (current(expected)) state.update { it.copy(deleting = null,
+                    messages = it.messages.filterNot { m -> m.id == message.id },
+                    quoting = if (it.quoting?.id == message.id) null else it.quoting) }
                 is AppResult.Failure -> if (current(expected)) state.update { it.copy(deleting = null, actionError = result.kind.message) }
             }
         }

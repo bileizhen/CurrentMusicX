@@ -5,9 +5,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.util.Base64
 
+@Serializable data class ChatQuote(val id: Long = 0, val userId: Long = 0, val nickname: String = "", val excerpt: String = "")
 @Serializable data class ChatMessage(val id: Long, val userId: Long = 0, val content: String = "",
     val image: String = "", val createdAt: Long = 0, val user: ProfileUser? = null,
-    val atts: List<PostAttachment> = emptyList(), val streaming: Boolean = false)
+    val atts: List<PostAttachment> = emptyList(), val streaming: Boolean = false,
+    val quote: ChatQuote? = null, val mentions: List<ProfileUser> = emptyList(), val mentionAll: Boolean = false)
 @Serializable data class ChatMessages(val messages: List<ChatMessage> = emptyList())
 @Serializable data class ChatMembers(val members: List<ProfileUser> = emptyList())
 @Serializable data class ChatLiveEvent(val seq: Long, val type: String, val payload: JsonElement)
@@ -54,15 +56,18 @@ class ChatRepository(private val api: ApiClient, private val session: () -> Requ
     }
 
     suspend fun send(content: String, image: String = "", mentions: List<Long> = emptyList(),
-        expected: RequestSession = session(), attachments: List<PostAttachment> = emptyList()): ChatMessage {
+        expected: RequestSession = session(), attachments: List<PostAttachment> = emptyList(),
+        quoteId: Long = 0): ChatMessage {
         require(content.length <= 500 && (content.isNotBlank() || image.isNotBlank() || attachments.isNotEmpty()))
         require(attachments.size <= 5 && validMusicAttachments(attachments).size == attachments.size)
         require(image.isEmpty() || validChatImageName(image))
         require(mentions.all { it > 0 } && mentions.distinct().size <= 10)
+        require(quoteId >= 0)
         return api.decode(request("POST", "chat/messages", expected, body = buildJsonObject {
             put("content", content.trim()); put("image", image)
             put("mentions", JsonArray(mentions.distinct().map(::JsonPrimitive)))
             put("atts", ApiJson.encodeToJsonElement(validMusicAttachments(attachments)))
+            if (quoteId > 0) put("quoteId", quoteId)
         }))
     }
 
