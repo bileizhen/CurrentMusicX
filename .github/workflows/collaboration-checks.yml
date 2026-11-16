@@ -26,6 +26,8 @@ jobs:
           for script in .github/scripts/*.cjs; do
             node --check "$script"
           done
+      - name: Test CI release PR gate policy
+        run: node --test .github/scripts/ci-open-pr-policy.test.cjs
       - name: Validate workflow syntax
         uses: docker://rhysd/actionlint:1.7.7
         with:
