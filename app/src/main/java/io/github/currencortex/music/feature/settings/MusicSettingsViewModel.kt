@@ -48,7 +48,9 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
         try {
             change()
             container.audioSources.invalidate()
-            if (previous != container.audioSettings.access().identity &&
+            val selected = container.audioSettings.access()
+            val selectedSourceReady = selected.provider != AudioProvider.LX || container.lxSources.state.value.isNotEmpty()
+            if (previous != selected.identity && selectedSourceReady &&
                 container.playerController.state.value.mode == io.github.currencortex.music.core.media.PlayerMode.LOCAL &&
                 container.playbackQueue.state.value.current?.video == false) {
                 val playback = container.playerController.state.value
