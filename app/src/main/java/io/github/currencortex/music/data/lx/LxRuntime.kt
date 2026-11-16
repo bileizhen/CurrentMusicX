@@ -55,7 +55,7 @@ class LxRuntime(context: Context, private val http: LxHttpClient = LxHttpClient(
         if (activeId == info.id && isolate != null && initialized != null) return
         close()
         if (!supported()) throw LxSourceException("当前系统不支持落雪音源运行环境，请更新 Android System WebView 后重试")
-        val engine = withTimeout(10000) { JavaScriptSandbox.createConnectedInstanceAsync(app).await() }
+        val engine = connect()
         sandbox = engine
         if (!engine.isFeatureSupported(JavaScriptSandbox.JS_FEATURE_ISOLATE_MAX_HEAP_SIZE) ||
             !engine.isFeatureSupported(JavaScriptSandbox.JS_FEATURE_ISOLATE_TERMINATION) ||
@@ -81,6 +81,28 @@ class LxRuntime(context: Context, private val http: LxHttpClient = LxHttpClient(
         lxCapabilities(requireNotNull(initialized))
         activeId = info.id
     }
+    /**
+     * 沙箱进程在上一轮 close() 后可能尚未完全退出，紧接着的连接请求会偶发失败。
+     * 短暂重试即可恢复；三次都失败才向外抛出（仍走 readable() 的用户可见提示）。
+     */
+    private suspend fun connect(): JavaScriptSandbox = withTimeout(10_000) {
+        var last: Exception? = null
+        repeat(3) { attempt ->
+            try {
+                return@withTimeout JavaScriptSandbox.createConnectedInstanceAsync(app).await()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (failure: Exception) {
+                last = failure
+                if (attempt < 2) delay(300)
+            }
+        }
+        throw last ?: IllegalStateException("JavaScript sandbox unavailable")
+    }
+
+    /** 与 inspect/resolve 共用一把锁关闭，避免关闭过程中其它协程仍在求值。 */
+    suspend fun closeSafely() = lock.withLock { close() }
+
     private suspend fun evaluate(code: String): String = withTimeout(2500) {
         requireNotNull(isolate).evaluateJavaScriptAsync(code).await()
     }
@@ -144,7 +166,7 @@ class LxRuntime(context: Context, private val http: LxHttpClient = LxHttpClient(
         return Base64.getEncoder().encodeToString(output)
     }
     private fun readable(failure: Exception): LxSourceException = if (failure is LxSourceException) failure
-        else LxSourceException("落雪音源执行失败或超出运行限制，请重试或更换音源")
+        else LxSourceException("落雪音源执行失败或超出运行限制（${failure.javaClass.simpleName}），请重试或更换音源")
     override fun close() {
         val engine = sandbox; val instance = isolate
         sandbox = null; isolate = null

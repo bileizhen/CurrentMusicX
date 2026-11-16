@@ -32,6 +32,8 @@ import kotlinx.coroutines.flow.StateFlow
     changeSong: (Int) -> Unit = {}, onIslandTop: (Int) -> Unit = {},
     togglePlayback: () -> Unit = {}, onCoverBounds: (androidx.compose.ui.geometry.Rect) -> Unit = {},
     defaultFpsMode: Boolean = false, noticeOnly: Boolean = false,
+    collapsed: Boolean = false,
+    onCollapseTransition: (Boolean) -> Unit = {},
     effectNotices: StateFlow<io.github.currencortex.music.core.media.SoundEffectNotice?> = remember { kotlinx.coroutines.flow.MutableStateFlow(null) },
     installUpdate: () -> Unit = {},
     audioLevel: io.github.currencortex.music.core.media.DockAudioLevel? = null) {
@@ -92,6 +94,7 @@ import kotlinx.coroutines.flow.StateFlow
         .onSizeChanged { coverTransition.drawingHeight = it.height }
         .testTag("desktop_lyrics_window"), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LaunchedEffect(effectNotice?.id) { if (effectNotice != null) onCoverBounds(androidx.compose.ui.geometry.Rect.Zero) }
+        val collapseProgress = rememberIslandCollapseProgress(collapsed, motion, onCollapseTransition)
         DesktopIslandEffectTransition(effectNotice, Modifier.align(Alignment.CenterHorizontally)
             .widthIn(max = maxIslandWidth().dp).padding(vertical = desktopIslandDrawingSpace)
             .onSizeChanged(onIslandSize)
@@ -99,9 +102,10 @@ import kotlinx.coroutines.flow.StateFlow
             .graphicsLayer {
                 alpha = entrance.value; scaleX = .94f + .06f * entrance.value; scaleY = scaleX
                 transformOrigin = TransformOrigin(.5f, 0f)
-            }, effectHeight = rememberIslandFpsHeight(font), font = font, onUpdateInstall = installUpdate) {
+            }, effectHeight = rememberIslandFpsHeight(font), font = font, onUpdateInstall = installUpdate,
+            collapseProgress = collapseProgress) {
         if (noticeOnly) Spacer(Modifier.width(112.dp).height(rememberIslandFpsHeight(font)))
-        else
+        else DesktopIslandCollapseTransition(collapseProgress, 80f.coerceAtMost(maxIslandWidth())) {
         DesktopIslandFrame(player.song, Modifier.islandAnimatedWidth(width).fillMaxWidth()
             .pointerInput(Unit) { detectTapGestures(onTap = { toggle() }) }
             .pointerInput(Unit) {
@@ -126,6 +130,7 @@ import kotlinx.coroutines.flow.StateFlow
                     }
                 } else Spacer(Modifier.height(0.dp))
             }, fps = { DesktopIslandFrameRate(frameRate.rate, font, Color(options.textColor.toInt())) })
+        }
         }
         }
     }

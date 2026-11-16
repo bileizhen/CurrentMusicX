@@ -22,6 +22,7 @@ import io.github.currencortex.music.data.song.MusicRepository
 import io.github.currencortex.music.data.local.MusicDatabase
 import io.github.currencortex.music.data.settings.MusicSettingsRepository
 import io.github.currencortex.music.data.settings.AudioProvider
+import io.github.currencortex.music.data.settings.AudioSourceAccess
 import androidx.room.Room
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -165,12 +166,36 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val navidrome = io.github.currencortex.music.data.navidrome.NavidromeRepository(SecureTokenStore(context, ".navidrome$storageSuffix"), appScope)
     val emby = io.github.currencortex.music.data.emby.EmbyRepository(SecureTokenStore(context, ".emby$storageSuffix"), appScope)
     val navidromeMedia = okhttp3.OkHttpClient.Builder().addInterceptor(navidrome.client.mediaInterceptor()).addInterceptor(emby.client.mediaInterceptor()).build()
-    val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome, lx = lxSources, emby = emby)
+    val qqMusic = io.github.currencortex.music.data.qqmusic.QqMusicRepository(apiClient, ::projectSession,
+        SecureTokenStore(context, ".qqmusic$storageSuffix"),
+        io.github.currencortex.music.data.qqmusic.QqDirectMusicClient(
+            apiHttpClient ?: ApiClient.defaultHttpClient(),
+            log = { logger.info("Network", it) },
+        ))
+    val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome, lx = lxSources, emby = emby, qqMusic = qqMusic)
+    internal fun qqAudioIdentity(access: AudioSourceAccess = audioSettings.access()): String =
+        qqAudioIdentity(qqMusic.audioIdentity, access)
+
+    private fun qqAudioIdentity(accountIdentity: String, access: AudioSourceAccess): String =
+        if (access.provider == AudioProvider.LX) "$accountIdentity:${access.identity}" else accountIdentity
+
     fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality, supportsDolby: Boolean = false): AudioRequest {
+        if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
+            qqMusic.selectOwner()
+            val qqQuality = quality.takeIf { it.qqOnly } ?: musicSettings.state.value.qqQuality
+            return AudioRequest(song.id, qqQuality, accountRepository.state.value.account?.id ?: 0L,
+                qqMusic.session(), qqAudioIdentity(), song)
+        }
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
             return AudioRequest(song.id, quality, 0L, navidrome.session(), "navidrome:" + navidrome.state.value.identity, song)
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY)
             return AudioRequest(song.id, quality, 0L, emby.session(), "emby:" + emby.state.value.identity, song)
+        if (song.neteaseCloud) {
+            val owner = neteaseSessions.state.value
+            return AudioRequest(song.id, quality, owner.profile?.uid ?: 0L,
+                RequestSession("https://music.163.com/", null, owner.revision), "netease-cloud", song,
+                supportsDolby = supportsDolby && quality == AudioQuality.AUTO)
+        }
         val access = audioSettings.access()
         val preferDolby = supportsDolby && quality == AudioQuality.AUTO &&
             song.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL &&
@@ -216,10 +241,28 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val audioSources = AudioSourceResolver(audioCache,
         { audioSession() },
         currentProvider = { audioSettings.access().identity },
-        validateRequest = { request -> request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME }?.let {
+        validateRequest = { request -> request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC }?.let {
+            qqMusic.selectOwner()
+            if (request.session != qqMusic.session() ||
+                request.accountId != (accountRepository.state.value.account?.id ?: 0L)) false
+            else {
+                val accountIdentity = qqMusic.audioIdentity
+                if (request.providerIdentity.substringBefore(":lx:") != accountIdentity) false
+                else {
+                    if (request.providerIdentity != qqAudioIdentity(accountIdentity, audioSettings.access()))
+                        throw ApiException(ErrorKind.AudioSourceChanged)
+                    true
+                }
+            }
+        } ?: request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME }?.let {
             navidrome.accepts(it) && request.session == navidrome.session() && request.providerIdentity == "navidrome:" + navidrome.state.value.identity
         } ?: request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY }?.let {
             emby.accepts(it) && request.session == emby.session() && request.providerIdentity == "emby:" + emby.state.value.identity
+        } ?: request.song?.takeIf { it.neteaseCloud }?.let {
+            val owner = neteaseSessions.state.value
+            owner.loggedIn && !owner.stale && request.accountId == owner.profile?.uid &&
+                request.session == RequestSession("https://music.163.com/", null, owner.revision) &&
+                request.providerIdentity == "netease-cloud"
         } },
         loadTrack = { request -> request.song?.let {
             musicRepository.source(it, request.quality, request.session, request.refresh, request.supportsDolby)
@@ -449,6 +492,14 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val ready = CompletableDeferred<Unit>()
     val sessionRestored = CompletableDeferred<Unit>()
     init {
+        appScope.launch {
+            musicSettings.state.map { it.musicPlatform }.distinctUntilChanged().collect { platform ->
+                audioSettings.selectForPlatform(
+                    if (platform == io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC)
+                        io.github.currencortex.music.data.settings.AudioProvider.QQ_MUSIC else null,
+                )
+            }
+        }
         if (storageNamespace.isEmpty() && externalPlayer == null) playerScope.launch {
             ready.await()
             sessionRestored.await()
@@ -516,8 +567,22 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         }
         playerScope.launch {
             accountRepository.sessionRevision.collect {
+                qqMusic.selectOwner()
                 audioSources.invalidate(); roomSession.disconnect(); listenTogether.disconnect()
                 bindingRepository.clearSession(); neteaseLibrary.invalidate(); neteaseSongActions.clearSession()
+            }
+        }
+        playerScope.launch {
+            sessionRestored.await()
+            var identity = qqMusic.audioIdentity
+            qqMusic.state.collect {
+                val next = qqMusic.audioIdentity
+                if (next != identity) {
+                    identity = next
+                    audioSources.invalidate()
+                    if (playbackQueue.state.value.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
+                        playerController.pause()
+                }
             }
         }
         appScope.launch { audioSettings.state.collect { audioSources.invalidate() } }
@@ -534,6 +599,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             kotlinx.coroutines.flow.combine(accountRepository.state, musicSettings.state) { account, preferences ->
                 account.account?.id to preferences.server
             }.distinctUntilChanged().collect {
+                qqMusic.selectOwner()
                 libraryRepository.clearSession(); bindingRepository.clearSession()
             }
         }

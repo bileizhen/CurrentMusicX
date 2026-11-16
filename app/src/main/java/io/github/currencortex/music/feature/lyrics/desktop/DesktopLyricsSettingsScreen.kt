@@ -94,7 +94,7 @@ import kotlin.math.roundToInt
         action.connecting -> "正在连接播放服务，可关闭以取消"
         !permitted -> "首次开启需要授予悬浮窗权限"
         !options.enabled -> "已关闭，样式与位置会保留"
-        status.visible -> "点击切换歌词与帧率 · 左右滑动切歌"
+        status.visible -> "点击切换歌词与帧率 · 左右切歌 · 上滑收起"
         playback.song == null -> "已开启 · 播放音乐后同步显示"
         else -> "已开启 · 返回桌面显示居中灵动岛"
     }

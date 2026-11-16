@@ -12,8 +12,10 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include "netease_usb_format.h"
 #include "netease_usb_status.h"
+#include "netease_usb_write.h"
 #include <android/log.h>
 
 namespace {
@@ -91,6 +93,7 @@ struct Stream {
     std::chrono::steady_clock::time_point emptySince{};
     bool playing = false;
     int lastTransferStatus = -999;
+    currentmusic_usb::WriteRetryWindow writeRetry;
     ~Stream() {
         // Destroy engine-owned device references before exiting libusb. The engine
         // stops its streaming/event threads and releases claimed USB interfaces.
@@ -221,13 +224,26 @@ extern "C" JNIEXPORT jboolean JNICALL
 Java_io_github_currencortex_music_core_media_NeteaseUsbBridge_testTransferState(JNIEnv*, jobject, jint raw, jboolean detached) {
     return currentmusic_usb::transferHealthy(raw, detached == JNI_TRUE);
 }
+extern "C" JNIEXPORT jboolean JNICALL
+Java_io_github_currencortex_music_core_media_NeteaseUsbBridge_testWritePolicy(JNIEnv*, jobject) {
+    using currentmusic_usb::WriteRetryWindow;
+    using Clock = std::chrono::steady_clock;
+    if (currentmusic_usb::queueTargetMs(96000) != 100 || currentmusic_usb::queueTargetMs(176400) != 250 ||
+        currentmusic_usb::queueTargetMs(192000) != 250) return false;
+    WriteRetryWindow retry;
+    const auto start = Clock::time_point{};
+    if (retry.expired(start) || retry.noteRejection(start) != 1 || retry.expired(start + std::chrono::milliseconds(499)) ||
+        !retry.expired(start + std::chrono::milliseconds(500))) return false;
+    retry.noteAccepted();
+    return retry.rejections == 0 && !retry.expired(start + std::chrono::seconds(1));
+}
 #endif
 extern "C" JNIEXPORT jlong JNICALL
 Java_io_github_currencortex_music_core_media_NeteaseUsbBridge_open(JNIEnv* env, jobject, jint fd, jint rate, jint channels, jint encoding, jint sourceBits) {
     std::lock_guard<std::mutex> lock(mutex);
     try {
         diagnostics.clear();
-        record("usbHost.adapter=ncm-usb-v3-status-init");
+        record("usbHost.adapter=ncm-usb-v4-high-rate-write-retry");
         if (active) throw std::runtime_error("[USB_BUSY] another exclusive stream owns the DAC");
         if (fd < 0 || rate < 8000 || rate > 192000 || channels < 1 || channels > 2 || (encoding != 2 && encoding != 22) ||
             (sourceBits != 16 && sourceBits != 24 && sourceBits != 32) || sourceBits > (encoding == 2 ? 16 : 32))
@@ -272,6 +288,8 @@ Java_io_github_currencortex_music_core_media_NeteaseUsbBridge_open(JNIEnv* env, 
         if (paused != 0) throw std::runtime_error("[USB_INIT_PAUSE] native initial Pause failed; result=" + std::to_string(paused));
         next->rate = rate;
         next->frameBytes = channels * (encoding == 2 ? 2 : 4);
+        record("usbHost.buffer policy=auto-high-rate targetMs=" + std::to_string(currentmusic_usb::queueTargetMs(rate)) +
+            " nativeRingMinBytes=524288 maxPushBytes=8192 retryAttempts=3 retryWindowMs=500");
         active = std::move(next);
         const auto id = ++generation;
         try { stream(id, "start-paused"); } catch (...) { active.reset(); throw; }
@@ -295,14 +313,42 @@ Java_io_github_currencortex_music_core_media_NeteaseUsbBridge_write(JNIEnv* env,
         if (!data || offset < 0 || count < 0 || int64_t(offset) + count > capacity || count % s.frameBytes != 0)
             throw std::runtime_error("[USB_BUFFER] invalid PCM buffer bounds or frame alignment");
         // Pinned SelectAudioFormat guarantees >=512 KiB. At the admitted maximum
-        // 192 kHz/stereo/32 bit, 100 ms + one 8192-byte write + rounding is <164 KiB.
+        // 192 kHz/stereo/32 bit, 250 ms + one 8192-byte write + rounding is <384 KiB.
         // One serialized producer and no other callers can overrun this ring. Push
         // reports bool rather than consumed bytes, so never feed an unbounded block.
-        if (api().leftMs(s.device.get()) >= 100) return 0;
+        const int leftMs = std::max(0, api().leftMs(s.device.get()));
+        if (leftMs >= currentmusic_usb::queueTargetMs(s.rate)) return 0;
         auto accepted = std::min(count, 8192 / s.frameBytes * s.frameBytes);
         if (accepted == 0) return 0;
-        if (!api().push(s.device.get(), data + offset, accepted))
-            throw std::runtime_error("[USB_WRITE] native USB ring rejected PCM");
+        bool pushed = false;
+        for (int attempt = 1; attempt <= 3 && !pushed; ++attempt) {
+            pushed = api().push(s.device.get(), data + offset, accepted);
+            if (pushed) break;
+            const auto now = std::chrono::steady_clock::now();
+            const int rejections = s.writeRetry.noteRejection(now);
+            if (rejections <= 3 || rejections % 32 == 0)
+                record("usbHost.writeRetry rejected attempt=" + std::to_string(rejections) +
+                    " elapsedMs=" + std::to_string(s.writeRetry.elapsedMs(now)) + " bytes=" + std::to_string(accepted) +
+                    " status=" + std::to_string(s.lastTransferStatus) + " leftMs=" + std::to_string(leftMs) +
+                    " aheadMs=" + std::to_string(std::max(0, api().aheadMs(s.device.get()))) +
+                    " playing=" + std::to_string(s.playing));
+            if (attempt < 3) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+        const auto now = std::chrono::steady_clock::now();
+        if (!pushed) {
+            if (s.writeRetry.expired(now)) {
+                record("usbHost.writeRetry exhausted elapsedMs=" + std::to_string(s.writeRetry.elapsedMs(now)) +
+                    " rejected=" + std::to_string(s.writeRetry.rejections));
+                throw std::runtime_error("[USB_WRITE] native USB ring rejected PCM for " +
+                    std::to_string(s.writeRetry.elapsedMs(now)) + " ms; status=" + std::to_string(s.lastTransferStatus) +
+                    " leftMs=" + std::to_string(leftMs) + " playing=" + std::to_string(s.playing));
+            }
+            return 0;
+        }
+        if (s.writeRetry.rejections > 0)
+            record("usbHost.writeRetry recovered rejected=" + std::to_string(s.writeRetry.rejections) +
+                " elapsedMs=" + std::to_string(s.writeRetry.elapsedMs(now)) + " accepted=" + std::to_string(accepted));
+        s.writeRetry.noteAccepted();
         s.bytes += accepted;
         s.emptySince = {};
         return accepted;

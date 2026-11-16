@@ -16,6 +16,9 @@ import androidx.compose.ui.text.style.ResolvedTextDirection
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalFontFamilyResolver
+import androidx.compose.ui.layout.FirstBaseline
+import androidx.compose.ui.layout.LastBaseline
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.text
 import androidx.compose.ui.semantics.getTextLayoutResult
@@ -45,7 +48,7 @@ import androidx.compose.ui.text.style.TextAlign
     prewarmGlow: Boolean = false, monet: Boolean = false,
     smokeColors: LyricsSmokeColors? = null, smokeFlight: (() -> LyricsSmokeFlight?)? = null,
     particleColors: LyricsSmokeColors? = null, particleExitAt: Long? = null,
-    wordLiftReturns: Boolean = false) {
+    wordLiftReturns: Boolean = false, alignFirstBaseline: Boolean = false) {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val direction = LocalLayoutDirection.current
@@ -77,6 +80,11 @@ import androidx.compose.ui.text.style.TextAlign
         }
         val layoutIndex = if (fontWeight == FontWeight.Normal) 0 else 1
         val layout = layouts[layoutIndex]
+        val firstBaseline = if (alignFirstBaseline) layouts.maxOf { it.firstBaseline } else layout.firstBaseline
+        val baselineShift = firstBaseline - layout.firstBaseline
+        val paragraphHeight = if (alignFirstBaseline)
+            kotlin.math.ceil(firstBaseline + layouts.maxOf { it.size.height - it.firstBaseline }).toInt()
+        else layouts.maxOf { it.size.height }
         SideEffect { onLayout?.invoke(layout) }
         val clusters = remember(line.text) { lyricsClusters(line.text) }
         // A display-only line sweep in Always mode; real word timing and cached data remain authoritative.
@@ -212,14 +220,22 @@ import androidx.compose.ui.text.style.TextAlign
             }
         } }
         val sung = remember { Path() }
-        Canvas(Modifier.fillMaxWidth().height(with(density) { (layouts.maxOf { it.size.height } + padding * 2).toDp() })
+        Canvas(Modifier.fillMaxWidth().height(with(density) { (paragraphHeight + padding * 2).toDp() })
+            .layout { measurable, constraints ->
+                val child = measurable.measure(constraints)
+                layout(child.width, child.height, alignmentLines = mapOf(
+                    FirstBaseline to (padding + firstBaseline).toInt(),
+                    LastBaseline to (padding + layout.lastBaseline + baselineShift).toInt())) {
+                    child.placeRelative(0, 0)
+                }
+            }
             .semantics {
                 if (exposeText) {
                     text = AnnotatedString(line.text)
                     getTextLayoutResult { it.add(layout); true }
                 }
             }) {
-            translate(left = padding.toFloat(), top = padding.toFloat()) {
+            translate(left = padding.toFloat(), top = padding + baselineShift) {
                 if (particleInk != null) {
                     with(particleInk) { draw(position.value, particleColors!!, color, particleExitAt) }
                     return@translate

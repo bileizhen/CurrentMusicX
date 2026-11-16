@@ -87,17 +87,33 @@ import io.github.currencortex.music.feature.lyrics.model.LyricLine
     // for translation, glow or karaoke progress.
     val blur = if ((monetTone.blur == 0f) && effects && android.os.Build.VERSION.SDK_INT >= 31 && !focused && !resting)
         Modifier.blur(if (distance <= 1) 1.4.dp else 2.2.dp, edgeTreatment = BlurredEdgeTreatment.Unbounded) else Modifier
+    val phonetics = remember(line, romanization) {
+        if (romanization) classicLyricPhonetics(line) else ClassicPhoneticLine(emptyList(), line.romanization)
+    }
+    val aligned = phonetics.cells.isNotEmpty()
+    val hasRomanization = phonetics.fallbackRomanization.isNotBlank() || phonetics.cells.any { it.romanization.isNotBlank() }
+    val showTranslation = translation && !(romanization && hasRomanization)
+    val sourceWordTiming = line.words.isNotEmpty() && !line.wordsEstimated
+    val vocalText: @Composable (LyricLine, Modifier, TextAlign) -> Unit = { vocal, modifier, textAlign ->
+        KaraokeText(vocal, position, wordAnimation && (focused || preview || (!resting && display.karaokeScope != KaraokeScope.CURRENT)),
+            modifier, size, weight, textAlign, forceLineAnimation = !aligned && display.karaokeScope == KaraokeScope.ALWAYS,
+            reservedFontWeight = reservedWeight, glow = display.glow && (!aligned || sourceWordTiming) &&
+                (focused || glowing || (!beforeStart && distance <= 4)),
+            wordLift = false, monet = wordAnimation, glowOpacity = glowOpacity, baseOpacity = baseOpacity,
+            prepareDrawResources = true, prewarmGlow = display.glow && (!aligned || sourceWordTiming) && beforeStart && distance == 1,
+            alignFirstBaseline = aligned)
+    }
     Column(Modifier.fillMaxWidth().then(blur)) {
-    if (line.text.isNotBlank()) KaraokeText(line, position, wordAnimation && (focused || preview || (!resting && display.karaokeScope != KaraokeScope.CURRENT)),
-        Modifier.fillMaxWidth().then(vocalModifier), size, weight, align, forceLineAnimation = display.karaokeScope == KaraokeScope.ALWAYS,
-        reservedFontWeight = reservedWeight, glow = display.glow && (focused || glowing || (!beforeStart && distance <= 4)),
-        wordLift = false, monet = wordAnimation, glowOpacity = glowOpacity, baseOpacity = baseOpacity,
-        prepareDrawResources = true, prewarmGlow = display.glow && beforeStart && distance == 1,
-        )
-    LyricsAuxiliaryText(line.translation, position, translation && focused, size * .6f,
+    if (line.text.isNotBlank()) {
+        if (aligned) ClassicPhoneticText(line, phonetics, size, reservedWeight, auxiliaryWeight, align, focused,
+            forceLineAnimation = display.karaokeScope == KaraokeScope.ALWAYS,
+            modifier = vocalModifier) { vocal, modifier -> vocalText(vocal, modifier, TextAlign.Center) }
+        else vocalText(line, Modifier.fillMaxWidth().then(vocalModifier), align)
+    }
+    LyricsAuxiliaryText(line.translation, position, showTranslation && focused, size * .6f,
         auxiliaryWeight, align, "lyric_translation", .65f,
-        reserveSpace = reserveAuxiliarySpace && translation, animateHeight = false)
-    LyricsAuxiliaryText(line.romanization, position, romanization && focused, size * .53f,
+        reserveSpace = reserveAuxiliarySpace && showTranslation, animateHeight = false)
+    LyricsAuxiliaryText(phonetics.fallbackRomanization, position, romanization && focused, size * .53f,
         auxiliaryWeight, align, "lyric_romanization", .5f,
         reserveSpace = reserveAuxiliarySpace && romanization, animateHeight = false)
     }
