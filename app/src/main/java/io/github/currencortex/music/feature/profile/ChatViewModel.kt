@@ -71,8 +71,11 @@ class ChatViewModel(val container: AppContainer) : ViewModel() {
                                 if (replay.events.isEmpty() && replay.latestSeq > state.value.seq) {
                                     // A retention gap needs a fresh snapshot, not a silent cursor jump.
                                     val page = repository.messages(expected = expected)
-                                    if (current(expected)) state.update { it.copy(messages = page.distinctBy(ChatMessage::id)
-                                        .sortedBy(ChatMessage::id), hasOlder = page.size >= 30, seq = replay.latestSeq) }
+                                    if (current(expected)) state.update {
+                                        val snapshot = page.distinctBy(ChatMessage::id).sortedBy(ChatMessage::id)
+                                        it.copy(messages = snapshot, hasOlder = page.size >= 30, seq = replay.latestSeq,
+                                            quoting = quotingInSnapshot(it.quoting, snapshot))
+                                    }
                                 }
                                 events.events(expected, state.value.seq, onOpen = {
                                     if (current(expected)) state.update { it.copy(connected = true, error = null) }
@@ -238,6 +241,10 @@ internal fun quotingAfterEvent(quoting: ChatMessage?, event: ChatLiveEvent): Cha
 /** Re-resolve a menu-captured quote target against the live list; null once it is gone. */
 internal fun resolveQuoteTarget(messages: List<ChatMessage>, captured: ChatMessage): ChatMessage? =
     messages.firstOrNull { it.id == captured.id }
+
+/** A retention-gap snapshot never delivers delete events; revalidate the pending quote against it. */
+internal fun quotingInSnapshot(quoting: ChatMessage?, snapshot: List<ChatMessage>): ChatMessage? =
+    quoting?.let { resolveQuoteTarget(snapshot, it) }
 
 /** Single-line bounded preview so multiline quotes cannot squeeze the composer. */
 internal fun quotePreview(content: String, image: String): String =
