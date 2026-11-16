@@ -760,7 +760,7 @@ class MusicService : MediaSessionService() {
                 }
             }) {
                 is AppResult.Failure -> container.playerController.state.value = container.playerController.state.value.copy(playing = false,
-                    playRequested = false, loading = false, resolving = false, error = result.kind.message)
+                    playRequested = false, loading = false, resolving = false, error = result.message)
                 is AppResult.Success -> {
                     if (container.playbackQueue.state.value.current?.id != song.id) return@launch
                     val (resolved, autoDolby) = result.value
