@@ -91,7 +91,10 @@ data class SearchPage(val songs: List<Song>, val total: Int, val hasMore: Boolea
             .joinToString("") { "%02x".format(it) }
     val highSpec get() = sampleRate > 48000 || channelCount > 2 ||
         // Some audio providers omit numeric specifications for these high-spec levels.
-        ((sampleRate <= 0 || channelCount <= 0) && level in setOf("hires", "jymaster", "sky", "jyeffect", "flac24bit"))
+        ((sampleRate <= 0 || channelCount <= 0) && level in setOf(
+            "hires", "jymaster", "sky", "jyeffect", "flac24bit",
+            "qq_master", "qq_surround", "qq_studio", "qq_nac", "qq_dts_x",
+        ))
 }
 @Serializable data class LyricDto(val lines: List<LyricLine> = emptyList())
 @Serializable data class LyricLine(val t: Long, val txt: String, val trans: String = "")

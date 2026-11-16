@@ -182,7 +182,8 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
         val (request, url) = lxResolveTrack(song, quality, source.info.capabilities) { data ->
             runtime.resolve(source.info, source.script, data)
         }
-        return AudioSource(url, lxQualityLevel(request.quality), 0, 0, lxQualityFormat(request.quality),
+        return AudioSource(url, lxQualityLevel(LxPlatform.from(song), request.quality), 0, 0,
+            lxQualityFormat(request.quality),
             validForSeconds = 30, source = "lx:${source.info.id}")
     }
     private suspend fun recordPerformance(id: String, platform: LxPlatform, elapsedMs: Long?) = withContext(Dispatchers.IO) {
