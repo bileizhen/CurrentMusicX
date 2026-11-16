@@ -9,8 +9,9 @@ import kotlinx.serialization.SerialName
                              val musicSource: MusicSource = MusicSource.NETEASE,
                              val externalIds: SongExternalIds = SongExternalIds(),
                              val navidrome: NavidromeTrackRef? = null, val videoQuality: Int = 1080, val localUri: String = "", val emby: EmbyTrackRef? = null,
-                             val albumId: Long = 0, val translatedName: String = "",
-                             val aliases: List<String> = emptyList(), val neteaseCloud: Boolean = false) {
+                              val albumId: Long = 0, val translatedName: String = "",
+                              val aliases: List<String> = emptyList(), val neteaseCloud: Boolean = false,
+                              val qqMusic: QqMusicTrackRef? = null) {
     val privateLibrary get() = musicSource == MusicSource.NAVIDROME || musicSource == MusicSource.EMBY
     val privateIdentity get() = emby?.identity ?: navidrome?.identity
     val originalQualityLabel get() = if (musicSource == MusicSource.EMBY) "Emby 原音质" else "Navidrome 原音质"
@@ -20,6 +21,8 @@ import kotlinx.serialization.SerialName
     val displayNames get() = listOf(name) + alternateNames
 }
 @Serializable enum class MusicSource { NETEASE, QQ_MUSIC, APPLE_MUSIC, SPOTIFY, NAVIDROME, LOCAL, EMBY }
+@Serializable data class QqMusicTrackRef(val mid: String, val songId: Long = 0, val albumMid: String = "",
+    val singerMids: List<String> = emptyList(), val mediaMid: String = "")
 @Serializable data class NavidromeTrackRef(val id: String, val identity: String, val format: String = "",
     val sampleRate: Int = 0, val channels: Int = 0)
 @Serializable data class SongExternalIds(val neteaseId: String? = null, val qqMusicId: String? = null,

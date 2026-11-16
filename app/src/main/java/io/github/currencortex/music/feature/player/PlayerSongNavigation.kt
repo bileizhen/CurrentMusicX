@@ -31,7 +31,9 @@ internal fun playerArtistLinks(song: Song?): List<PlayerArtistLink> {
 }
 
 internal fun playerAlbumRoute(song: Song): String =
-    if (song.musicSource == MusicSource.NETEASE && song.albumId > 0) "lib/album/${song.albumId}"
+    if (song.musicSource == MusicSource.QQ_MUSIC) song.qqMusic?.albumMid?.takeIf(String::isNotBlank)?.let { "qq/album/$it" }
+        ?: "qq/search/album/${java.net.URLEncoder.encode(song.album, "UTF-8")}"
+    else if (song.musicSource == MusicSource.NETEASE && song.albumId > 0) "lib/album/${song.albumId}"
     else catalogRoute(true, song.album)
 
 internal class PlayerSongNavigation(val artistsEnabled: Boolean, val albumEnabled: Boolean,
@@ -69,6 +71,9 @@ internal class PlayerSongNavigation(val artistsEnabled: Boolean, val albumEnable
     return PlayerSongNavigation(artistsEnabled, albumEnabled, albumLoading, chooseBiography != null,
         openArtists = { biography ->
             when {
+                song?.musicSource == MusicSource.QQ_MUSIC -> currentNavigate(
+                    song.qqMusic?.singerMids?.firstOrNull()?.let { "qq/artist/$it" }
+                        ?: "qq/search/artist/${java.net.URLEncoder.encode(song.artists, "UTF-8")}")
                 artists.size == 1 -> currentNavigate(artists.single().route(biography))
                 artists.size > 1 -> chooseBiography = biography
                 song != null && artistsEnabled -> currentNavigate(catalogRoute(false, song.artists))

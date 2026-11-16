@@ -59,14 +59,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
 }
 
-@Composable private fun StyleCard(style: MusicStyle, cover: String?, modifier: Modifier, navigate: (String) -> Unit) {
+@Composable private fun StyleCard(style: MusicStyle, cover: String?, modifier: Modifier, onClick: () -> Unit) {
     val tint = rememberStyleTint(cover.orEmpty())
     val surface = styleSurface(tint.value)
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .97f else 1f, tween(180), label = "style card")
     Box(modifier.height(112.dp).graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape(24.dp))
-        .background(surface).clickable(source, indication = null, role = Role.Button) { navigate("lib/style/${style.tagId}") }
+        .background(surface).clickable(source, indication = null, role = Role.Button, onClick = onClick)
         .testTag("style_category_${style.tagId}")) {
         StyleArtwork(cover.orEmpty(), Modifier.align(Alignment.CenterEnd).offset(x = 20.dp, y = 8.dp).size(94.dp)
             .graphicsLayer { rotationZ = 12f }.shadow(6.dp, RoundedCornerShape(18.dp)).clip(RoundedCornerShape(18.dp)), tint, 280, pending = cover == null)
@@ -80,7 +80,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable fun MusicStyleCategories(state: StyleCatalogState, retry: () -> Unit, navigate: (String) -> Unit,
-    loadCover: (Long) -> Unit, listHeader: Boolean = false) {
+    loadCover: (Long) -> Unit, listHeader: Boolean = false,
+    routeFor: (MusicStyle) -> String = { "lib/style/${it.tagId}" }) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().testTag("style_categories"), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (listHeader) io.github.currencortex.music.ui.component.nativeui.SettingsListHeader("曲风分类") {
@@ -104,7 +105,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     LaunchedEffect(style.tagId, cover == null, state.loading) {
                         if (cover == null && !state.loading) loadCover(style.tagId)
                     }
-                    StyleCard(style, cover, Modifier.weight(1f).elasticRootComponent(index), navigate)
+                    StyleCard(style, cover, Modifier.weight(1f).elasticRootComponent(index)) { navigate(routeFor(style)) }
                 } }
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             }

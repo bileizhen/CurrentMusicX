@@ -69,21 +69,37 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 /** Cover-first library entrance; the existing create dialog and server ownership stay in the host. */
 @Composable internal fun PlaylistIndexBody(vm: LibraryViewModel,
     navigate: (String) -> Unit, play: (List<Song>, Int) -> Unit,
-    onBack: (() -> Unit)? = null, onCreate: () -> Unit) {
+    onBack: (() -> Unit)? = null, onCreate: () -> Unit,
+    qqPlaylists: List<Playlist>? = null, qqLoading: Boolean = false,
+    qqError: String? = null, onQqRefresh: () -> Unit = {}) {
     val home by vm.home.collectAsStateWithLifecycle()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val nativeAccount by vm.container.neteaseSessions.state.collectAsStateWithLifecycle()
+    val qqAccount by vm.container.qqMusic.state.collectAsStateWithLifecycle()
+    val sourcePlaylists = qqPlaylists ?: home.playlists
+    val loading = if (qqPlaylists == null) home.loading || account.loading else qqLoading
+    val sourceErrors = if (qqPlaylists == null) home.errors
+        else listOfNotNull(qqError).associateBy { "我的歌单" }
+    val refresh = if (qqPlaylists == null) vm::refresh else onQqRefresh
+    fun openPlaylist(playlist: Playlist) {
+        if (playlist.source == "qqmusic") {
+            if (playlist.nativeLiked) navigate("qq/likes")
+            else navigate(io.github.currencortex.music.feature.qqmusic.qqRoute("playlist", playlist.remoteId.ifBlank { playlist.id.toString() }))
+        } else navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}")
+    }
     var playlistPreview by remember { mutableStateOf<Pair<Playlist, Rect>?>(null) }
     val playlistPlayback = rememberPlaylistPreviewPlayback(vm, play)
     var category by rememberSaveable { mutableStateOf(PlaylistCategory.ALL) }
-    val playlists = remember(home.playlists, category, account.account?.id) {
-        home.playlists.filter { category.includes(it, account.account?.id ?: 0) }
+    val playlists = remember(sourcePlaylists, category, account.account?.id) {
+        sourcePlaylists.filter { category.includes(it, account.account?.id ?: 0) }
     }
     MusicSubpage("我的歌单", "playlist_index_page", onBack, actions = {
-        if (account.account != null || (nativeAccount.loggedIn && !nativeAccount.stale))
+        if (qqPlaylists != null) {
+            if (qqAccount.loggedIn) GlassIconButton(onCreate, "新建歌单", Modifier.testTag("create_playlist")) { Icon(Icons.Default.Add, null) }
+        } else if (account.account != null || (nativeAccount.loggedIn && !nativeAccount.stale))
             GlassIconButton(onCreate, "新建歌单", Modifier.testTag("create_playlist")) { Icon(Icons.Default.Add, null) }
     }) { topInset ->
-    MusicPullToRefresh(home.loading, vm::refresh, Modifier.fillMaxSize(), showIndicator = false) {
+    MusicPullToRefresh(loading, refresh, Modifier.fillMaxSize(), showIndicator = false) {
         LazyVerticalGrid(GridCells.Adaptive(148.dp), Modifier.fillMaxSize().testTag("playlist_index"),
             contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
             horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -92,27 +108,27 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     { category = PlaylistCategory.entries[it] }, tag = "playlist_category")
             }
             item(key = "count", span = { GridItemSpan(maxLineSpan) }) { SettingsHint("${playlists.size} 个歌单 · ${category.label}") }
-            home.errors["我的歌单"]?.let { error -> item(span = { GridItemSpan(maxLineSpan) }) {
-                Column { Text(error); TextButton("重试", onClick = vm::refresh) }
+            sourceErrors["我的歌单"]?.let { error -> item(span = { GridItemSpan(maxLineSpan) }) {
+                Column { Text(error); TextButton("重试", onClick = refresh) }
             } }
-            if ((home.loading || account.loading) && home.playlists.isEmpty()) items(4) {
+            if (loading && sourcePlaylists.isEmpty()) items(4) {
                 LoadingCoverTile()
             }
-            if (!home.loading && !account.loading && home.playlists.isEmpty() && home.errors["我的歌单"] == null)
+            if (!loading && sourcePlaylists.isEmpty() && sourceErrors["我的歌单"] == null)
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                         Icon(MusicIcons.List, null, Modifier.size(40.dp), tint = MiuixTheme.colorScheme.primary.copy(alpha = .6f))
-                        Text(if (account.account == null) "登录后查看你的歌单" else "为喜欢的音乐建一个歌单", Modifier.padding(top = 16.dp), fontSize = 17.sp)
-                        Text(if (account.account == null) "绑定网易云账号后也可同步收藏" else "点右上角 + 开始收藏", Modifier.padding(top = 8.dp),
+                        Text(if (qqPlaylists != null && !qqAccount.loggedIn) "登录 QQ 音乐后查看你的歌单" else if (account.account == null) "登录后查看你的歌单" else "为喜欢的音乐建一个歌单", Modifier.padding(top = 16.dp), fontSize = 17.sp)
+                        Text(if (qqPlaylists != null && !qqAccount.loggedIn) "同步 QQ 音乐的自建与收藏歌单" else if (account.account == null) "绑定网易云账号后也可同步收藏" else "点右上角 + 开始收藏", Modifier.padding(top = 8.dp),
                             fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
                     }
                 }
-            if (!home.loading && home.playlists.isNotEmpty() && playlists.isEmpty() && home.errors["我的歌单"] == null)
+            if (!loading && sourcePlaylists.isNotEmpty() && playlists.isEmpty() && sourceErrors["我的歌单"] == null)
                 item(span = { GridItemSpan(maxLineSpan) }) { SettingsHint("暂无${category.label}歌单") }
             items(playlists, key = { "${it.source}-${it.id}" }) { playlist ->
                 var coverBounds by remember { mutableStateOf(Rect.Zero) }
                 Column(Modifier.testTag("playlist_card_${playlist.id}").combinedClickable(role = Role.Button,
-                    onClick = { navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}") },
+                    onClick = { openPlaylist(playlist) },
                     onLongClickLabel = "预览歌单与操作",
                     onLongClick = { if (!coverBounds.isEmpty) playlistPreview = playlist to coverBounds })) {
                     MusicCover(playlist.cover.ifBlank { playlist.songs.firstOrNull()?.cover.orEmpty() },
@@ -122,7 +138,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         }, 480, cornerRadius = 18.dp)
                     Text(playlist.name, Modifier.padding(top = 10.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium,
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Text("${playlist.count.takeIf { it > 0 } ?: playlist.songs.size} 首 · ${if (playlist.source in setOf("ncm", "netease")) "网易云音乐" else "CurrentMusic"}",
+                    Text("${playlist.count.takeIf { it > 0 } ?: playlist.songs.size} 首 · ${when (playlist.source) { "ncm", "netease" -> "网易云音乐"; "qqmusic" -> "QQ 音乐"; else -> "CurrentMusic" }}",
                         Modifier.padding(top = 4.dp), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
                 }
             }
@@ -132,7 +148,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     playlistPreview?.let { (playlist, bounds) ->
         PlaylistArtworkPreview(vm, playlist, bounds, canPlay = playlistPlayback.enabled,
             onPlay = { shuffle -> playlistPlayback.play(playlist, shuffle) },
-            onOpen = { navigate("lib/${if (playlist.source == "netease") "ncmplaylist" else "playlist"}/${playlist.id}") },
+            onOpen = { openPlaylist(playlist) },
             onDismiss = { playlistPreview = null })
     }
 }
@@ -159,6 +175,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val likesUseNetease by vm.container.primaryLibrary.likesUseNetease.collectAsStateWithLifecycle()
     val neteaseMain by vm.container.primaryLibrary.usesNetease.collectAsStateWithLifecycle()
     val neteaseLikes by vm.container.neteaseSongActions.likedState.collectAsStateWithLifecycle()
+    val qqLikes by vm.container.qqMusic.likedState.collectAsStateWithLifecycle()
     val navidromeLikes by vm.container.navidrome.likes.collectAsStateWithLifecycle()
     val likeBusy by library.primaryLikeBusy.collectAsStateWithLifecycle()
     val batch by library.batchFavorites.collectAsStateWithLifecycle()
@@ -189,6 +206,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val removable = vm.removable(state.playlist, account.account?.id ?: 0)
     val subscribable = vm.subscribable(state.playlist)
     val subscribed = state.playlist?.nativeSubscribed == true
+    val qqUnknownSubscription = state.playlist?.source == "qqmusic" && !state.playlist.nativeSubscriptionKnown
     fun subscribe() { library.action("已收藏歌单") { vm.subscribe() } }
     val sharedMotion = LocalPlaylistContainerMotion.current
     val cover = remember(state.cover, state.songs, sharedMotion) {
@@ -304,6 +322,8 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
     val origin = when {
         albumPage -> state.description.lineSequence().firstOrNull { it.isNotBlank() } ?: "专辑"
         localMusic != null -> "本地曲库 · ${state.songs.size} 首歌曲"
+        state.playlist?.source == "qqmusic-liked" -> "QQ 音乐 · 我喜欢"
+        state.playlist?.source == "qqmusic" -> "QQ 音乐"
         state.playlist?.source == "ncm" -> "网易云音乐 · 同步歌单只读"
         state.playlist?.source == "netease" -> "网易云音乐"
         editable -> account.account?.nickname.orEmpty().ifBlank { "我的歌单" }
@@ -314,7 +334,11 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         vm.route == "lib/cloud" -> "网易云音乐"
         else -> "CurrentMusic 歌单"
     }
-    val heroOrigin = if (state.playlist?.source == "ncm") "网易云音乐" else origin
+    val heroOrigin = when (state.playlist?.source) {
+        "ncm" -> "网易云音乐"
+        "qqmusic", "qqmusic-liked" -> "QQ 音乐"
+        else -> origin
+    }
     val heroDescription = (if (albumPage) state.description.substringAfter('\n', "") else state.description).trim().takeUnless {
         it == "来自网易云音乐" || it == heroOrigin
     }.orEmpty()
@@ -377,6 +401,9 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                         Row(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                             if (localMusic != null) PlaylistPill("扫描范围", Icons.Default.Search,
                                 localMusic.chooseScope, Modifier.weight(1f).testTag("local_music_scope"))
+                            else if (subscribable && qqUnknownSubscription) PlaylistPill("管理歌单收藏", MusicIcons.Star,
+                                { menuOpen = true }, Modifier.weight(1f).testTag("playlist_subscribe"),
+                                enabled = !busy && !state.loading && !state.refreshing)
                             else if (subscribable) PlaylistPill(if (subscribed) "已收藏" else "收藏歌单",
                                 if (subscribed) Icons.Default.Star else MusicIcons.Star,
                                 { if (subscribed) onDelete() else subscribe() },
@@ -458,7 +485,9 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                 if (room != null && localMusic == null) item { Text("点击歌曲，为当前房间点歌", Modifier.playlistPullSurface(pullMotion).padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 13.sp) }
                 if (!state.loading && songs.isEmpty() && state.error == null && localMusic?.allowed != false) item {
                     Text(if (query.isNotBlank()) "没有找到匹配的歌曲" else if (localMusic != null) "未找到音乐文件，下拉重新扫描"
-                        else if (vm.route == "lib/cloud") "云盘里还没有歌曲，请先在网易云音乐上传音乐。" else "这里还没有歌曲，可在搜索结果中加入歌单",
+                        else if (vm.route == "lib/cloud") "云盘里还没有歌曲，请先在网易云音乐上传音乐。"
+                        else if (vm.route == "qq/recent") "本周暂无常听记录，播放 QQ 音乐后再来看看"
+                        else "这里还没有歌曲，可在搜索结果中加入歌单",
                         Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(24.dp), fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
                 }
                 itemsIndexed(songs, key = { index, _ -> songKeys[index] }, contentType = { _, _ -> "track" }) { index, song ->
@@ -466,7 +495,8 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                         .playlistPullSurface(pullMotion).background(surface).padding(horizontal = 16.dp)) {
                         CompositionLocalProvider(LocalGlassBackdrop provides trackBackdrop) {
                             PlaylistTrack(song, selected = currentSong?.id == song.id && currentSong?.musicSource == song.musicSource,
-                                liked = localMusic == null && (if (neteaseMain) song.id in neteaseLikes else statuses[song.id]?.liked == true), play = { play(songs, index) },
+                                liked = localMusic == null && (if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) song.id in qqLikes
+                                    else if (neteaseMain) song.id in neteaseLikes else statuses[song.id]?.liked == true), play = { play(songs, index) },
                                 next = { vm.container.playerController.add(song, true) }, enqueue = { vm.container.playerController.add(song) },
                                 onMultiSelect = if (selectionAllowed && supportsBatchFavorite(song)) ({
                                     library.clearBatchFavoriteResult()
@@ -486,6 +516,10 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                             }
                         }
                     }
+                }
+                if (state.more) item(key = "more") {
+                    MusicTextAction(if (state.loading) "加载中…" else "加载更多",
+                        { vm.reload(more = true) }, Modifier.fillMaxWidth().testTag("playlist_load_more"), enabled = !state.loading)
                 }
             }
         }
@@ -508,7 +542,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
         }, modifier = Modifier.testTag("playlist_depth_ribbon_toggle"), chevron = false)
         MusicDestinationRow("${collectionKind}信息", { menuOpen = false; infoOpen = true }, modifier = Modifier.testTag("playlist_menu_info"), chevron = false)
         MusicDestinationRow(if (localMusic != null) "重新扫描本地音乐" else "刷新歌单", { menuOpen = false; refresh() }, chevron = false)
-        if (state.playlist?.editable(account.account?.id ?: 0) == true) {
+        if (state.playlist?.editable(account.account?.id ?: 0) == true && state.playlist?.source != "qqmusic") {
             MusicDestinationRow(if (importState.running) "查看网易云导入进度" else "一键导入网易云我喜欢", {
                 menuOpen = false
                 if (!importState.running) vm.container.playlistLikeImporter.start(vm.id, state.title)
@@ -521,11 +555,20 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                 enabled = !busy && !state.loading && !state.refreshing,
                 modifier = Modifier.testTag("playlist_menu_subscribe"), chevron = false)
         }
+        if (qqUnknownSubscription) MusicDestinationRow("取消收藏歌单", {
+            menuOpen = false
+            library.action("已取消收藏歌单") { vm.unsubscribeQqPlaylist() }
+        }, enabled = !busy && !state.loading && !state.refreshing,
+            modifier = Modifier.testTag("playlist_menu_unsubscribe_qq"), chevron = false)
+        if (subscribed && state.playlist?.source == "qqmusic") MusicDestinationRow("取消收藏歌单", {
+            menuOpen = false; onDelete()
+        }, enabled = !busy && !state.loading && !state.refreshing,
+            modifier = Modifier.testTag("playlist_menu_unsubscribe_qq_known"), chevron = false)
         if (editable) {
             MusicDestinationRow("重命名", { menuOpen = false; onRename() }, enabled = !busy, modifier = Modifier.testTag("rename_playlist"), chevron = false)
         }
         if (removable) {
-            MusicDestinationRow(if (state.playlist?.source == "netease" && !state.playlist.nativeOwned) "取消收藏" else "删除歌单",
+            MusicDestinationRow(if (state.playlist?.source in setOf("netease", "qqmusic") && state.playlist?.nativeOwned == false) "取消收藏" else "删除歌单",
                 { menuOpen = false; onDelete() }, enabled = !busy, modifier = Modifier.testTag("delete_playlist"), chevron = false)
         }
     }
@@ -555,7 +598,10 @@ internal fun playlistDurationLabel(songs: List<Song>): String {
     onSelect: () -> Unit = {}, extra: @Composable () -> Unit) {
     val host = LocalSongMenu.current
     var menu by remember(song.id) { mutableStateOf<SongMenu?>(null) }
-    val room = LocalRoomSongRequest.current.takeUnless { song.privateLibrary || song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL }
+    val room = LocalRoomSongRequest.current.takeUnless {
+        song.privateLibrary || song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.LOCAL,
+            io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
+    }
     val pending = room?.pending?.invoke(song.id) == true
     val primary = { if (selectionMode) onSelect() else if (room != null) room.request(song) else play() }
     var coverBounds by remember(song.id, song.musicSource) { mutableStateOf(Rect.Zero) }

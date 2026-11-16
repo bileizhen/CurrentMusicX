@@ -8,7 +8,7 @@
 
 **Artwork and lyrics that move with the music**
 
-NetEase Cloud Music · Self-hosted Navidrome / Emby libraries · Two-person listening
+NetEase Cloud Music / QQ Music · Self-hosted Navidrome / Emby libraries · Two-person listening
 
 Native Android client built with Kotlin, Jetpack Compose, and Miuix
 
@@ -51,7 +51,7 @@ CurrentMusicX is the native Android client for [CurrentMusic](https://github.com
 
 1. **Install the app.** Download `CurrentMusic-Android-v<version>.apk` from [Releases](https://github.com/bileizhen/CurrentMusicX/releases/latest) and follow Android's installation prompt. Official builds with the same signature can upgrade an existing installation.
 2. **Choose your sources.** In **Settings → Sources & Network**, choose audio and lyric sources separately. Automatic lyric selection is the default and prefers word-by-word timing, with line-by-line lyrics as a fallback.
-3. **Connect your library.** Sign in to CurrentMusic, link NetEase, or connect Navidrome or Emby under **Settings → Sources & Network → Self-hosted libraries**. Connected libraries appear under **Me → Music services** and hide after sign-out.
+3. **Connect your library.** Sign in to CurrentMusic, link NetEase, or tap **Current Music** at the top left to switch platforms and sign in to QQ Music with a QR code. You can also connect Navidrome or Emby under **Settings → Sources & Network → Self-hosted libraries**. Connected libraries appear under **Me → Music services** and hide after sign-out.
 
 Track, quality, member effects, and recommendation availability depend on the service and account entitlements. This page describes the current `main` source. See [GitHub Releases](https://github.com/bileizhen/CurrentMusicX/releases) for changes and verification scope by release.
 
@@ -69,7 +69,7 @@ Track, quality, member effects, and recommendation availability depend on the se
 
 ### Your library and shared listening
 
-- **Libraries.** Manage NetEase likes and playlists, subscribe to other people's NetEase playlists, create CurrentMusic playlists, and browse Navidrome or Emby albums and artists. Search, favorite, and play at original quality.
+- **Libraries.** Browse daily recommendations, likes, playlists, search, albums, artists, category playlists, and listening rankings from NetEase or QQ Music. Switch platforms from the top-left control while reusing the same interface components. The app also supports CurrentMusic playlists and Navidrome or Emby albums and artists, with search, favorites, and original-quality playback.
 - **Local audio.** Under **Local Music → Scan scope → Choose folder**, scan the selected directory and its subdirectories. The app remembers the location and asks again if access expires. A device-wide scan requires explicit selection and audio permission. Changing scan scope preserves the active queue.
 - **Discovery.** Search by category or lyrics, browse suggestions, daily recommendations, trends, and genres. Personal FM supports default, familiar, exploration, mix, and dynamic scenes. Your previous queue can be restored after a session.
 - **Two-person listening.** Use native NetEase invites and short links, a shared queue, synchronized track changes, and reconnection. Browse history, rankings, session recaps, and compatibility reports.
@@ -129,8 +129,9 @@ Set audio and lyric sources independently in **Settings → Sources & Network**.
 | --- | --- |
 | **CurrentMusic (default)** | Resolve playback through the configured CurrentMusic server using a CurrentMusic account. |
 | Native NetEase | Connect directly with the local NetEase account's entitlements. This mode keeps playback resolution on the direct route. |
+| Direct QQ Music | Tap **Current Music** at the top left, switch platforms, and sign in with a QR code. The phone calls QQ Music directly instead of routing through CurrentMusic. |
 | LeiZ API | Configure an API key for this service. The app stores it encrypted on the device. |
-| LX Music source | Import one or more `.js` files or links. With **Smart source switching** enabled, the app prefers the script that resolves fastest and falls back to other imported sources on failure. It resolves tracks with a valid NetEase ID. Search and playlists keep their original sources. |
+| LX Music source | Import one or more `.js` files or links. With **Smart source switching** enabled, the app prefers the script that resolves fastest and falls back to other imported sources on failure. It resolves tracks with a valid NetEase or QQ Music ID for the active platform. Search and playlists keep their original sources. |
 
 LX Music scripts send track information to their service. Import scripts from sources you trust. Smart-switch retries send the same track information to other imported scripts' services. Connect Navidrome under **Settings → Sources & Network → Self-hosted libraries** to play audio directly from your server.
 

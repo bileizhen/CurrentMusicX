@@ -23,7 +23,8 @@ import top.yukonga.miuix.kmp.basic.*
 }
 
 @Composable fun DiscoverScreen(vm: DiscoverViewModel,
-    pager: androidx.compose.foundation.pager.PagerState, navigate: (String) -> Unit) {
+    pager: androidx.compose.foundation.pager.PagerState, navigate: (String) -> Unit,
+    musicPage: (@Composable () -> Unit)? = null) {
     val scope = rememberCoroutineScope()
     val posts: PostsViewModel = viewModel(factory = viewModelFactory { PostsViewModel(vm.container) })
     val chat: ChatViewModel = viewModel(factory = viewModelFactory { ChatViewModel(vm.container) })
@@ -39,7 +40,7 @@ import top.yukonga.miuix.kmp.basic.*
             HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().clipToBounds()
                 .testTag("discover_pager")) { page ->
                 when (page) {
-                    0 -> DiscoverMusicPage(vm, navigate)
+                    0 -> if (musicPage == null) DiscoverMusicPage(vm, navigate) else musicPage()
                     1 -> DiscoverUsersPage(vm, navigate, pager.settledPage == 1)
                     2 -> PostsScreen(posts, navigate)
                     3 -> ChatScreen(chat, navigate, pager.settledPage == 3 && LocalMusicPageActive.current)

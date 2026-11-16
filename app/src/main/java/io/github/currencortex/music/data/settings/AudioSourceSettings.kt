@@ -9,7 +9,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.security.MessageDigest
 
-enum class AudioProvider(val label: String) { CURRENT_MUSIC("CurrentMusic"), NETEASE("网易云原生"), LEIZ("LeiZ API"), LX("落雪音源") }
+enum class AudioProvider(val label: String) { CURRENT_MUSIC("CurrentMusic"), NETEASE("网易云原生"), QQ_MUSIC("QQ 音乐直连"), LEIZ("LeiZ API"), LX("落雪音源") }
 data class AudioProviderState(val provider: AudioProvider = AudioProvider.CURRENT_MUSIC,
     val keyConfigured: Boolean = false, val identity: String = "currentmusic", val lxSourceId: String = "", val lxSmartSwitch: Boolean = false)
 
@@ -18,6 +18,7 @@ class AudioSourceAccess(val provider: AudioProvider, internal val key: String = 
     val identity = when (provider) {
         AudioProvider.CURRENT_MUSIC -> "currentmusic"
         AudioProvider.NETEASE -> "netease"
+        AudioProvider.QQ_MUSIC -> "qqmusic"
         AudioProvider.LEIZ -> "leiz:" + MessageDigest.getInstance("SHA-256").digest(key.toByteArray()).joinToString("") { "%02x".format(it) }
         AudioProvider.LX -> if (lxSmartSwitch) "lx:$lxSourceId:smart" else "lx:$lxSourceId"
     }
@@ -33,6 +34,8 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
     @Volatile private var current = AudioSourceAccess(AudioProvider.CURRENT_MUSIC)
     private var savedKey = ""
     private var savedLxSource = ""
+    private var platformMusicProvider: AudioProvider? = null
+    private var resumeProvider: AudioProvider? = null
     val state = MutableStateFlow(AudioProviderState())
     val ready = CompletableDeferred<Unit>()
     init { scope.launch(Dispatchers.IO) {
@@ -54,6 +57,21 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
     suspend fun select(provider: AudioProvider) {
         ready.await()
         lock.withLock { store.edit { it[preference] = provider.name }; publish(provider) }
+    }
+    suspend fun selectForPlatform(provider: AudioProvider?) {
+        ready.await()
+        lock.withLock {
+            if (provider == null) {
+                platformMusicProvider = null
+                resumeProvider?.let { store.edit { settings -> settings[preference] = it.name }; publish(it) }
+                resumeProvider = null
+            } else {
+                if (platformMusicProvider == null) resumeProvider = current.provider.takeUnless { it == provider }
+                platformMusicProvider = provider
+                store.edit { it[preference] = provider.name }
+                publish(provider)
+            }
+        }
     }
     suspend fun selectLxSource(id: String) {
         require(id.isEmpty() || id.matches(Regex("[a-f0-9]{64}"))) { "请选择有效的落雪音源" }

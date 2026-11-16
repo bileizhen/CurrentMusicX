@@ -36,6 +36,7 @@ This template uses the following libraries at runtime:
   The theme-attribute tint is removed so Compose can apply the player's animated tint.
 - Coil (including animated image decoders) by Coil contributors, Apache-2.0: https://github.com/coil-kt/coil.
 - ZXing QR encoder by ZXing authors, Apache-2.0: https://github.com/zxing/zxing. Copyright 2008 ZXing authors. Used for native login QR generation; the Apache-2.0 license is available offline with the notices.
+- Eclipse Paho MQTT v5 Java client 1.2.5 by the Eclipse Paho contributors, Eclipse Public License 2.0 or Eclipse Distribution License 1.0; used only to receive the QQ Music QR-login MQTT handoff. Source and license details: https://github.com/eclipse-paho/paho.mqtt.java.
 
 ## Floating Bottom Bar and Liquid Glass
 

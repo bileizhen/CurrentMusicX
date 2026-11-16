@@ -12,21 +12,23 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import io.github.currencortex.music.core.network.SourceAvailabilityStatus
+import io.github.currencortex.music.data.lx.LxPlatform
 import io.github.currencortex.music.data.lx.lxQualityLabel
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.TextField
 
 /** Uses the same grouped lists and anchored choice menu as the other source settings. */
-@Composable internal fun LxSourceSettings(vm: MusicSettingsViewModel) {
+@Composable internal fun LxSourceSettings(vm: MusicSettingsViewModel, platform: LxPlatform) {
     val sources by vm.lxSources.collectAsStateWithLifecycle()
     val provider by vm.audioProvider.collectAsStateWithLifecycle()
     val state by vm.audioState.collectAsStateWithLifecycle()
     val health by vm.lxHealth.collectAsStateWithLifecycle()
     val resolveTimes by vm.lxResolveTimes.collectAsStateWithLifecycle()
     val lifecycle = LocalLifecycleOwner.current.lifecycle
-    LaunchedEffect(sources.map { it.id }, provider.lxSourceId, lifecycle) {
-        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.checkLxSources() }
+    LaunchedEffect(sources.map { it.id }, provider.lxSourceId, platform, lifecycle) {
+        lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.checkLxSources(platform) }
     }
     var urlOpen by rememberSaveable { mutableStateOf(false) }
     var removal by rememberSaveable { mutableStateOf<String?>(null) }
@@ -34,24 +36,27 @@ import top.yukonga.miuix.kmp.basic.TextField
         uri?.let(vm::importLxFile)
     }
     val selected = sources.firstOrNull { it.id == provider.lxSourceId }
-    fun timeSuffix(id: String): String = resolveTimes[id]?.let { "，取链 $it ms" } ?: ""
+    fun timeSuffix(id: String): String = resolveTimes[platform to id]?.let { "，取链 $it ms" } ?: ""
     SettingsSection("落雪音源", MusicIcons.File) {
         if (sources.isNotEmpty()) {
             SettingsOptionsRow(if (provider.lxSmartSwitch) "默认音源" else "当前音源", selected?.name ?: "请选择", sources.map { source ->
                 SettingsOption("lx_source_${source.id}", source.name, source.id == provider.lxSourceId,
-                    summary = source.summary + timeSuffix(source.id),
-                    leadingContent = { LxHealthBadge(vm, source.id) }, onSelect = { vm.selectLxSource(source.id) })
+                    summary = source.summary(platform) + timeSuffix(source.id),
+                    leadingContent = { LxHealthBadge(source.id, platform, health[platform to source.id]?.status) },
+                    onSelect = { vm.selectLxSource(source.id) })
             }, Modifier.testTag("lx_source_select"), enabled = !state.busy,
-                valueLeading = selected?.let { source -> { LxHealthBadge(vm, source.id) } })
+                valueLeading = selected?.let { source ->
+                    { LxHealthBadge(source.id, platform, health[platform to source.id]?.status) }
+                })
             selected?.let { source ->
                 Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                     if (source.description.isNotBlank()) SettingsHint(source.description.take(500))
                     if (source.author.isNotBlank()) SettingsHint("作者 · ${source.author.take(100)}")
-                    SettingsHint(source.capabilities.joinToString("；") { capability ->
-                        "网易云 · ${capability.qualities.joinToString(" / ") { lxQualityLabel(it) }}"
-                    })
-                    resolveTimes[source.id]?.let { SettingsHint("最近成功取链 · $it ms") }
-                    health[source.id]?.message?.let { SettingsHint(it) }
+                    val qualities = source.qualities(platform)
+                    SettingsHint(if (qualities.isEmpty()) platform.label else
+                        "${platform.label} · ${qualities.joinToString(" / ") { lxQualityLabel(it) }}")
+                    resolveTimes[platform to source.id]?.let { SettingsHint("最近成功取链 · $it ms") }
+                    health[platform to source.id]?.message?.let { SettingsHint(it) }
                 }
             }
             SettingsDivider()
@@ -84,10 +89,10 @@ import top.yukonga.miuix.kmp.basic.TextField
     }
 }
 
-@Composable private fun LxHealthBadge(vm: MusicSettingsViewModel, id: String) {
-    val health by vm.lxHealth.collectAsStateWithLifecycle()
-    val status = health[id]?.status ?: io.github.currencortex.music.core.network.SourceAvailabilityStatus.UNKNOWN
-    SourceAvailabilityBadge(status, Modifier.testTag("lx_source_badge_$id"), "音源：${status.label}")
+@Composable private fun LxHealthBadge(id: String, platform: LxPlatform, status: SourceAvailabilityStatus?) {
+    val availability = status ?: SourceAvailabilityStatus.UNKNOWN
+    SourceAvailabilityBadge(availability, Modifier.testTag("lx_source_badge_$id"),
+        "${platform.label}音源：${availability.label}")
 }
 
 @Composable private fun LxSourceUrlDialog(onDismiss: () -> Unit, onImport: (String) -> Unit) {

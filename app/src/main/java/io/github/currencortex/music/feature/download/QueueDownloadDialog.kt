@@ -40,11 +40,20 @@ import top.yukonga.miuix.kmp.basic.TextButton
                     try {
                         val account = container.accountRepository.state.value.account?.id ?: 0L
                         val server = container.accountRepository.server
-                        val provider = container.audioSettings.access().identity
+                        val access = container.audioSettings.access()
                         val uid = if (container.nativeNetease != null) container.neteaseSessions.state.value.profile?.uid ?: 0L else -1L
-                        songs.distinctBy { it.id }.forEach { container.songDownloads.start(it, quality, account, server, provider, uid) }
+                        container.qqMusic.selectOwner()
+                        val qq = container.qqMusic.state.value
+                        if (songs.any { it.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC })
+                            check(qq.loggedIn) { "请先登录 QQ 音乐" }
+                        songs.distinctBy { it.id to it.musicSource }.forEach { song ->
+                            if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
+                                container.songDownloads.start(song, quality, account, server, container.qqAudioIdentity(access),
+                                    navidromeRevision = qq.revision.toString())
+                            else container.songDownloads.start(song, quality, account, server, access.identity, uid)
+                        }
                         onDismiss()
-                    } catch (_: Exception) { error = "部分下载任务未能创建，请重试" }
+                    } catch (e: Exception) { error = e.message ?: "部分下载任务未能创建，请重试" }
                 }, enabled = songs.isNotEmpty() && (Build.VERSION.SDK_INT >= 29 || directory != null),
                     modifier = Modifier.weight(1f).testTag("queue_download_confirm"))
             }
