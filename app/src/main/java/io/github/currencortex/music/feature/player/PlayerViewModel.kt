@@ -361,7 +361,7 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
         setPlaybackMode(when (queue.value.mode) {
             PlaybackMode.LIST -> PlaybackMode.ONE
             PlaybackMode.ONE -> PlaybackMode.SHUFFLE
-            PlaybackMode.SHUFFLE -> if (NeteaseSongActionsRepository.songId(queue.value.current) != null) PlaybackMode.HEART else PlaybackMode.LIST
+            PlaybackMode.SHUFFLE -> PlaybackMode.LIST
             PlaybackMode.HEART -> PlaybackMode.LIST
         })
     }

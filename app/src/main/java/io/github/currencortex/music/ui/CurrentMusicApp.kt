@@ -3,6 +3,7 @@
 package io.github.currencortex.music.ui
 
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.emitAll
 
 import android.os.Build
 import io.github.currencortex.music.BuildConfig
@@ -126,7 +127,7 @@ import io.github.currencortex.music.feature.binding.*
 import io.github.currencortex.music.feature.room.*
 
 private fun isPlaylistRoute(route: String) = route == "lib/local" || route.startsWith("lib/playlist/") || route.startsWith("lib/ncmplaylist/") || route.startsWith("lib/album/") ||
-    route in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent")
+    route in setOf("lib/likes", "lib/daily", "lib/foryou", "lib/recent", "lib/cloud")
 
 private val UnifiedMiniScrollClearance = 36.dp
 private const val ROOT = 0
@@ -337,7 +338,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val pageSceneStrategy=remember(pageNavigation) {PageContainerSceneStrategy(pageNavigation,
             setOf(ROOT.toString(),SETTINGS.toString(),APPEARANCE.toString(),NETWORK.toString(),STORAGE.toString(),ABOUT.toString(),
                 "user/security","user/binding","user/netease-tasks","user/playlist-import","user/decorations",
-                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome","emby",SupportConfig.route)+
+                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome","emby",SupportConfig.route,SupportConfig.donationRoute)+
                 LegalDocument.entries.map {it.route().toString()})}
         SideEffect {pageNavigation.onClosed={route->
             if(backStack.lastOrNull()==route)backStack=backStack.dropLast(1)
@@ -579,9 +580,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 }
             }
         }
-        // Retained container scenes still own back callbacks. Keep their dispatcher alive,
-        // but stop it receiving gestures while the player above them owns navigation.
-        val pageBackOwner = rememberNavigationEventDispatcherOwner(enabled = !playerPresented)
+        // Retained container scenes still own back callbacks. Keep their dispatcher active
+        // only when predictive back is enabled, and stop it while the player owns navigation.
+        // The legacy NavigationBackHandler below handles ordinary back when this is off.
+        val pageBackOwner = rememberNavigationEventDispatcherOwner(enabled = predictiveBack && !playerPresented)
         val pageContent: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize().then(if (launchBrand.active || launchPreview != null || playerPresented || miniQueueOpen || updateDialogVisible) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
         Column(Modifier.fillMaxSize().then(if (searchCoversScene) Modifier else Modifier.imePadding())) {
@@ -751,7 +753,21 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         onOpenMember = { member, group -> memberFocus = MemberFocus(member, group) },
                         onSupport = { navigateLibrary(SupportConfig.route) })
                 }
-                entry(SupportConfig.route) { SupportScreen(onBack = ::navigateBack) }
+                entry(SupportConfig.route) { SupportScreen(onBack = ::navigateBack,
+                    onOfficialDonation = { navigateLibrary(SupportConfig.donationRoute) }) }
+                entry(SupportConfig.donationRoute) {
+                    val vm: io.github.currencortex.music.feature.support.DonationViewModel = viewModel(factory = viewModelFactory {
+                        io.github.currencortex.music.feature.support.DonationViewModel(
+                            io.github.currencortex.music.data.support.DonationRepository(container.apiClient),
+                            kotlinx.coroutines.flow.flow {
+                                container.sessionRestored.await()
+                                emitAll(kotlinx.coroutines.flow.combine(container.accountRepository.sessionRevision,
+                                    container.musicSettings.state.map { it.server }) { _, _ -> container.projectSession() })
+                            })
+                    })
+                    io.github.currencortex.music.feature.support.OfficialDonationScreen(vm, ::navigateBack,
+                        onLogin = { authVm.begin(); navigateLibrary("user/login") })
+                }
                 LegalDocument.entries.forEach { document ->
                     entry(document.route().toString()) {
                         Box(Modifier.fillMaxSize().navigationBarsPadding()) {
@@ -1043,6 +1059,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 pendingPlay == null && !updateDialogVisible && updatePrompt == null && !announcementVisible && !showScale && launchPreview == null && memberFocus == null && libraryDialogSong == null && likeSelection.song == null && profileDialog == null && profileMessage == null && !roomDialogOpen && songMenu == null && downloadSongJson == null && !playerDialogOpen && !miniQueueOpen,
             onBackCompleted = ::navigateBack,
         )
+        // With predictive back off the page dispatcher is disabled, so the ribbon/shelf
+        // BackHandlers inside the playlist page never fire and the legacy pop above would
+        // exit the page. Registered after it, this closes the overlay first instead.
+        androidx.activity.compose.BackHandler(enabled = !predictiveBack && !playerPresented &&
+            isPlaylistRoute(sceneStack.last()) && (settings.playlistDepthRibbon || settings.playlistRecordShelf) &&
+            io.github.currencortex.music.feature.library.PlaylistOverlayVisibility.visible[sceneStack.last()] == true) {
+            scope.launch { container.settings.edit { it.copy(playlistDepthRibbon = false, playlistRecordShelf = false) } }
+        }
         ScaleDialog(showScale, settingsVm) { showScale = false }
         MemberDetailDialog(show = memberFocus != null, focus = shownMember, onDismiss = { memberFocus = null })
         LogExportDialog(showLogs, container.logger) { showLogs = false }

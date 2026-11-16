@@ -145,9 +145,7 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
                 // the lyric block sits below at full column width, independent of the buttons.
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(searchMatchText(song.name, query, colors.primary), fontSize = 16.sp, fontWeight = FontWeight.Medium,
-                            color = if (active) colors.primary else colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.testTag("search_result_title_${song.id}"))
+                        SearchSongTitles(song, query, active)
                         subtitleBlock()
                     }
                     quickActions?.let { actions ->
@@ -156,9 +154,7 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
                 }
                 lyricBlock()
             } else {
-                Text(searchMatchText(song.name, query, colors.primary), fontSize = 16.sp, fontWeight = FontWeight.Medium,
-                    color = if (active) colors.primary else colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.testTag("search_result_title_${song.id}"))
+                SearchSongTitles(song, query, active)
                 subtitleBlock()
                 lyricBlock()
             }
@@ -171,6 +167,20 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
     }
     }
     localMenu?.let { SongActionsSheet(it) { localMenu = null } }
+}
+
+/** Show the translated title when it explains a Chinese hit; retain the original for identification. */
+@Composable private fun SearchSongTitles(song: Song, query: String, active: Boolean) {
+    val colors = MiuixTheme.colorScheme
+    val word = query.trim()
+    val translated = song.alternateNames.firstOrNull { name ->
+        word.isNotEmpty() && name.contains(word, ignoreCase = true)
+    }
+    Text(searchMatchText(translated ?: song.name, query, colors.primary), fontSize = 16.sp, fontWeight = FontWeight.Medium,
+        color = if (active) colors.primary else colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.testTag("search_result_title_${song.id}"))
+    if (translated != null) Text(song.name, fontSize = 12.sp, color = colors.onSurface.copy(alpha = .55f),
+        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("search_result_original_${song.id}"))
 }
 
 /** Reuses the selected heart destination and the existing playlist picker. */

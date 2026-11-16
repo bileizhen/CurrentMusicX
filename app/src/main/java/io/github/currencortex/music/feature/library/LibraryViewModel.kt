@@ -414,6 +414,8 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                     } ?: previous.copy(title = "我喜欢的音乐", cover = "", description = "", playlist = null,
                         songs = container.libraryRepository.likedSongs(fresh = force))
                     "recent" -> previous.copy(title = "最近播放", songs = container.libraryRepository.recent(fresh = force))
+                    "cloud" -> previous.copy(title = "音乐云盘", description = "上传到网易云音乐的个人云盘歌曲",
+                        songs = container.neteaseLibrary.cloudLibrary(fresh = force))
                     "ncmplaylist" -> container.neteaseLibrary.playlist(id, fresh = force).let { previous.copy(title = it.name,
                         description = it.description, cover = it.cover, songs = it.songs, playlist = it) }
                     "playlist" -> container.libraryRepository.playlist(id, fresh = force).let { previous.copy(title = it.name, description = it.description,

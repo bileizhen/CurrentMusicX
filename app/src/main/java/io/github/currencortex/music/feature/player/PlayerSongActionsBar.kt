@@ -65,7 +65,11 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
         PlaybackMode.HEART -> PlayerIcon.HEART_MODE
         PlaybackMode.LIST -> PlayerIcon.REPEAT
     }, mode.label, vm::cyclePlaybackMode, Modifier.testTag("player_cycle_mode"),
-        selected = mode == PlaybackMode.HEART, enabled = if (together.active) !together.busy else player.mode == PlayerMode.LOCAL)
+        selected = mode == PlaybackMode.HEART, enabled = if (together.active) !together.busy else player.mode == PlayerMode.LOCAL,
+        onLongClick = if (!together.active && player.mode == PlayerMode.LOCAL &&
+            NeteaseSongActionsRepository.songId(queue.current) != null) {
+            { vm.setPlaybackMode(PlaybackMode.HEART) }
+        } else null, onLongClickLabel = "启用心动模式")
 }
 
 @Composable internal fun PlayerQueueButton(vm: PlayerViewModel, onQueue: () -> Unit) {

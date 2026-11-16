@@ -31,7 +31,7 @@ class MusicRepository(private val api: ApiClient,
         MusicSource.EMBY -> requireNotNull(emby).detail(song)
         MusicSource.LOCAL -> song
         MusicSource.NAVIDROME -> requireNotNull(navidrome).detail(song)
-        else -> detail(song.id)
+        else -> if (song.neteaseCloud) song else detail(song.id)
     }
     suspend fun lyricsDocument(song: Song) = if (song.musicSource == MusicSource.EMBY) appResult {
         io.github.currencortex.music.feature.lyrics.model.LyricsDocument(metadata = io.github.currencortex.music.feature.lyrics.model.LyricsMetadata(source = "Emby"))
@@ -40,6 +40,7 @@ class MusicRepository(private val api: ApiClient,
         supportsDolby: Boolean = false): AudioSource {
         if (song.musicSource == MusicSource.NAVIDROME) return requireNotNull(navidrome).source(song, quality)
         if (song.musicSource == MusicSource.EMBY) return requireNotNull(emby).source(song)
+        if (song.neteaseCloud) return source(song.id, quality, session, refresh, supportsDolby, nativeCloud = true)
         val access = audioAccess()
         return if (access.provider == AudioProvider.LX) lxSource(song, quality, access)
         else source(song.id, quality, session, refresh, supportsDolby)
@@ -72,19 +73,41 @@ class MusicRepository(private val api: ApiClient,
             if (code != null && code != 200) throw ApiException(ErrorKind.Server, code)
             val dto = api.decode<SearchDto>(raw)
             val supplements = if (type == "song" && offset == 0) dto.catalogSongs else emptyList()
-            return SearchPage((supplements + dto.songs).map(SongDto::toDomain).distinctBy(Song::id),
-                dto.totals.song, dto.hasMore.song,
+            val songs = (supplements + dto.songs).map(SongDto::toDomain).distinctBy(Song::id)
+            return SearchPage(songs, dto.totals.song, dto.hasMore.song,
                 if (type == "lyric") dto.songs.mapNotNull { song -> searchLyricContextOf(song)?.let { song.id to it } }.toMap() else emptyMap(),
                 upstreamCount = dto.songs.size, backend = source)
         }
+        // The project gateway currently drops translated and alternate titles. A native
+        // search keeps the project's catalog fallback and pagination, but restores names.
+        suspend fun readNativeNames(value: String): List<Song> {
+            if (!api.hasLocalNeteaseLogin) return emptyList()
+            val native = api.netease ?: return emptyList()
+            val nativeQuery = mapOf("keywords" to value, "offset" to "0", "limit" to "100", "type" to "song")
+            return withTimeoutOrNull(SEARCH_NAME_ENRICHMENT_TIMEOUT_MS) {
+                when (val result = appResult {
+                    val raw = native.request("GET", "ncm/search", nativeQuery, null, expectedRevision = revision)
+                    if (owner != api.publicSession()) throw ApiException(ErrorKind.Unauthorized)
+                    val code = (raw as? JsonObject)?.get("code")?.jsonPrimitive?.intOrNull
+                    if (code != null && code != 200) throw ApiException(ErrorKind.Server, code)
+                    api.decode<SearchDto>(raw).songs.map(SongDto::toDomain)
+                }) {
+                    is AppResult.Success -> result.value
+                    is AppResult.Failure -> emptyList()
+                }
+            } ?: emptyList()
+        }
         // Pin the transport after the first page: offsets from two search indexes cannot be mixed.
-        if (backend != null) return@appResult read(backend)
-        when (val result = appResult { read(SearchBackend.PROJECT) }) {
+        val page = if (backend != null) read(backend) else when (val result = appResult { read(SearchBackend.PROJECT) }) {
             is AppResult.Success -> result.value
             is AppResult.Failure -> if (offset == 0 && api.netease != null && result.kind in setOf(
                     ErrorKind.NotFound, ErrorKind.Network, ErrorKind.Timeout, ErrorKind.Server)) read(SearchBackend.NATIVE)
                 else throw ApiException(result.kind, result.status, result.message)
         }
+        val enriched = if (page.backend == SearchBackend.PROJECT && type == "song" && api.hasLocalNeteaseLogin)
+            page.copy(songs = mergeNativeSearchNames(page.songs, readNativeNames(keyword))) else page
+        if (owner != api.publicSession()) throw ApiException(ErrorKind.Unauthorized)
+        enriched
     }
     /** Matching sources are explicit: the media-source setting never reroutes this search. */
     suspend fun searchForLyricsMatching(keyword: String, source: LyricsSource): AppResult<SearchPage> = appResult {
@@ -182,10 +205,10 @@ class MusicRepository(private val api: ApiClient,
         else read("ncm/lyric")
     }
     suspend fun source(id: Long, quality: AudioQuality, session: RequestSession? = null, refresh: Boolean = false,
-        supportsDolby: Boolean = false): AudioSource {
+        supportsDolby: Boolean = false, nativeCloud: Boolean = false): AudioSource {
         val access = audioAccess()
-        if (access.provider == AudioProvider.LX) return lxSource(Song(id, ""), quality, access)
-        if (access.provider == AudioProvider.LEIZ) {
+        if (!nativeCloud && access.provider == AudioProvider.LX) return lxSource(Song(id, ""), quality, access)
+        if (!nativeCloud && access.provider == AudioProvider.LEIZ) {
             val source = leiz.source(id, quality, access.key)
             if (audioAccess().identity != access.identity) throw ApiException(ErrorKind.AudioSourceChanged)
             return source
@@ -195,7 +218,7 @@ class MusicRepository(private val api: ApiClient,
             if (quality == AudioQuality.AUTO && supportsDolby) put("supportsDolby", "1")
             if (refresh && access.provider == AudioProvider.CURRENT_MUSIC) put("refresh", "1")
         }
-        suspend fun fetch(params: Map<String, String>): SongUrlDto = if (access.provider == AudioProvider.NETEASE) {
+        suspend fun fetch(params: Map<String, String>): SongUrlDto = if (nativeCloud || access.provider == AudioProvider.NETEASE) {
             val gateway = api.netease ?: throw ApiException(ErrorKind.NotFound)
             ApiJson.decodeFromJsonElement<SongUrlDto>(gateway.request("GET", "ncm/song/url", params, null,
                 expectedRevision = session?.neteaseRevision))
@@ -208,13 +231,13 @@ class MusicRepository(private val api: ApiClient,
 
         var dto = fetch(query)
         if (quality == AudioQuality.AUTO && dto.isDolby()) {
-            if (access.provider == AudioProvider.CURRENT_MUSIC && supportsDolby && !dto.isUsableDolby())
+            if (!nativeCloud && access.provider == AudioProvider.CURRENT_MUSIC && supportsDolby && !dto.isUsableDolby())
                 dto = fetch(query - "supportsDolby")
             if (dto.isDolby() && (!supportsDolby || !dto.isUsableDolby()))
                 throw ApiException(ErrorKind.NeteaseAudioUnavailable)
         }
         val url = dto.url?.toHttpUrlOrNull() ?: throw ApiException(ErrorKind.NotFound)
-        if (audioAccess().identity != access.identity) throw ApiException(ErrorKind.AudioSourceChanged)
+        if (!nativeCloud && audioAccess().identity != access.identity) throw ApiException(ErrorKind.AudioSourceChanged)
         // Both sources report expi. Bound reuse to five minutes when a server omits it.
         return AudioSource(url.toString(), dto.level, maxOf(dto.sr, dto.sampleRate), maxOf(dto.ch, dto.channelCount), dto.type, dto.md5,
             validForSeconds = dto.expi.takeIf { it > 0 } ?: if (dto.level == "matched" || dto.source == "netease-match") 120 else 300,
@@ -223,6 +246,7 @@ class MusicRepository(private val api: ApiClient,
     }
 }
 
+private const val SEARCH_NAME_ENRICHMENT_TIMEOUT_MS = 1_000L
 private const val LYRICS_MATCH_SEARCH_TIMEOUT_MS = 3_500L
 private const val LYRICS_MATCH_LOAD_TIMEOUT_MS = 5_000L
 
