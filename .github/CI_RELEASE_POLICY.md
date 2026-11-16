@@ -6,13 +6,21 @@
 
 ## CI 版发布时机
 
-PR 合并前并行运行源码与协作检查。Android Release 构建和 Lint 集中在主线进行。只要还有目标为 `main` 的开放 PR，仓库就推迟构建和发布 CI 版，草稿和带 `bot: skip` 标签的 PR 也计入。中途合并只触发轻量的 **Check pending CI release** 检查。
+PR 合并前并行运行源码与协作检查。Android Release 构建和 Lint 集中在主线进行。只要还有目标为 `main` 的**阻塞型开放 PR**，仓库就推迟构建和发布 CI 版；普通 PR（包括草稿和带 `bot: skip` 标签的 PR）仍然计入。只有由官方 Dependabot 创建、位于本仓库且更改仅限依赖声明或 Actions 版本的 PR 才可以被忽略。中途合并只触发轻量的 **Check pending CI release** 检查。
 
 最后一个 PR 合并、关闭或改投其他分支后，检查最新 `main` 和上一个完整 CI 版之间的累计改动。有应用改动时构建并发布一个 CI 版。若只改了文档或 CI，则跳过打包。签名发布流程会再次核对 PR 和主线状态。
 
 Android CI 成功构建并上传 APK 后，通过 `workflow_dispatch` 显式启动 **Publish CI build**，传入构建的 `run_id` 和 `run_attempt`，避免依赖机器人调度后可能不继续触发的 `workflow_run` 事件。发布端从 GitHub API 核验来源、运行次数、完成状态及 APK 构建/上传步骤；通知作业尚未结束时最多等待两分钟，超时则失败。签名仍只在 `ci-signing` 环境的独立作业内执行。
 
-若需要补发已有构建，可在 `main` 上手动运行 **Publish CI build** 并填写原 Android CI 的运行 ID 和运行次数。补发也必须满足无开放 PR、构建提交仍为最新主线、存在累计应用改动等发布条件，且不能替换已发布的同名版本。
+若需要补发已有构建，可在 `main` 上手动运行 **Publish CI build** 并填写原 Android CI 的运行 ID 和运行次数。补发也必须满足无阻塞型开放 PR、构建提交仍为最新主线、存在累计应用改动等发布条件，且不能替换已发布的同名版本。
+
+## Dependabot PR 的队列豁免
+
+- 仅接受 GitHub 官方 Dependabot 机器人身份（`dependabot[bot]`、官方账户 ID），PR 分支必须来自**本仓库**，前缀仅为 `dependabot/gradle/` 或 `dependabot/github_actions/`。
+- 逐页读取所有目标为 `main` 的开放 PR。只有更改文件全部为预期 Gradle 依赖声明/锁文件/Wrapper 属性，或 GitHub Actions 工作流 YAML，并且每个文件均为已有文件的修改时，才不阻塞 CI 发布。混入任意应用源码、非预期文件、增删文件、过多变更，或查询失败都不会被静默豁免。
+- 豁免只影响**已合入 main 的 CI 版是否可构建及发布**，不会自动合并 Dependabot PR，也不会把尚未合并的依赖变更包含进 APK。
+- `releaseDecision` 同时用于主线构建判定、发布门禁和签名附件最终公开前的复核。每个普通 PR 保留原先的阻塞行为。
+- GitHub API 请求错误会使判定失败并阻止发布，避免在无法确认 PR 安全性时继续。
 
 ## 判断规则
 

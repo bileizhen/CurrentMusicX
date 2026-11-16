@@ -1,10 +1,11 @@
 const {planCiPrune} = require('./ci-prune.cjs');
 const {onlyLightweightChangesSince} = require('./ci-release.cjs');
+const {findBlockingOpenPr} = require('./ci-open-pr-policy.cjs');
 
 async function releaseDecision({github, context, sha, verifyOnly = false}) {
   const repo = context.repo;
-  const {data: open} = await github.rest.pulls.list({...repo, state: 'open', base: 'main', per_page: 1});
-  if (open.length) return {required: false, reason: `PR #${open[0].number} is still open against main`};
+  const blocking = await findBlockingOpenPr({github, repo});
+  if (blocking) return {required: false, reason: `PR #${blocking.number} is still open against main`};
 
   const {data: main} = await github.rest.repos.getBranch({...repo, branch: 'main'});
   if (main.commit.sha !== sha) return {required: false, reason: 'A newer main commit supersedes this run'};
