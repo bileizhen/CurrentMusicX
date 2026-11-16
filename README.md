@@ -99,7 +99,7 @@ Kotlin / Jetpack Compose / Miuix 原生 Android 客户端
 - 「播放器右上角菜单 → 播放背景」可从系统选择图片，预览并调整 0–100% 模糊度；图片仅保存在本机，重启保留，可恢复默认封面取色背景。
 - 「我的 → 网易云账号 → 网易云任务」开启后，“我的”页会在网易云账号下方显示任务入口。需要本机网易云登录；自动签到另行开启，仅在 App 前台进行日常与云贝签到。任务进度和奖励由网易云确认，听歌使用实际播放记录。
 - 歌词优先使用真实逐字时间，过滤服务端估算轴。卡拉 OK 兼容策略选「总是」时，可为普通逐行歌词生成近似高亮，属于本地显示效果。「歌词页自动隐藏控制面板」默认关闭，开启后歌词页 3 秒无操作即隐藏控制区，点击底部按钮恢复。
-- 音效页面使用原生 Compose；已内置适配的 ARM64 引擎，无需另装网易云。会员权益由服务端核验，未接入的算法会明确提示；外放场景仅在当前运行期间保留。
+- 网易云音效为可选下载，完整包约 71.4 MB。引擎和界面素材安装后，音效页会显示网易云音效卡片。下载源跟随「检查更新」，音效包可在下载页移除。本机均衡器和智能调音可直接使用。会员权益由服务端核验，外放场景仅在当前运行期间保留。
 - 应用内不常驻显示歌词 / FPS 灵动岛，仅临时显示音效、下载与错误反馈；桌面悬浮歌词需系统授权，窗口始终锁定，支持在设置中调整高度、字号和翻译，并保留点击切换与左右滑动切歌。上滑时容器收缩为 80dp 深色细线，点击或下滑展开。
 
 </details>
@@ -195,7 +195,7 @@ Emby 可从「设置 → 音源与网络 → 自建曲库 → Emby」连接，�
 | 项目 | 要求 |
 | --- | --- |
 | 系统 | Android 8.0 / API 26 及以上；目标 Android 16 / API 36 |
-| 架构 | 正式安装包面向 ARM64（arm64-v8a），包含适配的原版音效引擎 |
+| 架构 | 正式安装包面向 ARM64（arm64-v8a）；网易云原版音效引擎改为按需下载 |
 | 布局 | 竖屏、横屏与宽屏导航 |
 | 动态颜色 | Monet 需要 Android 12 / API 31 及以上 |
 | 实时模糊 | Android 13 / API 33 及以上；低版本或关闭时使用普通材质 |
@@ -259,7 +259,7 @@ Linux / macOS 使用 `./gradlew` 执行相同任务。Debug APK 位于 `app/buil
 <details>
 <summary>Release 体积、Baseline Profile 与性能回归</summary>
 
-Release 启用 R8 与资源压缩，仍发布一个包含现有 ABI 的通用 APK；保留网易云原版音效、MNN 和对应 JNI 名称。可复现体积报告：`python scripts/apk_size_report.py app/build/outputs/apk/release/app-release.apk --json output/apk-size.json`。报告区分 ZIP 压缩大小、各 ABI 解压占用与 ELF 页对齐，不将体积变化当作运行速度改善。部分既有供应商原生库仍不满足 16 KiB 页要求。
+Release 启用 R8 与资源压缩，仍发布一个包含现有 ABI 的通用 APK；网易云原版音效引擎与 MNN 不随包内置，保留对应 JNI 声明并支持按需下载校验。可复现体积报告：`python scripts/apk_size_report.py app/build/outputs/apk/release/app-release.apk --json output/apk-size.json`。报告区分 ZIP 压缩大小、各 ABI 解压占用与 ELF 页对齐，不将体积变化当作运行速度改善。部分既有供应商原生库仍不满足 16 KiB 页要求。
 
 性能测试使用独立的 `com.bileizhen.currentmusic.benchmark` 应用，不访问用户账号或在线服务。`baselineprofile` 与 `benchmark` 模块覆盖冷启动、首页、播放器、播放、歌词、歌单、设置和输出模式；执行 `:app:generateBaselineProfile` 显式采集，再用 `:benchmark:connectedPerformanceAndroidTest` 比较 `compilation=none` 与 `compilation=baseline`。未实际生成 Profile 时，后者应失败，不把框架或依赖自带 Profile 视为本项目已完成采集。设备需支持 AndroidX Macrobenchmark（测试模块最低 Android 9，不改变正式应用 Android 8 的最低版本）。
 

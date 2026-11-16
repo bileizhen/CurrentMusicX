@@ -35,13 +35,12 @@ fallback handling and rejection of malformed resources or model output.
 This establishes JavaScript runtime parity, not an independent execution of
 the original Hermes VM.
 
-Ordinary arm64 builds include the pinned original MNN and DSP libraries from
-NetEase 9.5.30. Their hashes are recorded in
-`app/src/main/assets/original-effects/engine-manifest.json`; builds verify the
-vendor binaries before packaging. The model and song parameters still come from
-the authenticated account.
-The app imports them from the user's compatible original APK, with separate
-hash verification. The model is obtained from the original DAI model manifest,
+Arm64 builds do not package the pinned original MNN and DSP libraries from
+NetEase 9.5.30. The app downloads them on user request from
+`external/netease-original-effects/9.5.30`, verifies each SHA-256, and stores
+the bytes in private application storage. A compatible original APK import
+remains available as a fallback. The model and song parameters still come from
+the authenticated account. The model is obtained from the original DAI model manifest,
 verified against its manifest size and MD5, decoded into private storage, and
 fed to the original MNN JNI. Local test fixtures are ignored. The model observed
 in development is `emofxnet.mnn`, SHA-256

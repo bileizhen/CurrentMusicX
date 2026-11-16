@@ -263,15 +263,15 @@ in the offline notices as MPL-2.0.txt. Rhino source is available at the link abo
 
 ## NetEase sound-effect interoperability resources
 
-The native sound-effect page uses NetEase Music 9.5.30 reference artwork and
+The optional sound-effect page uses NetEase Music 9.5.30 reference artwork and
 local audio-parameter algorithms. NetEase retains the rights to its resources.
-Artwork source URLs and hashes are recorded in the bundled
-netease-effects-ui/resource-manifest.json; the two local parameter codecs are
-hash-verified before execution. These resources do not imply endorsement.
-The release bundles the version-bound arm64 NetEase 9.5.30 audio engine and
-MNN dependencies; their SHA-256 hashes are listed in the bundled
-original-effects/engine-manifest.json. No user account data is bundled.
-Member functions require the current account's actual entitlement.
+Artwork source URLs and hashes are recorded in the downloaded package's
+resource-manifest.json; the two local parameter codecs are hash-verified before
+execution. These resources do not imply endorsement. The optional package
+contains the version-bound arm64 NetEase 9.5.30 audio engine, MNN dependencies,
+and interface artwork; their SHA-256 hashes are pinned by the application. No
+user account data is bundled. Member functions require the current account's
+actual entitlement.
 
 
 ## Folia Monet lyric motion and transport fade (Android port)

@@ -153,14 +153,14 @@ class OriginalMoodEffectsController internal constructor(
                 }
                 if (!current.engine) {
                     mutableState.value = state.value.copy(loading = false,
-                        message = "已记住开启意图；导入兼容原版引擎后将重新验证权益")
+                        message = "已记住开启意图；下载兼容原版引擎后将重新验证权益")
                     return@request
                 }
                 val raw = withContext(workDispatcher) { definition()?.copyOf() }
                 if (!isCurrent(token, current)) return@request
                 if (raw == null) {
                     mutableState.value = state.value.copy(loading = false,
-                        message = "原版AI 情绪音效资源尚未导入，当前继续使用手动音效")
+                        message = "原版AI 情绪音效资源尚未下载，当前继续使用手动音效")
                     return@request
                 }
                 val target = current.target
@@ -196,7 +196,7 @@ class OriginalMoodEffectsController internal constructor(
                     message = if (prepared.inferred) "原版 AI 情绪模型已匹配，等待音频处理" else "特征不足，已匹配原版情绪模板")
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: LinkageError) {
-                if (isCurrent(token, current)) reportFailure("原版 AI 情绪引擎加载失败，请重新导入兼容安装包后重试")
+                if (isCurrent(token, current)) reportFailure("原版 AI 情绪引擎加载失败，请重新下载引擎后重试")
             }
             catch (_: Exception) {
                 if (isCurrent(token, current)) mutableState.value = state.value.copy(enabled = false, loading = false,

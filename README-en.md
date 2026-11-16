@@ -99,7 +99,7 @@ Choose light, dark, or pure black themes with Monet colors. Use circular or imme
 - Use **Player menu → Playback background** to choose a system image and preview 0–100% blur. The image stays on the device across restarts. You can restore the artwork-derived background.
 - Enable **Me → NetEase account → NetEase tasks** to add a task shortcut. A local NetEase session is required. Automatic daily and Yunbei check-ins have a separate switch and run in the foreground. NetEase confirms progress and rewards based on actual listening records.
 - The lyrics view prefers genuine word timings and filters server estimates. Set karaoke compatibility to **Always** to generate approximate highlighting for line-by-line lyrics on the device. **Auto-hide the lyrics control panel** is off by default; when enabled, the lyrics page hides its controls after 3 seconds of inactivity and a bottom button brings them back.
-- Audio effects use native Compose and a bundled ARM64 engine. The server verifies member entitlements. The app identifies unavailable algorithms. Speaker presets apply for the current session.
+- NetEase effects are an optional download of about 71.4 MB. The effects gallery appears after the engine and interface assets are installed. Downloads use the source selected in Check for Updates. Remove the package from the same download page. The local equalizer and smart tuning are available immediately. The server verifies member entitlements, and speaker presets apply for the current session.
 - The in-app island shows temporary feedback for effects, downloads, and errors. Desktop lyrics require system overlay permission. The window stays locked. Settings control height, font size, and translation. Taps can toggle the view, and horizontal swipes change tracks.
 
 </details>
@@ -194,7 +194,7 @@ The deployment notes also describe a separate `ncm-inject` entry point. It adds 
 | Item | Requirement |
 | --- | --- |
 | Android | Android 8.0 / API 26 or later. Target Android 16 / API 36. |
-| Architecture | Official APK targets ARM64 (arm64-v8a) with the adapted original audio effects engine. |
+| Architecture | Official APK targets ARM64 (arm64-v8a); the adapted original audio effects engine downloads on demand. |
 | Layout | Portrait, landscape, and wide navigation. |
 | Dynamic colors | Monet requires Android 12 / API 31 or later. |
 | Real-time blur | Android 13 / API 33 or later. Older versions or disabled blur use a regular surface. |
@@ -258,7 +258,7 @@ Use `:app:assembleRelease` for a release build. Signing reads `storeFile`, `stor
 <details>
 <summary>Release size, Baseline Profile, and performance checks</summary>
 
-Release builds enable R8 and resource shrinking. The universal APK includes existing ABIs and preserves the original NetEase audio effects, MNN, and JNI names. Generate a size report with `python scripts/apk_size_report.py app/build/outputs/apk/release/app-release.apk --json output/apk-size.json`. It reports ZIP size, unpacked size by ABI, and ELF page alignment separately from runtime performance. Some vendor native libraries still fall short of the 16 KiB page-size requirement.
+Release builds enable R8 and resource shrinking. The universal APK includes existing ABIs; the original NetEase audio effects engine and MNN runtime stay out of the package, while JNI declarations remain available for verified on-demand download. Generate a size report with `python scripts/apk_size_report.py app/build/outputs/apk/release/app-release.apk --json output/apk-size.json`. It reports ZIP size, unpacked size by ABI, and ELF page alignment separately from runtime performance. Some vendor native libraries still fall short of the 16 KiB page-size requirement.
 
 Performance tests use the isolated `com.bileizhen.currentmusic.benchmark` app with local data. The `baselineprofile` and `benchmark` modules cover cold start, Home, player, playback, lyrics, playlists, Settings, and output modes. Run `:app:generateBaselineProfile` to collect a profile, then use `:benchmark:connectedPerformanceAndroidTest` to compare `compilation=none` and `compilation=baseline`. The baseline run requires a generated profile for this app. AndroidX Macrobenchmark requires a compatible device. The test modules require Android 9, while the release app supports Android 8.
 

@@ -27,6 +27,9 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import top.yukonga.miuix.kmp.basic.Text
 
+private const val NETEASE_EFFECTS_PACKAGE = "netease_effects_package"
+private val neteaseEffectDetails = setOf(SoundEffectKind.MOOD.name, SoundEffectKind.SPEAKER.name, SoundEffectKind.AI_MASTER.name)
+
 /** All master details stay inside Compose; returning preserves the gallery's exact scroll/pager state. */
 @Composable fun SoundEffectsScreen(vm: SoundEffectsViewModel, onBack: () -> Unit, onEqualizer: () -> Unit) {
     var route by rememberSaveable { mutableStateOf("") }
@@ -43,11 +46,16 @@ import top.yukonga.miuix.kmp.basic.Text
     val metadataSongId by vm.masterDetailSongId.collectAsStateWithLifecycle()
     val metadataLoading by vm.masterDetailLoading.collectAsStateWithLifecycle()
     val metadataError by vm.masterDetailError.collectAsStateWithLifecycle()
+    val effectsReady by vm.originalEffectsReady.collectAsStateWithLifecycle()
     val song = playback.song ?: queueSong
+    val visibleRoute = if (!effectsReady && route in neteaseEffectDetails) "" else route
     fun leaveDetail() { vm.stopPreview(); route = "" }
     BackHandler(enabled = active && route.isNotEmpty()) { leaveDetail() }
-    LaunchedEffect(route, song?.id, account.revision) {
-        if (route == SoundEffectKind.AI_MASTER.name) vm.loadMasterDetail()
+    LaunchedEffect(route, effectsReady, song?.id, account.revision) {
+        if (route in neteaseEffectDetails) {
+            if (!effectsReady) leaveDetail()
+            else if (route == SoundEffectKind.AI_MASTER.name) vm.loadMasterDetail()
+        }
     }
     LaunchedEffect(active) { if (!active) vm.stopPreview() }
     val owner = LocalLifecycleOwner.current
@@ -57,11 +65,12 @@ import top.yukonga.miuix.kmp.basic.Text
         onDispose { owner.lifecycle.removeObserver(observer); vm.stopPreview() }
     }
     val window = LocalActivity.current?.window
-    DisposableEffect(window, route.isNotEmpty(), active) {
+    val darkDetail = visibleRoute in neteaseEffectDetails
+    DisposableEffect(window, darkDetail, active) {
         val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
         val status = controller?.isAppearanceLightStatusBars
         val navigation = controller?.isAppearanceLightNavigationBars
-        if (route.isNotEmpty() && route != "adaptive_audio" && active) {
+        if (darkDetail && active) {
             controller?.isAppearanceLightStatusBars = false
             controller?.isAppearanceLightNavigationBars = false
         }
@@ -70,15 +79,16 @@ import top.yukonga.miuix.kmp.basic.Text
             if (navigation != null) controller?.isAppearanceLightNavigationBars = navigation
         }
     }
-    AnimatedContent(route, modifier = Modifier.fillMaxSize(), label = "native-effects-detail",
+    AnimatedContent(visibleRoute, modifier = Modifier.fillMaxSize(), label = "native-effects-detail",
         transitionSpec = {
             (fadeIn(tween(220)) + slideInHorizontally(tween(300)) { if (targetState.isEmpty()) -it / 6 else it / 5 }) togetherWith
                 (fadeOut(tween(180)) + slideOutHorizontally(tween(300)) { if (targetState.isEmpty()) it / 5 else -it / 6 })
         }) { page ->
         holder.SaveableStateProvider(page) {
-            CompositionLocalProvider(LocalMusicPageActive provides (active && page == route)) {
+            CompositionLocalProvider(LocalMusicPageActive provides (active && page == visibleRoute)) {
                 when (page) {
                     "adaptive_audio" -> AdaptiveAudioScreen(vm, ::leaveDetail)
+                    NETEASE_EFFECTS_PACKAGE -> NeteaseEffectsPackageScreen(vm, ::leaveDetail)
                     SoundEffectKind.MOOD.name -> MoodEffectsDetail(mood, song, playback.playing,
                         onBack = ::leaveDetail,
                         onToggle = { if (mood.requestedEnabled) vm.turnOff() else vm.originalMoodEnabled(true) },
@@ -103,7 +113,8 @@ import top.yukonga.miuix.kmp.basic.Text
                     }
                     else -> SoundEffectsMainScreen(vm, onBack, onEqualizer,
                         onDetails = { kind -> vm.stopPreview(); route = kind.name },
-                        onAdaptive = { vm.stopPreview(); route = "adaptive_audio" })
+                        onAdaptive = { vm.stopPreview(); route = "adaptive_audio" },
+                        onPackage = { vm.stopPreview(); route = NETEASE_EFFECTS_PACKAGE })
                 }
             }
         }
