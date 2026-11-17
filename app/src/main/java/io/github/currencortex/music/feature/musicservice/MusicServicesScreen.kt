@@ -1,10 +1,14 @@
 package io.github.currencortex.music.feature.musicservice
 
+import android.content.ActivityNotFoundException
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -29,6 +33,18 @@ private val searchKinds = linkedMapOf("song" to "歌曲", "album" to "专辑", "
 private data class ServiceQuery(val operation: String, val input: JsonObject = buildJsonObject {}, val offset: Int = 0)
 private data class PendingWrite(val operation: String, val label: String, val input: JsonObject)
 
+private fun openServiceAuthorization(context: Context, url: String) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE)
+    // Resolve a general browser before passing it a URL that the app itself might handle.
+    intent.selector = Intent(Intent.ACTION_VIEW, Uri.parse("https://browser.invalid/"))
+        .addCategory(Intent.CATEGORY_BROWSABLE)
+    try {
+        context.startActivity(intent)
+    } catch (e: ActivityNotFoundException) {
+        throw IllegalArgumentException("请安装能够打开网页的浏览器", e)
+    }
+}
+
 @Composable
 internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<Song>, Int) -> Unit,
     onVideo: (Song) -> Unit, onDownload: (Song) -> Unit) {
@@ -36,7 +52,7 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
         val services by repo.services.collectAsStateWithLifecycle()
         val pending by repo.pendingConnection.collectAsStateWithLifecycle()
         val authorized by repo.lastAuthorizedService.collectAsStateWithLifecycle()
-        val browser = LocalUriHandler.current
+        val browserContext = LocalContext.current
         var selected by rememberSaveable { mutableStateOf("") }
         LaunchedEffect(authorized) {
             authorized?.let { selected = it; repo.lastAuthorizedService.value = null }
@@ -78,7 +94,7 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
         suspend fun authorizeIfNeeded(connection: ConnectedMusicService, operation: String): Boolean {
             val required = connection.descriptor.capability(activePlatform, operation)?.scope ?: return true
             if (required in connection.authorizedScopes) return true
-            browser.openUri(repo.beginAuthorization(connection.key, setOf(required)))
+            openServiceAuthorization(browserContext, repo.beginAuthorization(connection.key, setOf(required)))
             message = "授权完成后可继续使用此功能"
             return false
         }
@@ -151,7 +167,7 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
                             }
                             if (connection.descriptor.authorization != null && connection.authorizedScopes.isNotEmpty()) {
                                 SettingsPreference("重新授权", enabled = !busy, onClick = { run {
-                                    browser.openUri(repo.beginAuthorization(connection.key,
+                                    openServiceAuthorization(browserContext, repo.beginAuthorization(connection.key,
                                         connection.descriptor.platforms.values.flatten().mapNotNull { it.scope }
                                             .toSet().intersect(connection.authorizedScopes)))
                                 } })

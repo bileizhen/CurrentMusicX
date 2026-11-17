@@ -52,4 +52,4 @@ adb shell pm get-app-links com.bileizhen.currentmusic
 
 服务网页使用 `https://currentmusicx.bileizhen.top/connect?descriptor=URL编码后的HTTPS地址` 打开连接确认页。描述、API 与授权地址来自同一 HTTPS 源。服务需注册公开 OAuth 客户端，并精确登记 `https://currentmusicx.bileizhen.top/connect/callback`。App 核对回跳 issuer、state 和单次 S256 PKCE 会话。测试使用独立的 HTTPS 样例服务和虚构曲库。
 
-验收时在 Android 系统链接设置中查看 `currentmusicx.bileizhen.top` 为已验证。由服务网页点击按钮，在 App 确认后发起一次权限授权，浏览器同意后应回到正确的服务页面。也要覆盖取消、重复连接、过期回跳、断开连接和首次安装的空列表。
+验收时在 Android 系统链接设置中查看 `currentmusicx.bileizhen.top` 为已验证。由服务网页点击按钮，在 App 确认后发起一次权限授权，浏览器同意后应回到正确的服务页面。服务域名也启用 App Links 时，起始授权页仍应在系统浏览器打开。也要覆盖取消、重复连接、过期回跳、断开连接和首次安装的空列表。
