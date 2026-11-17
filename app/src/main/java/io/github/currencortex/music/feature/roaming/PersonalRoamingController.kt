@@ -59,7 +59,6 @@ class PersonalRoamingController(private val repository: RoamingRepository,
     private var failedChoice: RoamingChoice? = null
     private val seen = LinkedHashSet<Long>()
     init {
-        player.onRadioBoundary = ::awaitNext
         scope.launch {
             sessions.ready.await()
             combine(sessions.state.map { it.revision }.distinctUntilChanged(), sourceIdentity) { revision, source -> revision to source }
@@ -81,6 +80,8 @@ class PersonalRoamingController(private val repository: RoamingRepository,
             }
         }
     }
+    /** Only the controller that started the current radio queue may answer its boundary. */
+    internal fun ownsRadio(session: String?): Boolean = station != null && station == session
     fun loadCatalog() {
         if (catalogJob?.isActive == true) return
         catalogJob = scope.launch {

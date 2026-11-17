@@ -39,6 +39,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     val scales by vm.container.profileRepository.scales.collectAsStateWithLifecycle()
     val nativeAccount by vm.container.neteaseSessions.state.collectAsStateWithLifecycle()
     val direct = vm.container.nativeNetease != null
+    val qqPlatform = preferences.musicPlatform == io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC
     val user = profile?.takeIf { it.id == account.account?.id }
     val avatar = user?.avatar ?: account.account?.avatar ?: nativeAccount.profile?.avatar.orEmpty()
     val decoration = user?.decoration.orEmpty()
@@ -107,7 +108,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
                     onConnect = { navigate("user/binding") }, dateLabel = "${today.monthValue}月${today.dayOfMonth}日", room = request)
             }
             item(key = "personal-roaming") {
-                HomePersonalRoamingEntry({ navigate(if (direct) "qq/roaming" else "lib/roaming") }, qqMusic = direct)
+                HomePersonalRoamingEntry({ navigate(if (qqPlatform) "qq/roaming" else "lib/roaming") }, qqMusic = qqPlatform)
             }
             item(key = "shortcuts") { HomeLibraryShortcuts(navigate, request != null) }
             if (!direct && !account.loading && account.account == null) item(key = "login") {

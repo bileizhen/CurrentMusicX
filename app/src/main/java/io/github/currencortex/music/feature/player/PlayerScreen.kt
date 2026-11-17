@@ -290,7 +290,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             excludedArea = { controlsCoordinates }, side = {
                 MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
                     if (sidePage.direction > 0f) PlayerListeningPage(vm.container, onPlay = sidePage::close,
-                        onBinding = { sidePage.close(); onAiNavigate(if (queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) "qq/account" else "user/binding") },
+                        onBinding = { sidePage.close(); onAiNavigate(if (vm.container.activePersonalRoamingIsQq) "qq/account" else "user/binding") },
                         onListening = { sidePage.close(); onAiNavigate("user/listening") },
                         onDialogActive = { sideDialog = it })
                     else PlayerSidePageContent(queue.current, songNavigation,
@@ -463,7 +463,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     "QQ 音乐用户" else "网易云用户")
             PlayerOverlay.QUEUE -> Unit
             PlayerOverlay.ROAMING -> io.github.currencortex.music.feature.roaming.PersonalRoamingDialog(vm.container, dismiss) {
-                onAiNavigate(if (queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) "qq/account" else "user/binding")
+                onAiNavigate(if (vm.container.activePersonalRoamingIsQq) "qq/account" else "user/binding")
             }
             PlayerOverlay.MODE -> MusicChoiceDialog("播放模式", dismiss) {
                 PlaybackMode.entries.filter { !together.active || it != PlaybackMode.HEART }.forEach { mode -> MusicDialogChoiceRow(mode.label, mode == playbackMode,

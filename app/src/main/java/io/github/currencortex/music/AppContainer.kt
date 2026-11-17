@@ -505,6 +505,16 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         get() = if (playerController.state.value.song?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC ||
             musicSettings.state.value.musicPlatform == io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC)
             qqMusicPersonalRoaming else personalRoaming
+    /** True when the station the roaming UI is bound to is QQ Music. */
+    val activePersonalRoamingIsQq: Boolean get() = activePersonalRoaming === qqMusicPersonalRoaming
+    init {
+        // One shared dispatcher: both stations publish boundaries on the same player.
+        playerController.onRadioBoundary = {
+            val session = playbackQueue.state.value.radioSession
+            val owner = listOf(personalRoaming, qqMusicPersonalRoaming).firstOrNull { it.ownsRadio(session) }
+            owner?.awaitNext()
+        }
+    }
     val smartTuning = SmartTuningController(equalizerSettings.state, soundEffectsSettings.state,
         playerController.state.map { it.song }, neteaseSoundEffects::analyze, playerScope)
     private val engineReady = MutableStateFlow(NeteaseNativeEngine.available() && NeteaseEngineLibraries.moodAvailable())
