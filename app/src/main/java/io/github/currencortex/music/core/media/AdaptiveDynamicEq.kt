@@ -34,7 +34,7 @@ internal class AdaptiveDynamicEq(private val sampleRate: Int, private val channe
     fun process(frame: DoubleArray, settings: AdaptiveAudioSettings) {
         for (channel in 0 until channels) {
             // The upstream harmonic stage deliberately keeps floating-point headroom.
-            val input = frame[channel].let { if (it.isFinite()) it.coerceIn(-64.0, 64.0) else 0.0 }
+            val input = frame[channel].let { if (it == it) it.coerceIn(-64.0, 64.0) else 0.0 }
             blockTotal += input * input / channels
             var previous = 0.0
             for (band in 0 until 9) {
@@ -42,12 +42,14 @@ internal class AdaptiveDynamicEq(private val sampleRate: Int, private val channe
                 state[band] += alpha[band] * (input - state[band])
                 val value = state[band] - previous
                 blockEnergy[band] += value * value / channels
-                blockPeaks[band] = max(blockPeaks[band], abs(value))
+                if (value > blockPeaks[band]) blockPeaks[band] = value
+                if (-value > blockPeaks[band]) blockPeaks[band] = -value
                 previous = state[band]
             }
             val high = input - previous
             blockEnergy[9] += high * high / channels
-            blockPeaks[9] = max(blockPeaks[9], abs(high))
+            if (high > blockPeaks[9]) blockPeaks[9] = high
+            if (-high > blockPeaks[9]) blockPeaks[9] = -high
         }
         frames++
         if (frames < blockFrames) return
