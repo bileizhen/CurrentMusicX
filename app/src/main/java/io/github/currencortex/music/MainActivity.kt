@@ -25,7 +25,10 @@ class MainActivity : ComponentActivity() {
         request.dataString?.let { webLinkRequest.value = WebLinkRequest(java.util.UUID.randomUUID().toString(), it) }
     }
     override fun onSaveInstanceState(outState: Bundle) {
-        webLinkRequest.value?.let {
+        webLinkRequest.value?.takeUnless {
+            android.net.Uri.parse(it.url).let { url -> url.host == io.github.currencortex.music.data.musicservice.CONNECTION_HOST &&
+                url.path == io.github.currencortex.music.data.musicservice.RETURN_PATH }
+        }?.let {
             outState.putString("webLinkId", it.id)
             outState.putString("webLinkUrl", it.url)
         }
