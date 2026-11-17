@@ -8,14 +8,45 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.util.UUID
 
+data class RoamingSessionState(val loggedIn: Boolean = false, val stale: Boolean = false,
+    val revision: Long = 0, val ownerId: Long = 0)
+
+interface RoamingSessionStore {
+    val ready: CompletableDeferred<Unit>
+    val state: Flow<RoamingSessionState>
+    val snapshot: RoamingSessionState
+}
+
+class NeteaseRoamingSessionStore(private val store: NeteaseSessionStore) : RoamingSessionStore {
+    override val ready = store.ready
+    override val state = store.state.map { RoamingSessionState(it.loggedIn, it.stale, it.revision, it.profile?.uid ?: 0) }
+    override val snapshot get() = store.state.value.let { RoamingSessionState(it.loggedIn, it.stale, it.revision, it.profile?.uid ?: 0) }
+}
+
+class QqMusicRoamingSessionStore(private val store: StateFlow<io.github.currencortex.music.data.qqmusic.QqAccountState>) : RoamingSessionStore {
+    override val ready = CompletableDeferred<Unit>().apply { complete(Unit) }
+    override val state = store.map { RoamingSessionState(it.loggedIn, false, it.revision, it.uin.toLongOrNull() ?: 0) }
+    override val snapshot get() = store.value.let { RoamingSessionState(it.loggedIn, false, it.revision, it.uin.toLongOrNull() ?: 0) }
+}
+
 data class RoamingState(val catalog: RoamingCatalog = RoamingCatalog.fallback, val catalogLoading: Boolean = false,
     val catalogError: String? = null, val choice: RoamingChoice = RoamingCatalog.fallback.modes.first(),
     val settings: RoamingSettings = RoamingSettings(), val active: Boolean = false,
     val loading: Boolean = false, val error: String? = null, val waiting: Boolean = false, val ready: Boolean = false)
 
 /** Application-scoped station: leaving its page keeps music playing, leaving the station restores the old queue. */
-class PersonalRoamingController(private val repository: PersonalRoamingRepository,
-    private val sessions: NeteaseSessionStore, private val player: PlayerController,
+interface RoamingRepository {
+    suspend fun catalog(): RoamingCatalog
+    suspend fun songs(choice: RoamingChoice, excluded: List<Long> = emptyList()): List<io.github.currencortex.music.data.song.Song>
+}
+
+class PersonalRoamingRepositoryAdapter(private val repository: PersonalRoamingRepository) : RoamingRepository {
+    override suspend fun catalog() = repository.catalog()
+    override suspend fun songs(choice: RoamingChoice, excluded: List<Long>) = repository.songs(choice, excluded)
+}
+
+class PersonalRoamingController(private val repository: RoamingRepository,
+    internal val sessions: RoamingSessionStore, private val player: PlayerController,
     private val preferences: RoamingPreferences, private val scope: CoroutineScope,
     private val sourceIdentity: StateFlow<String>) {
     val state = MutableStateFlow(RoamingState())
@@ -35,7 +66,7 @@ class PersonalRoamingController(private val repository: PersonalRoamingRepositor
                 .collectLatest {
                     stop(restore = false)
                     state.update { it.copy(ready = false) }
-                    val uid = sessions.state.value.profile?.uid ?: 0
+                    val uid = sessions.snapshot.ownerId
                     val saved = preferences.load(uid)
                     val choice = state.value.catalog.choices.find { it.key == saved.selection } ?: RoamingCatalog.fallback.modes.first()
                     state.value = state.value.copy(settings = saved, choice = choice, error = null, ready = true)
@@ -53,15 +84,17 @@ class PersonalRoamingController(private val repository: PersonalRoamingRepositor
     fun loadCatalog() {
         if (catalogJob?.isActive == true) return
         catalogJob = scope.launch {
-            val revision = sessions.state.value.revision
+            val revision = sessions.snapshot.revision
             state.update { it.copy(catalogLoading = true, catalogError = null) }
             val result = appResult { repository.catalog() }
-            if (revision != sessions.state.value.revision) {
+            if (revision != sessions.snapshot.revision) {
                 state.update { it.copy(catalogLoading = false) }; return@launch
             }
             when (result) {
                 is AppResult.Success -> state.update { old -> old.copy(catalog = result.value,
-                    choice = result.value.choices.find { it.key == if (old.active) old.choice.key else old.settings.selection } ?: old.choice) }
+                    choice = result.value.choices.find { it.key == old.choice.key }?.takeIf { old.active }
+                        ?: result.value.choices.find { it.key == old.settings.selection }
+                        ?: result.value.modes.firstOrNull() ?: old.choice) }
                 is AppResult.Failure -> state.update { it.copy(catalogError = result.message) }
             }
             state.update { it.copy(catalogLoading = false) }
@@ -74,7 +107,7 @@ class PersonalRoamingController(private val repository: PersonalRoamingRepositor
         }
         val epoch = ++generation
         job?.cancel(); waitingRevision = null; failedChoice = null
-        val revision = sessions.state.value.revision
+        val revision = sessions.snapshot.revision
         val source = sourceIdentity.value
         val commands = player.commandRevision
         val previousQueue = player.queue.state.value
@@ -83,7 +116,7 @@ class PersonalRoamingController(private val repository: PersonalRoamingRepositor
             try {
                 val songs = repository.songs(choice)
                 ensureActive()
-                if (epoch != generation || revision != sessions.state.value.revision || source != sourceIdentity.value ||
+                if (epoch != generation || revision != sessions.snapshot.revision || source != sourceIdentity.value ||
                     player.state.value.mode != PlayerMode.LOCAL || commands != player.commandRevision ||
                     player.queue.state.value.copy(positionMs = previousQueue.positionMs) != previousQueue) {
                     if (epoch == generation) state.update { it.copy(loading = false) }
@@ -98,7 +131,7 @@ class PersonalRoamingController(private val repository: PersonalRoamingRepositor
                     settings = it.settings.copy(selection = choice.key)) }
                 player.queue.startRadio(songs, session)
                 player.load()
-                preferences.save(sessions.state.value.profile?.uid ?: 0, state.value.settings)
+                preferences.save(sessions.snapshot.ownerId, state.value.settings)
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (error: Exception) {
                 if (epoch == generation) { failedChoice = choice; state.update { it.copy(loading = false, error = error.message ?: "获取漫游推荐失败") } }
@@ -152,7 +185,7 @@ class PersonalRoamingController(private val repository: PersonalRoamingRepositor
     }
     fun updateSettings(settings: RoamingSettings) {
         state.update { it.copy(settings = settings) }
-        val uid = sessions.state.value.profile?.uid ?: 0
+        val uid = sessions.snapshot.ownerId
         scope.launch { preferences.save(uid, settings) }
     }
     fun stop(restore: Boolean = state.value.settings.restoreQueue) {

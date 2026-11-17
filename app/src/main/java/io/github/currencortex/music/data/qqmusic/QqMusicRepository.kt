@@ -45,6 +45,8 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
     private val qrOwners = mutableMapOf<String, RequestSession>()
     private val writeMutex = Mutex()
     private val likesRefreshMutex = Mutex()
+    private var radioPoolId: String = ""
+    private var radioSceneId: String = ""
     private val persistenceMutex = Mutex()
 
     init {
@@ -484,10 +486,60 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
         }
         return requireNotNull(base).copy(songs = songs.distinctBy { it.id }, count = total.takeIf { it > 0 } ?: songs.size)
     }
-    suspend fun radio(): List<Song> = radioPage().songs
+    suspend fun radioScenes(): List<QqRadioScene> {
+        val raw = native("user/radio-scenes", requiresSession = true)
+        fun parse(key: String): List<QqRadioScene> = raw.array(key).mapNotNull { value ->
+            val row = value as? JsonObject ?: return@mapNotNull null
+            val id = row.text("Id", "id")
+            val name = row.text("Name", "name")
+            if (id.isBlank() || name.isBlank()) return@mapNotNull null
+            val ext = row["Ext"] as? JsonObject
+            QqRadioScene(id, name, ext?.text("pool_id").orEmpty(), row.text("Pic", "pic"),
+                row.number("Sort", "sort").toInt(), row.number("Status", "status").toInt())
+        }
+        val modes = parse("TopConfigList")
+        val scenes = parse("ConfigList")
+        return modes + scenes
+    }
+    suspend fun radioPreferences(): List<QqPreferenceGroup> {
+        val raw = native("user/radio-preference", requiresSession = true)
+        return raw.array("vecTagGroup").mapNotNull { value ->
+            val group = value as? JsonObject ?: return@mapNotNull null
+            val options = group.array("vecTag").mapNotNull { item ->
+                val row = item as? JsonObject ?: return@mapNotNull null
+                val id = row.text("id")
+                if (id.isBlank()) null else QqPreferenceOption(id, row.text("name"),
+                    row.number("status").toInt(), row.number("type").toInt())
+            }
+            if (options.isEmpty()) null else QqPreferenceGroup(group.text("name"), group.number("type").toInt(), options)
+        }
+    }
+    suspend fun saveRadioPreferences(groups: List<QqPreferenceGroup>) {
+        val vecTag = buildJsonArray {
+            groups.forEach { group ->
+                group.options.forEach { option ->
+                    add(buildJsonObject {
+                        put("id", option.id); put("name", option.name)
+                        put("status", option.status); put("type", option.type)
+                    })
+                }
+            }
+        }
+        payload(call("native/user/radio-preference/save", requiresSession = true, method = "POST",
+            body = buildJsonObject { put("vecTag", vecTag) }))
+    }
+    suspend fun radio(poolId: String = "", sceneId: String = ""): List<Song> {
+        radioPoolId = poolId
+        radioSceneId = sceneId
+        return try { radioPage().songs } finally { radioPoolId = ""; radioSceneId = "" }
+    }
     suspend fun radioPage(page: Int = 1): QqSongPage {
         require(page in 1..100)
-        val raw = native("user/personal-fm", mapOf("page" to "$page"), requiresSession = true)
+        val raw = native("user/personal-fm", buildMap {
+            put("page", "$page")
+            radioPoolId.takeIf(String::isNotBlank)?.let { put("pool_id", it) }
+            radioSceneId.takeIf(String::isNotBlank)?.let { put("scene_id", it) }
+        }, requiresSession = true)
         val next = (raw["nextPage"] as? JsonPrimitive)?.intOrNull?.takeIf { it > page && it <= 100 }
         return QqSongPage(QqMusicParsing.songs(raw), raw.flag("more"), next)
     }

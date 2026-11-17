@@ -343,7 +343,7 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
     private var task: Job? = null
     private val kind = route.split('/')[1]
     val id = route.substringAfterLast('/').toLongOrNull() ?: 0
-    private val qqPlaylist = route in setOf("qq/likes", "qq/recent") || kind == "playlist" && route.startsWith("qq/")
+    private val qqPlaylist = route in setOf("qq/foryou", "qq/likes", "qq/recent") || kind == "playlist" && route.startsWith("qq/")
     private val qqDaily = route == "qq/daily"
     private val qqNative = qqPlaylist || qqDaily
     private val qqLikedSongs = route == "qq/likes"
@@ -449,6 +449,11 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                             description = if (container.qqMusic.state.value.loggedIn) "今天的专属歌单" else "QQ 音乐新歌推荐",
                             cover = songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty(),
                             songs = songs)
+                    }
+                    "foryou" if route == "qq/foryou" -> {
+                        val songs = if (container.qqMusic.state.value.loggedIn) container.qqMusic.guessYouLike() else emptyList()
+                        previous.copy(title = "猜你喜欢", description = "沿着喜欢的旋律继续探索",
+                            cover = songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty(), songs = songs)
                     }
                     "daily", "foryou" -> container.libraryRepository.daily(fresh = force).let { previous.copy(title = if (kind == "daily") "每日推荐" else "猜你喜欢", songs = if (kind == "daily") it.songs else it.forYou) }
                     "likes" if qqLikedSongs -> {

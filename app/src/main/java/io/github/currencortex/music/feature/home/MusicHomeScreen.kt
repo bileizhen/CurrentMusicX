@@ -106,7 +106,9 @@ import androidx.lifecycle.compose.LifecycleEventEffect
                     }, onOpen = { navigate("lib/daily") }, onRetry = vm::refresh,
                     onConnect = { navigate("user/binding") }, dateLabel = "${today.monthValue}月${today.dayOfMonth}日", room = request)
             }
-            item(key = "personal-roaming") { HomePersonalRoamingEntry { navigate("lib/roaming") } }
+            item(key = "personal-roaming") {
+                HomePersonalRoamingEntry({ navigate(if (direct) "qq/roaming" else "lib/roaming") }, qqMusic = direct)
+            }
             item(key = "shortcuts") { HomeLibraryShortcuts(navigate, request != null) }
             if (!direct && !account.loading && account.account == null) item(key = "login") {
                 MusicTextAction("登录后查看推荐与音乐库 ›", { navigate("user/login") })
@@ -211,11 +213,12 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     }
 }
 
-@Composable internal fun HomePersonalRoamingEntry(onOpen: () -> Unit) {
+@Composable internal fun HomePersonalRoamingEntry(onOpen: () -> Unit, qqMusic: Boolean = false) {
     SettingsGroup {
-        SettingsPreference("私人漫游", "按你的喜好，连续听点好音乐",
+        SettingsPreference(if (qqMusic) "猜你喜欢" else "私人漫游",
+            if (qqMusic) "推荐歌曲" else "按你的喜好，连续听点好音乐",
             Modifier.testTag("open_personal_roaming"), onClick = onOpen,
             leading = { Icon(MusicIcons.Headphones, null, Modifier.size(24.dp), tint = MiuixTheme.colorScheme.primary) },
-            trailing = { MusicTransportButton("打开私人漫游", onOpen) })
+            trailing = { MusicTransportButton(if (qqMusic) "播放推荐歌曲" else "打开私人漫游", onOpen) })
     }
 }
