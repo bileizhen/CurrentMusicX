@@ -49,6 +49,9 @@ async function findBlockingOpenPr({github, repo}) {
   });
   if (!Array.isArray(open)) throw new Error('Unexpected GitHub PR listing');
   for (const pr of open) {
+    // Drafts are not ready for review and must not delay releases from main.
+    // This affects only the release queue, not PR checks or merge protection.
+    if (pr.draft === true) continue;
     if (!(await isIgnorableDependabotPr({github, repo, pr}))) return pr;
   }
   return null;
