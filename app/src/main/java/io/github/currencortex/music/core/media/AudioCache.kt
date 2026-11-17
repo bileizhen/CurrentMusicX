@@ -93,11 +93,8 @@ class AudioCache(context: Context, directory: File,
     } }
 
     fun refreshUsage() {
+        awaitCapacityReady()
         synchronized(usageLock) {
-            if (!capacityReady.isCompleted) {
-                bytes.value = 0L; entries.value = 0
-                return
-            }
             cachedKeys.clear()
             cache.keys.filterTo(cachedKeys) { cache.getCachedSpans(it).any { span -> span.length > 0 } }
             usageInitialized = true
@@ -110,11 +107,13 @@ class AudioCache(context: Context, directory: File,
         withContext(Dispatchers.IO) {
             require(value > 0) { "Audio cache capacity must be positive" }
             maxBytes.value = value
-            runCatching {
+            try {
                 evictor.setMaxBytes(cache, value)
+                capacityReady.complete(Unit)
                 refreshUsage()
+            } finally {
+                capacityReady.complete(Unit)
             }
-            capacityReady.complete(Unit)
         }
     }
     private fun updateUsage(key: String) {
@@ -128,13 +127,13 @@ class AudioCache(context: Context, directory: File,
         }
     }
     fun cachedSource(key: String): AudioSource? {
-        if (!capacityReady.isCompleted) return null
+        awaitCapacityReady()
         return runCatching {
             cache.getContentMetadata(key).get(SOURCE, "")?.takeIf { it.isNotBlank() }?.let { ApiJson.decodeFromString<AudioSource>(it) }
         }.getOrNull()
     }
     fun matchedSourceKey(requestKey: String): String? = runCatching {
-        if (!capacityReady.isCompleted) return null
+        awaitCapacityReady()
         cache.getContentMetadata(requestKey).get("cm.audio.matchedKey", "")
             ?.takeIf { it.startsWith("$requestKey:match:") }
     }.getOrNull()
@@ -154,12 +153,14 @@ class AudioCache(context: Context, directory: File,
         updateUsage(key)
     }
     fun completeSource(key: String): AudioSource? = runCatching {
-        if (!capacityReady.isCompleted) return null
+        awaitCapacityReady()
         val length = ContentMetadata.getContentLength(cache.getContentMetadata(key))
         if (length > 0 && cache.isCached(key, 0, length)) cachedSource(key) else null
     }.getOrNull()
-    fun cachedBytes(key: String, length: Long): Long =
-        if (capacityReady.isCompleted) cache.getCachedBytes(key, 0, length) else 0L
+    fun cachedBytes(key: String, length: Long): Long {
+        awaitCapacityReady()
+        return cache.getCachedBytes(key, 0, length)
+    }
     private fun forgetRedirect(key: String) {
         if (ContentMetadata.getRedirectedUri(cache.getContentMetadata(key)) == null) return
         val metadata = ContentMetadataMutations()
@@ -168,8 +169,9 @@ class AudioCache(context: Context, directory: File,
     }
 
     /** Only the next track's opening bytes, not a background whole-library download. */
-    suspend fun preload(key: String, source: AudioSource, limit: Long = PRELOAD_BYTES) = writeLock.withLock {
+    suspend fun preload(key: String, source: AudioSource, limit: Long = PRELOAD_BYTES) {
         capacityReady.await()
+        writeLock.withLock {
         withContext(Dispatchers.IO) {
             if (clearing.value) return@withContext
             val writer = CacheWriter(cachedFactory(block = true).createDataSource(),
@@ -191,6 +193,7 @@ class AudioCache(context: Context, directory: File,
                     }
                 }
             } finally { writers -= writer; runCatching { forgetRedirect(key) }; updateUsage(key) }
+        }
         }
     }
     suspend fun clear() {
@@ -237,8 +240,10 @@ private class DynamicLruCacheEvictor(initialMaxBytes: Long,
     private var currentSize = 0L
 
     fun setMaxBytes(cache: Cache, value: Long) {
-        maxBytes = value
-        evictCache(cache, 0L)
+        synchronized(cache) {
+            maxBytes = value
+            evictCache(cache, 0L)
+        }
     }
     override fun requiresCacheSpanTouches() = true
     override fun onCacheInitialized() = Unit

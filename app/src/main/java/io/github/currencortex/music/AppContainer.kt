@@ -714,7 +714,13 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 appResult { audioSettings.refreshServerSourceOwner() }
             }
         }
-        appScope.launch { storageSettings.limitBytes.collect { audioCache.setMaxBytes(it) } }
+        appScope.launch {
+            storageSettings.limitBytes.collect { bytes ->
+                try { audioCache.setMaxBytes(bytes) }
+                catch (e: CancellationException) { throw e }
+                catch (e: Exception) { logger.warn("Storage", "Audio cache capacity update failed", e) }
+            }
+        }
         appScope.launch {
             bindingRepository.state.map { it?.profile?.uid to it?.bound }.distinctUntilChanged().collect {
                 neteaseSongActions.clearSession(); neteaseLibrary.invalidate()
