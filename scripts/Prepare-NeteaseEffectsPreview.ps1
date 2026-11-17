@@ -43,4 +43,5 @@ $taskSmartAsset = Join-Path $taskRoot '.verification/sound-effects/port/runtime-
 New-Item -ItemType Directory -Force -Path $taskSmartAsset | Out-Null
 [IO.File]::WriteAllBytes((Join-Path $taskSmartAsset 'smartae.ncae'), $taskSmartBytes)
 Write-Output "Prepared local preview libraries in $taskOutput"
-Write-Output 'Build with -PneteaseOriginalEffects=true. Ordinary builds can import the compatible engine from a user-selected APK.'
+Write-Output 'Copy the verified preview artifacts to external/netease-original-effects/9.5.30/arm64-v8a when updating the optional repository download.'
+Write-Output 'Interface artwork is maintained in external/netease-original-effects/9.5.30/netease-effects-ui-source; regenerate and re-pin netease-effects-ui.zip after changes.'
