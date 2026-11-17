@@ -85,7 +85,11 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
             issues = issues.toList())
         // Automatic selection is a fresh comparison on every load. A previous
         // provider/cache result must not take precedence over the current winner.
-        if (selected?.automatic == true && !qqMusic) return@withLock matchAutomatically() ?: unavailable()
+        // QQ still gets the direct provider fallback below when auto matching finds nothing.
+        if (selected?.automatic == true) {
+            matchAutomatically()?.let { return@withLock it }
+            if (!qqMusic) return@withLock unavailable()
+        }
         memory[memoryKey]?.takeIf { keys.isNotEmpty() }?.let { entry ->
             val at = now()
             if (entry.expiresAtMillis == null || at >= entry.savedAtMillis && at < entry.expiresAtMillis)
