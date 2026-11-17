@@ -680,10 +680,12 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         playerScope.launch {
             sessionRestored.await()
             accountRepository.sessionRevision.collect {
-                val result = appResult { audioSettings.refreshServerSourceOwner() }
-                if (result is AppResult.Success && result.value &&
-                    playbackQueue.state.value.current?.let { it.musicSource == MusicSource.NETEASE && !it.neteaseCloud } == true)
-                    playerController.pause()
+                val track = playbackQueue.state.value.current
+                if (audioSettings.hasDetachedServerSource() &&
+                    track?.let { it.musicSource == MusicSource.NETEASE && !it.neteaseCloud && !it.video } == true) {
+                    appResult { playerController.discardLoadedLocalAudio() }
+                }
+                appResult { audioSettings.refreshServerSourceOwner() }
             }
         }
         appScope.launch {

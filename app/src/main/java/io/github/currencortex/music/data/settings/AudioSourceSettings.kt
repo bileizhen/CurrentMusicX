@@ -88,9 +88,13 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
     } }
     fun access(): AudioSourceAccess {
         val saved = current
-        return if (saved.provider == AudioProvider.SERVER && saved.serverSourceOwner != serverSourceOwner())
-            AudioSourceAccess(AudioProvider.NETEASE) else saved
+        return if (serverSourceDetached(saved)) AudioSourceAccess(AudioProvider.NETEASE) else saved
     }
+
+    internal fun hasDetachedServerSource(): Boolean = serverSourceDetached(current)
+
+    private fun serverSourceDetached(source: AudioSourceAccess): Boolean =
+        source.provider == AudioProvider.SERVER && source.serverSourceOwner != serverSourceOwner()
 
     private fun publish(provider: AudioProvider) {
         current = AudioSourceAccess(provider, savedKey, savedLxSource, savedSmartSwitch,
@@ -150,7 +154,7 @@ class AudioSourceSettings(private val store: DataStore<Preferences>, private val
     internal suspend fun refreshServerSourceOwner(): Boolean {
         ready.await()
         return lock.withLock {
-            val detach = current.provider == AudioProvider.SERVER && selectedServerOwner != serverSourceOwner()
+            val detach = hasDetachedServerSource()
             if (detach) {
                 store.edit { it.selectProvider(AudioProvider.NETEASE, null) }
                 selectedServerOwner = null
