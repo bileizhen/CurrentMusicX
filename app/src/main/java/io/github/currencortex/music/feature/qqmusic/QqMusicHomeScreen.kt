@@ -246,7 +246,7 @@ fun QqMusicHomeScreen(
                             )
                         }
                         item(key = "personal-roaming") {
-                            HomePersonalRoamingEntry { navigate("qq/radio") }
+                            HomePersonalRoamingEntry({ navigate("qq/roaming") }, qqMusic = true)
                         }
                         item(key = "shortcuts") {
                             HomeLibraryShortcuts(

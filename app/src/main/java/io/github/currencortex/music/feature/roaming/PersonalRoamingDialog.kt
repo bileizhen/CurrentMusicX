@@ -42,13 +42,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable private fun PersonalRoamingContent(container: AppContainer, onDismiss: () -> Unit,
     onBinding: () -> Unit, embedded: Boolean = false, modifier: Modifier = Modifier,
     onDialogActive: (Boolean) -> Unit = {}, header: @Composable () -> Unit = {}) {
-    val station = container.personalRoaming
+    val station = container.activePersonalRoaming
     val state by station.state.collectAsStateWithLifecycle()
-    val account by container.neteaseSessions.state.collectAsStateWithLifecycle()
+    val account by station.sessions.state.collectAsStateWithLifecycle(RoamingSessionState())
     var draftKey by rememberSaveable { mutableStateOf<String?>(null) }
     var submitted by remember { mutableStateOf<String?>(null) }
     var settings by remember { mutableStateOf(false) }
+    var preferences by remember { mutableStateOf(false) }
     val choice = if (embedded) state.choice else state.catalog.choices.find { it.key == draftKey } ?: state.choice
+    val qqMusic = station === container.qqMusicPersonalRoaming
     val loggedIn = account.loggedIn && !account.stale
     val changed = !state.active || choice.key != state.choice.key
     val selectChoice: (io.github.currencortex.music.data.roaming.RoamingChoice) -> Unit = { selected ->
@@ -72,6 +74,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     LaunchedEffect(settings) { onDialogActive(settings) }
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     SettingsUiScope {
+    if (preferences) QqRoamingPreferenceDialog(container) { preferences = false }
     if (settings) MusicDialog("漫游设置", { settings = false }, footer = {
         MusicDialogButton("返回模式选择", { settings = false }, Modifier.testTag("roaming_settings_done"))
     }) {
@@ -84,8 +87,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     val footer: @Composable () -> Unit = {
         val primary: @Composable (Modifier) -> Unit = { modifier ->
-        MusicDialogButton(if (!loggedIn) "登录网易云" else if (state.loading) "正在寻找推荐…"
-            else if (changed) if (state.active) "切换到${choice.title}" else "开始漫游"
+        MusicDialogButton(if (!loggedIn) if (qqMusic) "登录 QQ 音乐" else "登录网易云" else if (state.loading) "正在寻找推荐…"
+            else if (changed) if (state.active) "切换到${choice.title}" else if (qqMusic) "播放推荐歌曲" else "开始漫游"
             else if (state.error != null) "重试推荐" else "继续聆听",
             onClick = {
                 when {
@@ -107,8 +110,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     val body: @Composable () -> Unit = {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text("私人漫游", Modifier.weight(1f).testTag("music_dialog_title"),
+            Text(if (qqMusic) "猜你喜欢" else "私人漫游", Modifier.weight(1f).testTag("music_dialog_title"),
                 fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            if (qqMusic) MusicTextAction("音乐偏好", { preferences = true }, Modifier.testTag("qq_music_preferences"))
             MusicTextAction("设置", { settings = true }, Modifier.testTag("roaming_settings"))
         }
         Column(Modifier.fillMaxWidth().then(if (embedded) Modifier else
@@ -122,7 +126,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     if (index < state.catalog.modes.lastIndex) SettingsDivider()
                 }
             }
-            Text("场景模式", Modifier.padding(top = 8.dp, bottom = 4.dp), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+        Text(if (qqMusic) "音乐风格与生活场景" else "场景模式", Modifier.padding(top = 8.dp, bottom = 4.dp),
+            fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
             state.catalog.scenes.chunked(4).forEach { group ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     group.forEach { scene ->
