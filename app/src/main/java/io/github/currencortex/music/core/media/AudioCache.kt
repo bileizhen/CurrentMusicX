@@ -28,23 +28,12 @@ import java.util.concurrent.atomic.AtomicBoolean
 @androidx.annotation.OptIn(UnstableApi::class)
 class AudioCache(context: Context, directory: File,
     client: OkHttpClient = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(8, TimeUnit.SECONDS).build(),
-    val maxBytes: Long = DEFAULT_MAX_BYTES) : java.io.Closeable {
-    init { require(maxBytes > 0) { "Audio cache capacity must be positive" } }
+    initialMaxBytes: Long = DEFAULT_MAX_BYTES, initialCapacityReady: Boolean = true) : java.io.Closeable {
+    init { require(initialMaxBytes > 0) { "Audio cache capacity must be positive" } }
     // This is reclaimable playback cache, never the user's explicit downloads directory.
     // Defer accounting until outside SimpleCache's lock to avoid lock inversion on eviction.
     private val evicted = AtomicBoolean(false)
-    private val evictor = object : CacheEvictor {
-        private val lru = LeastRecentlyUsedCacheEvictor(maxBytes)
-        override fun requiresCacheSpanTouches() = lru.requiresCacheSpanTouches()
-        override fun onCacheInitialized() = lru.onCacheInitialized()
-        override fun onStartFile(cache: Cache, key: String, position: Long, length: Long) = lru.onStartFile(cache, key, position, length)
-        override fun onSpanAdded(cache: Cache, span: CacheSpan) = lru.onSpanAdded(cache, span)
-        override fun onSpanRemoved(cache: Cache, span: CacheSpan) {
-            lru.onSpanRemoved(cache, span)
-            evicted.set(true)
-        }
-        override fun onSpanTouched(cache: Cache, oldSpan: CacheSpan, newSpan: CacheSpan) = lru.onSpanTouched(cache, oldSpan, newSpan)
-    }
+    private val evictor = DynamicLruCacheEvictor(initialMaxBytes) { evicted.set(true) }
     private val cacheDelegate = lazy { SimpleCache(directory, evictor, StandaloneDatabaseProvider(context.applicationContext)) }
     private val cache get() = cacheDelegate.value
     private val upstream = OkHttpDataSource.Factory(client)
@@ -55,9 +44,11 @@ class AudioCache(context: Context, directory: File,
     private val usageLock = Any()
     private var usageInitialized = false
     private val cachedKeys = mutableSetOf<String>()
+    private val capacityReady = CompletableDeferred<Unit>().apply { if (initialCapacityReady) complete(Unit) }
     val bytes = MutableStateFlow(0L)
     /** Cached track count, for the storage page. */
     val entries = MutableStateFlow(0)
+    val maxBytes = MutableStateFlow(initialMaxBytes)
     val clearing = MutableStateFlow(false)
     private fun cachedFactory(block: Boolean = false) = CacheDataSource.Factory().setCache(cache)
         .setUpstreamDataSourceFactory(upstream).setFlags(if (block) CacheDataSource.FLAG_BLOCK_ON_CACHE else CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
@@ -79,7 +70,7 @@ class AudioCache(context: Context, directory: File,
         override fun addTransferListener(listener: TransferListener) { listeners += listener; delegate?.addTransferListener(listener) }
         override fun open(dataSpec: DataSpec): Long {
             activeKey = dataSpec.key?.takeIf { it.startsWith(PREFIX) }
-            val source = if (dataSpec.key?.startsWith(PREFIX) == true)
+            val source = if (activeKey != null && capacityReady.isCompleted)
                 runCatching { cachedFactory().createDataSource() }.getOrElse { upstream.createDataSource() }
                 else localAware.createDataSource()
             delegate = source; listeners.forEach(source::addTransferListener)
@@ -95,36 +86,65 @@ class AudioCache(context: Context, directory: File,
         override fun getResponseHeaders(): Map<String, List<String>> = delegate?.responseHeaders.orEmpty()
         override fun close() { try { delegate?.close() } finally {
             delegate = null
-            activeKey?.let { key -> runCatching { forgetRedirect(key); updateUsage(key) } }; activeKey = null
+            activeKey?.takeIf { capacityReady.isCompleted }?.let { key ->
+                runCatching { forgetRedirect(key); updateUsage(key) }
+            }; activeKey = null
         } }
     } }
 
-    fun refreshUsage() = synchronized(usageLock) {
-        cachedKeys.clear()
-        cache.keys.filterTo(cachedKeys) { cache.getCachedSpans(it).any { span -> span.length > 0 } }
-        usageInitialized = true
-        bytes.value = cache.cacheSpace
-        entries.value = cachedKeys.size
+    fun refreshUsage() {
+        synchronized(usageLock) {
+            if (!capacityReady.isCompleted) {
+                bytes.value = 0L; entries.value = 0
+                return
+            }
+            cachedKeys.clear()
+            cache.keys.filterTo(cachedKeys) { cache.getCachedSpans(it).any { span -> span.length > 0 } }
+            usageInitialized = true
+            bytes.value = cache.cacheSpace
+            entries.value = cachedKeys.size
+        }
     }
-    private fun updateUsage(key: String) = synchronized(usageLock) {
-        // An LRU write can remove another track, not only the key being written.
-        if (!usageInitialized || evicted.getAndSet(false)) refreshUsage()
-        if (cache.getCachedSpans(key).any { it.length > 0 }) cachedKeys.add(key) else cachedKeys.remove(key)
-        bytes.value = cache.cacheSpace
-        entries.value = cachedKeys.size
+
+    suspend fun setMaxBytes(value: Long) = writeLock.withLock {
+        withContext(Dispatchers.IO) {
+            require(value > 0) { "Audio cache capacity must be positive" }
+            maxBytes.value = value
+            runCatching {
+                evictor.setMaxBytes(cache, value)
+                refreshUsage()
+            }
+            capacityReady.complete(Unit)
+        }
     }
-    fun cachedSource(key: String): AudioSource? = runCatching {
-        cache.getContentMetadata(key).get(SOURCE, "")?.takeIf { it.isNotBlank() }?.let { ApiJson.decodeFromString<AudioSource>(it) }
-    }.getOrNull()
+    private fun updateUsage(key: String) {
+        synchronized(usageLock) {
+            if (!capacityReady.isCompleted) return
+            // An LRU write can remove another track, not only the key being written.
+            if (!usageInitialized || evicted.getAndSet(false)) refreshUsage()
+            if (cache.getCachedSpans(key).any { it.length > 0 }) cachedKeys.add(key) else cachedKeys.remove(key)
+            bytes.value = cache.cacheSpace
+            entries.value = cachedKeys.size
+        }
+    }
+    fun cachedSource(key: String): AudioSource? {
+        if (!capacityReady.isCompleted) return null
+        return runCatching {
+            cache.getContentMetadata(key).get(SOURCE, "")?.takeIf { it.isNotBlank() }?.let { ApiJson.decodeFromString<AudioSource>(it) }
+        }.getOrNull()
+    }
     fun matchedSourceKey(requestKey: String): String? = runCatching {
+        if (!capacityReady.isCompleted) return null
         cache.getContentMetadata(requestKey).get("cm.audio.matchedKey", "")
             ?.takeIf { it.startsWith("$requestKey:match:") }
     }.getOrNull()
     fun rememberSelection(requestKey: String, sourceKey: String) {
+        awaitCapacityReady()
         cache.applyContentMetadataMutations(requestKey, ContentMetadataMutations()
             .set("cm.audio.matchedKey", sourceKey.takeUnless { it == requestKey }.orEmpty()))
     }
     fun rememberSource(key: String, source: AudioSource) {
+        awaitCapacityReady()
         val old = cachedSource(key)
         if (old != null && (old.level != source.level || old.sampleRate != source.sampleRate || old.channelCount != source.channelCount ||
                 old.format != source.format || old.md5 != source.md5)) cache.removeResource(key)
@@ -134,10 +154,12 @@ class AudioCache(context: Context, directory: File,
         updateUsage(key)
     }
     fun completeSource(key: String): AudioSource? = runCatching {
+        if (!capacityReady.isCompleted) return null
         val length = ContentMetadata.getContentLength(cache.getContentMetadata(key))
         if (length > 0 && cache.isCached(key, 0, length)) cachedSource(key) else null
     }.getOrNull()
-    fun cachedBytes(key: String, length: Long): Long = cache.getCachedBytes(key, 0, length)
+    fun cachedBytes(key: String, length: Long): Long =
+        if (capacityReady.isCompleted) cache.getCachedBytes(key, 0, length) else 0L
     private fun forgetRedirect(key: String) {
         if (ContentMetadata.getRedirectedUri(cache.getContentMetadata(key)) == null) return
         val metadata = ContentMetadataMutations()
@@ -147,6 +169,7 @@ class AudioCache(context: Context, directory: File,
 
     /** Only the next track's opening bytes, not a background whole-library download. */
     suspend fun preload(key: String, source: AudioSource, limit: Long = PRELOAD_BYTES) = writeLock.withLock {
+        capacityReady.await()
         withContext(Dispatchers.IO) {
             if (clearing.value) return@withContext
             val writer = CacheWriter(cachedFactory(block = true).createDataSource(),
@@ -171,6 +194,7 @@ class AudioCache(context: Context, directory: File,
         }
     }
     suspend fun clear() {
+        capacityReady.await()
         clearing.value = true
         writers.forEach(CacheWriter::cancel)
         try { writeLock.withLock { withContext(Dispatchers.IO) {
@@ -182,8 +206,12 @@ class AudioCache(context: Context, directory: File,
         writers.forEach(CacheWriter::cancel)
         if (cacheDelegate.isInitialized()) cache.release()
     }
+    private fun awaitCapacityReady() {
+        if (!capacityReady.isCompleted) runBlocking { capacityReady.await() }
+    }
     companion object {
         const val DEFAULT_MAX_BYTES = 1024L * 1024 * 1024
+        const val UNLIMITED_BYTES = Long.MAX_VALUE
         const val PRELOAD_BYTES = 2L * 1024 * 1024
         private const val PREFIX = "cm-audio-v1:"
         private const val SOURCE = "cm.audio.source"
@@ -195,5 +223,50 @@ class AudioCache(context: Context, directory: File,
             val preference = if (quality == AudioQuality.AUTO && supportsDolby) ":prefer-dolby" else ""
             return "$PREFIX$scope:$songId:${quality.value}$preference"
         }
+    }
+}
+
+@androidx.annotation.OptIn(UnstableApi::class)
+private class DynamicLruCacheEvictor(initialMaxBytes: Long,
+    private val onSpanRemoved: () -> Unit) : CacheEvictor {
+    @Volatile private var maxBytes = initialMaxBytes
+    private val leastRecentlyUsed = java.util.TreeSet<CacheSpan> { left, right ->
+        val delta = left.lastTouchTimestamp.compareTo(right.lastTouchTimestamp)
+        if (delta != 0) delta else left.compareTo(right)
+    }
+    private var currentSize = 0L
+
+    fun setMaxBytes(cache: Cache, value: Long) {
+        maxBytes = value
+        evictCache(cache, 0L)
+    }
+    override fun requiresCacheSpanTouches() = true
+    override fun onCacheInitialized() = Unit
+    override fun onStartFile(cache: Cache, key: String, position: Long, length: Long) {
+        if (length != C.LENGTH_UNSET.toLong()) evictCache(cache, length)
+    }
+    override fun onSpanAdded(cache: Cache, span: CacheSpan) {
+        leastRecentlyUsed.add(span)
+        currentSize += span.length
+        evictCache(cache, 0L)
+    }
+    override fun onSpanRemoved(cache: Cache, span: CacheSpan) {
+        leastRecentlyUsed.remove(span)
+        currentSize -= span.length
+        onSpanRemoved()
+    }
+    override fun onSpanTouched(cache: Cache, oldSpan: CacheSpan, newSpan: CacheSpan) {
+        onSpanRemoved(cache, oldSpan)
+        onSpanAdded(cache, newSpan)
+    }
+    private fun evictCache(cache: Cache, requiredSpace: Long) {
+        while (exceedsLimit(requiredSpace) && leastRecentlyUsed.isNotEmpty()) {
+            cache.removeSpan(leastRecentlyUsed.first())
+        }
+    }
+    private fun exceedsLimit(requiredSpace: Long) = when {
+        maxBytes == Long.MAX_VALUE -> false
+        requiredSpace > maxBytes -> true
+        else -> currentSize > maxBytes - requiredSpace
     }
 }
