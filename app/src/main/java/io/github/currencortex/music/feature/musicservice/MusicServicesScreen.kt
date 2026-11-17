@@ -37,7 +37,6 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
         val pending by repo.pendingConnection.collectAsStateWithLifecycle()
         val authorized by repo.lastAuthorizedService.collectAsStateWithLifecycle()
         val browser = LocalUriHandler.current
-        val scope = rememberCoroutineScope()
         var selected by rememberSaveable { mutableStateOf("") }
         LaunchedEffect(authorized) {
             authorized?.let { selected = it; repo.lastAuthorizedService.value = null }
@@ -46,19 +45,20 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
         var platform by rememberSaveable(service?.key) { mutableStateOf("") }
         val activePlatform = platform.takeIf { service?.descriptor?.platforms?.containsKey(it) == true }
             ?: service?.descriptor?.platforms?.keys?.firstOrNull().orEmpty()
-        var keyword by rememberSaveable(service?.key, activePlatform) { mutableStateOf("") }
+        val context = Triple(service?.key, activePlatform, service?.account)
+        val scope = key(context) { rememberCoroutineScope() }
+        var keyword by rememberSaveable(context) { mutableStateOf("") }
         var kind by rememberSaveable { mutableStateOf("song") }
-        var busy by remember { mutableStateOf(false) }
-        var message by remember { mutableStateOf("") }
-        var page by remember(service?.key, activePlatform) { mutableStateOf(MusicServicePage()) }
-        var labels by remember(service?.key, activePlatform) { mutableStateOf(emptyList<String>()) }
-        var last by remember(service?.key, activePlatform) { mutableStateOf<ServiceQuery?>(null) }
-        var focused by remember(service?.key, activePlatform) { mutableStateOf<MusicServiceResource?>(null) }
-        var write by remember { mutableStateOf<PendingWrite?>(null) }
-        var editText by remember { mutableStateOf("") }
-        var remove by remember { mutableStateOf<ConnectedMusicService?>(null) }
-        var pendingTrack by remember(service?.key, activePlatform) { mutableStateOf<MusicServiceResource?>(null) }
-        LaunchedEffect(service?.key, activePlatform) { write = null }
+        var busy by remember(context) { mutableStateOf(false) }
+        var message by remember(context) { mutableStateOf("") }
+        var page by remember(context) { mutableStateOf(MusicServicePage()) }
+        var labels by remember(context) { mutableStateOf(emptyList<String>()) }
+        var last by remember(context) { mutableStateOf<ServiceQuery?>(null) }
+        var focused by remember(context) { mutableStateOf<MusicServiceResource?>(null) }
+        var write by remember(context) { mutableStateOf<PendingWrite?>(null) }
+        var editText by remember(context) { mutableStateOf("") }
+        var remove by remember(context) { mutableStateOf<ConnectedMusicService?>(null) }
+        var pendingTrack by remember(context) { mutableStateOf<MusicServiceResource?>(null) }
 
         fun run(action: suspend () -> Unit) {
             if (busy) return
@@ -89,7 +89,7 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
             val response = repo.call(connection.key, activePlatform, query.operation, buildJsonObject {
                 query.input.forEach { (key, value) -> put(key, value) }
                 put("offset", query.offset)
-            })
+            }, expectedConnection = connection)
             val rows = response["items"] as? JsonArray
             val comments = response["comments"] as? JsonArray
             if (query.operation in setOf("discover.hot", "discover.suggest")) {
@@ -184,7 +184,7 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
             val browse = listOf("discover.hot" to "热搜", "discover.charts" to "榜单", "discover.recommendations" to "每日推荐",
                 "roaming.songs" to "私人漫游", "library.favorites" to "收藏", "library.playlists" to "个人歌单",
                 "history.recent" to "最近播放", "library.cloud" to "云盘曲库").filter { supported(it.first) }
-            if (browse.isNotEmpty() || supported("library.playlist.create")) item("browse") {
+            if (browse.isNotEmpty() || supported("library.playlist.create") || supported("history.record")) item("browse") {
                 SettingsSection("浏览与曲库", MusicIcons.List) {
                     for ((op, label) in browse) SettingsPreference(label, enabled = !busy, onClick = { query(ServiceQuery(op)) })
                     if (supported("library.playlist.create")) SettingsPreference("新建歌单", enabled = !busy, onClick = {
@@ -317,7 +317,7 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
                     val result = repo.call(connection.key, activePlatform, action.operation, buildJsonObject {
                         action.input.forEach { (key, value) -> put(key, value) }
                         if (textKey != null) put(textKey, editText)
-                    }, confirm = true)
+                    }, confirm = true, expectedConnection = connection)
                     write = null
                     if (action.operation == "library.playlist.tracks") {
                         pendingTrack = null

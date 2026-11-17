@@ -37,6 +37,7 @@ import java.util.concurrent.TimeUnit
 data class ConnectedMusicService(
     val key: String, val descriptorUrl: String, val descriptor: MusicServiceDescriptor,
     val authorizedScopes: Set<String> = emptySet(), val account: String? = null,
+    val authorizationRevision: String = "",
 )
 
 @Serializable
@@ -52,11 +53,11 @@ private class ServiceGrant(
 
 @Serializable private class ServiceEntry(
     val key: String, val url: String, val descriptor: MusicServiceDescriptor,
-    val grant: ServiceGrant? = null, val expiresAt: Long = 0,
+    val grant: ServiceGrant? = null, val expiresAt: Long = 0, val authorizationRevision: String = "",
 ) {
-    fun view() = ConnectedMusicService(key, url, descriptor, grant?.scopes.orEmpty(), grant?.sub)
-    fun withGrant(value: ServiceGrant?) = ServiceEntry(key, url, descriptor, value,
-        value?.let { System.currentTimeMillis() + it.expiry.coerceIn(1, 86_400) * 1000 } ?: 0)
+    fun view() = ConnectedMusicService(key, url, descriptor, grant?.scopes.orEmpty(), grant?.sub, authorizationRevision)
+    fun withGrant(value: ServiceGrant, revision: String = authorizationRevision) = ServiceEntry(key, url, descriptor, value,
+        System.currentTimeMillis() + value.expiry.coerceIn(1, 86_400) * 1000, revision)
 }
 
 @Serializable private class PendingServiceGrant(
@@ -128,7 +129,8 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
             throw ApiException(ErrorKind.Forbidden, userMessage = "授权地址已变更，请先断开原连接")
         }
         require(old != null || data.entries.size < 16) { "已达到外接服务数量上限" }
-        val entry = ServiceEntry(old?.key ?: UUID.randomUUID().toString(), url, checked, old?.grant, old?.expiresAt ?: 0)
+        val entry = ServiceEntry(old?.key ?: UUID.randomUUID().toString(), url, checked, old?.grant, old?.expiresAt ?: 0,
+            old?.authorizationRevision.orEmpty())
         save(ConnectionData(data.entries.filterNot { it.key == entry.key } + entry, data.pending))
         pendingConnection.value = null
         entry.key
@@ -189,7 +191,7 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
             put("redirect_uri", REDIRECT_URI); put("code_verifier", pending.verifier); put("platform", "android")
         })
         require(grant.scopes.containsAll(pending.required)) { "服务返回的授权范围不足" }
-        replace(entry.withGrant(grant))
+        replace(entry.withGrant(grant, UUID.randomUUID().toString()))
         lastAuthorizedService.value = entry.key
         entry.key
     }
@@ -223,9 +225,14 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
                 (it.refresh?.length ?: 0) <= 4096)
         }
 
-    private suspend fun access(key: String, scope: String, subject: String?): String = mutex.withLock {
-        val entry = entry(key)
-        if (entry.grant?.sub != subject) throw ApiException(ErrorKind.AudioSourceChanged)
+    private fun checkAuthorization(expected: ServiceEntry, current: ServiceEntry) {
+        if (expected.grant?.sub != current.grant?.sub || expected.authorizationRevision != current.authorizationRevision)
+            throw ApiException(ErrorKind.AudioSourceChanged)
+    }
+
+    private suspend fun access(expected: ServiceEntry, scope: String): String = mutex.withLock {
+        val entry = entry(expected.key)
+        checkAuthorization(expected, entry)
         val grant = entry.grant?.takeIf { scope in it.scopes }
             ?: throw ApiException(ErrorKind.Unauthorized, userMessage = "请授权这项音乐服务能力")
         if (entry.expiresAt > System.currentTimeMillis() + 30_000) return@withLock grant.access
@@ -241,13 +248,15 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
     }
 
     suspend fun call(key: String, platform: String, operation: String, input: JsonObject = buildJsonObject {},
-        confirm: Boolean = false): JsonObject {
+        confirm: Boolean = false, expectedConnection: ConnectedMusicService? = null): JsonObject {
         ready.await()
         val entry = entry(key)
+        if (expectedConnection != null && (expectedConnection.key != key || expectedConnection.account != entry.grant?.sub ||
+                expectedConnection.authorizationRevision != entry.authorizationRevision))
+            throw ApiException(ErrorKind.AudioSourceChanged)
         val capability = entry.descriptor.capability(platform, operation) ?: throw ApiException(ErrorKind.NotFound)
         require(!capability.write || confirm) { "请确认本次写入" }
-        val subject = entry.grant?.sub
-        val bearer = capability.scope?.let { access(key, it, subject) }
+        val bearer = capability.scope?.let { access(entry, it) }
         val endpoint = httpsUrl(entry.descriptor.apiBase).newBuilder()
             .encodedPath(httpsUrl(entry.descriptor.apiBase).encodedPath.trimEnd('/') + "/")
             .addPathSegment(operation).build()
@@ -256,7 +265,7 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
             put("input", input)
             if (confirm) put("confirm", true)
         }, bearer).jsonObject.also {
-            if (entry(key).grant?.sub != subject) throw ApiException(ErrorKind.AudioSourceChanged)
+            checkAuthorization(entry, entry(key))
         }
     }
 
@@ -271,7 +280,7 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
             ?.takeIf { entry ->
                 val cap = entry.descriptor.capability(track.platform, operation) ?: return@takeIf false
                 cap.scope == null || cap.scope in entry.grant?.scopes.orEmpty()
-            }?.let { "external:${track.connection}:${track.platform}:${it.grant?.sub.orEmpty()}" }
+            }?.let { "external:${track.connection}:${track.platform}:${it.grant?.sub.orEmpty()}:${it.authorizationRevision}" }
 
     internal fun historySession(track: ServiceTrack): RequestSession =
         RequestSession(playbackSession(track).server, identityFor(track, "history.record"))

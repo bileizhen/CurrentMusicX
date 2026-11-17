@@ -701,9 +701,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         }
         appScope.launch { audioSettings.state.collect { audioSources.invalidate() } }
         playerScope.launch {
-            var previous = emptyMap<String, Pair<String?, Set<String>>>()
+            var previous = musicServices.services.value.associateBy { it.key }
             musicServices.services.collect { connections ->
-                val next = connections.associate { it.key to (it.account to it.authorizedScopes) }
+                val next = connections.associateBy { it.key }
                 val track = playbackQueue.state.value.current?.serviceTrack
                 if (track != null && track.connection in previous && previous[track.connection] != next[track.connection]) {
                     audioSources.invalidate()

@@ -742,7 +742,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 entry("music-services") {
                     io.github.currencortex.music.feature.musicservice.MusicServicesScreen(container.musicServices,
                         onPlay = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
-                        onVideo = { song -> playWithPermission { container.playerController.playVideo(song.copy(video = true)); navigateTo(PLAYER) } },
+                        onVideo = { song -> playWithPermission { container.playerController.playVideo(song.copy(video = true)); navigateLibrary("lib/video") } },
                         onDownload = { song -> downloadSongJson = io.github.currencortex.music.core.network.ApiJson.encodeToString(Song.serializer(), song) })
                 }
                 entry("playback-settings") { io.github.currencortex.music.feature.settings.PlaybackSettingsScreen(musicSettingsVm) }
