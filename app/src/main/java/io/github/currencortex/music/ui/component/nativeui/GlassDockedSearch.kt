@@ -60,7 +60,7 @@ private val dockedSearchCurve = Easing { t ->
     placeholder: String = "搜索", focusRequester: FocusRequester? = null,
     onInputFocus: (Boolean) -> Unit = {}, onSubmit: (() -> Unit)? = null,
     onActivate: (() -> Unit)? = null, submitTag: String? = null, clearTag: String = "${inputTag}_clear",
-    onCancel: () -> Unit = {}) {
+    onCancel: () -> Unit = {}, leadingContent: (@Composable () -> Unit)? = null) {
     val colors = MiuixTheme.colorScheme
     val density = LocalDensity.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -85,7 +85,7 @@ private val dockedSearchCurve = Easing { t ->
         focus.clearFocus(); keyboard?.hide(); change(""); onCancel()
     })
     BoxWithConstraints(modifier.fillMaxWidth().height(DockedSearchHeight.dp)
-        .then(if (onActivate != null) Modifier.semantics(mergeDescendants = true) {
+        .then(if (onActivate != null && leadingContent == null) Modifier.semantics(mergeDescendants = true) {
             role = Role.Button
             onClick("搜索") { onActivate(); true }
         } else Modifier)
@@ -169,7 +169,8 @@ private val dockedSearchCurve = Easing { t ->
         ElasticPress(Modifier.align(if (rtl) Alignment.CenterEnd else Alignment.CenterStart).width(fieldWidth).fillMaxHeight(), state = fieldPress) {
             GlassSearchField(value, onValueChange, Modifier.fillMaxSize(), requester, inputTag,
                 placeholder, onInputFocus = { focused = it; onInputFocus(it) }, onSubmit = onSubmit,
-                submitTag = submitTag, clearTag = clearTag, onActivate = onActivate)
+                submitTag = submitTag, clearTag = clearTag, onActivate = onActivate,
+                leadingContent = leadingContent)
         }
         Box(Modifier.align(if (rtl) Alignment.CenterStart else Alignment.CenterEnd).size(DockedSearchHeight.dp).zIndex(2f)
             .graphicsLayer {
