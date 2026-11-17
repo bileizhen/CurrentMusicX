@@ -275,6 +275,9 @@ class QqDirectMusicClient(
                 route == "recommend/category-playlists/sorted" -> categoryPlaylists(query, credential)
                 route == "user/guess-you-like" -> guessYouLike(requireNotNull(credential))
                 route == "user/personal-fm" -> personalFm(query, requireNotNull(credential))
+                route == "user/radio-scenes" -> radioScenes(requireNotNull(credential))
+                route == "user/radio-preference" -> radioPreference(requireNotNull(credential))
+                route == "user/radio-preference/save" -> saveRadioPreference(requireNotNull(credential), body ?: JsonObject(emptyMap()))
                 route == "user/daily-songs" -> dailySongs(requireNotNull(credential))
                 route == "user/listening-rank" -> recentListening(requireNotNull(credential))
                 route == "recommend/toplists" -> topLists()
@@ -1491,6 +1494,8 @@ class QqDirectMusicClient(
             put("num", limit)
             put("from", (page - 1) * limit)
             put("scene", 0)
+            query["pool_id"]?.takeIf { it.isNotBlank() }?.let { put("pool_id", it) }
+            query["scene_id"]?.takeIf { it.isNotBlank() }?.let { put("scene_id", it) }
             put("song_ids", JsonArray(emptyList()))
         }, credential)
         val rows = data.array("tracks", "songlist", "songs", "list")
@@ -1500,6 +1505,29 @@ class QqDirectMusicClient(
             put("more", more)
             if (more) put("nextPage", page + 1)
         })
+    }
+
+    private fun radioScenes(credential: DirectCredential): JsonObject {
+        val data = cgi("music.startup.RadioConfig", "GetRadioSceneConfigs", buildJsonObject {
+            put("Ext", buildJsonObject { put("client_time", (System.currentTimeMillis() / 1000).toString()) })
+        }, credential)
+        return wrapped(data)
+    }
+
+    private fun radioPreference(credential: DirectCredential): JsonObject {
+        val data = cgi("recommend.RecPreferenceSettingServer", "GetPreference", buildJsonObject {
+            put("id", 1)
+        }, credential)
+        return wrapped(data)
+    }
+
+    private fun saveRadioPreference(credential: DirectCredential, body: JsonObject): JsonObject {
+        val tags = body["vecTag"] as? JsonArray ?: JsonArray(emptyList())
+        val data = cgi("recommend.RecPreferenceSettingServer", "ReportPreference", buildJsonObject {
+            put("id", 1)
+            put("vecTag", tags)
+        }, credential)
+        return wrapped(data)
     }
 
     private fun dailySongs(credential: DirectCredential): JsonObject {

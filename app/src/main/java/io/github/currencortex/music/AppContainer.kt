@@ -512,10 +512,32 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val dockAudioLevel = DockAudioLevel()
     val playerController = PlayerController(context.applicationContext, playbackQueue, playerScope)
     val personalRoaming = io.github.currencortex.music.feature.roaming.PersonalRoamingController(
-        io.github.currencortex.music.data.roaming.PersonalRoamingRepository(neteaseTransport), neteaseSessions, playerController,
+        io.github.currencortex.music.feature.roaming.PersonalRoamingRepositoryAdapter(
+            io.github.currencortex.music.data.roaming.PersonalRoamingRepository(neteaseTransport)),
+        io.github.currencortex.music.feature.roaming.NeteaseRoamingSessionStore(neteaseSessions), playerController,
         io.github.currencortex.music.data.roaming.RoamingPreferences(settingsStore), playerScope,
         audioSettings.state.map { audioSettings.access().identity }.distinctUntilChanged()
             .stateIn(playerScope, SharingStarted.Eagerly, audioSettings.access().identity))
+    val qqMusicPersonalRoaming = io.github.currencortex.music.feature.roaming.PersonalRoamingController(
+        io.github.currencortex.music.data.roaming.QqMusicRoamingRepository(qqMusic),
+        io.github.currencortex.music.feature.roaming.QqMusicRoamingSessionStore(qqMusic.state), playerController,
+        io.github.currencortex.music.data.roaming.RoamingPreferences(settingsStore), playerScope,
+        musicSettings.state.map { it.musicPlatform.name }.distinctUntilChanged()
+            .stateIn(playerScope, SharingStarted.Eagerly, musicSettings.state.value.musicPlatform.name))
+    val activePersonalRoaming
+        get() = if (playerController.state.value.song?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC ||
+            musicSettings.state.value.musicPlatform == io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC)
+            qqMusicPersonalRoaming else personalRoaming
+    /** True when the station the roaming UI is bound to is QQ Music. */
+    val activePersonalRoamingIsQq: Boolean get() = activePersonalRoaming === qqMusicPersonalRoaming
+    init {
+        // One shared dispatcher: both stations publish boundaries on the same player.
+        playerController.onRadioBoundary = {
+            val session = playbackQueue.state.value.radioSession
+            val owner = listOf(personalRoaming, qqMusicPersonalRoaming).firstOrNull { it.ownsRadio(session) }
+            owner?.awaitNext()
+        }
+    }
     val smartTuning = SmartTuningController(equalizerSettings.state, soundEffectsSettings.state,
         playerController.state.map { it.song }, neteaseSoundEffects::analyze, playerScope)
     private val engineReady = MutableStateFlow(NeteaseNativeEngine.available() && NeteaseEngineLibraries.moodAvailable())
