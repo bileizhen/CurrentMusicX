@@ -129,6 +129,7 @@ Set audio and lyric sources independently in **Settings → Sources & Network**.
 | --- | --- |
 | **Platform direct (default)** | Resolve playback directly against the current platform's official NetEase or QQ Music service. Switch platforms and sign in with a QR code for QQ Music. Playback never falls back to a CurrentMusic server. |
 | LeiZ API | Configure an API key for this service. The app stores it encrypted on the device. |
+| Server source | Sign in to CurrentMusic, then choose and confirm a source under **Settings → Sources & Network → Import from server**. CurrentMusic Engine resolves playback for NetEase catalog tracks. [Integration guide](https://music.20110208.xyz/api-docs/reference/guide-audio-sources-api/) |
 | LX Music source | Import one or more `.js` files or links. With **Smart source switching** enabled, the app prefers the script that resolves fastest and falls back to other imported sources on failure. It resolves tracks with a valid NetEase or QQ Music ID for the active platform. Search and playlists keep their original sources. |
 
 LX Music scripts send track information to their service. Import scripts from sources you trust. Smart-switch retries send the same track information to other imported scripts' services. Connect Navidrome under **Settings → Sources & Network → Self-hosted libraries** to play audio directly from your server.
@@ -170,7 +171,7 @@ The address applies to CurrentMusic accounts, CurrentMusic lyrics, cloud binding
 ### How the clients route requests
 
 - **CurrentMusic Web** sends application API requests for search, track details, lyrics, playback URLs, accounts, and community features to the engine at `/cm/` by default. Selecting LeiZ sends playback URL requests directly to LeiZ. The cloud upload flow obtains a token and registers the file through the engine, while the browser can send the file itself directly to object storage.
-- **CurrentMusicX** routes each request by feature, audio source, and sign-in state. Platform direct resolves playback on the phone against the active platform; LeiZ and LX use their own services. CurrentMusic accounts and playlists, the community, CurrentMusic rooms, cloud account linking, and CurrentMusic lyrics go through the engine. Search, comments, and two-person listening can go directly to NetEase. With a local NetEase session, personal playlists, likes, and recommendations generally go directly as well. With no local session, selected account features can use the engine's saved NetEase binding. Lyrics have their own source setting.
+- **CurrentMusicX** routes each request by feature, audio source, and sign-in state. Platform direct resolves playback on the phone against the active platform; LeiZ and LX use their own services. An active imported server source resolves NetEase catalog tracks through its CurrentMusic server. CurrentMusic accounts and playlists, the community, CurrentMusic rooms, cloud account linking, and CurrentMusic lyrics go through the engine. Search, comments, and two-person listening can go directly to NetEase. With a local NetEase session, personal playlists, likes, and recommendations generally go directly as well. With no local session, selected account features can use the engine's saved NetEase binding. Lyrics have their own source setting.
 
 ### How the engine handles requests
 

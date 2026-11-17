@@ -2,6 +2,7 @@ package io.github.currencortex.music.core.media
 
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.song.AudioSource
+import io.github.currencortex.music.data.song.SERVER_AUDIO_SOURCE_IDENTITY_PREFIX
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -12,7 +13,8 @@ data class AudioRequest(val songId: Long, val quality: AudioQuality, val account
     val refresh: Boolean = false, val supportsDolby: Boolean = false) {
     val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity, supportsDolby)
 
-    private val dolbyAuto get() = quality == AudioQuality.AUTO && providerIdentity == "netease"
+    private val dolbyAuto get() = quality == AudioQuality.AUTO &&
+        (providerIdentity == "netease" || providerIdentity.startsWith(SERVER_AUDIO_SOURCE_IDENTITY_PREFIX))
 
     internal fun accepts(source: AudioSource): Boolean = !dolbyAuto || supportsDolby || source.level != AudioQuality.DOLBY.value
 
