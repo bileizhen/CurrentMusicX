@@ -122,7 +122,11 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
             } else {
                 labels = emptyList()
                 val next = ApiJson.decodeFromJsonElement<MusicServicePage>(response)
-                page = if (append) next.copy(items = page.items + next.items, tracks = page.tracks + next.tracks) else next
+                page = if (append) next.copy(
+                    items = page.items + next.items,
+                    tracks = page.tracks + next.tracks,
+                    albums = page.albums + next.albums,
+                ) else next
                 next.resource?.let { focused = it }
             }
             last = query
