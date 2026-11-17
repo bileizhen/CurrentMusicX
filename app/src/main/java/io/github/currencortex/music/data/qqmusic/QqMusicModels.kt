@@ -70,6 +70,10 @@ data class QqComment(val id: String, val text: String, val nickname: String = ""
 data class QqCommentsPage(val comments: List<QqComment> = emptyList(), val total: Int = 0,
     val hasMore: Boolean = false, val nextSeq: String = "")
 data class QqSongPage(val songs: List<Song>, val hasMore: Boolean = false, val nextPage: Int? = null)
+data class QqRadioScene(val id: String, val name: String, val poolId: String = "",
+    val cover: String = "", val sort: Int = 0, val status: Int = 0)
+data class QqPreferenceOption(val id: String, val name: String, val status: Int = 0, val type: Int = 0)
+data class QqPreferenceGroup(val name: String, val type: Int = 0, val options: List<QqPreferenceOption> = emptyList())
 data class QqListeningRankEntry(val song: Song, val listenCount: Long = 0)
 data class QqListeningRankPage(
     val entries: List<QqListeningRankEntry> = emptyList(),

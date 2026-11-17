@@ -121,11 +121,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     return qqAudioQualities(access, sources)
 }
 
-private val qqNativeQualities = linkedSetOf(
-    AudioQuality.STANDARD, AudioQuality.EXHIGH, AudioQuality.LOSSLESS,
-    AudioQuality.HIRES, AudioQuality.QQ_MASTER, AudioQuality.QQ_STUDIO, AudioQuality.QQ_SURROUND,
-    AudioQuality.DOLBY, AudioQuality.QQ_DTS_X, AudioQuality.QQ_NAC,
+private val qqQualityOrder = listOf(
+    AudioQuality.DOLBY, AudioQuality.LOSSLESS, AudioQuality.EXHIGH, AudioQuality.STANDARD,
+    AudioQuality.QQ_NAC, AudioQuality.QQ_MASTER, AudioQuality.QQ_SURROUND, AudioQuality.QQ_STUDIO,
+    AudioQuality.HIRES, AudioQuality.QQ_DTS_X,
 )
+private val qqNativeQualities = qqQualityOrder.toCollection(linkedSetOf())
 
 internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSourceInfo>): Set<AudioQuality> {
     if (access.provider != AudioProvider.LX) return qqNativeQualities
@@ -145,11 +146,7 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
             else -> null
         } }.toSet()
     val available = linkedSetOf<AudioQuality>()
-    listOf(
-        AudioQuality.STANDARD, AudioQuality.EXHIGH, AudioQuality.LOSSLESS, AudioQuality.HIRES,
-        AudioQuality.QQ_STUDIO, AudioQuality.QQ_SURROUND, AudioQuality.QQ_MASTER,
-        AudioQuality.DOLBY, AudioQuality.QQ_DTS_X, AudioQuality.QQ_NAC,
-    ).forEach { if (it in supported) available += it }
+    qqQualityOrder.forEach { if (it in supported) available += it }
     return available
 }
 
@@ -161,6 +158,9 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
     val regularOptions = (available ?: listOf(AudioQuality.VIVID, AudioQuality.DOLBY, AudioQuality.JYEFFECT,
         AudioQuality.HIRES, AudioQuality.LOSSLESS, AudioQuality.EXHIGH, AudioQuality.HIGHER, AudioQuality.STANDARD))
         .filter { it != AudioQuality.AUTO }
+    val qqOptions = qqQualityOrder.filter { it in regularOptions }
+    val qqFeaturedOptions = listOf(AudioQuality.QQ_SURROUND, AudioQuality.QQ_MASTER)
+        .filter { it in regularOptions }
     // This is a fixed, short list. Compose it before the native entrance starts instead of
     // subcomposing every text row during the first animated layout pass.
     // Let the native sheet supply the available screen height. Keep the safe-area spacing
@@ -178,11 +178,17 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
         }
         if (available == null) run {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FeaturedQuality(AudioQuality.SKY, selected, enabled, onSelect, Modifier.weight(1f))
-                FeaturedQuality(AudioQuality.JYMASTER, selected, enabled, onSelect, Modifier.weight(1f))
+                FeaturedQuality(AudioQuality.SKY, selected, enabled, onSelect, false, Modifier.weight(1f))
+                FeaturedQuality(AudioQuality.JYMASTER, selected, enabled, onSelect, false, Modifier.weight(1f))
+            }
+        } else if (isQq) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                qqFeaturedOptions.forEach { quality ->
+                    FeaturedQuality(quality, selected, enabled, onSelect, true, Modifier.weight(1f))
+                }
             }
         }
-        regularOptions.forEach { quality ->
+        (if (isQq) qqOptions.filter { it !in qqFeaturedOptions } else regularOptions).forEach { quality ->
             QualityRow(quality, selected, enabled, onSelect, isQq)
         }
         QualityRow(AudioQuality.AUTO, selected, enabled, onSelect, isQq)
@@ -231,7 +237,7 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
 }
 
 @Composable private fun FeaturedQuality(quality: AudioQuality, selected: AudioQuality, enabled: Boolean,
-    onSelect: (AudioQuality) -> Unit, modifier: Modifier) {
+    onSelect: (AudioQuality) -> Unit, isQq: Boolean, modifier: Modifier) {
     val colors = MiuixTheme.colorScheme
     val active = selected == quality
     val shape = RoundedCornerShape(22.dp)
@@ -240,13 +246,14 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
         .border(1.dp, if (active) colors.primary.copy(alpha = .6f) else Color.Transparent, shape)
         .padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (quality == AudioQuality.SKY) "SURROUND" else "MASTER", Modifier.weight(1f), fontSize = 10.sp,
+            Text(if (quality == AudioQuality.SKY || quality == AudioQuality.QQ_SURROUND) "SURROUND" else "MASTER",
+                Modifier.weight(1f), fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold, color = colors.primary)
             QualityCheck(active)
         }
         Spacer(Modifier.height(10.dp))
-        Text(quality.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
-        Text(if (quality == AudioQuality.SKY) "多声道环绕音源" else "高解析母带音源", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+        Text(quality.qualityLabel(isQq), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
+        Text(quality.description(isQq), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
     }
 }
 
@@ -256,8 +263,10 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
     val active = quality == selected
     Row(Modifier.fillMaxWidth().qualityClick(quality, active, enabled) { onSelect(quality) }
         .background(if (active) colors.primary.copy(alpha = .08f) else Color.Transparent, RoundedCornerShape(18.dp))
-        .padding(horizontal = 10.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(40.dp).background(colors.primary.copy(alpha = .08f), CircleShape), contentAlignment = Alignment.Center) {
+        .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(40.dp).background(colors.primary.copy(alpha = .08f), CircleShape),
+            contentAlignment = Alignment.Center) {
             Text(quality.shortName(), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.primary)
         }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
