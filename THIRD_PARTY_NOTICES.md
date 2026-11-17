@@ -324,10 +324,13 @@ song lyrics or audio are bundled with this port.
 
 ## QQ Music and Qishui public lyric matching
 
-`QqLyricsMatchSource.kt` uses QQ Music's public web catalogue and LRC endpoints.
-It retains real line timing and optional auxiliary lyric tracks; no encrypted QRC
-or estimated word timing is claimed. Its integration follows the Folia source
-registry credited above, with the public web endpoint adaptation implemented in Kotlin.
+`QqLyricsMatchSource.kt` uses QQ Music's public web catalogue, QRC and LRC endpoints.
+QRC is the source of real word timing; public LRC remains a fallback when QRC is absent
+or unavailable. `QqQrcDecoder.kt` adapts the QRC container decoder from
+[QQMusicDecoder](https://github.com/WXRIW/QQMusicDecoder/tree/0e1494194523dd885405812a91ee9b9702bfb30c),
+copyright (c) 2023 WXRIW, MIT. The original MIT notice is provided offline in
+`legal/QQMUSICDECODER-MIT.txt`. Its integration follows the Folia source registry
+credited above, with the public web endpoint adaptation implemented in Kotlin.
 
 `QishuiLyricsMatchSource.kt` adapts the anonymous client-token, public search and
 lyric-metadata portions of [qishui-music-api 0.2.2](https://github.com/GSQZ/qishui-music-api/tree/924add376cadf8a2268f11999051eb976e3b8e0d),
