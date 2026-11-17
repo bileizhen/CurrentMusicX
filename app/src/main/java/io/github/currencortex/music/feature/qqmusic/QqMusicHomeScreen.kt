@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,6 +42,8 @@ import io.github.currencortex.music.feature.home.HomeSectionHeader
 import io.github.currencortex.music.feature.library.LibrarySongActions
 import io.github.currencortex.music.feature.library.LibraryViewModel
 import io.github.currencortex.music.ui.component.HomeProfileAvatar
+import io.github.currencortex.music.ui.component.HomeBrandTitle
+import io.github.currencortex.music.ui.component.MusicPlatformSwitcher
 import io.github.currencortex.music.ui.component.LoadingArtworkCards
 import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import io.github.currencortex.music.ui.component.LoadingSongList
@@ -54,11 +57,13 @@ import io.github.currencortex.music.ui.component.nativeui.ElasticLazyRow
 import io.github.currencortex.music.ui.component.nativeui.MusicArtworkCard
 import io.github.currencortex.music.ui.component.nativeui.SettingsListHeader
 import io.github.currencortex.music.ui.component.nativeui.SettingsRootTopBar
+import io.github.currencortex.music.ui.component.nativeui.SettingsScrollLayout
 import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
 import io.github.currencortex.music.ui.component.rootMotionItems
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.map as flowMap
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -92,6 +97,7 @@ fun QqMusicHomeScreen(
     val container = libraryVm.container
     val account by container.accountRepository.state.collectAsStateWithLifecycle()
     val preferences by container.musicSettings.state.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
     val qqAccount by container.qqMusic.state.collectAsStateWithLifecycle()
     val sessionRevision by container.accountRepository.sessionRevision.collectAsStateWithLifecycle()
     val avatarVersions by container.profileRepository.avatarVersions.collectAsStateWithLifecycle()
@@ -188,15 +194,14 @@ fun QqMusicHomeScreen(
     SettingsUiScope {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val artworkCardWidth = (maxWidth.coerceAtMost(840.dp) - 64.dp) / 2.5f
-            MusicPlatformScrollLayout(
-                container,
+            SettingsScrollLayout(
                 Modifier.widthIn(max = 840.dp).fillMaxSize().align(Alignment.TopCenter),
                 glassOverContent = false,
-                topBar = { platformTitle ->
+                topBar = {
                     SettingsRootTopBar(
                         "Current Music",
                         Modifier.testTag("home_root_toolbar"),
-                        titleContent = platformTitle,
+                        titleContent = { HomeBrandTitle() },
                     ) {
                         HomeProfileAvatar(
                             avatarUrl,
@@ -224,6 +229,11 @@ fun QqMusicHomeScreen(
                                 onActivate = onSearch,
                                 placeholder = "搜索 QQ 音乐歌曲、歌手、专辑、歌单",
                                 inputTag = "home_search_field",
+                                leadingContent = {
+                                    MusicPlatformSwitcher(preferences.musicPlatform, { platform ->
+                                        scope.launch { container.musicSettings.setMusicPlatform(platform) }
+                                    }, enabled = !hideSearch)
+                                },
                             )
                         }
                         if (state.errors.isNotEmpty() && !state.loading) item(key = "retry") {
