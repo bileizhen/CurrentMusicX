@@ -46,7 +46,7 @@ import io.github.currencortex.music.ui.component.nativeui.*
             if (download != null) add(GlassMenuItem("song_download", "下载歌曲", MusicIcons.Download, onClick = { download(song) }))
             add(GlassMenuItem("song_share", "分享歌曲", onClick = { share(song) }))
         }
-        if (song.serviceTrack == null) addAll(libraryActions.filterNot { !roomRequest && it.id == like?.id })
+        addAll(libraryActions.filterNot { !roomRequest && it.id == like?.id })
         addAll(insights)
     }
     MusicArtworkPreview(song.cover, song.name, anchor,
@@ -67,10 +67,10 @@ import io.github.currencortex.music.ui.component.nativeui.*
                 song.qqMusic?.albumMid?.takeIf { it.isNotBlank() }?.let { mid ->
                     add(GlassMenuItem("album", "查看专辑", onClick = { navigate("qq/album/$mid") }))
                 }
-            } else {
-            if (song.artists.isNotBlank()) add(GlassMenuItem("artist", "查看歌手",
-                onClick = { navigate(song.artistIds.singleOrNull()?.let { "lib/artist/$it" } ?: catalogRoute(false, song.artists)) }))
-            if (song.album.isNotBlank()) add(GlassMenuItem("album", "查看专辑", onClick = { navigate(catalogRoute(true, song.album)) }))
+            } else if (song.serviceTrack == null) {
+                if (song.artists.isNotBlank()) add(GlassMenuItem("artist", "查看歌手",
+                    onClick = { navigate(song.artistIds.singleOrNull()?.let { "lib/artist/$it" } ?: catalogRoute(false, song.artists)) }))
+                if (song.album.isNotBlank()) add(GlassMenuItem("album", "查看专辑", onClick = { navigate(catalogRoute(true, song.album)) }))
             }
             if (more.isNotEmpty()) add(GlassMenuItem("more", "更多操作", children = more))
         }, onDismiss = onDismiss)

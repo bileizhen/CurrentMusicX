@@ -33,7 +33,8 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
         PlayerIconButton(PlayerIcon.LIKE, if (liked) "取消喜欢" else "喜欢", vm::togglePrimaryLike,
             Modifier.testTag("player_like"), selected = liked, count = current?.likeCount,
             countLabel = current?.likeCountLabel,
-            showCount = true, enabled = queue.current?.video == false && queue.current?.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL &&
+            showCount = true, enabled = queue.current?.video == false && queue.current?.serviceTrack == null &&
+                queue.current?.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL &&
                 ((!qqMusic && !netease && queue.current?.musicSource != io.github.currencortex.music.data.song.MusicSource.EMBY) ||
                     current?.liked != null), onLongClick = onLike)
         Box(middleSlot, contentAlignment = Alignment.Center) {
