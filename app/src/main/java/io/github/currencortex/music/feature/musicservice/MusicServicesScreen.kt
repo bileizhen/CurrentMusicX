@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.network.ApiJson
+import io.github.currencortex.music.core.network.AppResult
 import io.github.currencortex.music.data.musicservice.ConnectedMusicService
 import io.github.currencortex.music.data.musicservice.MusicServiceConnections
 import io.github.currencortex.music.data.musicservice.MusicServicePage
@@ -52,6 +53,7 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
         val services by repo.services.collectAsStateWithLifecycle()
         val pending by repo.pendingConnection.collectAsStateWithLifecycle()
         val authorized by repo.lastAuthorizedService.collectAsStateWithLifecycle()
+        val disconnection by repo.disconnection.collectAsStateWithLifecycle()
         val browserContext = LocalContext.current
         var selected by rememberSaveable { mutableStateOf("") }
         LaunchedEffect(authorized) {
@@ -158,7 +160,7 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
                             SettingsOptionsRow("曲库", activePlatform, platforms.map {
                                 SettingsOption(it, it, it == activePlatform, onSelect = { platform = it })
                             }, Modifier.testTag("choose_music_service_platform"), enabled = !busy)
-                            SettingsPreference("断开连接", onClick = { remove = connection }, enabled = !busy)
+                            SettingsPreference("断开连接", onClick = { remove = connection }, enabled = !busy && !disconnection.pending)
                             val lyricsScope = connection.descriptor.capability(activePlatform, "track.lyrics")?.scope
                             if (lyricsScope != null && lyricsScope !in connection.authorizedScopes) {
                                 SettingsPreference("授权读取歌词", enabled = !busy, onClick = { run {
@@ -174,8 +176,13 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
                             }
                         }
                     }
-                    if (busy) SettingsHint("正在处理…")
+                    if (busy || disconnection.pending) SettingsHint("正在处理…")
                     if (message.isNotBlank()) SettingsHint(message)
+                    when (val outcome = disconnection.outcome) {
+                        is AppResult.Success -> SettingsHint(if (outcome.value) "已断开连接" else "已断开，可在服务网页检查授权是否撤销")
+                        is AppResult.Failure -> SettingsHint(outcome.message)
+                        null -> Unit
+                    }
                 }
             }
 
@@ -305,6 +312,7 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
         pending?.let { (url, descriptor) ->
             val dismiss = { repo.pendingConnection.value = null }
             ServiceConfirmation("连接 ${descriptor.name}", dismiss, "连接", enabled = !busy, confirm = {
+                repo.clearDisconnectOutcome()
                 run { selected = repo.connect(url, descriptor) }
             }) {
                 SettingsHint("服务域名 · ${io.github.currencortex.music.data.musicservice.httpsUrl(descriptor.apiBase).host}")
@@ -312,12 +320,9 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
             }
         }
         remove?.let { connection ->
-            ServiceConfirmation("断开 ${connection.descriptor.name}", { remove = null }, "断开", confirm = {
+            ServiceConfirmation("断开 ${connection.descriptor.name}", { remove = null }, "断开", enabled = !disconnection.pending, confirm = {
                 remove = null
-                run {
-                    val revoked = repo.disconnect(connection.key)
-                    message = if (revoked) "已断开连接" else "已断开，可在服务网页检查授权是否撤销"
-                }
+                repo.requestDisconnect(connection.key)
             }) { SettingsHint("本机的服务授权和连接记录将被清除") }
         }
         write?.let { action ->

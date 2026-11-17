@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -39,6 +40,8 @@ data class ConnectedMusicService(
     val authorizedScopes: Set<String> = emptySet(), val account: String? = null,
     val authorizationRevision: String = "",
 )
+
+internal data class MusicServiceDisconnection(val pending: Boolean = false, val outcome: AppResult<Boolean>? = null)
 
 @Serializable
 private class ServiceGrant(
@@ -82,6 +85,8 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
     internal val lastAuthorizedService = MutableStateFlow<String?>(null)
     private val _authorizationOutcome = MutableStateFlow<AppResult<String>?>(null)
     internal val authorizationOutcome = _authorizationOutcome.asStateFlow()
+    private val _disconnection = MutableStateFlow(MusicServiceDisconnection())
+    internal val disconnection = _disconnection.asStateFlow()
 
     init {
         scope.launch(Dispatchers.IO) {
@@ -104,6 +109,8 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
         data = value
         _services.value = value.entries.map(ServiceEntry::view)
     }
+
+    internal suspend fun awaitRestored() = ready.await()
 
     private suspend fun save(value: ConnectionData) {
         withContext(Dispatchers.IO) { store.write(ApiJson.encodeToString(value)) }
@@ -196,14 +203,27 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
         entry.key
     }
 
-    suspend fun disconnect(key: String): Boolean = mutex.withLock {
-        ready.await()
-        val entry = entry(key)
-        save(ConnectionData(data.entries.filterNot { it.key == key }, data.pending?.takeUnless { it.key == key }))
+    internal fun requestDisconnect(key: String) {
+        val current = _disconnection.value
+        if (current.pending || !_disconnection.compareAndSet(current, MusicServiceDisconnection(pending = true))) return
+        scope.launch { _disconnection.value = MusicServiceDisconnection(outcome = appResult { disconnect(key) }) }
+    }
+
+    internal fun clearDisconnectOutcome() {
+        _disconnection.update { if (it.pending) it else MusicServiceDisconnection() }
+    }
+
+    private suspend fun disconnect(key: String): Boolean {
+        val entry = mutex.withLock {
+            ready.await()
+            val saved = entry(key)
+            save(ConnectionData(data.entries.filterNot { it.key == key }, data.pending?.takeUnless { it.key == key }))
+            saved
+        }
         val auth = entry.descriptor.authorization
         val grant = entry.grant
-        if (auth == null || grant == null) return@withLock true
-        try {
+        if (auth == null || grant == null) return true
+        return try {
             fetch(httpsUrl(auth.revokeUrl), buildJsonObject {
                 put("client_id", auth.clientId)
                 put("token", grant.refresh ?: grant.access)

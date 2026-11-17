@@ -596,6 +596,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             navidrome.state.map { it.revision }.distinctUntilChanged(),
             musicSettings.state.map { it.server to it.lyricsSource }.distinctUntilChanged()) { song, account, netease, navidrome, lyricsSettings ->
             io.github.currencortex.music.feature.lyrics.data.LyricsRequest(song, listOf(account, netease, navidrome, lyricsSettings))
+        }.combine(musicServices.services) { request, connections ->
+            val track = request.song?.serviceTrack ?: return@combine request
+            val connection = connections.firstOrNull { it.key == track.connection }
+            request.copy(session = request.session + connection)
         }, songLyrics.state), lyricsRepository::load, playerScope, songLyrics.state)
     val sleepTimer = io.github.currencortex.music.core.media.SleepTimer(playerController, playerScope)
     val roomRepository = io.github.currencortex.music.data.room.RoomRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
@@ -741,7 +745,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                     }
                 }
                 if (initial.restoreQueue) database.music().queue()?.let {
-                    playbackQueue.restore(ApiJson.decodeFromString<QueueSnapshot>(it.payload))
+                    val savedQueue = ApiJson.decodeFromString<QueueSnapshot>(it.payload)
+                    if (savedQueue.songs.any { song -> song.serviceTrack != null }) appResult { musicServices.awaitRestored() }
+                    playbackQueue.restore(savedQueue)
                 }
                 ready.complete(Unit)
                 if (nativeNetease != null) {

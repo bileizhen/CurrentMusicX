@@ -42,6 +42,7 @@ open class SongDownloadWorker(context: Context, params: WorkerParameters) : Coro
         val nav = song.navidrome != null
         val emby = song.emby != null
         val serviceTrack = song.serviceTrack
+        if (serviceTrack != null) container.musicServices.awaitRestored()
         val qq = song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC
         fun verifySession() {
             if (serviceTrack != null) {
