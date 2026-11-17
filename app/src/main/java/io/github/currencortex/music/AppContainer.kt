@@ -444,7 +444,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         { accountRepository.server }) { logger.debug("Lyrics", it) }
     val songLyrics = io.github.currencortex.music.feature.lyrics.data.SongLyricsStore(
         java.io.File(context.filesDir, "song-lyrics$storageSuffix"))
-    private val qqLyricsMatching = io.github.currencortex.music.feature.lyrics.data.QqLyricsMatchSource()
+    private val qqLyricsMatching = io.github.currencortex.music.feature.lyrics.data.QqLyricsMatchSource(
+        log = { logger.debug("Lyrics", it) })
     private val qishuiLyricsMatching = io.github.currencortex.music.feature.lyrics.data.QishuiLyricsMatchSource()
     val onlineLyrics = io.github.currencortex.music.feature.lyrics.data.OnlineLyricsMatcher(
         searchNetease = { query -> when (val result = musicRepository.searchForLyricsMatching(query,
