@@ -6,8 +6,6 @@ import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.animateColorAsState
@@ -62,7 +60,7 @@ import kotlinx.serialization.json.*
 
 /** Original presets and local EQ share one visible selection, with independent verified apply paths. */
 @Composable internal fun SoundEffectsMainScreen(vm: SoundEffectsViewModel, onBack: () -> Unit, onEqualizer: () -> Unit, onDetails: (SoundEffectKind) -> Unit,
-    onAdaptive: () -> Unit = {}) {
+    onAdaptive: () -> Unit, onPackage: () -> Unit) {
     val adaptive by vm.adaptive.collectAsStateWithLifecycle()
     val options by vm.preferences.collectAsStateWithLifecycle()
     val tuning by vm.tuning.collectAsStateWithLifecycle()
@@ -83,29 +81,34 @@ import kotlinx.serialization.json.*
     val originalMood by vm.originalMood.collectAsStateWithLifecycle()
     val originalMaster by vm.originalAiMaster.collectAsStateWithLifecycle()
     val originalSpeaker by vm.originalSpeaker.collectAsStateWithLifecycle()
-    val engineImport by vm.originalImport.collectAsStateWithLifecycle()
+    val installed by vm.originalEffectsReady.collectAsStateWithLifecycle()
+    val transfer by vm.originalImport.collectAsStateWithLifecycle()
     val colors = MiuixTheme.colorScheme
     val dark = colors.background.luminance() < .5f
     val background = colors.background
     val listState = rememberLazyListState()
     val catalogListState = rememberLazyListState()
     val context = LocalContext.current
-    val selectNeteaseApk = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) vm.importOriginal(uri)
-    }
     var selectedEffect by remember { mutableStateOf<NeteaseSoundEffect?>(null) }
     var launchError by remember { mutableStateOf<String?>(null) }
-    var expandedCatalog by rememberSaveable { mutableStateOf(false) }
-    var showEngine by rememberSaveable { mutableStateOf(false) }
-    LaunchedEffect(expandedCatalog) { if (expandedCatalog) vm.refreshMore() }
+    var catalogOpen by rememberSaveable { mutableStateOf(false) }
+    val expandedCatalog = installed && catalogOpen
     var tileDetails by remember { mutableStateOf<NativeEffectTile?>(null) }
-    BackHandler(enabled = LocalMusicPageActive.current && expandedCatalog) { expandedCatalog = false }
+    LaunchedEffect(expandedCatalog) { if (expandedCatalog) vm.refreshMore() }
+    LaunchedEffect(installed) {
+        if (!installed) {
+            catalogOpen = false
+            selectedEffect = null
+            tileDetails = null
+        }
+    }
+    BackHandler(enabled = LocalMusicPageActive.current && expandedCatalog) { catalogOpen = false }
     val canApply = runtime.supported
     val status = when {
         !runtime.supported -> "此设备暂不支持本机均衡器"
         runtime.error != null -> runtime.error!!
         options.smartEnabled -> tuning.message
-        else -> "根据歌曲的声音特征，自动调整本机均衡器"
+        else -> "按歌曲特征自动调整均衡器"
     }
     val masterChosen = originalMaster.requestedEnabled
     val speakerChosen = originalSpeaker.requestedEnabled
@@ -142,7 +145,7 @@ import kotlinx.serialization.json.*
     io.github.currencortex.music.ui.component.nativeui.SettingsScrollLayout(
         Modifier.widthIn(max = 680.dp).fillMaxSize().testTag("native_sound_effects_page"),background=background,topBar={
         SettingsTopBar(if (expandedCatalog) "官方精选音效" else "音效",
-            onBack = { if (expandedCatalog) expandedCatalog = false else onBack() }, backTag = "sound_effects_back")
+            onBack = { if (expandedCatalog) catalogOpen = false else onBack() }, backTag = "sound_effects_back")
         }) {topInset->
         LazyColumn(Modifier.fillMaxSize().testTag("sound_effects_screen"), state = if (expandedCatalog) catalogListState else listState,
             contentPadding = musicScrollPadding(PaddingValues(top=topInset,bottom = 20.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())),
@@ -152,15 +155,35 @@ import kotlinx.serialization.json.*
                 Card(Modifier.padding(horizontal = 16.dp)) {
                     SettingsPreference("流声音频系统", if (adaptive.enabled) "已开启 · 动态 EQ / 虚拟低频 / 马达驱动" else "动态 EQ · 虚拟低频 · 马达驱动",
                         Modifier.testTag("open_adaptive_audio"), onClick = onAdaptive)
+                    SettingsDivider()
+                    SettingsPreference("均衡器", if (manual.enabled) manual.preset.label else "手动调节音色",
+                        Modifier.testTag("open_sound_equalizer"), onClick = onEqualizer)
+                    SettingsDivider()
+                    SettingsToggle("本机智能调音", options.smartEnabled, vm::smartEnabled,
+                        modifier = Modifier.testTag("sound_local_smart"), summary = status, enabled = canApply)
                 }
             }
+            item {
+                Card(Modifier.padding(horizontal = 16.dp)) {
+                    SettingsPreference("网易云音效", when {
+                        transfer.removing -> "正在移除"
+                        transfer.loading -> transfer.progress?.let { "下载中 · $it%" } ?: "正在准备"
+                        installed -> "已安装"
+                        else -> "可选下载"
+                    }, Modifier.testTag("open_netease_engine"), onClick = onPackage,
+                        trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp)) })
+                }
+            }
+            }
+            if (installed) {
+            if (!expandedCatalog) {
             item { SettingsInfoHeader("大师音效", MusicIcons.Headphones) }
             item(key = "masters") {
                 val visible by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == "masters" } } }
                 NativeMasterPager(dark, moodChosen, originalMood.loading,
                     if (moodChosen) ((originalMood.visualExtra?.get("copywriting") as? JsonObject)
                         ?.get("description") as? JsonPrimitive)?.contentOrNull ?: activeStatus else "按歌曲情绪智能调音，读懂每首歌背后的情感温度",
-                    currentSong?.name, visible && animationsActive && selectedEffect == null && tileDetails == null && !showEngine,
+                    currentSong?.name, visible && animationsActive && selectedEffect == null && tileDetails == null,
                     true,
                     onMood = { if (moodChosen) vm.turnOff() else vm.originalMoodEnabled(true) },
                     masterChosen = masterChosen, masterReady = originalMaster.enabled && !originalMaster.loading, masterLoading = originalMaster.loading, masterStatus = if (masterChosen) originalMaster.description ?: originalMaster.message
@@ -180,7 +203,6 @@ import kotlinx.serialization.json.*
                     Text(originalMaster.message, Modifier.weight(1f).testTag("sound_master_status"), fontSize = 12.sp,
                         color = colors.onSurfaceVariantSummary)
                     if (!originalMaster.loading) MusicTextAction("重试", { vm.originalAiMasterEnabled(true) })
-                    if (!originalMaster.available) MusicTextAction("导入引擎", { showEngine = true })
                 }
             }
             if (!originalSpeaker.loading && !originalSpeaker.enabled &&
@@ -189,7 +211,6 @@ import kotlinx.serialization.json.*
                     Text(originalSpeaker.message, Modifier.weight(1f).testTag("sound_speaker_status"), fontSize = 12.sp,
                         color = colors.onSurfaceVariantSummary)
                     if (!originalSpeaker.loading) MusicTextAction("重试", { vm.originalSpeakerEnabled(true) })
-                    if (!originalSpeaker.available) MusicTextAction("导入引擎", { showEngine = true })
                 }
             }
             if (moodFailed || moodChosen && !originalMood.loading && !originalMood.enabled) item {
@@ -197,7 +218,6 @@ import kotlinx.serialization.json.*
                     Text(originalMood.message, Modifier.weight(1f).testTag("sound_original_mood_status"), fontSize = 12.sp,
                         color = colors.onSurfaceVariantSummary)
                     MusicTextAction("重试", vm::retryOriginalMood, Modifier.testTag("sound_original_mood_retry"))
-                    if (!originalMood.available) MusicTextAction("导入引擎", { showEngine = true })
                 }
             }
             item {
@@ -206,7 +226,7 @@ import kotlinx.serialization.json.*
                     Text("官方精选音效", Modifier.weight(1f), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     Text(if (expandedCatalog) "收起" else "更多 ›",
                         Modifier.testTag("sound_catalog_expand").clip(RoundedCornerShape(8.dp))
-                            .clickable(role = Role.Button) { expandedCatalog = !expandedCatalog }
+                            .clickable(role = Role.Button) { catalogOpen = true }
                             .padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
                         fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
                 }
@@ -215,7 +235,6 @@ import kotlinx.serialization.json.*
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(originalSmart.message, Modifier.weight(1f), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
                     MusicTextAction("重试", vm::retryOriginalSmart, Modifier.testTag("sound_original_smart_retry"))
-                    if (!originalSmart.available) MusicTextAction("导入引擎", { showEngine = true })
                 }
             }
             item(key = "smart") {
@@ -305,8 +324,7 @@ import kotlinx.serialization.json.*
                         onDetails = { tileDetails = tile }, onApply = { if (chosen) vm.turnOff() else vm.useTile(tile) })
                 }
             }
-            if (!expandedCatalog) {
-            if (original.error != null) item {
+            if (!expandedCatalog && original.error != null) item {
                 Card(Modifier.padding(horizontal = 16.dp)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("原版音效 · ${original.requestedName ?: original.selectedName.orEmpty()}",
                         Modifier.testTag("sound_original_selected"), fontSize = 17.sp)
@@ -336,7 +354,8 @@ import kotlinx.serialization.json.*
                 } }
             }
 
-            if (options.smartEnabled) item {
+            }
+            if (!expandedCatalog && options.smartEnabled) item {
                 Card(Modifier.padding(horizontal = 16.dp)) { Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(playback.song?.name ?: "等待播放", fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     val analysis = tuning.analysis
@@ -361,31 +380,15 @@ import kotlinx.serialization.json.*
                 } }
             }
 
-            }
         }
     }
     }
-    tileDetails?.let { tile -> MusicDialog(tile.name, onDismiss = { tileDetails = null }) {
+    if (installed) tileDetails?.let { tile -> MusicDialog(tile.name, onDismiss = { tileDetails = null }) {
         Text(tile.description, fontSize = 14.sp)
         MusicTextAction("使用", { vm.useTile(tile); tileDetails = null })
         MusicTextAction("返回音效页", { tileDetails = null })
     } }
-    if (showEngine) MusicDialog("原版音效引擎", onDismiss = { showEngine = false }) {
-        Text(if (original.available && originalMood.available) "引擎已就绪，支持原版音效和 AI 情绪调音师，无需额外导入。"
-            else "从本机网易云音乐或安装包导入兼容引擎。会员音效使用时会核验当前账号权益。",
-            fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
-        engineImport.message?.let { Text(it, Modifier.testTag("sound_engine_import_status"), fontSize = 13.sp,
-            color = if (engineImport.failed) colors.onSurfaceVariantSummary else colors.primary) }
-        if (!original.available || !originalMood.available) {
-            MusicTextAction("从已安装的网易云导入", vm::importInstalledOriginal,
-                Modifier.testTag("sound_import_installed"), enabled = !engineImport.loading)
-            MusicTextAction("选择网易云安装包", {
-                selectNeteaseApk.launch(arrayOf("application/vnd.android.package-archive", "application/octet-stream"))
-            }, Modifier.testTag("sound_import_apk"), enabled = !engineImport.loading)
-        }
-        MusicTextAction("完成", { showEngine = false })
-    }
-    selectedEffect?.let { effect ->
+    if (installed) selectedEffect?.let { effect ->
         val unavailable = vm.originalUnavailableReason(effect)
         MusicDialog(effect.name, onDismiss = { selectedEffect = null }) {
             Text(effect.description, fontSize = 15.sp)

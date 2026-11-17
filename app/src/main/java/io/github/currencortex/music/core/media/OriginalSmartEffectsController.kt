@@ -151,14 +151,14 @@ class OriginalSmartEffectsController internal constructor(
                 }
                 if (!current.engine) {
                     mutableState.value = state.value.copy(loading = false,
-                        message = "已记住开启意图；导入兼容原版引擎后将重新验证权益")
+                        message = "已记住开启意图；下载兼容原版引擎后将重新验证权益")
                     return@request
                 }
                 val raw = withContext(workDispatcher) { definition()?.copyOf() }
                 if (!isCurrent(token, current)) return@request
                 if (raw == null) {
                     mutableState.value = state.value.copy(loading = false,
-                        message = "原版智能音效资源尚未导入，当前继续使用手动音效")
+                        message = "原版智能音效资源尚未下载，当前继续使用手动音效")
                     return@request
                 }
                 val target = current.target

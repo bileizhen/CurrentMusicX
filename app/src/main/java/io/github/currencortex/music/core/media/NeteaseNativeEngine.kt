@@ -104,6 +104,9 @@ internal class NeteaseNativeEngine(sampleRate: Int, channels: Int, preset: Netea
         fun moodDefinition(): ByteArray? = NeteaseEngineLibraries.moodDefinition()
         suspend fun installFromApk(context: Context, uri: Uri) = NeteaseEngineLibraries.installFromApk(context, uri)
         suspend fun installFromInstalled(context: Context) = NeteaseEngineLibraries.installFromInstalled(context)
+        suspend fun installFromRepository(context: Context, client: okhttp3.OkHttpClient, source: io.github.currencortex.music.core.update.UpdateSource,
+            onProgress: (received: Long, total: Long) -> Unit) =
+            NeteaseEngineLibraries.installFromRepository(context, client, source, onProgress)
     }
 }
 

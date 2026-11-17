@@ -48,7 +48,8 @@ class OriginalSoundEffectsController internal constructor(
     private val beforeSelection: suspend () -> Unit,
 ) : java.io.Closeable {
     constructor(repository: NeteaseSoundEffectsRepository, sessions: NeteaseSessionStore,
-        settings: OriginalSoundEffectsSettingsRepository, scope: CoroutineScope, beforeSelection: suspend () -> Unit) : this(
+        settings: OriginalSoundEffectsSettingsRepository, scope: CoroutineScope,
+        engineAvailable: () -> Boolean = NeteaseNativeEngine::available, beforeSelection: suspend () -> Unit) : this(
         accounts = sessions.state.map {
             val uid = it.profile?.uid?.takeIf { value -> value > 0 && it.loggedIn }
             OriginalEffectsAccount(uid?.let { value -> "netease:$value" } ?: "anonymous", it.revision)
@@ -69,14 +70,14 @@ class OriginalSoundEffectsController internal constructor(
                 }
                 NeteaseOriginalPreset(effect.id, effect.name, decoded.type, decoded.bytes)
             }
-        }, scope = scope, engineAvailable = NeteaseNativeEngine::available,
+        }, scope = scope, engineAvailable = engineAvailable,
         entitlement = repository::originalPresetEntitlement, resolveFromServer = repository::resolve,
         beforeSelection = beforeSelection)
 
     private val mutableSelection = MutableStateFlow<NeteaseOriginalPreset?>(null)
     val selection: StateFlow<NeteaseOriginalPreset?> = mutableSelection.asStateFlow()
     private val mutableState = MutableStateFlow(OriginalSoundEffectsState(available = engineAvailable(),
-        unavailableReason = if (engineAvailable()) null else "尚未导入兼容的网易云原版音效引擎"))
+        unavailableReason = if (engineAvailable()) null else "尚未下载兼容的网易云原版音效引擎"))
     val state: StateFlow<OriginalSoundEffectsState> = mutableState.asStateFlow()
     private var generation = 0L
     private var pending: Job? = null
@@ -274,7 +275,7 @@ class OriginalSoundEffectsController internal constructor(
         if (closed) return
         val available = engineAvailable()
         mutableState.value = state.value.copy(available = available,
-            unavailableReason = if (available) null else "尚未导入兼容的网易云原版音效引擎",
+            unavailableReason = if (available) null else "尚未下载兼容的网易云原版音效引擎",
             error = if (available && !state.value.available) null else state.value.error)
         if (available && selection.value == null && state.value.requestedId != null) retry()
     }

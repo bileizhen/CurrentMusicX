@@ -30,7 +30,9 @@ internal class AdaptiveAudioDsp(private val sampleRate: Int, private val channel
         mix += switchSmoothing * ((if (settings.enabled) 1.0 else 0.0) - mix)
         fullPower = 0.0; bassPower = 0.0
         for (channel in 0 until channels) {
-            val input = frame[channel].let { if (it.isFinite()) it.coerceIn(-1.0, 1.0) else 0.0 }
+            // NaN comparisons are cheap; Double.isFinite() lowers to repeated raw-bit
+            // conversions on ART and dominates this per-sample loop at 192 kHz.
+            val input = frame[channel].let { if (it == it) it.coerceIn(-1.0, 1.0) else 0.0 }
             dry[channel] = input
             frame[channel] = input
             fullPower += input * input / channels
@@ -50,7 +52,10 @@ internal class AdaptiveAudioDsp(private val sampleRate: Int, private val channel
             var value = frame[channel]
             for (band in filters) value = band.process(value, channel)
             frame[channel] = value
-            peak = max(peak, abs(value))
+            // Math.abs(Double) lowers to raw-bit conversions on ART. A pair of
+            // comparisons keeps the shared peak detector cheap on the audio thread.
+            if (value > peak) peak = value
+            if (-value > peak) peak = -value
         }
 
         // Link gain across all channels: limiting must not move the stereo/surround image.
@@ -60,7 +65,8 @@ internal class AdaptiveAudioDsp(private val sampleRate: Int, private val channel
             else limiterGain + limiterRelease * (targetGain - limiterGain)
         for (channel in 0 until channels) {
             val wet = frame[channel] * limiterGain
-            frame[channel] = (dry[channel] + mix * (wet - dry[channel])).coerceIn(-1.0, 1.0)
+            val mixed = dry[channel] + mix * (wet - dry[channel])
+            frame[channel] = if (mixed == mixed) mixed.coerceIn(-1.0, 1.0) else 0.0
         }
     }
 
@@ -71,7 +77,8 @@ internal class AdaptiveAudioDsp(private val sampleRate: Int, private val channel
             val desired = if (AdaptiveAudioSettings.FREQUENCIES[band] < sampleRate * .45)
                 (settings.gains[band] + correction).coerceIn(-9.0, 9.0) else 0.0
             currentGains[band] += gainSmoothing * (desired - currentGains[band])
-            if (abs(desired - currentGains[band]) < 1e-6) currentGains[band] = desired
+            val delta = desired - currentGains[band]
+            if (delta > -1e-6 && delta < 1e-6) currentGains[band] = desired
             filters[band].gain(currentGains[band])
         }
     }
@@ -93,12 +100,15 @@ internal class AdaptiveAudioDsp(private val sampleRate: Int, private val channel
             val output = b0 * input + z1[channel]
             val next1 = b1 * input - a1 * output + z2[channel]
             val next2 = b2 * input - a2 * output
-            if (!output.isFinite() || !next1.isFinite() || !next2.isFinite()) {
+            // Input is sanitized once per frame. Stable RBJ coefficients keep the state
+            // bounded, so only NaN needs a cheap guard here instead of three isFinite()
+            // calls per band, channel, and sample.
+            if (output != output || next1 != next1 || next2 != next2) {
                 z1[channel] = 0.0; z2[channel] = 0.0
                 return 0.0
             }
-            z1[channel] = if (abs(next1) < 1e-30) 0.0 else next1
-            z2[channel] = if (abs(next2) < 1e-30) 0.0 else next2
+            z1[channel] = if (next1 > -1e-30 && next1 < 1e-30) 0.0 else next1
+            z2[channel] = if (next2 > -1e-30 && next2 < 1e-30) 0.0 else next2
             return output
         }
         fun gain(db: Double) {

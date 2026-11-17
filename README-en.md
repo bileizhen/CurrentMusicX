@@ -99,7 +99,7 @@ Choose light, dark, or pure black themes with Monet colors. Use circular or imme
 - Use **Player menu → Playback background** to choose a system image and preview 0–100% blur. The image stays on the device across restarts. You can restore the artwork-derived background.
 - Enable **Me → NetEase account → NetEase tasks** to add a task shortcut. A local NetEase session is required. Automatic daily and Yunbei check-ins have a separate switch and run in the foreground. NetEase confirms progress and rewards based on actual listening records.
 - The lyrics view prefers genuine word timings and filters server estimates. Set karaoke compatibility to **Always** to generate approximate highlighting for line-by-line lyrics on the device. **Auto-hide the lyrics control panel** is off by default; when enabled, the lyrics page hides its controls after 3 seconds of inactivity and a bottom button brings them back.
-- Audio effects use native Compose and a bundled ARM64 engine. The server verifies member entitlements. The app identifies unavailable algorithms. Speaker presets apply for the current session.
+- NetEase effects are an optional download of about 71.4 MB. The effects gallery appears after the engine and interface assets are installed. Downloads use the source selected in Check for Updates. Remove the package from the same download page. The local equalizer and smart tuning are available immediately. The server verifies member entitlements, and speaker presets apply for the current session.
 - The in-app island shows temporary feedback for effects, downloads, and errors. Desktop lyrics require system overlay permission. The window stays locked. Settings control height, font size, and translation. Taps can toggle the view, and horizontal swipes change tracks.
 
 </details>
@@ -129,6 +129,7 @@ Set audio and lyric sources independently in **Settings → Sources & Network**.
 | --- | --- |
 | **Platform direct (default)** | Resolve playback directly against the current platform's official NetEase or QQ Music service. Switch platforms and sign in with a QR code for QQ Music. Playback never falls back to a CurrentMusic server. |
 | LeiZ API | Configure an API key for this service. The app stores it encrypted on the device. |
+| Server source | Sign in to CurrentMusic, then choose and confirm a source under **Settings → Sources & Network → Import from server**. CurrentMusic Engine resolves playback for NetEase catalog tracks. [Integration guide](https://music.20110208.xyz/api-docs/reference/guide-audio-sources-api/) |
 | LX Music source | Import one or more `.js` files or links. With **Smart source switching** enabled, the app prefers the script that resolves fastest and falls back to other imported sources on failure. It resolves tracks with a valid NetEase or QQ Music ID for the active platform. Search and playlists keep their original sources. |
 
 LX Music scripts send track information to their service. Import scripts from sources you trust. Smart-switch retries send the same track information to other imported scripts' services. Connect Navidrome under **Settings → Sources & Network → Self-hosted libraries** to play audio directly from your server.
@@ -170,7 +171,7 @@ The address applies to CurrentMusic accounts, CurrentMusic lyrics, cloud binding
 ### How the clients route requests
 
 - **CurrentMusic Web** sends application API requests for search, track details, lyrics, playback URLs, accounts, and community features to the engine at `/cm/` by default. Selecting LeiZ sends playback URL requests directly to LeiZ. The cloud upload flow obtains a token and registers the file through the engine, while the browser can send the file itself directly to object storage.
-- **CurrentMusicX** routes each request by feature, audio source, and sign-in state. Platform direct resolves playback on the phone against the active platform; LeiZ and LX use their own services. CurrentMusic accounts and playlists, the community, CurrentMusic rooms, cloud account linking, and CurrentMusic lyrics go through the engine. Search, comments, and two-person listening can go directly to NetEase. With a local NetEase session, personal playlists, likes, and recommendations generally go directly as well. With no local session, selected account features can use the engine's saved NetEase binding. Lyrics have their own source setting.
+- **CurrentMusicX** routes each request by feature, audio source, and sign-in state. Platform direct resolves playback on the phone against the active platform; LeiZ and LX use their own services. An active imported server source resolves NetEase catalog tracks through its CurrentMusic server. CurrentMusic accounts and playlists, the community, CurrentMusic rooms, cloud account linking, and CurrentMusic lyrics go through the engine. Search, comments, and two-person listening can go directly to NetEase. With a local NetEase session, personal playlists, likes, and recommendations generally go directly as well. With no local session, selected account features can use the engine's saved NetEase binding. Lyrics have their own source setting.
 
 ### How the engine handles requests
 
@@ -194,7 +195,7 @@ The deployment notes also describe a separate `ncm-inject` entry point. It adds 
 | Item | Requirement |
 | --- | --- |
 | Android | Android 8.0 / API 26 or later. Target Android 16 / API 36. |
-| Architecture | Official APK targets ARM64 (arm64-v8a) with the adapted original audio effects engine. |
+| Architecture | Official APK targets ARM64 (arm64-v8a); the adapted original audio effects engine downloads on demand. |
 | Layout | Portrait, landscape, and wide navigation. |
 | Dynamic colors | Monet requires Android 12 / API 31 or later. |
 | Real-time blur | Android 13 / API 33 or later. Older versions or disabled blur use a regular surface. |
@@ -258,7 +259,7 @@ Use `:app:assembleRelease` for a release build. Signing reads `storeFile`, `stor
 <details>
 <summary>Release size, Baseline Profile, and performance checks</summary>
 
-Release builds enable R8 and resource shrinking. The universal APK includes existing ABIs and preserves the original NetEase audio effects, MNN, and JNI names. Generate a size report with `python scripts/apk_size_report.py app/build/outputs/apk/release/app-release.apk --json output/apk-size.json`. It reports ZIP size, unpacked size by ABI, and ELF page alignment separately from runtime performance. Some vendor native libraries still fall short of the 16 KiB page-size requirement.
+Release builds enable R8 and resource shrinking. The universal APK includes existing ABIs; the original NetEase audio effects engine and MNN runtime stay out of the package, while JNI declarations remain available for verified on-demand download. Generate a size report with `python scripts/apk_size_report.py app/build/outputs/apk/release/app-release.apk --json output/apk-size.json`. It reports ZIP size, unpacked size by ABI, and ELF page alignment separately from runtime performance. Some vendor native libraries still fall short of the 16 KiB page-size requirement.
 
 Performance tests use the isolated `com.bileizhen.currentmusic.benchmark` app with local data. The `baselineprofile` and `benchmark` modules cover cold start, Home, player, playback, lyrics, playlists, Settings, and output modes. Run `:app:generateBaselineProfile` to collect a profile, then use `:benchmark:connectedPerformanceAndroidTest` to compare `compilation=none` and `compilation=baseline`. The baseline run requires a generated profile for this app. AndroidX Macrobenchmark requires a compatible device. The test modules require Android 9, while the release app supports Android 8.
 

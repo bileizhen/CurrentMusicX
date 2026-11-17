@@ -212,14 +212,14 @@ class OriginalAiMasterEffectsController internal constructor(
                 }
                 if (!current.engine) {
                     mutableState.value = state.value.copy(loading = false,
-                        message = "已记住开启意图；导入兼容原版引擎后将重新验证权益")
+                        message = "已记住开启意图；下载兼容原版引擎后将重新验证权益")
                     return@request
                 }
                 val raw = withContext(workDispatcher) { definition()?.copyOf() }
                 if (!isCurrent(token, current)) return@request
                 if (raw == null) {
                     mutableState.value = state.value.copy(loading = false,
-                        message = "原版 AI 调音大师资源尚未导入，当前继续使用手动音效")
+                        message = "原版 AI 调音大师资源尚未下载，当前继续使用手动音效")
                     return@request
                 }
                 val target = current.target
@@ -252,7 +252,7 @@ class OriginalAiMasterEffectsController internal constructor(
                     message = if (prepared.songSpecific) "原版 AI 调音大师已匹配，等待音频处理" else "已匹配原版调音基础模板，等待音频处理")
             } catch (cancelled: CancellationException) { throw cancelled }
             catch (_: LinkageError) {
-                if (isCurrent(token, current)) reportFailure("原版 AI 调音大师引擎加载失败，请重新导入兼容安装包后重试")
+                if (isCurrent(token, current)) reportFailure("原版 AI 调音大师引擎加载失败，请重新下载引擎后重试")
             }
             catch (_: Exception) {
                 if (isCurrent(token, current)) mutableState.value = state.value.copy(enabled = false, loading = false,

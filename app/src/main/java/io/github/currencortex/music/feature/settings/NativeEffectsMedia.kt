@@ -23,7 +23,10 @@ import coil3.compose.AsyncImage
 import coil3.gif.AnimatedImageDecoder
 import coil3.request.ImageRequest
 import io.github.currencortex.music.R
+import io.github.currencortex.music.data.effects.NeteaseEffectsAssetRepository
 import io.github.currencortex.music.ui.component.LocalPageContainerSettled
+import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.*
@@ -34,29 +37,47 @@ class EffectsCardPlayerView @JvmOverloads constructor(context: Context, attrs: A
     override fun dispatchTouchEvent(event: MotionEvent): Boolean = false
 }
 
-/** Local vendor artwork remains usable offline; no HTML or JavaScript is involved. */
+/** Optional vendor artwork is resolved from the verified downloaded package. */
 internal object NativeEffectsAssets {
+    private const val LOCAL_ROOT = "file:///netease-effects/"
     private var urls: Map<String, String>? = null
-    @Synchronized fun image(context: Context, remote: String): String {
-        if (urls == null) urls = context.assets.open("netease-effects-ui/resource-manifest.json").bufferedReader().use { input ->
+
+    fun managed(source: String) = source.startsWith(LOCAL_ROOT)
+    fun local(name: String) = "${LOCAL_ROOT}assets/$name"
+
+    @Synchronized fun image(context: Context, remote: String): String? {
+        if (managed(remote)) return resolveLocal(context, remote)
+        val manifest = File(NeteaseEffectsAssetRepository.directory(context), "resource-manifest.json")
+        if (!manifest.isFile) return remote
+        if (urls == null) urls = try { manifest.bufferedReader().use { input ->
             Json.parseToJsonElement(input.readText()).jsonArray.associate { entry ->
                 val row = entry.jsonObject
                 row.getValue("source").jsonPrimitive.content.substringBefore('?').replace("http:", "https:") to
-                    "file:///android_asset/netease-effects-ui/${row.getValue("path").jsonPrimitive.content}"
+                    row.getValue("path").jsonPrimitive.content
             }
-        }
-        return urls!![remote.substringBefore('?').replace("http:", "https:")] ?: remote
+        } } catch (_: IOException) { return remote }
+        val path = urls!![remote.substringBefore('?').replace("http:", "https:")] ?: return remote
+        return resolveLocal(context, "$LOCAL_ROOT$path") ?: remote
     }
-    fun local(name: String) = "file:///android_asset/netease-effects-ui/assets/$name"
+
+    private fun resolveLocal(context: Context, source: String): String? {
+        val relative = source.removePrefix(LOCAL_ROOT)
+        if (relative.startsWith("/") || relative.contains("..")) return null
+        val file = File(NeteaseEffectsAssetRepository.directory(context), relative)
+        return file.takeIf { it.isFile }?.toURI()?.toString()
+    }
 }
 
 @Composable internal fun EffectsArtwork(source: String, modifier: Modifier = Modifier, description: String? = null,
     scale: ContentScale = ContentScale.Crop, animated: Boolean = false) {
     val context = LocalContext.current
-    val resolved by produceState<Pair<String, String>?>(null, context, source) {
-        if (!source.startsWith("file:")) value = source to withContext(Dispatchers.IO) { NativeEffectsAssets.image(context, source) }
+    val resolved by produceState<Pair<String, String?>?>(null, context, source) {
+        if (!source.startsWith("file:") || NativeEffectsAssets.managed(source)) {
+            value = source to withContext(Dispatchers.IO) { NativeEffectsAssets.image(context, source) }
+        }
     }
-    val imageUri = if (source.startsWith("file:")) source else resolved?.takeIf { it.first == source }?.second
+    val imageUri = if (source.startsWith("file:") && !NativeEffectsAssets.managed(source)) source
+        else resolved?.takeIf { it.first == source }?.second
     val request = remember(context, imageUri, animated) {
         ImageRequest.Builder(context).data(imageUri)
             .apply { if (animated && Build.VERSION.SDK_INT >= 28) decoderFactory(AnimatedImageDecoder.Factory()) }.build()
@@ -71,7 +92,7 @@ internal object NativeEffectsAssets {
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val state by lifecycle.currentStateFlow.collectAsStateWithLifecycle()
     val videoSource = if (video.contains("://")) video else NativeEffectsAssets.local(video)
-    val resolvedVideo by produceState<Pair<String, String>?>(null, context, videoSource, active) {
+    val resolvedVideo by produceState<Pair<String, String?>?>(null, context, videoSource, active) {
         if (active) value = videoSource to withContext(Dispatchers.IO) { NativeEffectsAssets.image(context, videoSource) }
     }
     val videoUri = resolvedVideo?.takeIf { it.first == videoSource }?.second
@@ -79,17 +100,18 @@ internal object NativeEffectsAssets {
     var rendered by remember { mutableStateOf(false) }
     var player by remember { mutableStateOf<ExoPlayer?>(null) }
     val visible = active && LocalPageContainerSettled.current && state.isAtLeast(Lifecycle.State.RESUMED)
-    // A use/cancel click changes the media item, not the decoder's lifetime.
-    // release() can synchronously wait for the playback thread on the UI thread.
+    // A use/cancel click changes the media item, not the renderer session.
+    // Release can synchronously wait on the playback thread; keep it off composition.
     LaunchedEffect(visible, videoUri) {
         if (visible && videoUri != null) {
-            val current = player ?: ExoPlayer.Builder(context).build().apply {
+            val current = player ?: ExoPlayer.Builder(context).build().also { player = it }.apply {
                 volume = 0f
                 setAudioAttributes(androidx.media3.common.AudioAttributes.DEFAULT, false)
-                trackSelectionParameters = trackSelectionParameters.buildUpon().setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build()
+                trackSelectionParameters = trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true).build()
                 repeatMode = Player.REPEAT_MODE_ONE
                 addListener(object : Player.Listener { override fun onRenderedFirstFrame() { rendered = true } })
-            }.also { player = it }
+            }
             if (current.currentMediaItem?.localConfiguration?.uri?.toString() != videoUri) {
                 rendered = false
                 current.setMediaItem(MediaItem.fromUri(videoUri))
@@ -107,7 +129,6 @@ internal object NativeEffectsAssets {
                 }
             }, update = { it.player = player }, onRelease = { it.player = null })
         }
-        if (!visible || !rendered)
-            EffectsArtwork(posterUri, Modifier.matchParentSize())
+        if (!visible || !rendered) EffectsArtwork(posterUri, Modifier.matchParentSize())
     }
 }

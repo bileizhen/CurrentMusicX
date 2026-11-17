@@ -712,7 +712,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onSupport = { navigateLibrary(SupportConfig.route) })
                     }
                 }
-                entry(NETWORK.toString()) { MusicSettingsScreen(musicSettingsVm, onNavidrome = { navigateLibrary("navidrome") }, onEmby = { navigateLibrary("emby") }) }
+                entry(NETWORK.toString()) {
+                    MusicSettingsScreen(musicSettingsVm, onNavidrome = { navigateLibrary("navidrome") },
+                        onEmby = { navigateLibrary("emby") }, onLogin = { authVm.begin(); navigateLibrary("user/login") })
+                }
                 entry("playback-settings") { io.github.currencortex.music.feature.settings.PlaybackSettingsScreen(musicSettingsVm) }
                 entry("audio-output") { io.github.currencortex.music.feature.settings.AudioOutputScreen(container) }
                 entry("desktop-lyrics") { io.github.currencortex.music.feature.lyrics.desktop.DesktopLyricsSettingsScreen(container) }
