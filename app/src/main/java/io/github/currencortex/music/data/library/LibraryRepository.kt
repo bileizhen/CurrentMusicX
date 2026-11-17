@@ -62,6 +62,8 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     suspend fun setLiked(song: Song, liked: Boolean, expectedSession: RequestSession? = null): AppResult<Unit> =
         changeLike(song, liked, expectedSession)
     private suspend fun changeLike(song: Song, desired: Boolean?, expectedSession: RequestSession? = null): AppResult<Unit> = mutationMutex.withLock {
+        if (song.serviceTrack != null) return@withLock AppResult.Failure(ErrorKind.Forbidden,
+            message = "请在外接音乐服务中管理收藏")
         if (song.musicSource == MusicSource.QQ_MUSIC) return@withLock AppResult.Failure(ErrorKind.NotFound,
             message = "请在 QQ 音乐的我喜欢中管理这首歌")
         if (accountId() == 0L) return@withLock AppResult.Failure(ErrorKind.Unauthorized)
@@ -105,12 +107,14 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
         val expected = session(); editable(id, expected); api.request("DELETE", "playlists/$id", authenticated = true, expectedSession = expected); revision.update { it + 1 }
     }
     suspend fun add(id: Long, songs: List<Song>) {
+        require(songs.none { it.serviceTrack != null }) { "请在外接音乐服务中管理歌单" }
         require(songs.none { it.musicSource == MusicSource.QQ_MUSIC }) { "QQ 音乐歌曲只能加入 QQ 歌单" }
         val expected = session(); editable(id, expected)
         api.request("POST", "playlists/$id/tracks", body = buildJsonObject { put("songs", JsonArray(songs.map(::metadata))) }, authenticated = true, expectedSession = expected)
         revision.update { it + 1 }
     }
     suspend fun remove(id: Long, song: Song) {
+        require(song.serviceTrack == null) { "请在外接音乐服务中管理歌单" }
         val expected = session(); editable(id, expected)
         api.request("DELETE", "playlists/$id/tracks", body = buildJsonObject { put("songs", JsonArray(listOf(metadata(song)))) }, authenticated = true, expectedSession = expected)
         revision.update { it + 1 }
@@ -179,6 +183,7 @@ class LibraryRepository(private val api: ApiClient, private val accountId: () ->
     }
     companion object {
         fun metadata(song: Song) = buildJsonObject {
+            require(song.serviceTrack == null) { "外接服务曲目没有 CurrentMusic 曲目标识" }
             put("ncm_id", song.id); put("name", song.name); put("artists", song.artists)
             put("album", song.album); put("pic", song.cover); put("duration", song.durationMs); put("mv", song.mv)
             put("artist_ids", JsonArray(song.artistIds.map(::JsonPrimitive)))

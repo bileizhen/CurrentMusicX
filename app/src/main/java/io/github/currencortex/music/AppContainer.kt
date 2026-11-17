@@ -394,7 +394,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             external = { song, ms, owner ->
                 val track = requireNotNull(song.serviceTrack)
                 val key = song.id to owner
-                val active = externalPlays[key]
+                val active = if (ms == null) {
+                    externalPlays.remove(key)
+                    null
+                } else externalPlays[key]
                 if (ms == null || active != null) {
                     val elapsed = (active?.second ?: 0) + (ms ?: 0)
                     val input = kotlinx.serialization.json.buildJsonObject {

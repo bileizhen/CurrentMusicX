@@ -3,8 +3,10 @@ package io.github.currencortex.music.data.musicservice
 import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.core.network.ApiException
 import io.github.currencortex.music.core.network.ApiJson
+import io.github.currencortex.music.core.network.AppResult
 import io.github.currencortex.music.core.network.ErrorKind
 import io.github.currencortex.music.core.network.RequestSession
+import io.github.currencortex.music.core.network.appResult
 import io.github.currencortex.music.core.network.readResponse
 import io.github.currencortex.music.core.security.TokenStore
 import io.github.currencortex.music.data.song.AudioSource
@@ -65,7 +67,7 @@ private class ServiceGrant(
     val entries: List<ServiceEntry> = emptyList(), val pending: PendingServiceGrant? = null,
 )
 
-class MusicServiceConnections(private val store: TokenStore, scope: CoroutineScope, http: OkHttpClient = OkHttpClient()) {
+class MusicServiceConnections(private val store: TokenStore, private val scope: CoroutineScope, http: OkHttpClient = OkHttpClient()) {
     private val http = http.newBuilder().followRedirects(false).followSslRedirects(false)
         .cookieJar(okhttp3.CookieJar.NO_COOKIES).retryOnConnectionFailure(false)
         .callTimeout(35, TimeUnit.SECONDS).build()
@@ -77,6 +79,8 @@ class MusicServiceConnections(private val store: TokenStore, scope: CoroutineSco
     val services = _services.asStateFlow()
     val pendingConnection = MutableStateFlow<Pair<String, MusicServiceDescriptor>?>(null)
     internal val lastAuthorizedService = MutableStateFlow<String?>(null)
+    private val _authorizationOutcome = MutableStateFlow<AppResult<String>?>(null)
+    internal val authorizationOutcome = _authorizationOutcome.asStateFlow()
 
     init {
         scope.launch(Dispatchers.IO) {
@@ -158,7 +162,15 @@ class MusicServiceConnections(private val store: TokenStore, scope: CoroutineSco
         result
     }
 
-    suspend fun completeAuthorization(raw: String): String = mutex.withLock {
+    internal fun receiveAuthorization(raw: String) {
+        scope.launch { _authorizationOutcome.value = appResult { completeAuthorization(raw) } }
+    }
+
+    internal fun consumeAuthorizationOutcome(outcome: AppResult<String>) {
+        _authorizationOutcome.compareAndSet(outcome, null)
+    }
+
+    internal suspend fun completeAuthorization(raw: String): String = mutex.withLock {
         ready.await()
         val url = httpsUrl(raw)
         require(url.host == CONNECTION_HOST && url.port == 443 && url.encodedPath == RETURN_PATH)
@@ -223,7 +235,8 @@ class MusicServiceConnections(private val store: TokenStore, scope: CoroutineSco
             put("grant_type", "refresh_token"); put("client_id", auth.clientId); put("refresh_token", refresh)
         })
         require(next.sub == grant.sub && scope in next.scopes) { "刷新后的服务授权已变更" }
-        replace(entry.withGrant(next))
+        val refreshToken = next.refresh?.takeIf(String::isNotBlank) ?: refresh
+        replace(entry.withGrant(ServiceGrant(next.access, refreshToken, next.expiry, next.scope, next.sub)))
         next.access
     }
 

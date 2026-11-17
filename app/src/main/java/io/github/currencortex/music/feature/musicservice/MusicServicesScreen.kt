@@ -143,6 +143,12 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
                                 SettingsOption(it, it, it == activePlatform, onSelect = { platform = it })
                             }, Modifier.testTag("choose_music_service_platform"), enabled = !busy)
                             SettingsPreference("断开连接", onClick = { remove = connection }, enabled = !busy)
+                            val lyricsScope = connection.descriptor.capability(activePlatform, "track.lyrics")?.scope
+                            if (lyricsScope != null && lyricsScope !in connection.authorizedScopes) {
+                                SettingsPreference("授权读取歌词", enabled = !busy, onClick = { run {
+                                    authorizeIfNeeded(connection, "track.lyrics")
+                                } })
+                            }
                             if (connection.descriptor.authorization != null && connection.authorizedScopes.isNotEmpty()) {
                                 SettingsPreference("重新授权", enabled = !busy, onClick = { run {
                                     browser.openUri(repo.beginAuthorization(connection.key,

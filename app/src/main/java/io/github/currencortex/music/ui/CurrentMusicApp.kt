@@ -431,6 +431,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             else action()
         }
         val webLinkResolver = remember { io.github.currencortex.music.core.links.MusicWebLinkResolver() }
+        val musicAuthorization by container.musicServices.authorizationOutcome.collectAsStateWithLifecycle()
+        LaunchedEffect(musicAuthorization, launchFinished, startupRouted) {
+            val outcome = musicAuthorization ?: return@LaunchedEffect
+            if (!launchFinished || !startupRouted) return@LaunchedEffect
+            navigateLibrary("music-services")
+            if (outcome is AppResult.Failure) libraryVm.message.value = outcome.message
+            container.musicServices.consumeAuthorizationOutcome(outcome)
+        }
         LaunchedEffect(webLinkRequest?.id, launchFinished, startupRouted) {
             val request = webLinkRequest ?: return@LaunchedEffect
             if (!launchFinished || !startupRouted) return@LaunchedEffect
@@ -448,12 +456,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         io.github.currencortex.music.data.musicservice.CONNECTION_PATH -> {
                             val descriptor = requireNotNull(connectionLink.getQueryParameters("descriptor").singleOrNull())
                             container.musicServices.preview(descriptor)
-                            navigateLibrary("music-services")
-                            onWebLinkConsumed(request.id)
-                            return@LaunchedEffect
-                        }
-                        io.github.currencortex.music.data.musicservice.RETURN_PATH -> {
-                            container.musicServices.completeAuthorization(request.url)
                             navigateLibrary("music-services")
                             onWebLinkConsumed(request.id)
                             return@LaunchedEffect

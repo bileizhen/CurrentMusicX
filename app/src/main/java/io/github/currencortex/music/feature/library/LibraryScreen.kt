@@ -60,6 +60,9 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 
 /** Shared actions for the song sheet and artwork's nested glass menu. */
 @Composable internal fun librarySongMenuItems(vm: LibraryViewModel, song: Song, navigate: (String) -> Unit): List<GlassMenuItem> {
+    if (song.serviceTrack != null) return listOf(
+        GlassMenuItem("song_service", "打开外接音乐服务", onClick = { navigate("music-services") })
+    )
     if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL) return emptyList()
     if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) return buildList {
         add(GlassMenuItem("song_like_${song.id}", "喜欢 / 取消喜欢", onClick = { vm.togglePrimaryLike(song) }))
