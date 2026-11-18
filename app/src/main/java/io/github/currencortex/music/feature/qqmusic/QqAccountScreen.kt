@@ -216,7 +216,7 @@ import io.github.currencortex.music.feature.binding.BindingAction
                         GlassActionButton("刷新 QQ 音乐库", {
                             action("QQ 音乐库已刷新") {
                                 libraryCount = repository.playlists().size
-                                repository.likedSongs()
+                                repository.likedSongs(fresh = true)
                             }
                         }, Modifier.fillMaxWidth().testTag("refresh_qq_library"), primary = true, enabled = !busy)
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
