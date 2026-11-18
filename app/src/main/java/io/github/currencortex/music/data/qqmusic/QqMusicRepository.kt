@@ -45,6 +45,7 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
     private val qrOwners = mutableMapOf<String, RequestSession>()
     private val writeMutex = Mutex()
     private val likesRefreshMutex = Mutex()
+    private val likedReads = SessionReadCache(::session, { state.value.revision })
     private var radioPoolId: String = ""
     private var radioSceneId: String = ""
     private val persistenceMutex = Mutex()
@@ -62,6 +63,7 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
         else value.server.trimEnd('/') + "\n" + value.token.orEmpty(),
     )
     private fun resetKnownLikes() {
+        likedReads.clear()
         knownLikes.clear()
         mutableKnownLikeState.value = emptySet()
     }
@@ -97,6 +99,7 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
     }
     private fun publishSingleLike(expected: AudioSnapshot, song: Song, liked: Boolean) = synchronized(this) {
         requireCurrentLocked(expected)
+        likedReads.clear()
         knownLikes += song.id
         likes.value = if (liked) likes.value + song.id else likes.value - song.id
         mutableKnownLikeState.value = knownLikes.toSet()
@@ -236,8 +239,9 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
         return obj
     }
     private fun payload(raw: JsonObject): JsonObject = (raw["data"] as? JsonObject) ?: raw
-    private suspend fun native(path: String, query: Map<String, String> = emptyMap(), requiresSession: Boolean = false) =
-        payload(call("native/$path", query, requiresSession))
+    private suspend fun native(path: String, query: Map<String, String> = emptyMap(), requiresSession: Boolean = false,
+        expectedAudio: AudioSnapshot? = null) =
+        payload(call("native/$path", query, requiresSession, expectedAudio = expectedAudio))
     private suspend fun write(path: String, body: JsonObject, expectedAudio: AudioSnapshot? = null): JsonObject =
         payload(call("native/$path", requiresSession = true, method = "POST",
             body = JsonObject(body + ("confirm" to JsonPrimitive(1))), expectedAudio = expectedAudio))
@@ -640,24 +644,29 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
             else -> null
         }
     }
-    suspend fun likedSongs(): List<Song> {
+    suspend fun likedSongs(fresh: Boolean = false): List<Song> = withContext(Dispatchers.Default) {
         val expected = audioSnapshot()
-        return likesRefreshMutex.withLock {
-            val songs = mutableListOf<Song>(); var offset = 0
-            repeat(100) {
-                val raw = native("user/liked-songs", mapOf("offset" to "$offset", "limit" to "100"), requiresSession = true)
-                if (audioSnapshot() != expected) throw ApiException(ErrorKind.AudioSourceChanged)
-                val batch = QqMusicParsing.songs(raw); songs += batch
-                if (!raw.flag("more") || batch.isEmpty()) {
-                    val result = songs.distinctBy { it.id }
-                    publishLikedSongs(expected, result)
-                    return@withLock result
+        likesRefreshMutex.withLock {
+            synchronized(this@QqMusicRepository) { requireCurrentLocked(expected) }
+            likedReads.read("likes", fresh) {
+                val songs = mutableListOf<Song>(); var offset = 0
+                repeat(100) {
+                    val raw = native("user/liked-songs", mapOf("offset" to "$offset", "limit" to "100"),
+                        requiresSession = true, expectedAudio = expected)
+                    songs += QqMusicParsing.songs(raw)
+                    if (!raw.flag("more")) {
+                        val result = songs.distinctBy(Song::id)
+                        publishLikedSongs(expected, result)
+                        return@read result
+                    }
+                    val pageSize = raw.array("songs", "songlist", "songList", "tracks", "list").size
+                    if (pageSize == 0) throw ApiException(ErrorKind.Parse)
+                    offset += pageSize
                 }
-                offset += batch.size
+                throw ApiException(ErrorKind.Parse)
+            }.also {
+                synchronized(this@QqMusicRepository) { requireCurrentLocked(expected) }
             }
-            val result = songs.distinctBy { it.id }
-            publishLikedSongs(expected, result)
-            result
         }
     }
     suspend fun likedSongCount(): Int {
