@@ -44,7 +44,9 @@ import io.github.currencortex.music.feature.home.HomePersonalRoamingEntry
 import io.github.currencortex.music.feature.home.HomeSectionHeader
 import io.github.currencortex.music.feature.library.LibrarySongActions
 import io.github.currencortex.music.feature.library.LibraryViewModel
+import io.github.currencortex.music.feature.library.PlaylistArtworkPreview
 import io.github.currencortex.music.feature.library.SongArtworkPreview
+import io.github.currencortex.music.feature.library.rememberPlaylistPreviewPlayback
 import io.github.currencortex.music.ui.component.HomeProfileAvatar
 import io.github.currencortex.music.ui.component.HomeBrandTitle
 import io.github.currencortex.music.ui.component.MusicPlatformSwitcher
@@ -146,8 +148,10 @@ fun QqMusicHomeScreen(
     val initialHome = remember { container.qqMusic.cachedHome() }
     var state by remember(initialHome) { mutableStateOf(initialHome.toUiState(qqAccount.loggedIn)) }
     var artworkPreview by remember { mutableStateOf<Pair<Song, Rect>?>(null) }
+    var playlistPreview by remember { mutableStateOf<Pair<Playlist, Rect>?>(null) }
     var sharingSong by remember { mutableStateOf<Song?>(null) }
     val downloadSong = LocalSongDownload.current
+    val playlistPlayback = rememberPlaylistPreviewPlayback(libraryVm, play)
     val identity = "${preferences.server}|$sessionRevision|${qqAccount.revision}|${qqAccount.loggedIn}"
 
     LaunchedEffect(identity, refresh) {
@@ -352,6 +356,8 @@ fun QqMusicHomeScreen(
                                         },
                                         Modifier.width(artworkCardWidth)
                                             .testTag("qq_home_recommended_playlist_${playlist.remoteId}"),
+                                        onLongClick = { bounds -> playlistPreview = playlist to bounds },
+                                        longClickLabel = "预览歌单与操作",
                                         playlistTransition = true,
                                     )
                                 }
@@ -380,6 +386,8 @@ fun QqMusicHomeScreen(
                                         },
                                         Modifier.width(artworkCardWidth)
                                             .testTag("qq_home_playlist_${playlist.remoteId}"),
+                                        onLongClick = { bounds -> playlistPreview = playlist to bounds },
+                                        longClickLabel = "预览歌单与操作",
                                         playlistTransition = true,
                                     )
                                 }
@@ -444,6 +452,19 @@ fun QqMusicHomeScreen(
     }
     sharingSong?.let { song ->
         io.github.currencortex.music.feature.share.SongShareDialog(song) { sharingSong = null }
+    }
+    playlistPreview?.let { (playlist, bounds) ->
+        PlaylistArtworkPreview(
+            libraryVm,
+            playlist,
+            bounds,
+            canPlay = playlistPlayback.enabled,
+            onPlay = { shuffle -> playlistPlayback.play(playlist, shuffle) },
+            onOpen = {
+                navigate(qqRoute("playlist", playlist.remoteId.ifBlank { playlist.id.toString() }))
+            },
+            onDismiss = { playlistPreview = null },
+        )
     }
 }
 
