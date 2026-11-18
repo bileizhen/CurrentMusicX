@@ -108,6 +108,7 @@ internal class FeedbackMediaStore(context: Context, storageSuffix: String = "") 
         val normalizedBytesBase64 = bytesBase64.let(::decode).let { Base64.encodeToString(it, Base64.NO_WRAP) }
         val storedSha256 = objectValue.string("sha256")?.takeIf { it.matches(SHA256_PATTERN) }
             ?: sha256(decode(normalizedBytesBase64))
+        val uploadedSha256 = objectValue.string("uploadedSha256")?.takeIf { it.matches(SHA256_PATTERN) }
         return MediaSlot(
             slot = slot,
             contentType = contentType,
@@ -117,6 +118,7 @@ internal class FeedbackMediaStore(context: Context, storageSuffix: String = "") 
             durationMs = objectValue.long("durationMs"),
             width = objectValue.int("width"),
             height = objectValue.int("height"),
+            uploadedSha256 = uploadedSha256,
         )
     }
 

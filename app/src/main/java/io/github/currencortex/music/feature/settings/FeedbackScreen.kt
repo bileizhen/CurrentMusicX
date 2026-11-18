@@ -51,7 +51,9 @@ import io.github.currencortex.music.ui.component.nativeui.SettingsSegmentedContr
 import io.github.currencortex.music.ui.component.nativeui.SettingsToggle
 import io.github.currencortex.music.ui.util.openExternalLink
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.util.UUID
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
@@ -92,22 +94,25 @@ internal fun FeedbackScreen(vm: FeedbackViewModel, owner: FeedbackOwner?, logger
     var restoreRetry by remember(owner) { mutableIntStateOf(0) }
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (owner != null) scope.launch {
-            val existing = form.media.filter { it.slot < 3 }
-            uris.take(3 - existing.size).forEachIndexed { index, uri ->
-                val slot = "screenshot-${existing.size + index + 1}"
-                readFeedbackMedia(resolver, uri, slot, "image/jpeg")?.let { media ->
-                    val localSlot = existing.size + index
+            val existing = form.media.filter { it.slot < 3 }.map { it.slot }.toMutableSet()
+            uris.take(3 - existing.size).forEach { uri ->
+                val localSlot = (0..2).firstOrNull { it !in existing } ?: return@forEach
+                existing += localSlot
+                try {
+                    readFeedbackMedia(resolver, uri, "screenshot-${localSlot + 1}", "image/jpeg")
+                } catch (_: Exception) { null }?.let { media ->
                     vm.saveMedia(owner, form.requestId, media.copy(slot = localSlot))
-                    vm.editForm(owner) { it.copy(media = it.media.filterNot { item -> item.slot == localSlot } + media.copy(slot = localSlot)) }
+                    vm.replaceFormMedia(owner, form.requestId)
                 }
             }
         }
     }
     val videoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (owner != null && uri != null) scope.launch {
-            readFeedbackMedia(resolver, uri, "video-1", "video/mp4")?.let { media ->
+            try { readFeedbackMedia(resolver, uri, "video-1", "video/mp4") }
+            catch (_: Exception) { null }?.let { media ->
                 vm.saveMedia(owner, form.requestId, media.copy(slot = 3))
-                vm.editForm(owner) { it.copy(media = it.media.filterNot { item -> item.slot == 3 } + media.copy(slot = 3)) }
+                vm.replaceFormMedia(owner, form.requestId)
             }
         }
     }
@@ -411,17 +416,29 @@ private suspend fun readFeedbackMedia(
     uri: Uri,
     slotName: String,
     fallbackType: String,
-): MediaSlot? {
+): MediaSlot? = withContext(Dispatchers.IO) {
     val contentType = resolver.getType(uri)?.lowercase() ?: fallbackType
-    val bytes = resolver.openInputStream(uri)?.use { input -> input.readBytes() } ?: return null
-    if (bytes.isEmpty()) return null
+    val bytes = resolver.openInputStream(uri)?.use { input ->
+        val output = java.io.ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        var total = 0
+        while (true) {
+            val count = input.read(buffer)
+            if (count < 0) break
+            total += count
+            require(total <= 25 * 1024 * 1024) { "反馈媒体超过 25 MiB 上限" }
+            output.write(buffer, 0, count)
+        }
+        output.toByteArray()
+    } ?: return@withContext null
+    if (bytes.isEmpty()) return@withContext null
     val slot = if (slotName.startsWith("video-")) 3 else slotName.substringAfterLast('-').toInt() - 1
     val name = resolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
         if (it.moveToFirst()) it.getString(0) else null
     } ?: "media-$slotName"
     val sha = java.security.MessageDigest.getInstance("SHA-256").digest(bytes)
         .joinToString("") { "%02x".format(it.toInt() and 255) }
-    return MediaSlot(slot, contentType, io.github.currencortex.music.data.feedback.FeedbackMediaStore.encode(bytes), sha, name)
+    return@withContext MediaSlot(slot, contentType, io.github.currencortex.music.data.feedback.FeedbackMediaStore.encode(bytes), sha, name)
 }
 
 private fun FeedbackAttempt.statusMessage() = when (receipt?.status) {

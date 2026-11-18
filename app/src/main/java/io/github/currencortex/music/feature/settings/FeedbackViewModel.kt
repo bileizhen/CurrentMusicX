@@ -76,15 +76,23 @@ internal class FeedbackViewModel(private val container: AppContainer) : ViewMode
 
     fun saveMedia(owner: FeedbackOwner, requestId: String, media: MediaSlot) {
         viewModelScope.launch {
-            mediaStore.write(owner, requestId, media)
-            val current = attempts.value[owner]
-            if (current?.requestId == requestId) setAttempt(owner, current.copy(media = mediaStore.list(owner, requestId)))
+            runCatching {
+                mediaStore.write(owner, requestId, media)
+                val current = attempts.value[owner]
+                if (current?.requestId == requestId) setAttempt(owner, current.copy(media = mediaStore.list(owner, requestId)))
+            }
         }
+    }
+
+    suspend fun replaceFormMedia(owner: FeedbackOwner, requestId: String) {
+        val current = forms.value[owner] ?: return
+        forms.update { it + (owner to current.copy(media = mediaStore.list(owner, requestId))) }
     }
 
     fun removeMedia(owner: FeedbackOwner, requestId: String, slotNumber: Int) {
         viewModelScope.launch {
             mediaStore.delete(owner, requestId, slotNumber)
+            replaceFormMedia(owner, requestId)
             val current = attempts.value[owner]
             if (current?.requestId == requestId) setAttempt(owner, current.copy(media = mediaStore.list(owner, requestId)))
         }
