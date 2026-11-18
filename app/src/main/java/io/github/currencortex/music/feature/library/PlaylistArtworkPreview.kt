@@ -63,7 +63,7 @@ import top.yukonga.miuix.kmp.basic.Text
     if (infoOpen) SettingsUiScope {
         MusicDialog("歌单信息", onDismiss = onDismiss) {
             Text(display.name, Modifier.testTag("playlist_preview_info_name"), fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-            Text(if (display.source in setOf("netease", "ncm")) "网易云音乐" else "CurrentMusic", fontSize = 13.sp)
+            Text(when (display.source) { "netease", "ncm" -> "网易云音乐"; "qqmusic" -> "QQ 音乐"; else -> "CurrentMusic" }, fontSize = 13.sp)
             Text("${display.count} 首歌曲", fontSize = 13.sp)
             Text(display.description.ifBlank { "暂无歌单介绍" },
                 Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()), fontSize = 14.sp)

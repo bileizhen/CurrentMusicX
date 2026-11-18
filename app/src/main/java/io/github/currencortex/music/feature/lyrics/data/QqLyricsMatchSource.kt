@@ -1,14 +1,16 @@
 // QQ lyric matching informed by Folia Major, AGPL-3.0, aecd330b720eb8fc728e6b10ebcec261b144d683.
-// Original Folia contributors retain attribution. Uses QQ's public web catalogue/LRC endpoints;
-// the upstream anonymous Lite search was refused, so neither it nor encrypted QRC is advertised.
+// Original Folia contributors retain attribution. Uses QQ's public web catalogue and lyric endpoints.
 package io.github.currencortex.music.feature.lyrics.data
 
 import io.github.currencortex.music.feature.lyrics.model.LyricsDocument
+import io.github.currencortex.music.feature.lyrics.model.LyricLine
 import io.github.currencortex.music.feature.lyrics.parser.LyricsParser
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.*
 import okhttp3.*
@@ -21,9 +23,11 @@ import java.util.Base64
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlin.math.abs
 
-/** Cookie-free QQ matching. Public LRC may include auxiliary tracks; it is never promoted to QRC. */
-class QqLyricsMatchSource(client: OkHttpClient = OkHttpClient(), baseUrl: String = "https://c.y.qq.com/") {
+/** Cookie-free QQ matching. QRC supplies real word timing; public LRC remains the fallback. */
+class QqLyricsMatchSource(client: OkHttpClient = OkHttpClient(), baseUrl: String = "https://c.y.qq.com/",
+    private val log: (String) -> Unit = {}) {
     private val base = baseUrl.toHttpUrl()
     private val client = client.newBuilder().connectTimeout(3, TimeUnit.SECONDS).readTimeout(4, TimeUnit.SECONDS)
         .callTimeout(6, TimeUnit.SECONDS).cookieJar(CookieJar.NO_COOKIES).authenticator(Authenticator.NONE)
@@ -75,6 +79,21 @@ class QqLyricsMatchSource(client: OkHttpClient = OkHttpClient(), baseUrl: String
 
     suspend fun load(candidate: LyricsCandidate): LyricsDocument = bounded {
         require(candidate.source == LyricsMatchSource.QQ_MUSIC && candidate.id.matches(SONG_MID)) { "QQ 音乐歌曲编号无效" }
+        val qrc = try {
+            withTimeoutOrNull(QRC_TIMEOUT_MS) { loadQrc(candidate) }
+        } catch (e: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            null
+        } catch (e: Exception) {
+            currentCoroutineContext().ensureActive()
+            log("QQ QRC ${candidate.id} unavailable: ${e.message}")
+            null
+        }
+        if (qrc != null) {
+            log("QQ QRC ${candidate.id}: lines=${qrc.lines.size} wordTags=${qrc.lines.sumOf { it.words.size }}")
+            return@bounded withMetadata(qrc, candidate)
+        }
+
         val root = request("lyric/fcgi-bin/fcg_query_lyric_new.fcg", mapOf("songmid" to candidate.id,
             "format" to "json", "nobase64" to "1", "g_tk" to "5381"))
         checkBusiness(root, "歌词")
@@ -90,9 +109,117 @@ class QqLyricsMatchSource(client: OkHttpClient = OkHttpClient(), baseUrl: String
         }).withoutEstimatedTiming()
         if (parsed.lines.isEmpty()) throw LyricsMatchException("QQ 音乐没有可识别的歌词时间轴")
         LyricsFileCodec.validate(parsed)
-        parsed.copy(metadata = parsed.metadata.copy(source = "QQ Music",
-            values = parsed.metadata.values + ("qqMusicId" to listOf(candidate.id))))
+        log("QQ LRC ${candidate.id}: lines=${parsed.lines.size} wordTags=${parsed.lines.sumOf { it.words.size }}")
+        withMetadata(parsed, candidate, source = "QQ Music")
     }
+
+    private suspend fun loadQrc(candidate: LyricsCandidate): LyricsDocument {
+        val musicId = candidate.reference.toLongOrNull()?.takeIf { it > 0 }
+            ?: throw LyricsMatchException("QQ 音乐缺少 QRC 歌曲编号")
+        val xml = requestText("qqmusic/fcgi-bin/lyric_download.fcg", mapOf(
+            "version" to "15", "miniversion" to "82", "lrctype" to "4", "musicid" to musicId.toString()))
+        val main = decodeQrc(xmlCdata(xml, "content"))
+        if (main.isBlank()) throw LyricsMatchException("QQ 音乐未提供 QRC 歌词")
+        val document = LyricsFileCodec.decode(main.toByteArray(Charsets.UTF_8), "lyrics.qrc").document
+        if (document.lines.isEmpty()) throw LyricsMatchException("QQ 音乐 QRC 没有可识别的时间轴")
+        val translation = decodeAuxiliary(xmlCdata(xml, "contentts"))
+        val romanization = decodeAuxiliary(xmlCdata(xml, "contentroma").ifBlank { xmlCdata(xml, "contentromalrc") })
+        val merged = document.copy(lines = document.lines.map { line ->
+            line.copy(
+                translation = line.translation.ifBlank {
+                    nearestLine(translation, line.startTimeMs)?.text.orEmpty()
+                },
+                romanization = line.romanization.ifBlank {
+                    nearestLine(romanization, line.startTimeMs)?.text.orEmpty()
+                })
+        })
+        LyricsFileCodec.validate(merged)
+        return merged
+    }
+
+    private fun decodeAuxiliary(value: String): LyricsDocument? {
+        val raw = decodeQrc(value)
+        if (raw.isBlank()) return null
+        val trimmed = raw.trimStart()
+        val extension = if (trimmed.contains("LyricContent=") ||
+            Regex("^\\[\\d+,\\d+\\]", RegexOption.MULTILINE).containsMatchIn(trimmed)) "qrc" else "lrc"
+        return try {
+            LyricsFileCodec.decode(raw.toByteArray(Charsets.UTF_8), "auxiliary.$extension").document
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** Auxiliary tracks commonly differ from the main timeline by a few milliseconds. */
+    private fun nearestLine(document: LyricsDocument?, timeMs: Long): LyricLine? {
+        val lines = document?.lines ?: return null
+        if (lines.isEmpty()) return null
+        var low = 0
+        var high = lines.lastIndex
+        while (low <= high) {
+            val middle = (low + high) ushr 1
+            val delta = lines[middle].startTimeMs - timeMs
+            when {
+                delta < 0 -> low = middle + 1
+                delta > 0 -> high = middle - 1
+                else -> return lines[middle]
+            }
+        }
+        val before = lines.getOrNull(high)
+        val after = lines.getOrNull(low)
+        return listOfNotNull(before, after)
+            .filter { abs(it.startTimeMs - timeMs) <= AUXILIARY_TIME_TOLERANCE_MS }
+            .minByOrNull { abs(it.startTimeMs - timeMs) }
+    }
+
+    private fun decodeQrc(value: String): String {
+        val text = value.trim()
+        if (text.isEmpty()) return ""
+        return if (QRC_HEX.matches(text.replace(Regex("\\s+"), ""))) QqQrcDecoder.decrypt(text) else text
+    }
+
+    private fun xmlCdata(xml: String, tag: String): String =
+        Regex("<$tag\\b[^>]*>\\s*<!\\[CDATA\\[(.*?)]]>\\s*</$tag>",
+            setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+            .find(xml)?.groupValues?.get(1).orEmpty()
+
+    private fun withMetadata(document: LyricsDocument, candidate: LyricsCandidate,
+        source: String = "QQ Music QRC") = document.copy(metadata = document.metadata.copy(source = source,
+        values = document.metadata.values + ("qqMusicId" to listOf(candidate.id))))
+
+    private suspend fun requestText(path: String, params: Map<String, String>): String =
+        suspendCancellableCoroutine { continuation ->
+            val url = base.newBuilder().addPathSegments(path)
+                .apply { params.forEach { (key, value) -> addQueryParameter(key, value) } }.build()
+            val call = client.newCall(Request.Builder().url(url).header("Accept", "text/xml, */*")
+                .header("User-Agent", "Mozilla/5.0").header("Referer", "https://y.qq.com/")
+                .header("Origin", "https://y.qq.com").build())
+            continuation.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (continuation.isActive) continuation.resumeWithException(
+                        LyricsMatchException("QQ 音乐 QRC 网络请求失败", e))
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    try {
+                        val text = response.use {
+                            if (!it.isSuccessful) throw LyricsMatchException("QQ 音乐 QRC 请求失败（HTTP ${it.code}）")
+                            val body = it.body ?: throw LyricsMatchException("QQ 音乐 QRC 返回了空响应")
+                            if (body.contentLength() > MAX_RESPONSE_BYTES) throw LyricsMatchException("QQ 音乐 QRC 响应过大")
+                            val source = body.source()
+                            source.request(MAX_RESPONSE_BYTES.toLong() + 1)
+                            if (source.buffer.size > MAX_RESPONSE_BYTES) throw LyricsMatchException("QQ 音乐 QRC 响应过大")
+                            source.readUtf8()
+                        }
+                        if (continuation.isActive) continuation.resume(text)
+                    } catch (e: Exception) {
+                        if (continuation.isActive) continuation.resumeWithException(
+                            if (e is LyricsMatchException) e else LyricsMatchException("QQ 音乐 QRC 响应读取失败", e))
+                    }
+                }
+            })
+        }
 
     private suspend fun request(path: String, params: Map<String, String>): JsonObject = suspendCancellableCoroutine { continuation ->
         val url = base.newBuilder().addPathSegments(path).apply { params.forEach { (key, value) -> addQueryParameter(key, value) } }.build()
@@ -131,7 +258,10 @@ class QqLyricsMatchSource(client: OkHttpClient = OkHttpClient(), baseUrl: String
 
     companion object {
         private const val MAX_RESPONSE_BYTES = 4 * 1024 * 1024
+        private const val QRC_TIMEOUT_MS = 1_500L
+        private const val AUXILIARY_TIME_TOLERANCE_MS = 100L
         private val SONG_MID = Regex("[A-Za-z0-9_-]{1,128}")
+        private val QRC_HEX = Regex("[0-9A-Fa-f]+")
         private val TIMESTAMP = Regex("\\[\\d{1,4}:\\d{1,2}(?:\\.\\d{1,3})?]")
         private val COLON_FRACTION_TIMESTAMP = Regex("\\[(\\d{1,4}:[0-5]?\\d):(\\d{1,3})]")
         private val ENTITY = Regex("&(#(?:x[0-9a-fA-F]{1,6}|[0-9]{1,7})|amp|lt|gt|quot|apos|nbsp);")

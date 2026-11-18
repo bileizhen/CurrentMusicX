@@ -18,6 +18,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.ui.component.MusicTextAction
+import io.github.currencortex.music.ui.component.nativeui.SettingsOption
+import io.github.currencortex.music.ui.component.nativeui.SettingsOptionsRow
+import io.github.currencortex.music.data.settings.AudioCacheLimit
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import java.util.Locale
@@ -32,6 +35,7 @@ private fun formatSize(bytes: Long): String = when {
 @Composable fun StorageScreen(vm: StorageViewModel) {
     SettingsUiScope {
     val state by vm.state.collectAsStateWithLifecycle()
+    val cacheLimit by vm.cacheLimit.collectAsStateWithLifecycle()
     val usage = state.usage
     LaunchedEffect(vm) { vm.refresh() }
     val colors = MiuixTheme.colorScheme
@@ -68,10 +72,17 @@ private fun formatSize(bytes: Long): String = when {
                 MusicTextAction(if (state.busy) "正在清理…" else "清理", { vm.clearAudio() },
                     Modifier.testTag("clear_audio_storage"), enabled = !state.busy && usage.audio > 0, destructive = true)
             }
-            Text("完整缓存的音频可离线重播；被回收或清理后需要重新加载。", fontSize = 12.sp, color = hint)
-            Text("默认上限 1 GiB，按最近使用情况自动回收。这里只清理播放缓存，不影响下载文件。",
+            Text("完整缓存的音频可离线重播；被回收或清理后需要重新加载。这里只清理播放缓存，不影响下载文件。",
                 fontSize = 12.sp, color = hint)
         } } }
+
+        item { Card {
+            SettingsOptionsRow("缓存上限", cacheLimit?.label ?: "读取中…", AudioCacheLimit.entries.map { option ->
+                SettingsOption("audio_cache_limit_${option.name.lowercase()}", option.label, cacheLimit == option,
+                    onSelect = { vm.setCacheLimit(option) })
+            }, Modifier.testTag("audio_cache_limit"), summary = "超过上限后，最久没听的歌会被先删掉。",
+                enabled = cacheLimit != null && !state.busy)
+        } }
 
         item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {

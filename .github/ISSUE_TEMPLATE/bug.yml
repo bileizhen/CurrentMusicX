@@ -1,54 +1,107 @@
-name: 报告问题
-description: 播放、界面、登录或其他功能异常
+name: "🐛 报告问题"
+description: "反馈崩溃、播放、歌词、界面或其他功能异常"
 title: "[Bug] "
-labels: [bug]
+labels:
+  - bug
 body:
   - type: markdown
     attributes:
-      value: 请先搜索已有问题。不要上传账号密码、Cookie、Token、完整私人歌单或未经检查的日志。
+      value: |
+        感谢帮助改进 CurrentMusicX！
+
+        - 请先[搜索已有 Issue](https://github.com/bileizhen/CurrentMusicX/issues)，同一问题优先补充到已有讨论。
+        - 一个 Issue 只描述一个问题。建议先使用[最新正式版](https://github.com/bileizhen/CurrentMusicX/releases/latest)复测；如果只在 CI 版出现，请说明。
+        - **保护隐私**：请勿公开密码、Cookie、Token、API Key、完整私人歌单或未经脱敏的诊断日志。截图和日志请先检查并遮挡个人信息。
+        - 不确定的内容可以写「不清楚」，但请尽可能提供复现路径。严重闪退无法进入设置时，可填写最后使用的版本。
   - type: input
     id: version
     attributes:
       label: 应用版本
-      description: 设置 → 关于中的版本号；自行构建请附提交号。
+      description: "在「设置 → 关于」中查看；CI 版请填写完整版本号，自行构建请附提交 SHA。"
+      placeholder: "例如：1.3.5-ci.264 (3800264)"
     validations:
       required: true
   - type: input
     id: device
     attributes:
       label: 设备与 Android 版本
-      placeholder: 手机型号、Android 版本、系统版本
+      description: "请包含设备型号、Android 版本；有条件可注明厂商系统版本。"
+      placeholder: "例如：小米 15 / Android 17 / HyperOS ..."
     validations:
       required: true
   - type: dropdown
     id: build
     attributes:
       label: 安装来源
-      options: [GitHub 正式版, 测试版, 自行构建, 其他]
+      options:
+        - GitHub 正式版
+        - 测试版
+        - 自行构建
+        - 其他
     validations:
       required: true
   - type: dropdown
     id: module
     attributes:
       label: 问题模块
-      options: [播放与音效, 歌词, 音源与网络, 界面与外观, 下载与缓存, 其他]
+      description: "请选择最接近的类别，以便自动分类。"
+      options:
+        - 播放与音效
+        - 歌词
+        - 音源与网络
+        - 界面与外观
+        - 下载与缓存
+        - 其他
     validations:
       required: true
   - type: textarea
     id: steps
     attributes:
       label: 复现步骤
-      description: 从哪个页面开始、依次点击什么、是否每次发生。
+      description: "按顺序写出操作步骤；不能稳定复现时，请描述出现前的操作。"
+      placeholder: |
+        1. 打开「…」
+        2. 进入「…」并点击「…」
+        3. 出现问题
     validations:
       required: true
   - type: textarea
     id: result
     attributes:
       label: 实际与预期结果
+      description: "请同时写出现在发生了什么，以及正常情况下应该发生什么。"
+      placeholder: |
+        实际结果：……
+
+        预期结果：……
     validations:
       required: true
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: 出现频率
+      options:
+        - 不确定
+        - 每次都出现
+        - 经常出现
+        - 偶尔出现
+        - 只发生过一次
+  - type: textarea
+    id: environment
+    attributes:
+      label: 相关设置与使用环境（可选）
+      description: "播放问题可补充音乐平台/音源、音质、输出模式、音效开关、蓝牙或 USB DAC 型号；网络问题可描述网络类型与错误提示。不要填写账号凭据。"
+      placeholder: "例如：网易云原生音源、USB 独占输出、SNOWSKY TINY A"
   - type: textarea
     id: diagnostics
     attributes:
       label: 截图与诊断信息
-      description: 可附已脱敏的日志。音频问题请补充音源、输出模式、音效状态及耳机/DAC 型号。
+      description: "可直接拖入截图、录屏或已脱敏日志；如无附件，请说明错误文案。不要上传含私人数据的原始诊断包。"
+      placeholder: "截图 / 录屏 / 脱敏诊断日志 / 错误提示（可选）"
+  - type: checkboxes
+    id: confirmation
+    attributes:
+      label: 提交前确认
+      options:
+        - label: "我已搜索现有 Issue，并检查所附信息不包含密码、Cookie、Token 等敏感内容。"
+          required: true

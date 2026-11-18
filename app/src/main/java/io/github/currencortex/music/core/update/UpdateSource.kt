@@ -33,6 +33,21 @@ enum class UpdateSource(val label: String, val prefix: String) {
         return result
     }
 
+    /** Repository files use the updater's selected mirror order; the APK-only dedicated service is skipped. */
+    fun repositoryFileUrl(path: String): String {
+        require(path.startsWith("/") && !path.contains("..")) { "仓库文件路径无效" }
+        val source = if (this == CURRENTMUSIC) GITHUB else this
+        val official = "${AppMetadata.RELEASES_PROJECT_URL}/raw/main$path"
+        val result = source.prefix + official
+        val uri = URI(result)
+        require(uri.scheme == "https" && uri.rawUserInfo == null) { "下载源必须使用 HTTPS" }
+        return result
+    }
+
+    fun repositoryFileFallbacks(): List<UpdateSource> = fallbacks()
+        .filter { it != CURRENTMUSIC }
+        .ifEmpty { listOf(GITHUB) }
+
     companion object {
         val available: List<UpdateSource> get() = entries.filter { it != CURRENTMUSIC || UpdateProxy.current.configured }
         val default: UpdateSource get() = if (UpdateProxy.current.configured) CURRENTMUSIC else GITHUB

@@ -36,6 +36,8 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
     private var active = false
     private var usbVolume = false
     private var format = Format.Builder().build()
+    private var sourceFormat = Format.Builder().build()
+    private var channelAdapter: NeteaseUsbChannelProcessor? = null
     private var next: AudioSink.AudioSinkConfig? = null
     private var stream: BitPerfectStream? = null
     private var attributes = AudioAttributes.DEFAULT
@@ -64,18 +66,26 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
         active = selected()
         usbVolume = active && settings().mode == AudioOutputMode.NETEASE_USB
         if (!active) { super.configure(config); return }
-        format = config.format
-        CurrentMusicAudioDiagnostics.format("decodedPcm.sink", format)
+        sourceFormat = config.format
+        format = sourceFormat
+        CurrentMusicAudioDiagnostics.format("decodedPcm.sink", sourceFormat)
         val mapping = config.outputChannelMapping
-        if (getFormatSupport(format) == AudioSink.SINK_FORMAT_UNSUPPORTED || format.sampleRate <= 0 || format.channelCount <= 0 ||
-            (mapping != null && (mapping.length() != format.channelCount || (0 until mapping.length()).any { mapping[it] != it }))) {
+        if (getFormatSupport(sourceFormat) == AudioSink.SINK_FORMAT_UNSUPPORTED || sourceFormat.sampleRate <= 0 || sourceFormat.channelCount <= 0 ||
+            (mapping != null && (mapping.length() != sourceFormat.channelCount || (0 until mapping.length()).any { mapping[it] != it }))) {
             val reason = "$label 已停止：不支持此 PCM 格式或声道重排"
             report(reason)
-            throw AudioSink.ConfigurationException(reason, format)
+            throw AudioSink.ConfigurationException(reason, sourceFormat)
         }
+        channelAdapter = if (settings().mode == AudioOutputMode.NETEASE_USB && sourceFormat.channelCount > 2) {
+            NeteaseUsbChannelProcessor { true }.also {
+                format = sourceFormat.buildUpon().setChannelCount(2).setChannelMask(Format.NO_VALUE).build()
+                it.configure(AudioProcessor.AudioFormat(sourceFormat))
+                it.flush(AudioProcessor.StreamMetadata(C.TIME_UNSET))
+            }
+        } else null
         frameSize = Util.getPcmFrameSize(format.pcmEncoding, format.channelCount)
-        trim.setTrimFrameCount(format.encoderDelay, format.encoderPadding)
-        trim.configure(AudioProcessor.AudioFormat(format))
+        trim.setTrimFrameCount(sourceFormat.encoderDelay, sourceFormat.encoderPadding)
+        trim.configure(AudioProcessor.AudioFormat(sourceFormat))
         clearPosition()
     }
     private fun clearPosition() {
@@ -85,7 +95,8 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
     }
     private fun fail(error: Exception): Nothing {
         val message = "$label 已停止：${error.message ?: "输出条件已改变"}"
-        CurrentMusicAudioDiagnostics.record("finalState=FAILED reason=${error.javaClass.simpleName} detail=${error.message?.take(600)}")
+        val cause = error.cause?.let { " cause=${it.javaClass.simpleName}:${it.message?.take(400)}" }.orEmpty()
+        CurrentMusicAudioDiagnostics.record("finalState=FAILED reason=${error.javaClass.simpleName} detail=${error.message?.take(600)}$cause")
         report(message)
         throw AudioSink.InitializationException(message, 0, format, false, error)
     }
@@ -135,11 +146,17 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
         if (discontinuity) {
             start = presentationTimeUs - durationUs(); discontinuity = false; listener?.onPositionDiscontinuity()
         }
-        if (trim.isActive) { trim.queueInput(buffer); pending = trim.output } else pending = buffer
+        if (trim.isActive) { trim.queueInput(buffer); pending = adapt(trim.output) } else pending = adapt(buffer)
         drain()
         return !buffer.hasRemaining() && !pending.hasRemaining()
     }
     private fun durationUs() = if (frameSize == 0) 0L else written / frameSize * 1_000_000 / format.sampleRate
+    private fun adapt(buffer: ByteBuffer): ByteBuffer {
+        val adapter = channelAdapter ?: return buffer
+        if (!buffer.hasRemaining()) return AudioProcessor.EMPTY_BUFFER
+        adapter.queueInput(buffer)
+        return adapter.output
+    }
     override fun getCurrentPositionUs(sourceEnded: Boolean): Long {
         if (!active) return super.getCurrentPositionUs(sourceEnded)
         if (start == C.TIME_UNSET) return AudioSink.CURRENT_POSITION_NOT_SET
@@ -153,8 +170,11 @@ internal class BitPerfectAudioSink(normal: AudioSink, private val settings: () -
         if (trim.isActive && !trimEnded) {
             // This is a real stream boundary, not a processor drain for speed changes.
             // Mark reconfiguration so TrimmingAudioProcessor discards codec end padding.
-            trim.configure(AudioProcessor.AudioFormat(format))
-            trim.queueEndOfStream(); trimEnded = true; pending = trim.output; drain()
+            trim.configure(AudioProcessor.AudioFormat(sourceFormat))
+            trim.queueEndOfStream(); trimEnded = true; pending = adapt(trim.output); drain()
+        }
+        if (channelAdapter != null && !pending.hasRemaining()) {
+            channelAdapter!!.queueEndOfStream(); pending = channelAdapter!!.output; drain()
         }
         if (pending.hasRemaining()) return
         ending = true

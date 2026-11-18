@@ -52,6 +52,7 @@ internal fun listeningHistorySong(song: Song): ListeningHistorySong {
         MusicSource.QQ_MUSIC -> listOf(song.externalIds.qqMusicId?.takeIf { it.isNotBlank() } ?: song.id.toString())
         MusicSource.APPLE_MUSIC -> listOf(song.externalIds.appleMusicId?.takeIf { it.isNotBlank() } ?: song.id.toString())
         MusicSource.SPOTIFY -> listOf(song.externalIds.spotifyId?.takeIf { it.isNotBlank() } ?: song.id.toString())
+        MusicSource.SERVICE -> song.serviceTrack?.let { listOf(it.connection, it.platform, it.id) }.orEmpty()
     }
     // Length-prefix fields so different provider/account/track combinations cannot alias.
     val raw = (listOf(song.musicSource.name) + identity).joinToString("") { "${it.length}:$it" }

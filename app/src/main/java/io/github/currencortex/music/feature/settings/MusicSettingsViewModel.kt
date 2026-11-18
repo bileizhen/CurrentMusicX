@@ -6,7 +6,10 @@ import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.auth.UserDto
+import io.github.currencortex.music.data.lx.LxPlatform
 import io.github.currencortex.music.data.settings.AudioProvider
+import io.github.currencortex.music.data.settings.MusicPlatform
+import io.github.currencortex.music.data.song.MusicSource
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
@@ -20,13 +23,14 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
     val audioProvider = container.audioSettings.state
     val audioState = MutableStateFlow(NetworkSettingsState())
     val lxSources = container.lxSources.state
-    val lxHealth = container.lxSources.health
-    val lxResolveTimes = container.lxSources.resolveTimes
-    suspend fun checkLxSources() {
+    internal val lxHealth = container.lxSources.health
+    internal val lxResolveTimes = container.lxSources.resolveTimes
+    internal suspend fun checkLxSources(platform: LxPlatform) {
         val selected = audioProvider.value.lxSourceId
-        lxSources.value.sortedBy { if (it.id == selected) 0 else 1 }.forEach { container.lxSources.checkAvailability(it.id) }
+        lxSources.value.sortedBy { it.id != selected }.forEach {
+            container.lxSources.checkAvailability(it.id, platform)
+        }
     }
-    fun lxSupported() = container.lxSources.supported()
     val serverHealth = container.serverRouter.health
     val automaticServer = container.serverRouter.automatic
     val serverProbeBusy = MutableStateFlow(false)
@@ -41,14 +45,16 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
             state.value = state.value.copy(message = "线路检测失败，请重试")
         } finally { serverProbeBusy.value = false }
     }
-    private fun audioEdit(change: suspend () -> Unit) = viewModelScope.launch {
+    private fun audioEdit(success: String = "音源设置已保存", change: suspend () -> Unit) = viewModelScope.launch {
         if (audioState.value.busy) return@launch
         val previous = container.audioSettings.access().identity
         audioState.value = NetworkSettingsState(busy = true)
         try {
             change()
             container.audioSources.invalidate()
-            if (previous != container.audioSettings.access().identity &&
+            val selected = container.audioSettings.access()
+            val selectedSourceReady = selected.provider != AudioProvider.LX || container.lxSources.state.value.isNotEmpty()
+            if (previous != selected.identity && selectedSourceReady &&
                 container.playerController.state.value.mode == io.github.currencortex.music.core.media.PlayerMode.LOCAL &&
                 container.playbackQueue.state.value.current?.video == false) {
                 val playback = container.playerController.state.value
@@ -56,7 +62,7 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
                 container.playerController.load(playback.showPause,
                     if (playback.song?.id == queue.current?.id) playback.positionMs else queue.positionMs)
             }
-            audioState.value = NetworkSettingsState(message = "音源设置已保存")
+            audioState.value = NetworkSettingsState(message = success)
         } catch (e: CancellationException) { throw e }
         catch (e: io.github.currencortex.music.data.lx.LxSourceException) { audioState.value = NetworkSettingsState(message = e.message) }
         catch (e: IllegalArgumentException) { audioState.value = NetworkSettingsState(message = e.message?.take(160) ?: "设置无效，请检查后重试") }
@@ -67,10 +73,10 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
     fun clearAudioKey() = audioEdit { container.audioSettings.clearKey() }
     fun lxSmartSwitch(enabled: Boolean) = audioEdit { container.audioSettings.setLxSmartSwitch(enabled) }
     fun selectLxSource(id: String) = audioEdit { container.audioSettings.selectLxSource(id) }
-    fun importLxFile(uri: android.net.Uri) = audioEdit {
+    fun importLxFile(uri: android.net.Uri) = audioEdit("音源已导入") {
         container.audioSettings.selectLxSource(container.lxSources.importFile(uri).id)
     }
-    fun importLxUrl(url: String) = audioEdit {
+    fun importLxUrl(url: String) = audioEdit("音源已导入") {
         container.audioSettings.selectLxSource(container.lxSources.importUrl(url).id)
     }
     fun removeLxSource(id: String) = audioEdit {
@@ -110,7 +116,6 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
         catch (e: CancellationException) { throw e }
         catch (_: Exception) { container.errorNotices.show("歌词字号保存失败，请重试") }
     }
-    fun likeMode(value: io.github.currencortex.music.data.settings.LikeMode) = viewModelScope.launch { container.musicSettings.setLikeMode(value) }
     fun preloadMetered(value: Boolean) = viewModelScope.launch { container.musicSettings.setPreloadMetered(value) }
     fun clearCache() = viewModelScope.launch {
         if (cacheState.value.busy) return@launch
@@ -161,12 +166,17 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
         })
     }
     fun mobileQuality(value: AudioQuality) = viewModelScope.launch {
-        container.musicSettings.setMobileQuality(value)
+        val qq = settings.value.musicPlatform == MusicPlatform.QQ_MUSIC
+        container.musicSettings.setMobileQuality(value, qq = qq)
     }
     fun wirelessQuality(value: AudioQuality) = viewModelScope.launch {
-        container.musicSettings.setWirelessQuality(value)
+        val qq = settings.value.musicPlatform == MusicPlatform.QQ_MUSIC
+        container.musicSettings.setWirelessQuality(value, qq = qq)
     }
-    fun downloadQuality(value: AudioQuality) = viewModelScope.launch { container.musicSettings.setDownloadQuality(value) }
+    fun downloadQuality(value: AudioQuality) = viewModelScope.launch {
+        val qq = settings.value.musicPlatform == MusicPlatform.QQ_MUSIC
+        container.musicSettings.setDownloadQuality(value, qq = qq)
+    }
     fun restore(value: Boolean) = viewModelScope.launch { container.musicSettings.setRestore(value) }
     fun concurrentPlayback(value: Boolean) = viewModelScope.launch { container.musicSettings.setConcurrentPlayback(value) }
     fun transition(value: io.github.currencortex.music.data.settings.MusicTransitionMode) = viewModelScope.launch { container.musicSettings.setTransitionMode(value) }

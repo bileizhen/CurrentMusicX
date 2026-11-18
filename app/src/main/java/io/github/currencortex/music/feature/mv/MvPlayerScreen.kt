@@ -60,10 +60,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var surface by remember { mutableStateOf<PlayerView?>(null) }
     var fullscreen by rememberSaveable { mutableStateOf(false) }
     val originalOrientation = rememberSaveable { activity?.requestedOrientation ?: ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
-    var download by rememberSaveable { mutableStateOf(false) }
-    var quality by rememberSaveable { mutableStateOf(false) }
-    val items by remember(song.mv) { container.mvDownloads.observe(song) }.collectAsStateWithLifecycle(emptyList())
-    val info = items.lastOrNull()
+    var download by rememberSaveable(song.id) { mutableStateOf(false) }
+    var quality by rememberSaveable(song.id) { mutableStateOf(false) }
+    val native = song.serviceTrack == null
+    val downloadLabel = if (native) {
+        val items by remember(song.mv) { container.mvDownloads.observe(song) }.collectAsStateWithLifecycle(emptyList())
+        items.lastOrNull().mvLabel()
+    } else ""
     val controller = container.playerController
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val currentDialogCallback by rememberUpdatedState(onDialogActive)
@@ -102,10 +105,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val immersive = fullscreen || maxWidth > maxHeight
         MvSystemBars(immersive)
-        MvPlayerContent(state, immersive, fullscreen, info.mvLabel(),
+        MvPlayerContent(state, immersive, fullscreen, downloadLabel,
             onBack = { if (fullscreen) toggleFullscreen() else onBack() }, onToggle = { controller.toggle() },
-            onSeek = controller::seek, onFullscreen = ::toggleFullscreen, onDownload = { download = true },
-            onQuality = { quality = true }, onRetry = { controller.load(true, state.positionMs) }) { modifier ->
+            onSeek = controller::seek, onFullscreen = ::toggleFullscreen,
+            onDownload = if (native) ({ download = true }) else null,
+            onQuality = if (native) ({ quality = true }) else null,
+            onRetry = { controller.load(true, state.positionMs) }) { modifier ->
             AndroidView(factory = { PlayerView(it).apply {
                 useController = false
                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
@@ -114,13 +119,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             } }, update = { binder?.attach(it) }, onRelease = { binder?.detach(it) }, modifier = modifier.testTag("mv_surface"))
         }
     }
-    if (download) MvDownloadDialog(song, container) { download = false }
-    if (quality) MvQualityDialog(song.videoQuality, controller::videoQuality) { quality = false }
+    if (native && download) MvDownloadDialog(song, container) { download = false }
+    if (native && quality) MvQualityDialog(song.videoQuality, controller::videoQuality) { quality = false }
 }
 
 @Composable internal fun MvPlayerContent(state: PlayerState, immersive: Boolean, fullscreen: Boolean, downloadLabel: String,
     onBack: () -> Unit, onToggle: () -> Unit, onSeek: (Long) -> Unit, onFullscreen: () -> Unit,
-    onDownload: () -> Unit, onQuality: () -> Unit, onRetry: () -> Unit,
+    onDownload: (() -> Unit)?, onQuality: (() -> Unit)?, onRetry: () -> Unit,
     surface: @Composable (Modifier) -> Unit) {
     var controls by rememberSaveable(state.song?.id) { mutableStateOf(true) }
     var interaction by remember { mutableIntStateOf(0) }
@@ -156,7 +161,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     if (immersive) Row(Modifier.fillMaxWidth().align(Alignment.TopCenter).padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         MvTextAction("‹", if (fullscreen) "退出全屏" else "返回", "mv_back", onBack)
                         Text(state.song?.name.orEmpty(), Modifier.weight(1f), color = Color.White, fontSize = 16.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        MvTextAction(downloadLabel, "下载 MV", "mv_download", onDownload)
+                        if (onDownload != null) MvTextAction(downloadLabel, "下载 MV", "mv_download", onDownload)
                     }
                     if (state.error == null) Row(Modifier.align(Alignment.Center), horizontalArrangement = Arrangement.spacedBy(24.dp), verticalAlignment = Alignment.CenterVertically) {
                         MvTextAction("−10s", "后退 10 秒", "mv_back_10", { interact { onSeek((state.positionMs - 10000).coerceAtLeast(0)) } }, canSeek)
@@ -172,7 +177,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                             Text("${mvTime(drag?.let { (it * duration).toLong() } ?: state.positionMs)} / ${mvTime(duration)}",
                                 color = Color.White.copy(alpha = .8f), fontSize = 11.sp, modifier = Modifier.weight(1f).testTag("mv_time"))
-                            MvTextAction("${state.song?.videoQuality ?: 1080}P", "选择清晰度", "mv_quality", { interact(onQuality) })
+                            if (onQuality != null) MvTextAction("${state.song?.videoQuality ?: 1080}P", "选择清晰度",
+                                "mv_quality", { interact(onQuality) })
                             Box(Modifier.size(44.dp).clickable(role = Role.Button, onClick = onFullscreen).testTag("mv_fullscreen"), contentAlignment = Alignment.Center) {
                                 Icon(MusicIcons.Scale, if (fullscreen) "退出全屏" else "全屏", tint = Color.White, modifier = Modifier.size(20.dp))
                             }
@@ -190,7 +196,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             Text(state.song?.name ?: "MV", fontSize = 26.sp, fontWeight = FontWeight.SemiBold, maxLines = 3, overflow = TextOverflow.Ellipsis)
             Text(state.song?.artists.orEmpty(), fontSize = 15.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                TextButton(downloadLabel, onDownload, Modifier.weight(1f).testTag("mv_download"),
+                if (onDownload != null) TextButton(downloadLabel, onDownload, Modifier.weight(1f).testTag("mv_download"),
                     colors = ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.primary, textColor = MiuixTheme.colorScheme.onPrimary))
                 TextButton("全屏观看", onFullscreen, Modifier.weight(1f))
             }

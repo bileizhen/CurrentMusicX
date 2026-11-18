@@ -2,6 +2,7 @@ package io.github.currencortex.music
 
 import android.app.Application
 import android.content.Context
+import android.os.Process
 import coil3.ImageLoader
 import okio.Path.Companion.toOkioPath
 import coil3.SingletonImageLoader
@@ -20,6 +21,8 @@ open class CurrentMusicApplication : Application(), SingletonImageLoader.Factory
 
     override fun onCreate() {
         super.onCreate()
+        // The isolated script service has a separate UID and does not start app infrastructure.
+        if (Process.myUid() != applicationInfo.uid) return
         container = createContainer()
         containerReady.complete(container)
         CrashLogger.install(container.logger)

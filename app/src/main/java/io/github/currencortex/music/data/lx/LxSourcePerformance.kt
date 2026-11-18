@@ -18,10 +18,16 @@ internal data class LxSourcePerformance(
     fun coolingDown(now: Long) = failedAtMs > 0 && now >= failedAtMs && now - failedAtMs < 60_000
 }
 
+internal fun LxStoredSource.performanceFor(platform: LxPlatform): LxSourcePerformance =
+    if (platform == LxPlatform.QQ_MUSIC) qqPerformance else performance
+
 /** Stable ordering keeps the manually selected plugin first when no measurements exist. */
-internal fun lxOrderedSources(sources: List<LxStoredSource>, selected: String, now: Long): List<LxStoredSource> =
-    sources.sortedWith(compareBy<LxStoredSource> { it.performance.coolingDown(now) }
-        .thenBy { it.performance.recentTime(now) ?: Long.MAX_VALUE }
+internal fun lxOrderedSources(
+    sources: List<LxStoredSource>, selected: String, now: Long, platform: LxPlatform = LxPlatform.NETEASE,
+): List<LxStoredSource> =
+    sources.sortedWith(compareBy<LxStoredSource> { it.info.qualities(platform).isEmpty() }
+        .thenBy { it.performanceFor(platform).coolingDown(now) }
+        .thenBy { it.performanceFor(platform).recentTime(now) ?: Long.MAX_VALUE }
         .thenBy { it.info.id != selected })
 
 /** Cancellation belongs to the caller and must never start another plugin. */

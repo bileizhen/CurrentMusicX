@@ -301,9 +301,27 @@ object LyricsFileCodec {
                 if (token.isNotEmpty() && length > 0) words += LyricWord(token, at, safeAdd(at, length), offset, text.length)
             }
             if (!trailing) text.append(chunks.last())
-            LyricLine(start, safeAdd(start, duration), text.toString(), words)
+            val lineText = text.toString()
+            val end = safeAdd(start, duration)
+            LyricLine(start, end, lineText,
+                if (validQrcWords(lineText, words, start, end)) words else emptyList())
         }.filter { it.text.isNotBlank() }.toList().sortedBy { it.startTimeMs }
         return LyricsDocument(rows, LyricsMetadata(source = "QRC"))
+    }
+
+    private fun validQrcWords(text: String, words: List<LyricWord>, start: Long, end: Long): Boolean {
+        if (words.isEmpty()) return false
+        var cursor = 0
+        var previousStart = start
+        for (word in words) {
+            if (word.startTimeMs !in previousStart..end || word.endTimeMs !in word.startTimeMs..end ||
+                word.startOffset < cursor || word.endOffset !in word.startOffset..text.length ||
+                text.substring(word.startOffset, word.endOffset) != word.text ||
+                text.substring(cursor, word.startOffset).any { !it.isWhitespace() }) return false
+            cursor = word.endOffset
+            previousStart = word.startTimeMs
+        }
+        return text.substring(cursor).all { it.isWhitespace() }
     }
 
     private fun parseVtt(source: String): LyricsDocument {

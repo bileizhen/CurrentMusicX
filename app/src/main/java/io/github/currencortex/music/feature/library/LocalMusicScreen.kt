@@ -18,8 +18,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.data.song.Song
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 internal fun localSongId(uri: String): Long {
     var hash = -3750763034362895579L
@@ -27,7 +27,7 @@ internal fun localSongId(uri: String): Long {
     return -1L - (hash and Long.MAX_VALUE)
 }
 
-internal fun scanLocalMusic(context: Context): List<Song> {
+internal suspend fun scanLocalMusic(context: Context): List<Song> {
     val collection = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
     val columns = mutableListOf(MediaStore.Audio.Media._ID, MediaStore.Audio.Media.TITLE,
         MediaStore.Audio.Media.ARTIST, MediaStore.Audio.Media.ALBUM, MediaStore.Audio.Media.DURATION,
@@ -40,6 +40,7 @@ internal fun scanLocalMusic(context: Context): List<Song> {
         val duration = cursor.getColumnIndexOrThrow(columns[4]); val albumId = cursor.getColumnIndexOrThrow(columns[5])
         val display = cursor.getColumnIndexOrThrow(columns[6]); val items = mutableListOf<Song>()
         while (cursor.moveToNext()) {
+            currentCoroutineContext().ensureActive()
             val rawId = cursor.getLong(id)
             if (rawId < 0 || rawId == Long.MAX_VALUE) continue
             fun text(column: Int) = cursor.getString(column).orEmpty().takeUnless { it == "<unknown>" }.orEmpty()
@@ -66,15 +67,21 @@ internal fun scanLocalMusic(context: Context): List<Song> {
     var wholeDevice by remember { mutableStateOf(prefs.getBoolean("whole_device", false)) }
     var scopeOpen by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
     var revision by remember { mutableIntStateOf(0) }
+    var refreshRequested by remember { mutableStateOf(false) }
     val permission = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_AUDIO else Manifest.permission.READ_EXTERNAL_STORAGE
     var allowed by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED) }
+    fun hasFolderPermission() = folder?.let { selected ->
+        context.contentResolver.persistedUriPermissions.any { it.uri.toString() == selected && it.isReadPermission }
+    } ?: false
+    var folderAllowed by remember { mutableStateOf(hasFolderPermission()) }
     var songs by remember { mutableStateOf<List<Song>>(emptyList()) }
     var scanning by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val canScan = folder != null || wholeDevice && allowed
     fun chooseScope(uri: String?) {
         prefs.edit().putString("folder", uri).putBoolean("whole_device", uri == null).apply()
-        folder = uri; wholeDevice = uri == null; songs = emptyList(); error = null; revision++
+        folder = uri; wholeDevice = uri == null; folderAllowed = hasFolderPermission()
+        songs = emptyList(); error = null; refreshRequested = true; revision++
     }
     val folderPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) {
@@ -92,19 +99,32 @@ internal fun scanLocalMusic(context: Context): List<Song> {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 allowed = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
+                folderAllowed = hasFolderPermission()
             }
         }
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer) }
     }
-    LaunchedEffect(folder, wholeDevice, allowed, revision) {
+    LaunchedEffect(folder, wholeDevice, canScan, folderAllowed, revision) {
         if (!canScan) { songs = emptyList(); scanning = false; return@LaunchedEffect }
+        if (folder != null && !folderAllowed) {
+            songs = emptyList(); scanning = false
+            error = "文件夹权限已失效，请重新选择文件夹"
+            return@LaunchedEffect
+        }
         scanning = true; error = null
         try {
-            songs = withContext(Dispatchers.IO) {
-                folder?.let { scanLocalFolder(context.applicationContext, android.net.Uri.parse(it)) }
+            val selectedFolder = folder
+            val result = library.container.localMusic.load(
+                scope = selectedFolder?.let { "folder:$it" } ?: "device",
+                refresh = refreshRequested,
+            ) {
+                selectedFolder?.let { scanLocalFolder(context.applicationContext, android.net.Uri.parse(it)) }
                     ?: scanLocalMusic(context.applicationContext)
             }
+            songs = result.songs
+            refreshRequested = false
+            if (!result.cacheSaved) error = "扫描完成，但列表保存失败，下次进入可能需要重新扫描"
         } catch (e: CancellationException) { throw e }
         catch (_: SecurityException) {
             songs = emptyList()
@@ -121,7 +141,9 @@ internal fun scanLocalMusic(context: Context): List<Song> {
             songs = songs, loading = scanning && songs.isEmpty(), refreshing = scanning && songs.isNotEmpty(),
             error = error.takeIf { canScan }, loaded = canScan),
         vm, library, onBack, navigate, play, onRename = {}, onDelete = {},
-        localMusic = LocalMusicPlaylistActions(canScan, { if (!scanning) revision++ }, { scopeOpen = true }, {
+        localMusic = LocalMusicPlaylistActions(canScan, {
+            if (!scanning) { refreshRequested = true; revision++ }
+        }, { scopeOpen = true }, {
             context.startActivity(android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
                 android.net.Uri.parse("package:${context.packageName}")))
         }, error, { scopeOpen = true }))

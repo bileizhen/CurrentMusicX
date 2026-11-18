@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.profile.*
+import io.github.currencortex.music.data.settings.MusicPlatform
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Semaphore
@@ -19,14 +20,30 @@ data class ProfileState(val loading: Boolean = false, val profile: ProfileDto? =
     val sectionErrors: List<String> = emptyList())
 class ProfileViewModel(val container: AppContainer, private val userId: Long? = null) : ViewModel() {
     val state = MutableStateFlow(ProfileState())
+    val platformLikedCount = MutableStateFlow<Int?>(null)
     val busy = MutableStateFlow(false)
     val passwordCodeUntil = MutableStateFlow(0L)
     val message = MutableStateFlow<String?>(null)
     val dialog = MutableStateFlow<String?>(null)
     val avatar = MutableStateFlow<Uri?>(null)
     private val refresh = MutableStateFlow(0)
+    private var platformLikesGeneration = 0L
     private fun session() = RequestSession(container.accountRepository.server, container.accountRepository.token)
     init {
+        if (userId == null) viewModelScope.launch {
+            container.sessionRestored.await()
+            combine(
+                container.musicSettings.state.map { it.musicPlatform }.distinctUntilChanged(),
+                container.bindingRepository.state.map { it?.let { value -> "${value.bound}:${value.stale}:${value.profile?.uid}" } }
+                    .distinctUntilChanged(),
+                container.neteaseSessions.state.map { it.revision }.distinctUntilChanged(),
+                container.qqMusic.state.map { it.revision }.distinctUntilChanged(),
+            ) { _, _, _, _ -> Unit }.collectLatest { refreshPlatformLikes(clear = true) }
+        }
+        if (userId == null) viewModelScope.launch {
+            combine(container.neteaseSongActions.revision, container.qqMusic.likedState) { _, _ -> Unit }
+                .drop(1).collectLatest { refreshPlatformLikes() }
+        }
         viewModelScope.launch {
             container.sessionRestored.await()
             // Only our own profile contains local account/library data. Public profiles
@@ -55,6 +72,7 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
     suspend fun refreshStats() {
         val before = state.value.profile ?: return
         if (state.value.loading) return
+        refreshPlatformLikes()
         val expected = session()
         when (val result = appResult {
             if (userId == null) container.profileRepository.me().let { ProfileDto(it, it.stat) }
@@ -65,6 +83,31 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
                     user = result.value.user, stat = result.value.stat, current = result.value.current))
             }
             is AppResult.Failure -> Unit
+        }
+    }
+    private suspend fun refreshPlatformLikes(clear: Boolean = false) {
+        if (userId != null) return
+        val platform = container.musicSettings.state.value.musicPlatform
+        val accountId = container.accountRepository.state.value.account?.id
+        val binding = container.bindingRepository.state.value?.let { "${it.bound}:${it.stale}:${it.profile?.uid}" }
+        val qqRevision = container.qqMusic.state.value.revision
+        val generation = ++platformLikesGeneration
+        if (clear) platformLikedCount.value = null
+        val result = appResult {
+            when (platform) {
+                MusicPlatform.NETEASE -> container.neteaseSongActions.likedIds().size
+                MusicPlatform.QQ_MUSIC -> {
+                    if (!container.qqMusic.state.value.loggedIn) throw ApiException(ErrorKind.Unauthorized)
+                    container.qqMusic.likedSongCount()
+                }
+            }
+        }
+        if (generation == platformLikesGeneration &&
+            platform == container.musicSettings.state.value.musicPlatform &&
+            accountId == container.accountRepository.state.value.account?.id &&
+            binding == container.bindingRepository.state.value?.let { "${it.bound}:${it.stale}:${it.profile?.uid}" } &&
+            qqRevision == container.qqMusic.state.value.revision) {
+            platformLikedCount.value = (result as? AppResult.Success)?.value
         }
     }
     private suspend fun load() = withContext(Dispatchers.Default) {

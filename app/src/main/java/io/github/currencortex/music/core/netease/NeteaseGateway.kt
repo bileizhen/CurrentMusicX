@@ -41,7 +41,16 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         put("album", album.text("name")); put("album_id", album.long("id"))
         put("pic", album.text("picUrl").ifBlank { raw.text("picUrl") }.replace("http:", "https:"))
         put("duration", raw["dt"] ?: raw["duration"] ?: JsonPrimitive(0)); put("mv", raw["mv"] ?: raw["mvid"] ?: JsonPrimitive(0))
+        put("tns", names(raw, "tns", "transNames"))
+        put("alia", names(raw, "alia", "alias"))
     }
+    private fun names(raw: JsonObject, vararg keys: String) = JsonArray(keys.flatMap { key ->
+        when (val value = raw[key]) {
+            is JsonArray -> value.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
+            is JsonPrimitive -> listOfNotNull(value.contentOrNull)
+            else -> emptyList()
+        }
+    }.map(String::trim).filter(String::isNotBlank).distinct().map(::JsonPrimitive))
     /** Keeps one line of context around the hits, newline-separated, markers preserved for the UI split. */
     private fun searchLyric(raw: JsonObject): String {
         val value = raw["lyrics"]
@@ -84,12 +93,22 @@ class NeteaseGateway(val transport: NeteaseTransport) {
             clientLog -> NeteaseEncoding.LOG; web -> NeteaseEncoding.WEB; else -> NeteaseEncoding.DESKTOP
         }, session = owner, clientProfile = clientProfile, saveCookies = saveCookies).body
         val code = (raw["code"] as? JsonPrimitive)?.intOrNull ?: 200
+        if (code == 502 && path == "/api/playlist/manipulate/tracks" && body.text("op") == "add")
+            throw ApiException(ErrorKind.NeteaseSongAlreadyInPlaylist, 502)
         if (code != 200) {
             if (code in setOf(301, 401) && authenticated) sessions.markStale(owner)
             throw ApiException(when (code) { 301, 401 -> ErrorKind.NeteaseBindingRequired; 403 -> ErrorKind.Forbidden
-                404 -> ErrorKind.NotFound; 406, 429 -> ErrorKind.RateLimited; else -> ErrorKind.Server }, code)
+                404 -> ErrorKind.NotFound; 405 -> ErrorKind.NeteaseRateLimited
+                406, 429 -> ErrorKind.RateLimited; else -> ErrorKind.Server }, code)
         }
         return raw
+    }
+    private suspend fun likeSong(id: Long, liked: Boolean, expected: NeteaseSession): JsonObject {
+        val uid = expected.credential.profile?.uid?.takeIf { it > 0 }
+            ?: throw ApiException(ErrorKind.NeteaseBindingRequired)
+        return official("/api/song/like", buildJsonObject {
+            put("trackId", id); put("userid", uid); put("like", liked)
+        }, expected = expected, authenticated = true)
     }
     private fun profile(raw: JsonObject): BoundProfile? {
         val info = (raw["profile"] ?: raw.obj("data")["profile"]) as? JsonObject ?: return null
@@ -194,8 +213,7 @@ class NeteaseGateway(val transport: NeteaseTransport) {
         if (path.startsWith("ncmbind/like/")) {
             val id = path.substringAfterLast('/').toLongOrNull()?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.NotFound)
             val liked = body["like"]?.jsonPrimitive?.booleanOrNull ?: throw ApiException(ErrorKind.Parse)
-            return official("/api/radio/like", params("trackId" to JsonPrimitive(id), "like" to JsonPrimitive(liked),
-                "alg" to JsonPrimitive("itembased"), "time" to JsonPrimitive(3)), web = true, expected = expected, authenticated = true)
+            return likeSong(id, liked, expected)
         }
         throw ApiException(ErrorKind.NotFound)
     }
@@ -279,12 +297,19 @@ class NeteaseGateway(val transport: NeteaseTransport) {
                 web = true, expected = expected, authenticated = true)
             "user/playlist" -> return official("/api/user/playlist", data("uid" to arg("uid"), "limit" to arg("limit", "100"),
                 "offset" to arg("offset", "0"), "includeVideo" to "true"), web = true, expected = expected, authenticated = true)
+            "user/cloud" -> {
+                val limit = page("limit", 100, min = 1, max = 1000)
+                val offset = page("offset", 0, min = 0, max = 100_000)
+                val raw = official("/api/v1/cloud/get", data("limit" to "$limit", "offset" to "$offset"),
+                    web = true, expected = expected, authenticated = true)
+                return mapCloudPage(raw, offset, limit)
+            }
             "playlist/detail" -> return official("/api/v6/playlist/detail", data("id" to id, "n" to "100000", "s" to arg("s", "0")), expected = expected)
             "playlist/tracks" -> return official("/api/playlist/manipulate/tracks", data("op" to arg("op"), "pid" to arg("pid"),
                 "trackIds" to JsonArray(arg("tracks").split(',').map(::JsonPrimitive)).toString(), "imme" to "true"), expected = expected, authenticated = true)
             "likelist" -> return official("/api/song/like/get", data("uid" to arg("uid")), expected = expected, authenticated = true)
-            "like" -> return official("/api/radio/like", params("trackId" to JsonPrimitive(id), "like" to JsonPrimitive(arg("like") != "false"),
-                "alg" to JsonPrimitive("itembased"), "time" to JsonPrimitive(3)), web = true, expected = expected, authenticated = true)
+            "like" -> return likeSong(id.toLongOrNull()?.takeIf { it > 0 } ?: throw ApiException(ErrorKind.NotFound),
+                arg("like") != "false", expected)
             "song/red/count" -> return official("/api/song/red/count", data("songId" to id), expected = expected)
             "comment/music" -> return official("/api/v1/resource/comments/R_SO_4_$id", params("rid" to JsonPrimitive("R_SO_4_$id"),
                 "limit" to JsonPrimitive(page("limit", 20, min = 1)), "offset" to JsonPrimitive(page("offset", 0, max = Int.MAX_VALUE)), "beforeTime" to JsonPrimitive(0)), web = true, expected = expected)

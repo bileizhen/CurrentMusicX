@@ -9,10 +9,11 @@ import io.github.currencortex.music.ui.component.nativeui.GlassDockedSearch
 @Composable fun MusicSearchBar(value: String, onSubmit: () -> Unit, modifier: Modifier = Modifier,
     onInput: ((String) -> Unit)? = null, onActivate: (() -> Unit)? = null, requester: FocusRequester? = null,
     placeholder: String = "搜索歌曲、歌手或歌词", inputTag: String = "search_input", submitTag: String? = null,
-    onInputFocus: (Boolean) -> Unit = {}, onCancel: () -> Unit = {}, clearTag: String = "search_clear") {
+    onInputFocus: (Boolean) -> Unit = {}, onCancel: () -> Unit = {}, clearTag: String = "search_clear",
+    leadingContent: (@Composable () -> Unit)? = null) {
     GlassDockedSearch(value, onInput ?: {}, modifier, inputTag = inputTag, placeholder = placeholder,
         focusRequester = requester, onInputFocus = onInputFocus, onSubmit = onSubmit,
         onActivate = if (onInput == null) onActivate ?: onSubmit else null,
         submitTag = submitTag ?: if (onInput == null) "home_search_submit" else "submit_search",
-        clearTag = clearTag, onCancel = onCancel)
+        clearTag = clearTag, onCancel = onCancel, leadingContent = leadingContent)
 }

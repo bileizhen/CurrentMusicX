@@ -24,7 +24,7 @@ struct OutputState final : oboe::AudioStreamDataCallback, oboe::AudioStreamError
     oboe::DataCallbackResult onAudioReady(oboe::AudioStream*, void* data, int32_t frames) override {
         auto *out = static_cast<int16_t*>(data);
         const int64_t start = read.load(std::memory_order_relaxed);
-        const int64_t count = std::min<int64_t>(frames * channels,
+        const int64_t count = std::min<int64_t>(int64_t(frames) * channels,
             written.load(std::memory_order_acquire) - start);
         const float volume = gain.load(std::memory_order_relaxed);
         for (int64_t i = 0; i < count; ++i) out[i] = static_cast<int16_t>(ring[(start+i) % ring.size()] * volume);

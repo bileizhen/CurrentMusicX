@@ -201,6 +201,23 @@ class PlayerController(private val context: Context, override val queue: Playbac
             positionMs = controller?.currentPosition?.coerceAtLeast(0) ?: state.value.positionMs, anchorRealtimeMs = SystemClock.elapsedRealtime())
         controller?.let { it.pause(); commandIntent = null }
     }
+    internal suspend fun discardLoadedLocalAudio() {
+        val playback = state.value
+        val snapshot = queue.state.value
+        if (playback.mode != PlayerMode.LOCAL || snapshot.current == null) return
+        val position = if (playback.song == snapshot.current) playback.positionMs else snapshot.positionMs
+        val action = ++transportGeneration
+        commandIntent = false
+        queue.state.value = snapshot.copy(positionMs = position)
+        state.value = playback.copy(playing = false, playRequested = false, loading = false, resolving = false,
+            audioInfo = null, bufferedPositionMs = 0, audioFullyCached = false, positionMs = position,
+            anchorRealtimeMs = SystemClock.elapsedRealtime(), error = null)
+        try {
+            controller?.sendCustomCommand(SessionCommand(MusicService.QUIESCE, Bundle.EMPTY), Bundle.EMPTY)?.await()
+        } finally {
+            if (action == transportGeneration) commandIntent = null
+        }
+    }
     fun next(play: Boolean = true) { if (!transportAllowed()) return; external?.let { it.next(); return }; if (queue.next()) load(play) else if (queue.state.value.radioSession != null) onRadioBoundary?.invoke() }
     fun previous(play: Boolean = true) { if (!transportAllowed()) return; external?.let { it.previous(); return }; queue.previous(); load(play) }
     fun seek(position: Long) { if (!transportAllowed()) return; external?.let { it.seek(position.coerceAtLeast(0)); return }; val target = position.coerceAtLeast(0)

@@ -6,6 +6,11 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.longPreferencesKey
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.int
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 internal object SettingsPreferences {
     private val THEME = stringPreferencesKey("theme_mode")
@@ -26,6 +31,7 @@ internal object SettingsPreferences {
     private val PREDICTIVE = booleanPreferencesKey("predictive_back")
     private val DEPTH_RIBBON = booleanPreferencesKey("playlist_depth_ribbon")
     private val RECORD_SHELF = booleanPreferencesKey("playlist_record_shelf")
+    private val PLAYLIST_ORDERS = stringPreferencesKey("playlist_orders")
     private val RECORD_PREVIEW_MODE = stringPreferencesKey("record_shelf_preview_mode")
     private val RECORD_FULL_PREVIEW = booleanPreferencesKey("record_shelf_full_preview")
     private val NAVIGATION_GLOW = booleanPreferencesKey("navigation_glow")
@@ -54,6 +60,10 @@ internal object SettingsPreferences {
         navigationGlow = p[NAVIGATION_GLOW] ?: true,
         playlistDepthRibbon = p[DEPTH_RIBBON] ?: false,
         playlistRecordShelf = p[RECORD_SHELF] ?: false,
+        playlistOrders = runCatching {
+            kotlinx.serialization.json.Json.parseToJsonElement(p[PLAYLIST_ORDERS].orEmpty())
+                .jsonObject.mapValues { it.value.jsonPrimitive.int }
+        }.getOrDefault(emptyMap()),
         recordShelfPreviewMode = runCatching { RecordShelfPreviewMode.valueOf(p[RECORD_PREVIEW_MODE].orEmpty()) }.getOrDefault(RecordShelfPreviewMode.ONCE),
         recordShelfFullPreview = p[RECORD_FULL_PREVIEW] ?: false,
         refreshRate = runCatching { RefreshRatePreference.valueOf(p[REFRESH_RATE] ?: RefreshRatePreference.SYSTEM.name) }.getOrDefault(RefreshRatePreference.SYSTEM),
@@ -84,6 +94,7 @@ internal object SettingsPreferences {
         p[NAVIGATION_GLOW] = v.navigationGlow
         p[DEPTH_RIBBON] = v.playlistDepthRibbon
         p[RECORD_SHELF] = v.playlistRecordShelf
+        p[PLAYLIST_ORDERS] = JsonObject(v.playlistOrders.mapValues { JsonPrimitive(it.value) }).toString()
         p[RECORD_PREVIEW_MODE] = v.recordShelfPreviewMode.name
         p[RECORD_FULL_PREVIEW] = v.recordShelfFullPreview
         p[REFRESH_RATE] = v.refreshRate.name

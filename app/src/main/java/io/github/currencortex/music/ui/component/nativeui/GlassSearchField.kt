@@ -42,13 +42,15 @@ private fun limitSearchInput(text: String): String {
     modifier: Modifier = Modifier, requester: FocusRequester, inputTag: String,
     placeholder: String = "搜索", onInputFocus: (Boolean) -> Unit = {},
     onSubmit: (() -> Unit)? = null, submitTag: String? = null,
-    clearTag: String = "${inputTag}_clear", onActivate: (() -> Unit)? = null, enabled: Boolean = true) {
+    clearTag: String = "${inputTag}_clear", onActivate: (() -> Unit)? = null, enabled: Boolean = true,
+    leadingContent: (@Composable () -> Unit)? = null) {
     val colors = MiuixTheme.colorScheme
     val keyboard = LocalSoftwareKeyboardController.current
-    Row(modifier.fillMaxSize().then(if (onActivate != null) Modifier.clickable(enabled = enabled, role = Role.Button,
+    Row(modifier.fillMaxSize().then(if (onActivate != null && leadingContent == null) Modifier.clickable(enabled = enabled, role = Role.Button,
         interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onActivate) else Modifier),
         verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.width(41.dp).fillMaxHeight().clickable(enabled = enabled,
+        if (leadingContent != null) leadingContent()
+        else Box(Modifier.width(41.dp).fillMaxHeight().clickable(enabled = enabled,
             interactionSource = remember { MutableInteractionSource() }, indication = null) {
             if (onSubmit != null) onSubmit()
             else if (onActivate != null) onActivate()
@@ -57,9 +59,19 @@ private fun limitSearchInput(text: String): String {
             contentAlignment = Alignment.CenterStart) {
             Icon(MusicIcons.Search, null, Modifier.padding(start = 12.dp).size(20.dp), tint = colors.onSurface)
         }
-        if (onActivate != null) Text(value.ifEmpty { placeholder }, Modifier.weight(1f).padding(end = 12.dp),
-            fontSize = 17.sp, lineHeight = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-            color = if (value.isEmpty()) colors.onSurfaceVariantSummary else colors.onSurface)
+        if (onActivate != null) BoxWithConstraints(
+            Modifier.weight(1f).fillMaxHeight().then(if (leadingContent != null) Modifier
+                .clickable(enabled = enabled, role = Role.Button, onClickLabel = "搜索",
+                    interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onActivate)
+                .then(if (submitTag != null) Modifier.testTag(submitTag) else Modifier)
+                .semantics { contentDescription = "搜索" } else Modifier),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            val textAlpha = if (leadingContent == null) 1f else ((maxWidth - 40.dp) / 56.dp).coerceIn(0f, 1f)
+            Text(value.ifEmpty { placeholder }, Modifier.padding(end = 12.dp).graphicsLayer { alpha = textAlpha },
+                fontSize = 17.sp, lineHeight = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = if (value.isEmpty()) colors.onSurfaceVariantSummary else colors.onSurface)
+        }
         else BasicTextField(value, { onValueChange(limitSearchInput(it)) }, Modifier.weight(1f)
             .padding(end = if (value.isEmpty()) 12.dp else 0.dp).focusRequester(requester).onFocusChanged {
                 onInputFocus(it.isFocused)

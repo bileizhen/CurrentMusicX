@@ -1,5 +1,7 @@
 package io.github.currencortex.music.feature.player
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.geometry.Offset
@@ -7,9 +9,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
-/** A circular black falloff, cached in cover space and transformed with the artwork.
- * No bitmap mask or blur is rebuilt when the flight changes opacity or size. */
-internal fun Modifier.playerCoverShadow(progress: () -> Float = { 1f }): Modifier {
+/** Shadows transform with the artwork, using a rounded outline for square covers. */
+internal fun Modifier.playerCoverShadow(square: Boolean = false, progress: () -> Float = { 1f }): Modifier {
+    if (square) return graphicsLayer {
+        shadowElevation = 16.dp.toPx() * progress().coerceIn(0f, 1f)
+        shape = RoundedCornerShape(5)
+        clip = false
+    }
     val tint = Color.Black
     return drawWithCache {
         val edge = size.minDimension / 2f

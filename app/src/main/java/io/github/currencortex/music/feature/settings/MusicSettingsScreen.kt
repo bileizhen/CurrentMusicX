@@ -12,8 +12,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.network.CurrentMusicServer
+import io.github.currencortex.music.data.lx.LxPlatform
 import io.github.currencortex.music.data.settings.AudioProvider
 import io.github.currencortex.music.data.settings.LyricsSource
+import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.MusicTextAction
@@ -21,7 +23,8 @@ import io.github.currencortex.music.ui.component.nativeui.*
 import top.yukonga.miuix.kmp.basic.TextField
 
 /** Sources and connections only; playback and other settings each have one owner. */
-@Composable fun MusicSettingsScreen(vm: MusicSettingsViewModel, onNavidrome: () -> Unit = {}, onEmby: () -> Unit = {}) {
+@Composable fun MusicSettingsScreen(vm: MusicSettingsViewModel, onNavidrome: () -> Unit = {}, onEmby: () -> Unit = {},
+    onMusicServices: () -> Unit = {}) {
     SettingsUiScope {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val state by vm.state.collectAsStateWithLifecycle()
@@ -56,7 +59,10 @@ import top.yukonga.miuix.kmp.basic.TextField
             }
             if (provider.provider != AudioProvider.LX) audioState.message?.let { SettingsHint(it, error = !audioState.busy) }
         } }
-        if (provider.provider == AudioProvider.LX) item("lx_sources") { LxSourceSettings(vm) }
+        if (provider.provider == AudioProvider.LX) item("lx_sources") {
+            val platform = if (settings.musicPlatform == MusicPlatform.QQ_MUSIC) LxPlatform.QQ_MUSIC else LxPlatform.NETEASE
+            LxSourceSettings(vm, platform)
+        }
         item("lyrics") { SettingsSection("歌词来源", MusicIcons.File) {
             SettingsOptionsRow("默认来源", when (settings.lyricsSource) {
                 LyricsSource.AUTO -> "自动择优"
@@ -89,6 +95,9 @@ import top.yukonga.miuix.kmp.basic.TextField
                 summary = "连接自己的音乐服务器 · Subsonic")
             SettingsDivider()
             MusicDestinationRow("Emby", onEmby, Modifier.testTag("open_emby"), summary = "专辑、歌曲、艺术家与歌单 · 原音质播放")
+            SettingsDivider()
+            MusicDestinationRow("外接音乐服务", onMusicServices, Modifier.testTag("open_music_services"),
+                summary = "管理从服务网页连接的音乐服务")
         } }
     }
     if (serverDialogOpen) CurrentMusicServerDialog(vm, onDismiss = { serverDialogOpen = false }, onCustom = {

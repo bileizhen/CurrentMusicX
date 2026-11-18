@@ -13,7 +13,6 @@ import androidx.media3.common.Format
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.exoplayer.audio.AudioOutput
 import androidx.media3.exoplayer.audio.AudioOutputProvider
-import io.github.currencortex.music.BuildConfig
 import io.github.currencortex.music.data.settings.AudioOutputSettings
 import java.io.File
 import java.nio.ByteBuffer
@@ -23,13 +22,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 @androidx.annotation.Keep
 internal object NeteaseUsbBridge {
-    const val ADAPTER = "ncm-usb-v3-status-init"
+    const val ADAPTER = "ncm-usb-v4-high-rate-write-retry"
     const val SHA256 = "150daa62df3b2f5a9b9bb5d54a3108e90495e50853c4b5ac7df3f63137f70a7a"
     private var loaded = false
     @Synchronized fun load(context: Context) {
         if (loaded) return
-        check(BuildConfig.NETEASE_ORIGINAL_EFFECTS && android.os.Build.SUPPORTED_ABIS.firstOrNull() == "arm64-v8a") {
-            "[USB_ABI] 本构建未内置 arm64 网易云 USB 引擎"
+        check(android.os.Build.SUPPORTED_ABIS.firstOrNull() == "arm64-v8a") {
+            "[USB_ABI] 当前设备不支持 arm64 网易云 USB 引擎"
         }
         val binary = File(context.applicationInfo.nativeLibraryDir, "libncmusbaudio.so")
         check(binary.isFile && binary.inputStream().use { input ->
@@ -50,6 +49,7 @@ internal object NeteaseUsbBridge {
     external fun diagnostics(): String
     external fun testFormatSelection(): Boolean
     external fun testTransferState(raw: Int, detached: Boolean): Boolean
+    external fun testWritePolicy(): Boolean
     external fun write(handle: Long, buffer: ByteBuffer, offset: Int, bytes: Int): Int
     external fun play(handle: Long, playing: Boolean)
     external fun position(handle: Long): Long
@@ -95,7 +95,8 @@ internal class NeteaseUsbStream private constructor(
             "描述符声明 ${declared.formats.size} 个 PCM alternate：${entries.ifBlank { "无可解析声明" }}；实际接受能力未验证"
         }
         return io.github.currencortex.music.core.media.engine.UsbOutputSnapshot(deviceLabel,
-            io.github.currencortex.music.core.media.engine.AudioPcmFormat(wire.rate, wire.encoding, wire.channels), capability)
+            io.github.currencortex.music.core.media.engine.AudioPcmFormat(wire.rate, wire.encoding, wire.channels), capability,
+            outputImpl.bufferSizeInFrames)
     }
     private val detached = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -209,7 +210,7 @@ private class OriginalUsbOutput(private val session: NeteaseUsbSession, private 
     override fun isOffloadedPlayback() = false
     override fun getAudioSessionId() = C.AUDIO_SESSION_ID_UNSET
     override fun getSampleRate() = session.pcm.rate
-    override fun getBufferSizeInFrames() = sampleRate / 10L
+    override fun getBufferSizeInFrames() = sampleRate * session.pcm.bufferDurationMs / 1000L
     override fun getPlaybackParameters() = PlaybackParameters.DEFAULT
     override fun isStalled() = false
     override fun addListener(listener: AudioOutput.Listener) { listeners += listener }
