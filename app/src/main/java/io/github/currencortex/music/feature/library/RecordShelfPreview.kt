@@ -9,7 +9,6 @@ import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.media.*
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.data.settings.RecordShelfPreviewMode
-import io.github.currencortex.music.data.settings.playbackQuality
 import kotlinx.coroutines.*
 
 /** The audition never replaces the user's queue or seek position. */
@@ -73,7 +72,7 @@ internal class RecordShelfPreview(context: Context, private val container: AppCo
         }
         coroutineScope {
             val request = container.audioRequest(song, container.musicSettings.state.value
-                .playbackQuality(container.playbackNetworkStatus.value.kind))
+                .qualityFor(song.musicSource, container.playbackNetworkStatus.value.kind))
             audioOwner = request
             val clip = async { container.musicRepository.previewClip(song) }
             val resolved = container.audioSources.resolve(request)
