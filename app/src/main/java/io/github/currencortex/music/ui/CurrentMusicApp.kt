@@ -88,6 +88,9 @@ import io.github.currencortex.music.feature.settings.FontSettingsScreen
 import io.github.currencortex.music.feature.settings.AppearanceScreen
 import io.github.currencortex.music.feature.settings.ScaleDialog
 import io.github.currencortex.music.feature.settings.SettingsScreen
+import io.github.currencortex.music.feature.settings.FEEDBACK_ROUTE
+import io.github.currencortex.music.feature.settings.FeedbackScreen
+import io.github.currencortex.music.feature.settings.FeedbackViewModel
 import io.github.currencortex.music.feature.settings.StorageScreen
 import io.github.currencortex.music.feature.settings.StorageViewModel
 import io.github.currencortex.music.feature.settings.SettingsViewModel
@@ -192,6 +195,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val lyricsFont = io.github.currencortex.music.feature.lyrics.ui.rememberLyricsFont(lyricsFontSettings)
     AppRefreshRateRequest(settings.refreshRate)
     val settingsVm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container.settings) })
+    val feedbackVm: FeedbackViewModel = viewModel(factory = viewModelFactory { FeedbackViewModel(container) })
     val announcementVm: io.github.currencortex.music.feature.announcement.AnnouncementViewModel =
         viewModel(factory = viewModelFactory { io.github.currencortex.music.feature.announcement.AnnouncementViewModel(container) })
     val announcementLifecycle = androidx.lifecycle.compose.LocalLifecycleOwner.current
@@ -346,7 +350,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val pageSceneStrategy=remember(pageNavigation) {PageContainerSceneStrategy(pageNavigation,
             setOf(ROOT.toString(),SETTINGS.toString(),APPEARANCE.toString(),NETWORK.toString(),STORAGE.toString(),ABOUT.toString(),
                 "user/security","user/binding","user/netease-tasks","user/playlist-import","user/decorations",
-                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome","emby",SupportConfig.route,SupportConfig.donationRoute)+
+                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome","emby",SupportConfig.route,SupportConfig.donationRoute,FEEDBACK_ROUTE)+
                 LegalDocument.entries.map {it.route().toString()})}
         SideEffect {pageNavigation.onClosed={route->
             if(backStack.lastOrNull()==route)backStack=backStack.dropLast(1)
@@ -674,7 +678,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") },
                                     onPlayback = { navigateLibrary("playback-settings") }, onEffects = { navigateTo(EQUALIZER) },
                                     updateTransfer = updateTransferState, onNavigateFrom = pageNavigation::from,
-                                    onSupport = { navigateLibrary(SupportConfig.route) })
+                                    onSupport = { navigateLibrary(SupportConfig.route) },
+                                    onFeedback = { navigateLibrary(FEEDBACK_ROUTE) })
                             }
                             }
                         }
@@ -709,7 +714,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") },
                             onPlayback = { navigateLibrary("playback-settings") }, onEffects = { navigateTo(EQUALIZER) },
                             updateTransfer = updateTransferState, onNavigateFrom = pageNavigation::from, onBack = ::navigateBack,
-                            onSupport = { navigateLibrary(SupportConfig.route) })
+                            onSupport = { navigateLibrary(SupportConfig.route) },
+                            onFeedback = { navigateLibrary(FEEDBACK_ROUTE) })
                     }
                 }
                 entry(NETWORK.toString()) {
@@ -792,6 +798,11 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         onOpenDocument = { navigateTo(it.route()) },
                         onOpenMember = { member, group -> memberFocus = MemberFocus(member, group) },
                         onSupport = { navigateLibrary(SupportConfig.route) })
+                }
+                entry(FEEDBACK_ROUTE) {
+                    val owner = remember(account.account?.id, sessionRevision) { feedbackVm.owner() }
+                    FeedbackScreen(feedbackVm, owner, container.logger, ::navigateBack,
+                        onLogin = { authVm.begin(); navigateLibrary("user/login") })
                 }
                 entry(SupportConfig.route) { SupportScreen(onBack = ::navigateBack,
                     onOfficialDonation = { navigateLibrary(SupportConfig.donationRoute) }) }

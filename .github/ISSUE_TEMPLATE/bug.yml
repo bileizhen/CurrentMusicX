@@ -47,6 +47,7 @@ body:
       description: "请选择最接近的类别，以便自动分类。"
       options:
         - 播放与音效
+        - 音频输出
         - 歌词
         - 音源与网络
         - 界面与外观
@@ -96,8 +97,8 @@ body:
     id: diagnostics
     attributes:
       label: 截图与诊断信息
-      description: "可直接拖入截图、录屏或已脱敏日志；如无附件，请说明错误文案。不要上传含私人数据的原始诊断包。"
-      placeholder: "截图 / 录屏 / 脱敏诊断日志 / 错误提示（可选）"
+      description: "音频输出问题可在「设置 → 音频输出 → 导出完整音频诊断」保存 CurrentMusicAudio.txt，检查内容后附上。也可附截图、录屏或脱敏日志。不要上传含私人数据的原始诊断包。"
+      placeholder: "截图 / 录屏 / 音频诊断 / 脱敏日志 / 错误提示（可选）"
   - type: checkboxes
     id: confirmation
     attributes:

@@ -7,7 +7,6 @@ import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
 import io.github.currencortex.music.ui.component.nativeui.SettingsOptionsRow
 import io.github.currencortex.music.ui.component.nativeui.SettingsOption
 
-import android.media.AudioDeviceInfo
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioTrack
@@ -27,13 +26,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.media.outputKey
 import io.github.currencortex.music.core.media.outputLabel
-import io.github.currencortex.music.core.media.CurrentMusicAudioDiagnostics
 import io.github.currencortex.music.data.settings.AudioOutputSettings
 import io.github.currencortex.music.data.settings.AudioOutputMode
 import io.github.currencortex.music.data.settings.AudioBufferPolicy
 import io.github.currencortex.music.core.media.engine.BitPerfectEvidence
 import io.github.currencortex.music.ui.component.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -49,35 +49,20 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val supportedRates = remember { AudioOutputSettings.rates.filter { it == 0 ||
         AudioTrack.getMinBufferSize(it, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT) > 0 } }
     val selectedDevice = devices.firstOrNull { it.outputKey() == settings.deviceKey }
-    var bitPerfectDevices by remember { mutableStateOf("正在读取 USB 逐位输出能力…") }
-    LaunchedEffect(devices, settings.deviceKey) {
-        bitPerfectDevices = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            if (android.os.Build.VERSION.SDK_INT < 34) "当前系统低于 Android 14，无法启用 Bit-perfect"
-            else {
-                val usb = devices.filter { it.type == AudioDeviceInfo.TYPE_USB_DEVICE || it.type == AudioDeviceInfo.TYPE_USB_HEADSET }
-                    .filter { settings.deviceKey.isEmpty() || it.outputKey() == settings.deviceKey }
-                if (usb.isEmpty()) "当前未连接或未选择 USB DAC"
-                else usb.joinToString("\n") { device ->
-                    CurrentMusicAudioDiagnostics.capabilities(manager, device)
-                }
-            }
+    var bitPerfectDevices by remember(manager, devices, settings.deviceKey) { mutableStateOf<String?>(null) }
+    LaunchedEffect(manager, devices, settings.deviceKey) {
+        bitPerfectDevices = withContext(Dispatchers.IO) {
+            audioOutputUsbCapabilities(manager, settings.deviceKey, devices)
         }
     }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     var diagnosticMessage by remember { mutableStateOf<String?>(null) }
-    suspend fun diagnosticReport(): String {
-        val structured = container.audioDiagnostics.text()
-        val capability = bitPerfectDevices
-        return kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-            "$structured\nUSB 系统能力查询:\n$capability\n\n完整原生诊断:\n${CurrentMusicAudioDiagnostics.fullSnapshot()}"
-        }
-    }
     val exportDiagnostics = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) scope.launch {
             try {
-                val report = diagnosticReport()
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                val report = audioOutputDiagnosticReport(container, bitPerfectDevices)
+                withContext(Dispatchers.IO) {
                     requireNotNull(context.contentResolver.openOutputStream(uri)) { "无法打开文件" }.bufferedWriter(Charsets.UTF_8).use { it.write(report) }
                 }
                 diagnosticMessage = "完整诊断已导出"
@@ -116,7 +101,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 })
             }
             if (settings.mode == AudioOutputMode.BIT_PERFECT)
-                SettingsHint(bitPerfectDevices, Modifier.testTag("bit_perfect_capability"))
+                SettingsHint(bitPerfectDevices ?: "正在读取 USB 逐位输出能力…", Modifier.testTag("bit_perfect_capability"))
         } }
         item("format") { SettingsSection("音频格式", MusicIcons.File) {
             SettingsOptionsRow("输出采样率", if (settings.mode.bypassProcessing || settings.sampleRate == 0) "跟随音源" else "${settings.sampleRate} Hz",
@@ -202,7 +187,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 Modifier.testTag("copy_audio_diagnostics"), onClick = {
                     scope.launch {
                         try {
-                            clipboard.setText(AnnotatedString(diagnosticReport()))
+                            clipboard.setText(AnnotatedString(audioOutputDiagnosticReport(container, bitPerfectDevices)))
                             diagnosticMessage = "已复制完整音频诊断"
                         } catch (e: kotlinx.coroutines.CancellationException) { throw e }
                         catch (_: Exception) { diagnosticMessage = "复制失败，请重试" }
