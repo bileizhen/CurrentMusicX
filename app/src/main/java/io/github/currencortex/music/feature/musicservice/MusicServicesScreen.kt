@@ -295,15 +295,23 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
                 }
             } }
 
-            if (page.items.isNotEmpty() || page.tracks.isNotEmpty() || page.albums.isNotEmpty() ||
-                labels.isNotEmpty() || nextPage != null) item("results") {
-                SettingsSection("结果", MusicIcons.List) {
-                    for (label in labels) SettingsPreference(label,
-                        onClick = if (last?.operation in setOf("discover.hot", "discover.suggest")) ({
-                            keyword = label.take(60); doSearch(keyword)
+            val results = page.items + page.tracks + page.albums
+            if (results.isNotEmpty() || labels.isNotEmpty() || nextPage != null) {
+                item("results") { SettingsInfoHeader("结果", MusicIcons.List, horizontalInset = 0.dp) }
+                val parent = last?.operation
+                val searchSuggestion = parent == "discover.hot" || parent == "discover.suggest"
+                items(labels.size, key = { index -> "result-label:$index" }, contentType = { "result-label" }) { index ->
+                    val label = labels[index]
+                    SettingsGroup {
+                        SettingsPreference(label, onClick = if (searchSuggestion) ({
+                            keyword = label.take(60)
+                            doSearch(keyword)
                         }) else null)
-                    val parent = last?.operation
-                    for (resource in page.items + page.tracks + page.albums) {
+                    }
+                }
+                items(results.size, key = { index -> "result-resource:$index" }, contentType = { "result-resource" }) { index ->
+                    val resource = results[index]
+                    SettingsGroup {
                         SettingsPreference(resource.name, resource.artists.ifBlank { searchKinds[resource.kind].orEmpty() },
                             enabled = !busy, onClick = {
                                 focused = resource
@@ -327,8 +335,12 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
                                 else -> null
                             })
                     }
-                    nextPage?.let { more ->
-                        SettingsPreference("加载更多", enabled = !busy, onClick = { query(more, append = true) })
+                }
+                nextPage?.let { more ->
+                    item("results-more") {
+                        SettingsGroup {
+                            SettingsPreference("加载更多", enabled = !busy, onClick = { query(more, append = true) })
+                        }
                     }
                 }
             }
