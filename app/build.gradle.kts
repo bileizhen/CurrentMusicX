@@ -49,7 +49,16 @@ android {
         if (providers.gradleProperty("ciPrArm64Only").orNull == "true") {
             ndk.abiFilters += "arm64-v8a"
         }
-        externalNativeBuild { cmake { arguments += "-DANDROID_STL=c++_static" } }
+        externalNativeBuild {
+            cmake {
+                arguments += "-DANDROID_STL=c++_static"
+                // The Android NDK toolchain supports ccache through ANDROID_CCACHE.
+                // CI-only, so local builds and release signing are unchanged.
+                if (providers.gradleProperty("ciNativeCcache").orNull == "true") {
+                    arguments += "-DANDROID_CCACHE=ccache"
+                }
+            }
+        }
         targetSdk = 36
         versionCode = 38
         versionName = "1.3.5"
