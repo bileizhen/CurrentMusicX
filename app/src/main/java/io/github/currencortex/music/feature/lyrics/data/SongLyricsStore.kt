@@ -262,7 +262,7 @@ class SongLyricsStore(private val directory: File) {
                 MusicSource.QQ_MUSIC -> song.externalIds.qqMusicId
                 MusicSource.APPLE_MUSIC -> song.externalIds.appleMusicId
                 MusicSource.SPOTIFY -> song.externalIds.spotifyId
-                MusicSource.EMBY, MusicSource.NAVIDROME, MusicSource.LOCAL -> null
+                MusicSource.EMBY, MusicSource.NAVIDROME, MusicSource.LOCAL, MusicSource.SERVICE -> null
             }
             return "${song.musicSource.name.lowercase(Locale.ROOT)}:${external?.takeIf { it.isNotBlank() } ?: song.id}"
         }

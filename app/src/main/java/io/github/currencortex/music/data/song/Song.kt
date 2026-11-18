@@ -20,7 +20,9 @@ import kotlinx.serialization.SerialName
         .filter { it.isNotBlank() && !it.equals(name, ignoreCase = true) }.distinct()
     val displayNames get() = listOf(name) + alternateNames
 }
-@Serializable enum class MusicSource { NETEASE, QQ_MUSIC, APPLE_MUSIC, SPOTIFY, NAVIDROME, LOCAL, EMBY }
+@Serializable enum class MusicSource { NETEASE, QQ_MUSIC, APPLE_MUSIC, SPOTIFY, NAVIDROME, LOCAL, EMBY,
+    /** Persisted by the removed external-service feature; filtered when restoring a saved queue. */
+    SERVICE }
 @Serializable data class QqMusicTrackRef(val mid: String, val songId: Long = 0, val albumMid: String = "",
     val singerMids: List<String> = emptyList(), val mediaMid: String = "")
 @Serializable data class NavidromeTrackRef(val id: String, val identity: String, val format: String = "",
