@@ -10,6 +10,7 @@ import io.github.currencortex.music.core.update.GitHubUpdateChecker
 import io.github.currencortex.music.core.update.UpdateService
 import io.github.currencortex.music.data.settings.SettingsRepository
 import io.github.currencortex.music.data.update.UpdateSettingsRepository
+import io.github.currencortex.music.data.settings.StorageSettingsRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -68,6 +69,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val musicSettings = MusicSettingsRepository(settingsStore, appScope)
     internal val localMusic = io.github.currencortex.music.feature.library.LocalMusicRepository(
         java.io.File(context.filesDir, "local-music$storageSuffix.json"))
+    val storageSettings = StorageSettingsRepository(settingsStore, appScope)
     val serverRouter = CurrentMusicServerRouter(serverCheck)
     fun updateAssetUrl(release: io.github.currencortex.music.core.update.AppRelease,
         source: io.github.currencortex.music.core.update.UpdateSource): String = source.url(release,
@@ -327,7 +329,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 neteaseSongActions.setLiked(id, true, expected, song, expectedUid = uid)
             })
     }
-    val audioCache = AudioCache(context.applicationContext, java.io.File(context.cacheDir, "audio$storageSuffix"), navidromeMedia)
+    val audioCache = AudioCache(context.applicationContext, java.io.File(context.cacheDir, "audio$storageSuffix"), navidromeMedia,
+        initialMaxBytes = AudioCache.UNLIMITED_BYTES, initialCapacityReady = false)
     val storage = io.github.currencortex.music.core.storage.StorageStore(context.applicationContext, audioCache)
     val audioSources = AudioSourceResolver(audioCache,
         { audioSession() },
@@ -737,6 +740,13 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                     appResult { playerController.discardLoadedLocalAudio() }
                 }
                 previous = next
+            }
+        }
+        appScope.launch {
+            storageSettings.limitBytes.collect { bytes ->
+                try { audioCache.setMaxBytes(bytes) }
+                catch (e: CancellationException) { throw e }
+                catch (e: Exception) { logger.warn("Storage", "Audio cache capacity update failed", e) }
             }
         }
         appScope.launch {

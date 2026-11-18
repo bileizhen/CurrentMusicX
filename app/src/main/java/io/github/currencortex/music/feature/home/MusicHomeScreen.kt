@@ -14,7 +14,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.feature.library.*
-import io.github.currencortex.music.feature.qqmusic.MusicPlatformScrollLayout
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.data.library.Playlist
 import io.github.currencortex.music.data.profile.ProfileUser
@@ -25,6 +24,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.core.network.ErrorKind
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.map as mapPlayback
 import java.time.LocalDate
 import androidx.lifecycle.Lifecycle
@@ -35,6 +35,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val home by vm.home.collectAsStateWithLifecycle()
     val preferences by vm.container.musicSettings.state.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
     val avatarVersions by vm.container.profileRepository.avatarVersions.collectAsStateWithLifecycle()
     val scales by vm.container.profileRepository.scales.collectAsStateWithLifecycle()
     val nativeAccount by vm.container.neteaseSessions.state.collectAsStateWithLifecycle()
@@ -77,9 +78,9 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     SettingsUiScope {
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val artworkCardWidth = (maxWidth.coerceAtMost(840.dp) - 64.dp) / 2.5f
-    MusicPlatformScrollLayout(vm.container, Modifier.widthIn(max = 840.dp).fillMaxSize().align(Alignment.TopCenter),
-        glassOverContent = false, topBar = { platformTitle ->
-        SettingsRootTopBar("Current Music", Modifier.testTag("home_root_toolbar"), titleContent = platformTitle) {
+    SettingsScrollLayout(Modifier.widthIn(max = 840.dp).fillMaxSize().align(Alignment.TopCenter),
+        glassOverContent = false, topBar = {
+        SettingsRootTopBar("Current Music", Modifier.testTag("home_root_toolbar"), titleContent = { HomeBrandTitle() }) {
             HomeProfileAvatar(avatarUrl, (!account.loading || direct) && home.loaded, onProfile,
                 decorationUrl = decorationUrl, decorationScale = scales[decoration] ?: 1.0)
         }
@@ -90,7 +91,12 @@ import androidx.lifecycle.compose.LifecycleEventEffect
         rootMotionItems(skipKeys = setOf("for-you", "recommended-playlists", "playlists")) {
             item(key = "search") { MusicSearchBar(searchQuery, onSearchSubmit,
                 Modifier.testTag("open_home_search").onGloballyPositioned { onSearchBounds(it.boundsInRoot()) }
-                    .graphicsLayer { alpha = if (hideSearch) 0f else 1f }, onActivate = onSearch, inputTag = "home_search_field") }
+                    .graphicsLayer { alpha = if (hideSearch) 0f else 1f }, onActivate = onSearch, inputTag = "home_search_field",
+                leadingContent = {
+                    MusicPlatformSwitcher(preferences.musicPlatform, { platform ->
+                        scope.launch { vm.container.musicSettings.setMusicPlatform(platform) }
+                    }, enabled = !hideSearch)
+                }) }
             if (!home.loading && homeLoadFailed) item(key = "retry") {
                 MusicTextAction("部分内容加载失败，重新加载", vm::refresh, Modifier.testTag("home_retry"))
             }

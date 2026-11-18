@@ -64,6 +64,26 @@ test('official GitHub Actions dependency update is nonblocking', async () => {
   assert.equal(await isIgnorableDependabotPr({github, repo, pr: p}), true);
 });
 
+test('draft feature PR does not block the main release queue', async () => {
+  const draft = pr(179, {draft: true, user: {login: 'contributor', id: 1234}});
+  const {github, calls} = api([draft]);
+  assert.equal(await findBlockingOpenPr({github, repo}), null);
+  assert.equal(calls.length, 1); // draft is ignored without inspecting its files
+});
+
+test('ready-for-review feature PR blocks while drafts stay ignored', async () => {
+  const draft = pr(179, {draft: true, user: {login: 'contributor', id: 1234}});
+  const ready = pr(180, {draft: false, user: {login: 'contributor', id: 1234}});
+  const {github} = api([draft, ready]);
+  assert.equal((await findBlockingOpenPr({github, repo})).number, 180);
+});
+
+test('a converted draft resumes blocking when marked ready', async () => {
+  const ready = pr(179, {draft: false, user: {login: 'contributor', id: 1234}});
+  const {github} = api([ready]);
+  assert.equal((await findBlockingOpenPr({github, repo})).number, 179);
+});
+
 test('a human PR blocks even when a Dependabot PR appears first', async () => {
   const human = pr(173, {user: {login: 'contributor', id: 1234}});
   const {github, calls} = api([pr(171), human], {
