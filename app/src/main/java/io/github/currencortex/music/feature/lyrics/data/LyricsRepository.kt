@@ -34,15 +34,6 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
             return@withLock LyricsResult(aligned.timingAlignment?.applyTo(aligned.document) ?: aligned.document,
                 origin = aligned.origin, sourceDocument = aligned.document, timingAlignment = aligned.timingAlignment)
         }
-        song.serviceTrack?.let { track ->
-            val origin = LyricsOrigin("外接音乐服务", "music_service", track.id)
-            return@withLock when (val result = fallback.findLyrics(song)) {
-                is LyricsProviderResult.Parsed -> LyricsResult(result.document, origin = origin)
-                is LyricsProviderResult.Failure -> LyricsResult(error = result.detail,
-                    issues = listOf(LyricsIssue(result.code, result.detail)))
-                is LyricsProviderResult.Ttml -> LyricsResult(error = "不支持的外接服务歌词格式")
-            }
-        }
         // Local metadata belongs to this exact recording and works without an online reference.
         // Manual imports above remain authoritative. Read afresh so edited file tags are visible.
         val issues = mutableListOf<LyricsIssue>()

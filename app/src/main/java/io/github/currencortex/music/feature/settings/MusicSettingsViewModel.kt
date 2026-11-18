@@ -10,11 +10,16 @@ import io.github.currencortex.music.data.lx.LxPlatform
 import io.github.currencortex.music.data.settings.AudioProvider
 import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.data.song.MusicSource
+import io.github.currencortex.music.data.song.ServerAudioSource
+import io.github.currencortex.music.data.song.ServerAudioSourceOwner
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
 data class NetworkSettingsState(val busy: Boolean = false, val message: String? = null)
 data class AudioCacheSettingsState(val busy: Boolean = false, val message: String? = null)
+internal data class ServerAudioCatalogState(val server: String, val busy: Boolean = false,
+    val sources: List<ServerAudioSource> = emptyList(), val message: String? = null, val needsLogin: Boolean = false)
+
 class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() {
     val settings = container.musicSettings.state
     val state = MutableStateFlow(NetworkSettingsState())
@@ -22,6 +27,10 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
     val cacheState = MutableStateFlow(AudioCacheSettingsState())
     val audioProvider = container.audioSettings.state
     val audioState = MutableStateFlow(NetworkSettingsState())
+    internal val serverAudioCatalog = MutableStateFlow<ServerAudioCatalogState?>(null)
+    private var serverCatalogJob: Job? = null
+    private var catalogOwner: ServerAudioSourceOwner? = null
+    private var catalogRevision = -1L
     val lxSources = container.lxSources.state
     internal val lxHealth = container.lxSources.health
     internal val lxResolveTimes = container.lxSources.resolveTimes
@@ -64,6 +73,7 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
             }
             audioState.value = NetworkSettingsState(message = success)
         } catch (e: CancellationException) { throw e }
+        catch (e: ApiException) { audioState.value = NetworkSettingsState(message = e.message) }
         catch (e: io.github.currencortex.music.data.lx.LxSourceException) { audioState.value = NetworkSettingsState(message = e.message) }
         catch (e: IllegalArgumentException) { audioState.value = NetworkSettingsState(message = e.message?.take(160) ?: "设置无效，请检查后重试") }
         catch (_: Exception) { audioState.value = NetworkSettingsState(message = "音源设置保存失败，请重试") }
@@ -79,6 +89,62 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
     fun importLxUrl(url: String) = audioEdit("音源已导入") {
         container.audioSettings.selectLxSource(container.lxSources.importUrl(url).id)
     }
+    internal fun openServerAudioCatalog() {
+        serverCatalogJob?.cancel()
+        catalogOwner = null
+        serverCatalogJob = viewModelScope.launch {
+            val session = container.projectSession()
+            val owner = container.serverAudioSourceOwner()
+            val revision = container.accountRepository.sessionRevision.value
+            val initial = ServerAudioCatalogState(session.server)
+            if (owner == null) {
+                serverAudioCatalog.value = initial.copy(needsLogin = true, message = "请先登录当前 CurrentMusic 服务器")
+                return@launch
+            }
+            serverAudioCatalog.value = initial.copy(busy = true)
+            val result = appResult { container.serverAudioSources.catalog(session) }
+            if (!isCurrentCatalogOwner(owner, revision)) {
+                val needsLogin = container.serverAudioSourceOwner() == null
+                serverAudioCatalog.value = initial.copy(needsLogin = needsLogin, message =
+                    if (needsLogin) "请登录当前 CurrentMusic 服务器后重试" else "账号或服务器已变更，请重新加载音源")
+                return@launch
+            }
+            serverAudioCatalog.value = when (result) {
+                is AppResult.Success -> {
+                    catalogOwner = owner
+                    catalogRevision = revision
+                    initial.copy(sources = result.value,
+                        message = "当前服务器没有可导入的网易云音源".takeIf { result.value.isEmpty() })
+                }
+                is AppResult.Failure -> initial.copy(
+                    message = if (result.status == 404) "当前服务器暂不支持音源导入" else result.message,
+                    needsLogin = result.kind == ErrorKind.Unauthorized,
+                )
+            }
+        }
+    }
+
+    internal fun closeServerAudioCatalog() {
+        serverCatalogJob?.cancel()
+        catalogOwner = null
+        serverAudioCatalog.value = null
+    }
+
+    internal fun importServerAudioSource(source: ServerAudioSource) {
+        val owner = catalogOwner ?: return
+        val revision = catalogRevision
+        if (audioState.value.busy || source !in serverAudioCatalog.value?.sources.orEmpty()) return
+        closeServerAudioCatalog()
+        audioEdit("音源已导入并启用") {
+            container.audioSettings.importServerSource(owner, source) { isCurrentCatalogOwner(owner, revision) }
+        }
+    }
+
+    private fun isCurrentCatalogOwner(owner: ServerAudioSourceOwner, revision: Long): Boolean =
+        owner == container.serverAudioSourceOwner() && revision == container.accountRepository.sessionRevision.value
+
+    internal fun removeServerAudioSource() = audioEdit("音源已移除") { container.audioSettings.removeServerSource() }
+
     fun removeLxSource(id: String) = audioEdit {
         if (container.audioSettings.access().lxSourceId == id) {
             container.audioSettings.selectLxSource("")
