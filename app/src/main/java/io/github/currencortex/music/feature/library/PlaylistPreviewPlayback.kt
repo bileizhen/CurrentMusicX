@@ -42,8 +42,13 @@ internal class PlaylistPreviewPlayback(val enabled: Boolean, val play: (Playlist
             job = scope.launch {
                 try {
                     val result = appResult {
-                        if (playlist.source == "netease") vm.container.neteaseLibrary.playlist(playlist.id).songs
-                        else vm.container.libraryRepository.playlist(playlist.id).songs
+                        when (playlist.source) {
+                            "netease" -> vm.container.neteaseLibrary.playlist(playlist.id).songs
+                            "qqmusic" -> vm.container.qqMusic.playlist(
+                                playlist.remoteId.ifBlank { playlist.id.toString() },
+                            ).songs
+                            else -> vm.container.libraryRepository.playlist(playlist.id).songs
+                        }
                     }
                     if (expected != vm.container.musicSession() || !allowed ||
                         vm.container.playerController.state.value.mode != PlayerMode.LOCAL) return@launch
