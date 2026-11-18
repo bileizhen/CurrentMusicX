@@ -6,13 +6,14 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
 permissions:
   contents: read
+  pull-requests: read
 concurrency:
   group: pr-source-checks-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 jobs:
   # Keep the status context required by main's branch protection.
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -26,33 +27,78 @@ jobs:
           for path in Path('scripts').glob('*.py'):
               ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
           PY
+      # Keep the required 'build' check fast for docs/automation-only PRs.
+      # Evaluate file paths from the GitHub API, not from untrusted PR scripts.
+      - name: Determine PR Android check scope
+        id: android-scope
+        if: github.event.pull_request.draft != true
+        uses: actions/github-script@v8
+        with:
+          script: |
+            let required = true;
+            try {
+              const files = await github.paginate(github.rest.pulls.listFiles, {
+                ...context.repo, pull_number: context.issue.number, per_page: 100,
+              });
+              const paths = [];
+              for (const file of files) {
+                if (file.status === 'renamed' && file.previous_filename) paths.push(file.previous_filename);
+                paths.push(file.filename);
+              }
+              const isLight = p =>
+                /^\.github\/(scripts|workflows)\//.test(p) ||
+                ['.github/release.yml', '.github/CI_RELEASE_POLICY.md', '.github/REVIEW_POLICY.md', 'AGENTS.md'].includes(p) ||
+                /^README(?:-[^/]+)?\.md$/.test(p) ||
+                /^\.github\/img\/.+\.(svg|png|jpe?g|webp|gif)$/.test(p);
+              required = files.length === 0 || files.length >= 3000 || !paths.every(isLight);
+            } catch (error) {
+              core.warning('Could not evaluate changed paths; run full Android checks: ' + error.message);
+            }
+            core.info(required ? 'Running Android Kotlin compile and lint' : 'Lightweight-only PR; Android Gradle checks skipped');
+            core.setOutput('required', String(required));
+
       # Compile and lint before merge: Android CI is a main-branch batch
       # pipeline, so without this gate a broken build only surfaces there.
       - uses: actions/setup-java@v5
-        if: github.event.pull_request.draft != true
+        if: steps.android-scope.outputs.required == 'true'
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v4
-        if: github.event.pull_request.draft != true
-        with:
-          cmdline-tools-version: '12266719'
-          packages: platform-tools
-          log-accepted-android-sdk-licenses: false
-      # Keep the SDK set identical to Android CI so configuration and caches match main.
-      - name: Install Android SDK
-        if: github.event.pull_request.draft != true
-        run: sdkmanager "platforms;android-37.0" "build-tools;35.0.0" "ndk;30.0.16248370" "cmake;4.1.2"
+      # Ubuntu 24.04 images already include most Android SDK packages.
+      - name: Ensure required Android SDK components
+        if: steps.android-scope.outputs.required == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -d "$ANDROID_HOME/platforms/android-37.0" ]] || missing+=("platforms;android-37.0")
+          [[ -d "$ANDROID_HOME/build-tools/35.0.0" ]] || missing+=("build-tools;35.0.0")
+          [[ -d "$ANDROID_HOME/ndk/30.0.16248370" ]] || missing+=("ndk;30.0.16248370")
+          [[ -d "$ANDROID_HOME/cmake/4.1.2" ]] || missing+=("cmake;4.1.2")
+          if (( ${#missing[@]} )); then
+            sdkmanager "${missing[@]}"
+          else
+            echo "Required Android SDK packages already installed."
+          fi
       - uses: gradle/actions/setup-gradle@v5
-        if: github.event.pull_request.draft != true
+        if: steps.android-scope.outputs.required == 'true'
       - name: Compile and lint PR source
-        if: github.event.pull_request.draft != true
-        run: ./gradlew :app:compileReleaseKotlin :app:lintRelease -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace
+        if: steps.android-scope.outputs.required == 'true'
+        run: ./gradlew :app:compileReleaseKotlin :app:lintRelease -PciPrArm64Only=true -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace --profile
       - name: Upload lint report
         if: failure()
         uses: actions/upload-artifact@v6
         with:
           name: lint-report
           path: app/build/reports/lint-results-*
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload PR Gradle performance report
+        if: always() && steps.android-scope.outputs.required == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: gradle-pr-profile
+          path: '**/build/reports/profile/*.html'
           if-no-files-found: ignore
           retention-days: 7
