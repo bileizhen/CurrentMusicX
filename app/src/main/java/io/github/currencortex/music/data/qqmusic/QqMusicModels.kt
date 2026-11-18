@@ -2,9 +2,18 @@ package io.github.currencortex.music.data.qqmusic
 
 import io.github.currencortex.music.data.library.Playlist
 import io.github.currencortex.music.data.song.Song
+import io.github.currencortex.music.data.library.Daily
 
 data class QqAccountState(val loggedIn: Boolean = false, val nickname: String = "", val avatar: String = "",
     val uin: String = "", val revision: Long = 0)
+data class QqHomeSnapshot(
+    val daily: Daily? = null,
+    val recommendedPlaylists: List<Playlist> = emptyList(),
+    val forYou: List<Song> = emptyList(),
+    val playlists: List<Playlist> = emptyList(),
+    val recent: QqListeningRankPage? = null,
+    val complete: Boolean = false,
+)
 data class QqLoginChannel(val id: String)
 data class QqLoginCapabilities(
     val configured: Boolean = false,

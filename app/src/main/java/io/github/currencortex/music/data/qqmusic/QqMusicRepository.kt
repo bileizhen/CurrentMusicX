@@ -49,6 +49,10 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
     private var radioPoolId: String = ""
     private var radioSceneId: String = ""
     private val persistenceMutex = Mutex()
+    private var homeSnapshot = QqHomeSnapshot()
+
+    fun cachedHome(): QqHomeSnapshot = synchronized(this) { homeSnapshot }
+    fun cacheHome(snapshot: QqHomeSnapshot) = synchronized(this) { homeSnapshot = snapshot }
 
     init {
         runCatching { tokenStore?.read()?.let { raw -> ApiJson.parseToJsonElement(raw) as? JsonObject } }
@@ -108,6 +112,7 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
         val next = owner()
         if (selectedOwner == next) return
         selectedOwner = next; generation++; qrOwners.clear(); playlistMetadata.clear(); playlistSubscriptions.clear()
+        homeSnapshot = QqHomeSnapshot()
         resetKnownLikes(); likes.value = emptySet()
         val saved = persisted[ownerKey(next)]
         val stored = saved?.text("session")?.takeIf(String::isNotBlank)
