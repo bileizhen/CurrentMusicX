@@ -5,6 +5,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.audio.AudioSink
 import androidx.media3.exoplayer.audio.DefaultAudioSink
+import io.github.currencortex.music.data.settings.AudioOutputMode
 
 @androidx.annotation.OptIn(UnstableApi::class)
 internal class DockRenderersFactory(context: Context, private val meter: DockAudioLevel,
@@ -87,7 +88,9 @@ internal class DockRenderersFactory(context: Context, private val meter: DockAud
                 if (processingSettings().mode.bypassProcessing) settings.copy(enabled = false) else settings
             }, hapticTimeline, adaptiveReport), DockAudioProcessor(meter, probe), OutputSampleRateProcessor(requestedRate = {
                 if (processingSettings().mode.bypassProcessing) 0 else outputSampleRate()
-            }))).build(), outputSettings, outputStatus, diagnostics, primary)
+            }), NeteaseUsbChannelProcessor {
+                outputSettings().mode == AudioOutputMode.NETEASE_USB
+            })).build(), outputSettings, outputStatus, diagnostics, primary)
         return diagnostics?.let { io.github.currencortex.music.core.media.engine.DiagnosticAudioSink(sink, it, primary, formatState) } ?: sink
     }
 }
