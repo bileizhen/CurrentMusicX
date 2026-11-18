@@ -53,6 +53,10 @@ private class ServiceGrant(
     val sub: String,
 ) {
     val scopes get() = scope.orEmpty().split(' ').filter(String::isNotBlank).toSet()
+
+    fun withFallbacks(fallbackScope: String?, fallbackRefresh: String? = null) = ServiceGrant(
+        access, refresh?.takeIf(String::isNotBlank) ?: fallbackRefresh, expiry, scope ?: fallbackScope, sub,
+    )
 }
 
 @Serializable private class ServiceEntry(
@@ -66,7 +70,9 @@ private class ServiceGrant(
 
 @Serializable private class PendingServiceGrant(
     val key: String, val state: String, val verifier: String, val required: Set<String>, val startedAt: Long,
-)
+) {
+    val requestedScope get() = (listOf("openid", "offline_access") + required.sorted()).joinToString(" ")
+}
 
 @Serializable private class ConnectionData(
     val entries: List<ServiceEntry> = emptyList(), val pending: PendingServiceGrant? = null,
@@ -159,7 +165,7 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
         val authorizationUrl = httpsUrl(auth.authorizeUrl, fragment = true)
         fun HttpUrl.Builder.parameters() = addQueryParameter("client_id", auth.clientId)
             .addQueryParameter("response_type", "code").addQueryParameter("redirect_uri", REDIRECT_URI)
-            .addQueryParameter("scope", (listOf("openid", "offline_access") + scopes.sorted()).joinToString(" "))
+            .addQueryParameter("scope", pending.requestedScope)
             .addQueryParameter("state", pending.state).addQueryParameter("code_challenge", challenge)
             .addQueryParameter("code_challenge_method", "S256")
         val result = if (authorizationUrl.fragment != null) {
@@ -197,7 +203,7 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
         val grant = token(auth, buildJsonObject {
             put("grant_type", "authorization_code"); put("client_id", auth.clientId); put("code", code)
             put("redirect_uri", REDIRECT_URI); put("code_verifier", pending.verifier); put("platform", "android")
-        })
+        }).withFallbacks(pending.requestedScope)
         require(grant.scopes.containsAll(pending.required)) { "服务返回的授权范围不足" }
         replace(entry.withGrant(grant, UUID.randomUUID().toString()))
         lastAuthorizedService.value = entry.key
@@ -264,8 +270,7 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
                 put("grant_type", "refresh_token"); put("client_id", auth.clientId); put("refresh_token", refresh)
             })
             require(response.sub == grant.sub) { "刷新后的服务账号已变更" }
-            val refreshToken = response.refresh?.takeIf(String::isNotBlank) ?: refresh
-            val next = ServiceGrant(response.access, refreshToken, response.expiry, response.scope ?: grant.scope, response.sub)
+            val next = response.withFallbacks(grant.scope, refresh)
             replace(entry.withGrant(next))
             if (requiredScope !in next.scopes) throw ApiException(ErrorKind.Unauthorized, userMessage = "该音乐服务权限已撤回")
             next.access
