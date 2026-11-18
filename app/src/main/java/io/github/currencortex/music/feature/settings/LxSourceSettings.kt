@@ -75,7 +75,6 @@ import top.yukonga.miuix.kmp.basic.TextField
             SettingsPreference("移除此音源", modifier = Modifier.testTag("lx_remove"), enabled = !state.busy,
                 onClick = { removal = selected.id })
         }
-        if (!vm.lxSupported()) SettingsHint("当前系统缺少脚本运行环境，请更新 Android System WebView。", error = true)
         state.message?.let { SettingsHint(it) }
     }
     if (urlOpen) LxSourceUrlDialog(onDismiss = { urlOpen = false }, onImport = vm::importLxUrl)

@@ -130,7 +130,11 @@ internal fun lxNormalizeCapabilities(sources: List<LxCapability>): List<LxCapabi
     val summary get() = summary(LxPlatform.NETEASE)
     internal fun qualities(platform: LxPlatform): List<String> = platform.qualities(capabilities)
     internal fun summary(platform: LxPlatform) =
-        (if (qualities(platform).isEmpty()) "未声明${platform.label}接口" else platform.label) +
+        (when {
+            qualities(platform).isNotEmpty() -> platform.label
+            capabilityVersion == 0 -> "待检测"
+            else -> "未声明${platform.label}接口"
+        }) +
         version.takeIf(String::isNotBlank)?.let { " · $it" }.orEmpty()
 }
 @Serializable internal data class LxStoredSource(val info: LxSourceInfo, val script: String,

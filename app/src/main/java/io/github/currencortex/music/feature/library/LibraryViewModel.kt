@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.library.*
+import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.data.song.Song
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -32,6 +33,14 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
     init {
         viewModelScope.launch {
             container.sessionRestored.await()
+            launch {
+                combine(container.musicSettings.state.map { it.musicPlatform }.distinctUntilChanged(),
+                    container.qqMusic.state) { platform, account -> account.takeIf { platform == MusicPlatform.QQ_MUSIC && it.loggedIn } }
+                    .distinctUntilChangedBy { it?.revision }
+                    .collectLatest { account ->
+                        if (account != null) appResult { container.qqMusic.likedSongs() }
+                    }
+            }
             launch { container.accountRepository.sessionRevision.drop(1).collect {
                 playlistLoad?.cancel(); selectedSong.value = null
                 availablePlaylists.value = emptyList(); playlistError.value = null
@@ -460,7 +469,7 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
                     }
                     "daily", "foryou" -> container.libraryRepository.daily(fresh = force).let { previous.copy(title = if (kind == "daily") "每日推荐" else "猜你喜欢", songs = if (kind == "daily") it.songs else it.forYou) }
                     "likes" if qqLikedSongs -> {
-                        val songs = container.qqMusic.likedSongs()
+                        val songs = container.qqMusic.likedSongs(fresh = force)
                         val playlist = io.github.currencortex.music.data.library.Playlist(
                             0L, "我喜欢的音乐", "QQ 音乐收藏的歌曲", "", "qqmusic", 0, songs.size, songs,
                             nativeOwned = true, nativeLiked = true)

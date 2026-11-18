@@ -438,6 +438,11 @@ and contributors, MIT: https://github.com/brix/crypto-js/tree/4.2.0 . Its licens
 included at `legal/CRYPTO-JS-MIT.txt`. The buffer, timer, HTTP, compression and raw
 RSA protocol adapters are CurrentMusic implementations.
 
+The isolated LX service runs scripts with QuickJS 2026-06-04, copyright Fabrice Bellard and
+Charlie Gordon, under the MIT license. See `app/src/main/cpp/quickjs/README.md`
+for the pinned upstream release and checksum. The original MIT notice is bundled
+as `legal/QUICKJS-MIT.txt`.
+
 
 ## Apple Music-like Lyrics native display and TTML annotations
 

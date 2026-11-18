@@ -47,6 +47,10 @@
         </provider>
         <service android:name="androidx.work.impl.foreground.SystemForegroundService"
             android:foregroundServiceType="dataSync" tools:node="merge" />
+        <service android:name=".data.lx.LxQuickJsService"
+            android:exported="false"
+            android:isolatedProcess="true"
+            android:process=":lx_quickjs" />
         <service android:name=".core.media.MusicService" android:exported="true"
             android:foregroundServiceType="mediaPlayback">
             <intent-filter>
