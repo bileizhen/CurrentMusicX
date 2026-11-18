@@ -8,6 +8,7 @@ internal data class NeteaseUsbPcm(val rate: Int, val channels: Int, val encoding
     val frameBytes get() = channels * when (encoding) { 2 -> 2; 21 -> 3; else -> 4 }
     val validBits get() = if (precision != 0) precision else when (encoding) { 2 -> 16; 21 -> 24; else -> 32 }
     val wireFormat get() = if (encoding == 21) copy(encoding = 22, precision = 24) else this
+    val bufferDurationMs get() = if (rate >= 176400) 250 else 100
     fun validate() {
         check(rate in 8000..192000 && channels in 1..2) { "[USB_PCM] 当前网易云驱动适配支持 8–192 kHz 单声道或立体声" }
         check(encoding == 2 || encoding == 21 || encoding == 22) {

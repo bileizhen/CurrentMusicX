@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           package-manager-cache: false
@@ -26,6 +26,8 @@ jobs:
           for script in .github/scripts/*.cjs; do
             node --check "$script"
           done
+      - name: Test automation policies
+        run: node --test .github/scripts/*.test.cjs
       - name: Validate workflow syntax
         uses: docker://rhysd/actionlint:1.7.7
         with:

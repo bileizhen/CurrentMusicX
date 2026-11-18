@@ -61,6 +61,20 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 /** Shared actions for the song sheet and artwork's nested glass menu. */
 @Composable internal fun librarySongMenuItems(vm: LibraryViewModel, song: Song, navigate: (String) -> Unit): List<GlassMenuItem> {
     if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL) return emptyList()
+    if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) return buildList {
+        add(GlassMenuItem("song_like_${song.id}", "喜欢 / 取消喜欢", onClick = { vm.togglePrimaryLike(song) }))
+        add(GlassMenuItem("song_playlist_${song.id}", "加入 QQ 歌单", onClick = { vm.choosePlaylist(song) }))
+        song.qqMusic?.singerMids?.forEachIndexed { index, mid ->
+            add(GlassMenuItem("qq_artist_$mid", "歌手 · ${song.artists.split(" / ").getOrNull(index).orEmpty()}",
+                onClick = { navigate("qq/artist/$mid") }))
+        }
+        song.qqMusic?.albumMid?.takeIf { it.isNotBlank() }?.let { mid ->
+            add(GlassMenuItem("qq_album_$mid", "查看专辑", onClick = { navigate("qq/album/$mid") }))
+        }
+        song.externalIds.qqMusicId?.let { mid ->
+            add(GlassMenuItem("qq_comments_$mid", "QQ 音乐评论", onClick = { navigate("qq/comments/$mid") }))
+        }
+    }
     if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY) {
         return listOf(GlassMenuItem("song_like_${song.id}", "喜欢 / 取消喜欢", onClick = { vm.togglePrimaryLike(song) }),
             GlassMenuItem("song_emby", "打开 Emby 曲库", onClick = { navigate("emby") }))
@@ -86,8 +100,6 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 }
 
 @Composable fun LibraryDialogs(vm: LibraryViewModel) {
-    val likes by vm.likes.state.collectAsStateWithLifecycle()
-    if (likes.song != null) SongLikeSheet(likes, vm.likes::toggle, vm.likes::dismiss)
     val song by vm.selectedSong.collectAsStateWithLifecycle()
     val lists by vm.availablePlaylists.collectAsStateWithLifecycle()
     val playlistError by vm.playlistError.collectAsStateWithLifecycle()
@@ -145,7 +157,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     var delete by rememberSaveable { mutableStateOf(false) }
     var name by rememberSaveable { mutableStateOf("") }
     val editable = vm.editable(state.playlist, account.account?.id ?: 0)
-    LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
+    LaunchedEffect(state.songs) { library.refreshSearchLikes(state.songs) }
     LaunchedEffect(state.refreshError) { state.refreshError?.let { library.container.errorNotices.show("刷新失败，已保留原列表：$it") } }
     // NavDisplay resumes the destination after the transition. Visible rows request their own art.
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
@@ -155,7 +167,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     if (vm.route.startsWith("lib/mv/")) {
         io.github.currencortex.music.feature.mv.MvDetailScreen(state, vm.container, onBack, playMv,
             onArtist = { navigate("lib/artist/$it") }, onRefresh = { vm.reload(force = true) }, onDialogActive = onDialogActive)
-    } else if (vm.route.split('/').getOrNull(1) in setOf("playlist", "ncmplaylist", "album", "likes", "daily", "foryou", "recent")) {
+    } else if (vm.route.split('/').getOrNull(1) in setOf("playlist", "ncmplaylist", "album", "likes", "daily", "foryou", "recent", "cloud")) {
         PlaylistDetailBody(state, vm, library, onBack, navigate, play,
             onRename = { name = state.title; rename = true }, onDelete = { delete = true })
     } else {
@@ -210,9 +222,9 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
         TextField(name, { name = it }, label = "歌单名称", modifier = Modifier.fillMaxWidth().then(Modifier.testTag("rename_input")))
         MusicDialogButton("保存", onClick = { library.action("名称已更新") { vm.rename(name); rename = false } }, enabled = name.isNotBlank() && !busy)
     }
-    val unsubscribe = state.playlist?.let { it.source == "netease" && !it.nativeOwned } == true
+    val unsubscribe = state.playlist?.let { it.source in setOf("netease", "qqmusic") && !it.nativeOwned } == true
     if (delete) MusicDialog(if (unsubscribe) "取消收藏歌单？" else "删除歌单？", onDismiss = { if (!busy) delete = false }) {
-        Text(if (unsubscribe) "歌单将从你的网易云收藏中移除。" else "删除后无法恢复。")
+        Text(if (unsubscribe) "歌单将从你的${if (state.playlist?.source == "qqmusic") "QQ 音乐" else "网易云"}收藏中移除。" else "删除后无法恢复。")
         MusicDialogButton(if (unsubscribe) "确认取消收藏" else "确认删除", onClick = {
             library.action(if (unsubscribe) "已取消收藏歌单" else "歌单已删除") { vm.delete(); delete = false; deleted() }
         }, enabled = !busy)

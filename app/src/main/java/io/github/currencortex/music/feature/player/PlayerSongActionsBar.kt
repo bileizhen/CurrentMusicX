@@ -17,24 +17,28 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
     val actions by vm.actions.collectAsStateWithLifecycle()
     val likePreview by vm.likePreview.collectAsStateWithLifecycle()
     val statuses by vm.libraryStatuses.collectAsStateWithLifecycle()
-    val neteaseMain by vm.usesNeteaseLibrary.collectAsStateWithLifecycle()
+    val platformLikes by vm.usesNeteaseLibrary.collectAsStateWithLifecycle()
     val sleep by vm.sleepTimer.state.collectAsStateWithLifecycle()
     val id = NeteaseSongActionsRepository.songId(queue.current)
     val navidrome = queue.current?.privateLibrary == true
-    val current = actions.takeIf { it.songId == if (navidrome) queue.current?.id else id }
+    val qqMusic = queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC
+    val netease = queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.NETEASE
+    val current = actions.takeIf { it.songId == if (navidrome || qqMusic) queue.current?.id else id }
     PlayerFunctionBar(actionCount = 5, transportAligned = onOptions != null) {
         // Match transport: fixed 48dp end buttons, three equally weighted middle slots.
         val middleSlot = if (onOptions != null) Modifier.weight(1f) else Modifier
         val liked = likePreview?.takeIf { it.song.id == queue.current?.id && it.song.musicSource == queue.current?.musicSource &&
             it.song.privateIdentity == queue.current?.privateIdentity }?.liked
-            ?: if (neteaseMain || navidrome) current?.liked == true else statuses[queue.current?.id]?.liked == true
+            ?: if (platformLikes || navidrome || qqMusic || netease) current?.liked == true else statuses[queue.current?.id]?.liked == true
         PlayerIconButton(PlayerIcon.LIKE, if (liked) "取消喜欢" else "喜欢", vm::togglePrimaryLike,
             Modifier.testTag("player_like"), selected = liked, count = current?.likeCount,
+            countLabel = current?.likeCountLabel,
             showCount = true, enabled = queue.current?.video == false && queue.current?.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL &&
-                (queue.current?.musicSource != io.github.currencortex.music.data.song.MusicSource.EMBY || current?.liked != null), onLongClick = onLike)
+                ((!qqMusic && !netease && queue.current?.musicSource != io.github.currencortex.music.data.song.MusicSource.EMBY) ||
+                    current?.liked != null), onLongClick = onLike)
         Box(middleSlot, contentAlignment = Alignment.Center) {
             PlayerIconButton(PlayerIcon.COMMENT, "评论区", onComments, Modifier.testTag("player_comments"),
-                count = current?.commentCount, showCount = true, enabled = id != null)
+                count = current?.commentCount, showCount = true, enabled = id != null || qqMusic)
         }
         // Lit while a timer is running, so an armed timer is visible without opening the sheet.
         Box(middleSlot, contentAlignment = Alignment.Center) {
@@ -65,7 +69,11 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
         PlaybackMode.HEART -> PlayerIcon.HEART_MODE
         PlaybackMode.LIST -> PlayerIcon.REPEAT
     }, mode.label, vm::cyclePlaybackMode, Modifier.testTag("player_cycle_mode"),
-        selected = mode == PlaybackMode.HEART, enabled = if (together.active) !together.busy else player.mode == PlayerMode.LOCAL)
+        selected = mode == PlaybackMode.HEART, enabled = if (together.active) !together.busy else player.mode == PlayerMode.LOCAL,
+        onLongClick = if (!together.active && player.mode == PlayerMode.LOCAL &&
+            NeteaseSongActionsRepository.songId(queue.current) != null) {
+            { vm.setPlaybackMode(PlaybackMode.HEART) }
+        } else null, onLongClickLabel = "启用心动模式")
 }
 
 @Composable internal fun PlayerQueueButton(vm: PlayerViewModel, onQueue: () -> Unit) {

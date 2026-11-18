@@ -100,7 +100,7 @@ class OriginalSpeakerEffectsController internal constructor(
         if (!current.account.loggedIn || current.account.stale || current.account.userId <= 0) {
             mutableState.value = base.copy(message = "请先登录网易云账号，再核验外放音效权益"); return
         }
-        if (!current.engine) { mutableState.value = base.copy(message = "请先导入网易云原版音效引擎"); return }
+        if (!current.engine) { mutableState.value = base.copy(message = "请先下载网易云原版音效引擎"); return }
         if (!current.environment.speaker) { mutableState.value = base.copy(message = "外放音效仅在手机扬声器播放时启用，当前已暂停处理"); return }
         val selectedScene = scene
         val id = originalSpeakerId(selectedScene, current.environment.landscape, current.environment.volume)

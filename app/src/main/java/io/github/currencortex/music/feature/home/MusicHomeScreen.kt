@@ -24,6 +24,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.core.network.ErrorKind
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.map as mapPlayback
 import java.time.LocalDate
 import androidx.lifecycle.Lifecycle
@@ -34,10 +35,12 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val home by vm.home.collectAsStateWithLifecycle()
     val preferences by vm.container.musicSettings.state.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
     val avatarVersions by vm.container.profileRepository.avatarVersions.collectAsStateWithLifecycle()
     val scales by vm.container.profileRepository.scales.collectAsStateWithLifecycle()
     val nativeAccount by vm.container.neteaseSessions.state.collectAsStateWithLifecycle()
     val direct = vm.container.nativeNetease != null
+    val qqPlatform = preferences.musicPlatform == io.github.currencortex.music.data.settings.MusicPlatform.QQ_MUSIC
     val user = profile?.takeIf { it.id == account.account?.id }
     val avatar = user?.avatar ?: account.account?.avatar ?: nativeAccount.profile?.avatar.orEmpty()
     val decoration = user?.decoration.orEmpty()
@@ -75,7 +78,8 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     SettingsUiScope {
     BoxWithConstraints(Modifier.fillMaxSize()) {
     val artworkCardWidth = (maxWidth.coerceAtMost(840.dp) - 64.dp) / 2.5f
-    SettingsScrollLayout(Modifier.widthIn(max = 840.dp).fillMaxSize().align(Alignment.TopCenter), glassOverContent = false, topBar = {
+    SettingsScrollLayout(Modifier.widthIn(max = 840.dp).fillMaxSize().align(Alignment.TopCenter),
+        glassOverContent = false, topBar = {
         SettingsRootTopBar("Current Music", Modifier.testTag("home_root_toolbar"), titleContent = { HomeBrandTitle() }) {
             HomeProfileAvatar(avatarUrl, (!account.loading || direct) && home.loaded, onProfile,
                 decorationUrl = decorationUrl, decorationScale = scales[decoration] ?: 1.0)
@@ -87,7 +91,12 @@ import androidx.lifecycle.compose.LifecycleEventEffect
         rootMotionItems(skipKeys = setOf("for-you", "recommended-playlists", "playlists")) {
             item(key = "search") { MusicSearchBar(searchQuery, onSearchSubmit,
                 Modifier.testTag("open_home_search").onGloballyPositioned { onSearchBounds(it.boundsInRoot()) }
-                    .graphicsLayer { alpha = if (hideSearch) 0f else 1f }, onActivate = onSearch, inputTag = "home_search_field") }
+                    .graphicsLayer { alpha = if (hideSearch) 0f else 1f }, onActivate = onSearch, inputTag = "home_search_field",
+                leadingContent = {
+                    MusicPlatformSwitcher(preferences.musicPlatform, { platform ->
+                        scope.launch { vm.container.musicSettings.setMusicPlatform(platform) }
+                    }, enabled = !hideSearch)
+                }) }
             if (!home.loading && homeLoadFailed) item(key = "retry") {
                 MusicTextAction("部分内容加载失败，重新加载", vm::refresh, Modifier.testTag("home_retry"))
             }
@@ -104,7 +113,9 @@ import androidx.lifecycle.compose.LifecycleEventEffect
                     }, onOpen = { navigate("lib/daily") }, onRetry = vm::refresh,
                     onConnect = { navigate("user/binding") }, dateLabel = "${today.monthValue}月${today.dayOfMonth}日", room = request)
             }
-            item(key = "personal-roaming") { HomePersonalRoamingEntry { navigate("lib/roaming") } }
+            item(key = "personal-roaming") {
+                HomePersonalRoamingEntry({ navigate(if (qqPlatform) "qq/roaming" else "lib/roaming") }, qqMusic = qqPlatform)
+            }
             item(key = "shortcuts") { HomeLibraryShortcuts(navigate, request != null) }
             if (!direct && !account.loading && account.account == null) item(key = "login") {
                 MusicTextAction("登录后查看推荐与音乐库 ›", { navigate("user/login") })
@@ -203,17 +214,18 @@ import androidx.lifecycle.compose.LifecycleEventEffect
     sharingSong?.let { song -> io.github.currencortex.music.feature.share.SongShareDialog(song) { sharingSong = null } }
 }
 
-@Composable private fun HomeSectionHeader(title: String, action: String, onClick: () -> Unit) {
+@Composable internal fun HomeSectionHeader(title: String, action: String, onClick: () -> Unit) {
     SettingsListHeader(title) {
         GlassActionButton(action, onClick, fillWidth = false, minHeight = 36.dp)
     }
 }
 
-@Composable private fun HomePersonalRoamingEntry(onOpen: () -> Unit) {
+@Composable internal fun HomePersonalRoamingEntry(onOpen: () -> Unit, qqMusic: Boolean = false) {
     SettingsGroup {
-        SettingsPreference("私人漫游", "按你的喜好，连续听点好音乐",
+        SettingsPreference(if (qqMusic) "猜你喜欢" else "私人漫游",
+            if (qqMusic) "推荐歌曲" else "按你的喜好，连续听点好音乐",
             Modifier.testTag("open_personal_roaming"), onClick = onOpen,
             leading = { Icon(MusicIcons.Headphones, null, Modifier.size(24.dp), tint = MiuixTheme.colorScheme.primary) },
-            trailing = { MusicTransportButton("打开私人漫游", onOpen) })
+            trailing = { MusicTransportButton(if (qqMusic) "播放推荐歌曲" else "打开私人漫游", onOpen) })
     }
 }

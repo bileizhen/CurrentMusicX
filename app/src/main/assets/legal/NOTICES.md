@@ -36,6 +36,7 @@ This template uses the following libraries at runtime:
   The theme-attribute tint is removed so Compose can apply the player's animated tint.
 - Coil (including animated image decoders) by Coil contributors, Apache-2.0: https://github.com/coil-kt/coil.
 - ZXing QR encoder by ZXing authors, Apache-2.0: https://github.com/zxing/zxing. Copyright 2008 ZXing authors. Used for native login QR generation; the Apache-2.0 license is available offline with the notices.
+- Eclipse Paho MQTT v5 Java client 1.2.5 by the Eclipse Paho contributors, Eclipse Public License 2.0 or Eclipse Distribution License 1.0; used only to receive the QQ Music QR-login MQTT handoff. Source and license details: https://github.com/eclipse-paho/paho.mqtt.java.
 
 ## Floating Bottom Bar and Liquid Glass
 
@@ -262,15 +263,15 @@ in the offline notices as MPL-2.0.txt. Rhino source is available at the link abo
 
 ## NetEase sound-effect interoperability resources
 
-The native sound-effect page uses NetEase Music 9.5.30 reference artwork and
+The optional sound-effect page uses NetEase Music 9.5.30 reference artwork and
 local audio-parameter algorithms. NetEase retains the rights to its resources.
-Artwork source URLs and hashes are recorded in the bundled
-netease-effects-ui/resource-manifest.json; the two local parameter codecs are
-hash-verified before execution. These resources do not imply endorsement.
-The release bundles the version-bound arm64 NetEase 9.5.30 audio engine and
-MNN dependencies; their SHA-256 hashes are listed in the bundled
-original-effects/engine-manifest.json. No user account data is bundled.
-Member functions require the current account's actual entitlement.
+Artwork source URLs and hashes are recorded in the downloaded package's
+resource-manifest.json; the two local parameter codecs are hash-verified before
+execution. These resources do not imply endorsement. The optional package
+contains the version-bound arm64 NetEase 9.5.30 audio engine, MNN dependencies,
+and interface artwork; their SHA-256 hashes are pinned by the application. No
+user account data is bundled. Member functions require the current account's
+actual entitlement.
 
 
 ## Folia Monet lyric motion and transport fade (Android port)
@@ -323,10 +324,13 @@ song lyrics or audio are bundled with this port.
 
 ## QQ Music and Qishui public lyric matching
 
-`QqLyricsMatchSource.kt` uses QQ Music's public web catalogue and LRC endpoints.
-It retains real line timing and optional auxiliary lyric tracks; no encrypted QRC
-or estimated word timing is claimed. Its integration follows the Folia source
-registry credited above, with the public web endpoint adaptation implemented in Kotlin.
+`QqLyricsMatchSource.kt` uses QQ Music's public web catalogue, QRC and LRC endpoints.
+QRC is the source of real word timing; public LRC remains a fallback when QRC is absent
+or unavailable. `QqQrcDecoder.kt` adapts the QRC container decoder from
+[QQMusicDecoder](https://github.com/WXRIW/QQMusicDecoder/tree/0e1494194523dd885405812a91ee9b9702bfb30c),
+copyright (c) 2023 WXRIW, MIT. The original MIT notice is provided offline in
+`legal/QQMUSICDECODER-MIT.txt`. Its integration follows the Folia source registry
+credited above, with the public web endpoint adaptation implemented in Kotlin.
 
 `QishuiLyricsMatchSource.kt` adapts the anonymous client-token, public search and
 lyric-metadata portions of [qishui-music-api 0.2.2](https://github.com/GSQZ/qishui-music-api/tree/924add376cadf8a2268f11999051eb976e3b8e0d),
@@ -433,6 +437,11 @@ not the application's accounts, cookies or filesystem.
 and contributors, MIT: https://github.com/brix/crypto-js/tree/4.2.0 . Its license is
 included at `legal/CRYPTO-JS-MIT.txt`. The buffer, timer, HTTP, compression and raw
 RSA protocol adapters are CurrentMusic implementations.
+
+The isolated LX service runs scripts with QuickJS 2026-06-04, copyright Fabrice Bellard and
+Charlie Gordon, under the MIT license. See `app/src/main/cpp/quickjs/README.md`
+for the pinned upstream release and checksum. The original MIT notice is bundled
+as `legal/QUICKJS-MIT.txt`.
 
 
 ## Apple Music-like Lyrics native display and TTML annotations

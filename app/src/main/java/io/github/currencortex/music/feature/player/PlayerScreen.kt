@@ -64,6 +64,10 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val state by vm.state.collectAsStateWithLifecycle()
     val queue by vm.queue.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
+    val isQq = queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC
+    val requestedQuality = if (isQq) settings.qqQuality else settings.quality
+    val displayedQuality = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty()
+        else state.audioInfo?.label ?: requestedQuality.qualityLabel(isQq)
     val appearance by vm.container.settings.state.collectAsStateWithLifecycle()
     val backgroundImage = remember(appearance.playerBackground) { vm.container.playerBackgrounds.file(appearance.playerBackground) }
     val songActions by vm.actions.collectAsStateWithLifecycle()
@@ -72,7 +76,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val sleepState by vm.sleepTimer.state.collectAsStateWithLifecycle()
     val together by vm.together.state.collectAsStateWithLifecycle()
     val sharedQueue by vm.together.queue.collectAsStateWithLifecycle()
-    val roaming by vm.container.personalRoaming.state.collectAsStateWithLifecycle()
+    val roaming by vm.container.activePersonalRoaming.state.collectAsStateWithLifecycle()
     val playbackMode = if (together.active) sharedQueue.mode else queue.mode
     val context = LocalContext.current
     // The timer can expire while the sheet is closed; report it once, on the next composition.
@@ -196,7 +200,14 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             !(roaming.active && roaming.choice.code == "PUZZLE_MODE_RCMD") &&
             (widePlayer || pager.currentPage == 0) && !pager.isScrollInProgress &&
             queueMotion.progress == 0f && overlay == PlayerOverlay.NONE && !sidePage.active)
-        SideEffect { pagerArtwork.immersive = immersiveCover && !widePlayer; pagerArtwork.updateBounds() }
+        val squareCover = appearance.playerCoverStyle == io.github.currencortex.music.data.settings.PlayerCoverStyle.SQUARE
+        val artworkTransition = LocalPlayerArtworkTransition.current
+        SideEffect {
+            pagerArtwork.square = squareCover
+            artworkTransition?.squareArtwork = squareCover
+            pagerArtwork.immersive = immersiveCover && !widePlayer
+            pagerArtwork.updateBounds()
+        }
         PlayerSystemBars(immersive = widePlayer)
         val density = LocalDensity.current
         val layoutDirection = LocalLayoutDirection.current
@@ -250,7 +261,9 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
         }
         val openQueue: () -> Unit = { scope.launch { queueMotion.animation.snapTo(0f); overlay = PlayerOverlay.QUEUE } }
         val functions: @Composable () -> Unit = {
-            PlayerSongActionsBar(vm, { overlay = PlayerOverlay.COMMENTS }, openQueue,
+            PlayerSongActionsBar(vm, {
+                overlay = PlayerOverlay.COMMENTS
+            }, openQueue,
                 { overlay = PlayerOverlay.SLEEP }, onLike, onEffects = onEqualizer,
                 onOptions = if (widePlayer) null else ({ overlay = PlayerOverlay.OPTIONS }))
         }
@@ -258,7 +271,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             Row(Modifier.fillMaxWidth().height(if (widePlayer) 48.dp else 52.dp), verticalAlignment = Alignment.CenterVertically) {
                 PlayerIconButton(PlayerIcon.COLLAPSE, "收起播放器", onBack, Modifier.testTag("navigate_back"))
                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                    if (roaming.active) Text("私人漫游 · ${roaming.choice.title}",
+                    if (roaming.active) Text(if (state.song?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
+                        "猜你喜欢 · ${roaming.choice.title}" else "私人漫游 · ${roaming.choice.title}",
                         Modifier.testTag("open_roaming_modes")
                             .clickable(role = Role.Button) { overlay = PlayerOverlay.ROAMING }
                             .padding(horizontal = 8.dp, vertical = 14.dp), color = Color.White.copy(alpha = .65f),
@@ -276,7 +290,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             excludedArea = { controlsCoordinates }, side = {
                 MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
                     if (sidePage.direction > 0f) PlayerListeningPage(vm.container, onPlay = sidePage::close,
-                        onBinding = { sidePage.close(); onAiNavigate("user/binding") },
+                        onBinding = { sidePage.close(); onAiNavigate(if (vm.container.activePersonalRoamingIsQq) "qq/account" else "user/binding") },
                         onListening = { sidePage.close(); onAiNavigate("user/listening") },
                         onDialogActive = { sideDialog = it })
                     else PlayerSidePageContent(queue.current, songNavigation,
@@ -401,7 +415,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         PlayerControlsRegion(controlsVisibility) { functions() }
                         PlayerControlsRegion(controlsVisibility, Modifier.testTag("player_transport_transition")) {
                             PlayerTransport(vm, onToggle, quality = {
-                                Text(if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else state.audioInfo?.label ?: settings.quality.label,
+                                Text(displayedQuality,
                                     Modifier.testTag("open_quality_sheet")
                                         .clickable(enabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true, role = Role.Button) {
                                             overlay = PlayerOverlay.QUALITY
@@ -442,10 +456,14 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlayerOverlay.SHARE -> queue.current?.let { io.github.currencortex.music.feature.share.SongShareDialog(it, dismiss) }
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) },
                 commentComposer, vm::onCommentEdited, vm::replyTo, vm::sendComment,
-                vm::selectCommentSort, vm::loadCommentReplies, vm::likeComment, vm::deleteComment)
+                vm::selectCommentSort, vm::loadCommentReplies, vm::likeComment, vm::deleteComment,
+                title = if (queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
+                    "QQ 音乐评论" else "网易云评论",
+                fallbackUser = if (queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
+                    "QQ 音乐用户" else "网易云用户")
             PlayerOverlay.QUEUE -> Unit
             PlayerOverlay.ROAMING -> io.github.currencortex.music.feature.roaming.PersonalRoamingDialog(vm.container, dismiss) {
-                onAiNavigate("user/binding")
+                onAiNavigate(if (vm.container.activePersonalRoamingIsQq) "qq/account" else "user/binding")
             }
             PlayerOverlay.MODE -> MusicChoiceDialog("播放模式", dismiss) {
                 PlaybackMode.entries.filter { !together.active || it != PlaybackMode.HEART }.forEach { mode -> MusicDialogChoiceRow(mode.label, mode == playbackMode,
@@ -454,10 +472,11 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         io.github.currencortex.music.data.song.NeteaseSongActionsRepository.songId(queue.current) != null),
                     modifier = Modifier.testTag("playback_mode_${mode.name}").semantics { selected = mode == playbackMode }) }
             }
-            PlayerOverlay.QUALITY -> AudioQualitySheet(settings.quality, vm::quality, dismiss, state.mode == PlayerMode.LOCAL,
+            PlayerOverlay.QUALITY -> AudioQualitySheet(requestedQuality, vm::quality, dismiss, state.mode == PlayerMode.LOCAL,
                 onNetwork = onNetwork, song = queue.current, insights = vm.container.musicRepository.insights,
                 audioInfo = state.audioInfo, onRefresh = if (state.mode == PlayerMode.LOCAL && state.song?.musicSource == io.github.currencortex.music.data.song.MusicSource.NETEASE && !state.resolving)
-                    ({ vm.container.playerController.refreshSource() }) else null)
+                    ({ vm.container.playerController.refreshSource() }) else null, container = vm.container,
+                onEffects = if (onEqualizer != null) ({ dismiss(); onEqualizer() }) else null)
             PlayerOverlay.ACTIONS -> if (queue.current != null) MusicChoiceDialog("歌曲操作", dismiss) { actions?.invoke(queue.current!!) }
             PlayerOverlay.OPTIONS -> MusicChoiceDialog("播放与歌词", dismiss) {
                 Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
@@ -480,12 +499,13 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                     if (menuHost == null) overlay = PlayerOverlay.ACTIONS
                     else { dismiss(); menuHost(SongMenu(song, {}, {}, {}, extra = { actions(song) }, transport = false)) }
                 })
-                MusicDestinationRow("播放音质", summary = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty() else state.audioInfo?.label ?: settings.quality.label, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true)
+                MusicDestinationRow("播放音质", summary = displayedQuality, onClick = { overlay = PlayerOverlay.QUALITY }, enabled = state.mode == PlayerMode.LOCAL && state.song?.privateLibrary != true)
                 MusicDestinationRow("播放背景", summary = if (backgroundImage != null) "自定义图片 · 模糊 ${appearance.playerBackgroundBlur.toInt()}%"
                     else if (appearance.playerDynamicBackground) "流动背景 · 跟随歌曲封面"
                     else "封面毛玻璃 · 模糊 ${appearance.playerBackgroundBlur.toInt()}%",
                     modifier = Modifier.testTag("open_player_background"), onClick = { overlay = PlayerOverlay.BACKGROUND })
-                MusicDestinationRow("私人漫游", summary = if (roaming.active) roaming.choice.title else "按你的喜好连续推荐",
+                MusicDestinationRow(if (queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) "猜你喜欢" else "私人漫游",
+                    summary = if (roaming.active) roaming.choice.title else "推荐歌曲",
                     modifier = Modifier.testTag("open_player_roaming"), onClick = { overlay = PlayerOverlay.ROAMING })
                 if (onEqualizer != null) MusicDestinationRow("音效", onClick = { dismiss(); onEqualizer() },
                     modifier = Modifier.testTag("open_player_equalizer"))
@@ -497,7 +517,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 if (queue.current != null && queue.current?.video != true)
                     MusicDestinationRow("歌词管理", summary = "来源 · 在线匹配 · 单曲偏移 · 导入导出",
                         modifier = Modifier.testTag("open_lyrics_management"), onClick = { overlay = PlayerOverlay.LYRICS_MANAGEMENT })
-                if (onRoom != null && state.song?.privateLibrary != true) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
+                if (onRoom != null && state.song?.privateLibrary != true && state.song?.musicSource != io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) MusicDestinationRow(if (state.mode == PlayerMode.ROOM) "房间控制" else "一起听", onClick = { dismiss(); onRoom() })
                 }
             }
             PlayerOverlay.AI -> PlayerAiDialog(vm.ai, dismiss) { card ->
@@ -545,7 +565,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     onPreviewCoordinates: (LayoutCoordinates) -> Unit = {}) {
     val queue by vm.queue.collectAsStateWithLifecycle()
     val song = queue.current
-    val roaming by vm.container.personalRoaming.state.collectAsStateWithLifecycle()
+    val roaming by vm.container.activePersonalRoaming.state.collectAsStateWithLifecycle()
     BoxWithConstraints(modifier.fillMaxWidth()) {
         val coverSize = minOf(maxWidth * .92f, (maxHeight - if (showPreview) 200.dp else 128.dp).coerceAtLeast(72.dp), 360.dp)
         Column(Modifier.fillMaxSize().then(if (immersive) Modifier else Modifier.verticalScroll(rememberScrollState())).padding(vertical = 16.dp),
@@ -575,7 +595,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
 /** Artwork stays at the center of its pane while controls and lyrics slide beside it. */
 @Composable private fun WideCoverContent(vm: PlayerViewModel, modifier: Modifier, immersive: Boolean) {
     val queue by vm.queue.collectAsStateWithLifecycle()
-    val roaming by vm.container.personalRoaming.state.collectAsStateWithLifecycle()
+    val roaming by vm.container.activePersonalRoaming.state.collectAsStateWithLifecycle()
     BoxWithConstraints(modifier.fillMaxWidth().testTag("player_wide_cover_content")) {
         val coverSize = minOf(maxWidth * .96f, (maxHeight - 8.dp).coerceAtLeast(0.dp), 360.dp)
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

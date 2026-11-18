@@ -17,7 +17,10 @@ internal data class SongShareContent(val title: String, val artists: String, val
                 (song.externalIds.neteaseId?.toLongOrNull() ?: song.id).takeIf { it > 0 } else null
             return SongShareContent(clean(song.name).ifBlank { "未命名歌曲" },
                 clean(song.artists).ifBlank { "未知歌手" },
-                id?.let { "https://music.20110208.xyz/app/#/song/$it" })
+                if (!song.video && song.musicSource == MusicSource.QQ_MUSIC)
+                    song.externalIds.qqMusicId?.takeIf { it.matches(Regex("[A-Za-z0-9]+")) }
+                        ?.let { "https://y.qq.com/n/ryqq/songDetail/$it" }
+                else id?.let { "https://music.20110208.xyz/app/#/song/$it" })
         }
     }
 }

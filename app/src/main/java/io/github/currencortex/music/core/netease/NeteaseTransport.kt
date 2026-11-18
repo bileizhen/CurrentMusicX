@@ -119,6 +119,9 @@ class NeteaseTransport(val sessions: NeteaseSessionStore, private val endpoints:
                 ApiJson.parseToJsonElement(plain.toString(Charsets.UTF_8)) as? JsonObject ?: throw ApiException(ErrorKind.Parse)
             } catch (failure: ApiException) { throw failure
             } catch (_: Exception) { throw ApiException(ErrorKind.Parse) }
+            val businessCode = (raw["code"] as? JsonPrimitive)?.intOrNull
+            if (businessCode != null && businessCode != 200)
+                log("NetEase $path business code $businessCode (HTTP ${response.code})")
             val changed = response.headers.values("Set-Cookie").mapNotNull { value -> Cookie.parse(url, value) }
                 .filter { cookie -> cookie.expiresAt > System.currentTimeMillis() }.associate { cookie -> cookie.name to cookie.value }
             currentCoroutineContext().ensureActive()

@@ -1,0 +1,36 @@
+{
+  "engineVersion": "NetEase 9.5.30",
+  "abi": "arm64-v8a",
+  "download": "optional",
+  "packagedRuntime": {
+    "name": "libc++_shared.so",
+    "sha256": "3e6d529147ffd66bd31fab85c8902b526abd1c06e43554ce64b97519e255e4b3"
+  },
+  "files": [
+    {
+      "name": "libneaudioeffects.so",
+      "size": 1446928,
+      "sha256": "3f8e2eec659080cb8e90bbfc672d327a180e4e0b6c051818e38625c5f01fcbd1"
+    },
+    {
+      "name": "libMNN.so",
+      "size": 2167032,
+      "sha256": "be7ad29454cfeecfb30399e32c3f600f963e69c7dd914f0001021fc78435249d"
+    },
+    {
+      "name": "libMNN_Express.so",
+      "size": 743640,
+      "sha256": "e095c40a22d3dbb83894c74b3735db857e5137079109cab25797864921d4de57"
+    },
+    {
+      "name": "libCore_MNN_JNI.so",
+      "size": 51232,
+      "sha256": "fec5363885343072c9aaf395a8560b217def8600404fa2ab9c940509215e0bef"
+    },
+    {
+      "name": "smartae.ncae",
+      "size": 473,
+      "sha256": "b4b927b0d494e9e726a7eac3ed0a81777eea3c0543a203879c6bf3898ec20e78"
+    }
+  ]
+}

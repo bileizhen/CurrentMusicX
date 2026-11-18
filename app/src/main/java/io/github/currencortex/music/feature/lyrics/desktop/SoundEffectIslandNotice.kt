@@ -1,6 +1,8 @@
 package io.github.currencortex.music.feature.lyrics.desktop
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.animateColorAsState
@@ -53,6 +55,9 @@ import androidx.compose.ui.semantics.text
 import io.github.currencortex.music.feature.lyrics.ui.currentLyricsFontFamily
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.constrainWidth
+import io.github.currencortex.music.feature.settings.NativeEffectsAssets
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -130,38 +135,57 @@ private fun soundEffectPhaseLabel(phase: SoundEffectNoticePhase) = when (phase) 
     SoundEffectNoticePhase.WAITING -> "待生效"; SoundEffectNoticePhase.FAILED -> "未启用"
 }
 
-/** The two master wordmarks are the exact local artwork used by their main cards. */
+/** Wordmarks use the optional package when present; text remains the offline fallback. */
 @Composable private fun SoundEffectIslandTitle(name: String, accent: Color, font: Float, modifier: Modifier) {
     val asset = when (name) {
         "AI 调音大师" -> "ai_model_title_icon_url.png"
         "AI 情绪调音师" -> "emotion_title_icon_dark_url.png"
         else -> null
     }
-    if (asset == null) BasicText(name, modifier.testTag("sound_effect_island_title"),
+    val context = LocalContext.current
+    val bitmap by produceState<Bitmap?>(null, context, asset) {
+        value = asset?.let { name -> withContext(Dispatchers.IO) {
+            readEffectsBitmap(context, name)
+        } }
+    }
+    if (bitmap == null) BasicText(name, modifier.testTag("sound_effect_island_title"),
         style = TextStyle(fontFamily = currentLyricsFontFamily(), color = accent, fontSize = font.sp,
             lineHeight = (font * 1.2f).sp, fontWeight = FontWeight.Medium),
         maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
     else {
-        val assets = LocalContext.current.assets
-        val bitmap = remember(assets, asset) {
-            assets.open("netease-effects-ui/assets/$asset").use { BitmapFactory.decodeStream(it) }.asImageBitmap()
-        }
+        val loaded = bitmap!!
         val titleHeight = with(LocalDensity.current) { (font * 1.2f).sp.toDp() }
-        Image(BitmapPainter(bitmap), null, modifier.height(titleHeight)
-            .width(titleHeight * bitmap.width / bitmap.height)
+        Image(BitmapPainter(loaded.asImageBitmap()), null, modifier.height(titleHeight)
+            .width(titleHeight * loaded.width / loaded.height)
             .testTag("sound_effect_island_wordmark").semantics { text = AnnotatedString(name) })
     }
 }
 
-/** Crop only the disc from the same local artwork used by the native membership badges. */
+/** Crop the optional package badge; text remains the offline fallback. */
 @Composable private fun SoundEffectMembershipDisc(tier: SoundEffectNoticeTier, modifier: Modifier) {
-    val assets = LocalContext.current.assets
-    val painter = remember(assets, tier) {
-        val name = if (tier == SoundEffectNoticeTier.SVIP) "svip_icon_url.png" else "vip_icon_url.png"
-        val bitmap = assets.open("netease-effects-ui/assets/$name").use { BitmapFactory.decodeStream(it) }.asImageBitmap()
-        BitmapPainter(bitmap, srcSize = IntSize(bitmap.height, bitmap.height))
+    val context = LocalContext.current
+    val bitmap by produceState<Bitmap?>(null, context, tier) {
+        value = withContext(Dispatchers.IO) {
+            val name = if (tier == SoundEffectNoticeTier.SVIP) "svip_icon_url.png" else "vip_icon_url.png"
+            readEffectsBitmap(context, name)
+        }
     }
+    if (bitmap == null) {
+        BasicText(if (tier == SoundEffectNoticeTier.SVIP) "SVIP" else "VIP", modifier.testTag("sound_effect_island_membership"),
+            style = TextStyle(color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold),
+            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        return
+    }
+    val loaded = bitmap!!
+    val painter = remember(loaded) { BitmapPainter(loaded.asImageBitmap(), srcSize = IntSize(loaded.height, loaded.height)) }
     Image(painter, "${tier.name} 唱片", modifier.clip(CircleShape))
+}
+
+private fun readEffectsBitmap(context: android.content.Context, name: String): Bitmap? {
+    val uri = NativeEffectsAssets.image(context, NativeEffectsAssets.local(name)) ?: return null
+    return try {
+        context.contentResolver.openInputStream(Uri.parse(uri))?.use { BitmapFactory.decodeStream(it) }
+    } catch (_: java.io.IOException) { null }
 }
 
 private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
@@ -177,7 +201,8 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
  */
 @Composable internal fun DesktopIslandEffectTransition(notice: SoundEffectNotice?, modifier: Modifier = Modifier,
     effectHeight: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE,
-    onUpdateInstall: () -> Unit = {}, normal: @Composable () -> Unit) {
+    onUpdateInstall: () -> Unit = {}, collapseProgress: androidx.compose.runtime.State<Float> = remember { mutableFloatStateOf(0f) },
+    normal: @Composable () -> Unit) {
     val motion = rememberDesktopMotion()
     var retained by remember { mutableStateOf(notice) }
     SideEffect { if (notice != null) retained = notice }
@@ -189,7 +214,7 @@ private fun soundEffectNoticeAccent(notice: SoundEffectNotice?) = when {
     val retainedReady = (notice ?: retained)?.phase == SoundEffectNoticePhase.READY
     val intensity = animateFloatAsState(if (ready) 1f else 0f, tween(if (motion) 400 else 0), label = "island material strength")
     val shape = RoundedCornerShape(50)
-    Layout(modifier = modifier.shadow(2.dp, shape, clip = false)
+    Layout(modifier = modifier.shadow((2.dp * (1f - collapseProgress.value)), shape, clip = false)
         .drawWithCache {
             val base = Brush.verticalGradient(listOf(Color(0xFF11141B), Color(0xFF080B10)))
             val neutralBorder = Brush.verticalGradient(listOf(Color.White.copy(alpha = .16f), Color.White.copy(alpha = .035f)))

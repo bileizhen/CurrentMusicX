@@ -2,11 +2,7 @@ package io.github.currencortex.music.data.lx
 
 import android.content.Context
 import android.os.SystemClock
-import androidx.javascriptengine.IsolateStartupParameters
-import androidx.javascriptengine.JavaScriptIsolate
-import androidx.javascriptengine.JavaScriptSandbox
 import kotlinx.coroutines.*
-import kotlinx.coroutines.guava.await
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.*
@@ -15,24 +11,24 @@ import java.util.Base64
 import java.util.zip.DeflaterOutputStream
 import java.util.zip.InflaterInputStream
 
-/** Modern JS, without a WebView, Java bridge, filesystem, account storage or application process heap. */
+/** Runs the LX bridge and source in the isolated QuickJS service. */
 class LxRuntime(context: Context, private val http: LxHttpClient = LxHttpClient()) : java.io.Closeable {
     private val app = context.applicationContext
     private val lock = Mutex()
-    @Volatile private var sandbox: JavaScriptSandbox? = null
-    @Volatile private var isolate: JavaScriptIsolate? = null
+    private val connectionLock = Any()
+    private var sandbox: LxQuickJsSandbox? = null
+    private var closed = false
     private var activeId = ""
     private var initialized: JsonObject? = null
     // Test diagnostics only. Never connected to UI or persistent logs: scripts can include private keys in errors.
     internal var failureObserver: ((String) -> Unit)? = null
     private val crypto by lazy { app.assets.open("lx/crypto-js.js").bufferedReader().use { it.readText() } }
     private val host by lazy { app.assets.open("lx/host.js").bufferedReader().use { it.readText() } }
-    fun supported() = JavaScriptSandbox.isSupported()
     suspend fun inspect(info: LxSourceInfo, script: String): List<LxCapability> = lock.withLock {
         try { ensure(info, script); lxCapabilities(requireNotNull(initialized)) }
-        catch (_: TimeoutCancellationException) { close(); currentCoroutineContext().ensureActive(); throw LxSourceException("落雪音源初始化超时，请重试或更换音源") }
-        catch (cancelled: CancellationException) { close(); throw cancelled }
-        catch (failure: Exception) { close(); throw readable(failure) }
+        catch (_: TimeoutCancellationException) { reset(); currentCoroutineContext().ensureActive(); throw LxSourceException("落雪音源初始化超时，请重试或更换音源") }
+        catch (cancelled: CancellationException) { reset(); throw cancelled }
+        catch (failure: Exception) { reset(); throw readable(failure) }
     }
     suspend fun resolve(info: LxSourceInfo, script: String, data: JsonObject): String = lock.withLock {
         try {
@@ -47,25 +43,21 @@ class LxRuntime(context: Context, private val http: LxHttpClient = LxHttpClient(
             val value = answer["value"] as? JsonPrimitive
             if (value?.isString != true || value.content.length > 8192) throw LxSourceException("音源没有返回有效的播放链接")
             http.url(value.content).toString()
-        } catch (_: TimeoutCancellationException) { close(); currentCoroutineContext().ensureActive(); throw LxSourceException("落雪音源解析超时，请重试或更换音源") }
-        catch (cancelled: CancellationException) { close(); throw cancelled }
-        catch (failure: Exception) { close(); throw readable(failure) }
+        } catch (_: TimeoutCancellationException) { reset(); currentCoroutineContext().ensureActive(); throw LxSourceException("落雪音源解析超时，请重试或更换音源") }
+        catch (cancelled: CancellationException) { reset(); throw cancelled }
+        catch (failure: Exception) { reset(); throw readable(failure) }
     }
     private suspend fun ensure(info: LxSourceInfo, script: String) {
-        if (activeId == info.id && isolate != null && initialized != null) return
-        close()
-        if (!supported()) throw LxSourceException("当前系统不支持落雪音源运行环境，请更新 Android System WebView 后重试")
-        val engine = withTimeout(10000) { JavaScriptSandbox.createConnectedInstanceAsync(app).await() }
-        sandbox = engine
-        if (!engine.isFeatureSupported(JavaScriptSandbox.JS_FEATURE_ISOLATE_MAX_HEAP_SIZE) ||
-            !engine.isFeatureSupported(JavaScriptSandbox.JS_FEATURE_ISOLATE_TERMINATION) ||
-            !engine.isFeatureSupported(JavaScriptSandbox.JS_FEATURE_PROMISE_RETURN)) {
-            throw LxSourceException("当前 WebView 缺少脚本隔离能力，请更新 Android System WebView")
+        if (activeId == info.id && initialized != null) return
+        reset()
+        val engine = withTimeout(10_000) { LxQuickJsSandbox.connect(app) }
+        synchronized(connectionLock) {
+            if (closed) {
+                engine.close()
+                throw CancellationException("LX runtime closed")
+            }
+            sandbox = engine
         }
-        if (!engine.isFeatureSupported(JavaScriptSandbox.JS_FEATURE_EVALUATE_WITHOUT_TRANSACTION_LIMIT) && script.length > 100000)
-            throw LxSourceException("当前 WebView 不支持较大的音源脚本，请更新后重试")
-        val parameters = IsolateStartupParameters().apply { setMaxHeapSizeBytes(64L * 1024 * 1024) }
-        isolate = engine.createIsolate(parameters)
         evaluate(crypto)
         evaluate(host)
         val metadata = buildJsonObject {
@@ -81,8 +73,14 @@ class LxRuntime(context: Context, private val http: LxHttpClient = LxHttpClient(
         lxCapabilities(requireNotNull(initialized))
         activeId = info.id
     }
-    private suspend fun evaluate(code: String): String = withTimeout(2500) {
-        requireNotNull(isolate).evaluateJavaScriptAsync(code).await()
+    /** 与 inspect/resolve 共用一把锁关闭，避免关闭过程中其它协程仍在求值。 */
+    suspend fun closeSafely() = lock.withLock { reset() }
+
+    private suspend fun evaluate(code: String): String = withTimeout(3_000) {
+        val engine = synchronized(connectionLock) {
+            sandbox ?: throw CancellationException("LX sandbox closed")
+        }
+        engine.evaluate(code)
     }
     private suspend fun pump(forInitialization: Boolean): JsonObject = withTimeout(25000) {
         coroutineScope {
@@ -124,8 +122,12 @@ class LxRuntime(context: Context, private val http: LxHttpClient = LxHttpClient(
                     }
                     val complete = pending.filterValues { it.isCompleted }.keys.toList()
                     if (complete.isNotEmpty()) {
-                        val replies = JsonArray(complete.map { pending.remove(it)!!.await() })
-                        evaluate("__cm_lx.reply($replies); 'ok'")
+                        // Each response is bounded by the HTTP bridge. Keep concurrent responses
+                        // from accumulating into one oversized sandbox message.
+                        for (id in complete) {
+                            val reply = requireNotNull(pending.remove(id)).await()
+                            evaluate("__cm_lx.reply([$reply]); 'ok'")
+                        }
                     } else if (forInitialization && done != null && pending.isEmpty()) {
                         return@coroutineScope done
                     } else delay(15)
@@ -144,14 +146,17 @@ class LxRuntime(context: Context, private val http: LxHttpClient = LxHttpClient(
         return Base64.getEncoder().encodeToString(output)
     }
     private fun readable(failure: Exception): LxSourceException = if (failure is LxSourceException) failure
-        else LxSourceException("落雪音源执行失败或超出运行限制，请重试或更换音源")
-    override fun close() {
-        val engine = sandbox; val instance = isolate
-        sandbox = null; isolate = null
+        else LxSourceException("落雪音源执行失败或超出运行限制（${failure.javaClass.simpleName}），请重试或更换音源")
+    private fun reset() {
         activeId = ""; initialized = null
-        // Unbinding the service terminates the whole process before local isolate cleanup.
-        // This also covers an evaluation that never returns to the JavaScript event loop.
+        synchronized(connectionLock) { sandbox.also { sandbox = null } }?.close()
+    }
+
+    override fun close() {
+        val engine = synchronized(connectionLock) {
+            closed = true
+            sandbox.also { sandbox = null }
+        }
         engine?.close()
-        instance?.close()
     }
 }

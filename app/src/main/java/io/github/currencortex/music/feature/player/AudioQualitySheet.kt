@@ -30,9 +30,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
+import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.core.network.AppResult
 import io.github.currencortex.music.core.network.appResult
+import io.github.currencortex.music.data.lx.LxPlatform
+import io.github.currencortex.music.data.lx.LxSourceInfo
+import io.github.currencortex.music.data.settings.AudioProvider
+import io.github.currencortex.music.data.settings.AudioProviderState
 import io.github.currencortex.music.data.song.*
 import io.github.currencortex.music.ui.component.MusicTextAction
 import io.github.currencortex.music.ui.component.qualityFileSummary
@@ -45,10 +51,25 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable internal fun AudioQualitySheet(selected: AudioQuality, onSelect: (AudioQuality) -> Unit,
     onDismiss: () -> Unit, enabled: Boolean = true, title: String = "当前歌曲音质", onNetwork: (() -> Unit)? = null,
     song: Song? = null, insights: SongInsightsRepository? = null,
-    audioInfo: io.github.currencortex.music.core.media.AudioStreamInfo? = null, onRefresh: (() -> Unit)? = null) {
+    audioInfo: io.github.currencortex.music.core.media.AudioStreamInfo? = null, onRefresh: (() -> Unit)? = null,
+    container: AppContainer? = null, onEffects: (() -> Unit)? = null,
+    isQq: Boolean = song?.musicSource == MusicSource.QQ_MUSIC,
+    available: Collection<AudioQuality>? = null) {
     var visible by remember { mutableStateOf(true) }
     var afterDismiss by remember { mutableStateOf<(() -> Unit)?>(null) }
     val dismiss by rememberUpdatedState(onDismiss)
+    var songQualities by remember(song?.id, song?.musicSource) { mutableStateOf<Set<AudioQuality>?>(null) }
+    val nativeQqQualitiesEnabled = qqNativeQualitiesEnabled(container)
+    LaunchedEffect(isQq, song?.id, song?.musicSource, container, nativeQqQualitiesEnabled) {
+        songQualities = if (isQq && song != null && container != null && nativeQqQualitiesEnabled)
+            (appResult { container.qqMusic.qualities(song) } as? AppResult.Success)?.value?.takeIf { it.isNotEmpty() }
+        else null
+    }
+    val effectiveAvailable = if (isQq) songQualities ?: available ?: qqAudioQualities(container) else null
+    LaunchedEffect(effectiveAvailable, selected) {
+        if (isQq && effectiveAvailable != null && selected != AudioQuality.AUTO && selected !in effectiveAvailable)
+            onSelect(AudioQuality.AUTO)
+    }
     MusicBottomSheet(show = visible, title = title,
         modifier = Modifier.testTag("audio_quality_sheet"),
         onDismissRequest = { visible = false },
@@ -58,7 +79,22 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 if (quality != selected) onSelect(quality)
                 visible = false
             }
-        }, enabled, onNetwork?.let { action -> { afterDismiss = action; visible = false } }, extraContent = {
+        }, enabled, onNetwork?.let { action -> { afterDismiss = action; visible = false } },
+            available = effectiveAvailable, isQq = isQq, extraContent = {
+            if (isQq && onEffects != null) {
+                Row(Modifier.fillMaxWidth().padding(4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    MusicTextAction("搭配音效 ›", {
+                        afterDismiss = onEffects
+                        visible = false
+                    }, Modifier.testTag("qq_audio_effects"))
+                    container?.let { app ->
+                        MusicTextAction("账号与会员 ›", {
+                            afterDismiss = { app.errorNotices.showMessage("会员与可用音质以 QQ 音乐账号页的实际状态为准") }
+                            visible = false
+                        }, Modifier.testTag("qq_audio_membership"))
+                    }
+                }
+            }
             audioInfo?.let { info ->
                 Text("实际播放 · ${info.summary}", Modifier.padding(4.dp).testTag("actual_audio_source"), fontSize = 13.sp)
                 if (info.matched) Text("官方音源暂不可用，正在播放匹配音源。音质与版本以实际文件为准。",
@@ -71,10 +107,60 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
 }
 
+@Composable private fun qqNativeQualitiesEnabled(container: AppContainer?): Boolean {
+    if (container == null) return false
+    val access by container.audioSettings.state.collectAsStateWithLifecycle()
+    return access.provider != AudioProvider.LX
+}
+
+@Composable private fun qqAudioQualities(container: AppContainer?): Set<AudioQuality> {
+    if (container == null) return qqNativeQualities
+    val access by container.audioSettings.state.collectAsStateWithLifecycle()
+    if (access.provider != AudioProvider.LX) return qqNativeQualities
+    val sources by container.lxSources.state.collectAsStateWithLifecycle()
+    return qqAudioQualities(access, sources)
+}
+
+private val qqQualityOrder = listOf(
+    AudioQuality.DOLBY, AudioQuality.LOSSLESS, AudioQuality.EXHIGH, AudioQuality.STANDARD,
+    AudioQuality.QQ_NAC, AudioQuality.QQ_MASTER, AudioQuality.QQ_SURROUND, AudioQuality.QQ_STUDIO,
+    AudioQuality.HIRES, AudioQuality.QQ_DTS_X,
+)
+private val qqNativeQualities = qqQualityOrder.toCollection(linkedSetOf())
+
+internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSourceInfo>): Set<AudioQuality> {
+    if (access.provider != AudioProvider.LX) return qqNativeQualities
+    val supported = sources.asSequence().filter { access.lxSmartSwitch || it.id == access.lxSourceId }
+        .flatMap { it.qualities(LxPlatform.QQ_MUSIC).asSequence() }
+        .mapNotNull { quality -> when (quality) {
+            "128k" -> AudioQuality.STANDARD
+            "320k" -> AudioQuality.EXHIGH
+            "flac" -> AudioQuality.LOSSLESS
+            "flac24bit", "hires" -> AudioQuality.HIRES
+            "atmos" -> AudioQuality.QQ_STUDIO
+            "atmos_plus" -> AudioQuality.QQ_SURROUND
+            "master" -> AudioQuality.QQ_MASTER
+            "nac" -> AudioQuality.QQ_NAC
+            "dtsx" -> AudioQuality.QQ_DTS_X
+            "dolby" -> AudioQuality.DOLBY
+            else -> null
+        } }.toSet()
+    val available = linkedSetOf<AudioQuality>()
+    qqQualityOrder.forEach { if (it in supported) available += it }
+    return available
+}
+
 @Composable internal fun AudioQualityChoices(selected: AudioQuality, onSelect: (AudioQuality) -> Unit,
     enabled: Boolean = true, onNetwork: (() -> Unit)? = null, modifier: Modifier = Modifier,
+    available: Collection<AudioQuality>? = null, isQq: Boolean = false,
     extraContent: @Composable () -> Unit = {}) {
     val colors = MiuixTheme.colorScheme
+    val regularOptions = (available ?: listOf(AudioQuality.VIVID, AudioQuality.DOLBY, AudioQuality.JYEFFECT,
+        AudioQuality.HIRES, AudioQuality.LOSSLESS, AudioQuality.EXHIGH, AudioQuality.HIGHER, AudioQuality.STANDARD))
+        .filter { it != AudioQuality.AUTO }
+    val qqOptions = qqQualityOrder.filter { it in regularOptions }
+    val qqFeaturedOptions = listOf(AudioQuality.QQ_SURROUND, AudioQuality.QQ_MASTER)
+        .filter { it in regularOptions }
     // This is a fixed, short list. Compose it before the native entrance starts instead of
     // subcomposing every text row during the first animated layout pass.
     // Let the native sheet supply the available screen height. Keep the safe-area spacing
@@ -84,25 +170,34 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         run {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("已选 · ${selected.label}", Modifier.weight(1f), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                Text("已选 · ${selected.qualityLabel(isQq)}", Modifier.weight(1f), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
                 onNetwork?.let { action -> Text("网络与播放 ›", Modifier.heightIn(min = 48.dp).testTag("quality_network_settings")
                     .clickable(role = Role.Button, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = action)
                     .padding(horizontal = 8.dp, vertical = 14.dp), fontSize = 12.sp, color = colors.primary) }
             }
         }
-        run {
+        if (available == null) run {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FeaturedQuality(AudioQuality.SKY, selected, enabled, onSelect, Modifier.weight(1f))
-                FeaturedQuality(AudioQuality.JYMASTER, selected, enabled, onSelect, Modifier.weight(1f))
+                FeaturedQuality(AudioQuality.SKY, selected, enabled, onSelect, false, Modifier.weight(1f))
+                FeaturedQuality(AudioQuality.JYMASTER, selected, enabled, onSelect, false, Modifier.weight(1f))
+            }
+        } else if (isQq) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                qqFeaturedOptions.forEach { quality ->
+                    FeaturedQuality(quality, selected, enabled, onSelect, true, Modifier.weight(1f))
+                }
             }
         }
-        AudioQuality.entries.filter { it !in setOf(AudioQuality.AUTO, AudioQuality.SKY, AudioQuality.JYMASTER) }.forEach { quality ->
-            QualityRow(quality, selected, enabled, onSelect)
+        (if (isQq) qqOptions.filter { it !in qqFeaturedOptions } else regularOptions).forEach { quality ->
+            QualityRow(quality, selected, enabled, onSelect, isQq)
         }
-        QualityRow(AudioQuality.AUTO, selected, enabled, onSelect)
+        QualityRow(AudioQuality.AUTO, selected, enabled, onSelect, isQq)
         run {
-            Text(if (enabled) "按所选档位请求音源，实际音质取决于歌曲、音源及账号权限。自动最高会优先请求可用高音质。"
-                else "请先退出一起听，再切换音质。",
+            Text(when {
+                !enabled -> "请先退出一起听，再切换音质。"
+                isQq -> "可用音质取决于歌曲、账号权限和设备解码能力。"
+                else -> "按所选档位请求音源，实际音质取决于歌曲、音源及账号权限。自动最高会优先请求可用高音质。"
+            },
                 Modifier.padding(horizontal = 4.dp, vertical = 8.dp).testTag("quality_note"),
                 fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
         }
@@ -142,7 +237,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable private fun FeaturedQuality(quality: AudioQuality, selected: AudioQuality, enabled: Boolean,
-    onSelect: (AudioQuality) -> Unit, modifier: Modifier) {
+    onSelect: (AudioQuality) -> Unit, isQq: Boolean, modifier: Modifier) {
     val colors = MiuixTheme.colorScheme
     val active = selected == quality
     val shape = RoundedCornerShape(22.dp)
@@ -151,28 +246,32 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         .border(1.dp, if (active) colors.primary.copy(alpha = .6f) else Color.Transparent, shape)
         .padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(if (quality == AudioQuality.SKY) "SURROUND" else "MASTER", Modifier.weight(1f), fontSize = 10.sp,
+            Text(if (quality == AudioQuality.SKY || quality == AudioQuality.QQ_SURROUND) "SURROUND" else "MASTER",
+                Modifier.weight(1f), fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold, color = colors.primary)
             QualityCheck(active)
         }
         Spacer(Modifier.height(10.dp))
-        Text(quality.label, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
-        Text(if (quality == AudioQuality.SKY) "多声道环绕音源" else "高解析母带音源", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+        Text(quality.qualityLabel(isQq), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
+        Text(quality.description(isQq), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
     }
 }
 
-@Composable private fun QualityRow(quality: AudioQuality, selected: AudioQuality, enabled: Boolean, onSelect: (AudioQuality) -> Unit) {
+@Composable private fun QualityRow(quality: AudioQuality, selected: AudioQuality, enabled: Boolean,
+    onSelect: (AudioQuality) -> Unit, isQq: Boolean) {
     val colors = MiuixTheme.colorScheme
     val active = quality == selected
     Row(Modifier.fillMaxWidth().qualityClick(quality, active, enabled) { onSelect(quality) }
         .background(if (active) colors.primary.copy(alpha = .08f) else Color.Transparent, RoundedCornerShape(18.dp))
-        .padding(horizontal = 10.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(40.dp).background(colors.primary.copy(alpha = .08f), CircleShape), contentAlignment = Alignment.Center) {
+        .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(40.dp).background(colors.primary.copy(alpha = .08f), CircleShape),
+            contentAlignment = Alignment.Center) {
             Text(quality.shortName(), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.primary)
         }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(quality.label, fontSize = 16.sp, fontWeight = FontWeight.Medium, color = colors.onSurface)
-            Text(quality.description(), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+            Text(quality.qualityLabel(isQq), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = colors.onSurface)
+            Text(quality.description(isQq), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
         }
         QualityCheck(active)
     }
@@ -196,6 +295,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 private fun AudioQuality.shortName() = when (this) {
+    AudioQuality.QQ_MASTER -> "母带"
+    AudioQuality.QQ_SURROUND -> "全景"
+    AudioQuality.QQ_STUDIO -> "臻品"
+    AudioQuality.QQ_DTS_X -> "DTS:X"
+    AudioQuality.QQ_NAC -> "NAC"
     AudioQuality.VIVID -> "全景"
     AudioQuality.DOLBY -> "杜比"
     AudioQuality.JYEFFECT -> "臻音"
@@ -206,13 +310,25 @@ private fun AudioQuality.shortName() = when (this) {
     AudioQuality.STANDARD -> "标"
     else -> "自动"
 }
-private fun AudioQuality.description() = when (this) {
+internal fun AudioQuality.qualityLabel(qqMusic: Boolean): String = if (qqMusic) when (this) {
+    AudioQuality.LOSSLESS -> "SQ 无损品质"
+    AudioQuality.EXHIGH -> "HQ 高品质"
+    AudioQuality.STANDARD -> "标准品质"
+    else -> label
+} else label
+
+private fun AudioQuality.description(qqMusic: Boolean) = when (this) {
+    AudioQuality.QQ_MASTER -> "QQ 音乐高解析母带音源"
+    AudioQuality.QQ_SURROUND -> "QQ 音乐全景声音源"
+    AudioQuality.QQ_STUDIO -> "QQ 音乐高品质音源"
+    AudioQuality.QQ_DTS_X -> "需设备支持 DTS:X 解码与输出"
+    AudioQuality.QQ_NAC -> "QQ 音乐 AI 编码音源"
     AudioQuality.VIVID -> "臻音全景声档位，需歌曲与账号支持"
-    AudioQuality.DOLBY -> "杜比全景声档位，需音源、账号与设备支持"
+    AudioQuality.DOLBY -> if (qqMusic) "QQ 音乐杜比全景声，需歌曲、账号和设备支持" else "杜比全景声档位，需音源、账号与设备支持"
     AudioQuality.JYEFFECT -> "网易云高清臻音档位，与 Hi-Res 分开选择"
     AudioQuality.HIRES -> "请求高解析度音源，不代表设备已高解析输出"
-    AudioQuality.LOSSLESS -> "无损音源，还原原始细节"
-    AudioQuality.EXHIGH -> "清晰细腻，兼顾音质与流量"
+    AudioQuality.LOSSLESS -> if (qqMusic) "FLAC 无损音源" else "无损音源，还原原始细节"
+    AudioQuality.EXHIGH -> if (qqMusic) "高码率音源" else "清晰细腻，兼顾音质与流量"
     AudioQuality.HIGHER -> "较高码率，兼顾清晰度与流量"
     AudioQuality.STANDARD -> "均衡音质，更省流量"
     else -> "优先请求可用的最高音质"
