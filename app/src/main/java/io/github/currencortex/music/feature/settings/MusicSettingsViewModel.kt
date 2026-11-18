@@ -45,7 +45,7 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
             state.value = state.value.copy(message = "线路检测失败，请重试")
         } finally { serverProbeBusy.value = false }
     }
-    private fun audioEdit(change: suspend () -> Unit) = viewModelScope.launch {
+    private fun audioEdit(success: String = "音源设置已保存", change: suspend () -> Unit) = viewModelScope.launch {
         if (audioState.value.busy) return@launch
         val previous = container.audioSettings.access().identity
         audioState.value = NetworkSettingsState(busy = true)
@@ -62,7 +62,7 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
                 container.playerController.load(playback.showPause,
                     if (playback.song?.id == queue.current?.id) playback.positionMs else queue.positionMs)
             }
-            audioState.value = NetworkSettingsState(message = "音源设置已保存")
+            audioState.value = NetworkSettingsState(message = success)
         } catch (e: CancellationException) { throw e }
         catch (e: io.github.currencortex.music.data.lx.LxSourceException) { audioState.value = NetworkSettingsState(message = e.message) }
         catch (e: IllegalArgumentException) { audioState.value = NetworkSettingsState(message = e.message?.take(160) ?: "设置无效，请检查后重试") }
