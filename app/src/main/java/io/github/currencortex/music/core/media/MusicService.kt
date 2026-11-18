@@ -351,7 +351,7 @@ class MusicService : MediaSessionService() {
             container.ready.await()
             combine(container.musicSettings.state, container.playbackNetworkStatus,
                 container.playbackQueue.state.map { it.current?.musicSource }.distinctUntilChanged()) { settings, network, source ->
-                network.kind.takeIf { network.online && it != PlaybackNetworkKind.UNKNOWN }
+                network.kind.takeIf { network.connected }
                     ?.let { settings.qualityFor(source, it) }
             }.distinctUntilChanged().drop(1).collect {
                 val song = container.playbackQueue.state.value.current
