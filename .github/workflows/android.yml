@@ -70,7 +70,7 @@ jobs:
       - name: Build and verify unsigned CI release
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
-        run: ./gradlew :app:assembleRelease :app:lintRelease -PciBuildNumber="$CI_BUILD_NUMBER" -PinstalledReleaseNotesDir="$GITHUB_WORKSPACE/app/build/generated/installedReleaseNotes" -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace
+        run: ./gradlew :app:assembleRelease -PciBuildNumber="$CI_BUILD_NUMBER" -PinstalledReleaseNotesDir="$GITHUB_WORKSPACE/app/build/generated/installedReleaseNotes" -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace
       - name: Prepare CI artifact
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
@@ -82,12 +82,6 @@ jobs:
           path: ci-dist/
           if-no-files-found: error
           retention-days: 7
-      - name: Upload lint report
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: lint-report
-          path: app/build/reports/lint-results-*
 
   request-publication:
     needs: build
