@@ -61,6 +61,14 @@ android {
         manifestPlaceholders["appLabel"] = "@string/app_name"
     }
 
+    // Non-draft app PRs run the complete :app:lintRelease check before merge.
+    // For CI prereleases, avoid the duplicate lintVitalRelease pulled in by
+    // :app:assembleRelease (4m04s of work in the sampled CI build).
+    // Normal stable/local release builds keep Android's fatal release lint gate.
+    lint {
+        checkReleaseBuilds = ciBuildNumber == 0
+    }
+
     buildFeatures { compose = true; buildConfig = true }
     providers.gradleProperty("installedReleaseNotesDir").orNull?.let {
         sourceSets.getByName("main").assets.srcDir(it)
