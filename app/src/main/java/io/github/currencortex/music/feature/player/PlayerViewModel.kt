@@ -9,6 +9,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.core.media.PlaybackMode
+import io.github.currencortex.music.core.media.PlaybackNetworkKind
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.song.*
 import kotlinx.coroutines.sync.Mutex
@@ -141,10 +142,14 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
                         container.logger.warn("Player", "QQ like state failed: ${it.kind} ${it.message}")
                     }
                     (qualitiesTyped as? AppResult.Success)?.value?.takeIf { it.isNotEmpty() }?.let { supported ->
-                        val selected = container.musicSettings.state.value.qqQuality
-                        if (selected != io.github.currencortex.music.core.media.AudioQuality.AUTO && selected !in supported) {
-                            container.musicSettings.setQuality(io.github.currencortex.music.core.media.AudioQuality.AUTO, qq = true)
-                            player.qualityChanged()
+                        val nativeQq = container.audioSettings.state.value.provider !=
+                            io.github.currencortex.music.data.settings.AudioProvider.LX
+                        val selected = container.musicSettings.state.value
+                            .qualityFor(song.musicSource, container.playbackNetworkStatus.value.kind)
+                        if (nativeQq && selected != io.github.currencortex.music.core.media.AudioQuality.AUTO && selected !in supported) {
+                            val wireless = container.playbackNetworkStatus.value.kind == PlaybackNetworkKind.WIRELESS
+                            if (wireless) container.musicSettings.setWirelessQuality(io.github.currencortex.music.core.media.AudioQuality.AUTO, qq = true)
+                            else container.musicSettings.setMobileQuality(io.github.currencortex.music.core.media.AudioQuality.AUTO, qq = true)
                         }
                     }
                     if (nextOwner == likeOwner()) _actions.value = PlayerSongActions(songId = id,
@@ -520,8 +525,10 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
         }
     }
     fun quality(value: io.github.currencortex.music.core.media.AudioQuality) = viewModelScope.launch {
-        container.musicSettings.setQuality(value, qq = queue.value.current?.musicSource == MusicSource.QQ_MUSIC)
-        player.qualityChanged()
+        val qq = queue.value.current?.musicSource == MusicSource.QQ_MUSIC
+        if (container.playbackNetworkStatus.value.kind == PlaybackNetworkKind.WIRELESS)
+            container.musicSettings.setWirelessQuality(value, qq = qq)
+        else container.musicSettings.setMobileQuality(value, qq = qq)
     }
     fun lyricsFontSize(value: Float) = viewModelScope.launch { container.musicSettings.setLyricsFontSize(value) }
     fun lyricsFont(value: io.github.currencortex.music.data.settings.LyricsFont) = viewModelScope.launch { container.musicSettings.setLyricsFont(value) }

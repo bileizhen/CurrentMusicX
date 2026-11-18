@@ -231,12 +231,17 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
             is AppResult.Failure -> if (result.kind == ErrorKind.Unauthorized) "服务器可达，请登录" else result.kind.message
         })
     }
-    fun quality(value: AudioQuality) = viewModelScope.launch {
+    fun mobileQuality(value: AudioQuality) = viewModelScope.launch {
         val qq = settings.value.musicPlatform == MusicPlatform.QQ_MUSIC
-        container.musicSettings.setQuality(value, qq = qq)
-        val current = container.playbackQueue.state.value.current
-        if (current != null && (current.musicSource == MusicSource.QQ_MUSIC) == qq)
-            container.playerController.qualityChanged()
+        container.musicSettings.setMobileQuality(value, qq = qq)
+    }
+    fun wirelessQuality(value: AudioQuality) = viewModelScope.launch {
+        val qq = settings.value.musicPlatform == MusicPlatform.QQ_MUSIC
+        container.musicSettings.setWirelessQuality(value, qq = qq)
+    }
+    fun downloadQuality(value: AudioQuality) = viewModelScope.launch {
+        val qq = settings.value.musicPlatform == MusicPlatform.QQ_MUSIC
+        container.musicSettings.setDownloadQuality(value, qq = qq)
     }
     fun restore(value: Boolean) = viewModelScope.launch { container.musicSettings.setRestore(value) }
     fun concurrentPlayback(value: Boolean) = viewModelScope.launch { container.musicSettings.setConcurrentPlayback(value) }

@@ -10,7 +10,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.AppContainer
-import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
 import top.yukonga.miuix.kmp.basic.Text
@@ -20,7 +19,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
 @Composable internal fun QueueDownloadDialog(container: AppContainer, songs: List<Song>, show: Boolean, onDismiss: () -> Unit) {
     val directory by container.songDownloads.directory.collectAsStateWithLifecycle()
     val settings by container.musicSettings.state.collectAsStateWithLifecycle()
-    val quality = AudioQuality.from(settings.quality.value)
+    val qualities = songs.map { settings.downloadQualityFor(it.musicSource) }.distinct()
     var error by remember { mutableStateOf<String?>(null) }
     val folder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) try { container.songDownloads.setDirectory(uri); error = null }
@@ -29,7 +28,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
     LaunchedEffect(show) { if (show) error = null }
     MusicOverlayDialog(show = show, title = "下载 ${songs.size} 首歌曲", onDismissRequest = onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("下载音质：${quality.label}")
+            Text("下载音质：${qualities.joinToString { it.label }}")
             MusicDestinationRow("保存位置", { folder.launch(directory) }, summary = directory?.let { android.net.Uri.decode(it.lastPathSegment.orEmpty()) }
                 ?: if (Build.VERSION.SDK_INT >= 29) "Download/CurrentMusic" else "请选择文件夹")
             Text("按当前下载设置加入任务，已在下载的歌曲会保留原任务。")
@@ -47,6 +46,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
                         if (songs.any { it.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC })
                             check(qq.loggedIn) { "请先登录 QQ 音乐" }
                         songs.distinctBy { it.id to it.musicSource }.forEach { song ->
+                            val quality = settings.downloadQualityFor(song.musicSource)
                             if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC)
                                 container.songDownloads.start(song, quality, account, server, container.qqAudioIdentity(access),
                                     navidromeRevision = qq.revision.toString())

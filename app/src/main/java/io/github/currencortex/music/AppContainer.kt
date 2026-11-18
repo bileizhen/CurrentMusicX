@@ -64,6 +64,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         scope = appScope,
         produceFile = { context.preferencesDataStoreFile("app$storageSuffix.preferences_pb") },
     )
+    val playbackNetworkStatus = preloadNetwork(context.applicationContext)
+        .stateIn(appScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, PreloadNetworkStatus())
 
     val updateTransfer = io.github.currencortex.music.core.update.UpdateTransfer(
         io.github.currencortex.music.core.update.UpdateDownloader(okhttp3.OkHttpClient(), java.io.File(context.cacheDir, "updates"),
@@ -279,8 +281,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality, supportsDolby: Boolean = false): AudioRequest {
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
             qqMusic.selectOwner()
-            val qqQuality = quality.takeIf { it.qqOnly } ?: musicSettings.state.value.qqQuality
-            return AudioRequest(song.id, qqQuality, accountRepository.state.value.account?.id ?: 0L,
+            return AudioRequest(song.id, quality, accountRepository.state.value.account?.id ?: 0L,
                 qqMusic.session(), qqAudioIdentity(), song)
         }
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
@@ -613,7 +614,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         io.github.currencortex.music.data.netease.listen.NeteaseListenTogetherRepository(neteaseTransport,
             trace = { if (BuildConfig.DEBUG) android.util.Log.d("ListenTogetherSync", it) }),
         externalPlayer ?: playerController, playerScope, musicRepository::detail,
-        { song -> musicRepository.source(song, AudioQuality.from(musicSettings.state.value.quality.value), audioSession()).url },
+        { song -> musicRepository.source(song, musicSettings.state.value
+            .qualityFor(song.musicSource, playbackNetworkStatus.value.kind), audioSession()).url },
         details = musicRepository::details,
         trace = { if (BuildConfig.DEBUG) android.util.Log.d("ListenTogetherSync", it) })
     val ready = CompletableDeferred<Unit>()

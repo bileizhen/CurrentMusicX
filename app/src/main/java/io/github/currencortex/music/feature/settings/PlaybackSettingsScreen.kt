@@ -16,6 +16,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.settings.ListeningSource
 import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.data.settings.MusicTransitionMode
+import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.feature.player.AudioQualitySheet
 import io.github.currencortex.music.feature.player.qqAudioQualities
 import io.github.currencortex.music.feature.player.qualityLabel
@@ -25,6 +26,7 @@ import io.github.currencortex.music.ui.component.AppleMusicLyricsControls
 import io.github.currencortex.music.ui.component.LyricsSizeSlider
 import io.github.currencortex.music.ui.component.MusicDialog
 import io.github.currencortex.music.data.settings.LyricsStyle
+import io.github.currencortex.music.core.media.PlaybackNetworkKind
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.SettingsSwitch
 import io.github.currencortex.music.ui.component.nativeui.*
@@ -33,14 +35,28 @@ import kotlin.math.roundToInt
 @Composable fun PlaybackSettingsScreen(vm: MusicSettingsViewModel) {
     val settings by vm.settings.collectAsStateWithLifecycle()
     val isQq = settings.musicPlatform == MusicPlatform.QQ_MUSIC
-    val quality = if (isQq) settings.qqQuality else settings.quality
-    var qualityOpen by rememberSaveable { mutableStateOf(false) }
+    val qualitySource = if (isQq) MusicSource.QQ_MUSIC else null
+    var mobileQualityOpen by rememberSaveable { mutableStateOf(false) }
+    var wirelessQualityOpen by rememberSaveable { mutableStateOf(false) }
+    var downloadQualityOpen by rememberSaveable { mutableStateOf(false) }
     var appleLyricsOpen by rememberSaveable { mutableStateOf(false) }
     var seconds by remember(settings.crossfadeSeconds) { mutableFloatStateOf(settings.crossfadeSeconds.toFloat()) }
     val modes = mapOf(MusicTransitionMode.OFF to "关闭", MusicTransitionMode.SMART to "智能过渡", MusicTransitionMode.CROSSFADE to "淡入淡出")
     SettingsPage("播放", "playback_settings") {
         item("quality") { SettingsSection("音质", MusicIcons.Headphones) {
-            MusicDestinationRow("默认音质", { qualityOpen = true }, Modifier.testTag("default_quality"), summary = quality.qualityLabel(isQq))
+            Column {
+                MusicDestinationRow("移动网络播放", { mobileQualityOpen = true },
+                    Modifier.testTag("mobile_playback_quality"),
+                    summary = settings.qualityFor(qualitySource).qualityLabel(isQq))
+                SettingsDivider()
+                MusicDestinationRow("无线网络播放", { wirelessQualityOpen = true },
+                    Modifier.testTag("wireless_playback_quality"),
+                    summary = settings.qualityFor(qualitySource, PlaybackNetworkKind.WIRELESS).qualityLabel(isQq))
+                SettingsDivider()
+                MusicDestinationRow("下载", { downloadQualityOpen = true },
+                    Modifier.testTag("download_quality"),
+                    summary = settings.downloadQualityFor(qualitySource).qualityLabel(isQq))
+            }
         } }
         item("listening") { SettingsSection("听歌足迹", MusicIcons.Headphones) {
             Column(Modifier.testTag("listening_source_setting").semantics { selectableGroup() }) {
@@ -103,14 +119,17 @@ import kotlin.math.roundToInt
                 summary = "包括移动网络，会额外消耗流量", enabled = settings.preloadAudio, modifier = Modifier.testTag("preload_metered"))
         } }
     }
-    if (qualityOpen) {
-        val available = if (isQq) {
-            val provider by vm.audioProvider.collectAsStateWithLifecycle()
-            val sources by vm.lxSources.collectAsStateWithLifecycle()
-            qqAudioQualities(provider, sources)
-        } else null
-        AudioQualitySheet(quality, vm::quality, { qualityOpen = false }, title = "默认播放音质", isQq = isQq, available = available)
-    }
+    val available = if (isQq) {
+        val provider by vm.audioProvider.collectAsStateWithLifecycle()
+        val sources by vm.lxSources.collectAsStateWithLifecycle()
+        qqAudioQualities(provider, sources)
+    } else null
+    if (mobileQualityOpen) AudioQualitySheet(settings.qualityFor(qualitySource), vm::mobileQuality,
+        { mobileQualityOpen = false }, title = "移动网络播放音质", isQq = isQq, available = available)
+    if (wirelessQualityOpen) AudioQualitySheet(settings.qualityFor(qualitySource, PlaybackNetworkKind.WIRELESS),
+        vm::wirelessQuality, { wirelessQualityOpen = false }, title = "无线网络播放音质", isQq = isQq, available = available)
+    if (downloadQualityOpen) AudioQualitySheet(settings.downloadQualityFor(qualitySource), vm::downloadQuality,
+        { downloadQualityOpen = false }, title = "下载音质", isQq = isQq, available = available)
     if (appleLyricsOpen) MusicDialog("Apple Music 歌词", { appleLyricsOpen = false }) {
         Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
             .testTag("apple_lyrics_settings")) {

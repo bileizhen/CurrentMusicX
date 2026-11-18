@@ -65,7 +65,8 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val queue by vm.queue.collectAsStateWithLifecycle()
     val settings by vm.settings.collectAsStateWithLifecycle()
     val isQq = queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC
-    val requestedQuality = if (isQq) settings.qqQuality else settings.quality
+    val playbackNetworkStatus by vm.container.playbackNetworkStatus.collectAsStateWithLifecycle()
+    val requestedQuality = settings.qualityFor(queue.current?.musicSource, playbackNetworkStatus.kind)
     val displayedQuality = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty()
         else state.audioInfo?.label ?: requestedQuality.qualityLabel(isQq)
     val appearance by vm.container.settings.state.collectAsStateWithLifecycle()

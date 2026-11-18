@@ -4,13 +4,17 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import io.github.currencortex.music.core.config.ServerDefaults
 import io.github.currencortex.music.core.media.AudioQuality
+import io.github.currencortex.music.core.media.PlaybackNetworkKind
 import io.github.currencortex.music.core.network.ServerUrl
 import io.github.currencortex.music.core.network.CurrentMusicServer
 import io.github.currencortex.music.data.song.MusicSource
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
-data class MusicSettings(val server: String = ServerDefaults.URL, val quality: AudioQuality = AudioQuality.AUTO,
+data class MusicSettings(val server: String = ServerDefaults.URL,
+                         val mobileQuality: AudioQuality = AudioQuality.AUTO,
+                         val wirelessQuality: AudioQuality = AudioQuality.AUTO,
+                         val downloadQuality: AudioQuality = AudioQuality.AUTO,
                          val restoreQueue: Boolean = true,
                          val nickname: String = "", val accountId: Long = 0,
                          val preloadAudio: Boolean = true, val preloadMetered: Boolean = false,
@@ -28,9 +32,16 @@ data class MusicSettings(val server: String = ServerDefaults.URL, val quality: A
                          val customServer: String = "",
                          val listeningSource: ListeningSource = ListeningSource.LOCAL,
                          val musicPlatform: MusicPlatform = MusicPlatform.NETEASE,
-                         val qqQuality: AudioQuality = AudioQuality.AUTO) {
-    fun qualityFor(source: MusicSource?): AudioQuality =
-        if (source == MusicSource.QQ_MUSIC) qqQuality else quality
+                         val qqMobileQuality: AudioQuality = AudioQuality.AUTO,
+                         val qqWirelessQuality: AudioQuality = AudioQuality.AUTO,
+                         val qqDownloadQuality: AudioQuality = AudioQuality.AUTO) {
+    fun qualityFor(source: MusicSource?, network: PlaybackNetworkKind = PlaybackNetworkKind.MOBILE): AudioQuality =
+        if (source == MusicSource.QQ_MUSIC) {
+            if (network == PlaybackNetworkKind.WIRELESS) qqWirelessQuality else qqMobileQuality
+        } else if (network == PlaybackNetworkKind.WIRELESS) wirelessQuality else mobileQuality
+
+    fun downloadQualityFor(source: MusicSource?): AudioQuality =
+        if (source == MusicSource.QQ_MUSIC) qqDownloadQuality else downloadQuality
 }
 
 enum class MusicPlatform(val label: String) {
@@ -111,7 +122,13 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val serverMode = stringPreferencesKey("music.serverMode")
     private val customServer = stringPreferencesKey("music.customServer")
     private val quality = stringPreferencesKey("music.quality")
+    private val mobileQuality = stringPreferencesKey("music.quality.mobile")
+    private val wirelessQuality = stringPreferencesKey("music.quality.wireless")
+    private val downloadQuality = stringPreferencesKey("music.quality.download")
     private val qqQuality = stringPreferencesKey("music.qqQuality")
+    private val qqMobileQuality = stringPreferencesKey("music.qqQuality.mobile")
+    private val qqWirelessQuality = stringPreferencesKey("music.qqQuality.wireless")
+    private val qqDownloadQuality = stringPreferencesKey("music.qqQuality.download")
     private val restore = booleanPreferencesKey("music.restore")
     private val nickname = stringPreferencesKey("account.nickname")
     private val account = longPreferencesKey("account.id")
@@ -175,7 +192,18 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
         glowIntensity = p[appleGlowIntensity] ?: AppleMusicLyricsOptions.DEFAULT_GLOW_INTENSITY,
         blurStrength = p[appleBlurStrength] ?: AppleMusicLyricsOptions.DEFAULT_BLUR_STRENGTH,
     )
-    private fun decode(p: Preferences) = MusicSettings(p[server] ?: ServerDefaults.URL, AudioQuality.from(p[quality].orEmpty()),
+    private fun decode(p: Preferences): MusicSettings {
+        val legacyQuality = AudioQuality.from(p[quality].orEmpty())
+        val legacyQqQuality = p[qqQuality]?.let(AudioQuality::from) ?: when (legacyQuality) {
+            AudioQuality.STANDARD -> AudioQuality.STANDARD
+            AudioQuality.EXHIGH, AudioQuality.HIGHER -> AudioQuality.EXHIGH
+            AudioQuality.LOSSLESS, AudioQuality.HIRES -> AudioQuality.LOSSLESS
+            else -> AudioQuality.AUTO
+        }
+        return MusicSettings(p[server] ?: ServerDefaults.URL,
+            p[mobileQuality]?.let(AudioQuality::from) ?: legacyQuality,
+            p[wirelessQuality]?.let(AudioQuality::from) ?: legacyQuality,
+            p[downloadQuality]?.let(AudioQuality::from) ?: legacyQuality,
         p[restore] ?: true, p[nickname].orEmpty(), p[account] ?: 0,
         p[preload] ?: true, p[metered] ?: false, LyricsTypography.normalize(p[lyricsSize] ?: LyricsTypography.DEFAULT_SIZE),
         LyricsWeight.from(p[lyricsWeight]), p[lyricsOffset] ?: 0,
@@ -187,14 +215,13 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
         p[concurrentPlayback] ?: false, MusicTransitionMode.from(p[transition]), (p[crossfadeSeconds] ?: 5).coerceIn(1, 12), decodeLyricsSource(p),
         LyricsFont.from(p[lyricsFont]), p[lyricsFontFile].orEmpty(),
         CurrentMusicServer.from(p[serverMode], p[server]),
-        p[customServer] ?: p[server]?.takeIf { CurrentMusicServer.infer(it) == CurrentMusicServer.CUSTOM }.orEmpty(),
-        ListeningSource.from(p[listeningSource]), MusicPlatform.from(p[platform]),
-        p[qqQuality]?.let(AudioQuality::from) ?: when (AudioQuality.from(p[quality].orEmpty())) {
-            AudioQuality.STANDARD -> AudioQuality.STANDARD
-            AudioQuality.EXHIGH, AudioQuality.HIGHER -> AudioQuality.EXHIGH
-            AudioQuality.LOSSLESS, AudioQuality.HIRES -> AudioQuality.LOSSLESS
-            else -> AudioQuality.AUTO
-        })
+            p[customServer] ?: p[server]?.takeIf { CurrentMusicServer.infer(it) == CurrentMusicServer.CUSTOM }.orEmpty(),
+            ListeningSource.from(p[listeningSource]),
+            MusicPlatform.from(p[platform]),
+            p[qqMobileQuality]?.let(AudioQuality::from) ?: legacyQqQuality,
+            p[qqWirelessQuality]?.let(AudioQuality::from) ?: legacyQqQuality,
+            p[qqDownloadQuality]?.let(AudioQuality::from) ?: legacyQuality)
+    }
     // Read the persisted value directly, without the StateFlow's initial defaults.
     val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: false }.distinctUntilChanged()
     val state = store.data.map(::decode)
@@ -224,15 +251,14 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             if (mode == CurrentMusicServer.CUSTOM) it[customServer] = normalized
         }
     }
-    suspend fun setQuality(value: AudioQuality, qq: Boolean = false) {
-        store.edit {
-            if (qq) it[qqQuality] = value.value
-            else {
-                // Keep the inherited QQ setting when the old shared preference is first changed.
-                if (it[qqQuality] == null) it[qqQuality] = decode(it).qqQuality.value
-                it[quality] = value.value
-            }
-        }
+    suspend fun setMobileQuality(value: AudioQuality, qq: Boolean = false) {
+        store.edit { if (qq) it[qqMobileQuality] = value.value else it[mobileQuality] = value.value }
+    }
+    suspend fun setWirelessQuality(value: AudioQuality, qq: Boolean = false) {
+        store.edit { if (qq) it[qqWirelessQuality] = value.value else it[wirelessQuality] = value.value }
+    }
+    suspend fun setDownloadQuality(value: AudioQuality, qq: Boolean = false) {
+        store.edit { if (qq) it[qqDownloadQuality] = value.value else it[downloadQuality] = value.value }
     }
     suspend fun setRestore(value: Boolean) { store.edit { it[restore] = value } }
     suspend fun setConcurrentPlayback(value: Boolean) { store.edit { it[concurrentPlayback] = value } }

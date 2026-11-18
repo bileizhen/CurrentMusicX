@@ -93,7 +93,8 @@ class EffectsAuditionController internal constructor(private val context: Contex
                     .compose(material.base, material.diy, material.baseKey, material.song, selected).preset()
             }
         } else null
-        val audio = container.audioSources.resolve(container.audioRequest(current, container.musicSettings.state.value.quality))
+        val audio = container.audioSources.resolve(container.audioRequest(current, container.musicSettings.state.value
+            .qualityFor(current.musicSource, container.playbackNetworkStatus.value.kind)))
         container.neteaseSessions.check(owner)
         Audition(audio.source.url, effect, audio.key, container.playerController.state.value.positionMs, deadline)
     }

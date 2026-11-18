@@ -3,6 +3,7 @@ package io.github.currencortex.music.feature.library
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.currencortex.music.AppContainer
+import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.library.*
 import io.github.currencortex.music.data.settings.MusicPlatform
@@ -357,7 +358,8 @@ class LibraryDetailViewModel(val container: AppContainer, val route: String) : V
             withTimeoutOrNull(5_000) {
                 val settings = container.musicSettings.state.value
                 if (container.audioCache.clearing.value) return@withTimeoutOrNull
-                val audio = container.audioSources.resolve(container.audioRequest(song, settings.quality))
+                val quality = settings.qualityFor(song.musicSource, container.playbackNetworkStatus.value.kind)
+                val audio = container.audioSources.resolve(container.audioRequest(song, quality))
                 container.audioCache.preload(audio.key, audio.source)
             }
         } catch (e: CancellationException) { throw e }
