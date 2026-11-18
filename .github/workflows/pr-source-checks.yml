@@ -11,24 +11,14 @@ concurrency:
   group: pr-source-checks-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 jobs:
-  # Keep the status context required by main's branch protection.
-  build:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: read
+    outputs:
+      required: ${{ steps.android-scope.outputs.required }}
     steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - name: Check Python source syntax
-        run: |
-          python3 - <<'PY'
-          import ast
-          from pathlib import Path
-          for path in Path('scripts').glob('*.py'):
-              ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
-          PY
-      # Keep the required 'build' check fast for docs/automation-only PRs.
-      # Evaluate file paths from the GitHub API, not from untrusted PR scripts.
       - name: Determine PR Android check scope
         id: android-scope
         if: github.event.pull_request.draft != true
@@ -57,16 +47,42 @@ jobs:
             core.info(required ? 'Running Android Kotlin compile and lint' : 'Lightweight-only PR; Android Gradle checks skipped');
             core.setOutput('required', String(required));
 
-      # Compile and lint before merge: Android CI is a main-branch batch
-      # pipeline, so without this gate a broken build only surfaces there.
+
+  # Keep the status context required by main's branch protection.
+  build:
+    needs: scope
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Require successful PR scope decision
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+        run: test "$SCOPE_RESULT" = success
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Check Python source syntax
+        run: |
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          for path in Path('scripts').glob('*.py'):
+              ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
+          PY
+      # Keep the required 'build' check fast for docs/automation-only PRs.
+      # Evaluate file paths from the GitHub API, not from untrusted PR scripts.
+      # Keep Kotlin, Java, and KSP compilation as the fast required gate.
+      # Full Android lint runs independently so its analysis doesn't serialize
+      # behind the required 'build' status.
       - uses: actions/setup-java@v5
-        if: steps.android-scope.outputs.required == 'true'
+        if: needs.scope.outputs.required == 'true'
         with:
           distribution: temurin
           java-version: '17'
       # Ubuntu 24.04 images already include most Android SDK packages.
       - name: Ensure required Android SDK components
-        if: steps.android-scope.outputs.required == 'true'
+        if: needs.scope.outputs.required == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -81,24 +97,67 @@ jobs:
             echo "Required Android SDK packages already installed."
           fi
       - uses: gradle/actions/setup-gradle@v5
-        if: steps.android-scope.outputs.required == 'true'
-      - name: Compile and lint PR source
-        if: steps.android-scope.outputs.required == 'true'
-        run: ./gradlew :app:compileReleaseKotlin :app:lintRelease -PciPrArm64Only=true -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace --profile
+        if: needs.scope.outputs.required == 'true'
+      - name: Compile PR Kotlin and Java sources
+        if: needs.scope.outputs.required == 'true'
+        run: ./gradlew :app:compileReleaseJavaWithJavac -PciPrArm64Only=true -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace --profile
+      - name: Upload PR Gradle performance report
+        if: always() && needs.scope.outputs.required == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: gradle-pr-compile-profile
+          path: '**/build/reports/profile/*.html'
+          if-no-files-found: ignore
+          retention-days: 7
+
+  lint:
+    # Advisory full Android Lint; the required 'build' status remains fast.
+    # A repository ruleset can separately require this job if desired.
+    needs: scope
+    if: needs.scope.outputs.required == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Ensure required Android SDK components
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          [[ -d "$ANDROID_HOME/platforms/android-37.0" ]] || missing+=("platforms;android-37.0")
+          [[ -d "$ANDROID_HOME/build-tools/35.0.0" ]] || missing+=("build-tools;35.0.0")
+          [[ -d "$ANDROID_HOME/ndk/30.0.16248370" ]] || missing+=("ndk;30.0.16248370")
+          [[ -d "$ANDROID_HOME/cmake/4.1.2" ]] || missing+=("cmake;4.1.2")
+          if (( ${#missing[@]} )); then
+            sdkmanager "${missing[@]}"
+          else
+            echo "Required Android SDK packages already installed."
+          fi
+      - uses: gradle/actions/setup-gradle@v5
+        with:
+          # The compile job owns Gradle cache writes; concurrent lint reads only.
+          cache-read-only: true
+      - name: Run full Android Lint
+        run: ./gradlew :app:lintRelease -PciPrArm64Only=true -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace --profile
       - name: Upload lint report
-        if: failure()
+        if: always()
         uses: actions/upload-artifact@v6
         with:
           name: lint-report
           path: app/build/reports/lint-results-*
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Upload PR Gradle performance report
-        if: always() && steps.android-scope.outputs.required == 'true'
+      - name: Upload Lint performance report
+        if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: gradle-pr-profile
+          name: gradle-pr-lint-profile
           path: '**/build/reports/profile/*.html'
           if-no-files-found: ignore
           retention-days: 7
