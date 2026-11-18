@@ -66,8 +66,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
     val settings by vm.settings.collectAsStateWithLifecycle()
     val isQq = queue.current?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC
     val playbackNetworkStatus by vm.container.playbackNetworkStatus.collectAsStateWithLifecycle()
-    val requestedQuality = if (queue.current?.serviceTrack != null) AudioQuality.AUTO
-        else settings.qualityFor(queue.current?.musicSource, playbackNetworkStatus.kind)
+    val requestedQuality = settings.qualityFor(queue.current?.musicSource, playbackNetworkStatus.kind)
     val displayedQuality = if (state.song?.privateLibrary == true) state.song?.originalQualityLabel.orEmpty()
         else state.audioInfo?.label ?: requestedQuality.qualityLabel(isQq)
     val appearance by vm.container.settings.state.collectAsStateWithLifecycle()
@@ -281,7 +280,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                         fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 PlayerIconButton(PlayerIcon.SHARE, "分享歌曲", { overlay = PlayerOverlay.SHARE }, Modifier.testTag("player_share"),
-                    enabled = queue.current?.let { it.serviceTrack == null } == true)
+                    enabled = queue.current != null)
             }
         }
         PlayerSidePageLayout(sidePage,
@@ -455,8 +454,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             PlayerOverlay.NONE -> Unit
             PlayerOverlay.BACKGROUND -> PlayerBackgroundDialog(vm.container, dismiss)
             PlayerOverlay.LYRICS_MANAGEMENT -> queue.current?.let { PlayerLyricsManagementDialog(vm.container, it, dismiss) }
-            PlayerOverlay.SHARE -> queue.current?.takeUnless { it.serviceTrack != null }
-                ?.let { io.github.currencortex.music.feature.share.SongShareDialog(it, dismiss) }
+            PlayerOverlay.SHARE -> queue.current?.let { io.github.currencortex.music.feature.share.SongShareDialog(it, dismiss) }
             PlayerOverlay.COMMENTS -> PlayerCommentsDialog(comments, dismiss, { vm.loadComments() }, { vm.loadComments(more = true) },
                 commentComposer, vm::onCommentEdited, vm::replyTo, vm::sendComment,
                 vm::selectCommentSort, vm::loadCommentReplies, vm::likeComment, vm::deleteComment,

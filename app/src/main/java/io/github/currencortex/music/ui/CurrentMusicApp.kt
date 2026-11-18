@@ -431,14 +431,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             else action()
         }
         val webLinkResolver = remember { io.github.currencortex.music.core.links.MusicWebLinkResolver() }
-        val musicAuthorization by container.musicServices.authorizationOutcome.collectAsStateWithLifecycle()
-        LaunchedEffect(musicAuthorization, launchFinished, startupRouted) {
-            val outcome = musicAuthorization ?: return@LaunchedEffect
-            if (!launchFinished || !startupRouted) return@LaunchedEffect
-            navigateLibrary("music-services")
-            if (outcome is AppResult.Failure) libraryVm.message.value = outcome.message
-            container.musicServices.consumeAuthorizationOutcome(outcome)
-        }
         LaunchedEffect(webLinkRequest?.id, launchFinished, startupRouted) {
             val request = webLinkRequest ?: return@LaunchedEffect
             if (!launchFinished || !startupRouted) return@LaunchedEffect
@@ -449,19 +441,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             // Startup routing must finish first, so a cold link cannot be overwritten by restoration.
             container.sessionRestored.await()
             try {
-                val connectionLink = android.net.Uri.parse(request.url)
-                if (connectionLink.scheme == "https" && connectionLink.host == io.github.currencortex.music.data.musicservice.CONNECTION_HOST &&
-                    connectionLink.port in listOf(-1, 443)) {
-                    when (connectionLink.path) {
-                        io.github.currencortex.music.data.musicservice.CONNECTION_PATH -> {
-                            val descriptor = requireNotNull(connectionLink.getQueryParameters("descriptor").singleOrNull())
-                            container.musicServices.preview(descriptor)
-                            navigateLibrary("music-services")
-                            onWebLinkConsumed(request.id)
-                            return@LaunchedEffect
-                        }
-                    }
-                }
                 when (val target = webLinkResolver.resolve(request.url)) {
                     io.github.currencortex.music.core.links.MusicWebLink.Home -> {
                         playerSheetMotion = PlayerSheetMotion.NONE
@@ -505,9 +484,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
                 libraryVm.message.value = "一起听房间当前支持网易云歌曲"; return
             }
-            if (song.privateLibrary || song.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL) {
-                libraryVm.message.value = "本地或私有曲库歌曲不能提交到一起听房间"; return
-            }
+            if (song.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.NAVIDROME, io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.LOCAL)) { libraryVm.message.value = "本地或私有曲库歌曲不能提交到一起听房间"; return }
             if (nativeTogether.active) { container.listenTogether.request(song); return }
             if (!container.roomSession.active || song.id in roomPending) return
             val revision = container.accountRepository.sessionRevision.value
@@ -737,13 +714,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 }
                 entry(NETWORK.toString()) {
                     MusicSettingsScreen(musicSettingsVm, onNavidrome = { navigateLibrary("navidrome") },
-                        onEmby = { navigateLibrary("emby") }, onMusicServices = { navigateLibrary("music-services") })
-                }
-                entry("music-services") {
-                    io.github.currencortex.music.feature.musicservice.MusicServicesScreen(container.musicServices,
-                        onPlay = { songs, index -> playWithPermission { container.playerController.playList(songs, index) } },
-                        onVideo = { song -> playWithPermission { container.playerController.playVideo(song.copy(video = true)); navigateLibrary("lib/video") } },
-                        onDownload = { song -> downloadSongJson = io.github.currencortex.music.core.network.ApiJson.encodeToString(Song.serializer(), song) })
+                        onEmby = { navigateLibrary("emby") }, onLogin = { authVm.begin(); navigateLibrary("user/login") })
                 }
                 entry("playback-settings") { io.github.currencortex.music.feature.settings.PlaybackSettingsScreen(musicSettingsVm) }
                 entry("audio-output") { io.github.currencortex.music.feature.settings.AudioOutputScreen(container) }

@@ -14,7 +14,6 @@ class ListeningReportQueue(
     netease: (suspend (Song, Long?, RequestSession) -> Unit)? = null,
     navidrome: suspend (Song, Long?, RequestSession) -> Unit,
     private val onFailure: (String, ErrorKind) -> Unit = { _, _ -> },
-    external: (suspend (Song, Long?, RequestSession) -> Unit)? = null,
 ) {
     private data class Report(val song: Song, val ms: Long?, val owner: RequestSession)
     private fun worker(name: String, accepts: (Report) -> Boolean,
@@ -37,15 +36,12 @@ class ListeningReportQueue(
         report.owner.neteaseRevision != null && report.owner.neteaseRevision == currentSession(report.song).neteaseRevision
     }, send) }
     private val privateLibrary = worker("Navidrome", { it.owner == currentSession(it.song) }, navidrome)
-    private val externalMusic = external?.let { send -> worker("Connected service",
-        { it.owner.token != null && it.owner == currentSession(it.song) }, send) }
 
     fun report(song: Song, owner: RequestSession, milliseconds: Long? = null) {
         if (song.video || song.musicSource == MusicSource.LOCAL || song.musicSource == MusicSource.EMBY ||
             song.musicSource == MusicSource.QQ_MUSIC || milliseconds != null && milliseconds <= 0) return
         val report = Report(song, milliseconds, owner)
-        if (song.musicSource == MusicSource.SERVICE) externalMusic?.trySend(report)
-        else if (song.musicSource == MusicSource.NAVIDROME) privateLibrary.trySend(report)
+        if (song.musicSource == MusicSource.NAVIDROME) privateLibrary.trySend(report)
         else {
             current.trySend(report)
             if (song.musicSource == MusicSource.NETEASE) native?.trySend(report)

@@ -24,7 +24,7 @@ val LocalRoomSongRequest = staticCompositionLocalOf<RoomSongRequest?> { null }
 
 @Composable fun SongActionsSheet(menu: SongMenu, onDownload: ((Song) -> Unit)? = null, onDismiss: () -> Unit) {
     var sharing by remember(menu.song) { mutableStateOf(menu.shareInitially) }
-    if (sharing && menu.song.serviceTrack == null) {
+    if (sharing) {
         io.github.currencortex.music.feature.share.SongShareDialog(menu.song, onDismiss)
         return
     }
@@ -37,12 +37,10 @@ val LocalRoomSongRequest = staticCompositionLocalOf<RoomSongRequest?> { null }
                 MusicDestinationRow("下一首播放", { onDismiss(); menu.next() }, chevron = false)
                 MusicDestinationRow("加入队列", { onDismiss(); menu.queue() }, chevron = false)
             }
-            val supportsBuiltInActions = !menu.song.video && menu.song.serviceTrack == null &&
-                menu.song.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL
-            if (supportsBuiltInActions && onDownload != null) MusicDestinationRow("下载歌曲", {
+            if (!menu.song.video && menu.song.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL && onDownload != null) MusicDestinationRow("下载歌曲", {
                 onDismiss(); onDownload(menu.song)
             }, modifier = Modifier.testTag("song_download"), summary = "保存歌曲信息、封面与歌词", chevron = false)
-            if (supportsBuiltInActions) MusicDestinationRow("分享歌曲", { sharing = true },
+            if (!menu.song.video && menu.song.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL) MusicDestinationRow("分享歌曲", { sharing = true },
                 modifier = Modifier.testTag("song_share"), summary = "生成海报、保存图片或复制链接", chevron = false)
             CompositionLocalProvider(LocalDismissSongMenu provides onDismiss) { menu.extra?.invoke() }
             menu.onMultiSelect?.let { select ->

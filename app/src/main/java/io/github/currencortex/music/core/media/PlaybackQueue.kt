@@ -1,5 +1,6 @@
 package io.github.currencortex.music.core.media
 
+import io.github.currencortex.music.data.song.MusicSource
 import io.github.currencortex.music.data.song.Song
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,11 +46,26 @@ class PlaybackQueue {
         state.value = resetHistory(state.value.copy(songs = songs.toList(), index = if (songs.isEmpty()) -1 else index.coerceIn(songs.indices), positionMs = 0,
             mode = if (state.value.mode == PlaybackMode.HEART) PlaybackMode.LIST else state.value.mode, heartPlaylistId = 0, radioSession = null))
     }
+    /** Drop tracks persisted by the removed external-service feature before they reach playback or song actions. */
+    private fun QueueSnapshot.withoutRemovedServiceTracks(): QueueSnapshot {
+        if (songs.none { it.musicSource == MusicSource.SERVICE }) return this
+        val kept = songs.indices.filter { songs[it].musicSource != MusicSource.SERVICE }
+        if (kept.isEmpty()) return copy(songs = emptyList(), index = -1, positionMs = 0,
+            shuffleHistory = emptyList(), shuffleHistoryIndex = -1)
+        val current = songs.getOrNull(index)
+        val currentKept = current != null && current.musicSource != MusicSource.SERVICE
+        val nearest = kept.firstOrNull { it >= index } ?: kept.last()
+        val remapped = if (currentKept) kept.indexOf(index) else kept.indexOf(nearest)
+        return copy(songs = kept.map { songs[it] }, index = remapped,
+            positionMs = if (currentKept) positionMs else 0,
+            shuffleHistory = emptyList(), shuffleHistoryIndex = -1)
+    }
     fun restore(value: QueueSnapshot) {
         plannedShuffle = null
-        val restored = value.copy(index = if (value.songs.isEmpty()) -1 else value.index.coerceIn(value.songs.indices), positionMs = value.positionMs.coerceAtLeast(0), radioSession = null,
+        val clean = value.withoutRemovedServiceTracks()
+        val restored = clean.copy(index = if (clean.songs.isEmpty()) -1 else clean.index.coerceIn(clean.songs.indices), positionMs = clean.positionMs.coerceAtLeast(0), radioSession = null,
             // A killed process cannot resume an unfinished optimistic recommendation request.
-            mode = if (value.mode == PlaybackMode.HEART && value.heartPlaylistId <= 0) PlaybackMode.LIST else value.mode)
+            mode = if (clean.mode == PlaybackMode.HEART && clean.heartPlaylistId <= 0) PlaybackMode.LIST else clean.mode)
         state.value = if (restored.mode == PlaybackMode.SHUFFLE && restored.hasHistory()) restored else resetHistory(restored)
     }
     fun next(automatic: Boolean = false, random: Random = Random.Default): Boolean {

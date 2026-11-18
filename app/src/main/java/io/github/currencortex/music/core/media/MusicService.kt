@@ -168,8 +168,7 @@ class MusicService : MediaSessionService() {
     private val dolbyAvailable = MutableStateFlow(false)
     private data class PreloadPlan(val request: AudioRequest, val metered: Boolean)
     private fun currentSession(song: Song? = container.playbackQueue.state.value.current) =
-        if (song?.serviceTrack != null) container.musicServices.historySession(song.serviceTrack)
-        else if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) container.qqMusic.session()
+        if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) container.qqMusic.session()
         else if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.session()
         else if (song?.musicSource == io.github.currencortex.music.data.song.MusicSource.EMBY) container.emby.session()
         else container.musicSession()
@@ -179,8 +178,6 @@ class MusicService : MediaSessionService() {
         container.audioRequest(song, quality, supportsDolby = allowDolby)
     private fun playbackQuality(song: Song? = container.playbackQueue.state.value.current) =
         container.musicSettings.state.value.qualityFor(song?.musicSource, container.playbackNetworkStatus.value.kind)
-    private fun effectiveQuality(song: Song): AudioQuality =
-        if (song.serviceTrack != null) AudioQuality.AUTO else playbackQuality(song)
 
     private fun checkDolbyRoute(): Boolean = playbackQuality() in setOf(AudioQuality.AUTO, AudioQuality.DOLBY) &&
         !updateDolbySupport() && retryAutoDolby()
@@ -211,8 +208,7 @@ class MusicService : MediaSessionService() {
         }
         listening.update(SystemClock.elapsedRealtime(), isPlaying)
         if (isPlaying && !recorded && song != null && !song.video &&
-            (if (song.serviceTrack != null) owner.token != null
-            else if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.accepts(song)
+            (if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME) container.navidrome.accepts(song)
             else container.accountRepository.token != null ||
                 container.nativeNetease != null && container.neteaseSessions.state.value.loggedIn && !container.neteaseSessions.state.value.stale)) {
             recorded = true
@@ -389,7 +385,7 @@ class MusicService : MediaSessionService() {
                     !state.loading && !state.resolving &&
                     player.currentMediaItem?.mediaId == container.playbackQueue.state.value.current?.id?.toString()) container.playbackQueue.previewNext() else null
                 if (next == null || next.musicSource == io.github.currencortex.music.data.song.MusicSource.LOCAL) { preloadBudget.reset(); null } else {
-                    val request = audioRequest(next, effectiveQuality(next))
+                    val request = audioRequest(next, playbackQuality(next))
                     if (preloadBudget.allow("${state.song?.id}:${request.key}", state.positionMs, state.bufferedPositionMs, state.durationMs))
                         PreloadPlan(request, settings.preloadMetered) else null
                 }
@@ -556,7 +552,7 @@ class MusicService : MediaSessionService() {
             container.sleepTimer.state.value.waitingForSongEnd || container.audioCache.clearing.value ||
             player.currentMediaItem?.mediaId != from.id.toString()) return null
         val next = container.playbackQueue.previewNext()?.takeUnless { it.video } ?: return null
-        return TransitionOffer(from, next, audioRequest(next, effectiveQuality(next)))
+        return TransitionOffer(from, next, audioRequest(next, playbackQuality(next)))
     }
     private fun promoteTransition(song: Song, outgoing: ExoPlayer, incoming: ExoPlayer) {
         failedStagedDolby = null
@@ -777,8 +773,7 @@ class MusicService : MediaSessionService() {
             audioFocusReady.await()
             when (val result = appResult {
                 if (song.video) {
-                    val url = song.serviceTrack?.let { container.musicServices.media(it, "playback.mv").url }
-                        ?: withContext(Dispatchers.IO) { container.libraryRepository.mvSource(song.mv, song.videoQuality) }
+                    val url = withContext(Dispatchers.IO) { container.libraryRepository.mvSource(song.mv, song.videoQuality) }
                     ResolvedAudio(io.github.currencortex.music.data.song.AudioSource(url, "video", 0, 0), "") to false
                 } else {
                     val quality = container.musicSettings.snapshot()
