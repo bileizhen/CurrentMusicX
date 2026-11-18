@@ -17,6 +17,9 @@ data class LibraryHomeState(val loading: Boolean = false, val daily: List<Song> 
     val recommendedPlaylists: List<Playlist> = emptyList())
 
 class LibraryViewModel(val container: AppContainer) : ViewModel() {
+    private companion object {
+        val homeCache = mutableMapOf<String, LibraryHomeState>()
+    }
     val home = MutableStateFlow(LibraryHomeState())
     val message = MutableStateFlow<String?>(null)
     val busy = MutableStateFlow(false)
@@ -57,10 +60,13 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
                     val nextIdentity = keys.take(2) + listOf(keys[4], keys.last())
                     val sameAccount = identity == nextIdentity
                     identity = nextIdentity
+                    val cacheKey = nextIdentity.joinToString("|")
+                    val cached = synchronized(homeCache) { homeCache[cacheKey] }
                     val pending = setOf("每日推荐", "每日推荐歌单", "最近播放", "我的歌单")
-                    home.value = if (sameAccount) home.value.copy(loading = true, errors = emptyMap(), pendingSections = pending)
-                        else LibraryHomeState(loading = true, pendingSections = pending)
+                    home.value = (cached ?: if (sameAccount) home.value else LibraryHomeState())
+                        .copy(loading = true, errors = emptyMap(), pendingSections = pending)
                     loadHome()
+                    synchronized(homeCache) { homeCache[cacheKey] = home.value }
                     if (container.accountRepository.token != null || container.nativeNetease != null) prefetchJob = viewModelScope.launch {
                         launch { appResult { container.primaryLibrary.likedPlaylist() } }
                         home.value.playlists.firstOrNull()?.let { playlist -> launch { appResult {
@@ -93,7 +99,19 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
             launch { section("我的歌单", { container.primaryLibrary.playlists() }) { s, d -> s.copy(playlists = d) } },
         ).joinAll()
         home.update { it.copy(loading = false, loaded = true, pendingSections = emptySet()) }
+        val snapshot = home.value
+        synchronized(homeCache) {
+            homeCache.entries.removeIf { it.value === snapshot }
+            homeCache[homeCacheKey()] = snapshot
+        }
     }
+
+    private fun homeCacheKey(): String = listOf(
+        container.accountRepository.state.value.account?.id,
+        container.musicSettings.state.value.server,
+        container.primaryLibrary.identity.value,
+        container.neteaseSessions.state.value.profile?.uid,
+    ).joinToString("|")
     fun choosePlaylist(song: Song) {
         if (song.emby != null) { message.value = "Emby 歌单当前仅支持浏览"; return }
         if (busy.value) return

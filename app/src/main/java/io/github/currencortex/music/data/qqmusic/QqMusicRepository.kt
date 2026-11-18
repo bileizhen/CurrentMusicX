@@ -49,6 +49,10 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
     private var radioPoolId: String = ""
     private var radioSceneId: String = ""
     private val persistenceMutex = Mutex()
+    private var homeSnapshot = QqHomeSnapshot()
+
+    fun cachedHome(): QqHomeSnapshot = synchronized(this) { homeSnapshot }
+    fun cacheHome(snapshot: QqHomeSnapshot) = synchronized(this) { homeSnapshot = snapshot }
 
     init {
         runCatching { tokenStore?.read()?.let { raw -> ApiJson.parseToJsonElement(raw) as? JsonObject } }
@@ -108,6 +112,7 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
         val next = owner()
         if (selectedOwner == next) return
         selectedOwner = next; generation++; qrOwners.clear(); playlistMetadata.clear(); playlistSubscriptions.clear()
+        homeSnapshot = QqHomeSnapshot()
         resetKnownLikes(); likes.value = emptySet()
         val saved = persisted[ownerKey(next)]
         val stored = saved?.text("session")?.takeIf(String::isNotBlank)
@@ -146,6 +151,7 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
                 state.value.avatar.isNotBlank() || state.value.uin.isNotBlank()
             credential = null
             generation++
+            homeSnapshot = QqHomeSnapshot()
             resetKnownLikes(); likes.value = emptySet()
             mutableState.value = QqAccountState(revision = generation)
             qrOwners.clear()
@@ -297,6 +303,7 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
                     qrOwners.remove(key)
                     credential = token
                     generation++
+                    homeSnapshot = QqHomeSnapshot()
                     resetKnownLikes()
                     likes.value = emptySet()
                     playlistMetadata.clear()
@@ -358,8 +365,10 @@ class QqMusicRepository(private val api: ApiClient, private val owner: () -> Req
         return state.value
     }
     suspend fun refresh() {
+        val previousCredential = credential
         val data = payload(call("login/refresh", requiresSession = true, method = "POST", body = buildJsonObject {}))
         data.text("token", "session").takeIf(String::isNotBlank)?.let { credential = it; generation++ }
+        if (credential != previousCredential) homeSnapshot = QqHomeSnapshot()
         mutableState.value = state.value.copy(revision = generation); persist()
     }
     suspend fun logout() {
