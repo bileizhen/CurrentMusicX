@@ -426,7 +426,8 @@ private suspend fun readFeedbackMedia(
             val count = input.read(buffer)
             if (count < 0) break
             total += count
-            require(total <= 25 * 1024 * 1024) { "反馈媒体超过 25 MiB 上限" }
+            val maxBytes = if (contentType.startsWith("image/")) 2 * 1024 * 1024 else 25 * 1024 * 1024
+            require(total <= maxBytes) { "反馈媒体超过大小上限" }
             output.write(buffer, 0, count)
         }
         output.toByteArray()
