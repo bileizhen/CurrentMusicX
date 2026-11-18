@@ -112,7 +112,6 @@ class ApiClient(
             retryConnection -> http
             else -> singleAttemptHttp
         }
-        }
         val call = requestClient.newCall(request)
         callTimeoutMillis?.let { call.timeout().timeout(it, TimeUnit.MILLISECONDS) }
         executeProjectRequest(path, call) {
