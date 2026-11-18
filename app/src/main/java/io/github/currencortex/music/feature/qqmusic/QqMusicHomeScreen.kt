@@ -44,11 +44,13 @@ import io.github.currencortex.music.feature.home.HomePersonalRoamingEntry
 import io.github.currencortex.music.feature.home.HomeSectionHeader
 import io.github.currencortex.music.feature.library.LibrarySongActions
 import io.github.currencortex.music.feature.library.LibraryViewModel
+import io.github.currencortex.music.feature.library.SongArtworkPreview
 import io.github.currencortex.music.ui.component.HomeProfileAvatar
 import io.github.currencortex.music.ui.component.HomeBrandTitle
 import io.github.currencortex.music.ui.component.MusicPlatformSwitcher
 import io.github.currencortex.music.ui.component.LoadingArtworkCards
 import io.github.currencortex.music.ui.component.LocalMusicBottomInset
+import io.github.currencortex.music.ui.component.LocalSongDownload
 import io.github.currencortex.music.ui.component.LoadingSongList
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.MusicSearchBar
@@ -143,6 +145,9 @@ fun QqMusicHomeScreen(
     var refresh by remember { mutableIntStateOf(0) }
     val initialHome = remember { container.qqMusic.cachedHome() }
     var state by remember(initialHome) { mutableStateOf(initialHome.toUiState(qqAccount.loggedIn)) }
+    var artworkPreview by remember { mutableStateOf<Pair<Song, Rect>?>(null) }
+    var sharingSong by remember { mutableStateOf<Song?>(null) }
+    val downloadSong = LocalSongDownload.current
     val identity = "${preferences.server}|$sessionRevision|${qqAccount.revision}|${qqAccount.loggedIn}"
 
     LaunchedEffect(identity, refresh) {
@@ -312,6 +317,7 @@ fun QqMusicHomeScreen(
                                         song.artists,
                                         { play(state.forYou, index) },
                                         Modifier.width(artworkCardWidth).testTag("qq_home_recommendation_${song.id}"),
+                                        onLongClick = { bounds -> artworkPreview = song to bounds },
                                     )
                                 }
                             }
@@ -417,6 +423,27 @@ fun QqMusicHomeScreen(
                 }
             }
         }
+    }
+    artworkPreview?.let { (song, bounds) ->
+        SongArtworkPreview(
+            libraryVm,
+            song,
+            bounds,
+            play = {
+                val index = state.forYou.indexOfFirst { it.id == song.id }
+                if (index >= 0) play(state.forYou, index) else play(listOf(song), 0)
+            },
+            queue = { container.playerController.add(song) },
+            roomRequest = false,
+            playVersion = { version -> play(listOf(version), 0) },
+            navigate = navigate,
+            share = { sharingSong = it },
+            download = downloadSong,
+            onDismiss = { artworkPreview = null },
+        )
+    }
+    sharingSong?.let { song ->
+        io.github.currencortex.music.feature.share.SongShareDialog(song) { sharingSong = null }
     }
 }
 
