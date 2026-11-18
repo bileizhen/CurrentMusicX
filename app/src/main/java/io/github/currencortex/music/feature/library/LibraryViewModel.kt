@@ -113,7 +113,6 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         container.neteaseSessions.state.value.profile?.uid,
     ).joinToString("|")
     fun choosePlaylist(song: Song) {
-        if (song.serviceTrack != null) { message.value = "请在外接音乐服务中管理歌单"; return }
         if (song.emby != null) { message.value = "Emby 歌单当前仅支持浏览"; return }
         if (busy.value) return
         selectedSong.value = song
@@ -162,7 +161,6 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
     }
     fun addToPlaylist(playlist: Playlist) {
         val song = selectedSong.value ?: return
-        if (song.serviceTrack != null) return
         if (playlist !in availablePlaylists.value) return
         action("已加入歌单") {
             if (playlist.source == "qqmusic") container.qqMusic.addToPlaylist(playlist.remoteId, listOf(song))
@@ -225,7 +223,6 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
     }
 
     fun togglePrimaryLike(song: Song, undoable: Boolean = false, desiredLiked: Boolean? = null) {
-        if (song.serviceTrack != null) { message.value = "请在外接音乐服务中管理收藏"; return }
         if (primaryLikeBusy.value || song.video) return
         primaryLikeBusy.value = true
         likeUndoNotice?.let(container.errorNotices::clear); likeUndoNotice = null
@@ -340,7 +337,7 @@ class LibraryViewModel(val container: AppContainer) : ViewModel() {
         if (container.primaryLibrary.resolveLikeNetease()) container.neteaseSongActions.likedIds()
     } }
     fun refreshStatuses(songs: List<Song>) = viewModelScope.launch { appResult {
-        val legacySongs = songs.filterNot { it.serviceTrack != null || it.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.NAVIDROME,
+        val legacySongs = songs.filterNot { it.musicSource in setOf(io.github.currencortex.music.data.song.MusicSource.EMBY, io.github.currencortex.music.data.song.MusicSource.NAVIDROME,
             io.github.currencortex.music.data.song.MusicSource.LOCAL, io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) }
         if (legacySongs.isEmpty()) return@appResult
         if (container.primaryLibrary.resolveLikeNetease()) container.neteaseSongActions.likedIds()

@@ -45,11 +45,3 @@ adb shell pm get-app-links com.bileizhen.currentmusic
 - 使用仍有效的网易云一起听邀请测试：确认打开后仅预填、不自动加入；登录后返回、旋转、连续打开不同邀请仍显示正确内容。正在其他会话时退出后仍保留新邀请；过期邀请的失败由现有加入流程提示。
 
 指定包名的 `adb shell am start -a android.intent.action.VIEW -d 'URL' -p com.bileizhen.currentmusic` 只能验证应用处理流程，不能证明系统默认分发或域名验证通过。真机验收需额外使用不指定包名的链接打开操作。
-
-## 外接音乐服务
-
-在 X 项目域名 `currentmusicx.bileizhen.top` 的 `/.well-known/assetlinks.json` 合并 `connection/assetlinks.json`。在 `/connect` 和 `/connect/callback` 提供 `connection/index.html` 作为浏览器回退页。回调路径使用无查询参数的访问日志，回退页禁止引用来源信息。部署时以发布 APK 的公开签名指纹核对关联。
-
-服务网页使用 `https://currentmusicx.bileizhen.top/connect?descriptor=URL编码后的HTTPS地址` 打开连接确认页。描述、API 与授权地址来自同一 HTTPS 源。服务需注册公开 OAuth 客户端，并精确登记 `https://currentmusicx.bileizhen.top/connect/callback`。App 核对回跳 issuer、state 和单次 S256 PKCE 会话。测试使用独立的 HTTPS 样例服务和虚构曲库。
-
-验收时在 Android 系统链接设置中查看 `currentmusicx.bileizhen.top` 为已验证。由服务网页点击按钮，在 App 确认后发起一次权限授权，浏览器同意后应回到正确的服务页面。服务域名也启用 App Links 时，起始授权页仍应在系统浏览器打开。也要覆盖取消、重复连接、过期回跳、断开连接和首次安装的空列表。

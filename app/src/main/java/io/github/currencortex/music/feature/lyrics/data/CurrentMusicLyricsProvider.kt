@@ -26,7 +26,7 @@ class CurrentMusicLyricsProvider(private val music: MusicRepository, private val
     private val now: () -> Long = System::currentTimeMillis,
     private val log: (String) -> Unit = {}) : LyricsProvider {
     override suspend fun findLyrics(song: Song): LyricsProviderResult {
-        if (song.musicSource == MusicSource.QQ_MUSIC || song.serviceTrack != null) return when (val result = music.lyricsDocument(song)) {
+        if (song.musicSource == MusicSource.QQ_MUSIC) return when (val result = music.lyricsDocument(song)) {
             is AppResult.Success -> LyricsProviderResult.Parsed(result.value)
             is AppResult.Failure -> LyricsProviderResult.Failure(LyricsErrorCode.NETWORK_ERROR, result.message)
         }
