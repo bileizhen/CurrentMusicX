@@ -124,6 +124,7 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
                 val next = ApiJson.decodeFromJsonElement<MusicServicePage>(response)
                 page = if (append) next.copy(
                     items = page.items + next.items,
+                    resource = next.resource ?: page.resource,
                     tracks = page.tracks + next.tracks,
                     albums = page.albums + next.albums,
                 ) else next
