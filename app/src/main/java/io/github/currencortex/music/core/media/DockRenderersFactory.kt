@@ -87,7 +87,7 @@ internal class DockRenderersFactory(context: Context, private val meter: DockAud
                 if (processingSettings().mode.bypassProcessing) settings.copy(enabled = false) else settings
             }, hapticTimeline, adaptiveReport), DockAudioProcessor(meter, probe), OutputSampleRateProcessor(requestedRate = {
                 if (processingSettings().mode.bypassProcessing) 0 else outputSampleRate()
-            })).build(), outputSettings, outputStatus, diagnostics, primary)
+            }))).build(), outputSettings, outputStatus, diagnostics, primary)
         return diagnostics?.let { io.github.currencortex.music.core.media.engine.DiagnosticAudioSink(sink, it, primary, formatState) } ?: sink
     }
 }
