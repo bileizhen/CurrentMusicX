@@ -282,7 +282,7 @@ Release 启用 R8 与资源压缩，仍发布一个包含现有 ABI 的通用 AP
 - 每天北京时间 03:00 检查过期条目。`STALE_MODE` 默认 `dry-run`，维护者检查 Actions 日志后可设为 `live`：缺信息 14 天、无活动 60 天标记 stale，再等待 30 天；每次最多关闭两个符合条件的 Bug／问题。功能建议、PR、已分配负责人、有里程碑、重开过的条目受保护；`bot: skip`、`needs follow-up` 等标签可豁免。关闭理由是暂不计划处理，不代表修复完成。作者回复会转为待跟进，普通讨论会解除 stale。
 - 开发使用独立功能分支 → PR → CI → 合并 `main`。PR 标题使用 `feat:`、`fix:`、`perf:`、`docs:`、`deps:` 或 `chore:` 等前缀，机器人映射到已有发布分类标签；维护者手工添加的标签不被自动撤销。一个 PR 对应一个明确改动，完整解决问题时用 `Fixes #编号`，仅关联讨论时用 `Refs #编号`，不为制造发布条目而创建空 PR。
 - PR 的 `build` 保留 Python 快速检查，`test` 运行协作脚本测试和 actionlint。非草稿且包含应用相关改动的 PR 还会执行 `compileReleaseKotlin` 和 Android `lintRelease`；纯文档与 CI 配置类 PR 可跳过 Gradle，所有 PR 都不在此阶段生成正式 APK。草稿 PR 跳过耗时的 Android 检查。
-- 所有面向 `main` 的开放 PR 处理完毕后，Android CI 按累计改动决定是否打包。有应用改动时编译 Release APK，校验并上传未签名产物，然后交给签名发布流程。Android Lint 已在非草稿 PR 阶段执行，主线不再重复执行；主线工作流当前也不单独运行单元测试。
+- 所有面向 `main` 的开放 PR 处理完毕后，Android CI 按累计改动决定是否打包。有应用改动时编译 Release APK，校验并上传未签名产物，然后交给签名发布流程。Android Lint 已在非草稿 PR 阶段执行，主线 CI 预发布包还通过 `checkReleaseBuilds = false` 跳过隐式的 `lintVitalRelease`；正式版/本地 Release 构建保留这项致命问题检查。绕过 PR 直接推送代码到 main 时须另行运行 `:app:lintRelease`。主线工作流当前不单独运行单元测试。
 - 仓库允许对已审查的具体 PR 启用 Auto-merge，仅使用 Merge commit 保留原子提交。合并前需通过 `build` 和 `test`，并满足现有的分支同步与审查要求。
 - PR 合并后由 GitHub 自动删除远端功能分支，PR 记录和提交历史保留。本地分支及 worktree 不自动删除，清理前确认没有未提交或未合并的工作。
 - `Update PR branches` 在主线推进、PR 打开或更新时自动把 `main` 合入落后的非草稿 PR。仅处理无冲突且允许维护者更新的分支，使用精确 head SHA 防止并发覆盖；已同步的分支不重复更新，`bot: skip` 可退出自动处理。工作流只运行主线可信脚本，不检出 PR 代码、不强推、不代替审查或自动批准 CI。使用内置 `GITHUB_TOKEN` 更新后，GitHub 可能要求维护者批准新检查；fork 权限不足、冲突或分支保护阻止更新时会在日志提示，需人工处理。
