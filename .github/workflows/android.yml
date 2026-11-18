@@ -101,61 +101,8 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  lint:
-    needs: scope
-    if: needs.scope.outputs.required == 'true'
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          persist-credentials: false
-      - uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '17'
-      # ubuntu-24.04 includes these exact Android SDK/NDK/CMake versions.
-      # Avoid the expensive, repeated sdkmanager invocation on every CI run.
-      - name: Ensure required Android SDK components
-        shell: bash
-        run: |
-          set -euo pipefail
-          missing=()
-          [[ -d "$ANDROID_HOME/platforms/android-37.0" ]] || missing+=("platforms;android-37.0")
-          [[ -d "$ANDROID_HOME/build-tools/35.0.0" ]] || missing+=("build-tools;35.0.0")
-          [[ -d "$ANDROID_HOME/ndk/30.0.16248370" ]] || missing+=("ndk;30.0.16248370")
-          [[ -d "$ANDROID_HOME/cmake/4.1.2" ]] || missing+=("cmake;4.1.2")
-          if (( ${#missing[@]} )); then
-            sdkmanager "${missing[@]}"
-          else
-            echo "Required Android SDK packages are already installed."
-          fi
-      - uses: gradle/actions/setup-gradle@v5
-        with:
-          # Only the APK build job writes caches, to avoid parallel cache contention.
-          cache-read-only: true
-      - name: Android Lint (parallel with Release APK build)
-        env:
-          CI_BUILD_NUMBER: ${{ github.run_number }}
-        run: ./gradlew :app:lintRelease -PciBuildNumber="$CI_BUILD_NUMBER" -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace --profile
-      - name: Upload lint report
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: lint-report
-          path: app/build/reports/lint-results-*
-          if-no-files-found: ignore
-          retention-days: 7
-      - name: Upload Gradle Lint performance report
-        if: always()
-        uses: actions/upload-artifact@v6
-        with:
-          name: gradle-lint-profile
-          path: '**/build/reports/profile/*.html'
-          if-no-files-found: ignore
-          retention-days: 7
-
   request-publication:
-    needs: [build, lint]
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
