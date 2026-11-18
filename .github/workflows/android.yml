@@ -41,6 +41,10 @@ jobs:
     needs: scope
     if: needs.scope.outputs.required == 'true'
     runs-on: ubuntu-24.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_BASEDIR: ${{ github.workspace }}
+      CCACHE_MAXSIZE: 512M
     concurrency:
       group: android-build-${{ github.ref }}
       cancel-in-progress: true
@@ -69,6 +73,27 @@ jobs:
             echo "Required Android SDK packages are already installed."
           fi
       - uses: gradle/actions/setup-gradle@v5
+      # Cache compiler outputs rather than copying AGP's timestamp-sensitive .cxx tree.
+      # The NDK's Android toolchain uses ANDROID_CCACHE as a compiler launcher.
+      - name: Prepare native compiler cache
+        run: |
+          set -euo pipefail
+          if ! command -v ccache >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends ccache
+          fi
+          mkdir -p "$CCACHE_DIR"
+          ccache --version
+      - name: Restore native compiler cache
+        id: native-ccache
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: cmx-native-ccache-v1-${{ runner.os }}-${{ runner.arch }}-ndk30-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            cmx-native-ccache-v1-${{ runner.os }}-${{ runner.arch }}-ndk30-
+      - name: Reset native cache counters
+        run: ccache --zero-stats
       - name: Bundle installed CI release notes
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
@@ -79,7 +104,7 @@ jobs:
       - name: Build and verify unsigned CI release
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
-        run: ./gradlew :app:assembleRelease -PciBuildNumber="$CI_BUILD_NUMBER" -PinstalledReleaseNotesDir="$GITHUB_WORKSPACE/app/build/generated/installedReleaseNotes" -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace --profile
+        run: ./gradlew :app:assembleRelease -PciBuildNumber="$CI_BUILD_NUMBER" -PinstalledReleaseNotesDir="$GITHUB_WORKSPACE/app/build/generated/installedReleaseNotes" -Plei.officialRepositoriesFirst=true -PciNativeCcache=true --build-cache --no-daemon --stacktrace --profile
       - name: Prepare CI artifact
         env:
           CI_BUILD_NUMBER: ${{ github.run_number }}
@@ -100,6 +125,16 @@ jobs:
           path: '**/build/reports/profile/*.html'
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Native compiler cache statistics
+        if: always()
+        run: ccache --show-stats
+      - name: Save warmed native compiler cache
+        if: success()
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ env.CCACHE_DIR }}
+          key: ${{ steps.native-ccache.outputs.cache-primary-key }}
 
   request-publication:
     needs: build
