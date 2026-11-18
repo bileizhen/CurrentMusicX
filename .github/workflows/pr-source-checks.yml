@@ -44,16 +44,15 @@ jobs:
             } catch (error) {
               core.warning('Could not evaluate changed paths; run full Android checks: ' + error.message);
             }
-            core.info(required ? 'Running Android Kotlin compile and lint' : 'Lightweight-only PR; Android Gradle checks skipped');
+            core.info(required ? 'Run required Java/Kotlin compile and independent full Android Lint' : 'Lightweight-only PR; Android Gradle checks skipped');
             core.setOutput('required', String(required));
-
 
   # Keep the status context required by main's branch protection.
   build:
     needs: scope
     if: ${{ !cancelled() }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - name: Require successful PR scope decision
         env:
@@ -70,8 +69,6 @@ jobs:
           for path in Path('scripts').glob('*.py'):
               ast.parse(path.read_text(encoding='utf-8'), filename=str(path))
           PY
-      # Keep the required 'build' check fast for docs/automation-only PRs.
-      # Evaluate file paths from the GitHub API, not from untrusted PR scripts.
       # Keep Kotlin, Java, and KSP compilation as the fast required gate.
       # Full Android lint runs independently so its analysis doesn't serialize
       # behind the required 'build' status.
