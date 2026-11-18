@@ -160,10 +160,13 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
             is AppResult.Failure -> if (result.kind == ErrorKind.Unauthorized) "服务器可达，请登录" else result.kind.message
         })
     }
-    fun quality(value: AudioQuality) = viewModelScope.launch {
-        container.musicSettings.setQuality(value)
-        if (container.playbackQueue.state.value.current != null) container.playerController.qualityChanged()
+    fun mobileQuality(value: AudioQuality) = viewModelScope.launch {
+        container.musicSettings.setMobileQuality(value)
     }
+    fun wirelessQuality(value: AudioQuality) = viewModelScope.launch {
+        container.musicSettings.setWirelessQuality(value)
+    }
+    fun downloadQuality(value: AudioQuality) = viewModelScope.launch { container.musicSettings.setDownloadQuality(value) }
     fun restore(value: Boolean) = viewModelScope.launch { container.musicSettings.setRestore(value) }
     fun concurrentPlayback(value: Boolean) = viewModelScope.launch { container.musicSettings.setConcurrentPlayback(value) }
     fun transition(value: io.github.currencortex.music.data.settings.MusicTransitionMode) = viewModelScope.launch { container.musicSettings.setTransitionMode(value) }

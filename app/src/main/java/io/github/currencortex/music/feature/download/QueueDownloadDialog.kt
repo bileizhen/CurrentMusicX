@@ -20,7 +20,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
 @Composable internal fun QueueDownloadDialog(container: AppContainer, songs: List<Song>, show: Boolean, onDismiss: () -> Unit) {
     val directory by container.songDownloads.directory.collectAsStateWithLifecycle()
     val settings by container.musicSettings.state.collectAsStateWithLifecycle()
-    val quality = AudioQuality.from(settings.quality.value)
+    val quality = settings.downloadQuality
     var error by remember { mutableStateOf<String?>(null) }
     val folder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) try { container.songDownloads.setDirectory(uri); error = null }

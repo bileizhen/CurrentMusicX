@@ -9,6 +9,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.core.media.PlaybackMode
+import io.github.currencortex.music.core.media.PlaybackNetworkKind
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.song.*
 import kotlinx.coroutines.sync.Mutex
@@ -403,8 +404,9 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
         }
     }
     fun quality(value: io.github.currencortex.music.core.media.AudioQuality) = viewModelScope.launch {
-        container.musicSettings.setQuality(value)
-        player.qualityChanged()
+        if (container.playbackNetworkStatus.value.kind == PlaybackNetworkKind.WIRELESS)
+            container.musicSettings.setWirelessQuality(value)
+        else container.musicSettings.setMobileQuality(value)
     }
     fun lyricsFontSize(value: Float) = viewModelScope.launch { container.musicSettings.setLyricsFontSize(value) }
     fun lyricsFont(value: io.github.currencortex.music.data.settings.LyricsFont) = viewModelScope.launch { container.musicSettings.setLyricsFont(value) }

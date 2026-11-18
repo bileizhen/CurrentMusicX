@@ -43,7 +43,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val manager = container.songDownloads
     val directory by manager.directory.collectAsStateWithLifecycle()
     val info by remember(manager, song.id, song.musicSource) { manager.observe(song) }.collectAsStateWithLifecycle(null)
-    var quality by rememberSaveable(song.id) { mutableStateOf(container.musicSettings.state.value.quality.value) }
+    val settings by container.musicSettings.state.collectAsStateWithLifecycle()
+    var selectedQuality by rememberSaveable(song.id) { mutableStateOf<String?>(null) }
+    val quality = selectedQuality?.let(AudioQuality::from) ?: settings.downloadQuality
     var choosingQuality by rememberSaveable { mutableStateOf(false) }
     var afterFolder by rememberSaveable { mutableStateOf(false) }
     var deleting by remember { mutableStateOf(false) }
@@ -55,13 +57,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             if (song.emby != null) {
                 val account = container.emby.state.value
                 if (!account.download) { context.showMusicError("此 Emby 账号不允许下载"); return }
-                manager.start(song, AudioQuality.from(quality), 0, account.server, "emby:" + account.identity,
+                manager.start(song, quality, 0, account.server, "emby:" + account.identity,
                     navidromeRevision = account.revision)
             } else if (song.navidrome != null) {
                 val account = container.navidrome.state.value
-                manager.start(song, AudioQuality.from(quality), 0, account.server, "navidrome:" + account.identity,
+                manager.start(song, quality, 0, account.server, "navidrome:" + account.identity,
                     navidromeRevision = account.revision)
-            } else manager.start(song, AudioQuality.from(quality), container.accountRepository.state.value.account?.id ?: 0L,
+            } else manager.start(song, quality, container.accountRepository.state.value.account?.id ?: 0L,
                 container.accountRepository.server, container.audioSettings.access().identity,
                 if (container.nativeNetease != null) container.neteaseSessions.state.value.profile?.uid ?: 0L else -1)
         } catch (cancelled: CancellationException) { throw cancelled }
@@ -96,14 +98,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         afterFolder = false
     }
     // Reuse the playback picker so both quality sheets stay visually identical.
-    if (choosingQuality) AudioQualitySheet(AudioQuality.from(quality), { quality = it.value },
+    if (choosingQuality) AudioQualitySheet(quality, { selectedQuality = it.value },
         { choosingQuality = false }, enabled = !active, title = "下载音质")
     else MusicDialog("下载歌曲", onDismiss) {
         Column(Modifier.testTag("song_download_dialog").heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(song.name, fontSize = 18.sp)
             Text(song.artists, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
-            if (song.privateLibrary) Text(song.originalQualityLabel) else MusicDestinationRow("下载音质", { choosingQuality = true }, summary = AudioQuality.from(quality).label,
+            if (song.privateLibrary) Text(song.originalQualityLabel) else MusicDestinationRow("下载音质", { choosingQuality = true }, summary = quality.label,
                 enabled = !active && !deleting, modifier = Modifier.testTag("song_download_quality"))
             val location = directory?.let { Uri.decode(it.lastPathSegment.orEmpty()).substringAfter(':') }
                 ?: if (Build.VERSION.SDK_INT >= 29) "Download/CurrentMusic" else "请选择文件夹"

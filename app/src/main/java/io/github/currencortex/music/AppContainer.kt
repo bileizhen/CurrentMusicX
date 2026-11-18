@@ -22,6 +22,7 @@ import io.github.currencortex.music.data.song.MusicRepository
 import io.github.currencortex.music.data.local.MusicDatabase
 import io.github.currencortex.music.data.settings.MusicSettingsRepository
 import io.github.currencortex.music.data.settings.AudioProvider
+import io.github.currencortex.music.data.settings.playbackQuality
 import androidx.room.Room
 import kotlinx.serialization.decodeFromString
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -50,6 +51,8 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         scope = appScope,
         produceFile = { context.preferencesDataStoreFile("app$storageSuffix.preferences_pb") },
     )
+    val playbackNetworkStatus = preloadNetwork(context.applicationContext)
+        .stateIn(appScope, kotlinx.coroutines.flow.SharingStarted.Eagerly, PreloadNetworkStatus())
 
     val updateTransfer = io.github.currencortex.music.core.update.UpdateTransfer(
         io.github.currencortex.music.core.update.UpdateDownloader(okhttp3.OkHttpClient(), java.io.File(context.cacheDir, "updates"),
@@ -441,7 +444,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         io.github.currencortex.music.data.netease.listen.NeteaseListenTogetherRepository(neteaseTransport,
             trace = { if (BuildConfig.DEBUG) android.util.Log.d("ListenTogetherSync", it) }),
         externalPlayer ?: playerController, playerScope, musicRepository::detail,
-        { song -> musicRepository.source(song, AudioQuality.from(musicSettings.state.value.quality.value), audioSession()).url },
+        { song -> musicRepository.source(song, musicSettings.state.value.playbackQuality(playbackNetworkStatus.value.kind), audioSession()).url },
         details = musicRepository::details,
         trace = { if (BuildConfig.DEBUG) android.util.Log.d("ListenTogetherSync", it) })
     val ready = CompletableDeferred<Unit>()

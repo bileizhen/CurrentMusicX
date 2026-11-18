@@ -4,12 +4,16 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.*
 import io.github.currencortex.music.core.config.ServerDefaults
 import io.github.currencortex.music.core.media.AudioQuality
+import io.github.currencortex.music.core.media.PlaybackNetworkKind
 import io.github.currencortex.music.core.network.ServerUrl
 import io.github.currencortex.music.core.network.CurrentMusicServer
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
-data class MusicSettings(val server: String = ServerDefaults.URL, val quality: AudioQuality = AudioQuality.AUTO,
+data class MusicSettings(val server: String = ServerDefaults.URL,
+                         val mobileQuality: AudioQuality = AudioQuality.AUTO,
+                         val wirelessQuality: AudioQuality = AudioQuality.AUTO,
+                         val downloadQuality: AudioQuality = AudioQuality.AUTO,
                          val restoreQueue: Boolean = true,
                          val nickname: String = "", val accountId: Long = 0,
                          val preloadAudio: Boolean = true, val preloadMetered: Boolean = false,
@@ -31,6 +35,9 @@ enum class ListeningSource(val label: String) {
     LOCAL("CurrentMusicX"), NETEASE("网易云");
     companion object { fun from(value: String?) = entries.firstOrNull { it.name == value } ?: LOCAL }
 }
+
+internal fun MusicSettings.playbackQuality(network: PlaybackNetworkKind) =
+    if (network == PlaybackNetworkKind.WIRELESS) wirelessQuality else mobileQuality
 
 enum class LyricsFont(val label: String) {
     SYSTEM("系统字体"), WENKAI("霞鹜文楷"), IMPORTED("导入字体");
@@ -105,6 +112,9 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
     private val serverMode = stringPreferencesKey("music.serverMode")
     private val customServer = stringPreferencesKey("music.customServer")
     private val quality = stringPreferencesKey("music.quality")
+    private val mobileQuality = stringPreferencesKey("music.quality.mobile")
+    private val wirelessQuality = stringPreferencesKey("music.quality.wireless")
+    private val downloadQuality = stringPreferencesKey("music.quality.download")
     private val restore = booleanPreferencesKey("music.restore")
     private val nickname = stringPreferencesKey("account.nickname")
     private val account = longPreferencesKey("account.id")
@@ -169,7 +179,11 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
         glowIntensity = p[appleGlowIntensity] ?: AppleMusicLyricsOptions.DEFAULT_GLOW_INTENSITY,
         blurStrength = p[appleBlurStrength] ?: AppleMusicLyricsOptions.DEFAULT_BLUR_STRENGTH,
     )
-    private fun decode(p: Preferences) = MusicSettings(p[server] ?: ServerDefaults.URL, AudioQuality.from(p[quality].orEmpty()),
+    private fun decode(p: Preferences): MusicSettings {
+        return MusicSettings(p[server] ?: ServerDefaults.URL,
+            AudioQuality.from((p[mobileQuality] ?: p[quality]).orEmpty()),
+            AudioQuality.from((p[wirelessQuality] ?: p[quality]).orEmpty()),
+            AudioQuality.from((p[downloadQuality] ?: p[quality]).orEmpty()),
         p[restore] ?: true, p[nickname].orEmpty(), p[account] ?: 0,
         p[preload] ?: true, p[metered] ?: false, LyricsTypography.normalize(p[lyricsSize] ?: LyricsTypography.DEFAULT_SIZE),
         LyricsWeight.from(p[lyricsWeight]), p[lyricsOffset] ?: 0,
@@ -182,7 +196,8 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
         LyricsFont.from(p[lyricsFont]), p[lyricsFontFile].orEmpty(),
         CurrentMusicServer.from(p[serverMode], p[server]),
         p[customServer] ?: p[server]?.takeIf { CurrentMusicServer.infer(it) == CurrentMusicServer.CUSTOM }.orEmpty(),
-        ListeningSource.from(p[listeningSource]))
+            ListeningSource.from(p[listeningSource]))
+    }
     // Read the persisted value directly, without the StateFlow's initial defaults.
     val concurrentPlaybackEnabled = store.data.map { it[concurrentPlayback] ?: false }.distinctUntilChanged()
     val state = store.data.map(::decode)
@@ -212,7 +227,9 @@ class MusicSettingsRepository(private val store: DataStore<Preferences>, scope: 
             if (mode == CurrentMusicServer.CUSTOM) it[customServer] = normalized
         }
     }
-    suspend fun setQuality(value: AudioQuality) { store.edit { it[quality] = value.value } }
+    suspend fun setMobileQuality(value: AudioQuality) { store.edit { it[mobileQuality] = value.value } }
+    suspend fun setWirelessQuality(value: AudioQuality) { store.edit { it[wirelessQuality] = value.value } }
+    suspend fun setDownloadQuality(value: AudioQuality) { store.edit { it[downloadQuality] = value.value } }
     suspend fun setRestore(value: Boolean) { store.edit { it[restore] = value } }
     suspend fun setConcurrentPlayback(value: Boolean) { store.edit { it[concurrentPlayback] = value } }
     suspend fun setTransitionMode(value: MusicTransitionMode) { store.edit { it[transition] = value.name } }
