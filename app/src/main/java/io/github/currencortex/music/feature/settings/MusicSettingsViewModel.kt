@@ -40,7 +40,6 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
             container.lxSources.checkAvailability(it.id, platform)
         }
     }
-    fun lxSupported() = container.lxSources.supported()
     val serverHealth = container.serverRouter.health
     val automaticServer = container.serverRouter.automatic
     val serverProbeBusy = MutableStateFlow(false)
@@ -84,10 +83,10 @@ class MusicSettingsViewModel(private val container: AppContainer) : ViewModel() 
     fun clearAudioKey() = audioEdit { container.audioSettings.clearKey() }
     fun lxSmartSwitch(enabled: Boolean) = audioEdit { container.audioSettings.setLxSmartSwitch(enabled) }
     fun selectLxSource(id: String) = audioEdit { container.audioSettings.selectLxSource(id) }
-    fun importLxFile(uri: android.net.Uri) = audioEdit {
+    fun importLxFile(uri: android.net.Uri) = audioEdit("音源已导入") {
         container.audioSettings.selectLxSource(container.lxSources.importFile(uri).id)
     }
-    fun importLxUrl(url: String) = audioEdit {
+    fun importLxUrl(url: String) = audioEdit("音源已导入") {
         container.audioSettings.selectLxSource(container.lxSources.importUrl(url).id)
     }
     internal fun openServerAudioCatalog() {

@@ -38,7 +38,6 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
         } catch (cancelled: CancellationException) { ready.cancel(cancelled); throw cancelled }
         catch (_: Exception) { ready.completeExceptionally(LxSourceException("落雪音源列表读取失败，请重新导入")) }
     } }
-    fun supported() = runtime.supported()
     suspend fun importFile(uri: Uri): LxSourceInfo = withContext(Dispatchers.IO) {
         require(uri.scheme == "content") { "请选择系统文件选择器中的音源脚本" }
         val script = context.contentResolver.openInputStream(uri)?.use { lxReadBounded(it, LX_MAX_SCRIPT_BYTES).toString(Charsets.UTF_8) }
@@ -53,14 +52,13 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
         ready.await()
         lock.withLock {
             val info = lxScriptInfo(script, origin)
-            entries.firstOrNull { it.info.id == info.id }?.let { throw LxSourceException("该音源已导入，可直接选择使用") }
+            entries.firstOrNull { it.info.id == info.id }?.let { return@withLock it.info }
             require(entries.size < 12 && entries.sumOf { it.script.toByteArray().size } + script.toByteArray().size <= 8 * LX_MAX_SCRIPT_BYTES) {
                 "音源数量或总大小已达上限，请先移除不使用的音源"
             }
-            val capabilities = runtime.inspect(info, script)
-            val complete = info.copy(capabilities = capabilities, capabilityVersion = LX_CAPABILITY_VERSION)
-            save(entries + LxStoredSource(complete, script, capabilitiesChecked = true))
-            complete
+            // The source library can retain a script while its runtime or upstream service is unavailable.
+            save(entries + LxStoredSource(info, script))
+            info
         }
     }
     suspend fun remove(id: String) {
@@ -95,7 +93,7 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
             withTimeout(60_000) {
                 val stored = lock.withLock { entries.firstOrNull { it.info.id == id } }
                     ?: return@withTimeout LxSourceHealth()
-                val selected = refreshCapabilities(stored, platform)
+                val selected = refreshCapabilities(stored)
                 if (selected.info.qualities(platform).isEmpty()) {
                     return@withTimeout result(SourceAvailabilityStatus.UNAVAILABLE, "此音源未声明${platform.label}播放接口")
                 }
@@ -121,8 +119,11 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
         } catch (_: java.net.SocketTimeoutException) {
             result(SourceAvailabilityStatus.TIMEOUT, "网络响应超时")
         } catch (error: LxSourceException) {
-            if (error.message?.contains("超时") == true) result(SourceAvailabilityStatus.TIMEOUT, "音源解析超时")
-            else result(SourceAvailabilityStatus.UNAVAILABLE, "音源解析失败")
+            when {
+                error.message?.contains("超时") == true -> result(SourceAvailabilityStatus.TIMEOUT, error.message.orEmpty())
+                error.qualityUnavailable -> result(SourceAvailabilityStatus.UNAVAILABLE, "音源未能解析${platform.label}测试歌曲")
+                else -> result(SourceAvailabilityStatus.UNAVAILABLE, error.message ?: "音源检测失败")
+            }
         } catch (_: Exception) {
             result(SourceAvailabilityStatus.UNAVAILABLE, "音源解析或网络连接失败")
         }
@@ -140,7 +141,7 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
             }.filterNot { it.info.id in excludeIds }
             if (candidates.isEmpty()) throw LxSourceException("没有其他可尝试的落雪音源")
             lxTrySources(candidates) { candidate ->
-                val current = refreshCapabilities(candidate, platform)
+                val current = refreshCapabilities(candidate)
                 if (current.info.qualities(platform).isEmpty())
                     throw LxSourceException("此音源未声明${platform.label}播放接口，请切换音源")
                 val started = android.os.SystemClock.elapsedRealtime()
@@ -164,19 +165,25 @@ class LxSourceStore(private val context: Context, private val vault: TokenStore,
     }
     internal suspend fun reportPlaybackFailure(id: String, platform: LxPlatform = LxPlatform.NETEASE) =
         recordPerformance(id, platform, null)
-    private suspend fun refreshCapabilities(source: LxStoredSource, platform: LxPlatform): LxStoredSource {
-        if (source.capabilitiesChecked && source.info.capabilityVersion >= LX_CAPABILITY_VERSION) return source
-        val capabilities = runtime.inspect(source.info, source.script)
-        val updated = source.copy(
-            info = source.info.copy(capabilities = capabilities, capabilityVersion = LX_CAPABILITY_VERSION),
-            capabilitiesChecked = true,
-        )
+    private suspend fun refreshCapabilities(source: LxStoredSource): LxStoredSource {
+        val id = source.info.id
         lock.withLock {
-            if (entries.none { it.info.id == updated.info.id }) return source
-            entries = entries.map { if (it.info.id == updated.info.id) updated else it }
-            save(entries)
+            val latest = entries.firstOrNull { it.info.id == id }
+                ?: throw LxSourceException("该音源已移除")
+            if (latest.capabilitiesChecked && latest.info.capabilityVersion >= LX_CAPABILITY_VERSION) return latest
         }
-        return updated
+        val capabilities = runtime.inspect(source.info, source.script)
+        return lock.withLock {
+            val latest = entries.firstOrNull { it.info.id == id }
+                ?: throw LxSourceException("该音源已移除")
+            if (latest.capabilitiesChecked && latest.info.capabilityVersion >= LX_CAPABILITY_VERSION) return@withLock latest
+            val updated = latest.copy(
+                info = latest.info.copy(capabilities = capabilities, capabilityVersion = LX_CAPABILITY_VERSION),
+                capabilitiesChecked = true,
+            )
+            save(entries.map { if (it.info.id == id) updated else it })
+            updated
+        }
     }
     private suspend fun resolveSource(song: Song, quality: AudioQuality, source: LxStoredSource): AudioSource {
         val (request, url) = lxResolveTrack(song, quality, source.info.capabilities) { data ->

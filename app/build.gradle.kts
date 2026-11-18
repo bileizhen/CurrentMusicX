@@ -173,7 +173,6 @@ dependencies {
     implementation("androidx.credentials:credentials:1.6.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
     implementation("androidx.profileinstaller:profileinstaller:1.4.1")
-    implementation("androidx.javascriptengine:javascriptengine:1.1.1")
     implementation("org.mozilla:rhino:1.8.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
     implementation("com.squareup.okhttp3:okhttp-sse:4.12.0")
