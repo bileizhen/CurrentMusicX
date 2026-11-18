@@ -34,6 +34,22 @@ private val searchKinds = linkedMapOf("song" to "歌曲", "album" to "专辑", "
 private data class ServiceQuery(val operation: String, val input: JsonObject = buildJsonObject {}, val offset: Int = 0)
 private data class PendingWrite(val operation: String, val label: String, val input: JsonObject)
 
+private fun ServiceQuery.continuation(response: JsonObject): ServiceQuery? {
+    if ("nextOffset" in response) {
+        val nextOffset = (response["nextOffset"] as? JsonPrimitive)?.intOrNull
+        return nextOffset?.takeIf { it > offset }?.let { copy(offset = it) }
+    }
+    if (operation != "track.comments" || (response["more"] as? JsonPrimitive)?.booleanOrNull != true) return null
+    val cursor = (response["nextCursor"] as? JsonPrimitive)?.contentOrNull?.takeIf(String::isNotBlank)
+    if (cursor != null && cursor == (input["cursor"] as? JsonPrimitive)?.contentOrNull) return null
+    val currentPage = (input["page"] as? JsonPrimitive)?.intOrNull ?: 1
+    return copy(input = buildJsonObject {
+        input.forEach { (key, value) -> if (key != "cursor") put(key, value) }
+        put("page", currentPage + 1)
+        if (cursor != null) put("cursor", cursor)
+    })
+}
+
 private fun openServiceAuthorization(context: Context, url: String) {
     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).addCategory(Intent.CATEGORY_BROWSABLE)
     // Resolve a general browser before passing it a URL that the app itself might handle.
@@ -72,6 +88,7 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
         var page by remember(context) { mutableStateOf(MusicServicePage()) }
         var labels by remember(context) { mutableStateOf(emptyList<String>()) }
         var last by remember(context) { mutableStateOf<ServiceQuery?>(null) }
+        var nextPage by remember(context) { mutableStateOf<ServiceQuery?>(null) }
         var focused by remember(context) { mutableStateOf<MusicServiceResource?>(null) }
         var write by remember(context) { mutableStateOf<PendingWrite?>(null) }
         var editText by remember(context) { mutableStateOf("") }
@@ -114,7 +131,8 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
                 labels = rows.orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
                 page = MusicServicePage()
             } else if (query.operation == "track.comments") {
-                labels = comments.orEmpty().mapNotNull { ((it as? JsonObject)?.get("content") as? JsonPrimitive)?.contentOrNull }
+                val texts = comments.orEmpty().mapNotNull { ((it as? JsonObject)?.get("content") as? JsonPrimitive)?.contentOrNull }
+                labels = if (append) labels + texts else texts
                 page = MusicServicePage()
             } else if (query.operation == "playback.qualities") {
                 labels = (response["levels"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull }
@@ -131,7 +149,9 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
                 next.resource?.let { focused = it }
             }
             last = query
-            if (labels.isEmpty() && page.items.isEmpty() && page.tracks.isEmpty() && page.albums.isEmpty() && page.resource == null)
+            nextPage = query.continuation(response)
+            if (labels.isEmpty() && page.items.isEmpty() && page.tracks.isEmpty() && page.albums.isEmpty() &&
+                page.resource == null && nextPage == null)
                 message = "暂无结果"
         }
 
@@ -275,7 +295,8 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
                 }
             } }
 
-            if (page.items.isNotEmpty() || page.tracks.isNotEmpty() || page.albums.isNotEmpty() || labels.isNotEmpty()) item("results") {
+            if (page.items.isNotEmpty() || page.tracks.isNotEmpty() || page.albums.isNotEmpty() ||
+                labels.isNotEmpty() || nextPage != null) item("results") {
                 SettingsSection("结果", MusicIcons.List) {
                     for (label in labels) SettingsPreference(label,
                         onClick = if (last?.operation in setOf("discover.hot", "discover.suggest")) ({
@@ -306,10 +327,9 @@ internal fun MusicServicesScreen(repo: MusicServiceConnections, onPlay: (List<So
                                 else -> null
                             })
                     }
-                    val original = last
-                    val more = page.nextOffset
-                    if (original != null && more != null && more > original.offset) SettingsPreference("加载更多", enabled = !busy,
-                        onClick = { query(original.copy(offset = more), append = true) })
+                    nextPage?.let { more ->
+                        SettingsPreference("加载更多", enabled = !busy, onClick = { query(more, append = true) })
+                    }
                 }
             }
         }

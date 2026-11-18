@@ -13,6 +13,7 @@ import io.github.currencortex.music.data.song.AudioSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -48,10 +49,10 @@ private class ServiceGrant(
     @SerialName("access_token") val access: String,
     @SerialName("refresh_token") val refresh: String? = null,
     @SerialName("expires_in") val expiry: Long,
-    val scope: String = "",
+    val scope: String? = null,
     val sub: String,
 ) {
-    val scopes get() = scope.split(' ').filter(String::isNotBlank).toSet()
+    val scopes get() = scope.orEmpty().split(' ').filter(String::isNotBlank).toSet()
 }
 
 @Serializable private class ServiceEntry(
@@ -250,22 +251,26 @@ class MusicServiceConnections(private val store: TokenStore, private val scope: 
             throw ApiException(ErrorKind.AudioSourceChanged)
     }
 
-    private suspend fun access(expected: ServiceEntry, scope: String): String = mutex.withLock {
-        val entry = entry(expected.key)
-        checkAuthorization(expected, entry)
-        val grant = entry.grant?.takeIf { scope in it.scopes }
-            ?: throw ApiException(ErrorKind.Unauthorized, userMessage = "请授权这项音乐服务能力")
-        if (entry.expiresAt > System.currentTimeMillis() + 30_000) return@withLock grant.access
-        val auth = requireNotNull(entry.descriptor.authorization)
-        val refresh = grant.refresh ?: throw ApiException(ErrorKind.Unauthorized, userMessage = "服务授权已过期")
-        val next = token(auth, buildJsonObject {
-            put("grant_type", "refresh_token"); put("client_id", auth.clientId); put("refresh_token", refresh)
-        })
-        require(next.sub == grant.sub && scope in next.scopes) { "刷新后的服务授权已变更" }
-        val refreshToken = next.refresh?.takeIf(String::isNotBlank) ?: refresh
-        replace(entry.withGrant(ServiceGrant(next.access, refreshToken, next.expiry, next.scope, next.sub)))
-        next.access
-    }
+    private suspend fun access(expected: ServiceEntry, requiredScope: String): String = scope.async {
+        mutex.withLock {
+            val entry = entry(expected.key)
+            checkAuthorization(expected, entry)
+            val grant = entry.grant?.takeIf { requiredScope in it.scopes }
+                ?: throw ApiException(ErrorKind.Unauthorized, userMessage = "请授权这项音乐服务能力")
+            if (entry.expiresAt > System.currentTimeMillis() + 30_000) return@withLock grant.access
+            val auth = requireNotNull(entry.descriptor.authorization)
+            val refresh = grant.refresh ?: throw ApiException(ErrorKind.Unauthorized, userMessage = "服务授权已过期")
+            val response = token(auth, buildJsonObject {
+                put("grant_type", "refresh_token"); put("client_id", auth.clientId); put("refresh_token", refresh)
+            })
+            require(response.sub == grant.sub) { "刷新后的服务账号已变更" }
+            val refreshToken = response.refresh?.takeIf(String::isNotBlank) ?: refresh
+            val next = ServiceGrant(response.access, refreshToken, response.expiry, response.scope ?: grant.scope, response.sub)
+            replace(entry.withGrant(next))
+            if (requiredScope !in next.scopes) throw ApiException(ErrorKind.Unauthorized, userMessage = "该音乐服务权限已撤回")
+            next.access
+        }
+    }.await()
 
     suspend fun call(key: String, platform: String, operation: String, input: JsonObject = buildJsonObject {},
         confirm: Boolean = false, expectedConnection: ConnectedMusicService? = null): JsonObject {
