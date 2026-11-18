@@ -7,6 +7,8 @@ import androidx.activity.enableEdgeToEdge
 import io.github.currencortex.music.ui.CurrentMusicApp
 import io.github.currencortex.music.core.update.UpdateInstallAction
 import io.github.currencortex.music.core.links.WebLinkRequest
+import io.github.currencortex.music.data.musicservice.CONNECTION_HOST
+import io.github.currencortex.music.data.musicservice.RETURN_PATH
 
 class MainActivity : ComponentActivity() {
     override fun onStart() {
@@ -22,7 +24,14 @@ class MainActivity : ComponentActivity() {
     private val webLinkRequest = androidx.compose.runtime.mutableStateOf<WebLinkRequest?>(null)
     private fun handleWebLink(request: android.content.Intent) {
         if (request.action != android.content.Intent.ACTION_VIEW) return
-        request.dataString?.let { webLinkRequest.value = WebLinkRequest(java.util.UUID.randomUUID().toString(), it) }
+        val url = request.data ?: return
+        if (url.scheme == "https" && url.host == CONNECTION_HOST && url.path == RETURN_PATH &&
+            (url.port == -1 || url.port == 443)) {
+            (application as CurrentMusicApplication).container.musicServices.receiveAuthorization(url.toString())
+            request.setData(null)
+            return
+        }
+        webLinkRequest.value = WebLinkRequest(java.util.UUID.randomUUID().toString(), url.toString())
     }
     override fun onSaveInstanceState(outState: Bundle) {
         webLinkRequest.value?.let {

@@ -2,6 +2,7 @@ package io.github.currencortex.music.data.song
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
+import io.github.currencortex.music.data.musicservice.ServiceTrack
 
 @Serializable data class Song(val id: Long, val name: String, val artists: String = "",
                              val album: String = "", val cover: String = "", val durationMs: Long = 0, val mv: Long = 0,
@@ -11,16 +12,20 @@ import kotlinx.serialization.SerialName
                              val navidrome: NavidromeTrackRef? = null, val videoQuality: Int = 1080, val localUri: String = "", val emby: EmbyTrackRef? = null,
                               val albumId: Long = 0, val translatedName: String = "",
                               val aliases: List<String> = emptyList(), val neteaseCloud: Boolean = false,
-                              val qqMusic: QqMusicTrackRef? = null) {
-    val privateLibrary get() = musicSource == MusicSource.NAVIDROME || musicSource == MusicSource.EMBY
-    val privateIdentity get() = emby?.identity ?: navidrome?.identity
-    val originalQualityLabel get() = if (musicSource == MusicSource.EMBY) "Emby 原音质" else "Navidrome 原音质"
+                              val qqMusic: QqMusicTrackRef? = null, val serviceTrack: ServiceTrack? = null) {
+    val privateLibrary get() = musicSource == MusicSource.NAVIDROME || musicSource == MusicSource.EMBY || serviceTrack != null
+    val privateIdentity get() = emby?.identity ?: navidrome?.identity ?: serviceTrack?.connection
+    val originalQualityLabel get() = when (musicSource) {
+        MusicSource.EMBY -> "Emby 原音质"
+        MusicSource.SERVICE -> "由外接服务提供"
+        else -> "Navidrome 原音质"
+    }
     /** Names a Chinese search result may carry besides its original title. */
     val alternateNames get() = (listOf(translatedName) + aliases).map(String::trim)
         .filter { it.isNotBlank() && !it.equals(name, ignoreCase = true) }.distinct()
     val displayNames get() = listOf(name) + alternateNames
 }
-@Serializable enum class MusicSource { NETEASE, QQ_MUSIC, APPLE_MUSIC, SPOTIFY, NAVIDROME, LOCAL, EMBY }
+@Serializable enum class MusicSource { NETEASE, QQ_MUSIC, APPLE_MUSIC, SPOTIFY, NAVIDROME, LOCAL, EMBY, SERVICE }
 @Serializable data class QqMusicTrackRef(val mid: String, val songId: Long = 0, val albumMid: String = "",
     val singerMids: List<String> = emptyList(), val mediaMid: String = "")
 @Serializable data class NavidromeTrackRef(val id: String, val identity: String, val format: String = "",

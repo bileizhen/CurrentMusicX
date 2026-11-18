@@ -23,9 +23,6 @@ import io.github.currencortex.music.data.auth.*
 import io.github.currencortex.music.data.effects.NeteaseEffectsAssetRepository
 import io.github.currencortex.music.data.effects.NeteaseEffectsInstallState
 import io.github.currencortex.music.data.song.MusicRepository
-import io.github.currencortex.music.data.song.MusicSource
-import io.github.currencortex.music.data.song.ServerAudioSourceOwner
-import io.github.currencortex.music.data.song.ServerAudioSources
 import io.github.currencortex.music.data.local.MusicDatabase
 import io.github.currencortex.music.data.settings.MusicSettingsRepository
 import io.github.currencortex.music.data.settings.AudioProvider
@@ -195,12 +192,12 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             }
         }
     }
-    val accountVault = EncryptedAccountVault.create(context, storageSuffix, settingsStore, appScope)
-    val accountRepository = AccountRepository(SecureTokenStore(context, storageSuffix), appScope, accountVault)
     val audioSettings = io.github.currencortex.music.data.settings.AudioSourceSettings(settingsStore,
-        SecureTokenStore(context, ".leiz$storageSuffix"), appScope, ::serverAudioSourceOwner)
+        SecureTokenStore(context, ".leiz$storageSuffix"), appScope)
     val lxSources = io.github.currencortex.music.data.lx.LxSourceStore(context,
         SecureTokenStore(context, ".lx-sources$storageSuffix"), appScope)
+    val accountVault = EncryptedAccountVault.create(context, storageSuffix, settingsStore, appScope)
+    val accountRepository = AccountRepository(SecureTokenStore(context, storageSuffix), appScope, accountVault)
     val neteaseSessions = NeteaseSessionStore(SecureTokenStore(context, ".netease$storageSuffix"), appScope)
     private val neteaseTransport = NeteaseTransport(neteaseSessions, neteaseEndpoints,
         log = { logger.info("Network", it) })
@@ -229,11 +226,6 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     /** Community features belong to the project account, independently of the audio provider. */
     fun projectSession() = RequestSession(
         accountRepository.server.ifBlank { musicSettings.state.value.server }, accountRepository.token)
-    internal fun serverAudioSourceOwner(): ServerAudioSourceOwner? {
-        val account = accountRepository.state.value.account ?: return null
-        val session = projectSession()
-        return if (session.token.isNullOrBlank()) null else ServerAudioSourceOwner(session.server, account.id)
-    }
     private fun directNeteaseSession() =
         RequestSession("https://music.163.com/", null, neteaseSessions.state.value.revision)
     fun audioSession() = if (audioSettings.access().provider == AudioProvider.NETEASE)
@@ -247,8 +239,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         netease = nativeNetease,
         nativeMedia = {
             val session = neteaseSessions.state.value
-            val provider = audioSettings.access().provider
-            (provider == AudioProvider.NETEASE || provider == AudioProvider.SERVER) && session.loggedIn && !session.stale
+            audioSettings.access().provider == AudioProvider.NETEASE && session.loggedIn && !session.stale
         },
         currentMusicAccountReady = { accountRepository.state.value.account != null && !accountRepository.token.isNullOrBlank() },
         currentMusicSessionRevision = { accountRepository.sessionRevision.value },
@@ -265,9 +256,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             apiHttpClient ?: ApiClient.defaultHttpClient(),
             log = { logger.info("Network", it) },
         ))
-    val serverAudioSources = ServerAudioSources(apiClient)
+    val musicServices = io.github.currencortex.music.data.musicservice.MusicServiceConnections(
+        SecureTokenStore(context, ".external-music-services$storageSuffix"), appScope, apiHttpClient ?: okhttp3.OkHttpClient())
     val musicRepository = MusicRepository(apiClient, audioSettings::access, navidrome = navidrome,
-        lx = lxSources, emby = emby, qqMusic = qqMusic, serverAudioSources = serverAudioSources)
+        lx = lxSources, emby = emby, qqMusic = qqMusic, musicServices = musicServices)
     internal fun qqAudioIdentity(access: AudioSourceAccess = audioSettings.access()): String =
         qqAudioIdentity(qqMusic.audioIdentity, access)
 
@@ -275,6 +267,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         if (access.provider == AudioProvider.LX) "$accountIdentity:${access.identity}" else accountIdentity
 
     fun audioRequest(song: io.github.currencortex.music.data.song.Song, quality: AudioQuality, supportsDolby: Boolean = false): AudioRequest {
+        song.serviceTrack?.let { track ->
+            return AudioRequest(song.id, quality, 0L, musicServices.playbackSession(track),
+                musicServices.playbackIdentity(track).orEmpty(), song, supportsDolby = supportsDolby)
+        }
         if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
             qqMusic.selectOwner()
             val qqQuality = quality.takeIf { it.qqOnly } ?: musicSettings.state.value.qqQuality
@@ -295,7 +291,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         val directNetease = access.provider == AudioProvider.NETEASE
         val preferDolby = supportsDolby && quality == AudioQuality.AUTO &&
             song.musicSource != io.github.currencortex.music.data.song.MusicSource.LOCAL &&
-            (directNetease || access.provider == AudioProvider.SERVER)
+            directNetease
         if (directNetease) {
             // Snapshot UID and revision together so a concurrent account switch cannot mix cache owners.
             val owner = neteaseSessions.state.value
@@ -339,7 +335,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val audioSources = AudioSourceResolver(audioCache,
         { audioSession() },
         currentProvider = { audioSettings.access().identity },
-        validateRequest = { request -> request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC }?.let {
+        validateRequest = { request -> request.song?.serviceTrack?.let { track ->
+            val identity = musicServices.playbackIdentity(track)
+            identity != null && identity == request.providerIdentity && request.session == musicServices.playbackSession(track)
+        } ?: request.song?.takeIf { it.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC }?.let {
             qqMusic.selectOwner()
             if (request.session != qqMusic.session() ||
                 request.accountId != (accountRepository.state.value.account?.id ?: 0L)) false
@@ -372,8 +371,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     val listeningReports = run {
         val listened = mutableMapOf<Pair<Long, RequestSession>, Long>()
         val submitted = mutableSetOf<Pair<Long, RequestSession>>()
+        val externalPlays = mutableMapOf<Pair<Long, RequestSession>, Pair<String, Long>>()
         ListeningReportQueue(appScope,
-            currentSession = { song -> if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
+            currentSession = { song -> if (song.serviceTrack != null) musicServices.historySession(song.serviceTrack)
+            else if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.NAVIDROME)
                 navidrome.session() else musicSession() },
             currentMusic = { song, ms, owner ->
                 if (ms == null) libraryRepository.recordPlay(song, owner) else libraryRepository.listen(song, ms, owner)
@@ -392,7 +393,29 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                 }
                 if (listened.size > 100) { listened.keys.firstOrNull()?.let { listened.remove(it); submitted.remove(it) } }
             },
-            onFailure = { platform, kind -> logger.warn("Player", "$platform listening report failed: $kind") })
+            onFailure = { platform, kind -> logger.warn("Player", "$platform listening report failed: $kind") },
+            external = { song, ms, owner ->
+                val track = requireNotNull(song.serviceTrack)
+                val key = song.id to owner
+                val active = if (ms == null) {
+                    externalPlays.remove(key)
+                    null
+                } else externalPlays[key]
+                if (ms == null || active != null) {
+                    val elapsed = (active?.second ?: 0) + (ms ?: 0)
+                    val input = kotlinx.serialization.json.buildJsonObject {
+                        put("id", kotlinx.serialization.json.JsonPrimitive(track.id))
+                        if (ms != null && active != null) {
+                            put("playId", kotlinx.serialization.json.JsonPrimitive(active.first))
+                            put("elapsedMs", kotlinx.serialization.json.JsonPrimitive(elapsed.coerceAtMost(14_400_000)))
+                        }
+                    }
+                    val result = musicServices.call(track.connection, track.platform, "history.record", input, confirm = true)
+                    val id = (result["playId"] as? kotlinx.serialization.json.JsonPrimitive)?.content
+                    if (id != null) externalPlays[key] = id to elapsed
+                    if (externalPlays.size > 100) externalPlays.keys.firstOrNull()?.let(externalPlays::remove)
+                }
+            })
     }
     val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient,
         AvatarImageCache(context, storageSuffix)) { RequestSession(accountRepository.server, accountRepository.token) }
@@ -599,6 +622,10 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
             navidrome.state.map { it.revision }.distinctUntilChanged(),
             musicSettings.state.map { it.server to it.lyricsSource }.distinctUntilChanged()) { song, account, netease, navidrome, lyricsSettings ->
             io.github.currencortex.music.feature.lyrics.data.LyricsRequest(song, listOf(account, netease, navidrome, lyricsSettings))
+        }.combine(musicServices.services) { request, connections ->
+            val track = request.song?.serviceTrack ?: return@combine request
+            val connection = connections.firstOrNull { it.key == track.connection }
+            request.copy(session = request.session + connection)
         }, songLyrics.state), lyricsRepository::load, playerScope, songLyrics.state)
     val sleepTimer = io.github.currencortex.music.core.media.SleepTimer(playerController, playerScope)
     val roomRepository = io.github.currencortex.music.data.room.RoomRepository(apiClient) { RequestSession(accountRepository.server, accountRepository.token) }
@@ -704,14 +731,15 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
         }
         appScope.launch { audioSettings.state.collect { audioSources.invalidate() } }
         playerScope.launch {
-            sessionRestored.await()
-            accountRepository.sessionRevision.collect {
-                val track = playbackQueue.state.value.current
-                if (audioSettings.hasDetachedServerSource() &&
-                    track?.let { it.musicSource == MusicSource.NETEASE && !it.neteaseCloud && !it.video } == true) {
+            var previous = musicServices.services.value.associateBy { it.key }
+            musicServices.services.collect { connections ->
+                val next = connections.associateBy { it.key }
+                val track = playbackQueue.state.value.current?.serviceTrack
+                if (track != null && track.connection in previous && previous[track.connection] != next[track.connection]) {
+                    audioSources.invalidate()
                     appResult { playerController.discardLoadedLocalAudio() }
                 }
-                appResult { audioSettings.refreshServerSourceOwner() }
+                previous = next
             }
         }
         appScope.launch {
@@ -750,7 +778,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                     }
                 }
                 if (initial.restoreQueue) database.music().queue()?.let {
-                    playbackQueue.restore(ApiJson.decodeFromString<QueueSnapshot>(it.payload))
+                    val savedQueue = ApiJson.decodeFromString<QueueSnapshot>(it.payload)
+                    if (savedQueue.songs.any { song -> song.serviceTrack != null }) appResult { musicServices.awaitRestored() }
+                    playbackQueue.restore(savedQueue)
                 }
                 ready.complete(Unit)
                 if (nativeNetease != null) {

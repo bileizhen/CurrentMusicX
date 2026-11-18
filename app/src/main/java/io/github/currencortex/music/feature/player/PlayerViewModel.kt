@@ -119,7 +119,7 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
                     if (likeWrite?.owner != nextOwner) _likePreview.value = null
                 }
                 actionsOwner = nextOwner
-                if (id == null) return@collectLatest
+                if (id == null || queue.value.current?.serviceTrack != null) return@collectLatest
                 if (queue.value.current?.musicSource == MusicSource.QQ_MUSIC) {
                     val song = queue.value.current!!
                     val results = supervisorScope {
@@ -197,7 +197,7 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
         }
     }
     fun togglePrimaryLike() {
-        val song = queue.value.current?.takeUnless { it.video || it.musicSource == MusicSource.LOCAL } ?: return
+        val song = queue.value.current?.takeUnless { it.video || it.musicSource == MusicSource.LOCAL || it.serviceTrack != null } ?: return
         val owner = likeOwner()
         likeWrite?.takeIf { it.owner == owner }?.let { pending ->
             pending.desired = !pending.desired; pending.revision++
@@ -292,7 +292,7 @@ class PlayerViewModel(internal val container: AppContainer) : ViewModel() {
         replyCount = replyCount,
     )
     fun loadComments(more: Boolean = false) {
-        val song = queue.value.current?.takeUnless { it.video } ?: return
+        val song = queue.value.current?.takeUnless { it.video || it.serviceTrack != null } ?: return
         val qqMusic = song.musicSource == MusicSource.QQ_MUSIC
         val id = if (qqMusic) song.id else NeteaseSongActionsRepository.songId(song) ?: return
         if (_comments.value.loading || commentComposer.value.sending || _comments.value.busy.isNotEmpty() || more && !_comments.value.more) return

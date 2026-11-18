@@ -2,7 +2,6 @@ package io.github.currencortex.music.core.media
 
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.data.song.AudioSource
-import io.github.currencortex.music.data.song.SERVER_AUDIO_SOURCE_IDENTITY_PREFIX
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -13,8 +12,7 @@ data class AudioRequest(val songId: Long, val quality: AudioQuality, val account
     val refresh: Boolean = false, val supportsDolby: Boolean = false) {
     val key get() = AudioCache.key(session.server, accountId, songId, quality, providerIdentity, supportsDolby)
 
-    private val dolbyAuto get() = quality == AudioQuality.AUTO &&
-        (providerIdentity == "netease" || providerIdentity.startsWith(SERVER_AUDIO_SOURCE_IDENTITY_PREFIX))
+    private val dolbyAuto get() = quality == AudioQuality.AUTO && providerIdentity == "netease"
 
     internal fun accepts(source: AudioSource): Boolean = !dolbyAuto || supportsDolby || source.level != AudioQuality.DOLBY.value
 
@@ -95,13 +93,17 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
         }
         checkRequest(request)
         val key = request.key
+        val connectedService = request.song?.serviceTrack != null
         if (!refresh) {
             denied[key]?.takeIf { it.request == request }?.let { throw it.error }
             // Complete, account/provider/quality-scoped audio does not need a CDN URL.
             // Partial cache must still resolve a live URL to read the missing bytes.
-            cache.completeSource(key)?.takeIf(request::accepts)?.takeUnless { it.matched || cache.matchedSourceKey(key) != null }?.let {
-                checkRequest(request)
-                return@withContext ResolvedAudio(it, key, refreshAfterMs = Long.MAX_VALUE)
+            // A connected service must still authorize playback of previously buffered music.
+            if (!connectedService) {
+                cache.completeSource(key)?.takeIf(request::accepts)?.takeUnless { it.matched || cache.matchedSourceKey(key) != null }?.let {
+                    checkRequest(request)
+                    return@withContext ResolvedAudio(it, key, refreshAfterMs = Long.MAX_VALUE)
+                }
             }
         }
         // A background renewal must not block a switch that already has a valid URL.
@@ -124,6 +126,7 @@ class AudioSourceResolver(private val cache: AudioCache, private val currentSess
                     throw e
                 }
                 denied[key]?.takeIf { it.request == request }?.let { throw it.error }
+                if (connectedService) throw e
                 val (cachedRequest, cachedAudio) = request.offlineAudio { candidate ->
                     val candidateKey = if (candidate == request) key else candidate.key
                     if (denied[candidateKey]?.request == candidate) return@offlineAudio null

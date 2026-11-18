@@ -25,7 +25,7 @@ class SongDownloadManager(context: Context, namespace: String = "") {
         directory.value = uri
     }
     fun ownerKey(song: Song, accountId: Long, server: String, provider: String, revision: String = ""): String {
-        if (song.musicSource != io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) return ""
+        if (song.musicSource != io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC && song.serviceTrack == null) return ""
         // Keep showing the account's current download when the selected LX plugin changes.
         val accountIdentity = provider.substringBefore(":lx:")
         val raw = "$accountId\n${server.trimEnd('/')}\n$accountIdentity\n$revision"

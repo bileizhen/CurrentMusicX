@@ -46,8 +46,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val qqAccount by container.qqMusic.state.collectAsStateWithLifecycle()
     val settings by container.musicSettings.state.collectAsStateWithLifecycle()
     val audioProvider by container.audioSettings.state.collectAsStateWithLifecycle()
-    val owner = remember(song.id, song.musicSource, project.account?.id, settings.server, qqAccount.revision, audioProvider.identity) {
-        if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
+    val serviceAccounts by container.musicServices.services.collectAsStateWithLifecycle()
+    val owner = remember(song.id, song.musicSource, project.account?.id, settings.server, qqAccount.revision, audioProvider.identity, serviceAccounts) {
+        val serviceTrack = song.serviceTrack
+        if (serviceTrack != null) {
+            manager.ownerKey(song, 0L, container.musicServices.playbackSession(serviceTrack).server,
+                container.musicServices.identityFor(serviceTrack, "playback.download").orEmpty())
+        } else if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
             container.qqMusic.selectOwner()
             manager.ownerKey(song, project.account?.id ?: 0L, container.accountRepository.server,
                 container.qqAudioIdentity(), container.qqMusic.state.value.revision.toString())
@@ -63,7 +68,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val saved = info?.state == WorkInfo.State.SUCCEEDED
     fun start() {
         try {
-            if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
+            val serviceTrack = song.serviceTrack
+            if (serviceTrack != null) {
+                val identity = container.musicServices.identityFor(serviceTrack, "playback.download")
+                if (identity == null) { context.showMusicError("此服务尚未授权下载"); return }
+                manager.start(song, AudioQuality.from(quality), 0L, container.musicServices.playbackSession(serviceTrack).server, identity)
+            } else if (song.musicSource == io.github.currencortex.music.data.song.MusicSource.QQ_MUSIC) {
                 container.qqMusic.selectOwner()
                 val account = container.qqMusic.state.value
                 if (!account.loggedIn) { context.showMusicError("请先登录 QQ 音乐"); return }
