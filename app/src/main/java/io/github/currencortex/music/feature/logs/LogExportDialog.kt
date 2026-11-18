@@ -24,7 +24,13 @@ import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDi
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 
 @Composable
-fun LogExportDialog(show: Boolean, logger: AppLogger, onDismiss: () -> Unit) {
+fun LogExportDialog(
+    show: Boolean,
+    logger: AppLogger,
+    includeAppLogs: Boolean = true,
+    audioDiagnostics: (suspend () -> String)? = null,
+    onDismiss: () -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
@@ -39,13 +45,14 @@ fun LogExportDialog(show: Boolean, logger: AppLogger, onDismiss: () -> Unit) {
     }
     val save = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
         if (uri != null && !busy) scope.launch { generate {
-            val file = DiagnosticExporter.create(context, logger)
+            val file = DiagnosticExporter.create(context, logger, includeAppLogs, audioDiagnostics?.invoke())
             try { DiagnosticExporter.save(context, file, uri) } finally { file.delete() }
             context.showMusicMessage("日志已保存")
         } }
     }
     OverlayDialog(show = show && !busy, title = "导出日志",
-        summary = "应用日志与设备信息会打包为 ZIP，并自动隐藏敏感信息。", onDismissRequest = onDismiss) {
+        summary = if (audioDiagnostics != null) "ZIP 包含音频诊断${if (includeAppLogs) "和应用日志" else ""}。分享前请检查文件内容。"
+            else "应用日志与设备信息会打包为 ZIP，并自动隐藏敏感信息。", onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxWidth()) {
             ArrowPreference(title = "保存日志", summary = "选择保存位置",
                 startAction = { Icon(MusicIcons.Download, null, Modifier.padding(end = 12.dp)) },
@@ -59,7 +66,7 @@ fun LogExportDialog(show: Boolean, logger: AppLogger, onDismiss: () -> Unit) {
                 startAction = { Icon(MusicIcons.Share, null, Modifier.padding(end = 12.dp)) },
                 modifier = Modifier.testTag("export_logs_share"), onClick = {
                     if (!busy) scope.launch { onDismiss(); generate {
-                        val file = DiagnosticExporter.create(context, logger)
+                        val file = DiagnosticExporter.create(context, logger, includeAppLogs, audioDiagnostics?.invoke())
                         context.startActivity(Intent.createChooser(DiagnosticExporter.shareIntent(context, file), "分享日志"))
                     } }
                 })

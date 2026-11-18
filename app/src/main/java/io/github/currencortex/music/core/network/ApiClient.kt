@@ -6,6 +6,7 @@ import kotlinx.serialization.json.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import okio.BufferedSink
 import java.util.concurrent.TimeUnit
 import io.github.currencortex.music.core.netease.NeteaseGateway
 
@@ -29,6 +30,10 @@ class ApiClient(
 
     private val http = client.newBuilder().addInterceptor(AuthInterceptor()).build()
     private val singleAttemptHttp = http.newBuilder().retryOnConnectionFailure(false).build()
+    private val feedbackHttp = singleAttemptHttp.newBuilder().followRedirects(false).followSslRedirects(false)
+        .authenticator(Authenticator.NONE).proxyAuthenticator(Authenticator.NONE).build()
+    private val feedbackUploadHttp = feedbackHttp.newBuilder()
+        .readTimeout(180, TimeUnit.SECONDS).callTimeout(240, TimeUnit.SECONDS).build()
     private val audioSourceHttp = http.newBuilder().followRedirects(false).followSslRedirects(false)
         .cookieJar(okhttp3.CookieJar.NO_COOKIES).build()
     val hasLocalNeteaseLogin get() = netease?.sessions?.state?.value?.loggedIn == true
@@ -107,20 +112,106 @@ class ApiClient(
             retryConnection -> http
             else -> singleAttemptHttp
         }
+        }
         val call = requestClient.newCall(request)
         callTimeoutMillis?.let { call.timeout().timeout(it, TimeUnit.MILLISECONDS) }
+        executeProjectRequest(path, call) {
+            checkLoginOwner()
+            if (expectedSession != null && (expectedSession.server != server() || expectedSession.token != if (authenticated) token() else null))
+                throw ApiException(ErrorKind.Unauthorized)
+            if ((netease?.handles(path) == true || path == "ncmbind/import") && expectedSession?.neteaseRevision != null &&
+                expectedSession.neteaseRevision != netease?.sessions?.state?.value?.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
+        }
+    }
+
+    internal suspend fun feedbackCapabilities(expectedSession: RequestSession): JsonElement? = withContext(Dispatchers.IO) {
+        val session = publicSession()
+        if (session.server != expectedSession.server) throw ApiException(ErrorKind.Unauthorized)
+        val path = "feedback/capabilities"
+        val url = ServerUrl.endpoint(routeServer(session.server), path, emptyMap())
+        if (!url.isHttps) return@withContext null
+        val request = Request.Builder().url(url).tag(RequestSession::class.java, session)
+            .header("Accept", "application/json")
+            .build()
+        executeProjectRequest(path, feedbackHttp.newCall(request)) {
+            if (session.server != server()) throw ApiException(ErrorKind.Unauthorized)
+        }
+    }
+
+    internal suspend fun submitFeedback(
+        expectedSession: RequestSession,
+        jsonBody: JsonElement,
+        attachmentBody: MultipartBody?,
+        hasMedia: Boolean = false,
+    ): JsonElement = feedbackMutation(
+        expectedSession, "POST", "feedback",
+        attachmentBody ?: jsonBody.toString().toRequestBody("application/json".toMediaType()),
+        httpsOnly = attachmentBody != null || hasMedia,
+    )
+
+    internal suspend fun uploadFeedbackMedia(
+        expectedSession: RequestSession,
+        requestId: String,
+        slot: String,
+        payload: RequestBody,
+    ): JsonElement = feedbackMutation(
+        expectedSession, "PUT", "feedback/$requestId/media/$slot", payload, mediaUpload = true,
+    )
+
+    internal suspend fun deleteFeedbackMedia(expectedSession: RequestSession, requestId: String, slot: String) {
+        feedbackMutation(expectedSession, "DELETE", "feedback/$requestId/media/$slot", ByteArray(0).toRequestBody())
+    }
+
+    private suspend fun feedbackMutation(
+        expectedSession: RequestSession,
+        method: String,
+        path: String,
+        payload: RequestBody,
+        httpsOnly: Boolean = true,
+        mediaUpload: Boolean = false,
+    ): JsonElement = withContext(Dispatchers.IO) {
+        val session = RequestSession(server(), token())
+        val revision = currentMusicSessionRevision()
+        if (session.server != expectedSession.server || session.token != expectedSession.token)
+            throw ApiException(ErrorKind.Unauthorized)
+        if (session.token.isNullOrBlank())
+            throw ApiException(ErrorKind.Unauthorized, userMessage = "请先登录 CurrentMusic 账号")
+        val url = ServerUrl.endpoint(routeServer(session.server), path, emptyMap())
+        if (httpsOnly && !url.isHttps)
+            throw ApiException(ErrorKind.Forbidden, userMessage = "反馈附件需要 HTTPS 线路")
+        val singleUseBody = object : RequestBody() {
+            override fun contentType() = payload.contentType()
+            override fun contentLength() = payload.contentLength()
+            override fun isOneShot() = true
+            override fun writeTo(sink: BufferedSink) = payload.writeTo(sink)
+        }
+        val request = Request.Builder().url(url).tag(RequestSession::class.java, session)
+            .header("Accept", "application/json")
+            .apply { if (mediaUpload) header("X-Feedback-Media-Consent", "true") }
+            .method(method, singleUseBody)
+            .build()
+        fun checkSession() {
+            if (session != RequestSession(server(), token()) || revision != currentMusicSessionRevision())
+                throw ApiException(ErrorKind.Unauthorized)
+        }
+        checkSession()
+        val requestClient = if (mediaUpload) feedbackUploadHttp else feedbackHttp
+        executeProjectRequest(path, requestClient.newCall(request), ::checkSession)
+    }
+
+    private suspend fun executeProjectRequest(path: String, call: Call, checkSession: () -> Unit): JsonElement {
+        val request = call.request()
+        val session = checkNotNull(request.tag(RequestSession::class.java))
+        val authenticated = session.token != null
+        val serverAudioSource = path == "audio-sources" || path.startsWith("audio-sources/")
         val (code, raw) = call.readResponse { response ->
             val responseBody = response.body
             if (serverAudioSource && responseBody?.source()?.request(65_537) == true)
                 throw ApiException(ErrorKind.Parse, userMessage = "服务器音源响应过大")
             response.code to responseBody?.string().orEmpty()
         }
-        checkLoginOwner()
-        if (expectedSession != null && (expectedSession.server != server() || expectedSession.token != if (authenticated) token() else null))
-            throw ApiException(ErrorKind.Unauthorized)
-        if ((netease?.handles(path) == true || path == "ncmbind/import") && expectedSession?.neteaseRevision != null &&
-            expectedSession.neteaseRevision != netease?.sessions?.state?.value?.revision) throw ApiException(ErrorKind.NeteaseSessionChanged)
-        log("$method $path HTTP $code")
+        checkSession()
+        log("${request.method} $path HTTP $code")
         if (code !in 200..299) {
             // Older NCM gateway also uses 401 for missing NCM binding. Only a project-session
             // rejection should invalidate the account.
@@ -144,7 +235,7 @@ class ApiClient(
                 in 500..599 -> ErrorKind.Server; else -> ErrorKind.Unknown
             }, code, accountError)
         }
-        if (raw.isBlank()) JsonNull else ApiJson.parseToJsonElement(raw)
+        return if (raw.isBlank()) JsonNull else ApiJson.parseToJsonElement(raw)
     }
     suspend inline fun <reified T> decode(value: JsonElement): T = withContext(Dispatchers.Default) {
         ApiJson.decodeFromJsonElement(value)
