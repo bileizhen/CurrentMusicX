@@ -34,6 +34,9 @@ import io.github.currencortex.music.core.network.AppResult
 import io.github.currencortex.music.core.network.appResult
 import io.github.currencortex.music.data.library.Playlist
 import io.github.currencortex.music.data.profile.ProfileUser
+import io.github.currencortex.music.data.qqmusic.QqHomeSnapshot
+import io.github.currencortex.music.data.qqmusic.QqListeningRankEntry
+import io.github.currencortex.music.data.qqmusic.QqListeningRankPage
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.home.DailyRecommendationHero
 import io.github.currencortex.music.feature.home.HomeLibraryShortcuts
@@ -79,6 +82,17 @@ private data class QqHomeState(
     val recommendedPlaylists: List<Playlist> = emptyList(),
     val playlists: List<Playlist> = emptyList(),
     val errors: Map<String, String> = emptyMap(),
+)
+
+private fun QqHomeSnapshot.toUiState(loggedIn: Boolean) = QqHomeState(
+    loading = !complete,
+    loaded = complete,
+    daily = daily?.songs.orEmpty(),
+    forYou = if (loggedIn) forYou else daily?.forYou.orEmpty(),
+    recent = recent?.entries?.map(QqListeningRankEntry::song).orEmpty(),
+    recentCounts = recent?.entries?.associate { it.song.id to it.listenCount }.orEmpty(),
+    recommendedPlaylists = recommendedPlaylists,
+    playlists = playlists,
 )
 
 @Composable
@@ -127,11 +141,13 @@ fun QqMusicHomeScreen(
     }
     val playback by playbackSummary.collectAsStateWithLifecycle(initialValue = PlayerState())
     var refresh by remember { mutableIntStateOf(0) }
-    var state by remember { mutableStateOf(QqHomeState()) }
+    val initialHome = remember { container.qqMusic.cachedHome() }
+    var state by remember(initialHome) { mutableStateOf(initialHome.toUiState(qqAccount.loggedIn)) }
     val identity = "${preferences.server}|$sessionRevision|${qqAccount.revision}|${qqAccount.loggedIn}"
 
     LaunchedEffect(identity, refresh) {
-        state = QqHomeState()
+        val cached = container.qqMusic.cachedHome()
+        state = if (cached.complete) cached.toUiState(qqAccount.loggedIn) else QqHomeState()
         coroutineScope {
             val dailyTask = async { appResult { container.qqMusic.daily() } }
             val recommendedTask = async { appResult { container.qqMusic.recommendedPlaylists() } }
@@ -183,6 +199,14 @@ fun QqMusicHomeScreen(
                 }
             }
             state = next.copy(loading = false, loaded = true)
+            container.qqMusic.cacheHome(QqHomeSnapshot(
+                daily = io.github.currencortex.music.data.library.Daily(next.daily, next.forYou, emptyList()),
+                recommendedPlaylists = next.recommendedPlaylists,
+                forYou = next.forYou,
+                playlists = next.playlists,
+                recent = QqListeningRankPage(next.recent.map { QqListeningRankEntry(it, next.recentCounts[it.id] ?: 0) }),
+                complete = next.errors.isEmpty(),
+            ))
         }
     }
 
