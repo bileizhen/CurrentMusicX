@@ -6,7 +6,7 @@
 
 ## CI 版发布时机
 
-PR 合并前并行运行源码与协作检查。Android Release 构建和 Lint 集中在主线进行。只要还有目标为 `main` 的**阻塞型开放 PR**，仓库就推迟构建和发布 CI 版；普通 PR（包括草稿和带 `bot: skip` 标签的 PR）仍然计入。只有由官方 Dependabot 创建、位于本仓库且更改仅限依赖声明或 Actions 版本的 PR 才可以被忽略。中途合并只触发轻量的 **Check pending CI release** 检查。
+PR 合并前运行源码与协作检查；非草稿、涉及应用改动的 PR 还会执行 `:app:compileReleaseKotlin` 和完整的 `:app:lintRelease`。主线 Android CI 只生成包含 R8/资源压缩的 Release APK，不重复运行完整 Lint。CI 预发布版本（`ciBuildNumber > 0`）也跳过 `assembleRelease` 隐式触发的 `lintVitalRelease`；普通正式版/本地 Release 构建（`ciBuildNumber = 0`）仍保留致命问题检查。若绕过 PR 直接向主线提交应用代码，必须另行完成 Android Lint 检查。只要还有目标为 `main` 的**阻塞型开放 PR**，仓库就推迟构建和发布 CI 版；普通 PR（包括草稿和带 `bot: skip` 标签的 PR）仍然计入。只有由官方 Dependabot 创建、位于本仓库且更改仅限依赖声明或 Actions 版本的 PR 才可以被忽略。中途合并只触发轻量的 **Check pending CI release** 检查。
 
 最后一个 PR 合并、关闭或改投其他分支后，检查最新 `main` 和上一个完整 CI 版之间的累计改动。有应用改动时构建并发布一个 CI 版。若只改了文档或 CI，则跳过打包。签名发布流程会再次核对 PR 和主线状态。
 
