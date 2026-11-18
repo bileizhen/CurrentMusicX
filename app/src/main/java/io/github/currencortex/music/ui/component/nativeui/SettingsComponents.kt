@@ -230,7 +230,7 @@ private val LocalSettingsPicker=compositionLocalOf<((Rect,List<GlassMenuItem>)->
     val open=LocalSettingsPicker.current
     var rowBounds by remember {mutableStateOf<Rect?>(null)}
     var valueBounds by remember {mutableStateOf<Rect?>(null)}
-    GlassMenuAnchor(enabled,onOpen={val anchor=valueBounds?:rowBounds
+    GlassMenuAnchor(onOpen={val anchor=valueBounds?:rowBounds
             if(anchor!=null)open?.invoke(anchor,options.map {option->GlassMenuItem(option.id,option.label,
                 subtitle=option.summary,checked=option.selected,keepOpen=true,leadingContent=option.leadingContent,onClick=option.onSelect)})}) {openValue,target->
     SettingsPreference(title,summary,modifier.onGloballyPositioned {rowBounds=it.boundsInWindow()},enabled,

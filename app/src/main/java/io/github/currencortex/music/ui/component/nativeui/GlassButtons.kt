@@ -55,48 +55,20 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     return source
 }
 
-/** CommonPopupBox for a setting's value. The row can call open too; only the
- * selected anchor owns the captured glyph and the carried opening pointer. */
-@Composable internal fun GlassMenuAnchor(enabled:Boolean=true,onOpen:()->Unit,
+/** Captures a setting's value for the glass transition opened by its row click. */
+@Composable internal fun GlassMenuAnchor(onOpen:()->Unit,
     content:@Composable (open:()->Unit,target:Modifier)->Unit) {
     val trigger=LocalGlassMenuTrigger.current
     val source=rememberGraphicsLayer()
-    var origin by remember {mutableStateOf(Offset.Zero)}
     val click by rememberUpdatedState(onOpen)
-    val currentEnabled by rememberUpdatedState(enabled)
     val open=remember(trigger,source){{
-        if(currentEnabled) {trigger?.layer=source;click()}
+        trigger?.layer=source;click()
     }}
-    val target=Modifier.onGloballyPositioned {origin=it.boundsInWindow().topLeft}
-        .pointerInput(trigger) {
-            awaitEachGesture {
-                val down=awaitFirstDown(false,PointerEventPass.Initial)
-                if(!currentEnabled||down.isConsumed)return@awaitEachGesture
-                down.consume();open()
-                var moved=false;var cancelled=false
-                try {
-                    do {
-                        val event=awaitPointerEvent(PointerEventPass.Initial)
-                        val change=event.changes.firstOrNull{it.id==down.id}
-                        val released=change?.changedToUp()==true
-                        if(change==null||event.changes.count{it.pressed}>1||change.isConsumed)cancelled=true
-                        if(change!=null) {
-                            moved=moved||(change.position-down.position).getDistance()>viewConfiguration.touchSlop
-                            if(moved&&!cancelled)trigger?.move?.invoke(change.position+origin)
-                            event.changes.forEach{it.consume()}
-                            if(!change.pressed) {
-                                if(moved&&!cancelled&&released)trigger?.release?.invoke(change.position+origin)
-                                break
-                            }
-                        }else break
-                    }while(!cancelled)
-                }finally{trigger?.cancel?.invoke()}
-            }
-        }.drawWithContent {
-            val hidden=trigger!=null&&trigger.layer===source&&trigger.hidden
-            if(!hidden)source.record {this@drawWithContent.drawContent()}
-            if(!hidden)drawLayer(source)
-        }
+    val target=Modifier.drawWithContent {
+        val hidden=trigger!=null&&trigger.layer===source&&trigger.hidden
+        if(!hidden)source.record {this@drawWithContent.drawContent()}
+        if(!hidden)drawLayer(source)
+    }
     content(open,target)
 }
 
