@@ -2,35 +2,22 @@
 // ListHeader/generateSection: upstream lib/ui/list.dart and metrics.dart.
 package io.github.currencortex.music.ui.component.nativeui
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import io.github.suqi8.coui.kmp.basic.Text
-import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.preference.PreferenceCategory
 
 /** Plain list headings, distinct from the icon-led InfoHeader used on the theme page. */
 @Composable internal fun SettingsListHeader(title: String, modifier: Modifier = Modifier,
     actions: @Composable RowScope.() -> Unit = {}) {
-    val scale = LocalDensity.current.fontScale
-    val adaptive = (1 + (scale - 1) * .5f).coerceAtMost(1f)
-    val overhang = (36f - 22f * scale) / 2
-    Row(modifier.fillMaxWidth().padding(start = (16 * adaptive).dp, end = (16 * adaptive).dp,
-        top = (24 * adaptive - overhang).coerceAtLeast(0f).dp,
-        bottom = (8 * adaptive - overhang).coerceAtLeast(6f).dp).heightIn(min = 36.dp),
-        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(title, Modifier.weight(1f).semantics { heading() }, fontSize = 17.sp, lineHeight = 22.sp,
-            fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis,
-            color = COUITheme.colorScheme.labelSecondaryVariant)
-        actions()
-    }
+    PreferenceCategory(
+        title = title,
+        modifier = modifier,
+        endWidget = actions,
+    )
 }
 
 @Composable internal fun SettingsListSection(title: String, modifier: Modifier = Modifier,
