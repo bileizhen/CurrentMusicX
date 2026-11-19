@@ -893,6 +893,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                         onLogin = { navigateLibrary("user/binding") },
                                         onPlaylist = { id -> container.neteaseLibrary.invalidate(); navigateLibrary("lib/ncmplaylist/$id") })
                                 }
+                                route.startsWith("user/posts/") -> {
+                                    val author = route.substringAfterLast('/').toLongOrNull()?.takeIf { it > 0 }
+                                    if (author != null) {
+                                        val vm: PostsViewModel = viewModel(key = route,
+                                            factory = viewModelFactory { PostsViewModel(container, author) })
+                                        ProfilePostsScreen(vm, ::navigateLibrary, ::navigateBack)
+                                    }
+                                }
                                 route.startsWith("user/profile/") -> {
                                     val id = route.substringAfterLast('/').toLongOrNull() ?: 0L
                                     val vm: ProfileViewModel = viewModel(key = route,

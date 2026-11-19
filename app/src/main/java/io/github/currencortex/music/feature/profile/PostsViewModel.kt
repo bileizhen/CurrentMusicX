@@ -8,25 +8,39 @@ import io.github.currencortex.music.data.profile.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 
-data class PostsState(val posts: List<CommunityPost> = emptyList(), val total: Int = 0,
+internal data class PostsState(val posts: List<CommunityPost> = emptyList(), val total: Int = 0,
     val offset: Int = 0, val done: Boolean = false, val loaded: Boolean = false, val loading: Boolean = false,
-    val busy: Boolean = false, val error: String? = null, val message: String? = null,
-    val editor: Boolean = false, val draft: String = "", val attachments: List<PostAttachment> = emptyList(),
+    val busy: Boolean = false, val error: String? = null, val failedMore: Boolean = false, val message: String? = null,
+    val editor: Boolean = false, val draft: PostDraft = PostDraft(), val draftRestored: Boolean = false,
     val picker: Boolean = false, val attachmentQuery: String = "", val attachmentType: String = "song",
     val attachmentResults: List<PostAttachment> = emptyList(), val attachmentLoading: Boolean = false,
     val attachmentError: String? = null, val attachmentSearched: Boolean = false,
     val attachmentOffset: Int = 0, val attachmentMore: Boolean = false, val attachmentRetryMore: Boolean = false,
-    val commentsFor: Long? = null,
+    val detailId: Long? = null, val detail: CommunityPost? = null, val detailLoading: Boolean = false,
+    val detailError: String? = null, val focusComments: Boolean = false, val commentSent: Long = 0,
     val comments: List<PostComment> = emptyList(), val commentsLoading: Boolean = false,
-    val commentsError: String? = null)
+    val commentsError: String? = null, val nextAfter: Long? = null, val commentRetryAfter: Long = 0)
 
-class PostsViewModel(val container: AppContainer) : ViewModel() {
+internal class PostsViewModel(val container: AppContainer, val authorId: Long? = null) : ViewModel() {
     val state = MutableStateFlow(PostsState())
-    private fun session() = RequestSession(container.accountRepository.server, container.accountRepository.token)
+    private fun session() = container.projectSession()
     private val repository = PostsRepository(container.apiClient, ::session)
+    private var draftOwner: DraftOwner? = null
+    private var activeSession: RequestSession? = null
+    private data class DraftOwner(val expected: RequestSession, val accountId: Long) {
+        val key get() = "${ServerUrl.normalize(expected.server)}|$accountId"
+    }
+
+    private fun owner(): DraftOwner? {
+        val current = session()
+        val id = container.accountRepository.state.value.account?.id ?: return null
+        return if (current.token.isNullOrBlank() || id <= 0) null else DraftOwner(current, id)
+    }
+
     private var requested = false
     private var generation = 0L
     private var feedTask: Job? = null
+    private var detailTask: Job? = null
     private var commentTask: Job? = null
     private var actionTask: Job? = null
     private var attachmentTask: Job? = null
@@ -36,12 +50,15 @@ class PostsViewModel(val container: AppContainer) : ViewModel() {
         combine(container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged())
             { revision, server -> revision to server }.collect {
                 ++generation; ++attachmentGeneration
-                feedTask?.cancel(); commentTask?.cancel(); actionTask?.cancel(); attachmentTask?.cancel()
+                feedTask?.cancel(); detailTask?.cancel(); commentTask?.cancel(); actionTask?.cancel(); attachmentTask?.cancel()
+                activeSession = session()
+                draftOwner = null
                 state.value = PostsState()
                 if (requested) reload()
             }
     } }
     fun ensureLoaded() { requested = true; if (!state.value.loaded && !state.value.loading) reload() }
+    fun postLink(id: Long): String = repository.link(id)
     fun reload(more: Boolean = false) {
         if (more && (state.value.loading || state.value.done)) return
         requested = true
@@ -51,52 +68,88 @@ class PostsViewModel(val container: AppContainer) : ViewModel() {
         state.update { it.copy(loading = true, error = null) }
         feedTask = viewModelScope.launch {
             container.sessionRestored.await()
-            when (val result = appResult { repository.list(if (more) before.offset else 0) }) {
+            when (val result = appResult { repository.list(if (more) before.offset else 0, authorId) }) {
                 is AppResult.Success -> if (token == generation) state.update { it.copy(
-                    posts = (if (more) before.posts + result.value.posts else result.value.posts).distinctBy(CommunityPost::id),
+                    posts = (if (more) it.posts + result.value.posts else result.value.posts).distinctBy(CommunityPost::id),
                     total = result.value.total, offset = (if (more) before.offset else 0) + result.value.posts.size,
                     done = result.value.posts.isEmpty() || (if (more) before.offset else 0) + result.value.posts.size >= result.value.total,
                     loaded = true, loading = false) }
-                is AppResult.Failure -> if (token == generation) state.update { it.copy(loading = false, loaded = true, error = result.kind.message) }
+                is AppResult.Failure -> if (token == generation) state.update {
+                    it.copy(loading = false, loaded = true, error = result.kind.message, failedMore = more)
+                }
             }
         }
     }
-    private fun action(success: String, block: suspend () -> Unit, refresh: Boolean = true, after: () -> Unit = {}) {
+    private fun <T> action(success: String, block: suspend (RequestSession) -> T, after: (T) -> Unit) {
         if (state.value.busy) return
-        if (session().token == null) { state.update { it.copy(message = "登录 CurrentMusic 账户后可操作") }; return }
         val expected = session()
+        if (expected != activeSession || expected.token.isNullOrBlank()) {
+            state.update { it.copy(message = "登录 CurrentMusic 账户后可操作") }
+            return
+        }
         state.update { it.copy(busy = true, message = null) }
         actionTask = viewModelScope.launch {
-            val result = appResult { block() }
+            val result = appResult { block(expected) }
             if (expected != session()) return@launch
             state.update { it.copy(busy = false, message = if (result is AppResult.Success) success else (result as AppResult.Failure).kind.message) }
-            if (result is AppResult.Success) { after(); if (refresh) reload() }
+            if (result is AppResult.Success) after(result.value)
         }
     }
     fun like(post: CommunityPost) {
         val on = !post.likedByMe
-        action(if (on) "已点赞" else "已取消点赞", { repository.like(post.id, on) }, refresh = false) {
-            state.update { it.copy(posts = it.posts.map { current -> if (current.id != post.id) current else current.copy(
-                likedByMe = on, likeCount = (current.likeCount + if (current.likedByMe == on) 0 else if (on) 1 else -1).coerceAtLeast(0)) }) }
+        action(if (on) "已点赞" else "已取消点赞", { repository.like(post.id, on, it) }) { count ->
+            updatePost(post.id) { it.copy(likedByMe = on, likeCount = count) }
+            if (state.value.loading) reload()
         }
     }
     fun delete(post: CommunityPost) {
-        if (post.canDelete) action("帖子已删除", { repository.delete(post.id) }, refresh = false) {
-            state.update { it.copy(posts = it.posts.filterNot { current -> current.id == post.id },
-                total = (it.total - 1).coerceAtLeast(0), offset = (it.offset - 1).coerceAtLeast(0)) }
+        if (post.canDelete) action("帖子已删除", { repository.delete(post.id, it) }) {
+            if (state.value.detailId == post.id) detail(null)
+            state.update { current -> current.copy(
+                posts = current.posts.filterNot { it.id == post.id },
+                total = (current.total - 1).coerceAtLeast(0),
+            ) }
+            reload()
         }
     }
     fun editor(open: Boolean) {
         if (state.value.busy) return
-        if (!open) picker(false)
-        state.update { it.copy(editor = open, message = null) }
+        if (open) {
+            val current = owner()?.takeIf { it.expected == activeSession } ?: return
+            draftOwner = current
+            val draft = container.postDraftStore.load(current.key)
+            state.update { it.copy(editor = true, draft = draft, draftRestored = !draft.isEmpty, message = null) }
+        } else {
+            picker(false)
+            draftOwner = null
+            state.update { it.copy(editor = false, draft = PostDraft(), draftRestored = false, message = null) }
+        }
     }
-    fun draft(value: String) { if (!state.value.busy) state.update { it.copy(draft = value) } }
+    private fun editDraft(change: (PostDraft) -> PostDraft) {
+        val current = draftOwner?.takeIf { it == owner() } ?: return
+        if (state.value.busy || !state.value.editor) return
+        val updated = change(state.value.draft)
+        container.postDraftStore.save(current.key, updated)
+        state.update { it.copy(draft = updated, message = null) }
+    }
+    fun draft(value: String) = editDraft { it.copy(content = value) }
+    fun draftTitle(value: String) = editDraft { it.copy(title = value) }
+    fun discardDraft() {
+        editDraft { PostDraft() }
+        editor(false)
+    }
     fun publish() {
-        val content = state.value.draft
-        val attachments = state.value.attachments
-        if (content.isNotBlank()) action("帖子已发布", { repository.create(content, attachments) }) {
-            state.update { it.copy(editor = false, draft = "", attachments = emptyList(), picker = false) }
+        val current = draftOwner?.takeIf { it == owner() } ?: return
+        val draft = state.value.draft
+        if (draft.canPublish) action("帖子已发布", { expected ->
+            if (current.expected != expected) throw ApiException(ErrorKind.Unauthorized)
+            val id = repository.create(draft.content, draft.attachments, draft.title, expected)
+            container.postDraftStore.clearPublished(current.key, draft)
+            id
+        }) { id ->
+            editor(false)
+            reload()
+            detail(id)
         }
     }
     fun picker(open: Boolean) {
@@ -137,40 +190,91 @@ class PostsViewModel(val container: AppContainer) : ViewModel() {
     }
     fun attach(card: PostAttachment) {
         if (state.value.busy) return
-        state.update {
-            if (it.attachments.any { current -> current.type == card.type && current.id == card.id }) it
-            else if (it.attachments.size >= 5) it.copy(message = "最多添加 5 项内容")
-            else it.copy(attachments = validMusicAttachments(it.attachments + card), message = null)
+        if (state.value.draft.attachments.size >= 5) {
+            state.update { it.copy(message = "最多添加 5 项内容") }
+        } else editDraft { draft ->
+            draft.copy(attachments = validMusicAttachments(draft.attachments + card).distinctBy { it.type to it.id })
         }
     }
-    fun removeAttachment(card: PostAttachment) {
-        if (!state.value.busy) state.update { it.copy(attachments = it.attachments.filterNot { a -> a.type == card.type && a.id == card.id }, message = null) }
+    fun removeAttachment(card: PostAttachment) = editDraft { draft ->
+        draft.copy(attachments = draft.attachments.filterNot { it.type == card.type && it.id == card.id })
     }
-    fun comments(id: Long?) {
+
+    fun detail(id: Long?, focusComments: Boolean = false) {
+        detailTask?.cancel()
         commentTask?.cancel()
-        state.update { it.copy(commentsFor = id, comments = emptyList(), commentsLoading = id != null, commentsError = null) }
+        state.update { it.copy(detailId = id, detail = null, detailLoading = id != null, detailError = null, focusComments = focusComments,
+            comments = emptyList(), commentsLoading = false, commentsError = null, nextAfter = null, commentRetryAfter = 0, message = null) }
         if (id == null) return
         val expected = session()
-        commentTask = viewModelScope.launch {
-            val result = appResult { repository.comments(id) }
-            if (expected != session() || state.value.commentsFor != id) return@launch
-            state.update { it.copy(commentsLoading = false,
-                comments = (result as? AppResult.Success)?.value.orEmpty(),
-                commentsError = (result as? AppResult.Failure)?.kind?.message) }
+        val fromFeed = state.value.posts.find { it.id == id }
+        detailTask = viewModelScope.launch {
+            val result = appResult {
+                try { repository.detail(id) }
+                catch (e: ApiException) {
+                    if (e.status == 404 && e.userMessage?.startsWith("未知接口 GET") == true && fromFeed != null) fromFeed
+                    else throw e
+                }
+            }
+            if (expected != session() || state.value.detailId != id) return@launch
+            when (result) {
+                is AppResult.Success -> {
+                    state.update { it.copy(detail = result.value, detailLoading = false,
+                        posts = it.posts.map { post -> if (post.id == id) result.value else post }) }
+                    loadComments()
+                }
+                is AppResult.Failure -> state.update { it.copy(detailLoading = false, detailError = result.message) }
+            }
         }
     }
-    fun sendComment(content: String) {
-        val id = state.value.commentsFor ?: return
-        if (content.isNotBlank()) action("评论已发布", { repository.comment(id, content) }, refresh = false) {
-            state.update { it.copy(posts = it.posts.map { post -> if (post.id == id) post.copy(commentCount = post.commentCount + 1) else post }) }
-            if (state.value.commentsFor == id) comments(id)
+
+    fun loadComments(after: Long = 0) {
+        val id = state.value.detail?.id ?: return
+        if (state.value.commentsLoading) return
+        val expected = session()
+        state.update { it.copy(commentsLoading = true, commentsError = null, commentRetryAfter = after) }
+        commentTask = viewModelScope.launch {
+            val result = appResult { repository.comments(id, after) }
+            if (expected != session() || state.value.detailId != id) return@launch
+            state.update { current -> when (result) {
+                is AppResult.Success -> current.copy(commentsLoading = false,
+                    comments = ((if (after == 0L) emptyList() else current.comments) + result.value.comments).distinctBy { it.id },
+                    nextAfter = result.value.nextAfter?.takeIf { it > after })
+                is AppResult.Failure -> current.copy(commentsLoading = false, commentsError = result.message)
+            } }
         }
+    }
+    fun sendComment(content: String, replyTo: Long?) {
+        val id = state.value.detail?.id ?: return
+        if (!state.value.commentsLoading && content.postCharacterCount() in 1..POST_COMMENT_LIMIT) {
+            action("评论已发布", { repository.comment(id, content, replyTo, it) }) {
+                updatePost(id) { post -> post.copy(commentCount = post.commentCount + 1) }
+                if (state.value.detailId == id) {
+                    state.update { current -> current.copy(commentSent = current.commentSent + 1) }
+                    if (state.value.nextAfter == null) loadComments(state.value.comments.lastOrNull()?.id ?: 0)
+                }
+            }
+        }
+    }
+    fun canDelete(comment: PostComment): Boolean {
+        val account = container.accountRepository.state.value.account ?: return false
+        return comment.canDelete || account.id == comment.author.id || account.isAdmin || account.isSuper
     }
     fun delete(comment: PostComment) {
-        val id = state.value.commentsFor ?: return
-        if (comment.canDelete) action("评论已删除", { repository.deleteComment(comment.id) }, refresh = false) {
-            state.update { it.copy(posts = it.posts.map { post -> if (post.id == id) post.copy(commentCount = (post.commentCount - 1).coerceAtLeast(0)) else post }) }
-            if (state.value.commentsFor == id) comments(id)
+        val id = state.value.detail?.id ?: return
+        if (!state.value.commentsLoading && canDelete(comment)) action("评论已删除", { repository.deleteComment(comment.id, it) }) {
+            updatePost(id) { post -> post.copy(commentCount = (post.commentCount - 1).coerceAtLeast(0)) }
+            if (state.value.detailId == id) state.update { current ->
+                current.copy(comments = current.comments.filterNot { it.id == comment.id }
+                    .map { if (it.replyTo?.id == comment.id) it.copy(replyTo = null) else it })
+            }
         }
+    }
+
+    private fun updatePost(id: Long, change: (CommunityPost) -> CommunityPost) {
+        state.update { current -> current.copy(
+            posts = current.posts.map { if (it.id == id) change(it) else it },
+            detail = current.detail?.let { if (it.id == id) change(it) else it },
+        ) }
     }
 }

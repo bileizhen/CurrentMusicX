@@ -26,6 +26,8 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
     val message = MutableStateFlow<String?>(null)
     val dialog = MutableStateFlow<String?>(null)
     val avatar = MutableStateFlow<Uri?>(null)
+    val bannerPreview = MutableStateFlow<ByteArray?>(null)
+    private var bannerOwner: RequestSession? = null
     private val refresh = MutableStateFlow(0)
     private var platformLikesGeneration = 0L
     private fun session() = RequestSession(container.accountRepository.server, container.accountRepository.token)
@@ -59,7 +61,11 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
                 container.musicSettings.state.map { it.server }.distinctUntilChanged(), container.profileRepository.revision, refresh)
                 { _, _, _, _ -> Unit }
                 .combine(libraryChanges) { _, _ -> Unit }
-                .collectLatest { state.value = ProfileState(); load() }
+                .collectLatest {
+                    if (bannerOwner != null && bannerOwner != session()) dismissBanner()
+                    state.value = ProfileState()
+                    load()
+                }
         }
     }
     fun reload() { refresh.update { it + 1 } }
@@ -137,12 +143,12 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
     }
     private fun io.github.currencortex.music.data.song.Song.dto() = io.github.currencortex.music.data.song.SongDto(
         id, name, artists, album, cover, durationMs, mv = mv, artistIds = artistIds)
-    fun action(success: String, block: suspend () -> Unit) {
+    fun action(success: String?, block: suspend () -> Unit) {
         if (busy.value) return
         busy.value = true
         viewModelScope.launch {
             try { when (val r = appResult { block() }) {
-                is AppResult.Success -> message.value = success
+                is AppResult.Success -> if (success != null) message.value = success
                 is AppResult.Failure -> container.errorNotices.show(r.message)
             } } finally { busy.value = false }
         }
@@ -163,6 +169,53 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         applyUser(container.profileRepository.avatar(bytes, expected, previousAvatar), expected)
     }
+
+    fun beginBannerPick(): Boolean {
+        val expected = session()
+        if (userId != null || busy.value || expected.token.isNullOrBlank() || state.value.profile == null) return false
+        bannerOwner = expected
+        bannerPreview.value = null
+        return true
+    }
+
+    fun previewBanner(resolver: ContentResolver, uri: Uri?) {
+        val expected = bannerOwner ?: return
+        if (uri == null || expected != session() || busy.value) {
+            dismissBanner()
+            return
+        }
+        action(null) {
+            val bytes = withContext(Dispatchers.IO) { readProfileBanner(resolver, uri) }
+            if (expected == session() && bannerOwner == expected) bannerPreview.value = bytes
+        }
+    }
+
+    fun dismissBanner() {
+        bannerOwner = null
+        bannerPreview.value = null
+    }
+
+    fun saveBanner() {
+        val bytes = bannerPreview.value ?: return
+        val expected = bannerOwner?.takeIf { it == session() } ?: return
+        updateBanner(bytes, expected)
+    }
+
+    fun removeBanner() {
+        val expected = session()
+        if (userId == null && !expected.token.isNullOrBlank()) updateBanner(null, expected)
+    }
+
+    private fun updateBanner(bytes: ByteArray?, expected: RequestSession) =
+        action(if (bytes == null) "主页横幅已移除" else "主页横幅已更新") {
+            val bannerUrl = container.profileRepository.banner(bytes, expected)
+            if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
+            state.update { current ->
+                current.copy(profile = current.profile?.let { it.copy(user = it.user.copy(bannerUrl = bannerUrl)) })
+            }
+            dismissBanner()
+            container.profileRepository.revision.update { it + 1 }
+        }
     fun password(old: String, new: String) = action("密码已更新，请确认当前会话") {
         container.profileRepository.password(old, new); dialog.value = null
         container.authRepository.restore(container.accountRepository.server); reload()
@@ -194,6 +247,27 @@ class ProfileViewModel(val container: AppContainer, private val userId: Long? = 
             } } finally { bitmap.recycle() }
         }
     }
+}
+
+private fun readProfileBanner(resolver: ContentResolver, uri: Uri): ByteArray {
+    val bytes = resolver.openInputStream(uri)?.use { input ->
+        val buffer = ByteArray(8192)
+        val output = ByteArrayOutputStream()
+        while (output.size() <= PROFILE_BANNER_LIMIT) {
+            val count = input.read(buffer, 0, minOf(buffer.size, PROFILE_BANNER_LIMIT + 1 - output.size()))
+            if (count <= 0) break
+            output.write(buffer, 0, count)
+        }
+        output.toByteArray()
+    } ?: throw ApiException(ErrorKind.Unknown, userMessage = "无法读取横幅图片")
+    if (bytes.size > PROFILE_BANNER_LIMIT) throw ApiException(ErrorKind.Unknown, userMessage = "横幅图片需 ≤1 MiB")
+    val info = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, info)
+    if (info.outMimeType !in setOf("image/jpeg", "image/png", "image/webp") ||
+        info.outWidth <= 0 || info.outHeight <= 0 || info.outWidth.toLong() * info.outHeight > 25_000_000) {
+        throw ApiException(ErrorKind.Unknown, userMessage = "请选择 JPEG、PNG 或 WebP 图片，最多 2500 万像素")
+    }
+    return bytes
 }
 
 data class DiscoverState(val query: String = "", val submitted: String = "", val sort: String = "composite",

@@ -8,30 +8,60 @@ import kotlinx.serialization.json.*
     val sub: String = "", val pic: String = "")
 @Serializable data class CommunityPost(val id: Long, val content: String = "", val author: ProfileUser = ProfileUser(),
     val attachments: List<PostAttachment> = emptyList(), val createdAt: Long = 0,
-    val likeCount: Int = 0, val commentCount: Int = 0, val likedByMe: Boolean = false, val canDelete: Boolean = false)
+    val likeCount: Int = 0, val commentCount: Int = 0, val likedByMe: Boolean = false, val canDelete: Boolean = false,
+    val title: String = "")
 @Serializable data class PostsPage(val posts: List<CommunityPost> = emptyList(), val total: Int = 0)
+@Serializable data class PostReplyTarget(val id: Long, val userId: Long, val nickname: String = "")
 @Serializable data class PostComment(val id: Long, val content: String = "", val author: ProfileUser = ProfileUser(),
-    val createdAt: Long = 0, val canDelete: Boolean = false)
-@Serializable data class PostComments(val comments: List<PostComment> = emptyList())
+    val createdAt: Long = 0, val canDelete: Boolean = false, val replyTo: PostReplyTarget? = null)
+@Serializable data class PostComments(val comments: List<PostComment> = emptyList(), val nextAfter: Long? = null)
+@Serializable private data class PostDetails(val post: CommunityPost)
+@Serializable private data class CreatedPost(val id: Long)
+@Serializable private data class PostLike(val likeCount: Int)
 data class PostAttachmentPage(val items: List<PostAttachment>, val nextOffset: Int, val hasMore: Boolean)
+
+internal const val POST_TITLE_LIMIT = 80
+internal const val POST_CONTENT_LIMIT = 5000
+internal const val POST_COMMENT_LIMIT = 500
+internal fun String.postCharacterCount(): Int = trim().let { it.codePointCount(0, it.length) }
+internal fun String.validPostTitle(): Boolean = postCharacterCount() <= POST_TITLE_LIMIT &&
+    trim().none { it in "\n\r\u000B\u000C\u001C\u001D\u001E\u0085\u2028\u2029" }
 
 class PostsRepository(private val api: ApiClient, private val session: () -> RequestSession) {
     private suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
-        body: JsonElement? = null): JsonElement {
-        val expected = session()
+        body: JsonElement? = null, expected: RequestSession = session()): JsonElement {
+        if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         if (method != "GET" && expected.token.isNullOrBlank()) throw ApiException(ErrorKind.Unauthorized)
         val result = api.request(method, path, query, body, authenticated = !expected.token.isNullOrBlank(), expectedSession = expected,
             retryConnection = method == "GET")
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         return result
     }
-    suspend fun list(offset: Int = 0): PostsPage = api.decode(request("GET", "posts",
-        mapOf("offset" to offset.coerceAtLeast(0).toString(), "limit" to "20")))
-    suspend fun create(content: String, attachments: List<PostAttachment> = emptyList()) {
-        require(content.isNotBlank() && attachments.size <= 5 && validMusicAttachments(attachments).size == attachments.size)
-        request("POST", "posts", body = buildJsonObject {
-            put("content", content.trim()); put("attachments", ApiJson.encodeToJsonElement(validMusicAttachments(attachments)))
-        })
+    suspend fun list(offset: Int = 0, author: Long? = null): PostsPage = api.decode(request("GET", "posts",
+        buildMap {
+            put("offset", offset.coerceAtLeast(0).toString())
+            put("limit", "20")
+            if (author != null) put("author", author.toString())
+        }))
+    suspend fun detail(id: Long): CommunityPost {
+        require(id > 0)
+        return api.decode<PostDetails>(request("GET", "posts/$id")).post
+    }
+    fun link(id: Long): String {
+        require(id > 0)
+        val endpoint = ServerUrl.endpoint(api.routeServer(session().server), "posts/$id", emptyMap())
+        val basePath = endpoint.encodedPath.removeSuffix("/posts/$id").removeSuffix("/cm").trimEnd('/')
+        return endpoint.newBuilder().encodedPath("$basePath/app/").fragment("/post/$id").build().toString()
+    }
+    suspend fun create(content: String, attachments: List<PostAttachment>, title: String, expected: RequestSession): Long {
+        val music = validMusicAttachments(attachments)
+        require(content.postCharacterCount() in 1..POST_CONTENT_LIMIT && title.validPostTitle() &&
+            attachments.size <= 5 && music.size == attachments.size)
+        return api.decode<CreatedPost>(request("POST", "posts", body = buildJsonObject {
+            if (title.isNotBlank()) put("title", title.trim())
+            put("content", content.trim())
+            put("attachments", ApiJson.encodeToJsonElement(music))
+        }, expected = expected)).id
     }
     suspend fun searchAttachments(query: String, type: String, offset: Int = 0): PostAttachmentPage {
         require(type in setOf("song", "album", "artist", "playlist") && query.isNotBlank() && offset >= 0)
@@ -56,16 +86,28 @@ class PostsRepository(private val api: ApiClient, private val session: () -> Req
         val more = ((result["hasMore"] as? JsonObject)?.get(type) as? JsonPrimitive)?.booleanOrNull ?: (raw.size == 30)
         return PostAttachmentPage(cards, offset + raw.size, raw.isNotEmpty() && more)
     }
-    suspend fun like(id: Long, on: Boolean) {
-        require(id > 0); request("POST", "posts/$id/like", body = buildJsonObject { put("on", on) })
+    suspend fun like(id: Long, on: Boolean, expected: RequestSession): Int {
+        require(id > 0)
+        return api.decode<PostLike>(request("POST", "posts/$id/like",
+            body = buildJsonObject { put("on", on) }, expected = expected)).likeCount
     }
-    suspend fun delete(id: Long) { require(id > 0); request("DELETE", "posts/$id") }
-    suspend fun comments(id: Long): List<PostComment> {
-        require(id > 0); return api.decode<PostComments>(request("GET", "posts/$id/comments")).comments
+    suspend fun delete(id: Long, expected: RequestSession) {
+        require(id > 0)
+        request("DELETE", "posts/$id", expected = expected)
     }
-    suspend fun comment(id: Long, content: String) {
-        require(id > 0 && content.isNotBlank())
-        request("POST", "posts/$id/comments", body = buildJsonObject { put("content", content.trim()) })
+    suspend fun comments(id: Long, after: Long = 0): PostComments {
+        require(id > 0 && after >= 0)
+        return api.decode(request("GET", "posts/$id/comments", mapOf("after" to after.toString(), "limit" to "30")))
     }
-    suspend fun deleteComment(id: Long) { require(id > 0); request("DELETE", "posts/comments/$id") }
+    suspend fun comment(id: Long, content: String, replyTo: Long?, expected: RequestSession): Long {
+        require(id > 0 && content.postCharacterCount() in 1..POST_COMMENT_LIMIT)
+        return api.decode<CreatedPost>(request("POST", "posts/$id/comments", body = buildJsonObject {
+            put("content", content.trim())
+            if (replyTo != null) put("replyTo", replyTo)
+        }, expected = expected)).id
+    }
+    suspend fun deleteComment(id: Long, expected: RequestSession) {
+        require(id > 0)
+        request("DELETE", "posts/comments/$id", expected = expected)
+    }
 }

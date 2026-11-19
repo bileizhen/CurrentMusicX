@@ -161,9 +161,16 @@ import kotlinx.coroutines.launch
     val embyAccount by vm.container.emby.state.collectAsStateWithLifecycle()
     val qqAccount by vm.container.qqMusic.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
+    val bannerPreview by vm.bannerPreview.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val server = vm.container.projectSession().server
     var avatarPreview by rememberSaveable(vm.container.accountRepository.server, account.account?.id) { mutableStateOf(false) }
+    var removingBanner by remember(server, account.account?.id) { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
         if (uri != null) { avatarPreview = false; vm.avatar.value = uri; vm.dialog.value = "avatar" }
+    }
+    val bannerPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        vm.previewBanner(context.contentResolver, uri)
     }
     val user = state.profile?.user ?: account.account?.takeIf { onBack == null }?.let {
         ProfileUser(id = it.id, username = it.username, nickname = it.nickname, avatar = it.avatar,
@@ -197,6 +204,17 @@ import kotlinx.coroutines.launch
         } } }
         if (user != null) {
             item("identity") { SettingsGroup(Modifier.testTag("profile_identity")) {
+                val bannerUrl = remember(server, user.id, user.bannerUrl) { vm.container.profileRepository.bannerImageUrl(server, user) }
+                ProfileBannerImage(bannerUrl, Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp).testTag("profile_banner"))
+                if (privateOwnProfile) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.End, verticalAlignment = Alignment.CenterVertically) {
+                    MusicTextAction(if (bannerUrl == null) "上传横幅" else "更换横幅", {
+                        if (vm.beginBannerPick())
+                            bannerPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                    }, Modifier.testTag("profile_banner_pick"), enabled = !busy && state.profile != null)
+                    if (bannerUrl != null) MusicTextAction("移除横幅", { removingBanner = true },
+                        Modifier.testTag("profile_banner_remove"), enabled = !busy && state.profile != null)
+                }
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 12.dp),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Box(Modifier.testTag("my_profile_avatar").clickable(role = Role.Button) { avatarPreview = true }
@@ -236,6 +254,14 @@ import kotlinx.coroutines.launch
                         onListening = if (privateOwnProfile) ({ navigate("user/listening") }) else null)
                 }
             } }
+            if (user.id > 0) item("posts") {
+                SettingsGroup(Modifier.padding(top = 12.dp)) {
+                    SettingsPreference(if (privateOwnProfile) "我的帖子" else "TA 的帖子",
+                        modifier = Modifier.testTag("profile_posts_entry"), onClick = { navigate("user/posts/${user.id}") },
+                        leading = { Icon(MusicIcons.Comment, null, Modifier.size(22.dp)) },
+                        trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp)) })
+                }
+            }
             if (privateOwnProfile) {
                 item("library") { ProfileLibrarySection(navigate, platform, showLikes = !privateOwnProfile) }
                 item("services") { ProfileServicesSection(navigate, tasksEnabled == true,
@@ -284,6 +310,16 @@ import kotlinx.coroutines.launch
         onDismiss = { avatarPreview = false },
         onChange = if (privateOwnProfile && !busy) ({ picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) else null,
         onDecorations = if (privateOwnProfile) ({ avatarPreview = false; navigate("user/decorations") }) else null)
+    if (privateOwnProfile) bannerPreview?.let { bytes ->
+        ProfileBannerPreview(bytes, busy, vm::dismissBanner, vm::saveBanner)
+    }
+    if (privateOwnProfile && removingBanner) MusicDialog("移除主页横幅？", { removingBanner = false }) {
+        Text("移除后，主页会显示默认横幅。")
+        MusicDialogButton("移除", {
+            removingBanner = false
+            vm.removeBanner()
+        }, enabled = !busy)
+    }
 }
 
 /** Accounts and security are one page: switching accounts and changing credentials are the same job. */

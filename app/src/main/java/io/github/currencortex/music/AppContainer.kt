@@ -58,6 +58,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     }
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val playerScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    internal val postDraftStore = io.github.currencortex.music.data.profile.PostDraftStore(context.applicationContext, storageSuffix)
     internal val feedbackStore = io.github.currencortex.music.data.feedback.FeedbackSubmissionStore(context, storageSuffix)
     internal val feedbackMediaStore = io.github.currencortex.music.data.feedback.FeedbackMediaStore(context, storageSuffix)
     private val settingsStore = PreferenceDataStoreFactory.create(
