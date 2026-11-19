@@ -112,7 +112,7 @@ internal class PostsViewModel(
     }
     fun delete(post: CommunityPost, onDeleted: () -> Unit = {}) {
         if (post.canDelete) action("帖子已删除", { repository.delete(post.id, it) }) {
-            if (linkedPostId == null && state.value.detailId == post.id) detail(null)
+            if (state.value.detailId == post.id) detail(null)
             state.update { current -> current.copy(
                 posts = current.posts.filterNot { it.id == post.id },
                 total = (current.total - 1).coerceAtLeast(0),

@@ -424,6 +424,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         var pendingPlay by remember { mutableStateOf<(() -> Unit)?>(null) }
         var pendingWebLinkId by remember { mutableStateOf<String?>(null) }
+        var postLinkRequest by remember { mutableStateOf<Pair<Long, String>?>(null) }
         var explained by rememberSaveable { mutableStateOf(false) }
         val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             val action = pendingPlay
@@ -455,8 +456,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     }
                     is io.github.currencortex.music.core.links.MusicWebLink.Page -> navigateLibrary(target.route)
                     is io.github.currencortex.music.core.links.MusicWebLink.Post -> {
-                        if (CurrentMusicServer.builtIn(container.projectSession().server)) navigateLibrary("user/post/${target.id}")
-                        else openExternalLink(context, target.webUrl.toString(), excludeCurrentApp = true)
+                        if (CurrentMusicServer.builtIn(container.projectSession().server)) {
+                            postLinkRequest = target.id to request.id
+                            navigateLibrary("user/post/${target.id}")
+                        } else openExternalLink(context, target.webUrl.toString(), excludeCurrentApp = true)
                     }
                     is io.github.currencortex.music.core.links.MusicWebLink.ListenTogether -> {
                         listenInvitationUrl = target.invitation.shareUrl()
@@ -902,9 +905,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                 route.startsWith("user/post/") -> {
                                     val id = route.substringAfterLast('/').toLongOrNull()?.takeIf { it > 0 }
                                     if (id != null) {
-                                        val vm: PostsViewModel = viewModel(key = route,
-                                            factory = viewModelFactory { PostsViewModel(container, linkedPostId = id) })
-                                        LinkedPostScreen(vm, ::navigateLibrary) { if (backStack.lastOrNull() == route) navigateBack() }
+                                        val requestId = postLinkRequest?.takeIf { it.first == id }?.second
+                                        LinkedPostScreen(container, id, requestId, ::navigateLibrary) {
+                                            if (backStack.lastOrNull() == route) navigateBack()
+                                        }
                                     }
                                 }
                                 route.startsWith("user/posts/") -> {

@@ -24,7 +24,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.data.profile.POST_COMMENT_LIMIT
 import io.github.currencortex.music.data.profile.PostComment
 import io.github.currencortex.music.data.profile.postCharacterCount
@@ -32,6 +36,7 @@ import io.github.currencortex.music.feature.update.MarkdownText
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.util.collectAsPageState
+import io.github.currencortex.music.ui.util.viewModelFactory
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -48,7 +53,21 @@ internal fun PostDetailDialog(vm: PostsViewModel, state: PostsState, navigate: (
 }
 
 @Composable
-internal fun LinkedPostScreen(vm: PostsViewModel, navigate: (String) -> Unit, onBack: () -> Unit) {
+internal fun LinkedPostScreen(
+    container: AppContainer,
+    postId: Long,
+    linkRequestId: String?,
+    navigate: (String) -> Unit,
+    onBack: () -> Unit,
+) {
+    val owner = remember(container, postId, linkRequestId) {
+        object : ViewModelStoreOwner {
+            override val viewModelStore = ViewModelStore()
+        }
+    }
+    DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
+    val vm: PostsViewModel = viewModel(viewModelStoreOwner = owner,
+        factory = viewModelFactory { PostsViewModel(container, linkedPostId = postId) })
     val state by vm.state.collectAsPageState()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val close = { if (!state.busy) onBack() }
