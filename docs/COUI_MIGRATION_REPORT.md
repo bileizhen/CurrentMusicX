@@ -20,7 +20,7 @@
 - `ui/theme/Theme.kt`: theme now uses `COUITheme`; removed the global transparent `LocalIndication` override so COUI's press/hover/focus feedback is active.
 - `ui/theme/AppearanceColors.kt`: rebuilt on `io.github.suqi8.coui.kmp.theme.Colors`. Monet/system seed, custom accent, pure black, card/background levels and label opacity are preserved through COUI roles.
 - `app/src/main/AndroidManifest.xml`: removed `tools:overrideLibrary="top.yukonga.miuix.kmp.blur"`. No SDK override is used.
-- `SettingsScreen`: rebuilt as a dedicated COUI `Scaffold` with the official 116dp/40sp SettingsHome `TopAppBar`, in-place `TopAppBarSearchBar`, `topAppBarSearchContent`/`topAppBarSearchResults`, `PreferenceCategory`, `Card`, `CardListGroup`, `ArrowPreference`, and `COUIIcons`. The previous floating-header host is no longer used for the settings home.
+- `SettingsScreen`: rebuilt as a dedicated COUI `Scaffold` with a 116dp/40sp collapsible SettingsHome header, in-place `TopAppBarSearchBar`, `topAppBarSearchContent`/`topAppBarSearchResults`, `PreferenceCategory`, `Card`, `CardListGroup`, `ArrowPreference`, and `COUIIcons`. The previous floating-header host is no longer used for the settings home.
 - Settings account row now shows the signed-in CurrentMusic account avatar and nickname, with the ColorOS-style summary `管理账号、云服务、查找`; tapping it opens the existing profile tab.
 - `THIRD_PARTY_NOTICES.md` and `app/src/main/assets/legal/NOTICES.md`: MIUIX attribution replaced with COUI 2.0 attribution.
 
@@ -28,7 +28,7 @@
 
 `coui-blur-android:2.0.0` is now used directly and the application minimum SDK is 33. The former `coui-blur-compat` module and its manifest/dependency wiring were removed. The old `tools:overrideLibrary` entry is also absent.
 
-The settings page records its scrolling content with `rememberLayerBackdrop` and passes it to COUI's `TopAppBarGlow`. The scroll-driven condensed-light overlay provides the ColorOS 17 progressive blur, 30dp alpha threshold and 24dp fade strip below the bar. The bar uses the COUI SettingsHome dimensions with its large title fading away on collapse, leaving the same blurred search band as the system Settings page; without runtime shader support, `TopAppBarGlow` falls back to the opaque page surface.
+The settings page records its scrolling content with `rememberLayerBackdrop` and passes it to COUI's `TopAppBarGlow`. The scroll-driven condensed-light overlay provides the ColorOS 17 progressive blur, 30dp alpha threshold and 24dp fade strip below the bar. A dedicated collapsing header uses the 116dp/40sp SettingsHome metrics, but removes the generic `TopAppBar` 52dp collapsed toolbar slot: the title height reaches zero and the pinned search bar sits directly below the status bar, matching the system Settings page without an empty band. Without runtime shader support, `TopAppBarGlow` falls back to the opaque page surface.
 
 ## 4. Preserved custom components
 
@@ -74,7 +74,7 @@ The signed release (`com.bileizhen.currentmusic`, certificate SHA-256 `FC:3E:63:
 
 - Light home page with search capsule, recommendation cards and floating dock.
 - Settings home rebuilt with a COUI `Scaffold`, collapsible large title, in-place search and native preference cards.
-- Scrolled settings use `TopAppBarGlow` progressive blur with the large title faded away above the pinned search bar, matching the ColorOS 17 Settings material band.
+- Scrolled settings use `TopAppBarGlow` progressive blur with the large title fully collapsed and the search bar directly below the status bar, matching the ColorOS 17 Settings material band without a 52dp empty toolbar.
 - Account card shows the real `bileizhen` avatar and nickname; tapping it opens `我的`.
 - Search opens from the top bar, fades the settings content, filters rows in a separate results list, and cancels back to the unchanged page.
 - Settings page light and dark palettes, pinned search bar and scrolled/collapsed state.

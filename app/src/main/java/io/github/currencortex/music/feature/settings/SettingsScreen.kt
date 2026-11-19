@@ -1,20 +1,31 @@
 package io.github.currencortex.music.feature.settings
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.feature.update.UpdatePageOrigin
@@ -25,6 +36,7 @@ import io.github.currencortex.music.ui.component.musicScrollPadding
 import io.github.currencortex.music.ui.component.rootMotionItems
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.blur.Backdrop
 import io.github.suqi8.coui.kmp.blur.TopAppBarGlow
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
@@ -69,7 +81,39 @@ fun SettingsScreen(
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     val searchState = rememberTopAppBarSearchState(active = searching)
-    val scrollBehavior: ScrollBehavior = COUIScrollBehavior()
+    val density = LocalDensity.current
+    val titleHeight = 116.dp
+    val titleHeightPx = with(density) { titleHeight.toPx() }
+    var headerCollapsePx by remember { mutableFloatStateOf(0f) }
+    val searchLift by animateFloatAsState(
+        targetValue = if (searching) 1f else 0f,
+        animationSpec = spring(dampingRatio = 1f, stiffness = 800f),
+        label = "settings_search_lift",
+    )
+    val collapseFraction = maxOf(
+        if (titleHeightPx > 0f) (headerCollapsePx / titleHeightPx).coerceIn(0f, 1f) else 0f,
+        searchLift,
+    )
+    val headerConnection = remember(titleHeightPx, searching) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (searching) return Offset.Zero
+                return if (available.y < 0f) {
+                    val delta = (-available.y).coerceAtMost(titleHeightPx - headerCollapsePx)
+                    if (delta <= 0f) Offset.Zero else {
+                        headerCollapsePx += delta
+                        Offset(0f, -delta)
+                    }
+                } else {
+                    val delta = available.y.coerceAtMost(headerCollapsePx)
+                    if (delta <= 0f) Offset.Zero else {
+                        headerCollapsePx -= delta
+                        Offset(0f, delta)
+                    }
+                }
+            }
+        }
+    }
     val backgroundColor = COUITheme.colorScheme.background
     val isDark = COUITheme.isDark
     val backdrop = rememberLayerBackdrop {
@@ -113,54 +157,26 @@ fun SettingsScreen(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
                 containerColor = backgroundColor,
                 topBar = {
-                    TopAppBar(
+                    SettingsHomeHeader(
                         title = "设置",
-                        largeTitle = "设置",
-                        modifier = Modifier.testTag("settings_root_toolbar"),
-                        color = Color.Transparent,
-                        scrollBehavior = scrollBehavior,
-                        expandedHeight = 116.dp,
-                        largeTitleFontSize = 40.sp,
-                        titlePadding = 24.dp,
-                        largeTitleBottomMargin = 18.dp,
-                        fadeLargeTitleOnCollapse = true,
-                        searchState = searchState,
-                        glow = {
-                            TopAppBarGlow(
-                                backdrop = backdrop,
-                                scrollOffsetPx = scrollBehavior.glowScrollOffsetPx(),
-                                isDark = isDark,
-                                baseColor = backgroundColor,
-                                enabled = true,
-                            )
+                        titleHeight = titleHeight,
+                        collapseFraction = collapseFraction,
+                        scrollOffsetPx = collapseFraction * titleHeightPx,
+                        backdrop = backdrop,
+                        isDark = isDark,
+                        baseColor = backgroundColor,
+                        query = query,
+                        onQueryChange = { query = it },
+                        searching = searching,
+                        onExpandedChange = {
+                            searching = it
+                            if (!it) query = ""
                         },
-                        navigationIcon = {
-                            if (onBack != null) {
-                                IconButton(
-                                    onClick = onBack,
-                                    modifier = Modifier.testTag("navigate_back"),
-                                ) {
-                                    Icon(COUIIcons.Back, contentDescription = "返回")
-                                }
-                            }
-                        },
-                        bottomContent = {
-                            TopAppBarSearchBar(
-                                query = query,
-                                onQueryChange = { query = it },
-                                expanded = searching,
-                                onExpandedChange = {
-                                    searching = it
-                                    if (!it) query = ""
-                                },
-                                cancelText = "取消",
-                                label = "搜索设置项",
-                                modifier = Modifier.testTag("settings_search"),
-                            )
-                        },
+                        onBack = onBack,
                     )
                 },
             ) { padding ->
+                val contentTopPadding = maxOf(0.dp, padding.calculateTopPadding() - 24.dp)
                 Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
                     if (searchState.isContentVisible) {
                         LazyColumn(
@@ -168,9 +184,9 @@ fun SettingsScreen(
                                 .testTag("settings_screen")
                                 .topAppBarSearchContent(searchState)
                                 .overScrollVertical()
-                                .nestedScroll(scrollBehavior.nestedScrollConnection),
+                                .nestedScroll(headerConnection),
                             contentPadding = musicScrollPadding(
-                                PaddingValues(16.dp, padding.calculateTopPadding() + 8.dp, 16.dp, 20.dp)
+                                PaddingValues(16.dp, contentTopPadding + 8.dp, 16.dp, 20.dp)
                             ),
                         ) {
                             rootMotionItems {
@@ -317,7 +333,7 @@ fun SettingsScreen(
                         SettingsSearchResults(
                             query = query,
                             searchState = searchState,
-                            scrollBehavior = scrollBehavior,
+                            headerConnection = headerConnection,
                             padding = padding,
                             destinations = destinations,
                             onBeforeNavigate = {
@@ -328,6 +344,76 @@ fun SettingsScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SettingsHomeHeader(
+    title: String,
+    titleHeight: androidx.compose.ui.unit.Dp,
+    collapseFraction: Float,
+    scrollOffsetPx: Float,
+    backdrop: Backdrop,
+    isDark: Boolean,
+    baseColor: Color,
+    query: String,
+    onQueryChange: (String) -> Unit,
+    searching: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    onBack: (() -> Unit)?,
+) {
+    val statusBarInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding()
+    val titleAreaHeight = (titleHeight * (1f - collapseFraction)).coerceAtLeast(0.dp)
+    Box(Modifier.fillMaxWidth().testTag("settings_root_toolbar")) {
+        TopAppBarGlow(
+            backdrop = backdrop,
+            scrollOffsetPx = scrollOffsetPx,
+            isDark = isDark,
+            baseColor = baseColor,
+            enabled = true,
+        )
+        Column(Modifier.fillMaxWidth()) {
+            Spacer(Modifier.height(statusBarInset))
+            Box(Modifier.fillMaxWidth().height(titleAreaHeight).clipToBounds()) {
+                Box(
+                    Modifier.fillMaxSize().graphicsLayer {
+                        alpha = 1f - collapseFraction
+                        scaleX = 1f - 0.2f * collapseFraction
+                        scaleY = 1f - 0.2f * collapseFraction
+                        transformOrigin = TransformOrigin(0f, 1f)
+                    }
+                ) {
+                    if (onBack != null) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier.align(Alignment.CenterStart).padding(start = 16.dp)
+                                .testTag("navigate_back"),
+                        ) {
+                            Icon(COUIIcons.Back, contentDescription = "返回")
+                        }
+                    }
+                    Text(
+                        text = title,
+                        modifier = Modifier.align(Alignment.BottomStart)
+                            .padding(start = if (onBack != null) 72.dp else 24.dp, bottom = 18.dp),
+                        fontSize = 40.sp,
+                        lineHeight = 52.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
+                }
+            }
+            TopAppBarSearchBar(
+                query = query,
+                onQueryChange = onQueryChange,
+                expanded = searching,
+                onExpandedChange = onExpandedChange,
+                cancelText = "取消",
+                label = "搜索设置项",
+                modifier = Modifier.testTag("settings_search"),
+            )
+            Spacer(Modifier.height(24.dp))
         }
     }
 }
@@ -398,7 +484,7 @@ private fun SettingsAccountCard(
 private fun SettingsSearchResults(
     query: String,
     searchState: TopAppBarSearchState,
-    scrollBehavior: ScrollBehavior,
+    headerConnection: NestedScrollConnection,
     padding: PaddingValues,
     destinations: List<SettingsDestination>,
     onBeforeNavigate: () -> Unit,
@@ -407,14 +493,15 @@ private fun SettingsSearchResults(
     val results = if (normalized.isBlank()) destinations else destinations.filter {
         it.title.contains(normalized, ignoreCase = true) || it.summary.contains(normalized, ignoreCase = true)
     }
+    val contentTopPadding = maxOf(0.dp, padding.calculateTopPadding() - 24.dp)
     LazyColumn(
         modifier = Modifier.fillMaxSize()
             .testTag("settings_search_results")
             .topAppBarSearchResults(searchState)
             .overScrollVertical()
-            .nestedScroll(scrollBehavior.nestedScrollConnection),
+            .nestedScroll(headerConnection),
         contentPadding = musicScrollPadding(
-            PaddingValues(16.dp, padding.calculateTopPadding(), 16.dp, 20.dp)
+            PaddingValues(16.dp, contentTopPadding, 16.dp, 20.dp)
         ),
     ) {
         if (results.isEmpty()) {
