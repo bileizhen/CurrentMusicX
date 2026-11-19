@@ -218,7 +218,7 @@ fun SettingsScreen(
                                     )
                                 }
                                 item {
-                                    SettingsCategoryCard("个性化") {
+                                    SettingsCategoryCard(null) {
                                         item {
                                             ArrowPreference(
                                                 title = "外观",
@@ -240,7 +240,7 @@ fun SettingsScreen(
                                     }
                                 }
                                 item {
-                                    SettingsCategoryCard("音乐") {
+                                    SettingsCategoryCard(null) {
                                         item {
                                             ArrowPreference(
                                                 title = "播放",
@@ -280,7 +280,7 @@ fun SettingsScreen(
                                     }
                                 }
                                 item {
-                                    SettingsCategoryCard("应用") {
+                                    SettingsCategoryCard(null) {
                                         item {
                                             ArrowPreference(
                                                 title = "默认打开链接",
@@ -523,6 +523,7 @@ private fun SettingsSearchResults(
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                     insideMargin = PaddingValues(24.dp),
+                    shadow = CardDefaults.shadow(),
                 ) {
                     Text(
                         text = "未找到“$normalized”相关的设置",
@@ -555,14 +556,15 @@ private fun SettingsSearchResults(
 
 @Composable
 private fun SettingsCategoryCard(
-    title: String,
+    title: String?,
     content: CardListGroupScope.() -> Unit,
 ) {
     Column {
-        PreferenceCategory(title = title)
+        if (title != null) PreferenceCategory(title = title)
         Card(
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             insideMargin = PaddingValues(0.dp),
+            shadow = CardDefaults.shadow(),
         ) {
             CardListGroup(content = content)
         }
@@ -574,7 +576,7 @@ private fun SettingsCard(
     modifier: Modifier = Modifier,
     content: CardListGroupScope.() -> Unit,
 ) {
-    Card(modifier = modifier, insideMargin = PaddingValues(0.dp)) {
+    Card(modifier = modifier, insideMargin = PaddingValues(0.dp), shadow = CardDefaults.shadow()) {
         CardListGroup(content = content)
     }
 }
