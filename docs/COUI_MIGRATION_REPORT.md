@@ -69,6 +69,7 @@ A verification build (`-PisolatedDebug=true`, package `com.bileizhen.currentmusi
 - Light home page with search capsule, recommendation cards and floating dock.
 - Settings home rebuilt with `PreferenceCategory`, `Card`, `CardListGroup` and `ArrowPreference`, including COUI row dividers and chevrons.
 - Desktop-lyrics subpage inheriting the shared COUI `Card` group container.
+- Home and library section headings using COUI `PreferenceCategory`.
 - Appearance page, light and dark themes.
 - Custom color sheet (`OverlayBottomSheet`) with preview, HEX field and color grid.
 - Pure dark palette switches correctly and keeps contrast.
@@ -79,7 +80,7 @@ Not verified: player/lyrics animation, audio output, Bluetooth/notification cont
 
 ## 7. Known risks / follow-up
 
-- The settings home and shared settings cards are now structurally COUI. Main pages, search, player controls and remaining dialogs still need their visual pass.
+- The settings home, shared settings cards and home/library section headings are now structurally COUI. Search, player controls and remaining dialogs still need their visual pass.
 - A broader visual attempt that placed a COUI `TopAppBar` inside the existing floating-header backdrop host produced a native RenderThread stack overflow. That host keeps its custom glass toolbar until a safe COUI integration is designed.
 - Official COUI blur is now exercised on the connected Android 17 device. Additional API 33+ devices remain unverified.
 - No performance comparison was possible without a full native build and release APK.
