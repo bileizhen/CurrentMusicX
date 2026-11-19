@@ -44,7 +44,7 @@ android {
 
     defaultConfig {
         applicationId = "com.bileizhen.currentmusic"
-        minSdk = 26
+        minSdk = 33
         // Only PR smoke builds opt into a single ABI; releases keep every supported ABI.
         if (providers.gradleProperty("ciPrArm64Only").orNull == "true") {
             ndk.abiFilters += "arm64-v8a"
@@ -214,9 +214,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core:1.7.8")
 
     implementation("io.github.suqi8.coui.kmp:coui-ui-android:2.0.0")
+    implementation("io.github.suqi8.coui.kmp:coui-blur-android:2.0.0")
     implementation("io.github.suqi8.coui.kmp:coui-preference-android:2.0.0")
     implementation("io.github.suqi8.coui.kmp:coui-squircle-android:2.0.0")
-    implementation(project(":coui-blur-compat"))
     implementation("com.materialkolor:material-color-utilities:4.1.1")
 
     implementation("androidx.navigation3:navigation3-runtime:1.1.4")
