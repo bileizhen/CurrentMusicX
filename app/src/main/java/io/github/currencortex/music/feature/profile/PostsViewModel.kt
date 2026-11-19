@@ -30,7 +30,9 @@ internal class PostsViewModel(
     private fun session() = container.projectSession()
     private val repository = PostsRepository(container.apiClient, ::session)
     private var draftOwner: DraftOwner? = null
+    private var publication: Publication? = null
     private var activeSession: RequestSession? = null
+    private data class Publication(val postId: Long, val authorId: Long)
     private data class DraftOwner(val expected: RequestSession, val accountId: Long) {
         val key get() = "${ServerUrl.normalize(expected.server)}|$accountId"
     }
@@ -57,6 +59,7 @@ internal class PostsViewModel(
                 feedTask?.cancel(); detailTask?.cancel(); commentTask?.cancel(); actionTask?.cancel(); attachmentTask?.cancel()
                 activeSession = session()
                 draftOwner = null
+                publication = null
                 state.value = PostsState()
                 if (requested) reload()
                 if (linkedPostId != null) detail(linkedPostId)
@@ -153,6 +156,7 @@ internal class PostsViewModel(
             container.postDraftStore.clearPublished(current.key, draft)
             id
         }) { id ->
+            publication = Publication(id, current.accountId)
             editor(false)
             reload()
             detail(id)
@@ -218,13 +222,17 @@ internal class PostsViewModel(
             return
         }
         val fromFeed = state.value.posts.find { it.id == id }
+        val publishedBy = publication?.takeIf { it.postId == id }?.authorId
         detailTask = viewModelScope.launch {
-            val result = appResult { repository.detail(id, fromFeed) }
+            val result = appResult { repository.detail(id, fromFeed, publishedBy) }
             if (expected != session() || state.value.detailId != id) return@launch
             when (result) {
                 is AppResult.Success -> {
-                    state.update { it.copy(detail = result.value, detailLoading = false,
-                        posts = it.posts.map { post -> if (post.id == id) result.value else post }) }
+                    state.update { current ->
+                        val post = result.value.keepNewerLikes(fromFeed, current.posts.find { it.id == id })
+                        current.copy(detail = post, detailLoading = false,
+                            posts = current.posts.map { if (it.id == id) post else it })
+                    }
                     loadComments()
                 }
                 is AppResult.Failure -> state.update { it.copy(detailLoading = false, detailError = result.message) }

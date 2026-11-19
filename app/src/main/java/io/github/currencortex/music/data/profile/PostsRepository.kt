@@ -27,6 +27,12 @@ internal fun String.postCharacterCount(): Int = trim().let { it.codePointCount(0
 internal fun String.validPostTitle(): Boolean = postCharacterCount() <= POST_TITLE_LIMIT &&
     trim().none { it in "\n\r\u000B\u000C\u001C\u001D\u001E\u0085\u2028\u2029" }
 
+internal fun CommunityPost.keepNewerLikes(before: CommunityPost?, latest: CommunityPost?): CommunityPost {
+    if (before?.id != id || latest?.id != id) return this
+    return if (before.likedByMe != latest.likedByMe || before.likeCount != latest.likeCount)
+        copy(likedByMe = latest.likedByMe, likeCount = latest.likeCount) else this
+}
+
 class PostsRepository(private val api: ApiClient, private val session: () -> RequestSession) {
     private suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
         body: JsonElement? = null, expected: RequestSession = session()): JsonElement {
@@ -37,19 +43,22 @@ class PostsRepository(private val api: ApiClient, private val session: () -> Req
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         return result
     }
-    suspend fun list(offset: Int = 0, author: Long? = null): PostsPage = api.decode(request("GET", "posts",
+    suspend fun list(offset: Int = 0, author: Long? = null, expected: RequestSession = session()): PostsPage = api.decode(request("GET", "posts",
         buildMap {
             put("offset", offset.coerceAtLeast(0).toString())
             put("limit", "20")
             if (author != null) put("author", author.toString())
-        }))
-    suspend fun detail(id: Long, cached: CommunityPost? = null): CommunityPost {
+        }, expected = expected))
+    suspend fun detail(id: Long, cached: CommunityPost? = null, publishedBy: Long? = null): CommunityPost {
         require(id > 0)
+        val expected = session()
         return try {
-            api.decode<PostDetails>(request("GET", "posts/$id")).post
+            api.decode<PostDetails>(request("GET", "posts/$id", expected = expected)).post
         } catch (error: ApiException) {
-            if (cached?.id == id && error.status == 404 && error.userMessage == "未知接口 GET /posts/$id") cached
-            else throw error
+            if (error.status != 404 || error.userMessage != "未知接口 GET /posts/$id") throw error
+            cached?.takeIf { it.id == id }
+                ?: publishedBy?.let { author -> list(author = author, expected = expected).posts.find { it.id == id } }
+                ?: throw error
         }
     }
     fun link(id: Long): String {
