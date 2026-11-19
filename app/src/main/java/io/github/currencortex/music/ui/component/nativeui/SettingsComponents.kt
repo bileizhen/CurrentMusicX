@@ -39,6 +39,7 @@ import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
+import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
@@ -147,7 +148,9 @@ private val LocalSettingsPicker=compositionLocalOf<((Rect,List<GlassMenuItem>)->
 }
 
 @Composable internal fun SettingsGroup(modifier:Modifier=Modifier,content:@Composable ColumnScope.()->Unit) {
-    Column(modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(COUITheme.colorScheme.cardBackground),content=content)
+    Card(modifier = modifier.fillMaxWidth(), insideMargin = PaddingValues(0.dp)) {
+        Column(content = content)
+    }
 }
 
 /** Same section hierarchy as the appearance page: icon heading, one list, footer outside the card. */
