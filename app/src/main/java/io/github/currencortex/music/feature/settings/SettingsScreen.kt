@@ -123,6 +123,7 @@ fun SettingsScreen(
                         largeTitleFontSize = 40.sp,
                         titlePadding = 24.dp,
                         largeTitleBottomMargin = 18.dp,
+                        fadeLargeTitleOnCollapse = true,
                         searchState = searchState,
                         glow = {
                             TopAppBarGlow(

@@ -28,7 +28,7 @@
 
 `coui-blur-android:2.0.0` is now used directly and the application minimum SDK is 33. The former `coui-blur-compat` module and its manifest/dependency wiring were removed. The old `tools:overrideLibrary` entry is also absent.
 
-The settings page records its scrolling content with `rememberLayerBackdrop` and passes it to COUI's `TopAppBarGlow`. The scroll-driven condensed-light overlay provides the ColorOS 17 progressive blur, 30dp alpha threshold and 24dp fade strip below the bar. The bar uses the COUI SettingsHome dimensions and keeps its collapsed title above the pinned search slot; without runtime shader support, `TopAppBarGlow` falls back to the opaque page surface.
+The settings page records its scrolling content with `rememberLayerBackdrop` and passes it to COUI's `TopAppBarGlow`. The scroll-driven condensed-light overlay provides the ColorOS 17 progressive blur, 30dp alpha threshold and 24dp fade strip below the bar. The bar uses the COUI SettingsHome dimensions with its large title fading away on collapse, leaving the same blurred search band as the system Settings page; without runtime shader support, `TopAppBarGlow` falls back to the opaque page surface.
 
 ## 4. Preserved custom components
 
@@ -74,7 +74,7 @@ The signed release (`com.bileizhen.currentmusic`, certificate SHA-256 `FC:3E:63:
 
 - Light home page with search capsule, recommendation cards and floating dock.
 - Settings home rebuilt with a COUI `Scaffold`, collapsible large title, in-place search and native preference cards.
-- Scrolled settings use `TopAppBarGlow` progressive blur with the collapsed `设置` title still present above the pinned search bar, matching the ColorOS 17 material header instead of leaving an empty translucent band.
+- Scrolled settings use `TopAppBarGlow` progressive blur with the large title faded away above the pinned search bar, matching the ColorOS 17 Settings material band.
 - Account card shows the real `bileizhen` avatar and nickname; tapping it opens `我的`.
 - Search opens from the top bar, fades the settings content, filters rows in a separate results list, and cancels back to the unchanged page.
 - Settings page light and dark palettes, pinned search bar and scrolled/collapsed state.
