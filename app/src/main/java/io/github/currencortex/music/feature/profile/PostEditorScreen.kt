@@ -75,14 +75,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), tag = "post_editor_mode", enabled = !state.busy)
                         LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("post_editor_content"),
                             contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            if (!state.draft.isEmpty) item {
+                            if (!state.draft.isEmpty) item(key = "draft") {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(if (state.draftRestored) "已恢复此设备上的草稿" else "草稿已保存到此设备",
                                         Modifier.weight(1f), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
                                     MusicTextAction("丢弃草稿", { discard = true }, enabled = !state.busy)
                                 }
                             }
-                            if (!preview || state.draft.title.isNotBlank()) item {
+                            if (!preview || state.draft.title.isNotBlank()) item(key = "title") {
                                 SettingsGroup {
                                     Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                         if (preview) {
@@ -106,7 +106,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                     }
                                 }
                             }
-                            item {
+                            item(key = "content") {
                                 SettingsGroup {
                                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                                         verticalAlignment = Alignment.CenterVertically) {
@@ -154,7 +154,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                     }
                                 }
                             }
-                            item {
+                            item(key = "attachments") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Text("分享音乐", Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)

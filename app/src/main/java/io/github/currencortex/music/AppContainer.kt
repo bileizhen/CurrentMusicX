@@ -400,6 +400,7 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     }
     val profileRepository = io.github.currencortex.music.data.profile.ProfileRepository(apiClient,
         AvatarImageCache(context, storageSuffix)) { RequestSession(accountRepository.server, accountRepository.token) }
+    internal val postsRepository = io.github.currencortex.music.data.profile.PostsRepository(apiClient, ::projectSession)
     val bindingRepository: io.github.currencortex.music.data.binding.BindingRepository = io.github.currencortex.music.data.binding.BindingRepository(apiClient,
         { musicSession() }) { libraryRepository.invalidate(); neteaseLibrary.invalidate() }
     private val neteaseAvatarImporter by lazy {

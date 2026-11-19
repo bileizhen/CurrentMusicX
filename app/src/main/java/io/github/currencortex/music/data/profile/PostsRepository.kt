@@ -1,6 +1,9 @@
 package io.github.currencortex.music.data.profile
 
 import io.github.currencortex.music.core.network.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
@@ -27,13 +30,33 @@ internal fun String.postCharacterCount(): Int = trim().let { it.codePointCount(0
 internal fun String.validPostTitle(): Boolean = postCharacterCount() <= POST_TITLE_LIMIT &&
     trim().none { it in "\n\r\u000B\u000C\u001C\u001D\u001E\u0085\u2028\u2029" }
 
-internal fun CommunityPost.keepNewerLikes(before: CommunityPost?, latest: CommunityPost?): CommunityPost {
-    if (before?.id != id || latest?.id != id) return this
-    return if (before.likedByMe != latest.likedByMe || before.likeCount != latest.likeCount)
-        copy(likedByMe = latest.likedByMe, likeCount = latest.likeCount) else this
+internal data class PostLikeChanges(
+    val revision: Long = 0,
+    private val session: RequestSession? = null,
+    private val changes: Map<Long, Change> = emptyMap(),
+) {
+    data class Change(val revision: Long, val liked: Boolean, val count: Int)
+
+    fun forSession(expected: RequestSession): PostLikeChanges =
+        if (expected == session) this else PostLikeChanges(revision, expected)
+
+    fun record(expected: RequestSession, id: Long, liked: Boolean, count: Int): PostLikeChanges {
+        val next = revision + 1
+        return forSession(expected).let { it.copy(revision = next, changes = it.changes + (id to Change(next, liked, count))) }
+    }
+
+    fun applyTo(post: CommunityPost, expected: RequestSession, since: Long): CommunityPost {
+        if (expected != session) return post
+        val change = changes[post.id]?.takeIf { it.revision > since } ?: return post
+        return post.copy(likedByMe = change.liked, likeCount = change.count)
+    }
 }
 
 class PostsRepository(private val api: ApiClient, private val session: () -> RequestSession) {
+    private val likes = MutableStateFlow(PostLikeChanges())
+    internal val likeChanges = likes.asStateFlow()
+    internal fun resetLikesForCurrentSession() = likes.update { it.forSession(session()) }
+
     private suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
         body: JsonElement? = null, expected: RequestSession = session()): JsonElement {
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
@@ -43,16 +66,21 @@ class PostsRepository(private val api: ApiClient, private val session: () -> Req
         if (expected != session()) throw ApiException(ErrorKind.Unauthorized)
         return result
     }
-    suspend fun list(offset: Int = 0, author: Long? = null, expected: RequestSession = session()): PostsPage = api.decode(request("GET", "posts",
-        buildMap {
+    suspend fun list(offset: Int = 0, author: Long? = null, expected: RequestSession = session()): PostsPage {
+        val since = likes.value.revision
+        val page = api.decode<PostsPage>(request("GET", "posts", buildMap {
             put("offset", offset.coerceAtLeast(0).toString())
             put("limit", "20")
             if (author != null) put("author", author.toString())
         }, expected = expected))
+        val latest = likes.value
+        return page.copy(posts = page.posts.map { latest.applyTo(it, expected, since) })
+    }
     suspend fun detail(id: Long, cached: CommunityPost? = null, publishedBy: Long? = null): CommunityPost {
         require(id > 0)
         val expected = session()
-        return try {
+        val since = likes.value.revision
+        val post = try {
             api.decode<PostDetails>(request("GET", "posts/$id", expected = expected)).post
         } catch (error: ApiException) {
             if (error.status != 404 || error.userMessage != "未知接口 GET /posts/$id") throw error
@@ -60,6 +88,7 @@ class PostsRepository(private val api: ApiClient, private val session: () -> Req
                 ?: publishedBy?.let { author -> list(author = author, expected = expected).posts.find { it.id == id } }
                 ?: throw error
         }
+        return likes.value.applyTo(post, expected, since)
     }
     fun link(id: Long): String {
         require(id > 0)
@@ -102,8 +131,10 @@ class PostsRepository(private val api: ApiClient, private val session: () -> Req
     }
     suspend fun like(id: Long, on: Boolean, expected: RequestSession): Int {
         require(id > 0)
-        return api.decode<PostLike>(request("POST", "posts/$id/like",
+        val count = api.decode<PostLike>(request("POST", "posts/$id/like",
             body = buildJsonObject { put("on", on) }, expected = expected)).likeCount
+        likes.update { if (expected == session()) it.record(expected, id, on, count) else it }
+        return count
     }
     suspend fun delete(id: Long, expected: RequestSession) {
         require(id > 0)

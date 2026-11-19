@@ -17,7 +17,7 @@ internal data class PostsState(val posts: List<CommunityPost> = emptyList(), val
     val attachmentError: String? = null, val attachmentSearched: Boolean = false,
     val attachmentOffset: Int = 0, val attachmentMore: Boolean = false, val attachmentRetryMore: Boolean = false,
     val detailId: Long? = null, val detail: CommunityPost? = null, val detailLoading: Boolean = false,
-    val detailError: String? = null, val focusComments: Boolean = false, val commentSent: Long = 0,
+    val detailError: String? = null, val focusComments: Boolean = false, val commentSent: Long = 0, val commentOwner: String? = null,
     val comments: List<PostComment> = emptyList(), val commentsLoading: Boolean = false,
     val commentsError: String? = null, val nextAfter: Long? = null, val commentRetryAfter: Long = 0)
 
@@ -28,19 +28,19 @@ internal class PostsViewModel(
 ) : ViewModel() {
     val state = MutableStateFlow(PostsState(detailId = linkedPostId, detailLoading = linkedPostId != null))
     private fun session() = container.projectSession()
-    private val repository = PostsRepository(container.apiClient, ::session)
-    private var draftOwner: DraftOwner? = null
+    private val repository = container.postsRepository
+    private var draftOwner: PostAccount? = null
     private var publication: Publication? = null
     private var activeSession: RequestSession? = null
     private data class Publication(val postId: Long, val authorId: Long)
-    private data class DraftOwner(val expected: RequestSession, val accountId: Long) {
+    private data class PostAccount(val expected: RequestSession, val accountId: Long) {
         val key get() = "${ServerUrl.normalize(expected.server)}|$accountId"
     }
 
-    private fun owner(): DraftOwner? {
+    private fun owner(): PostAccount? {
         val current = session()
         val id = container.accountRepository.state.value.account?.id ?: return null
-        return if (current.token.isNullOrBlank() || id <= 0) null else DraftOwner(current, id)
+        return if (current.token.isNullOrBlank() || id <= 0) null else PostAccount(current, id)
     }
 
     private var requested = false
@@ -51,20 +51,37 @@ internal class PostsViewModel(
     private var actionTask: Job? = null
     private var attachmentTask: Job? = null
     private var attachmentGeneration = 0L
-    init { viewModelScope.launch {
-        container.sessionRestored.await()
-        combine(container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged())
-            { revision, server -> revision to server }.collect {
-                ++generation; ++attachmentGeneration
-                feedTask?.cancel(); detailTask?.cancel(); commentTask?.cancel(); actionTask?.cancel(); attachmentTask?.cancel()
-                activeSession = session()
-                draftOwner = null
-                publication = null
-                state.value = PostsState()
-                if (requested) reload()
-                if (linkedPostId != null) detail(linkedPostId)
+    init {
+        viewModelScope.launch {
+            container.sessionRestored.await()
+            combine(container.accountRepository.sessionRevision, container.musicSettings.state.map { it.server }.distinctUntilChanged())
+                { revision, server -> revision to server }.collect {
+                    ++generation; ++attachmentGeneration
+                    feedTask?.cancel(); detailTask?.cancel(); commentTask?.cancel(); actionTask?.cancel(); attachmentTask?.cancel()
+                    activeSession = session()
+                    repository.resetLikesForCurrentSession()
+                    draftOwner = null
+                    publication = null
+                    state.value = PostsState(commentOwner = owner()?.key)
+                    if (requested) reload()
+                    if (linkedPostId != null) detail(linkedPostId)
+                }
+        }
+        viewModelScope.launch {
+            var observed = repository.likeChanges.value.revision
+            repository.likeChanges.collect { changes ->
+                val previous = observed
+                observed = changes.revision
+                val expected = activeSession?.takeIf { it == session() } ?: return@collect
+                if (previous < observed) state.update { current ->
+                    current.copy(
+                        posts = current.posts.map { changes.applyTo(it, expected, previous) },
+                        detail = current.detail?.let { changes.applyTo(it, expected, previous) },
+                    )
+                }
             }
-    } }
+        }
+    }
     fun ensureLoaded() { requested = true; if (!state.value.loaded && !state.value.loading) reload() }
     fun postLink(id: Long): String = repository.link(id)
     fun reload(more: Boolean = false) {
@@ -104,10 +121,12 @@ internal class PostsViewModel(
         }
     }
     fun like(post: CommunityPost) {
-        val on = !post.likedByMe
+        val current = state.value.detail?.takeIf { it.id == post.id }
+            ?: state.value.posts.find { it.id == post.id }
+            ?: post
+        val on = !current.likedByMe
         action(if (on) "已点赞" else "已取消点赞", { repository.like(post.id, on, it) }) { count ->
             updatePost(post.id) { it.copy(likedByMe = on, likeCount = count) }
-            if (state.value.loading) reload()
         }
     }
     fun delete(post: CommunityPost, onDeleted: () -> Unit = {}) {
@@ -229,7 +248,7 @@ internal class PostsViewModel(
             when (result) {
                 is AppResult.Success -> {
                     state.update { current ->
-                        val post = result.value.keepNewerLikes(fromFeed, current.posts.find { it.id == id })
+                        val post = result.value
                         current.copy(detail = post, detailLoading = false,
                             posts = current.posts.map { if (it.id == id) post else it })
                     }
@@ -256,8 +275,8 @@ internal class PostsViewModel(
             } }
         }
     }
-    fun sendComment(content: String, replyTo: Long?) {
-        val id = state.value.detail?.id ?: return
+    fun sendComment(id: Long, content: String, replyTo: Long?, commentOwner: String?) {
+        if (commentOwner == null || commentOwner != owner()?.key || state.value.detail?.id != id) return
         if (!state.value.commentsLoading && content.postCharacterCount() in 1..POST_COMMENT_LIMIT) {
             action("评论已发布", { repository.comment(id, content, replyTo, it) }) {
                 updatePost(id) { post -> post.copy(commentCount = post.commentCount + 1) }

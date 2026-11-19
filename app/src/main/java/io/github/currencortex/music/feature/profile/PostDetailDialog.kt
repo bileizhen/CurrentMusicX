@@ -92,14 +92,18 @@ private fun PostDetailPage(
     val list = rememberLazyListState()
     val bottomInset = LocalMusicBottomInset.current
     val openRoute: (String) -> Unit = { route -> if (!state.busy) navigate(route) }
-    var deletingPost by remember(id) { mutableStateOf(false) }
-    var deletingComment by remember(id) { mutableStateOf<PostComment?>(null) }
-    var replyTo by remember(id) { mutableStateOf<PostComment?>(null) }
-    val input = rememberSaveable(id, saver = TextFieldState.Saver) { TextFieldState() }
+    val commentOwner = state.commentOwner
+    val canComment = signedIn && commentOwner != null
+    var deletingPost by remember(id, commentOwner) { mutableStateOf(false) }
+    var deletingComment by remember(id, commentOwner) { mutableStateOf<PostComment?>(null) }
+    var replyTo by remember(id, commentOwner) { mutableStateOf<PostComment?>(null) }
+    val input = key(id, commentOwner) {
+        rememberSaveable(saver = TextFieldState.Saver) { TextFieldState() }
+    }
 
     // The first composition for a thread must not clear its restored input.
-    var lastSent by remember(id) { mutableLongStateOf(state.commentSent) }
-    LaunchedEffect(state.commentSent) {
+    var lastSent by remember(id, commentOwner) { mutableLongStateOf(state.commentSent) }
+    LaunchedEffect(id, commentOwner, state.commentSent) {
         if (lastSent != state.commentSent) {
             input.clearText()
             replyTo = null
@@ -161,7 +165,7 @@ private fun PostDetailPage(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(postTime(comment.createdAt), Modifier.weight(1f), fontSize = 11.sp,
                                         color = colors.onSurfaceVariantSummary)
-                                    if (signedIn) MusicTextAction("回复", { replyTo = comment }, enabled = !state.busy)
+                                    if (canComment) MusicTextAction("回复", { replyTo = comment }, enabled = !state.busy)
                                     if (vm.canDelete(comment)) MusicTextAction("删除", { deletingComment = comment },
                                         Modifier.testTag("post_comment_delete_" + comment.id),
                                         enabled = !state.busy && !state.commentsLoading)
@@ -185,7 +189,7 @@ private fun PostDetailPage(
             if (post != null) Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 state.message?.let { SettingsHint(it) }
-                if (signedIn) {
+                if (canComment) {
                     replyTo?.let { comment ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("回复 @" + comment.author.nickname.ifBlank { comment.author.username }, Modifier.weight(1f),
@@ -196,7 +200,7 @@ private fun PostDetailPage(
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextField(state = input, modifier = Modifier.weight(1f).testTag("post_reply"),
                             label = "写评论", readOnly = state.busy)
-                        GlassActionButton("发送", { vm.sendComment(input.text.toString(), replyTo?.id) },
+                        GlassActionButton("发送", { vm.sendComment(id, input.text.toString(), replyTo?.id, commentOwner) },
                             Modifier.testTag("post_reply_send"), primary = true, fillWidth = false,
                             enabled = !state.busy && !state.commentsLoading &&
                                 input.text.toString().postCharacterCount() in 1..POST_COMMENT_LIMIT)
