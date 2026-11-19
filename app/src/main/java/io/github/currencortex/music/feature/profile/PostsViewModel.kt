@@ -21,8 +21,12 @@ internal data class PostsState(val posts: List<CommunityPost> = emptyList(), val
     val comments: List<PostComment> = emptyList(), val commentsLoading: Boolean = false,
     val commentsError: String? = null, val nextAfter: Long? = null, val commentRetryAfter: Long = 0)
 
-internal class PostsViewModel(val container: AppContainer, val authorId: Long? = null) : ViewModel() {
-    val state = MutableStateFlow(PostsState())
+internal class PostsViewModel(
+    val container: AppContainer,
+    val authorId: Long? = null,
+    private val linkedPostId: Long? = null,
+) : ViewModel() {
+    val state = MutableStateFlow(PostsState(detailId = linkedPostId, detailLoading = linkedPostId != null))
     private fun session() = container.projectSession()
     private val repository = PostsRepository(container.apiClient, ::session)
     private var draftOwner: DraftOwner? = null
@@ -55,6 +59,7 @@ internal class PostsViewModel(val container: AppContainer, val authorId: Long? =
                 draftOwner = null
                 state.value = PostsState()
                 if (requested) reload()
+                if (linkedPostId != null) detail(linkedPostId)
             }
     } }
     fun ensureLoaded() { requested = true; if (!state.value.loaded && !state.value.loading) reload() }
@@ -102,14 +107,15 @@ internal class PostsViewModel(val container: AppContainer, val authorId: Long? =
             if (state.value.loading) reload()
         }
     }
-    fun delete(post: CommunityPost) {
+    fun delete(post: CommunityPost, onDeleted: () -> Unit = {}) {
         if (post.canDelete) action("帖子已删除", { repository.delete(post.id, it) }) {
-            if (state.value.detailId == post.id) detail(null)
+            if (linkedPostId == null && state.value.detailId == post.id) detail(null)
             state.update { current -> current.copy(
                 posts = current.posts.filterNot { it.id == post.id },
                 total = (current.total - 1).coerceAtLeast(0),
             ) }
-            reload()
+            if (requested) reload()
+            onDeleted()
         }
     }
     fun editor(open: Boolean) {
@@ -207,15 +213,13 @@ internal class PostsViewModel(val container: AppContainer, val authorId: Long? =
             comments = emptyList(), commentsLoading = false, commentsError = null, nextAfter = null, commentRetryAfter = 0, message = null) }
         if (id == null) return
         val expected = session()
+        if (linkedPostId != null && !CurrentMusicServer.builtIn(expected.server)) {
+            state.update { it.copy(detailLoading = false, detailError = "此链接指向 CurrentMusic 公共服务器") }
+            return
+        }
         val fromFeed = state.value.posts.find { it.id == id }
         detailTask = viewModelScope.launch {
-            val result = appResult {
-                try { repository.detail(id) }
-                catch (e: ApiException) {
-                    if (e.status == 404 && e.userMessage?.startsWith("未知接口 GET") == true && fromFeed != null) fromFeed
-                    else throw e
-                }
-            }
+            val result = appResult { repository.detail(id, fromFeed) }
             if (expected != session() || state.value.detailId != id) return@launch
             when (result) {
                 is AppResult.Success -> {

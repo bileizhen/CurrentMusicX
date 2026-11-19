@@ -43,9 +43,14 @@ class PostsRepository(private val api: ApiClient, private val session: () -> Req
             put("limit", "20")
             if (author != null) put("author", author.toString())
         }))
-    suspend fun detail(id: Long): CommunityPost {
+    suspend fun detail(id: Long, cached: CommunityPost? = null): CommunityPost {
         require(id > 0)
-        return api.decode<PostDetails>(request("GET", "posts/$id")).post
+        return try {
+            api.decode<PostDetails>(request("GET", "posts/$id")).post
+        } catch (error: ApiException) {
+            if (cached?.id == id && error.status == 404 && error.userMessage == "未知接口 GET /posts/$id") cached
+            else throw error
+        }
     }
     fun link(id: Long): String {
         require(id > 0)

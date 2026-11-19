@@ -44,14 +44,14 @@ internal fun postExcerpt(content: String): String {
     return if (length > 180) text.substring(0, text.offsetByCodePoints(0, 180)) + "…" else text
 }
 
-internal fun postTime(seconds: Long): String {
+internal fun postTime(seconds: Long, now: Long = System.currentTimeMillis() / 1000): String {
     if (seconds <= 0) return ""
-    val age = (System.currentTimeMillis() / 1000 - seconds).coerceAtLeast(0)
+    val age = (now - seconds).coerceAtLeast(0)
     return when {
         age < 60 -> "刚刚"
-        age < 3600 -> "\${age / 60} 分钟前"
-        age < 86400 -> "\${age / 3600} 小时前"
-        age < 86400 * 30 -> "\${age / 86400} 天前"
+        age < 3600 -> "${age / 60} 分钟前"
+        age < 86400 -> "${age / 3600} 小时前"
+        age < 86400 * 30 -> "${age / 86400} 天前"
         else -> SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(seconds * 1000))
     }
 }

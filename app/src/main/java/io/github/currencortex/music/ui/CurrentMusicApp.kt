@@ -44,6 +44,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import io.github.currencortex.music.core.media.PlayerMode
 import io.github.currencortex.music.core.network.AppResult
+import io.github.currencortex.music.core.network.CurrentMusicServer
+import io.github.currencortex.music.ui.util.openExternalLink
 import io.github.currencortex.music.ui.component.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -452,6 +454,10 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         selected = HOME_TAB
                     }
                     is io.github.currencortex.music.core.links.MusicWebLink.Page -> navigateLibrary(target.route)
+                    is io.github.currencortex.music.core.links.MusicWebLink.Post -> {
+                        if (CurrentMusicServer.builtIn(container.projectSession().server)) navigateLibrary("user/post/${target.id}")
+                        else openExternalLink(context, target.webUrl.toString(), excludeCurrentApp = true)
+                    }
                     is io.github.currencortex.music.core.links.MusicWebLink.ListenTogether -> {
                         listenInvitationUrl = target.invitation.shareUrl()
                         listenInvitationId = request.id
@@ -892,6 +898,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     io.github.currencortex.music.feature.playlistimport.PlaylistImportScreen(vm, ::navigateBack,
                                         onLogin = { navigateLibrary("user/binding") },
                                         onPlaylist = { id -> container.neteaseLibrary.invalidate(); navigateLibrary("lib/ncmplaylist/$id") })
+                                }
+                                route.startsWith("user/post/") -> {
+                                    val id = route.substringAfterLast('/').toLongOrNull()?.takeIf { it > 0 }
+                                    if (id != null) {
+                                        val vm: PostsViewModel = viewModel(key = route,
+                                            factory = viewModelFactory { PostsViewModel(container, linkedPostId = id) })
+                                        LinkedPostScreen(vm, ::navigateLibrary) { if (backStack.lastOrNull() == route) navigateBack() }
+                                    }
                                 }
                                 route.startsWith("user/posts/") -> {
                                     val author = route.substringAfterLast('/').toLongOrNull()?.takeIf { it > 0 }
