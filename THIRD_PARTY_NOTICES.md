@@ -61,6 +61,8 @@ The saveable page stack, MIUIX NavDisplay navigation and non-predictive Navigati
 
 The phone theme preview, icon paths, appearance layout, LeiFetch About logo/fade layout, grouped member layout, QQ avatar rows, member dialogs, AnimatedList entry motion and blurred bars, animated About background shaders, bottom dialogs and update Markdown renderer are adapted from the local 123PanX / LeiFetch / XBlocker / SukiSU-Ultra source chain. GPL-3.0-only attribution headers are retained. CurrentMusic branding and product configuration replace application-specific data.
 
+The contributor bubble wall, its pan/zoom/momentum geometry, and the contributor-name wordmark are adapted from [eltavine/Duck-Detector-Refactoring](https://github.com/eltavine/Duck-Detector-Refactoring) through SukiSU-Nova's `ContributorWall.kt` and `ContributorNameWordmark.kt`. Copyright 2026 Duck Apps Contributor, Apache-2.0. The native adaptation maps Material theme surfaces to the app's MIUIX colors and replaces GitHub avatar loading with the existing QQ avatar loader; the hexagonal packing, edge compression, momentum settling and character-filled wordmark follow the upstream implementation.
+
 The cancellable HTTPS download and verification helper is adapted from 123PanX `UpdateDownloader.kt`, originally XBlocker `data/AppUpdates.kt`. OkHttp and Okio are used under Apache-2.0. The upstream helper's MIT permission follows:
 
 MIT License
