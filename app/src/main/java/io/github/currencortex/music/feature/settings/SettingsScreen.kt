@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
@@ -15,6 +16,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.feature.update.UpdatePageOrigin
 import io.github.currencortex.music.ui.component.DecoratedAvatar
 import io.github.currencortex.music.ui.component.LocalPageContainerSource
@@ -23,6 +25,9 @@ import io.github.currencortex.music.ui.component.musicScrollPadding
 import io.github.currencortex.music.ui.component.rootMotionItems
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.blur.TopAppBarGlow
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.extended.*
 import io.github.suqi8.coui.kmp.preference.ArrowPreference
@@ -65,6 +70,12 @@ fun SettingsScreen(
     var query by rememberSaveable { mutableStateOf("") }
     val searchState = rememberTopAppBarSearchState(active = searching)
     val scrollBehavior: ScrollBehavior = COUIScrollBehavior()
+    val backgroundColor = COUITheme.colorScheme.background
+    val isDark = COUITheme.isDark
+    val backdrop = rememberLayerBackdrop {
+        drawRect(backgroundColor)
+        drawContent()
+    }
     val updateProgress = updateTransfer.download
     val updateTitle = when (updateProgress) {
         is io.github.currencortex.music.core.update.UpdateDownloadState.Downloading ->
@@ -100,16 +111,28 @@ fun SettingsScreen(
         SettingsUiScope {
             Scaffold(
                 contentWindowInsets = WindowInsets(0, 0, 0, 0),
-                containerColor = COUITheme.colorScheme.background,
+                containerColor = backgroundColor,
                 topBar = {
                     TopAppBar(
                         title = "设置",
                         largeTitle = "设置",
                         modifier = Modifier.testTag("settings_root_toolbar"),
-                        color = COUITheme.colorScheme.background,
+                        color = Color.Transparent,
                         scrollBehavior = scrollBehavior,
-                        fadeLargeTitleOnCollapse = true,
+                        expandedHeight = 116.dp,
+                        largeTitleFontSize = 40.sp,
+                        titlePadding = 24.dp,
+                        largeTitleBottomMargin = 18.dp,
                         searchState = searchState,
+                        glow = {
+                            TopAppBarGlow(
+                                backdrop = backdrop,
+                                scrollOffsetPx = scrollBehavior.glowScrollOffsetPx(),
+                                isDark = isDark,
+                                baseColor = backgroundColor,
+                                enabled = true,
+                            )
+                        },
                         navigationIcon = {
                             if (onBack != null) {
                                 IconButton(
@@ -137,7 +160,7 @@ fun SettingsScreen(
                     )
                 },
             ) { padding ->
-                Box(Modifier.fillMaxSize()) {
+                Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
                     if (searchState.isContentVisible) {
                         LazyColumn(
                             modifier = Modifier.fillMaxSize()
