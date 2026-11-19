@@ -70,6 +70,8 @@ A verification build (`-PisolatedDebug=true`, package `com.bileizhen.currentmusi
 - Settings home rebuilt with `PreferenceCategory`, `Card`, `CardListGroup` and `ArrowPreference`, including COUI row dividers and chevrons.
 - Desktop-lyrics subpage inheriting the shared COUI `Card` group container.
 - Home and library section headings using COUI `PreferenceCategory`.
+- Settings toggles using `SwitchPreference` on the interface-effects card.
+- Shared settings section headers using `PreferenceCategory` and row dividers using `HorizontalDivider`.
 - Appearance page, light and dark themes.
 - Custom color sheet (`OverlayBottomSheet`) with preview, HEX field and color grid.
 - Pure dark palette switches correctly and keeps contrast.
