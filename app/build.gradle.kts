@@ -215,6 +215,7 @@ dependencies {
 
     implementation("io.github.suqi8.coui.kmp:coui-ui-android:2.0.0")
     implementation("io.github.suqi8.coui.kmp:coui-blur-android:2.0.0")
+    implementation("io.github.suqi8.coui.kmp:coui-icons-android:2.0.0")
     implementation("io.github.suqi8.coui.kmp:coui-preference-android:2.0.0")
     implementation("io.github.suqi8.coui.kmp:coui-squircle-android:2.0.0")
     implementation("com.materialkolor:material-color-utilities:4.1.1")

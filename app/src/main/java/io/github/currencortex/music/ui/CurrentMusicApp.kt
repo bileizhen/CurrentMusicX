@@ -234,11 +234,21 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     })
     val profileVm: ProfileViewModel = viewModel(key = "my-profile", factory = viewModelFactory { ProfileViewModel(container) })
     val myProfile by profileVm.state.collectAsStateWithLifecycle()
+    val settingsAvatarVersions by container.profileRepository.avatarVersions.collectAsStateWithLifecycle()
     val discoverVm: DiscoverViewModel = viewModel(factory = viewModelFactory { DiscoverViewModel(container) })
     val profileDialog by profileVm.dialog.collectAsStateWithLifecycle()
     val profileMessage by profileVm.message.collectAsStateWithLifecycle()
     val account by container.accountRepository.state.collectAsStateWithLifecycle()
     val sessionRevision by container.accountRepository.sessionRevision.collectAsStateWithLifecycle()
+    val settingsProfileUser = myProfile.profile?.user?.takeIf { it.id == account.account?.id }
+    val settingsAccountName = settingsProfileUser?.nickname?.trim()?.takeIf { it.isNotBlank() }
+        ?: account.account?.nickname?.trim()?.takeIf { it.isNotBlank() }
+        ?: account.account?.username?.trim()?.takeIf { it.isNotBlank() }
+    val settingsAvatar = settingsProfileUser?.avatar?.takeIf { it.isNotBlank() }
+        ?: account.account?.avatar.orEmpty()
+    val settingsAvatarUrl = remember(lyricsFontSettings.server, settingsAvatar, settingsAvatarVersions) {
+        container.profileRepository.avatarUrl(lyricsFontSettings.server, settingsAvatar, settingsAvatarVersions)
+    }
     LaunchedEffect(sessionRevision) { profileVm.dialog.value = null; profileVm.avatar.value = null; profileVm.message.value = null }
     val libraryMessage by libraryVm.message.collectAsStateWithLifecycle()
     val libraryDialogSong by libraryVm.selectedSong.collectAsStateWithLifecycle()
@@ -677,7 +687,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     onPlayback = { navigateLibrary("playback-settings") }, onEffects = { navigateTo(EQUALIZER) },
                                     updateTransfer = updateTransferState, onNavigateFrom = pageNavigation::from,
                                     onSupport = { navigateLibrary(SupportConfig.route) },
-                                    onFeedback = { navigateLibrary(FEEDBACK_ROUTE) })
+                                    onFeedback = { navigateLibrary(FEEDBACK_ROUTE) },
+                                    accountName = settingsAccountName, accountAvatarUrl = settingsAvatarUrl,
+                                    onAccount = { selectTab(ME_TAB) })
                             }
                             }
                         }
@@ -713,7 +725,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onPlayback = { navigateLibrary("playback-settings") }, onEffects = { navigateTo(EQUALIZER) },
                             updateTransfer = updateTransferState, onNavigateFrom = pageNavigation::from, onBack = ::navigateBack,
                             onSupport = { navigateLibrary(SupportConfig.route) },
-                            onFeedback = { navigateLibrary(FEEDBACK_ROUTE) })
+                            onFeedback = { navigateLibrary(FEEDBACK_ROUTE) },
+                            accountName = settingsAccountName, accountAvatarUrl = settingsAvatarUrl,
+                            onAccount = { navigateBack(); selectTab(ME_TAB) })
                     }
                 }
                 entry(NETWORK.toString()) {
