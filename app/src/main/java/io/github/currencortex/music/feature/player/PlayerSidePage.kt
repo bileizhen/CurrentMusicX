@@ -39,7 +39,7 @@ import io.github.currencortex.music.ui.component.MusicCover
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.nativeui.LocalGlassBackdrop
 import io.github.currencortex.music.ui.component.nativeui.rememberGlassBackdrop
-import io.github.currencortex.music.blurcompat.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job

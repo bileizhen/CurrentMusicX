@@ -5,12 +5,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
-import io.github.currencortex.music.blurcompat.BlendColorEntry
-import io.github.currencortex.music.blurcompat.BlurColors
-import io.github.currencortex.music.blurcompat.LayerBackdrop
+import io.github.suqi8.coui.kmp.blur.BlendColorEntry
+import io.github.suqi8.coui.kmp.blur.BlurColors
+import io.github.suqi8.coui.kmp.blur.LayerBackdrop
 import io.github.suqi8.coui.kmp.shader.isRenderEffectSupported
-import io.github.currencortex.music.blurcompat.rememberLayerBackdrop
-import io.github.currencortex.music.blurcompat.textureBlur
+import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
+import io.github.suqi8.coui.kmp.blur.textureBlur
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable

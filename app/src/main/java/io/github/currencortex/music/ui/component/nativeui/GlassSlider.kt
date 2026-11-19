@@ -33,8 +33,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
 import io.github.suqi8.coui.kmp.basic.SliderDefaults
-import io.github.currencortex.music.blurcompat.Backdrop
-import io.github.currencortex.music.blurcompat.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.Backdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.abs
 import kotlin.math.roundToInt

@@ -29,7 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.flow.collectLatest
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.currencortex.music.blurcompat.Backdrop
+import io.github.suqi8.coui.kmp.blur.Backdrop
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 internal val UpdateSource.menuLabel:String get()=when(this) {

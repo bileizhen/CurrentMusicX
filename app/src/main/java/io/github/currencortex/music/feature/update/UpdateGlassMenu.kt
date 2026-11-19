@@ -8,7 +8,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.ui.component.nativeui.*
-import io.github.currencortex.music.blurcompat.Backdrop
+import io.github.suqi8.coui.kmp.blur.Backdrop
 
 internal val UpdateButtonGlowKey = GlassPressLight
 internal typealias UpdateMenuInteraction = GlassMenuInteraction

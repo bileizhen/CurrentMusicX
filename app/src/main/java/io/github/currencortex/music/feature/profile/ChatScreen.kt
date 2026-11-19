@@ -25,7 +25,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.luminance
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
-import io.github.currencortex.music.blurcompat.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.theme.LocalContentColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged

@@ -49,7 +49,7 @@ import io.github.currencortex.music.ui.component.nativeui.SettingsSegmentedContr
 import io.github.currencortex.music.ui.component.nativeui.LocalGlassBackdrop
 import io.github.currencortex.music.ui.component.nativeui.rememberGlassBackdrop
 import io.github.suqi8.coui.kmp.basic.Icon
-import io.github.currencortex.music.blurcompat.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import java.time.LocalDate

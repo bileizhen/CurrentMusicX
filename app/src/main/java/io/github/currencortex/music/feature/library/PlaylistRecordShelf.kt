@@ -39,8 +39,8 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import io.github.currencortex.music.blurcompat.Backdrop
-import io.github.currencortex.music.blurcompat.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.Backdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.currencortex.music.feature.update.UpdateGlassButton
 import io.github.currencortex.music.feature.update.rememberUpdateBackdrop
 import io.github.currencortex.music.data.song.Song

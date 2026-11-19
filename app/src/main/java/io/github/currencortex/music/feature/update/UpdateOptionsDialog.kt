@@ -25,7 +25,7 @@ import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.Switch
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.currencortex.music.blurcompat.*
+import io.github.suqi8.coui.kmp.blur.*
 import io.github.suqi8.coui.kmp.theme.LocalContentColor
 import io.github.suqi8.coui.kmp.theme.COUITheme
 

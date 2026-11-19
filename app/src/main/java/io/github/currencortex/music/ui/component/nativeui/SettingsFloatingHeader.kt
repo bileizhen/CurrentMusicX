@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.LocalRootTabSwipe
 import io.github.currencortex.music.ui.component.RootMotionItem
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
-import io.github.currencortex.music.blurcompat.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.theme.COUITheme
 

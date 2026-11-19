@@ -18,7 +18,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import io.github.currencortex.music.blurcompat.*
+import io.github.suqi8.coui.kmp.blur.*
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.*
 

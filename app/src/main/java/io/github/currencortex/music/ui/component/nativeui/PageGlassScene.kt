@@ -14,7 +14,7 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.unit.Density
 import io.github.currencortex.music.ui.component.liquid.CombinedBackdrop
-import io.github.currencortex.music.blurcompat.Backdrop
+import io.github.suqi8.coui.kmp.blur.Backdrop
 
 internal val LocalPageGlassScene = compositionLocalOf<PageGlassScene?> { null }
 

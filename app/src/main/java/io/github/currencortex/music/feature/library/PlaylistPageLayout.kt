@@ -33,7 +33,7 @@ import io.github.currencortex.music.ui.component.coverRequestUrl
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
 import io.github.currencortex.music.ui.theme.LocalDarkTheme
-import io.github.currencortex.music.blurcompat.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.theme.LocalContentColor
 import io.github.suqi8.coui.kmp.theme.COUITheme
 

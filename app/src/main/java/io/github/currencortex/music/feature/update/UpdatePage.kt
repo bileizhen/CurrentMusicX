@@ -52,7 +52,7 @@ import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.theme.LocalContentColor
 import io.github.suqi8.coui.kmp.theme.darkColorScheme
-import io.github.currencortex.music.blurcompat.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
 
 private val pageWhite = Color(0xFFF7F4FF)

@@ -41,7 +41,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.currencortex.music.blurcompat.*
+import io.github.suqi8.coui.kmp.blur.*
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun rememberGlassBackdrop(): LayerBackdrop? {

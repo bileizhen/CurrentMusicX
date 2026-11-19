@@ -53,7 +53,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.currencortex.music.blurcompat.Backdrop
+import io.github.suqi8.coui.kmp.blur.Backdrop
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.*
 import io.github.currencortex.music.ui.theme.LocalCustomFont

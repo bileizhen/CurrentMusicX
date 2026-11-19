@@ -12,7 +12,7 @@ import androidx.compose.ui.graphics.GraphicsLayerScope
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.Density
-import io.github.currencortex.music.blurcompat.Backdrop
+import io.github.suqi8.coui.kmp.blur.Backdrop
 
 @Stable
 class CombinedBackdrop(

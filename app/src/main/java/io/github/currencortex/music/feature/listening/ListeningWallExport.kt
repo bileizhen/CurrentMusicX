@@ -55,7 +55,7 @@ import io.github.currencortex.music.ui.component.nativeui.GlassActionButton
 import io.github.currencortex.music.ui.component.nativeui.LocalGlassBackdrop
 import io.github.currencortex.music.ui.component.nativeui.rememberGlassBackdrop
 import io.github.currencortex.music.ui.component.nativeui.SettingsFloatingHeader
-import io.github.currencortex.music.blurcompat.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.io.File

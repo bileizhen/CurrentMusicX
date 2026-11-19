@@ -41,7 +41,7 @@ import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
-import io.github.currencortex.music.blurcompat.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Limits the new preference controls to settings; music/library rows keep their own design. */

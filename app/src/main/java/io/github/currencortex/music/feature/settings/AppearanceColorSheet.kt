@@ -33,8 +33,8 @@ import io.github.currencortex.music.ui.theme.rememberAppearanceColors
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
-import io.github.currencortex.music.blurcompat.layerBackdrop
-import io.github.currencortex.music.blurcompat.rememberLayerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Confirmation is delivered after the exit animation, so retheming cannot stall it. */

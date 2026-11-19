@@ -17,10 +17,10 @@ import io.github.currencortex.music.ui.component.liquid.innerShadow
 import io.github.currencortex.music.ui.component.liquid.lens
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
 import io.github.currencortex.music.ui.component.miuix.animation.DampedDragAnimation
-import io.github.currencortex.music.blurcompat.Backdrop
-import io.github.currencortex.music.blurcompat.drawBackdrop
-import io.github.currencortex.music.blurcompat.layerBackdrop
-import io.github.currencortex.music.blurcompat.rememberLayerBackdrop
+import io.github.suqi8.coui.kmp.blur.Backdrop
+import io.github.suqi8.coui.kmp.blur.drawBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** A sibling of the clipped base panel, so the expanded lens can extend past its edge. */
