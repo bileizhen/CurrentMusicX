@@ -15,11 +15,13 @@
 
 ## 2. Main changes
 
-- `app/build.gradle.kts`: replaced MIUIX artifacts with `coui-ui-android`, `coui-blur-android`, `coui-preference-android`, `coui-squircle-android`, and added `navigation3-ui` (previously supplied transitively by the MIUIX navigation adapter). `minSdk` is now 33.
+- `app/build.gradle.kts`: replaced MIUIX artifacts with `coui-ui-android`, `coui-blur-android`, `coui-icons-android`, `coui-preference-android`, `coui-squircle-android`, and added `navigation3-ui` (previously supplied transitively by the MIUIX navigation adapter). `minSdk` is now 33.
 - About 190 Kotlin files had MIUIX imports; 211 Kotlin files were rewritten in total (imports, `Miuix*` symbols, color slots, text styles).
 - `ui/theme/Theme.kt`: theme now uses `COUITheme`; removed the global transparent `LocalIndication` override so COUI's press/hover/focus feedback is active.
 - `ui/theme/AppearanceColors.kt`: rebuilt on `io.github.suqi8.coui.kmp.theme.Colors`. Monet/system seed, custom accent, pure black, card/background levels and label opacity are preserved through COUI roles.
 - `app/src/main/AndroidManifest.xml`: removed `tools:overrideLibrary="top.yukonga.miuix.kmp.blur"`. No SDK override is used.
+- `SettingsScreen`: rebuilt as a dedicated COUI `Scaffold` with collapsible `TopAppBar`, in-place `TopAppBarSearchBar`, `topAppBarSearchContent`/`topAppBarSearchResults`, `PreferenceCategory`, `Card`, `CardListGroup`, `ArrowPreference`, and `COUIIcons`. The previous floating-header host is no longer used for the settings home.
+- Settings account row now shows the signed-in CurrentMusic account avatar and nickname, with the ColorOS-style summary `管理账号、云服务、查找`; tapping it opens the existing profile tab.
 - `THIRD_PARTY_NOTICES.md` and `app/src/main/assets/legal/NOTICES.md`: MIUIX attribution replaced with COUI 2.0 attribution.
 
 ## 3. Blur and compatibility
@@ -31,10 +33,10 @@
 These are CurrentMusic product features rather than generic look-alikes, so they were kept and now consume COUI colors/text styles:
 
 - Liquid glass: `GlassMaterial`, `GlassMenu`, `GlassButtons`, `GlassSwitch`, `GlassSlider`, `PageGlassScene`, `CombinedBackdrop`.
-- Custom settings chrome: `SettingsPage`, `SettingsTopBar`, `SettingsPreference`, `SettingsGroup` (COUI typography, colors, press feedback and spacing).
+- Custom subpage settings chrome: `SettingsPage`, `SettingsTopBar`, `SettingsPreference`, `SettingsGroup` (COUI typography, colors, press feedback and spacing).
 - Independent search sheet, player/lyrics visuals, launch animations, playlist ribbon/shelf and update page visuals.
 
-They were not replaced with COUI `TopAppBar` / `PreferenceCategory` / `CardListGroup` because doing so would remove the floating-glass interaction model that defines these screens. Settings data, DataStore keys and ViewModel state were not changed.
+The settings home is the exception: it now uses the official COUI page/search/preference structure. Other settings subpages keep their shared custom chrome while their rows already use `Card`, `SwitchPreference`, `PreferenceCategory` and COUI dividers. Settings data, DataStore keys and ViewModel state were not changed.
 
 ## 5. Build and test results
 
@@ -48,11 +50,11 @@ Environment: Windows, JDK 21.0.10, AGP 8.13.2, Kotlin 2.4.0, compileSdk 37.
 | `:app:lintRelease` | PASS (HTML report generated) |
 | `:app:minifyReleaseWithR8` | PASS |
 | `:app:assembleDebug` | PASS when the local CMake task is excluded, as in the existing verification workflow |
-| `:app:assembleRelease` | BLOCKED by the same CMake environment failure |
+| `:app:assembleRelease` | PASS with the local CMake tasks excluded; signed APK assembled from the checked-in native libraries |
 
-The verification debug APK reports `minSdkVersion 33`, `targetSdkVersion 36`, and contains official COUI blur classes with zero `top.yukonga.miuix` classes.
+The debug and signed release APKs report `minSdkVersion 33`, `targetSdkVersion 36`, and contain official COUI blur classes with zero `top.yukonga.miuix` classes.
 
-After the settings visual changes, `:app:assembleDebug`, `:app:lintRelease` and `:app:minifyReleaseWithR8` were rerun and passed.
+After the settings visual changes, `:app:compileDebugKotlin`, `:app:assembleDebug`, `:app:assembleRelease`, `:app:lintRelease` and `:app:minifyReleaseWithR8` were rerun and passed.
 
 ### Native build blocker
 
@@ -62,14 +64,17 @@ Every `configureCMakeDebug[abi]` task aborts with Windows exit code `-1073740791
 - It reproduces with the bundled CMake 4.1.2, a portable CMake 3.31.6 and CMake 3.22.1.
 - NDK 30 clang and lld compile/link the same probe file successfully when invoked directly.
 
-Therefore the final signed APK/AAB still has to be produced on a working CMake host or CI.
+The signed APK can still be assembled locally when the CMake tasks are excluded because the required native libraries are committed under `jniLibs`. A clean native rebuild/AAB still needs a working CMake host or CI.
 
 ## 6. Device verification
 
-A verification build (`-PisolatedDebug=true`, package `com.bileizhen.currentmusic.verification`) was installed on the connected device (CMake tasks excluded for the reason above). Verified visually:
+The signed release (`com.bileizhen.currentmusic`, certificate SHA-256 `FC:3E:63:07:9B:8E:69:AE:A7:AB:73:48:28:46:DA:09:39:D6:CD:12:DA:F0:AF:FF:AA:9A:2E:93:FB:FC:CF:35`) was installed over the user's existing package with `adb install -r`. Login state, avatar, username, mini-player state and account data were preserved. The isolated verification package remains installed for regression checks. Verified visually:
 
 - Light home page with search capsule, recommendation cards and floating dock.
-- Settings home rebuilt with `PreferenceCategory`, `Card`, `CardListGroup` and `ArrowPreference`, including COUI row dividers and chevrons.
+- Settings home rebuilt with a COUI `Scaffold`, collapsible large title, in-place search and native preference cards.
+- Account card shows the real `bileizhen` avatar and nickname; tapping it opens `我的`.
+- Search opens from the top bar, fades the settings content, filters rows in a separate results list, and cancels back to the unchanged page.
+- Settings page light and dark palettes, pinned search bar and scrolled/collapsed state.
 - Desktop-lyrics subpage inheriting the shared COUI `Card` group container.
 - Home and library section headings using COUI `PreferenceCategory`.
 - Settings toggles using `SwitchPreference` on the interface-effects card.
@@ -78,16 +83,16 @@ A verification build (`-PisolatedDebug=true`, package `com.bileizhen.currentmusi
 - Custom color sheet (`OverlayBottomSheet`) with preview, HEX field and color grid.
 - Pure dark palette switches correctly and keeps contrast.
 
-The verification package is intentionally left installed until the user confirms the visual result.
+Both the updated production package and the verification package are intentionally left installed until the user confirms the visual result.
 
-Not verified: player/lyrics animation, audio output, Bluetooth/notification controls, API 26/29/32 devices, landscape/wide layouts, input method behavior, and network/account flows.
+Not verified: player/lyrics animation, audio output, Bluetooth/notification controls, API 33+ devices other than the connected ColorOS 17 device, landscape/wide layouts, and account mutations beyond opening the profile tab.
 
 ## 7. Known risks / follow-up
 
-- The settings home, shared settings cards and home/library section headings are now structurally COUI. Search, player controls and remaining dialogs still need their visual pass.
-- A broader visual attempt that placed a COUI `TopAppBar` inside the existing floating-header backdrop host produced a native RenderThread stack overflow. That host keeps its custom glass toolbar until a safe COUI integration is designed.
+- The settings home, search, account card, shared settings cards and home/library section headings are now structurally COUI. Player controls and remaining dialogs still need their visual pass.
+- A previous attempt that placed a COUI `TopAppBar` inside the existing floating-header backdrop host produced a native RenderThread stack overflow. The settings home now owns a separate COUI `Scaffold`; repeated open/search/cancel/account/back navigation on the production build produced no fatal exception or RenderThread recursion.
 - Official COUI blur is now exercised on the connected Android 17 device. Additional API 33+ devices remain unverified.
-- No performance comparison was possible without a full native build and release APK.
+- No performance comparison was measured; the visual pass only checks that page navigation and search remain responsive on the connected device.
 - `docs/` is ignored by the repository; this report must be force-added.
 
 ## 8. Suggested PR
