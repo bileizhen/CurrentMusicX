@@ -19,8 +19,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -32,7 +32,7 @@ import java.time.format.DateTimeFormatter
 
 @Composable internal fun AnnouncementArchivePage(state: AnnouncementArchiveState, onBack: () -> Unit,
     refresh: () -> Unit, onOpenLink: ((String) -> Unit)? = null) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     var selected by rememberSaveable { mutableStateOf<Int?>(null) }
     // A refreshed catalog cannot leave a detail dialog pointing at a different announcement.
     LaunchedEffect(state.items) { selected = null }
@@ -44,22 +44,22 @@ import java.time.format.DateTimeFormatter
             contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             if (state.error != null) item {
-                Text(state.error, fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                Text(state.error, fontSize = 13.sp, color = colors.labelSecondaryVariant)
                 MusicTextAction("重试", refresh, Modifier.testTag("announcement_retry"))
             }
             if (state.loading && state.items.isEmpty()) item {
                 Row(Modifier.fillMaxWidth().padding(vertical = 24.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     CircularProgressIndicator(size = 20.dp, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-                    Text("正在加载公告…", fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+                    Text("正在加载公告…", fontSize = 14.sp, color = colors.labelSecondaryVariant)
                 }
             }
             if (!state.loading && state.error == null && state.items.isEmpty()) item {
                 Text("暂无公告", Modifier.padding(vertical = 24.dp).testTag("announcement_empty"),
-                    fontSize = 15.sp, color = colors.onSurfaceVariantSummary)
+                    fontSize = 15.sp, color = colors.labelSecondaryVariant)
             }
             if (state.items.isNotEmpty()) item {
-                Text("全部公告 · ${state.items.size} 条", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                Text("全部公告 · ${state.items.size} 条", fontSize = 13.sp, color = colors.labelSecondaryVariant)
             }
             itemsIndexed(state.items, key = { index, item -> "${item.id}:$index" }) { index, item ->
                 SettingsGroup {
@@ -74,7 +74,7 @@ import java.time.format.DateTimeFormatter
                             }.getOrDefault("")
                         }
                         Text(listOf(item.author.ifBlank { "CurrentStation" }, date).filter(String::isNotBlank).joinToString(" · "),
-                            fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                            fontSize = 12.sp, color = colors.labelSecondaryVariant)
                     }
                     })
                 }

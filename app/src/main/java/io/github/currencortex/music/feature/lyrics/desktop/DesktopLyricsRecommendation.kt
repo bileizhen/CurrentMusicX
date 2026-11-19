@@ -21,9 +21,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.ui.component.MusicDialog
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** A one-time, optional shortcut using the same activation guard as desktop settings. */
 @Composable internal fun DesktopLyricsRecommendation(container: AppContainer, eligible: Boolean) {
@@ -50,8 +49,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         MusicDialog("试试桌面歌词灵动岛", onDismiss = ::dismiss) {
             Text("悬浮在屏幕顶部，离开应用也能看歌词。", Modifier.testTag("desktop_recommendation"), fontSize = 15.sp)
             Text("应用内默认显示 FPS，点击灵动岛可切换歌词与帧率。", fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            (error ?: action.error)?.let { Text(it, fontSize = 13.sp, color = MiuixTheme.colorScheme.error) }
+                color = COUITheme.colorScheme.labelSecondaryVariant)
+            (error ?: action.error)?.let { Text(it, fontSize = 13.sp, color = COUITheme.colorScheme.error) }
             MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             MusicDialogButton("暂不开启", onClick = ::dismiss, modifier = Modifier.weight(1f).testTag("desktop_recommendation_skip"))
             MusicDialogButton(if (action.connecting) "正在开启…" else "快捷开启", onClick = {

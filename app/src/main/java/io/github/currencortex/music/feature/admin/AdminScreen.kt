@@ -31,9 +31,9 @@ import io.github.currencortex.music.data.admin.*
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import kotlinx.coroutines.*
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 internal sealed interface AdminDestination {
     data class User(val user: AdminUser) : AdminDestination
@@ -105,10 +105,10 @@ internal sealed interface AdminConfirmation {
                                 }.testTag("admin_tab_${tab.name.lowercase()}"), horizontalAlignment = Alignment.CenterHorizontally) {
                                 Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
                                     Text(tab.label, fontSize = 13.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                                        color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                        color = if (selected) COUITheme.colorScheme.primary else COUITheme.colorScheme.labelSecondaryVariant)
                                 }
                                 Box(Modifier.width(22.dp).height(3.dp).clip(RoundedCornerShape(2.dp))
-                                    .background(if (selected) MiuixTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent))
+                                    .background(if (selected) COUITheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent))
                             }
                         }
                     }

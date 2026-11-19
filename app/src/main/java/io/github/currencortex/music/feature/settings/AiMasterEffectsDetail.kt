@@ -41,8 +41,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.media.OriginalAiMasterState
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
 
 private val MasterGold = Color(0xFFE4CC9F)
 private data class MasterDiyOption(val key: String, val title: String, val subtitle: String, val icon: String)
@@ -209,28 +209,28 @@ private val masterDiyOptions = listOf(
                 Modifier.weight(1f).testTag("sound_ai_master_diy_save"), enabled = !saving)
         }
     }) {
-        val colors = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
+        val colors = io.github.suqi8.coui.kmp.theme.COUITheme.colorScheme
         Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
         Text("选择偏好后，AI调音大师会在保障好的听歌体验基础上结合偏好为你定制最佳调音效果哟！（PS：偏好标签会基于歌曲生效）",
-            Modifier.padding(bottom = 18.dp), color = colors.onSurfaceVariantSummary, fontSize = 11.sp, lineHeight = 16.sp)
+            Modifier.padding(bottom = 18.dp), color = colors.labelSecondaryVariant, fontSize = 11.sp, lineHeight = 16.sp)
         for (row in 0..2) {
             Row(Modifier.fillMaxWidth().padding(bottom = 9.dp), horizontalArrangement = Arrangement.spacedBy(9.dp)) {
                 for (column in 0..1) {
                     val option = masterDiyOptions.getOrNull(row * 2 + column)
                     val chosen = option != null && option.key in draft
                     Box(Modifier.weight(1f).height(110.dp).clip(RoundedCornerShape(8.dp))
-                        .background(if (chosen) colors.primary.copy(alpha = .10f) else colors.onBackground.copy(alpha = .06f))
+                        .background(if (chosen) colors.primary.copy(alpha = .10f) else colors.labelPrimary.copy(alpha = .06f))
                         .border(if (chosen) 1.dp else 0.dp, if (chosen) colors.primary else Color.Transparent, RoundedCornerShape(8.dp))
                         .then(if (option != null) Modifier.toggleable(value = chosen, role = Role.Checkbox) { checked ->
                             draft = if (checked) draft + option.key else draft - option.key
                         }.testTag("sound_ai_master_diy_${option.icon}") else Modifier),
                         contentAlignment = if (option == null) Alignment.Center else Alignment.TopStart) {
-                        if (option == null) Text("敬请期待", color = colors.onSurfaceVariantSummary, fontSize = 14.sp)
+                        if (option == null) Text("敬请期待", color = colors.labelSecondaryVariant, fontSize = 14.sp)
                         else Column(Modifier.padding(11.dp)) {
                             EffectsArtwork(NativeEffectsAssets.local("ai_master_detail_diy_${option.icon}${if (chosen) "_selected" else ""}.png"),
                                 Modifier.size(28.dp), scale = ContentScale.Fit)
-                            Text(option.title, Modifier.padding(top = 8.dp), color = colors.onBackground, fontSize = 14.sp)
-                            Text(option.subtitle, Modifier.padding(top = 5.dp), color = colors.onSurfaceVariantSummary, fontSize = 10.sp,
+                            Text(option.title, Modifier.padding(top = 8.dp), color = colors.labelPrimary, fontSize = 14.sp)
+                            Text(option.subtitle, Modifier.padding(top = 5.dp), color = colors.labelSecondaryVariant, fontSize = 10.sp,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         if (chosen) Text("✓", Modifier.align(Alignment.BottomEnd).padding(9.dp), color = colors.primary, fontSize = 17.sp)
@@ -255,8 +255,8 @@ private val masterDiyOptions = listOf(
             "4.版权限制" to "部分版权方限制的特殊歌曲（如付费数字专辑）禁用音效调节功能",
             "5.偏好设置" to "偏好保存在当前网易云账号的本机设置中，用于重新计算当前歌曲的音效参数。",
         ).forEach { (title, description) ->
-            Text(title, color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onBackground, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            Text(description, Modifier.padding(top = 7.dp, bottom = 18.dp), color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 12.sp, lineHeight = 19.sp)
+            Text(title, color = io.github.suqi8.coui.kmp.theme.COUITheme.colorScheme.labelPrimary, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text(description, Modifier.padding(top = 7.dp, bottom = 18.dp), color = io.github.suqi8.coui.kmp.theme.COUITheme.colorScheme.labelSecondaryVariant, fontSize = 12.sp, lineHeight = 19.sp)
         }
         }
     }

@@ -50,8 +50,8 @@ import io.github.currencortex.music.core.media.OriginalMoodState
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
 import kotlinx.serialization.json.*
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -268,7 +268,7 @@ import kotlin.math.sin
         Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState()).testTag("mood_info_panel")) {
             MoodEffectsPresentation.explanation.forEach { (heading, text) ->
                 Text(heading, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-                Text(text, color = top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                Text(text, color = io.github.suqi8.coui.kmp.theme.COUITheme.colorScheme.labelSecondaryVariant,
                     fontSize = 13.sp, lineHeight = 20.sp)
                 Spacer(Modifier.height(18.dp))
             }

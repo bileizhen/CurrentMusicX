@@ -32,11 +32,9 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.player.AudioQualitySheet
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.MusicDialog
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.LinearProgressIndicator
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun SongDownloadDialog(song: Song, container: AppContainer, onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -121,7 +119,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         Column(Modifier.testTag("song_download_dialog").heightIn(max = 360.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(song.name, fontSize = 18.sp)
-            Text(song.artists, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+            Text(song.artists, fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
             if (song.privateLibrary) Text(song.originalQualityLabel) else MusicDestinationRow("下载音质", { choosingQuality = true }, summary = quality.label,
                 enabled = !active && !deleting, modifier = Modifier.testTag("song_download_quality"))
             val location = directory?.let { Uri.decode(it.lastPathSegment.orEmpty()).substringAfter(':') }
@@ -129,7 +127,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             MusicDestinationRow("保存位置", { afterFolder = false; folderLauncher.launch(directory) }, summary = location,
                 enabled = !active && !deleting, modifier = Modifier.testTag("song_download_directory"))
             Text("原格式保存，内嵌歌曲信息、封面和歌词；同时保存同名封面与 LRC。", fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
             if (active) {
                 val data = info?.progress
                 val received = data?.getLong("received", 0) ?: 0

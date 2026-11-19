@@ -26,8 +26,8 @@ import io.github.currencortex.music.ui.util.showMusicError
 import io.github.currencortex.music.ui.util.showMusicMessage
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.TextField
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter

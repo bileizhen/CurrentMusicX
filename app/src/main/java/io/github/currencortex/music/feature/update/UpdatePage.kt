@@ -48,11 +48,11 @@ import io.github.currencortex.music.data.update.UpdateSettings
 import io.github.currencortex.music.ui.component.ArtworkGlowPalette
 import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
 import kotlinx.coroutines.delay
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.LocalContentColor
-import top.yukonga.miuix.kmp.theme.darkColorScheme
-import top.yukonga.miuix.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.theme.LocalContentColor
+import io.github.suqi8.coui.kmp.theme.darkColorScheme
+import io.github.currencortex.music.blurcompat.layerBackdrop
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
 
 private val pageWhite = Color(0xFFF7F4FF)
@@ -157,7 +157,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     val detail by animateFloatAsState(if (expanded) 1f else 0f, tween(600, easing = FastOutSlowInEasing), label = "update_details_morph")
     val notesScroll = rememberScrollState()
     val artworkPalette by rememberArtworkGlowPalette(cover)
-    val accent = MiuixTheme.colorScheme.primary
+    val accent = COUITheme.colorScheme.primary
     val palette = if (cover.isBlank()) ArtworkGlowPalette(accent.toArgb(),
         androidx.compose.ui.graphics.lerp(accent, Color(0xFFFF9FFC), .4f).toArgb()) else artworkPalette
     BackHandler {
@@ -173,9 +173,9 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     val titleBackdrop = rememberUpdateBackdrop()
     val glassBackdrop = if(sceneBackdrop!=null&&heroBackdrop!=null&&titleBackdrop!=null)
         rememberCombinedBackdrop(rememberCombinedBackdrop(sceneBackdrop,heroBackdrop),titleBackdrop)else sceneBackdrop
-    val colors = remember { darkColorScheme(primary = Color(0xFF0A84FF), onBackground = pageWhite,
-        background = Color(0xFF100D29), surface = Color(0xFF201C35), surfaceContainer = Color(0xFF29253F)) }
-    MiuixTheme(colors = colors) {
+    val colors = remember { darkColorScheme(primary = Color(0xFF0A84FF), labelPrimary = pageWhite,
+        background = Color(0xFF100D29), surface = Color(0xFF201C35), surfaceContainerHighest = Color(0xFF29253F)) }
+    COUITheme(colors = colors) {
     CompositionLocalProvider(LocalContentColor provides pageWhite, LocalGlassBackdrop provides glassBackdrop) {
     Box(Modifier.fillMaxSize().testTag("update_page").background(Color(0xFF0A0A0A))
         .pointerInput(Unit) { detectTapGestures {

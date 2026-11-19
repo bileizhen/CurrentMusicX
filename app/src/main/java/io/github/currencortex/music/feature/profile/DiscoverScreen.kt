@@ -16,7 +16,7 @@ import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.util.collectAsPageState
 import io.github.currencortex.music.ui.util.viewModelFactory
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.*
+import io.github.suqi8.coui.kmp.basic.*
 
 @Composable fun DiscoverScreen(vm: DiscoverViewModel, navigate: (String) -> Unit) {
     DiscoverScreen(vm, rememberPagerState { 4 }, navigate)

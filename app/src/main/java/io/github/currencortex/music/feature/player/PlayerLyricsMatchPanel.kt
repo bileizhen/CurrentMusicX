@@ -48,9 +48,9 @@ import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
 import io.github.currencortex.music.feature.lyrics.data.LyricsMatchAssessment
 import io.github.currencortex.music.feature.lyrics.model.LyricsTimingAlignment
 import io.github.currencortex.music.ui.component.MusicCover
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.TextField
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.util.Locale
 
 /** A bounded, state-only matching workspace. Network requests and persistence belong to its owner. */
@@ -79,7 +79,7 @@ import java.util.Locale
     onApply: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     val songKey = remember(song) { SongLyricsStore.identity(song) }
@@ -114,7 +114,7 @@ import java.util.Locale
                             .padding(horizontal = 12.dp), contentAlignment = Alignment.Center) {
                         Text(choice.shortLabel, fontSize = 13.sp,
                             fontWeight = if (chosen) FontWeight.SemiBold else FontWeight.Normal,
-                            color = if (chosen) colors.primary else colors.onSurfaceVariantSummary)
+                            color = if (chosen) colors.primary else colors.labelSecondaryVariant)
                     }
                 }
             }
@@ -124,7 +124,7 @@ import java.util.Locale
                 }, Modifier.weight(1f).testTag("lyrics_match_query"),
                     label = "歌名 / 歌手", useLabelAsPlaceholder = true, singleLine = true,
                     insideMargin = DpSize(12.dp, 10.dp), cornerRadius = 12.dp,
-                    textStyle = MiuixTheme.textStyles.main.copy(fontSize = 14.sp), enabled = !busy,
+                    textStyle = COUITheme.textStyles.bodyXL.copy(fontSize = 14.sp), enabled = !busy,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                     keyboardActions = KeyboardActions(onSearch = { submit() }))
                 LyricsActionButton("搜索", ::submit, Modifier.testTag("lyrics_match_search"),
@@ -133,7 +133,7 @@ import java.util.Locale
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(if (searching) "正在搜索…" else if (previewing) "正在读取歌词…"
                     else if (hasSearched) "${results.size} 个候选 · 信息匹配度" else "信息匹配 ≥75% · 逐字优先 · 逐行兜底",
-                    Modifier.weight(1f), fontSize = 12.sp, color = colors.onSurfaceVariantSummary,
+                    Modifier.weight(1f), fontSize = 12.sp, color = colors.labelSecondaryVariant,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 LyricsActionButton("自动择优", {
                     focus.clearFocus(); keyboard?.hide(); showingPreview = true; onAutomatic()
@@ -144,13 +144,13 @@ import java.util.Locale
             } else if (loading) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 Text("正在读取歌词…", Modifier.weight(1f),
-                    fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                    fontSize = 12.sp, color = colors.labelSecondaryVariant)
                 LyricsActionButton("停止", onCancelLoading, Modifier.testTag("lyrics_match_cancel_loading"), enabled = !busy)
             }
             if (message != null) Text(message,
                 Modifier.fillMaxWidth().testTag("lyrics_match_message").semantics { liveRegion = LiveRegionMode.Polite },
                 fontSize = 12.sp, lineHeight = 17.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                color = if (messageError) colors.error else colors.onSurfaceVariantSummary)
+                color = if (messageError) colors.error else colors.labelSecondaryVariant)
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 val choose: (LyricsCandidate) -> Unit = {
                     focus.clearFocus(); keyboard?.hide(); showingPreview = true; onCandidate(it)
@@ -158,7 +158,7 @@ import java.util.Locale
                 if (wide) Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     LyricsMatchResults(song, source, results, selectedCandidate, searching, busy, hasSearched,
                         choose, Modifier.weight(.60f).fillMaxHeight())
-                    Box(Modifier.width(1.dp).fillMaxHeight().background(colors.onSurface.copy(alpha = .08f)))
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(colors.labelPrimary.copy(alpha = .08f)))
                     LyricsMatchPreview(selectedCandidate, preview, assessment, assessmentNote, previewing,
                         onBackToResults = null, wide = true, modifier = Modifier.weight(.40f).fillMaxHeight())
                 } else if (showingPreview) {
@@ -167,7 +167,7 @@ import java.util.Locale
                 } else LyricsMatchResults(song, source, results, selectedCandidate, searching, busy, hasSearched,
                     choose, Modifier.fillMaxSize())
             }
-            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.onSurface.copy(alpha = .08f)))
+            Box(Modifier.fillMaxWidth().height(1.dp).background(colors.labelPrimary.copy(alpha = .08f)))
             Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 LyricsActionButton("取消", {
                     focus.clearFocus(); keyboard?.hide(); onBack()
@@ -183,20 +183,20 @@ import java.util.Locale
 /** Local compact action style, also used by the management view without changing global dialogs. */
 @Composable internal fun LyricsActionButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     enabled: Boolean = true, primary: Boolean = false) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Box(modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(12.dp))
-        .background(if (primary && enabled) colors.primary else colors.surfaceContainer)
+        .background(if (primary && enabled) colors.primary else colors.cardBackground)
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .padding(horizontal = 16.dp, vertical = 12.dp), contentAlignment = Alignment.Center) {
         Text(text, fontSize = 13.sp, fontWeight = FontWeight.Medium,
-            color = (if (primary && enabled) colors.onPrimary else colors.onSurface).copy(alpha = if (enabled) 1f else .38f))
+            color = (if (primary && enabled) colors.labelOnColor else colors.labelPrimary).copy(alpha = if (enabled) 1f else .38f))
     }
 }
 
 @Composable private fun LyricsMatchResults(song: Song, source: LyricsMatchSource, results: List<LyricsCandidate>,
     selected: LyricsCandidate?, searching: Boolean, busy: Boolean, hasSearched: Boolean,
     onCandidate: (LyricsCandidate) -> Unit, modifier: Modifier) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val scroll = rememberLazyListState()
     LaunchedEffect(source, results) { scroll.scrollToItem(0) }
     LazyColumn(modifier.testTag("lyrics_match_results"), state = scroll,
@@ -207,14 +207,14 @@ import java.util.Locale
                 Text(if (searching) "正在搜索 ${source.shortLabel}…" else if (hasSearched) "没有找到候选" else "搜索这首歌的歌词",
                     fontSize = 15.sp, fontWeight = FontWeight.Medium)
                 Text(if (searching) "可随时停止" else if (hasSearched) "修改关键词或切换来源重试" else "也可以自动比较各来源的歌词",
-                    fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                    fontSize = 12.sp, color = colors.labelSecondaryVariant)
             }
         }
         itemsIndexed(results, key = { index, candidate -> "${candidate.source}:${candidate.reference.ifEmpty { candidate.id }}:$index" }) { index, candidate ->
             val chosen = candidate == selected
             val metadataPercent = OnlineLyricsMatcher.metadataMatchPercent(song, candidate)
             Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                .background(if (chosen) colors.primary.copy(alpha = .10f) else colors.surfaceContainer.copy(alpha = .35f))
+                .background(if (chosen) colors.primary.copy(alpha = .10f) else colors.cardBackground.copy(alpha = .35f))
                 .then(if (chosen) Modifier.border(1.dp, colors.primary.copy(alpha = .45f), RoundedCornerShape(12.dp)) else Modifier)
                 .selectable(chosen, enabled = !busy, role = Role.RadioButton, onClick = { onCandidate(candidate) })
                 .testTag("lyrics_match_candidate_$index").padding(12.dp),
@@ -223,7 +223,7 @@ import java.util.Locale
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(candidate.title, Modifier.weight(1f, fill = false), fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                            color = colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            color = colors.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("$metadataPercent%", Modifier.testTag("lyrics_match_metadata_$index")
                             .clearAndSetSemantics { text = AnnotatedString("信息匹配 $metadataPercent%") }
                             .clip(RoundedCornerShape(6.dp)).background(colors.primary.copy(alpha = .12f))
@@ -232,7 +232,7 @@ import java.util.Locale
                     }
                     Text(listOf(candidate.artists.ifBlank { "歌手信息缺失" }, candidate.album.takeIf(String::isNotBlank))
                         .filterNotNull().joinToString(" · "), fontSize = 12.sp,
-                        color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        color = colors.labelSecondaryVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Box(Modifier.size(20.dp), contentAlignment = Alignment.Center) {
                     if (chosen) Text("✓", Modifier.semantics { contentDescription = "已选中" },
@@ -246,7 +246,7 @@ import java.util.Locale
 @Composable private fun LyricsMatchPreview(candidate: LyricsCandidate?, preview: SavedLyrics?,
     assessment: LyricsMatchAssessment?, assessmentNote: String?, previewing: Boolean,
     onBackToResults: (() -> Unit)?, wide: Boolean, modifier: Modifier) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val scroll = rememberLazyListState()
     val previewDocument = remember(preview) {
         preview?.timingAlignment?.applyTo(preview.document) ?: preview?.document
@@ -271,24 +271,24 @@ import java.util.Locale
             }
             if (previewing) item {
                 Text("正在读取歌词…", Modifier.testTag("lyrics_match_preview_loading").semantics { liveRegion = LiveRegionMode.Polite },
-                    fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                    fontSize = 13.sp, color = colors.labelSecondaryVariant)
                 Spacer(Modifier.height(12.dp))
             }
             if (preview != null) {
                 item {
                     val realWords = preview.document.withoutEstimatedTiming().hasWordTiming
                     Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                        .background(colors.surfaceContainer.copy(alpha = .65f)).padding(12.dp),
+                        .background(colors.cardBackground.copy(alpha = .65f)).padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                             Text(preview.origin.label, Modifier.weight(1f), fontSize = 12.sp,
-                                color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                color = colors.labelSecondaryVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(if (realWords) "逐字歌词" else "逐行歌词", Modifier.testTag("lyrics_match_timing_kind"),
                                 fontSize = 11.sp, color = colors.primary)
                         }
                         Text("歌曲信息 ${assessment?.matchPercent?.let { "$it%" } ?: "未校验"}",
                             Modifier.testTag("lyrics_match_content_score"), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                        Text("信息匹配 ≥75% · 按来源顺序选择 · 逐字优先", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                        Text("信息匹配 ≥75% · 按来源顺序选择 · 逐字优先", fontSize = 12.sp, color = colors.labelSecondaryVariant)
                         preview.timingAlignment?.let {
                             Text(lyricsAlignmentLabel(it), Modifier.testTag("lyrics_match_alignment"),
                                 fontSize = 12.sp, color = colors.primary)
@@ -299,39 +299,39 @@ import java.util.Locale
                             assessment.preferredWord -> "符合自动条件 · 逐字歌词优先"
                             else -> "符合自动条件 · 逐行歌词兜底"
                         }, Modifier.testTag("lyrics_match_policy"), fontSize = 12.sp,
-                            color = if (!previewing && assessment?.accepted == false) colors.error else colors.onSurfaceVariantSummary)
+                            color = if (!previewing && assessment?.accepted == false) colors.error else colors.labelSecondaryVariant)
                         assessmentNote?.takeIf { !previewing && it.isNotBlank() }?.let { Text(it, fontSize = 12.sp, lineHeight = 17.sp,
-                            color = colors.onSurfaceVariantSummary, modifier = Modifier.testTag("lyrics_match_assessment_note")) }
+                            color = colors.labelSecondaryVariant, modifier = Modifier.testTag("lyrics_match_assessment_note")) }
                     }
                     Text("歌词预览", Modifier.padding(top = 16.dp, bottom = 12.dp), fontSize = 13.sp,
-                        color = colors.onSurfaceVariantSummary, fontWeight = FontWeight.Medium)
+                        color = colors.labelSecondaryVariant, fontWeight = FontWeight.Medium)
                 }
                 if (previewDocument!!.lines.isEmpty()) item {
-                    Text("这份歌词为空", fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+                    Text("这份歌词为空", fontSize = 14.sp, color = colors.labelSecondaryVariant)
                 }
                 itemsIndexed(previewDocument!!.lines, key = { index, _ -> index }) { index, line ->
                     val shape = RoundedCornerShape(topStart = if (index == 0) 12.dp else 0.dp,
                         topEnd = if (index == 0) 12.dp else 0.dp,
                         bottomStart = if (index == previewDocument.lines.lastIndex) 12.dp else 0.dp,
                         bottomEnd = if (index == previewDocument.lines.lastIndex) 12.dp else 0.dp)
-                    Column(Modifier.fillMaxWidth().clip(shape).background(colors.surfaceContainer.copy(alpha = .65f))
+                    Column(Modifier.fillMaxWidth().clip(shape).background(colors.cardBackground.copy(alpha = .65f))
                         .padding(horizontal = 16.dp, vertical = 12.dp).testTag("lyrics_match_preview_line_$index"),
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(lyricsMatchTime(line.startTimeMs), fontSize = 10.sp, color = colors.onSurfaceVariantSummary)
+                        Text(lyricsMatchTime(line.startTimeMs), fontSize = 10.sp, color = colors.labelSecondaryVariant)
                         if (line.text.isNotBlank()) Text(line.text, fontSize = 15.sp, lineHeight = 22.sp)
                         (listOf(line.translation) + line.translations.map { it.text }).filter(String::isNotBlank).distinct().take(2).forEach {
-                            Text(it, fontSize = 12.sp, lineHeight = 18.sp, color = colors.onSurfaceVariantSummary)
+                            Text(it, fontSize = 12.sp, lineHeight = 18.sp, color = colors.labelSecondaryVariant)
                         }
-                        if (line.romanization.isNotBlank()) Text(line.romanization, fontSize = 11.sp, color = colors.onSurfaceVariantSummary)
+                        if (line.romanization.isNotBlank()) Text(line.romanization, fontSize = 11.sp, color = colors.labelSecondaryVariant)
                         line.backgroundVocals.filter { it.text.isNotBlank() }.forEach {
-                            Text("和声 · ${it.text}", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                            Text("和声 · ${it.text}", fontSize = 12.sp, color = colors.labelSecondaryVariant)
                         }
                     }
                 }
             } else if (!previewing) item {
                 Column(Modifier.fillMaxWidth().padding(vertical = 24.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("选择候选预览", fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                    Text("查看原文、翻译与匹配度后保存", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                    Text("查看原文、翻译与匹配度后保存", fontSize = 12.sp, color = colors.labelSecondaryVariant)
                 }
             }
         }
@@ -340,17 +340,17 @@ import java.util.Locale
 
 @Composable private fun LyricsMatchPreviewIdentity(candidate: LyricsCandidate?, preview: SavedLyrics?,
     centered: Boolean, modifier: Modifier = Modifier) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = if (centered) Alignment.CenterHorizontally else Alignment.Start) {
         Text(candidate?.title ?: "已匹配歌词", Modifier.fillMaxWidth(), fontSize = 16.sp,
             fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis,
             textAlign = if (centered) TextAlign.Center else TextAlign.Start)
         Text(candidate?.artists?.ifBlank { null } ?: preview?.origin?.label.orEmpty(), Modifier.fillMaxWidth(),
-            fontSize = 12.sp, color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis,
+            fontSize = 12.sp, color = colors.labelSecondaryVariant, maxLines = 1, overflow = TextOverflow.Ellipsis,
             textAlign = if (centered) TextAlign.Center else TextAlign.Start)
         candidate?.album?.takeIf(String::isNotBlank)?.let {
-            Text(it, Modifier.fillMaxWidth(), fontSize = 11.sp, color = colors.onSurfaceVariantSummary,
+            Text(it, Modifier.fillMaxWidth(), fontSize = 11.sp, color = colors.labelSecondaryVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis,
                 textAlign = if (centered) TextAlign.Center else TextAlign.Start)
         }

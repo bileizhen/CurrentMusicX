@@ -81,7 +81,6 @@ import io.github.currencortex.music.feature.about.LegalDocumentScreen
 import io.github.currencortex.music.feature.about.MemberFocus
 import io.github.currencortex.music.feature.about.MemberDetailDialog
 import io.github.currencortex.music.feature.update.UpdatePage
-import io.github.currencortex.music.feature.home.HomeScreen
 import io.github.currencortex.music.feature.home.MusicHomeScreen
 import io.github.currencortex.music.feature.logs.LogExportDialog
 import io.github.currencortex.music.feature.settings.FontSettingsScreen
@@ -99,7 +98,7 @@ import io.github.currencortex.music.ui.component.StandardNavigationBar
 import io.github.currencortex.music.ui.component.HighApiFloatingNavigation
 import io.github.currencortex.music.ui.theme.LeiTheme
 import io.github.currencortex.music.ui.util.viewModelFactory
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -120,8 +119,7 @@ import io.github.currencortex.music.feature.player.*
 import io.github.currencortex.music.feature.settings.MusicSettingsViewModel
 import io.github.currencortex.music.feature.settings.MusicSettingsScreen
 import io.github.currencortex.music.ui.component.MusicDialog
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
+import io.github.suqi8.coui.kmp.basic.Text
 import io.github.currencortex.music.feature.library.*
 import io.github.currencortex.music.data.song.Song
 import java.net.URLDecoder
@@ -540,8 +538,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
 
         val dialogBackdrop = rememberMusicDialogBackdrop()
         CompositionLocalProvider(LocalMusicDialogBackdrop provides dialogBackdrop) {
-        top.yukonga.miuix.kmp.basic.Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            containerColor = MiuixTheme.colorScheme.background) {
+        io.github.suqi8.coui.kmp.basic.Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0),
+            containerColor = COUITheme.colorScheme.background) {
         CompositionLocalProvider(LocalSongMenu provides { songMenu = it },
             LocalSongDownload provides { song -> downloadSongJson = io.github.currencortex.music.core.network.ApiJson.encodeToString(Song.serializer(), song) },
             LocalRoomSongRequest provides roomRequest,
@@ -586,7 +584,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 val miniSpace = if (availableMini.value && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video", "appearance-font")) miniInset.value else 0.dp
                 // Each moving scene must cover the outgoing page and its dim scrim, including
                 // its inset areas. A background on NavDisplay alone sits behind both scenes.
-                Box(Modifier.fillMaxSize().background(if (ribbonScene) androidx.compose.ui.graphics.Color(0xFF0A0A0A) else MiuixTheme.colorScheme.background)
+                Box(Modifier.fillMaxSize().background(if (ribbonScene) androidx.compose.ui.graphics.Color(0xFF0A0A0A) else COUITheme.colorScheme.background)
                     .testTag("music_scene_${entry.contentKey}")) {
                     // Keep the scene viewport full size so the glass samples page content.
                     // Clearance belongs to the end of each scrollable list, not to its bounds.
@@ -605,7 +603,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         NavDisplay(
             backStack = sceneStack,
             modifier = Modifier.weight(1f).fillMaxSize().then(pageSceneStrategy.blur.viewport)
-                .testTag("music_navigation").background(MiuixTheme.colorScheme.background),
+                .testTag("music_navigation").background(COUITheme.colorScheme.background),
             entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), sceneInsets),
             sceneStrategies = listOf(pageSceneStrategy),
             onBack = ::navigateBack,
@@ -1127,7 +1125,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             val song = remember(raw) { io.github.currencortex.music.core.network.ApiJson.decodeFromString(Song.serializer(), raw) }
             io.github.currencortex.music.feature.download.SongDownloadDialog(song, container) { downloadSongJson = null }
         }
-        // XBlocker pattern: intercept completion when prediction is disabled. MIUIX
+        // XBlocker pattern: intercept completion when prediction is disabled. Navigation 3
         // owns seeking, cancellation and settling otherwise. Popups are hosted after
         // navigation, once, and take precedence over returning to the parent page.
         NavigationBackHandler(

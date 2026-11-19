@@ -25,9 +25,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.theme.LocalCustomFont
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.util.Locale
 
 private fun limitSearchInput(text: String): String {
@@ -44,7 +44,7 @@ private fun limitSearchInput(text: String): String {
     onSubmit: (() -> Unit)? = null, submitTag: String? = null,
     clearTag: String = "${inputTag}_clear", onActivate: (() -> Unit)? = null, enabled: Boolean = true,
     leadingContent: (@Composable () -> Unit)? = null) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val keyboard = LocalSoftwareKeyboardController.current
     Row(modifier.fillMaxSize().then(if (onActivate != null && leadingContent == null) Modifier.clickable(enabled = enabled, role = Role.Button,
         interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onActivate) else Modifier),
@@ -57,7 +57,7 @@ private fun limitSearchInput(text: String): String {
             else { requester.requestFocus(); keyboard?.show() }
         }.then(if (submitTag != null) Modifier.testTag(submitTag).semantics { contentDescription = "搜索" } else Modifier),
             contentAlignment = Alignment.CenterStart) {
-            Icon(MusicIcons.Search, null, Modifier.padding(start = 12.dp).size(20.dp), tint = colors.onSurface)
+            Icon(MusicIcons.Search, null, Modifier.padding(start = 12.dp).size(20.dp), tint = colors.labelPrimary)
         }
         if (onActivate != null) BoxWithConstraints(
             Modifier.weight(1f).fillMaxHeight().then(if (leadingContent != null) Modifier
@@ -70,19 +70,19 @@ private fun limitSearchInput(text: String): String {
             val textAlpha = if (leadingContent == null) 1f else ((maxWidth - 40.dp) / 56.dp).coerceIn(0f, 1f)
             Text(value.ifEmpty { placeholder }, Modifier.padding(end = 12.dp).graphicsLayer { alpha = textAlpha },
                 fontSize = 17.sp, lineHeight = 22.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = if (value.isEmpty()) colors.onSurfaceVariantSummary else colors.onSurface)
+                color = if (value.isEmpty()) colors.labelSecondaryVariant else colors.labelPrimary)
         }
         else BasicTextField(value, { onValueChange(limitSearchInput(it)) }, Modifier.weight(1f)
             .padding(end = if (value.isEmpty()) 12.dp else 0.dp).focusRequester(requester).onFocusChanged {
                 onInputFocus(it.isFocused)
             }
             .testTag(inputTag), singleLine = true, enabled = enabled,
-            textStyle = TextStyle(fontFamily = LocalCustomFont.current, fontSize = 17.sp, lineHeight = 22.sp, color = colors.onSurface),
+            textStyle = TextStyle(fontFamily = LocalCustomFont.current, fontSize = 17.sp, lineHeight = 22.sp, color = colors.labelPrimary),
             cursorBrush = SolidColor(colors.primary), keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             // Selection sheets keep focus; a catalog search supplies its submit action.
             keyboardActions = KeyboardActions(onSearch = { onSubmit?.invoke() }), decorationBox = { input -> Box {
                 if (value.isEmpty()) Text(placeholder, fontSize = 17.sp, lineHeight = 22.sp,
-                    maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.onSurfaceVariantSummary)
+                    maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.labelSecondaryVariant)
                 input()
             } })
         if (onActivate == null && value.isNotEmpty()) Box(Modifier.width(49.dp).fillMaxHeight()
@@ -90,7 +90,7 @@ private fun limitSearchInput(text: String): String {
                 interactionSource = remember { MutableInteractionSource() }, indication = null) { onValueChange("") }
             .semantics { contentDescription = "清除搜索" }, contentAlignment = Alignment.Center) {
             Canvas(Modifier.size(24.dp).graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
-                drawCircle(colors.onSurface)
+                drawCircle(colors.labelPrimary)
                 val reach = size.minDimension * .145f
                 drawLine(Color.Transparent, center - Offset(reach, reach), center + Offset(reach, reach),
                     1.7.dp.toPx(), StrokeCap.Round, blendMode = BlendMode.Clear)

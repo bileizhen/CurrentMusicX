@@ -12,7 +12,7 @@ import io.github.currencortex.music.core.media.DockAudioLevel
 import io.github.currencortex.music.core.media.FluidBackgroundMotion
 import io.github.currencortex.music.data.song.Song
 import kotlinx.coroutines.isActive
-import top.yukonga.miuix.kmp.shader.isRuntimeShaderSupported
+import io.github.suqi8.coui.kmp.shader.isRuntimeShaderSupported
 
 @Composable internal fun rememberPlayerFluidSpeed(meter: DockAudioLevel, playing: Boolean, active: Boolean,
     song: Song?, playbackRate: Float = 1f): State<Float> {

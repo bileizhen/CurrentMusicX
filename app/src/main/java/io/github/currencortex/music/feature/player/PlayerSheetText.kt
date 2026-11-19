@@ -22,7 +22,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Text
 
 internal data class PlayerSheetTextFrame(val progress: Float, val bounds: Rect, val start: Rect, val end: Rect)
 internal val PlayerSheetTextGeometry = SemanticsPropertyKey<PlayerSheetTextFrame>("PlayerSheetTextGeometry")

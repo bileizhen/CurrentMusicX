@@ -40,10 +40,10 @@ import io.github.currencortex.music.ui.component.MusicCategoryTabs
 import io.github.currencortex.music.ui.component.MusicSearchBar
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.component.MusicDestinationRow
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
-import top.yukonga.miuix.kmp.basic.*
+import io.github.suqi8.coui.kmp.basic.*
 
 @Composable fun RoomScreen(vm: RoomViewModel, onBack: () -> Unit, onSearch: () -> Unit, onPlayer: () -> Unit,
     onDialogActive: (Boolean) -> Unit = {}, onBinding: (() -> Unit)? = null) {
@@ -155,8 +155,8 @@ import top.yukonga.miuix.kmp.basic.*
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(detail.room.name, fontSize = 24.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text("#${detail.room.code} · ${detail.members.size} 人 · ${when(role) { RoomRole.OWNER -> "房主"; RoomRole.ADMIN -> "管理员"; else -> "成员" }}",
-                fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            Text(if (live.connected) "已连接 · 播放同步中" else "正在连接房间，自动恢复同步…", fontSize = 13.sp, color = MiuixTheme.colorScheme.primary)
+                fontSize = 14.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
+            Text(if (live.connected) "已连接 · 播放同步中" else "正在连接房间，自动恢复同步…", fontSize = 13.sp, color = COUITheme.colorScheme.primary)
             Row { MusicTextAction("复制房间号", onClick = { scope.launch { clipboard.setClipEntry(ClipEntry(ClipData.newPlainText("房间号", detail.room.code))) } })
                 MusicTextAction("退出房间", onClick = { exit = true }, enabled = !busy) }
             } }
@@ -172,7 +172,7 @@ import top.yukonga.miuix.kmp.basic.*
                         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text(track?.name ?: "等待点歌", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(track?.artists?.takeIf { it.isNotBlank() } ?: if (detail.room.freeMode || !detail.room.needApproval) "所有成员可直接点歌" else "点歌通过审批后加入队列",
-                                fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -188,7 +188,7 @@ import top.yukonga.miuix.kmp.basic.*
                                 { vm.session.play(detail.timeline?.playing != true) }, !controlsBusy, primary = true)
                             RoomTransport("下一首", R.drawable.player_symbol_skip_next_fill1, vm.session::next, !controlsBusy)
                         }
-                        if (controlsBusy) Text("正在同步操作…", fontSize = 12.sp, color = MiuixTheme.colorScheme.primary)
+                        if (controlsBusy) Text("正在同步操作…", fontSize = 12.sp, color = COUITheme.colorScheme.primary)
                     }
                 }
             }
@@ -238,9 +238,9 @@ import top.yukonga.miuix.kmp.basic.*
         verticalArrangement = Arrangement.spacedBy(5.dp)) {
         GlassIconButton(onClick, label, enabled = enabled, size = if (primary) 48.dp else 44.dp) {
             Icon(painterResource(icon), null, Modifier.size(28.dp),
-                tint = (if (primary) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface).copy(alpha = if (enabled) 1f else .35f))
+                tint = (if (primary) COUITheme.colorScheme.primary else COUITheme.colorScheme.labelPrimary).copy(alpha = if (enabled) 1f else .35f))
         }
-        Text(label, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        Text(label, fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
     }
 }
 @Composable private fun RoomQueue(detail: RoomDetail, role: RoomRole?, vm: RoomViewModel, modifier: Modifier) {
@@ -251,9 +251,9 @@ import top.yukonga.miuix.kmp.basic.*
             val pending = "queue:${item.id}" in live.pendingActions
             Text(item.name, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
             val subtitle = listOf(item.artists, item.requester).filter { it.isNotBlank() }.joinToString(" · ")
-            if (subtitle.isNotBlank()) Text(subtitle, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            if (subtitle.isNotBlank()) Text(subtitle, fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
             Text(when(item.status) { "pending" -> "待审批"; "playing" -> "正在播放"; "rejected" -> "已拒绝"; else -> "已加入队列" })
-            if (pending) Text("正在提交…", fontSize = 12.sp, color = MiuixTheme.colorScheme.primary)
+            if (pending) Text("正在提交…", fontSize = 12.sp, color = COUITheme.colorScheme.primary)
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (item.status == "pending" && role?.controls == true) {
                     MusicTextAction("通过", onClick = { vm.session.queueAction(item, "approve") }, enabled = !pending)
@@ -295,7 +295,7 @@ import top.yukonga.miuix.kmp.basic.*
                 MusicDestinationRow("封禁名单", { showBans = true; vm.loadBans() }, summary = "查看并解除禁止加入")
                 SettingsDivider()
                 SettingsPreference("归档房间", "保留房间号、队列和进度，可稍后恢复", onClick = onClose,
-                    trailing = { Icon(io.github.currencortex.music.ui.component.MusicIcons.Close, null, tint = MiuixTheme.colorScheme.error) })
+                    trailing = { Icon(io.github.currencortex.music.ui.component.MusicIcons.Close, null, tint = COUITheme.colorScheme.error) })
             }
         }
         item { SettingsSectionHeader("成员 · ${detail.members.size}") }

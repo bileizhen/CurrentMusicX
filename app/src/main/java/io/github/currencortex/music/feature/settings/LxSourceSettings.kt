@@ -17,7 +17,7 @@ import io.github.currencortex.music.data.lx.LxPlatform
 import io.github.currencortex.music.data.lx.lxQualityLabel
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.TextField
+import io.github.suqi8.coui.kmp.basic.TextField
 
 /** Uses the same grouped lists and anchored choice menu as the other source settings. */
 @Composable internal fun LxSourceSettings(vm: MusicSettingsViewModel, platform: LxPlatform) {

@@ -26,8 +26,8 @@ import io.github.currencortex.music.core.network.appResult
 import io.github.currencortex.music.feature.library.PlaylistTrack
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.flow.distinctUntilChanged
 
 data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
@@ -92,7 +92,7 @@ data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
             LazyColumn(Modifier.fillMaxSize().testTag("emby_list"), state = list,
                 contentPadding = musicScrollPadding(PaddingValues(start = 16.dp, end = 16.dp, top = topInset + 12.dp, bottom = 104.dp))) {
                 error?.let { message -> item("action_error") {
-                    Text(message, Modifier.padding(vertical = 8.dp), color = MiuixTheme.colorScheme.error)
+                    Text(message, Modifier.padding(vertical = 8.dp), color = COUITheme.colorScheme.error)
                 } }
                 items(state.page.entries, key = { "${it.type}:${it.id}" }) { entry ->
                     val cover by produceState(entry.cover, entry, account.revision) {
@@ -118,7 +118,7 @@ data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
                 }
                 if (state.loading) item("loading") { LoadingSongList(4) }
                 state.error?.let { message -> item("error") {
-                    Text(message, color = MiuixTheme.colorScheme.error)
+                    Text(message, color = COUITheme.colorScheme.error)
                     MusicTextAction("重试", { vm.refresh(state.loaded && state.page.more) })
                 } }
                 if (state.loaded && !state.loading && state.page.entries.isEmpty() && state.page.songs.isEmpty())
@@ -166,7 +166,7 @@ data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
                         visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { connect() }),
                         modifier = Modifier.testTag("emby_password"))
-                    error?.let { Text(it, color = MiuixTheme.colorScheme.error) }
+                    error?.let { Text(it, color = COUITheme.colorScheme.error) }
                 }
             } }
             item { GlassActionButton(if (busy) "正在连接…" else if (account.configured) "更换连接" else "连接服务器", ::connect,

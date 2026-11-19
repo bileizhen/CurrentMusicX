@@ -35,10 +35,10 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.lyrics.data.LyricsSongSettings
 import io.github.currencortex.music.ui.component.MusicCover
 import io.github.currencortex.music.ui.component.MusicOverlayDialog
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.TextField
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** One bounded overlay; its content pages share the same fixed header and native back handling. */
 @Composable internal fun PlayerLyricsDialogFrame(song: Song, matching: Boolean, onBack: () -> Unit,
@@ -64,21 +64,21 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     MusicOverlayDialog(show = true, title = null, modifier = Modifier.width(panelWidth).height(panelHeight),
         onDismissRequest = { if (matching) back() else close() }, insideMargin = DpSize(0.dp, 0.dp),
         outsideMargin = DpSize(16.dp, 12.dp)) {
-        val colors = MiuixTheme.colorScheme
+        val colors = COUITheme.colorScheme
         Column(Modifier.fillMaxWidth().height(panelHeight)) {
             Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically) {
                 if (matching) Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp))
                     .clickable(onClick = back).semantics { contentDescription = "返回歌词管理"; role = Role.Button }
                     .testTag("lyrics_match_header_back"), contentAlignment = Alignment.Center) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(20.dp), tint = colors.onBackground)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, null, Modifier.size(20.dp), tint = colors.labelPrimary)
                 }
                 Text(if (matching) "匹配歌词" else "歌词管理", Modifier.weight(1f), fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold)
                 Box(Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).clickable(onClick = close)
                     .semantics { contentDescription = "关闭歌词管理"; role = Role.Button }
                     .testTag("lyrics_management_close"), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Close, null, Modifier.size(20.dp), tint = colors.onSurfaceVariantSummary)
+                    Icon(Icons.Default.Close, null, Modifier.size(20.dp), tint = colors.labelSecondaryVariant)
                 }
             }
             if (panelHeight >= 360.dp) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(top = 4.dp, bottom = 14.dp),
@@ -88,10 +88,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     Text(song.name, fontSize = if (matching) 14.sp else 17.sp, fontWeight = FontWeight.Medium,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (song.artists.isNotBlank()) Text(song.artists, fontSize = 12.sp,
-                        color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        color = colors.labelSecondaryVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
-            Box(Modifier.fillMaxWidth().height(.7.dp).background(colors.onBackground.copy(alpha = .08f)))
+            Box(Modifier.fillMaxWidth().height(.7.dp).background(colors.labelPrimary.copy(alpha = .08f)))
             Column(Modifier.fillMaxWidth().weight(1f), content = content)
         }
     }
@@ -104,8 +104,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     onOffsetApply: () -> Unit, onOffsetReset: () -> Unit, onDefault: () -> Unit, onMatched: () -> Unit,
     onImported: () -> Unit, onReset: () -> Unit, onMatch: () -> Unit, onImport: () -> Unit,
     onExportFia: () -> Unit, onExportLrc: () -> Unit, onClose: () -> Unit, alignmentLabel: String? = null) {
-    val colors = MiuixTheme.colorScheme
-    val hint = colors.onSurfaceVariantSummary
+    val colors = COUITheme.colorScheme
+    val hint = colors.labelSecondaryVariant
     var fileHelp by remember { mutableStateOf(false) }
     val parsedOffset = offsetInput.toLongOrNull()
     val validOffset = parsedOffset != null && parsedOffset in -60_000..60_000
@@ -120,7 +120,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
             recoveryMessage?.let { Text(it, Modifier.testTag("lyrics_storage_recovery"), fontSize = 12.sp, color = colors.error) }
             loadError?.let { Text(it, Modifier.testTag("lyrics_management_load_error"), fontSize = 12.sp, color = colors.error) }
-            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.onBackground.copy(alpha = .035f))) {
+            Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(colors.labelPrimary.copy(alpha = .035f))) {
                 LyricsSourceChoice(if (automatic) "自动择优" else "默认来源 · $defaultSource",
                     if (automatic) "按来源顺序 · 逐字优先 · 逐行兜底" else "使用默认歌词服务", options.matchedOrigin == null && !options.useImported,
                     !blocked, onDefault, Modifier.testTag("lyrics_source_default"))
@@ -144,7 +144,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 LyricsActionButton("−250", { onOffsetStep(-250) }, Modifier.width(68.dp).height(44.dp).testTag("lyrics_offset_minus"), enabled = !blocked)
                 TextField(value = offsetInput, onValueChange = onOffsetInput, label = "毫秒", singleLine = true,
                     enabled = !blocked, insideMargin = DpSize(8.dp, 8.dp), cornerRadius = 12.dp, useLabelAsPlaceholder = true,
-                    textStyle = MiuixTheme.textStyles.main.copy(fontFamily = FontFamily.Monospace, fontSize = 16.sp, textAlign = TextAlign.Center),
+                    textStyle = COUITheme.textStyles.bodyXL.copy(fontFamily = FontFamily.Monospace, fontSize = 16.sp, textAlign = TextAlign.Center),
                     modifier = Modifier.weight(1f).height(44.dp).testTag("lyrics_offset_input"))
                 LyricsActionButton("+250", { onOffsetStep(250) }, Modifier.width(68.dp).height(44.dp).testTag("lyrics_offset_plus"), enabled = !blocked)
             }
@@ -189,19 +189,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable private fun LyricsManagementDivider() {
-    Box(Modifier.fillMaxWidth().height(.7.dp).background(MiuixTheme.colorScheme.onBackground.copy(alpha = .07f)))
+    Box(Modifier.fillMaxWidth().height(.7.dp).background(COUITheme.colorScheme.labelPrimary.copy(alpha = .07f)))
 }
 
 @Composable private fun LyricsSourceChoice(title: String, subtitle: String, selected: Boolean, enabled: Boolean,
     onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Row(modifier.fillMaxWidth().selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
         .padding(horizontal = 14.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(title, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, fontSize = 11.sp, color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(subtitle, fontSize = 11.sp, color = colors.labelSecondaryVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        Text(if (selected) "●" else "○", fontSize = 19.sp, color = if (selected) colors.primary else colors.onSurfaceVariantSummary)
+        Text(if (selected) "●" else "○", fontSize = 19.sp, color = if (selected) colors.primary else colors.labelSecondaryVariant)
     }
 }

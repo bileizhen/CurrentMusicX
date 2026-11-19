@@ -29,9 +29,9 @@ import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.theme.*
 import kotlinx.coroutines.*
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun FontSettingsScreen(viewModel: SettingsViewModel, onBack: () -> Unit) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -77,12 +77,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
         }
     }
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val filter = remember(query) { MusicSearchQuery(query) }
     val showDefault = filter.matches("默认")
     val filteredImports = imports.filter { filter.matches(it.label) }
     val filteredInstalled = installed.orEmpty().filter { filter.matches(it.label) }
-    CompositionLocalProvider(top.yukonga.miuix.kmp.theme.LocalContentColor provides colors.onSurface) {
+    CompositionLocalProvider(io.github.suqi8.coui.kmp.theme.LocalContentColor provides colors.labelPrimary) {
     SettingsUiScope {
         Box(Modifier.fillMaxSize().imePadding().testTag("font_settings_page")) {
             SettingsScrollLayout(Modifier.fillMaxSize(), topBar = {
@@ -131,7 +131,7 @@ private fun LazyListScope.fontSection(title: String, fonts: List<AppearanceFont>
                 topEnd = if (index == 0) 20.dp else 0.dp,
                 bottomStart = if (index == fonts.lastIndex) 20.dp else 0.dp,
                 bottomEnd = if (index == fonts.lastIndex) 20.dp else 0.dp)
-            Column(Modifier.fillMaxWidth().clip(shape).background(MiuixTheme.colorScheme.surfaceContainer)) {
+            Column(Modifier.fillMaxWidth().clip(shape).background(COUITheme.colorScheme.cardBackground)) {
                 FontChoice(font, selected == font.key, enabled, { onSelect(font.key) })
                 if (index != fonts.lastIndex) SettingsDivider()
             }
@@ -148,7 +148,7 @@ private fun LazyListScope.fontSection(title: String, fonts: List<AppearanceFont>
         .heightIn(min = 56.dp).padding(horizontal = 16.dp, vertical = 16.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(font.label, Modifier.weight(1f), style = TextStyle(fontFamily = preview ?: androidx.compose.ui.text.font.FontFamily.Default,
-            fontSize = 17.sp, lineHeight = 24.sp), color = MiuixTheme.colorScheme.onSurface)
+            fontSize = 17.sp, lineHeight = 24.sp), color = COUITheme.colorScheme.labelPrimary)
         SettingsSelectionCheck(selected)
     }
 }

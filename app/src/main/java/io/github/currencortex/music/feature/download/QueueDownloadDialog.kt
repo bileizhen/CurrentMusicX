@@ -12,8 +12,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
+import io.github.suqi8.coui.kmp.basic.Text
 
 /** Submit the captured shared list to the existing download manager only after confirmation. */
 @Composable internal fun QueueDownloadDialog(container: AppContainer, songs: List<Song>, show: Boolean, onDismiss: () -> Unit) {

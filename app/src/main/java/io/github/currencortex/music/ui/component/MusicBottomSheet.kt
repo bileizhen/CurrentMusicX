@@ -14,8 +14,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
-import top.yukonga.miuix.kmp.overlay.OverlayBottomSheet
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.overlay.OverlayBottomSheet
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 private val MusicBottomSheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
 private data class SheetMaterialBounds(val size: IntSize, val bodyOffset: IntOffset)
@@ -32,7 +32,7 @@ private data class SheetMaterialBounds(val size: IntSize, val bodyOffset: IntOff
     val materialBounds = if (panelSize != IntSize.Zero && bodySize != IntSize.Zero)
         SheetMaterialBounds(panelSize, IntOffset((panelSize.width - bodySize.width) / 2,
             panelSize.height - bodySize.height)) else null
-    MiuixTheme(colors = musicDialogColors()) {
+    COUITheme(colors = musicDialogColors()) {
         // Native paint covers the first layout and its elastic bottom fill. The sampled
         // material is added above it; a transparent native surface exposes a gap while settling.
         OverlayBottomSheet(show = show, title = title, backgroundColor = musicDialogFallbackColor(), cornerRadius = 32.dp,

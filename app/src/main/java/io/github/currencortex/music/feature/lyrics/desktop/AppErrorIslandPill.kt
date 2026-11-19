@@ -26,8 +26,8 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.core.media.SoundEffectNotice
 import io.github.currencortex.music.core.media.IslandNoticeKind
 import io.github.currencortex.music.ui.component.MusicIcons
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
 
 @Composable internal fun AppErrorIslandPill(notice: SoundEffectNotice, modifier: Modifier = Modifier,
     material: Boolean = true, height: Dp = 36.dp, font: Float = DESKTOP_ISLAND_FONT_SIZE) {

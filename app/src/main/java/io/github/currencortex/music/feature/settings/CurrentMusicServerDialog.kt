@@ -17,9 +17,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.network.*
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.TextField
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun CurrentMusicServerDialog(vm: MusicSettingsViewModel, onDismiss: () -> Unit, onCustom: () -> Unit) {
     val settings by vm.settings.collectAsStateWithLifecycle()
@@ -37,7 +37,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }) {
         Text("自动在启动时选择较快的可用线路。延迟为公告接口响应耗时，列表顺序固定。",
             Modifier.padding(horizontal = 24.dp, vertical = 12.dp), fontSize = 12.sp,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            color = COUITheme.colorScheme.labelSecondaryVariant)
         CurrentMusicServer.entries.forEach { candidate ->
             val address = when (candidate) {
                 CurrentMusicServer.AUTO -> automatic
@@ -76,12 +76,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         ServerStatus.UNAVAILABLE -> "不可用"
         null -> "未检测"
     }
-    val dark = MiuixTheme.colorScheme.onBackground.luminance() > .5f
+    val dark = COUITheme.colorScheme.labelPrimary.luminance() > .5f
     val color = when (health?.status) {
         ServerStatus.AVAILABLE -> if (dark) Color(0xFF73D4A4) else Color(0xFF24865B)
         ServerStatus.TIMEOUT -> if (dark) Color(0xFFE8BA69) else Color(0xFFAD731B)
         ServerStatus.UNAVAILABLE -> if (dark) Color(0xFFF28F99) else Color(0xFFCD5058)
-        else -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+        else -> COUITheme.colorScheme.labelSecondaryVariant
     }
     Column(Modifier.width(72.dp).background(color.copy(alpha = .12f), RoundedCornerShape(10.dp))
         .padding(horizontal = 4.dp, vertical = 5.dp).testTag("server_source_badge_${source.name}")
@@ -111,8 +111,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             TextField(address, { address = it; error = null }, singleLine = true, label = "服务器地址",
                 modifier = Modifier.fillMaxWidth().testTag("server_input"))
             Text("填写完整的 API 地址，包含 /cm/ 等路径。切换到其他服务器后需重新登录。",
-                fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            error?.let { Text(it, fontSize = 12.sp, color = MiuixTheme.colorScheme.error) }
+                fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
+            error?.let { Text(it, fontSize = 12.sp, color = COUITheme.colorScheme.error) }
         }
     }
 }

@@ -25,9 +25,9 @@ import io.github.currencortex.music.ui.component.LocalMusicPageActive
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.roundToInt
 
 @Composable internal fun AdaptiveAudioScreen(vm: SoundEffectsViewModel, onBack: () -> Unit) {
@@ -71,13 +71,13 @@ import kotlin.math.roundToInt
                     SettingsGroup {
                         SettingsToggle("启用流声音频系统", settings.enabled, { value -> vm.editAdaptive { it.copy(enabled = value) } },
                             Modifier.testTag("adaptive_enabled"))
-                        Row(Modifier.fillMaxWidth().background(MiuixTheme.colorScheme.primary.copy(alpha = if (live) .08f else .03f))
+                        Row(Modifier.fillMaxWidth().background(COUITheme.colorScheme.primary.copy(alpha = if (live) .08f else .03f))
                             .padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Box(Modifier.size(6.dp).clip(RoundedCornerShape(3.dp)).background(
-                                if (live) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary))
+                                if (live) COUITheme.colorScheme.primary else COUITheme.colorScheme.labelSecondaryVariant))
                             Text(status, Modifier.weight(1f).testTag("adaptive_status"), fontSize = 12.sp, lineHeight = 17.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                color = COUITheme.colorScheme.labelSecondaryVariant)
                         }
                     }
                 }
@@ -87,7 +87,7 @@ import kotlin.math.roundToInt
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text("十段均衡器", fontSize = 20.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold)
                                 Text(if (liveEq) "实时增益 · 含动态 EQ · ±9 dB" else "手动调节 · ±6 dB",
-                                    Modifier.testTag("adaptive_band_mode"), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                    Modifier.testTag("adaptive_band_mode"), fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
                             }
                             GlassIconButton({ vm.editAdaptive { it.copy(gains = List(10) { 0f }) } }, "重置十段均衡器",
                                 Modifier.testTag("adaptive_reset"), enabled = enabled && settings.gains.any { it != 0f }, surface = false) {
@@ -99,7 +99,7 @@ import kotlin.math.roundToInt
                             onSave = { index, value -> vm.commitAdaptive { it.copy(gains = it.gains.toMutableList().apply { set(index, value) }) } },
                             onCancel = vm::clearAdaptivePreview, liveGains = runtime.gains.takeIf { liveEq })
                         Column(Modifier.padding(horizontal = 12.dp).clip(RoundedCornerShape(14.dp))
-                            .background(MiuixTheme.colorScheme.primary.copy(alpha = if (enabled) .07f else .025f))) {
+                            .background(COUITheme.colorScheme.primary.copy(alpha = if (enabled) .07f else .025f))) {
                             AudioAdjustment("${AdaptiveAudioSettings.FREQUENCIES[selectedBand]} Hz · 手动增益", settings.gains[selectedBand], -6f..6f,
                                 ::gainLabel, enabled, "adaptive_band_fine", key = selectedBand,
                                 onPreview = { vm.previewAdaptive(band(it)) }, onCancel = vm::clearAdaptivePreview,
@@ -189,12 +189,12 @@ import kotlin.math.roundToInt
 
 @Composable private fun AudioSectionLabel(title: String) {
     Text(title, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 12.sp,
-        fontWeight = FontWeight.Medium, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        fontWeight = FontWeight.Medium, color = COUITheme.colorScheme.labelSecondaryVariant)
 }
 
 @Composable private fun AudioCurveChoice(curve: DynamicEqCurve, selected: Boolean, enabled: Boolean,
     modifier: Modifier, onClick: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val summary = when (curve) {
         DynamicEqCurve.WARM -> "柔和、厚实"
         DynamicEqCurve.V_SHAPE -> "低音与高音更突出"
@@ -203,15 +203,15 @@ import kotlin.math.roundToInt
     }
     ElasticPress(modifier.selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = onClick), enabled) {
         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-            .background(if (selected) colors.primary.copy(alpha = .12f) else colors.onSurface.copy(alpha = .035f))
+            .background(if (selected) colors.primary.copy(alpha = .12f) else colors.labelPrimary.copy(alpha = .035f))
             .padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(curve.label, Modifier.weight(1f), fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium,
-                    color = (if (selected) colors.primary else colors.onSurface).copy(alpha = if (enabled) 1f else .38f))
+                    color = (if (selected) colors.primary else colors.labelPrimary).copy(alpha = if (enabled) 1f else .38f))
                 if (selected) Icon(MusicIcons.Check, null, Modifier.size(16.dp), tint = colors.primary.copy(alpha = if (enabled) 1f else .38f))
             }
             Text(summary, fontSize = 11.sp, lineHeight = 16.sp,
-                color = colors.onSurfaceVariantSummary.copy(alpha = if (enabled) 1f else .45f))
+                color = colors.labelSecondaryVariant.copy(alpha = if (enabled) 1f else .45f))
         }
     }
 }
@@ -231,7 +231,7 @@ import kotlin.math.roundToInt
                 verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(title, Modifier.padding(end = 12.dp), fontSize = 13.sp, lineHeight = 19.sp)
                 Text(label(preview), fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.SemiBold,
-                    color = if (enabled) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    color = if (enabled) COUITheme.colorScheme.primary else COUITheme.colorScheme.labelSecondaryVariant)
             }
             GlassSlider(preview, { preview = if (steps == 0 && range.start < 0) (it * 10).roundToInt() / 10f else it; onPreview(preview) },
                 Modifier.fillMaxWidth().testTag(tag).semantics { contentDescription = title }, enabled = enabled,

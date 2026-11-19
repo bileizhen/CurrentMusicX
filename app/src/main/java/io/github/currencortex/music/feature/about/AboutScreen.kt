@@ -24,8 +24,8 @@ import io.github.currencortex.music.ui.component.PageNavigationPreference
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.util.openExternalLink
 import io.github.currencortex.music.ui.util.showMusicMessage
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable
 fun AboutScreen(onBack: () -> Unit, onOpenDocument: (LegalDocument) -> Unit, enableBlur: Boolean,
@@ -73,16 +73,16 @@ data class AboutScreenActions(val onBack: () -> Unit, val onOpenLink: (String) -
 @Composable
 fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlur: Boolean,
     onOpenMember: (AboutMember, String) -> Unit, onSupport: () -> Unit = {}) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     SettingsPage(state.title, "about_screen", actions.onBack) {
         item("brand") {
             Column(Modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Image(painterResource(R.drawable.ic_launcher_foreground), "应用图标",
-                    Modifier.size(88.dp).testTag("about_logo"), colorFilter = ColorFilter.tint(colors.onBackground))
+                    Modifier.size(88.dp).testTag("about_logo"), colorFilter = ColorFilter.tint(colors.labelPrimary))
                 Text(state.appName, fontSize = 30.sp, fontWeight = FontWeight.Bold)
                 Text(state.versionName, Modifier.testTag("about_version").clickable { actions.onOpenLink("currentmusic:version") }
-                    .padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+                    .padding(horizontal = 16.dp, vertical = 8.dp), fontSize = 14.sp, color = colors.labelSecondaryVariant)
             }
         }
         item("project") { SettingsSection("项目", MusicIcons.Info) {
@@ -98,9 +98,9 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 SettingsInfoHeader("主要贡献者", MusicIcons.Heart, horizontalInset = 0.dp) {
                     Text(AboutCredits.all.size.toString(),
-                        Modifier.clip(CircleShape).background(colors.surfaceContainer)
+                        Modifier.clip(CircleShape).background(colors.cardBackground)
                             .padding(horizontal = 10.dp, vertical = 3.dp),
-                        fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                        fontSize = 12.sp, color = colors.labelSecondaryVariant)
                 }
                 SettingsGroup {
                     Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
@@ -110,7 +110,7 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
                             modifier = Modifier.testTag("about_contributor_wall"))
                         Text("拖动浏览 · 双指缩放 · 点击头像查看详情",
                             Modifier.padding(horizontal = 4.dp), fontSize = 12.sp, lineHeight = 18.sp,
-                            color = colors.onSurfaceVariantSummary)
+                            color = colors.labelSecondaryVariant)
                     }
                 }
             }

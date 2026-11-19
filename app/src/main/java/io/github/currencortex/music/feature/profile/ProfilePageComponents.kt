@@ -24,9 +24,9 @@ import io.github.currencortex.music.ui.component.rememberPageNavigationSource
 import io.github.currencortex.music.ui.component.LocalRootTabSwipe
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun ProfilePageTitle(navigate: (String) -> Unit, onSettings: (() -> Unit)?,
     public: Boolean = false, loading: Boolean = false, reload: () -> Unit = {}) {
@@ -43,7 +43,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         if (public) Row(Modifier.fillMaxWidth().height(SettingsToolbarHeight).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("用户主页", Modifier.weight(1f), fontSize = 24.sp, lineHeight = 30.sp,
-                fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.onSurface)
+                fontWeight = FontWeight.SemiBold, color = COUITheme.colorScheme.labelPrimary)
             actions()
         }
         else SettingsRootTopBar("我的", Modifier.testTag("me_root_toolbar"), actions = actions)
@@ -66,7 +66,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     SettingsUiScope {
         SettingsPreference(title, summary, Modifier.testTag(tag).then(source.modifier), onClick = { source.open(onClick) },
             leading = { Icon(icon, null, Modifier.size(24.dp)) },
-            trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = MiuixTheme.colorScheme.onSurfaceVariantSummary) })
+            trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = COUITheme.colorScheme.labelSecondaryVariant) })
     }
 }
 
@@ -162,7 +162,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun ProfileStatsBlock(stats: ProfileStats, likesLabel: String = "点赞",
     likesValue: String = "${stats.likes}", onLikes: (() -> Unit)? = null, onListening: (() -> Unit)? = null) {
-    val muted = MiuixTheme.colorScheme.onSurfaceVariantSummary
+    val muted = COUITheme.colorScheme.labelSecondaryVariant
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp).testTag("profile_stats"),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
@@ -182,7 +182,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         val columns = if (maxWidth >= 280.dp * LocalDensity.current.fontScale + 10.dp) 2 else 1
         FlowRow(Modifier.fillMaxWidth(), maxItemsInEachRow = columns,
             horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            val tile = Modifier.weight(1f).background(MiuixTheme.colorScheme.onSurface.copy(alpha = .035f), RoundedCornerShape(16.dp))
+            val tile = Modifier.weight(1f).background(COUITheme.colorScheme.labelPrimary.copy(alpha = .035f), RoundedCornerShape(16.dp))
                 .padding(horizontal = 12.dp, vertical = 10.dp)
             Column(tile, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("听歌天数", fontSize = 12.sp, lineHeight = 16.sp, color = muted)

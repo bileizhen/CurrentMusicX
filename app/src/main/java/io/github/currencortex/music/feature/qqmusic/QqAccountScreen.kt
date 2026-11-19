@@ -29,8 +29,8 @@ import io.github.currencortex.music.data.qqmusic.QqLoginCapabilities
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import kotlinx.coroutines.*
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.currencortex.music.feature.binding.BindingAction
 
 @Composable internal fun QqAccountScreen(container: AppContainer, onBack: () -> Unit, navigate: (String) -> Unit) {
@@ -195,15 +195,15 @@ import io.github.currencortex.music.feature.binding.BindingAction
                                 Text(account.nickname.ifBlank { "QQ 音乐" }, fontSize = 21.sp, fontWeight = FontWeight.SemiBold,
                                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                                 Text("QQ 音乐账号 · ${account.uin}", fontSize = 12.sp,
-                                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                                    color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                             }
                             Text("已登录", Modifier.clip(RoundedCornerShape(50))
-                                .background(MiuixTheme.colorScheme.primary.copy(alpha = .08f))
+                                .background(COUITheme.colorScheme.primary.copy(alpha = .08f))
                                 .padding(horizontal = 10.dp, vertical = 6.dp),
-                                fontSize = 11.sp, color = MiuixTheme.colorScheme.primary)
+                                fontSize = 11.sp, color = COUITheme.colorScheme.primary)
                         }
                         Text("已直接连接 QQ 音乐我喜欢与歌单${if (libraryCount > 0) " · $libraryCount 个歌单" else ""}",
-                            fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                            fontSize = 12.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                         if (vipLevel.isNotBlank()) Text(when (vipLevel) {
                             "super" -> "超级会员"
                             "green" -> "绿钻会员"

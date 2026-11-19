@@ -22,7 +22,7 @@ import androidx.navigation3.scene.SceneStrategyScope
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import io.github.currencortex.music.ui.component.nativeui.LocalPageGlassScene
 import io.github.currencortex.music.ui.component.nativeui.PageGlassScene
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Scoped to settings pages, so unrelated navigation keeps its existing transition. */
 internal val LocalPageContainerSource = compositionLocalOf<((PageContainerOrigin, () -> Unit) -> Unit)?> { null }
@@ -31,14 +31,14 @@ private class SourceCoordinates { var value: LayoutCoordinates? = null }
 internal class PageNavigationSource(val modifier: Modifier, val open: (() -> Unit) -> Unit)
 
 @Composable internal fun PageNavigationIcon(icon:ImageVector) {
-    top.yukonga.miuix.kmp.basic.Icon(icon,null,Modifier.padding(end=12.dp).size(24.dp))
+    io.github.suqi8.coui.kmp.basic.Icon(icon,null,Modifier.padding(end=12.dp).size(24.dp))
 }
 
 @Composable internal fun rememberPageNavigationSource(title: String, summary: String = "",
     icon: ImageVector? = null, playlistMotion: PlaylistContainerMotion? = null): PageNavigationSource {
     val coordinates=remember {SourceCoordinates()}
     val capture=LocalPageContainerSource.current
-    val color=MiuixTheme.colorScheme.surfaceContainer
+    val color=COUITheme.colorScheme.cardBackground
     val currentColor=rememberUpdatedState(color)
     // Keep the card's background and subtitle in the container crossfade too. Its
     // shared cover/title suppress their own drawing while the overlay owns them.
@@ -59,11 +59,11 @@ internal class PageNavigationSource(val modifier: Modifier, val open: (() -> Uni
     val source=rememberPageNavigationSource(title,summary.orEmpty(),icon)
     if(io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current) {
         io.github.currencortex.music.ui.component.nativeui.SettingsPreference(title,summary,modifier.then(source.modifier),
-            onClick={source.open(onClick)},leading={icon?.let {top.yukonga.miuix.kmp.basic.Icon(it,null,Modifier.size(24.dp))}},
-            trailing={top.yukonga.miuix.kmp.basic.Icon(MusicIcons.Forward,null,Modifier.size(16.dp))})
+            onClick={source.open(onClick)},leading={icon?.let {io.github.suqi8.coui.kmp.basic.Icon(it,null,Modifier.size(24.dp))}},
+            trailing={io.github.suqi8.coui.kmp.basic.Icon(MusicIcons.Forward,null,Modifier.size(16.dp))})
         return
     }
-    top.yukonga.miuix.kmp.preference.ArrowPreference(title=title,summary=summary,
+    io.github.suqi8.coui.kmp.preference.ArrowPreference(title=title,summary=summary,
         startAction={icon?.let {PageNavigationIcon(it)}},
         modifier=modifier.then(source.modifier),onClick={source.open(onClick)})
 }

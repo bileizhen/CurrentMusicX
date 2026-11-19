@@ -20,8 +20,8 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.draw.drawWithContent
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.feature.update.UpdatePageOrigin
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable
 fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
@@ -45,7 +45,7 @@ fun SettingsScreen(onAppearance: () -> Unit, onNetwork: () -> Unit,
         item {
             var origin by remember { mutableStateOf<LayoutCoordinates?>(null) }
             val sourceLayer = rememberGraphicsLayer()
-            val color = MiuixTheme.colorScheme.surfaceContainer
+            val color = COUITheme.colorScheme.cardBackground
             SettingsGroup(Modifier.fillMaxWidth().onGloballyPositioned { origin = it }.drawWithContent {
                 sourceLayer.record { this@drawWithContent.drawContent() }; drawLayer(sourceLayer)
             }) {

@@ -14,8 +14,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
 import io.github.currencortex.music.ui.component.nativeui.SettingsGroup
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun BindingMedalsCard(state: BindingMedalsState, onRetry: () -> Unit) {
     SettingsGroup(Modifier.fillMaxWidth().testTag("binding_medals")) {
@@ -23,19 +23,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("我的勋章", Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 state.value?.let { Text("${it.total} 枚", fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f)) }
+                    color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f)) }
             }
             when {
                 state.loading -> Text("正在加载勋章…", Modifier.padding(horizontal = 16.dp), fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                    color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                 state.error != null -> Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(state.error, Modifier.weight(1f), fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                        color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                     BindingAction("重试", onRetry, Modifier.testTag("binding_medals_retry"))
                 }
                 state.value != null -> if (state.value.medals.isEmpty()) {
                     Text("还没有获得勋章", Modifier.padding(horizontal = 16.dp).testTag("binding_medals_empty"), fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                        color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                 } else LazyRow(contentPadding = PaddingValues(horizontal = 16.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     itemsIndexed(state.value.medals) { index, medal ->

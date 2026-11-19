@@ -31,7 +31,7 @@ internal fun launchUsername(account: Account?): String =
 
 /** Consume input while disk settings select the actual animation, before either timeline mounts. */
 @Composable internal fun LaunchPreparationOverlay(dark: Boolean = false) {
-    val background = if (dark) Color(0xFF05070C) else top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme.background
+    val background = if (dark) Color(0xFF05070C) else io.github.suqi8.coui.kmp.theme.COUITheme.colorScheme.background
     BackHandler { }
     Canvas(Modifier.fillMaxSize().testTag("launch_preparing").pointerInput(Unit) {
         awaitPointerEventScope { while (true) awaitPointerEvent(PointerEventPass.Initial).changes.forEach { it.consume() } }

@@ -27,8 +27,8 @@ import io.github.currencortex.music.ui.component.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Read-only archive pages. Network requests, invitations and sharing belong to their explicit callbacks. */
 @Composable internal fun ListenTogetherHistoryContent(
@@ -47,7 +47,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     onFate: ((ListenTogetherParticipant, Int) -> Unit)? = null,
     sharing: Boolean = false,
 ) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val title = when (state.page) {
         ListenArchivePage.RANKING -> "一起听排行"
         ListenArchivePage.REPORT -> "和 TA 的一起听"
@@ -98,7 +98,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                         Column(Modifier.weight(1f).padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                                             Text("你和${most.user.displayName()}", fontSize = 17.sp, fontWeight = FontWeight.SemiBold,
                                                 maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                            Text(if (most.online) "好友在线" else "一起听的陪伴", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                                            Text(if (most.online) "好友在线" else "一起听的陪伴", fontSize = 12.sp, color = colors.labelSecondaryVariant)
                                         }
                                     }
                                     ArchiveStats("陪伴彼此", durationLabel(most.totalDurationMs), "一起听过", countLabel(most.totalSongCount))
@@ -143,7 +143,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(entry.rank.takeIf { it > 0 }?.toString() ?: "—", Modifier.width(28.dp), fontSize = 22.sp,
-                                        fontWeight = FontWeight.SemiBold, color = if (entry.rank == 1) colors.primary else colors.onSurfaceVariantSummary)
+                                        fontWeight = FontWeight.SemiBold, color = if (entry.rank == 1) colors.primary else colors.labelSecondaryVariant)
                                     ArchiveAvatar(entry.user, entry.online)
                                     Text(entry.user.displayName(), Modifier.weight(1f).padding(start = 12.dp), fontSize = 16.sp,
                                         maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -186,7 +186,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                         verticalAlignment = Alignment.CenterVertically) {
                                         Text("查看和 TA 的缘分报告", Modifier.weight(1f), fontSize = 13.sp,
                                             fontWeight = FontWeight.Medium, color = colors.primary)
-                                        Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = colors.onSurfaceVariantSummary)
+                                        Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = colors.labelSecondaryVariant)
                                     }
                                 }
                                 report.failMessage.takeIf(String::isNotBlank)?.let { ArchiveMuted(it) }
@@ -242,7 +242,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable private fun ArchiveAvatar(user: ListenTogetherParticipant, online: Boolean) {
     Box(Modifier.size(44.dp)) {
         DecoratedAvatar(user.avatarUrl.takeIf(String::isNotBlank), null, size = 44.dp)
-        if (online) Box(Modifier.align(Alignment.BottomEnd).size(10.dp).background(MiuixTheme.colorScheme.primary, CircleShape))
+        if (online) Box(Modifier.align(Alignment.BottomEnd).size(10.dp).background(COUITheme.colorScheme.primary, CircleShape))
     }
 }
 
@@ -267,7 +267,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     ArchiveMuted(label)
                     Text(value, fontSize = valueSize, fontWeight = FontWeight.SemiBold,
-                        color = if (emphasized) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface)
+                        color = if (emphasized) COUITheme.colorScheme.primary else COUITheme.colorScheme.labelPrimary)
                 }
             }
         }
@@ -277,10 +277,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable private fun ArchiveMuted(text: String) {
-    Text(text, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+    Text(text, fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
 }
 
-@Composable private fun ArchiveRule() { Box(Modifier.fillMaxWidth().height(1.dp).background(MiuixTheme.colorScheme.onSurface.copy(alpha = .07f))) }
+@Composable private fun ArchiveRule() { Box(Modifier.fillMaxWidth().height(1.dp).background(COUITheme.colorScheme.labelPrimary.copy(alpha = .07f))) }
 
 @Composable private fun ArchiveMessage(title: String, message: String? = null, detail: String? = null, tag: String, onRetry: (() -> Unit)? = null) {
     SettingsGroup(Modifier.fillMaxWidth().testTag(tag)) {

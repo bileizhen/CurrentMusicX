@@ -19,11 +19,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.DropdownEntry
-import top.yukonga.miuix.kmp.basic.DropdownItem
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.menu.OverlayDropdownMenu
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.DropdownEntry
+import io.github.suqi8.coui.kmp.basic.DropdownItem
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.menu.OverlayDropdownMenu
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun LyricsFontSelector(font: LyricsFont, file: String,
     onFont: (LyricsFont) -> Unit, onFile: suspend (String) -> Unit) {
@@ -66,9 +66,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             })
         }))
     if (file.isNotBlank()) Text("更换导入字体", fontSize = 13.sp,
-        color = MiuixTheme.colorScheme.primary,
+        color = COUITheme.colorScheme.primary,
         modifier = Modifier.testTag("lyrics_font_import").clickable(enabled = !importing, role = Role.Button, onClick = import)
             .padding(vertical = 12.dp))
-    error?.let { Text(it, fontSize = 12.sp, color = MiuixTheme.colorScheme.error,
+    error?.let { Text(it, fontSize = 12.sp, color = COUITheme.colorScheme.error,
         modifier = Modifier.padding(vertical = 6.dp)) }
 }

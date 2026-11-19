@@ -34,8 +34,8 @@ import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun PostEditorScreen(vm: PostsViewModel, state: PostsState) {
     var text by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(state.draft, TextRange(state.draft.length))) }
@@ -44,7 +44,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val songFlow = remember(vm) { vm.container.playerController.state.map { it.song }.distinctUntilChanged() }
     val song by songFlow.collectAsStateWithLifecycle(initialValue = null)
     val current = song?.let { s -> NeteaseSongActionsRepository.songId(s)?.let { PostAttachment("song", it, s.name, s.artists, s.cover) } }
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val appDensity = LocalDensity.current
     fun close() { if (!state.busy) { if (state.picker) vm.picker(false) else vm.editor(false) } }
     Dialog(::close, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false,
@@ -74,19 +74,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                         verticalAlignment = Alignment.CenterVertically) {
                                         Text(if (preview) "正文预览" else "写下此刻", Modifier.weight(1f),
                                             fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                                        Text("${text.text.length} 字", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                                        Text("${text.text.length} 字", fontSize = 12.sp, color = colors.labelSecondaryVariant)
                                     }
                                     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp).heightIn(min = 176.dp)) {
                                         if (preview) {
-                                            if (text.text.isBlank()) Text("还没有内容", color = colors.onSurfaceVariantSummary)
+                                            if (text.text.isBlank()) Text("还没有内容", color = colors.labelSecondaryVariant)
                                             else MarkdownText(text.text, Modifier.testTag("post_preview"), compact = true)
                                         } else BasicTextField(text, { text = it; vm.draft(it.text) },
                                             Modifier.fillMaxWidth().heightIn(min = 176.dp).focusRequester(requester)
                                                 .semantics { contentDescription = "帖子正文" }.testTag("post_draft"), enabled = !state.busy,
-                                            textStyle = TextStyle(fontSize = 16.sp, lineHeight = 25.sp, color = colors.onSurface),
+                                            textStyle = TextStyle(fontSize = 16.sp, lineHeight = 25.sp, color = colors.labelPrimary),
                                             cursorBrush = SolidColor(colors.primary), decorationBox = { input ->
                                                 Box { if (text.text.isEmpty()) Text("最近在听什么？", fontSize = 16.sp,
-                                                    lineHeight = 25.sp, color = colors.onSurfaceVariantSummary); input() }
+                                                    lineHeight = 25.sp, color = colors.labelSecondaryVariant); input() }
                                             })
                                     }
                                     if (!preview) {
@@ -96,7 +96,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                             PostMarkdownTool.entries.forEach { tool ->
                                                 GlassIconButton({ text = applyPostMarkdown(text, tool); vm.draft(text.text); requester.requestFocus() },
                                                     tool.label, Modifier.testTag("post_tool_${tool.name.lowercase()}"), enabled = !state.busy, surface = false) {
-                                                    Text(tool.glyph, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
+                                                    Text(tool.glyph, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = colors.labelPrimary)
                                                 }
                                             }
                                         }
@@ -108,7 +108,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Text("分享音乐", Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                                         Text("${state.attachments.size}/5", Modifier.testTag("post_attachment_count"),
-                                            fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                                            fontSize = 13.sp, color = colors.labelSecondaryVariant)
                                     }
                                     SettingsGroup {
                                         state.attachments.forEach { card ->
@@ -123,7 +123,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                             Modifier.testTag("post_add_attachment"), enabled = !state.busy && state.attachments.size < 5,
                                             onClick = { focus.clearFocus(); vm.picker(true) },
                                             leading = { Icon(MusicIcons.Add, null, Modifier.size(22.dp), tint = colors.primary) },
-                                            trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = colors.onSurfaceVariantSummary) })
+                                            trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = colors.labelSecondaryVariant) })
                                         if (state.attachments.isEmpty() && current != null) {
                                             SettingsDivider(50.dp)
                                             SettingsPreference("附带当前歌曲", current.name, Modifier.testTag("post_attach_current"),
@@ -154,13 +154,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             placeholder = "搜索${postAttachmentLabel(state.attachmentType)}", inputTag = "post_attachment_query",
             submitTag = "post_attachment_search", onCancel = { vm.attachmentQuery("") })
         Text("已添加 ${state.attachments.size}/5 · 点击条目添加或移除", Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
-            fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         LazyColumn(Modifier.weight(1f).testTag("post_attachment_results"), contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (!state.attachmentSearched && current != null) item { Text("正在播放", fontSize = 13.sp) }
             if (!state.attachmentSearched && current != null) item { AttachmentChoice(current, state, vm) }
             if (!state.attachmentSearched) item { Text("输入关键词，搜索想分享的音乐内容。", fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }
+                color = COUITheme.colorScheme.labelSecondaryVariant) }
             items(state.attachmentResults, key = { "${it.type}:${it.id}" }) { AttachmentChoice(it, state, vm) }
             if (state.attachmentLoading) item { LoadingTextList(3, leading = true) }
             if (state.attachmentSearched && !state.attachmentLoading && state.attachmentError == null && state.attachmentResults.isEmpty()) item {
@@ -174,7 +174,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 MusicTextAction("加载更多", { vm.searchAttachments(true) }, Modifier.testTag("post_attachment_more"))
             }
         }
-        state.message?.let { Text(it, Modifier.padding(horizontal = 20.dp), fontSize = 13.sp, color = MiuixTheme.colorScheme.primary) }
+        state.message?.let { Text(it, Modifier.padding(horizontal = 20.dp), fontSize = 13.sp, color = COUITheme.colorScheme.primary) }
     }
 }
 
@@ -185,6 +185,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         onClick = { if (selected) vm.removeAttachment(card) else vm.attach(card) }, enabled = enabled) {
         Icon(if (selected) MusicIcons.Check else MusicIcons.Add,
             if (selected) "已添加" else if (enabled) "添加" else "最多添加 5 项", Modifier.size(22.dp),
-            tint = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface.copy(alpha = if (enabled) .6f else .25f))
+            tint = if (selected) COUITheme.colorScheme.primary else COUITheme.colorScheme.labelPrimary.copy(alpha = if (enabled) .6f else .25f))
     }
 }

@@ -23,8 +23,8 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.library.*
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -81,11 +81,11 @@ private fun albumCaption(album: Album) = listOf(albumDate(album), if (album.size
     }
 }
 @Composable internal fun ArtistEmpty(message: String) {
-    Text(message, Modifier.padding(vertical = 12.dp), fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+    Text(message, Modifier.padding(vertical = 12.dp), fontSize = 14.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
 }
 @Composable internal fun ArtistSectionError(message: String, retry: String, onRetry: () -> Unit, loading: Boolean) {
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(message, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        Text(message, fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         MusicTextAction(retry, onRetry, enabled = !loading)
     }
 }
@@ -94,7 +94,7 @@ private fun albumCaption(album: Album) = listOf(albumDate(album), if (album.size
         MusicTransportButton(title, onPlay, Modifier.size(48.dp), prominent = true, enabled = enabled)
         Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, fontSize = 18.sp, fontWeight = FontWeight.Medium)
-            Text("$count 首", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            Text("$count 首", fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         }
     }
 }
@@ -109,31 +109,31 @@ private fun albumCaption(album: Album) = listOf(albumDate(album), if (album.size
         MusicCover(album.cover, Modifier.size(88.dp), 240, cornerRadius = 12.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(album.name, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(albumCaption(album), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-            if (album.type.isNotBlank()) Text(albumTypeLabel(album.type), fontSize = 11.sp, color = MiuixTheme.colorScheme.primary)
+            Text(albumCaption(album), fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
+            if (album.type.isNotBlank()) Text(albumTypeLabel(album.type), fontSize = 11.sp, color = COUITheme.colorScheme.primary)
         }
     }
 }
 @Composable internal fun ArtistAlbumFilters(filter: String, onFilter: (String) -> Unit, order: String,
     onSort: (String) -> Unit, visible: Int, loaded: Int, total: Int, more: Boolean) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(listOf("all" to "全部", "album" to "专辑", "single" to "单曲", "ep" to "EP", "other" to "其他")) { (key, title) ->
                 Text(title, Modifier.clip(RoundedCornerShape(24.dp))
-                    .background(if (key == filter) colors.primary.copy(alpha = .14f) else colors.surfaceContainer)
+                    .background(if (key == filter) colors.primary.copy(alpha = .14f) else colors.cardBackground)
                     .semantics { selected = key == filter }.clickable(role = Role.Tab) { onFilter(key) }
                     .testTag("artist_album_filter_$key").padding(horizontal = 22.dp, vertical = 14.dp),
-                    color = if (key == filter) colors.primary else colors.onSurfaceVariantSummary, fontSize = 14.sp)
+                    color = if (key == filter) colors.primary else colors.labelSecondaryVariant, fontSize = 14.sp)
             }
         }
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(if (more) "已加载 $loaded / ${maxOf(total, loaded)} 张 · 显示 $visible 张" else "共 $visible 张",
-                Modifier.weight(1f), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                Modifier.weight(1f), fontSize = 12.sp, color = colors.labelSecondaryVariant)
             MusicTextAction(if (order == "time") "按时间排序 ↓" else "按热度排序 ↓",
                 { onSort(if (order == "time") "hot" else "time") }, Modifier.testTag("artist_album_sort"))
         }
-        if (more) Text("类型筛选适用于已加载的专辑", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+        if (more) Text("类型筛选适用于已加载的专辑", fontSize = 12.sp, color = colors.labelSecondaryVariant)
     }
 }
 @Composable internal fun ArtistMvCard(mv: MvDto, modifier: Modifier, navigate: (String) -> Unit) {
@@ -152,7 +152,7 @@ private fun albumCaption(album: Album) = listOf(albumDate(album), if (album.size
 }
 @Composable internal fun ArtistBiographyPreview(state: ArtistUiState, onOpen: () -> Unit) {
     ArtistSectionTitle("艺人百科", "查看详情", onOpen)
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MiuixTheme.colorScheme.surfaceContainer)
+    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(COUITheme.colorScheme.cardBackground)
         .clickable(role = Role.Button, onClick = onOpen).testTag("artist_bio_preview").padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -162,7 +162,7 @@ private fun albumCaption(album: Album) = listOf(albumDate(album), if (album.size
         val brief = state.biography?.briefDesc?.takeIf { it.isNotBlank() } ?: state.displayArtist?.briefDesc.orEmpty()
         when {
             brief.isNotBlank() -> Text(brief, fontSize = 14.sp, lineHeight = 23.sp, maxLines = 4,
-                overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                overflow = TextOverflow.Ellipsis, color = COUITheme.colorScheme.labelSecondaryVariant)
             state.biographyLoading -> LoadingTextList(2)
             state.biographyError != null -> Text("简介暂未加载，点击查看详情并重试", fontSize = 14.sp)
             else -> Text("查看基本信息与艺人资料", fontSize = 14.sp)
@@ -177,7 +177,7 @@ private fun albumCaption(album: Album) = listOf(albumDate(album), if (album.size
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (overview.awardTitle.isNotBlank()) Text(overview.awardTitle, fontSize = 14.sp, fontWeight = FontWeight.Medium)
             if (overview.awardCount > 0) Text("${overview.awardCount} 项成就", fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                color = COUITheme.colorScheme.labelSecondaryVariant)
         }
     }
 }

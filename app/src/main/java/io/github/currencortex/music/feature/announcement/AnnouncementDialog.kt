@@ -39,9 +39,9 @@ import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Text
 import io.github.currencortex.music.ui.component.MusicDialogButton as TextButton
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable
 fun AnnouncementDialog(items: List<Announcement>, suppressByDefault: Boolean = false,
@@ -70,12 +70,12 @@ fun AnnouncementDialog(items: List<Announcement>, suppressByDefault: Boolean = f
                 if (items.size <= 7) items.indices.forEach { index ->
                     Box(Modifier.size(24.dp).semantics { contentDescription = "第${index + 1}条公告" }
                         .clickable { scope.launch { pager.animateScrollToPage(index) } }, contentAlignment = Alignment.Center) {
-                        Box(Modifier.size(6.dp).background(MiuixTheme.colorScheme.primary.copy(
+                        Box(Modifier.size(6.dp).background(COUITheme.colorScheme.primary.copy(
                             alpha = if (pager.currentPage == index) 1f else .2f), RoundedCornerShape(3.dp)))
                     }
                 }
                 Text("${pager.currentPage + 1} / ${items.size}", fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    color = COUITheme.colorScheme.labelSecondaryVariant,
                     modifier = Modifier.padding(start = 8.dp).testTag("announcement_page"))
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -98,8 +98,8 @@ fun AnnouncementDialog(items: List<Announcement>, suppressByDefault: Boolean = f
                 if (heights[index] != it.height) heights[index] = it.height
             },
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                if (item.pinned) Text("置顶", fontSize = 12.sp, color = MiuixTheme.colorScheme.primary,
-                    modifier = Modifier.background(MiuixTheme.colorScheme.primary.copy(alpha = .1f),
+                if (item.pinned) Text("置顶", fontSize = 12.sp, color = COUITheme.colorScheme.primary,
+                    modifier = Modifier.background(COUITheme.colorScheme.primary.copy(alpha = .1f),
                         RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 3.dp))
                 Text(item.title, fontSize = 19.sp, fontWeight = FontWeight.SemiBold)
                 val date = remember(item.createdAt) {
@@ -109,7 +109,7 @@ fun AnnouncementDialog(items: List<Announcement>, suppressByDefault: Boolean = f
                     }.getOrDefault("")
                 }
                 Text(listOf(item.author.ifBlank { "CurrentStation" }, date).filter { it.isNotBlank() }.joinToString(" · "),
-                    fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
                 if (item.body.isNotBlank()) MarkdownText(item.body, compact = true)
             }
         }

@@ -58,8 +58,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.min
 
 private const val WordmarkWidth = 1000f
@@ -85,7 +85,7 @@ internal fun ContributorNameWordmark(names: List<String>, modifier: Modifier = M
     var viewport by remember { mutableStateOf(IntSize.Zero) }
     var zoom by rememberSaveable { mutableFloatStateOf(1f) }
     var offset by rememberSaveable(stateSaver = WordmarkOffsetSaver) { mutableStateOf(Offset.Zero) }
-    val characterColor = MiuixTheme.colorScheme.onSurface.toArgb()
+    val characterColor = COUITheme.colorScheme.labelPrimary.toArgb()
     val characterPaint = remember(characterColor) {
         Paint(Paint.ANTI_ALIAS_FLAG).apply { color = characterColor }
     }
@@ -136,7 +136,7 @@ internal fun ContributorNameWordmark(names: List<String>, modifier: Modifier = M
             text = "双指放大查看贡献者姓名中的字符",
             modifier = Modifier.fillMaxWidth(),
             fontSize = 12.sp,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            color = COUITheme.colorScheme.labelSecondaryVariant,
             textAlign = TextAlign.Center,
         )
     }

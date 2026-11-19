@@ -22,8 +22,8 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.MusicTextAction
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.*
 
 /** Touch and accessibility selection share the same index; dragging stays inside this chart. */
@@ -33,10 +33,10 @@ import kotlin.math.*
     val data = values.map { it.coerceAtLeast(0) }
     val ceiling = niceMaximum(data.maxOrNull() ?: 0)
     val secondCeiling = niceMaximum(secondary.maxOrNull() ?: 0)
-    val primary = MiuixTheme.colorScheme.primary
+    val primary = COUITheme.colorScheme.primary
     val secondaryColor = Color(0xFFFF982E)
-    val grid = MiuixTheme.colorScheme.onSurface.copy(alpha = .10f)
-    val ink = MiuixTheme.colorScheme.onSurfaceVariantSummary
+    val grid = COUITheme.colorScheme.labelPrimary.copy(alpha = .10f)
+    val ink = COUITheme.colorScheme.labelSecondaryVariant
     val format: (Long) -> String = { if (bytes) adminBytes(it) else adminCount(it) }
     var selected by rememberSaveable(labels, label) { mutableIntStateOf(-1) }
     val index = selected.takeIf { it in data.indices }
@@ -118,7 +118,7 @@ private fun compactAxis(value: Long) = when {
 }
 
 @Composable internal fun AdminDistribution(labels: List<String>, values: List<Long>, donut: Boolean = true) {
-    val colors = listOf(MiuixTheme.colorScheme.primary, Color(0xFF0088CC), Color(0xFFFF982E), Color(0xFF8E8E93))
+    val colors = listOf(COUITheme.colorScheme.primary, Color(0xFF0088CC), Color(0xFFFF982E), Color(0xFF8E8E93))
     val total = values.sum()
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(20.dp)) {
         Box(Modifier.size(112.dp), contentAlignment = Alignment.Center) {
@@ -148,8 +148,8 @@ private fun compactAxis(value: Long) = when {
     val max = (rows.maxOfOrNull { it.second } ?: 0).coerceAtLeast(1)
     rows.forEach { (name, value) ->
         AdminMetric(name, if (bytes) adminBytes(value) else adminCount(value))
-        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(MiuixTheme.colorScheme.primary.copy(alpha = .08f))) {
-            Box(Modifier.fillMaxWidth((value.toFloat() / max).coerceIn(0f, 1f)).fillMaxHeight().background(MiuixTheme.colorScheme.primary))
+        Box(Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)).background(COUITheme.colorScheme.primary.copy(alpha = .08f))) {
+            Box(Modifier.fillMaxWidth((value.toFloat() / max).coerceIn(0f, 1f)).fillMaxHeight().background(COUITheme.colorScheme.primary))
         }
     }
 }

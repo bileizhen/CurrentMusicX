@@ -43,8 +43,8 @@ import io.github.currencortex.music.feature.auth.AuthViewModel
 import io.github.currencortex.music.feature.auth.LoginScreen
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.launch
 
 @Composable fun UserAvatar(user: ProfileUser, container: AppContainer, size: androidx.compose.ui.unit.Dp = 64.dp,
@@ -128,7 +128,7 @@ import kotlinx.coroutines.launch
                     Text(native.nickname, fontSize = 23.sp, fontWeight = FontWeight.SemiBold,
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text(if (account.stale) "网易云登录已过期" else "网易云音乐", fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+                        color = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f))
                 }
             }
         } } }
@@ -227,7 +227,7 @@ import kotlinx.coroutines.launch
                                 .clickable(enabled = !busy && state.profile != null, role = Role.Button) { vm.dialog.value = "edit" }
                                 .semantics { contentDescription = "编辑资料" } else Modifier),
                             fontSize = 13.sp, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                            color = COUITheme.colorScheme.labelSecondaryVariant)
                 state.profile?.stat?.let { stats ->
                     ProfileStatsBlock(stats,
                         likesLabel = if (privateOwnProfile) "喜欢" else "点赞",
@@ -293,7 +293,7 @@ import kotlinx.coroutines.launch
     val account by container.accountRepository.state.collectAsStateWithLifecycle()
     val state by auth.state.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     var removing by remember { mutableStateOf<io.github.currencortex.music.data.auth.SavedAccount?>(null) }
     var protection by remember { mutableStateOf<String?>(null) }
     MusicSubpage("账号与安全", "security_page", onBack, actions = {

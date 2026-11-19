@@ -20,8 +20,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.text.DateFormat
 import java.text.NumberFormat
 import java.util.Date
@@ -31,14 +31,14 @@ import java.util.Locale
     SettingsGroup { Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-            subtitle?.let { Text(it, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }
+            subtitle?.let { Text(it, fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant) }
         }
         content()
     } }
 }
 @Composable internal fun AdminMetric(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.Top) {
-        Text(label, Modifier.weight(1f), fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        Text(label, Modifier.weight(1f), fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         Text(value.ifBlank { "—" }, fontSize = 14.sp, fontWeight = FontWeight.Medium, modifier = Modifier.widthIn(max = 180.dp))
     }
 }
@@ -50,20 +50,20 @@ internal data class AdminStat(val label: String, val value: String, val hint: St
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             stats.chunked(columns).forEach { row -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.height(IntrinsicSize.Max)) {
                 row.forEach { stat -> Column(Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(12.dp))
-                    .background(MiuixTheme.colorScheme.surfaceContainer).padding(horizontal = 10.dp, vertical = 9.dp),
+                    .background(COUITheme.colorScheme.cardBackground).padding(horizontal = 10.dp, vertical = 9.dp),
                     verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     if (stacked) {
-                        Text(stat.label, fontSize = 11.sp, lineHeight = 14.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                        Text(stat.label, fontSize = 11.sp, lineHeight = 14.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
                         Text(stat.value, fontSize = 20.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold,
-                            color = MiuixTheme.colorScheme.primary)
+                            color = COUITheme.colorScheme.primary)
                     } else Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(stat.label, Modifier.weight(1f), fontSize = 11.sp, lineHeight = 14.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                            color = COUITheme.colorScheme.labelSecondaryVariant)
                         Text(stat.value, fontSize = 18.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold,
-                            color = MiuixTheme.colorScheme.primary)
+                            color = COUITheme.colorScheme.primary)
                     }
                     if (stat.hint.isNotBlank()) Text(stat.hint, fontSize = 10.sp, lineHeight = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                        color = COUITheme.colorScheme.labelSecondaryVariant)
                 } }
                 repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
             } }
@@ -71,7 +71,7 @@ internal data class AdminStat(val label: String, val value: String, val hint: St
     }
 }
 @Composable internal fun AdminBadge(label: String, warning: Boolean = false) {
-    val color = if (warning) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
+    val color = if (warning) COUITheme.colorScheme.error else COUITheme.colorScheme.primary
     Text(label, Modifier.clip(RoundedCornerShape(6.dp)).background(color.copy(alpha = .1f)).padding(horizontal = 7.dp, vertical = 3.dp),
         color = color, fontSize = 11.sp, lineHeight = 16.sp)
 }
@@ -79,18 +79,18 @@ internal data class AdminStat(val label: String, val value: String, val hint: St
     Row(Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(title, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-            Text(subtitle, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            Text(subtitle, fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         }
         action?.let { MusicTextAction(it, click, enabled = enabled) }
     }
 }
 @Composable internal fun AdminNotice(message: String, error: Boolean = false, retry: (() -> Unit)? = null, onDismiss: (() -> Unit)? = null) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clip(RoundedCornerShape(12.dp))
-        .background((if (error) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary).copy(alpha = .09f))
+        .background((if (error) COUITheme.colorScheme.error else COUITheme.colorScheme.primary).copy(alpha = .09f))
         .padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp)
         .semantics { liveRegion = LiveRegionMode.Polite }, verticalAlignment = Alignment.CenterVertically) {
         Text(message, Modifier.weight(1f).padding(vertical = 8.dp), fontSize = 13.sp,
-            color = if (error) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.onSurface)
+            color = if (error) COUITheme.colorScheme.error else COUITheme.colorScheme.labelPrimary)
         retry?.let { MusicTextAction("重试", it) }
         onDismiss?.let { GlassIconButton(it, "关闭提示") { Icon(MusicIcons.Close, null, Modifier.size(16.dp)) } }
     }
@@ -98,9 +98,9 @@ internal data class AdminStat(val label: String, val value: String, val hint: St
 @Composable internal fun AdminEmpty(title: String, summary: String, action: String? = null, click: () -> Unit = {}) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Icon(MusicIcons.Info, null, Modifier.size(32.dp), tint = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        Icon(MusicIcons.Info, null, Modifier.size(32.dp), tint = COUITheme.colorScheme.labelSecondaryVariant)
         Text(title, fontSize = 17.sp, fontWeight = FontWeight.Medium)
-        Text(summary, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        Text(summary, fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         action?.let { MusicTextAction(it, click) }
     }
 }
@@ -124,7 +124,7 @@ internal data class AdminStat(val label: String, val value: String, val hint: St
 @Composable internal fun AdminActionRow(title: String, summary: String, icon: ImageVector, tag: String, enabled: Boolean = true,
     dangerous: Boolean = false, onClick: () -> Unit) {
     SettingsPreference(title, summary, Modifier.testTag(tag), enabled = enabled, onClick = onClick,
-        leading = { Icon(icon, null, Modifier.size(22.dp), tint = if (dangerous) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary) },
+        leading = { Icon(icon, null, Modifier.size(22.dp), tint = if (dangerous) COUITheme.colorScheme.error else COUITheme.colorScheme.primary) },
         trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp)) })
 }
 internal fun adminCount(value: Long?) = value?.let { NumberFormat.getIntegerInstance().format(it) } ?: "—"

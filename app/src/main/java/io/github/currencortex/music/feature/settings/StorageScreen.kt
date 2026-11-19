@@ -21,8 +21,8 @@ import io.github.currencortex.music.ui.component.MusicTextAction
 import io.github.currencortex.music.ui.component.nativeui.SettingsOption
 import io.github.currencortex.music.ui.component.nativeui.SettingsOptionsRow
 import io.github.currencortex.music.data.settings.AudioCacheLimit
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.util.Locale
 
 private fun formatSize(bytes: Long): String = when {
@@ -38,11 +38,11 @@ private fun formatSize(bytes: Long): String = when {
     val cacheLimit by vm.cacheLimit.collectAsStateWithLifecycle()
     val usage = state.usage
     LaunchedEffect(vm) { vm.refresh() }
-    val colors = MiuixTheme.colorScheme
-    val hint = colors.onSurfaceVariantSummary
+    val colors = COUITheme.colorScheme
+    val hint = colors.labelSecondaryVariant
     // One hue stepped down: the bar reads as a single system instead of borrowing another app's palette.
     val ramp = listOf(colors.primary, colors.primary.copy(alpha = .5f), colors.primary.copy(alpha = .28f),
-        colors.onSurface.copy(alpha = .14f))
+        colors.labelPrimary.copy(alpha = .14f))
     SettingsPage("存储空间","storage_screen") {
         item { Card { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("CurrentMusic 占用", fontSize = 13.sp, color = hint)
@@ -123,7 +123,7 @@ private fun formatSize(bytes: Long): String = when {
 /** A single track that splits proportionally; zero-sized parts simply do not occupy a segment. */
 @Composable private fun StorageBar(segments: List<Long>, colors: List<Color>) {
     Box(Modifier.fillMaxWidth().height(10.dp).clip(RoundedCornerShape(5.dp))
-        .background(MiuixTheme.colorScheme.onSurface.copy(alpha = .08f))) {
+        .background(COUITheme.colorScheme.labelPrimary.copy(alpha = .08f))) {
         Row(Modifier.fillMaxSize()) {
             segments.forEachIndexed { index, value ->
                 if (value > 0L) Box(Modifier.weight(value.toFloat()).fillMaxHeight().background(colors[index]))

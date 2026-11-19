@@ -18,11 +18,11 @@ import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.data.settings.AppearanceSettings
 import io.github.currencortex.music.data.settings.LaunchStyle
 import io.github.currencortex.music.ui.theme.LocalCustomTypeface
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Static launch scenes in the same 96:66 frame as the other appearance choices. */
 @Composable internal fun AppearanceLaunchThumb(style: LaunchStyle, config: AppearanceSettings) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     if (style == LaunchStyle.NONE) {
         AppearanceMiniThumb(colors, true, config.liquidGlass)
         return
@@ -48,12 +48,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 drawCircle(colors.primary.copy(alpha = .15f), 15f, Offset(48f, 20f))
                 drawCircle(colors.primary, 10f, Offset(48f, 20f))
                 // Avatar/wordmark arrangement from the classic launch's opening scene.
-                drawCircle(colors.onPrimary, 2.1f, Offset(46f, 23f))
-                drawLine(colors.onPrimary, Offset(48f, 23f), Offset(48f, 14f), 1.8f)
-                drawLine(colors.onPrimary, Offset(48f, 14f), Offset(52f, 15f), 1.8f)
-                label.color = colors.onSurface.toArgb()
+                drawCircle(colors.labelOnColor, 2.1f, Offset(46f, 23f))
+                drawLine(colors.labelOnColor, Offset(48f, 23f), Offset(48f, 14f), 1.8f)
+                drawLine(colors.labelOnColor, Offset(48f, 14f), Offset(52f, 15f), 1.8f)
+                label.color = colors.labelPrimary.toArgb()
                 drawContext.canvas.nativeCanvas.drawText("Current Music", 48f, 43f, label)
-                drawRoundRect(colors.onSurfaceVariantSummary.copy(alpha = .45f), Offset(34f, 50f), Size(28f, 2.5f), CornerRadius(2f))
+                drawRoundRect(colors.labelSecondaryVariant.copy(alpha = .45f), Offset(34f, 50f), Size(28f, 2.5f), CornerRadius(2f))
             } else {
                 drawRect(Color.Black, size = frame)
                 drawRect(Brush.radialGradient(listOf(Color(0xFF123C53), Color.Black), Offset(44f, 25f), 62f), size = frame)
@@ -70,7 +70,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 label.color = android.graphics.Color.WHITE
                 drawContext.canvas.nativeCanvas.drawText("Current Music", 48f, 55f, label)
             }
-            drawRoundRect(colors.onSurface.copy(alpha = .13f), size = frame, cornerRadius = CornerRadius(16f), style = Stroke(1.2f))
+            drawRoundRect(colors.labelPrimary.copy(alpha = .13f), size = frame, cornerRadius = CornerRadius(16f), style = Stroke(1.2f))
         }
     }
 }

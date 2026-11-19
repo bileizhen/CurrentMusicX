@@ -15,8 +15,8 @@ import io.github.currencortex.music.ui.component.MusicDialog
 import io.github.currencortex.music.ui.component.MusicDialogButton
 import kotlinx.coroutines.delay
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** One transient form for public recovery and authenticated password changes. No secrets in saved state. */
 @Composable internal fun PasswordDialog(recovery: Boolean, busy: Boolean, codeUntil: Long,
@@ -46,7 +46,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         if (usingCode) {
             Text(if (recovery) "验证码 5 分钟内有效。重置后需重新登录，其他设备也会退出。"
                 else "验证码发送到当前账号绑定的邮箱。修改后保留本机登录，其他设备下线。",
-                fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextField(credential, { credential = it }, label = "邮箱验证码", singleLine = true, enabled = !busy,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Next),
@@ -69,7 +69,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
             modifier = Modifier.fillMaxWidth().testTag("password_confirm"))
         if (confirm.isNotEmpty() && confirm != password) Text("两次输入的密码不一致", fontSize = 12.sp,
-            color = MiuixTheme.colorScheme.error, modifier = Modifier.testTag("password_mismatch"))
+            color = COUITheme.colorScheme.error, modifier = Modifier.testTag("password_mismatch"))
         MusicDialogButton(if (busy) "处理中…" else if (recovery) "重置密码" else "更新密码",
             onClick = { onSubmit(email.trim(), credential, password, usingCode) },
             enabled = !busy && (!recovery || email.isNotBlank()) && credential.isNotBlank() &&

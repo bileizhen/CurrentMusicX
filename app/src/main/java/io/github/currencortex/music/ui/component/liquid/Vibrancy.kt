@@ -5,8 +5,8 @@
 
 package io.github.currencortex.music.ui.component.liquid
 
-import top.yukonga.miuix.kmp.blur.BackdropEffectScope
-import top.yukonga.miuix.kmp.blur.colorControls
+import io.github.currencortex.music.blurcompat.BackdropEffectScope
+import io.github.currencortex.music.blurcompat.colorControls
 
 fun BackdropEffectScope.vibrancy() {
     colorControls(

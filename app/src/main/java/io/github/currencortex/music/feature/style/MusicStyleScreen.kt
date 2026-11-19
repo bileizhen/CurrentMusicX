@@ -37,9 +37,9 @@ import io.github.currencortex.music.feature.library.LibrarySongActions
 import io.github.currencortex.music.feature.library.LibraryViewModel
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.util.collectAsPageState
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Quiet actions use text and a press response, without another filled button surface. */
 @Composable private fun StyleAction(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
@@ -47,13 +47,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .96f else 1f, tween(180), label = "style action")
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Column(modifier.graphicsLayer { scaleX = scale; scaleY = scale }
         .semantics { selected = active }.clickable(source, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
         .heightIn(min = 48.dp).padding(horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
         Text(label, fontSize = 13.sp, fontWeight = if (active) FontWeight.SemiBold else FontWeight.Medium,
-            color = (if (active) colors.primary else colors.onSurface).copy(alpha = if (!enabled) .35f else if (active) 1f else .65f))
+            color = (if (active) colors.primary else colors.labelPrimary).copy(alpha = if (!enabled) .35f else if (active) 1f else .65f))
         Spacer(Modifier.height(5.dp))
         Box(Modifier.width(14.dp).height(2.dp).background(if (active) colors.primary else androidx.compose.ui.graphics.Color.Transparent, RoundedCornerShape(1.dp)))
     }
@@ -74,7 +74,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         Column(Modifier.align(Alignment.CenterStart).padding(start = 16.dp, end = 54.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
             Text(style.tagName, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (style.enName.isNotBlank()) Text(style.enName, fontSize = 11.sp,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f), maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
@@ -111,7 +111,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
         }
         state.error?.let {
-            Text(it, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+            Text(it, fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
             StyleAction("重试曲风分类", retry, Modifier.testTag("style_catalog_retry"), enabled = !state.loading)
         }
         if (!state.loading && state.styles.isEmpty() && state.error == null) Text("暂无曲风分类")
@@ -131,9 +131,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         Column(Modifier.align(Alignment.CenterStart).padding(start = 22.dp, end = 142.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(state.title, fontSize = 30.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
             if (english.isNotBlank()) Text(english, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
             if (state.total > 0) Text("${state.total} 首歌曲", fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
         }
     }
 }
@@ -155,7 +155,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var allChildren by rememberSaveable(vm.id) { mutableStateOf(false) }
     var fullDescription by rememberSaveable(vm.id) { mutableStateOf(false) }
     val children = state.style?.childrenTags.orEmpty()
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     LaunchedEffect(state.songs) { library.refreshStatuses(state.songs) }
     PreloadMusicCovers(state.songs.take(12).map(Song::cover))
     MusicPullToRefresh(state.loading, { vm.reload(fresh = true) }, Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()) {
@@ -163,7 +163,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 Row(Modifier.clickable(role = Role.Button, onClick = onBack).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(22.dp), tint = colors.onSurface)
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, modifier = Modifier.size(22.dp), tint = colors.labelPrimary)
                     Text("返回", Modifier.padding(horizontal = 10.dp), fontSize = 14.sp)
                 }
                 Spacer(Modifier.height(8.dp))
@@ -172,7 +172,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             state.description?.desc?.takeIf(String::isNotBlank)?.let { description -> item {
                 Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(description, Modifier.weight(1f), fontSize = 14.sp, lineHeight = 22.sp, maxLines = if (fullDescription) Int.MAX_VALUE else 2,
-                        overflow = TextOverflow.Ellipsis, color = colors.onSurface.copy(alpha = .65f))
+                        overflow = TextOverflow.Ellipsis, color = colors.labelPrimary.copy(alpha = .65f))
                     StyleAction(if (fullDescription) "收起介绍" else "展开介绍", { fullDescription = !fullDescription })
                 }
             } }
@@ -197,7 +197,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     }.testTag("style_play_all"), verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(28.dp), tint = colors.primary.copy(alpha = if (enabled) 1f else .35f))
                         Text("播放全部", Modifier.padding(start = 4.dp), fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                            color = colors.onSurface.copy(alpha = if (enabled) 1f else .4f))
+                            color = colors.labelPrimary.copy(alpha = if (enabled) 1f else .4f))
                     }
                     StyleAction("热门", { vm.sort(0) }, Modifier.testTag("style_sort_hot"), active = state.sort == 0)
                     StyleAction("最新", { vm.sort(1) }, Modifier.testTag("style_sort_new"), active = state.sort == 1)

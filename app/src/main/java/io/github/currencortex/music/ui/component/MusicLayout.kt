@@ -24,8 +24,8 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.disabled
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** End-of-list clearance for controls drawn over scrolling page content. */
 val LocalMusicBottomInset = staticCompositionLocalOf { 0.dp }
@@ -51,7 +51,7 @@ val LocalMusicPageActive = androidx.compose.runtime.compositionLocalOf { true }
     Text(label, modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick).heightIn(min = 48.dp)
         .padding(horizontal = if (LocalMusicDialogContent.current) 0.dp else 8.dp, vertical = 12.dp),
         fontSize = 13.sp, fontWeight = FontWeight.Medium,
-        color = (if (destructive) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary).copy(alpha = if (enabled) 1f else .4f))
+        color = (if (destructive) COUITheme.colorScheme.error else COUITheme.colorScheme.primary).copy(alpha = if (enabled) 1f else .4f))
 }
 
 @Composable fun MusicSectionHeader(title: String, action: String? = null, onClick: () -> Unit = {}) {
@@ -70,7 +70,7 @@ val LocalMusicPageActive = androidx.compose.runtime.compositionLocalOf { true }
     val dialog = LocalMusicDialogContent.current
     val press = rememberMusicDialogPress()
     val clicks = remember { MutableInteractionSource() }
-    val ink = MiuixTheme.colorScheme.onBackground
+    val ink = COUITheme.colorScheme.labelPrimary
     val source=rememberPageNavigationSource(title,summary.orEmpty())
     if(io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current&&!dialog) {
         io.github.currencortex.music.ui.component.nativeui.SettingsPreference(title,summary,
@@ -89,20 +89,20 @@ val LocalMusicPageActive = androidx.compose.runtime.compositionLocalOf { true }
         .padding(horizontal = if (!dialog) 16.dp else if (LocalMusicDialogEdgeToEdge.current) 24.dp else 0.dp,
             vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(title, fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = if (enabled) 1f else .4f))
-            summary?.let { Text(it, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f),
+            Text(title, fontSize = 16.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = if (enabled) 1f else .4f))
+            summary?.let { Text(it, fontSize = 12.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f),
                 maxLines = 2, overflow = TextOverflow.Ellipsis) }
         }
-        if (chevron) Text("›", Modifier.padding(start = 12.dp), fontSize = 22.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .4f))
+        if (chevron) Text("›", Modifier.padding(start = 12.dp), fontSize = 22.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .4f))
     }
 }
 
 @Composable fun MusicTransportButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     enabled: Boolean = true, playing: Boolean = false, direction: Int = 0, prominent: Boolean = false) {
-    val color = if (prominent) MiuixTheme.colorScheme.onPrimary else MiuixTheme.colorScheme.onSurface
+    val color = if (prominent) COUITheme.colorScheme.labelOnColor else COUITheme.colorScheme.labelPrimary
     val ink = color.copy(alpha = if (enabled) 1f else .3f)
     Box(modifier.size(if (prominent) 64.dp else 48.dp)
-        .background(if (prominent) MiuixTheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent, CircleShape)
+        .background(if (prominent) COUITheme.colorScheme.primary else androidx.compose.ui.graphics.Color.Transparent, CircleShape)
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick).semantics { contentDescription = label; if (!enabled) disabled() },
         contentAlignment = Alignment.Center) {
         Canvas(Modifier.size(if (prominent) 28.dp else 22.dp)) {

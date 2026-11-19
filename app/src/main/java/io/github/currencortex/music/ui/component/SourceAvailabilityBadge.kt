@@ -13,17 +13,17 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.*
 import io.github.currencortex.music.core.network.SourceAvailabilityStatus
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun SourceAvailabilityBadge(status: SourceAvailabilityStatus, modifier: Modifier = Modifier,
     description: String = status.label) {
-    val dark = MiuixTheme.colorScheme.onBackground.luminance() > .5f
+    val dark = COUITheme.colorScheme.labelPrimary.luminance() > .5f
     val color = when (status) {
         SourceAvailabilityStatus.AVAILABLE -> if (dark) Color(0xFF73D4A4) else Color(0xFF24865B)
         SourceAvailabilityStatus.LIMITED, SourceAvailabilityStatus.TIMEOUT -> if (dark) Color(0xFFE8BA69) else Color(0xFFAD731B)
         SourceAvailabilityStatus.UNAVAILABLE -> if (dark) Color(0xFFF28F99) else Color(0xFFCD5058)
-        else -> MiuixTheme.colorScheme.onSurfaceVariantSummary
+        else -> COUITheme.colorScheme.labelSecondaryVariant
     }
     Box(modifier.width(with(LocalDensity.current) { 44.sp.toDp() })
         .background(color.copy(alpha = .12f), RoundedCornerShape(8.dp)).padding(horizontal = 4.dp, vertical = 5.dp)

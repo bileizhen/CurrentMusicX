@@ -72,8 +72,8 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.map as flowMap
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.time.LocalDate
 
 private data class QqHomeState(
@@ -470,7 +470,7 @@ fun QqMusicHomeScreen(
 
 @Composable
 private fun EmptyHomeText(message: String) {
-    Text(message, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+    Text(message, fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
 }
 
 private fun qqHomeSongSubtitle(song: Song, listenCount: Long? = null): String = listOfNotNull(

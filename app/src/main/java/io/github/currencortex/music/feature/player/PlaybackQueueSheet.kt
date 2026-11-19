@@ -43,9 +43,8 @@ import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Icon
 
 internal data class NativeQueueActions(val recommended: Boolean, val description: String,
     val onRecommendation: (Boolean) -> Unit, val onDownload: () -> Unit, val onCollect: () -> Unit,

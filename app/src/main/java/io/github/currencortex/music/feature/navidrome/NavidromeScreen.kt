@@ -35,8 +35,8 @@ import io.github.currencortex.music.feature.style.*
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.flow.distinctUntilChanged
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun NavidromeScreen(vm: NavidromeViewModel, library: LibraryViewModel, navigate: (String) -> Unit,
     play: (List<Song>, Int) -> Unit, root: Boolean = false, onBack: (() -> Unit)? = null) {
@@ -134,7 +134,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             MusicSectionHeader("${state.entries.size} 个歌单", "新建歌单", { action("create") })
                         }
                         if (state.error != null || error != null && dialog.isEmpty()) item("error", span = { GridItemSpan(maxLineSpan) }) {
-                            Column { Text(state.error ?: error.orEmpty(), color = MiuixTheme.colorScheme.error, fontSize = 13.sp)
+                            Column { Text(state.error ?: error.orEmpty(), color = COUITheme.colorScheme.error, fontSize = 13.sp)
                                 MusicTextAction(if (state.error != null) "重试" else "关闭", { if (state.error != null) vm.refresh() else vm.clearError() }) }
                         }
                         if (shownSongs.isNotEmpty()) item("play", span = { GridItemSpan(maxLineSpan) }) {
@@ -219,7 +219,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     } else if (dialog.isNotEmpty()) MusicDialog(when (dialog) { "disconnect" -> "断开连接"; "delete" -> "删除歌单"; "remove" -> "移出歌单"; "rename" -> "重命名歌单"; else -> "新建歌单" }, ::closeDialog) {
         if (dialog in setOf("create", "rename")) TextField(name, { name = it }, label = "歌单名称", singleLine = true, enabled = !busy, modifier = Modifier.fillMaxWidth().then(Modifier.testTag("navidrome_playlist_name")))
         else Text(when (dialog) { "disconnect" -> "断开此服务器账号，保留其他音乐服务与播放队列。"; "remove" -> "将「${removal?.song?.name.orEmpty()}」移出「${removal?.playlist?.title.orEmpty()}」？"; else -> "删除「${target.title}」？服务器中的音乐文件会保留。" })
-        error?.let { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 13.sp) }
+        error?.let { Text(it, color = COUITheme.colorScheme.error, fontSize = 13.sp) }
         MusicDialogActions(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             MusicDialogButton("取消", ::closeDialog, enabled = !busy, modifier = Modifier.weight(1f))
             MusicDialogButton(if (busy) "正在处理…" else "确定", {
@@ -235,18 +235,18 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     GlassIconButton(click, description, Modifier.testTag(tag)) { Icon(icon, null, Modifier.size(22.dp)) }
 }
 @Composable internal fun NavHint(text: String, modifier: Modifier = Modifier) {
-    Text(text, modifier, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+    Text(text, modifier, fontSize = 12.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f), maxLines = 2, overflow = TextOverflow.Ellipsis)
 }
 @Composable private fun NavEntryRow(entry: NavidromeEntry, open: () -> Unit) {
     Row(Modifier.elasticRootComponent().fillMaxWidth().clip(RoundedCornerShape(14.dp)).clickable(role = Role.Button, onClick = open).testTag("navidrome_entry_${entry.id}").padding(vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
         if (entry.cover.isNotBlank()) MusicCover(entry.cover, Modifier.size(52.dp), cornerRadius = 12.dp)
-        else Box(Modifier.size(52.dp).background(MiuixTheme.colorScheme.surfaceContainer, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Text(entry.name.take(1), fontSize = 22.sp, color = MiuixTheme.colorScheme.primary) }
+        else Box(Modifier.size(52.dp).background(COUITheme.colorScheme.cardBackground, RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) { Text(entry.name.take(1), fontSize = 22.sp, color = COUITheme.colorScheme.primary) }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(entry.name, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val summary = listOf(entry.subtitle, if (entry.count > 0) "${entry.count} 首" else "", if (entry.owned) "我的歌单" else "").filter(String::isNotBlank).joinToString(" · ")
             if (summary.isNotEmpty()) NavHint(summary)
         }
-        Text("›", fontSize = 22.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .35f))
+        Text("›", fontSize = 22.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .35f))
     }
 }
 @Composable private fun NavAlbumCard(entry: NavidromeEntry, open: () -> Unit) {

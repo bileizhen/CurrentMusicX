@@ -4,8 +4,8 @@
 package io.github.currencortex.music.ui.component.miuix.effect
 
 import androidx.compose.ui.graphics.Color
-import top.yukonga.miuix.kmp.blur.BlendColorEntry
-import top.yukonga.miuix.kmp.blur.BlurBlendMode
+import io.github.currencortex.music.blurcompat.BlendColorEntry
+import io.github.currencortex.music.blurcompat.BlurBlendMode
 
 object ColorBlendToken {
 

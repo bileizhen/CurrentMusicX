@@ -28,8 +28,8 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.MusicDialog
 import kotlinx.coroutines.CancellationException
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 internal fun WorkInfo?.mvActive() = this?.state in listOf(WorkInfo.State.ENQUEUED, WorkInfo.State.RUNNING, WorkInfo.State.BLOCKED)
 internal fun WorkInfo?.mvLabel(): String = when {
@@ -82,14 +82,14 @@ internal fun WorkInfo?.mvLabel(): String = when {
         Column(Modifier.heightIn(max = 370.dp).verticalScroll(rememberScrollState()).testTag("mv_download_dialog"),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(song.name, fontSize = 20.sp)
-            Text(song.artists, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+            Text(song.artists, fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
             MusicDestinationRow("下载清晰度", { choosing = true }, summary = "优先 ${quality}P", enabled = !active,
                 modifier = Modifier.testTag("mv_download_quality"))
             MusicDestinationRow("保存位置", { afterFolder = false; folder.launch(directory) }, enabled = !active,
                 summary = directory?.let { Uri.decode(it.lastPathSegment.orEmpty()).substringAfter(':') }
                     ?: if (Build.VERSION.SDK_INT >= 29) "Download/CurrentMusic" else "请选择文件夹")
             Text("保存 MP4 视频，离开播放页后继续下载。", fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
             if (active) {
                 val received = info?.progress?.getLong("received", 0) ?: 0
                 val total = info?.progress?.getLong("total", -1) ?: -1

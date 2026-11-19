@@ -24,8 +24,8 @@ import coil3.compose.AsyncImage
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** The dialog previews choices; the embedded listening page applies them on tap. */
 @Composable internal fun PersonalRoamingDialog(container: AppContainer, onDismiss: () -> Unit, onBinding: () -> Unit) {
@@ -63,7 +63,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
         }
     }
-    val colors = if (embedded) MiuixTheme.colorScheme else musicDialogColors()
+    val colors = if (embedded) COUITheme.colorScheme else musicDialogColors()
     val bodyHeight = (LocalConfiguration.current.screenHeightDp * .48f).dp
     LaunchedEffect(Unit) { station.loadCatalog() }
     LaunchedEffect(account.revision) { draftKey = null; submitted = null }
@@ -83,7 +83,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         SettingsSwitch("结束时恢复原队列", state.settings.restoreQueue,
             { station.updateSettings(state.settings.copy(restoreQueue = it)) }, Modifier.testTag("roaming_restore_queue"))
         Text(if (state.settings.restoreQueue) "结束后恢复之前的队列与进度，保持暂停。" else "结束后保留当前歌曲与队列。",
-            fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+            fontSize = 12.sp, color = colors.labelSecondaryVariant)
     }
     val footer: @Composable () -> Unit = {
         val primary: @Composable (Modifier) -> Unit = { modifier ->
@@ -99,7 +99,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 }
             }, modifier.testTag(if (loggedIn) "roaming_start" else "roaming_login"),
             enabled = state.ready && !state.loading, cornerRadius = 14.dp,
-            colors = ButtonDefaults.textButtonColors(color = colors.primary, textColor = colors.onPrimary))
+            colors = ButtonDefaults.textButtonColors(color = colors.primary, textColor = colors.labelOnColor))
         }
         if (state.active) MusicDialogActions {
             MusicDialogButton("结束漫游", { station.stop(); onDismiss() },
@@ -127,7 +127,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 }
             }
         Text(if (qqMusic) "音乐风格与生活场景" else "场景模式", Modifier.padding(top = 8.dp, bottom = 4.dp),
-            fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+            fontSize = 13.sp, color = colors.labelSecondaryVariant)
             state.catalog.scenes.chunked(4).forEach { group ->
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     group.forEach { scene ->
@@ -139,16 +139,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             .padding(horizontal = 2.dp, vertical = 12.dp), horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (scene.icon.isNotBlank()) AsyncImage(scene.icon, null, Modifier.size(24.dp),
-                                colorFilter = ColorFilter.tint(if (selected) colors.primary else colors.onSurfaceVariantSummary))
-                            else Icon(MusicIcons.Headphones, null, Modifier.size(24.dp), tint = colors.onSurfaceVariantSummary)
+                                colorFilter = ColorFilter.tint(if (selected) colors.primary else colors.labelSecondaryVariant))
+                            else Icon(MusicIcons.Headphones, null, Modifier.size(24.dp), tint = colors.labelSecondaryVariant)
                             Text(scene.title, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                color = if (selected) colors.primary else colors.onSurface)
+                                color = if (selected) colors.primary else colors.labelPrimary)
                         }
                     }
                     repeat(4 - group.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
-            if (state.catalogLoading) Text("正在刷新场景…", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+            if (state.catalogLoading) Text("正在刷新场景…", fontSize = 12.sp, color = colors.labelSecondaryVariant)
             if (state.catalogError != null) MusicTextAction("重新加载场景", station::loadCatalog, Modifier.testTag("roaming_reload_catalog"))
         }
     }

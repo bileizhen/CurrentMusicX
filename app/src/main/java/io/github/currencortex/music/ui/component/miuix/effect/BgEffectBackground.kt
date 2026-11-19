@@ -20,8 +20,8 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import io.github.currencortex.music.ui.theme.LocalDarkTheme
-import top.yukonga.miuix.kmp.shader.isRuntimeShaderSupported
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.shader.isRuntimeShaderSupported
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.floor
 
 @Composable
@@ -46,7 +46,7 @@ fun BgEffectBackground(
     Box(
         modifier = modifier,
     ) {
-        val surface = surfaceColor ?: MiuixTheme.colorScheme.surface
+    val surface = surfaceColor ?: COUITheme.colorScheme.surface
         val deviceType = if (shouldShowSplitPane()) DeviceType.PAD else DeviceType.PHONE
         val isDarkTheme = darkTheme ?: LocalDarkTheme.current
         val painter = remember { BgEffectPainter() }

@@ -39,7 +39,7 @@ import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import io.github.currencortex.music.ui.component.MusicDialog
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Text
 
 /** Native presentation of the original outside detail. Browsing a scene never applies its DSP. */
 @Composable internal fun SpeakerEffectsDetail(

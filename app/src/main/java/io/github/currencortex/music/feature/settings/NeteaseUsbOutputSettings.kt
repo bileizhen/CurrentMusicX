@@ -23,8 +23,8 @@ import io.github.currencortex.music.data.settings.AudioOutputSettings
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.MusicDialogChoiceRow
 import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun NeteaseUsbOutputSettings(settings: AudioOutputSettings, select: (String) -> Unit) {
     val context = LocalContext.current
@@ -43,7 +43,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     }
     val manager = remember(context) { context.getSystemService(UsbManager::class.java) }
     var message by remember { mutableStateOf<String?>(null) }
-    val hint = MiuixTheme.colorScheme.onSurfaceVariantSummary
+    val hint = COUITheme.colorScheme.labelSecondaryVariant
     Card { Column(Modifier.padding(vertical = 8.dp).testTag("netease_usb_settings")) {
         Text("USB Host 独占输出", Modifier.padding(horizontal = 20.dp, vertical = 10.dp), fontSize = 18.sp)
         Text("内置网易云 9.6.15 arm64 USB 驱动，直接访问授权设备。支持 8–192 kHz、单声道或立体声的 PCM 16/24/32-bit 整数；24-bit packed 扩展至 32-bit。音量跟随系统媒体音量，可用手机音量键调节；应用会对 PCM 做音量衰减，原驱动仍包含淡入处理，此模式不标为 Bit-perfect。",

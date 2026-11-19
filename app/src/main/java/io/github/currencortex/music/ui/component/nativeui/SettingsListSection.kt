@@ -12,8 +12,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Plain list headings, distinct from the icon-led InfoHeader used on the theme page. */
 @Composable internal fun SettingsListHeader(title: String, modifier: Modifier = Modifier,
@@ -28,7 +28,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(title, Modifier.weight(1f).semantics { heading() }, fontSize = 17.sp, lineHeight = 22.sp,
             fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            color = COUITheme.colorScheme.labelSecondaryVariant)
         actions()
     }
 }
