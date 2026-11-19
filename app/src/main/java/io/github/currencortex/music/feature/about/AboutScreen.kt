@@ -1,11 +1,14 @@
 package io.github.currencortex.music.feature.about
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -91,15 +94,32 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
                 PageNavigationPreference(link.fullText, onClick = { actions.onOpenLink(link.url) })
             }
         } }
-        AboutCredits.sections.forEach { section ->
-            item("credits_${section.title}") { SettingsSection(section.title, if (section.title == "CDN 组") MusicIcons.Storage else MusicIcons.Heart) {
-                section.members.forEachIndexed { index, member ->
-                    if (index > 0) SettingsDivider(68.dp)
-                    SettingsPreference(member.name, member.role, onClick = { onOpenMember(member, section.title) },
-                        leading = { QqAvatar(member.qq) },
-                        trailing = { top.yukonga.miuix.kmp.basic.Icon(MusicIcons.Forward, null, Modifier.size(16.dp)) })
+        item("credits") {
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                SettingsInfoHeader("主要贡献者", MusicIcons.Heart, horizontalInset = 0.dp) {
+                    Text(AboutCredits.all.size.toString(),
+                        Modifier.clip(CircleShape).background(colors.surfaceContainer)
+                            .padding(horizontal = 10.dp, vertical = 3.dp),
+                        fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
                 }
-            } }
+                SettingsGroup {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                        ContributorWall(AboutCredits.all,
+                            onSelect = { credit -> onOpenMember(credit.member, credit.group) },
+                            modifier = Modifier.testTag("about_contributor_wall"))
+                        Text("拖动浏览 · 双指缩放 · 点击头像查看详情",
+                            Modifier.padding(horizontal = 4.dp), fontSize = 12.sp, lineHeight = 18.sp,
+                            color = colors.onSurfaceVariantSummary)
+                    }
+                }
+            }
+        }
+        item("credit_wordmark") {
+            SettingsGroup {
+                ContributorNameWordmark(AboutCredits.all.map { it.member.name },
+                    Modifier.padding(18.dp).testTag("about_contributor_wordmark"))
+            }
         }
     }
 }

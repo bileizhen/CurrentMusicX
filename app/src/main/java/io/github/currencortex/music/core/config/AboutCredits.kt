@@ -1,4 +1,4 @@
-// CurrentMusic contributors, displayed with the LeiFetch member cards.
+// CurrentMusic contributors, displayed on the About page's bubble wall and name wordmark.
 package io.github.currencortex.music.core.config
 
 data class AboutMember(
@@ -10,6 +10,9 @@ data class AboutMember(
 )
 
 data class AboutSection(val title: String, val members: List<AboutMember>)
+
+/** A member together with the section they first appear in. */
+data class AboutCredit(val member: AboutMember, val group: String)
 
 object AboutCredits {
     val sections = listOf(
@@ -50,4 +53,17 @@ object AboutCredits {
             AboutMember("1462302892", "Var username:String?=null", "CDN · music.ctcehs.com"),
         )),
     )
+
+    /** One bubble per person; members in several sections keep every role and group. */
+    val all: List<AboutCredit> = sections
+        .flatMap { section -> section.members.map { AboutCredit(it, section.title) } }
+        .groupBy { it.member.qq }
+        .values
+        .map { entries ->
+            val member = entries.first().member
+            AboutCredit(
+                member.copy(role = entries.map { it.member.role }.distinct().joinToString(" · ")),
+                entries.map { it.group }.distinct().joinToString(" · "),
+            )
+        }
 }
