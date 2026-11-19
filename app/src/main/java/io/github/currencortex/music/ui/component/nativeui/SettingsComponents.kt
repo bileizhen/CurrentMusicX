@@ -40,6 +40,7 @@ import io.github.currencortex.music.ui.component.musicScrollPadding
 import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
 import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
@@ -165,8 +166,7 @@ private val LocalSettingsPicker=compositionLocalOf<((Rect,List<GlassMenuItem>)->
 }
 
 @Composable internal fun SettingsDivider(start:androidx.compose.ui.unit.Dp=16.dp) {
-    Box(Modifier.fillMaxWidth().padding(start=start,end=16.dp).height(.5.dp)
-        .background(COUITheme.colorScheme.labelPrimary.copy(alpha=.08f)))
+    HorizontalDivider(modifier = Modifier.padding(start = start, end = 16.dp))
 }
 
 @Composable internal fun SettingsHint(text:String,modifier:Modifier=Modifier,error:Boolean=false) {
@@ -175,10 +175,14 @@ private val LocalSettingsPicker=compositionLocalOf<((Rect,List<GlassMenuItem>)->
 }
 
 @Composable internal fun SettingsSectionHeader(title:String,action:String?=null,onClick:()->Unit={}) {
-    Row(Modifier.fillMaxWidth().padding(start=16.dp,end=8.dp,top=8.dp),verticalAlignment=Alignment.CenterVertically) {
-        Text(title,Modifier.weight(1f),fontSize=17.sp,lineHeight=22.sp,fontWeight=FontWeight.SemiBold)
-        action?.let {GlassActionButton(it,onClick,fillWidth=false,minHeight=36.dp)}
-    }
+    io.github.suqi8.coui.kmp.preference.PreferenceCategory(
+        title = title,
+        endWidget = action?.let { label ->
+            {
+                io.github.suqi8.coui.kmp.preference.PreferenceCategoryDefaults.TextButton(label, onClick)
+            }
+        },
+    )
 }
 
 /** ListItem's 56dp minimum, 16dp horizontal inset and 17/13sp title/summary scale. */
