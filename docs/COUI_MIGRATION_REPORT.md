@@ -44,13 +44,15 @@ Environment: Windows, JDK 21.0.10, AGP 8.13.2, Kotlin 2.4.0, compileSdk 37.
 | --- | --- |
 | `:app:compileDebugKotlin` | PASS |
 | `:app:compileReleaseKotlin` | PASS |
-| `:app:testDebugUnitTest` | PASS |
+| `:app:testDebugUnitTest` | PASS (no local test sources in this checkout) |
 | `:app:lintRelease` | PASS (HTML report generated) |
 | `:app:minifyReleaseWithR8` | PASS |
 | `:app:assembleDebug` | PASS when the local CMake task is excluded, as in the existing verification workflow |
 | `:app:assembleRelease` | BLOCKED by the same CMake environment failure |
 
 The verification debug APK reports `minSdkVersion 33`, `targetSdkVersion 36`, and contains official COUI blur classes with zero `top.yukonga.miuix` classes.
+
+After the settings visual changes, `:app:assembleDebug`, `:app:lintRelease` and `:app:minifyReleaseWithR8` were rerun and passed.
 
 ### Native build blocker
 
