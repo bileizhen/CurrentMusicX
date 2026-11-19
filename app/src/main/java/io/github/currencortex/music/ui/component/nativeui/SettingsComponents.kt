@@ -43,6 +43,7 @@ import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.preference.SwitchPreference
 import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Limits the new preference controls to settings; music/library rows keep their own design. */
@@ -205,9 +206,15 @@ private val LocalSettingsPicker=compositionLocalOf<((Rect,List<GlassMenuItem>)->
 
 @Composable internal fun SettingsToggle(title:String,checked:Boolean,onCheckedChange:(Boolean)->Unit,
     modifier:Modifier=Modifier,summary:String?=null,enabled:Boolean=true,leading:(@Composable ()->Unit)?=null) {
-    SettingsPreference(title,summary,modifier.semantics {toggleableState=ToggleableState(checked)},enabled,
-        onClick={onCheckedChange(!checked)},role=Role.Switch,leading=leading,
-        trailing={GlassSwitch(checked,onCheckedChange,modifier=Modifier.graphicsLayer {alpha=if(enabled)1f else .45f}.clearAndSetSemantics{},enabled=enabled)})
+    SwitchPreference(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        title = title,
+        modifier = modifier,
+        summary = summary,
+        startAction = leading,
+        enabled = enabled,
+    )
 }
 
 /** Adapter for preference pages with a footer such as a slider or diagnostic details. */
