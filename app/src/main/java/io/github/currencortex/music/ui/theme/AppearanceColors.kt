@@ -43,27 +43,24 @@ import kotlin.math.min
     val base = controller.currentColors()
     return remember(base, settings.primaryColor, settings.colorStyle, settings.pureBlack, dynamic, dark) {
         val seed = Hct.fromInt(if (dynamic) base.primary.toArgb() else settings.primaryColor.toInt())
-        val tinted = settings.colorStyle == ThemeColorStyle.TINTED
         val colorful = settings.colorStyle in listOf(ThemeColorStyle.VIVID, ThemeColorStyle.TINTED)
         fun tone(hue: Double, chroma: Double, value: Double) =
             Color(Hct.from(hue, chroma, value.coerceIn(0.0, 100.0)).toInt())
-        fun neutral(value: Double, paper: Boolean = false) = tone(
-            seed.hue,
-            if (tinted) min(seed.chroma / 6, 10.0) else if (paper && !dark) 1.5 else 3.0,
-            value,
-        )
         val accentTone = if (dark) (seed.tone + 3).coerceIn(50.0, 75.0) else seed.tone.coerceIn(35.0, 60.0)
         val primary = if (colorful) tone(seed.hue, seed.chroma, accentTone) else base.primary
         val onPrimary = if (colorful) {
             if (accentTone <= 60) Color.White else tone(seed.hue, seed.chroma, 10.0)
         } else base.onPrimary
-        val shift = if (dark && settings.pureBlack) 6.0 else 0.0
-        val page = neutral(if (dark) 6.0 - shift else 98.0, true)
-        val card = neutral(if (dark) 15.0 - shift else 100.0)
-        val block = neutral(if (dark) 21.0 - shift else 96.0)
-        val inset = neutral(if (dark) 27.0 - shift else 94.0)
+        val page = when {
+            dark && settings.pureBlack -> Color.Black
+            dark -> Color(0xFF0F1011)
+            else -> Color(0xFFF2F5F7)
+        }
+        val card = if (dark) Color(0xFF1B1C1D) else Color.White
+        val block = if (dark) Color(0xFF242526) else Color(0xFFF7F9FA)
+        val inset = if (dark) Color(0xFF2B2C2D) else Color(0xFFE8EDF0)
         val container = tone(seed.hue, min(seed.chroma, 48.0), if (dark) 30.0 else 90.0)
-        val label = if (dark) neutral(97.0) else base.labelPrimary
+        val label = if (dark) Color(0xFFF5F5F5) else Color(0xFF191B1C)
         val tint = container.copy(alpha = if (dark) .25f else .15f)
         base.copy(
             primary = primary,
@@ -93,6 +90,8 @@ import kotlin.math.min
             card = card,
             cardBackground = card,
             cardPressed = block,
+            divider = if (dark) Color(0x1FFFFFFF) else Color(0x14000000),
+            outline = if (dark) Color(0x33FFFFFF) else Color(0x1F000000),
             surfaceContainerHighest = inset,
             labelPrimary = label,
             labelPrimaryVariant = label.copy(alpha = base.labelPrimaryVariant.alpha),
