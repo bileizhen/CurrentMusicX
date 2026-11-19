@@ -95,6 +95,11 @@ jobs:
           fi
       - uses: gradle/actions/setup-gradle@v5
         if: needs.scope.outputs.required == 'true'
+        with:
+          # The action otherwise defaults to read-only on every PR. Allow
+          # same-repository PRs to warm their PR-scoped cache for subsequent
+          # synchronizations. Fork PRs remain read-only (untrusted changes).
+          cache-read-only: ${{ github.event.pull_request.head.repo.full_name != github.repository }}
       - name: Compile PR Kotlin and Java sources
         if: needs.scope.outputs.required == 'true'
         run: ./gradlew :app:compileReleaseJavaWithJavac -PciPrArm64Only=true -Plei.officialRepositoriesFirst=true --build-cache --no-daemon --stacktrace --profile
