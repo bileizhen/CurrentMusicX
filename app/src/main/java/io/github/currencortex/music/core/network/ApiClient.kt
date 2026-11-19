@@ -218,7 +218,8 @@ class ApiClient(
             if (code == 401 && authenticated && !path.startsWith("qqmusic/") && !errorText.contains("绑定")) onUnauthorized(session)
             // Account validation is user-facing upstream text, not a generic HTTP failure.
             // Other routes and server failures retain their existing bounded error mapping.
-            val accountError = if (code in 400..499 && (path.startsWith("qqmusic/") || path in setOf("auth/login", "auth/2fa/login", "auth/security-question/login",
+            val missingPostRoute = code == 404 && request.method == "GET" && path.matches(Regex("posts/[0-9]+"))
+            val errorMessage = if (missingPostRoute || code in 400..499 && (path.startsWith("qqmusic/") || path in setOf("auth/login", "auth/2fa/login", "auth/security-question/login",
                     "auth/login/email", "auth/login/email/code", "auth/2fa/setup", "auth/2fa/enable", "auth/2fa/disable",
                     "auth/security-question", "auth/passkeys/login/options", "auth/passkeys/login/verify",
                     "auth/register", "auth/email/code", "auth/phone/code",
@@ -228,11 +229,12 @@ class ApiClient(
                     ((error["error"] ?: error["message"]) as? JsonPrimitive)
                         ?.takeIf { value -> value.isString }?.content?.trim()?.takeIf { value -> value.isNotEmpty() }?.take(240)
                 }.getOrNull() else null
+            val publicError = if (missingPostRoute) errorMessage?.takeIf { it == "未知接口 GET /$path" } else errorMessage
             throw ApiException(when (code) {
                 401 -> if (errorText.contains("绑定")) ErrorKind.Forbidden else ErrorKind.Unauthorized
                 403 -> ErrorKind.Forbidden; 404 -> ErrorKind.NotFound; 429 -> ErrorKind.RateLimited
                 in 500..599 -> ErrorKind.Server; else -> ErrorKind.Unknown
-            }, code, accountError)
+            }, code, publicError)
         }
         return if (raw.isBlank()) JsonNull else ApiJson.parseToJsonElement(raw)
     }

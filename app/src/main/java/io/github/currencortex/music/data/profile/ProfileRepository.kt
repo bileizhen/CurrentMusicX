@@ -6,8 +6,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 import java.util.Base64
+
+internal const val PROFILE_BANNER_LIMIT = 1024 * 1024
+private val profileBannerPath = Regex("/users/([0-9]+)/banner\\?v=([0-9a-f]{24})")
+
+@Serializable private data class ProfileBanner(val bannerUrl: String)
 
 class ProfileRepository(private val api: ApiClient, private val avatarCache: AvatarCache? = null,
     private val session: () -> RequestSession) {
@@ -39,6 +45,22 @@ class ProfileRepository(private val api: ApiClient, private val avatarCache: Ava
     }
     suspend fun avatar(bytes: ByteArray, expected: RequestSession = session(), previousAvatar: String = ""): ProfileUser =
         avatarMutex.withLock { uploadAvatar(bytes, expected, previousAvatar) }
+
+    suspend fun banner(bytes: ByteArray?, expected: RequestSession): String {
+        val body = bytes?.let {
+            require(it.isNotEmpty() && it.size <= PROFILE_BANNER_LIMIT)
+            buildJsonObject { put("data", Base64.getEncoder().encodeToString(it)) }
+        }
+        return api.decode<ProfileBanner>(api.request(if (body == null) "DELETE" else "PUT", "profile/banner",
+            body = body, authenticated = true, expectedSession = expected, retryConnection = false)).bannerUrl
+    }
+
+    fun bannerImageUrl(server: String, user: ProfileUser): String? {
+        val path = profileBannerPath.matchEntire(user.bannerUrl) ?: return null
+        if (path.groupValues[1].toLongOrNull() != user.id) return null
+        return ServerUrl.endpoint(api.routeServer(server), "users/${user.id}/banner",
+            mapOf("v" to path.groupValues[2])).toString()
+    }
 
     suspend fun avatarIfDefault(bytes: ByteArray, expected: RequestSession, accountId: Long,
         stillAllowed: () -> Boolean): ProfileUser? = avatarMutex.withLock {

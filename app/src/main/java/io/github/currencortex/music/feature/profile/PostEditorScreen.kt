@@ -28,6 +28,10 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.profile.PostAttachment
+import io.github.currencortex.music.data.profile.POST_CONTENT_LIMIT
+import io.github.currencortex.music.data.profile.POST_TITLE_LIMIT
+import io.github.currencortex.music.data.profile.postCharacterCount
+import io.github.currencortex.music.data.profile.validPostTitle
 import io.github.currencortex.music.data.song.NeteaseSongActionsRepository
 import io.github.currencortex.music.feature.update.MarkdownText
 import io.github.currencortex.music.ui.component.*
@@ -38,8 +42,11 @@ import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable internal fun PostEditorScreen(vm: PostsViewModel, state: PostsState) {
-    var text by rememberSaveable(stateSaver = TextFieldValue.Saver) { mutableStateOf(TextFieldValue(state.draft, TextRange(state.draft.length))) }
+    var text by rememberSaveable(stateSaver = TextFieldValue.Saver) {
+        mutableStateOf(TextFieldValue(state.draft.content, TextRange(state.draft.content.length)))
+    }
     var preview by rememberSaveable { mutableStateOf(false) }
+    var discard by remember { mutableStateOf(false) }
     val requester = remember { FocusRequester() }
     val songFlow = remember(vm) { vm.container.playerController.state.map { it.song }.distinctUntilChanged() }
     val song by songFlow.collectAsStateWithLifecycle(initialValue = null)
@@ -57,7 +64,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         primary = true, fillWidth = false)
                     else GlassActionButton(if (state.busy) "发布中" else "发布", { focus.clearFocus(); vm.publish() },
                         Modifier.testTag("post_publish"), primary = true, fillWidth = false,
-                        enabled = !state.busy && state.draft.isNotBlank())
+                        enabled = !state.busy && state.draft.canPublish)
                 }) { topInset ->
                 Column(Modifier.fillMaxSize().padding(top = topInset)) {
                     if (state.picker) {
@@ -68,19 +75,56 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         }, Modifier.padding(horizontal = 16.dp, vertical = 8.dp), tag = "post_editor_mode", enabled = !state.busy)
                         LazyColumn(Modifier.weight(1f).fillMaxWidth().testTag("post_editor_content"),
                             contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            item {
+                            if (!state.draft.isEmpty) item(key = "draft") {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(if (state.draftRestored) "已恢复此设备上的草稿" else "草稿已保存到此设备",
+                                        Modifier.weight(1f), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                                    MusicTextAction("丢弃草稿", { discard = true }, enabled = !state.busy)
+                                }
+                            }
+                            if (!preview || state.draft.title.isNotBlank()) item(key = "title") {
+                                SettingsGroup {
+                                    Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        if (preview) {
+                                            Text(state.draft.title.trim(), fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
+                                        } else {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text("标题（选填）", Modifier.weight(1f), fontSize = 15.sp)
+                                                Text("${state.draft.title.postCharacterCount()}/$POST_TITLE_LIMIT", fontSize = 12.sp,
+                                                    color = colors.onSurfaceVariantSummary)
+                                            }
+                                            BasicTextField(state.draft.title, { value ->
+                                                if (value.validPostTitle() && value.codePointCount(0, value.length) <= POST_TITLE_LIMIT)
+                                                    vm.draftTitle(value)
+                                            }, Modifier.fillMaxWidth().semantics { contentDescription = "帖子标题" }.testTag("post_title"),
+                                                singleLine = true, enabled = !state.busy,
+                                                textStyle = TextStyle(fontSize = 18.sp, color = colors.onSurface),
+                                                cursorBrush = SolidColor(colors.primary), decorationBox = { input ->
+                                                    Box { if (state.draft.title.isEmpty()) Text("添加标题", color = colors.onSurfaceVariantSummary); input() }
+                                                })
+                                        }
+                                    }
+                                }
+                            }
+                            item(key = "content") {
                                 SettingsGroup {
                                     Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                                         verticalAlignment = Alignment.CenterVertically) {
                                         Text(if (preview) "正文预览" else "写下此刻", Modifier.weight(1f),
                                             fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                                        Text("${text.text.length} 字", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                                        Text("${text.text.postCharacterCount()}/$POST_CONTENT_LIMIT", fontSize = 12.sp,
+                                            color = colors.onSurfaceVariantSummary)
                                     }
                                     Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).padding(bottom = 16.dp).heightIn(min = 176.dp)) {
                                         if (preview) {
                                             if (text.text.isBlank()) Text("还没有内容", color = colors.onSurfaceVariantSummary)
-                                            else MarkdownText(text.text, Modifier.testTag("post_preview"), compact = true)
-                                        } else BasicTextField(text, { text = it; vm.draft(it.text) },
+                                            else MarkdownText(text.text, Modifier.testTag("post_preview"), compact = true, allowImages = false)
+                                        } else BasicTextField(text, {
+                                            if (it.text.codePointCount(0, it.text.length) <= POST_CONTENT_LIMIT) {
+                                                text = it
+                                                vm.draft(it.text)
+                                            }
+                                        },
                                             Modifier.fillMaxWidth().heightIn(min = 176.dp).focusRequester(requester)
                                                 .semantics { contentDescription = "帖子正文" }.testTag("post_draft"), enabled = !state.busy,
                                             textStyle = TextStyle(fontSize = 16.sp, lineHeight = 25.sp, color = colors.onSurface),
@@ -94,7 +138,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                         Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(8.dp),
                                             horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                                             PostMarkdownTool.entries.forEach { tool ->
-                                                GlassIconButton({ text = applyPostMarkdown(text, tool); vm.draft(text.text); requester.requestFocus() },
+                                                GlassIconButton({
+                                                    val edited = applyPostMarkdown(text, tool)
+                                                    if (edited.text.codePointCount(0, edited.text.length) <= POST_CONTENT_LIMIT) {
+                                                        text = edited
+                                                        vm.draft(edited.text)
+                                                        requester.requestFocus()
+                                                    }
+                                                },
                                                     tool.label, Modifier.testTag("post_tool_${tool.name.lowercase()}"), enabled = !state.busy, surface = false) {
                                                     Text(tool.glyph, fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
                                                 }
@@ -103,15 +154,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                     }
                                 }
                             }
-                            item {
+                            item(key = "attachments") {
                                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                                         Text("分享音乐", Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-                                        Text("${state.attachments.size}/5", Modifier.testTag("post_attachment_count"),
+                                        Text("${state.draft.attachments.size}/5", Modifier.testTag("post_attachment_count"),
                                             fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
                                     }
                                     SettingsGroup {
-                                        state.attachments.forEach { card ->
+                                        state.draft.attachments.forEach { card ->
                                             PostAttachmentTile(card, Modifier.padding(horizontal = 12.dp).padding(top = 12.dp)) {
                                                 GlassIconButton({ vm.removeAttachment(card) }, "移除${card.name}",
                                                     Modifier.testTag("post_remove_${card.type}_${card.id}"), enabled = !state.busy, surface = false) {
@@ -119,19 +170,18 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                                 }
                                             }
                                         }
-                                        SettingsPreference("添加音乐", if (state.attachments.isEmpty()) "单曲、专辑、歌手或歌单" else "还可添加 ${5 - state.attachments.size} 项",
-                                            Modifier.testTag("post_add_attachment"), enabled = !state.busy && state.attachments.size < 5,
+                                        SettingsPreference("添加音乐", if (state.draft.attachments.isEmpty()) "单曲、专辑、歌手或歌单" else "还可添加 ${5 - state.draft.attachments.size} 项",
+                                            Modifier.testTag("post_add_attachment"), enabled = !state.busy && state.draft.attachments.size < 5,
                                             onClick = { focus.clearFocus(); vm.picker(true) },
                                             leading = { Icon(MusicIcons.Add, null, Modifier.size(22.dp), tint = colors.primary) },
                                             trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = colors.onSurfaceVariantSummary) })
-                                        if (state.attachments.isEmpty() && current != null) {
+                                        if (state.draft.attachments.isEmpty() && current != null) {
                                             SettingsDivider(50.dp)
                                             SettingsPreference("附带当前歌曲", current.name, Modifier.testTag("post_attach_current"),
                                                 enabled = !state.busy, onClick = { vm.attach(current) },
                                                 leading = { MusicCover(current.pic, Modifier.size(32.dp).clip(RoundedCornerShape(8.dp))) })
                                         }
                                     }
-                                    SettingsHint("关闭后保留草稿")
                                 }
                             }
                         }
@@ -140,6 +190,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 }
             }
         }
+    }
+    if (discard) MusicDialog("丢弃草稿？", { discard = false }) {
+        Text("将清除这篇草稿的标题、正文和音乐附件。")
+        MusicDialogButton("丢弃", { discard = false; vm.discardDraft() })
     }
 }
 
@@ -153,7 +207,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             Modifier.fillMaxWidth().padding(16.dp), onInput = vm::attachmentQuery,
             placeholder = "搜索${postAttachmentLabel(state.attachmentType)}", inputTag = "post_attachment_query",
             submitTag = "post_attachment_search", onCancel = { vm.attachmentQuery("") })
-        Text("已添加 ${state.attachments.size}/5 · 点击条目添加或移除", Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
+        Text("已添加 ${state.draft.attachments.size}/5 · 点击条目添加或移除", Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
             fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
         LazyColumn(Modifier.weight(1f).testTag("post_attachment_results"), contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -179,8 +233,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable private fun AttachmentChoice(card: PostAttachment, state: PostsState, vm: PostsViewModel) {
-    val selected = state.attachments.any { it.type == card.type && it.id == card.id }
-    val enabled = selected || state.attachments.size < 5
+    val selected = state.draft.attachments.any { it.type == card.type && it.id == card.id }
+    val enabled = selected || state.draft.attachments.size < 5
     PostAttachmentTile(card, Modifier.testTag("post_pick_${card.type}_${card.id}").semantics { this.selected = selected },
         onClick = { if (selected) vm.removeAttachment(card) else vm.attach(card) }, enabled = enabled) {
         Icon(if (selected) MusicIcons.Check else MusicIcons.Add,
