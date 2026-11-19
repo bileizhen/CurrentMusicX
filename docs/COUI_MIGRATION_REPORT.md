@@ -67,7 +67,8 @@ Therefore the final signed APK/AAB still has to be produced on a working CMake h
 A verification build (`-PisolatedDebug=true`, package `com.bileizhen.currentmusic.verification`) was installed on the connected device (CMake tasks excluded for the reason above). Verified visually:
 
 - Light home page with search capsule, recommendation cards and floating dock.
-- Settings home with COUI typography, grouped cards, summaries and chevrons.
+- Settings home rebuilt with `PreferenceCategory`, `Card`, `CardListGroup` and `ArrowPreference`, including COUI row dividers and chevrons.
+- Desktop-lyrics subpage inheriting the shared COUI `Card` group container.
 - Appearance page, light and dark themes.
 - Custom color sheet (`OverlayBottomSheet`) with preview, HEX field and color grid.
 - Pure dark palette switches correctly and keeps contrast.
@@ -78,7 +79,8 @@ Not verified: player/lyrics animation, audio output, Bluetooth/notification cont
 
 ## 7. Known risks / follow-up
 
-- Full visual pass across every screen is still required. The first visual-redesign attempt exposed a native RenderThread stack overflow and was reverted before submission.
+- The settings home and shared settings cards are now structurally COUI. Main pages, search, player controls and remaining dialogs still need their visual pass.
+- A broader visual attempt that placed a COUI `TopAppBar` inside the existing floating-header backdrop host produced a native RenderThread stack overflow. That host keeps its custom glass toolbar until a safe COUI integration is designed.
 - Official COUI blur is now exercised on the connected Android 17 device. Additional API 33+ devices remain unverified.
 - No performance comparison was possible without a full native build and release APK.
 - `docs/` is ignored by the repository; this report must be force-added.
