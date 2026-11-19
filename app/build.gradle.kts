@@ -60,8 +60,8 @@ android {
             }
         }
         targetSdk = 36
-        versionCode = 38
-        versionName = "1.3.5"
+        versionCode = 39
+        versionName = "1.3.6"
         versionCode = requireNotNull(versionCode) * 100_000 + ciBuildNumber
         if (ciBuildNumber > 0) versionName = "$versionName-ci.$ciBuildNumber"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
