@@ -9,26 +9,22 @@
 | Theme entry | `LeiTheme` -> `MiuixTheme(colors, textStyles)` | `LeiTheme` -> `COUITheme(colors, textStyles)` |
 | Color roles | Miuix role names (`onSurface`, `onSurfaceVariantSummary`, `surfaceContainer`, ...) | COUI 17 roles (`labelPrimary`, `labelSecondaryVariant`, `cardBackground`, ...) |
 | Text roles | `main`, `body1/2`, `footnote1/2`, `title1..4` | `bodyXL/L/M/S/XS`, `headlineS/XS`, `displayS/XS`, ... |
-| Material | MIUIX blur + CurrentMusic liquid glass | COUI 2.0 blur sources in a minSdk-26 compat module + CurrentMusic liquid glass |
+| Material | MIUIX blur + CurrentMusic liquid glass | Official COUI 2.0 blur + CurrentMusic liquid glass |
 | Navigation | Navigation 3 runtime + MIUIX navigation3 adapter | Navigation 3 runtime/UI, CurrentMusic transitions preserved |
-| minSdk | 26 | 26 |
+| minSdk | 26 | 33 |
 
 ## 2. Main changes
 
-- `app/build.gradle.kts`: replaced MIUIX artifacts with `coui-ui-android`, `coui-preference-android`, `coui-squircle-android`, and added `navigation3-ui` (previously supplied transitively by the MIUIX navigation adapter).
+- `app/build.gradle.kts`: replaced MIUIX artifacts with `coui-ui-android`, `coui-blur-android`, `coui-preference-android`, `coui-squircle-android`, and added `navigation3-ui` (previously supplied transitively by the MIUIX navigation adapter). `minSdk` is now 33.
 - About 190 Kotlin files had MIUIX imports; 211 Kotlin files were rewritten in total (imports, `Miuix*` symbols, color slots, text styles).
 - `ui/theme/Theme.kt`: theme now uses `COUITheme`; removed the global transparent `LocalIndication` override so COUI's press/hover/focus feedback is active.
 - `ui/theme/AppearanceColors.kt`: rebuilt on `io.github.suqi8.coui.kmp.theme.Colors`. Monet/system seed, custom accent, pure black, card/background levels and label opacity are preserved through COUI roles.
 - `app/src/main/AndroidManifest.xml`: removed `tools:overrideLibrary="top.yukonga.miuix.kmp.blur"`. No SDK override is used.
-- `THIRD_PARTY_NOTICES.md` and `app/src/main/assets/legal/NOTICES.md`: MIUIX attribution replaced with COUI 2.0 attribution and vendored blur notice.
+- `THIRD_PARTY_NOTICES.md` and `app/src/main/assets/legal/NOTICES.md`: MIUIX attribution replaced with COUI 2.0 attribution.
 
-## 3. Blur compatibility
+## 3. Blur and compatibility
 
-`coui-blur-android:2.0.0` declares `minSdk 33`. Adding it to a `minSdk 26` app would require a manifest override, which this migration forbids.
-
-`coui-blur-compat/` is therefore a small Android library module that vendors the Apache-2.0 COUI 2.0 `coui-blur` sources with `minSdk 26`. Package names were adapted; the four `expect` declarations were merged with their Android implementations. Runtime-shader paths remain gated by `isRuntimeShaderSupported()` and only run on Android 13+; older devices keep the opaque fallback. Original copyright headers are retained and the module has its own `NOTICE`.
-
-`coui-shader-android:2.0.0` is the only COUI module used by this compat layer.
+`coui-blur-android:2.0.0` is now used directly and the application minimum SDK is 33. The former `coui-blur-compat` module and its manifest/dependency wiring were removed. The old `tools:overrideLibrary` entry is also absent.
 
 ## 4. Preserved custom components
 
@@ -51,10 +47,10 @@ Environment: Windows, JDK 21.0.10, AGP 8.13.2, Kotlin 2.4.0, compileSdk 37.
 | `:app:testDebugUnitTest` | PASS |
 | `:app:lintRelease` | PASS (HTML report generated) |
 | `:app:minifyReleaseWithR8` | PASS |
-| `:app:assembleDebug` | PARTIAL: packaging PASS when CMake tasks are excluded; full task blocked by the local CMake crash below |
+| `:app:assembleDebug` | PASS when the local CMake task is excluded, as in the existing verification workflow |
 | `:app:assembleRelease` | BLOCKED by the same CMake environment failure |
 
-The partial debug APK (`app/build/outputs/apk/debug/app-debug.apk`) reports `minSdkVersion 26`, `targetSdkVersion 36`, and contains COUI/blurcompat classes but **zero** `top.yukonga.miuix` classes.
+The verification debug APK reports `minSdkVersion 33`, `targetSdkVersion 36`, and contains official COUI blur classes with zero `top.yukonga.miuix` classes.
 
 ### Native build blocker
 
@@ -82,8 +78,8 @@ Not verified: player/lyrics animation, audio output, Bluetooth/notification cont
 
 ## 7. Known risks / follow-up
 
-- Full visual pass across every screen is still required; the migration is API/token level, not a per-screen redesign.
-- The vendored blur module is not linted by `:app:lintRelease`; its shader code is runtime-gated but should be exercised on Android 13+ and on an API 26 device.
+- Full visual pass across every screen is still required. The first visual-redesign attempt exposed a native RenderThread stack overflow and was reverted before submission.
+- Official COUI blur is now exercised on the connected Android 17 device. Additional API 33+ devices remain unverified.
 - No performance comparison was possible without a full native build and release APK.
 - `docs/` is ignored by the repository; this report must be force-added.
 
