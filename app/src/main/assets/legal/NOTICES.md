@@ -127,6 +127,19 @@ This license is copied below, and is also available with a FAQ at:
 https://openfontlicense.org
 
 
+## OPPO Sans font
+
+Unmodified OPPO Sans 4.0 (`OPPO_Sans_4.0.ttf`, SHA-256
+`6C7D5864C661516E1F400D9F21E4297F2E2A0719909691E29607CC4EF484A9F4`)
+is bundled as the app font option "OPPO Sans" and is not distributed separately.
+
+Copyright 2024 Guangdong OPPO Mobile Telecommunications Corp., Ltd.
+
+OPPO Sans Fonts Software is licensed under the OPPO Sans Fonts License Agreement.
+The complete agreement is bundled offline at `legal/OPPO-Sans-License.txt` and is
+available from OPPO at https://openfs.oppomobile.com/open/oop/202410/18/62d51f494591f1a9040d83b597745911.zip .
+
+
 -----------------------------------------------------------
 SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
 -----------------------------------------------------------
