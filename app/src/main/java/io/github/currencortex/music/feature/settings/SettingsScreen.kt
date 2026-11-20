@@ -2,12 +2,15 @@ package io.github.currencortex.music.feature.settings
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -523,7 +526,6 @@ private fun SettingsSearchResults(
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
                     insideMargin = PaddingValues(24.dp),
-                    shadow = CardDefaults.shadow(),
                 ) {
                     Text(
                         text = "未找到“$normalized”相关的设置",
@@ -561,10 +563,10 @@ private fun SettingsCategoryCard(
 ) {
     Column {
         if (title != null) PreferenceCategory(title = title)
-        Card(
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
-            insideMargin = PaddingValues(0.dp),
-            shadow = CardDefaults.shadow(),
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                .clip(RoundedCornerShape(24.dp))
+                .background(COUITheme.colorScheme.cardBackground),
         ) {
             CardListGroup(content = content)
         }
@@ -576,7 +578,10 @@ private fun SettingsCard(
     modifier: Modifier = Modifier,
     content: CardListGroupScope.() -> Unit,
 ) {
-    Card(modifier = modifier, insideMargin = PaddingValues(0.dp), shadow = CardDefaults.shadow()) {
+    Column(
+        modifier = modifier.clip(RoundedCornerShape(24.dp))
+            .background(COUITheme.colorScheme.cardBackground),
+    ) {
         CardListGroup(content = content)
     }
 }
