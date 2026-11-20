@@ -5,6 +5,7 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -101,24 +102,73 @@ internal val UpdateSource.menuLabel:String get()=when(this) {
 }
 
 @Composable internal fun UpdateSourceBadge(source: UpdateSource, health: UpdateSourceHealth) {
-    val label = when (health.status) {
-        UpdateSourceStatus.CHECKING -> "检测中"
-        UpdateSourceStatus.AVAILABLE -> "可用"
-        UpdateSourceStatus.LIMITED -> "限流"
-        UpdateSourceStatus.TIMEOUT -> "超时"
-        UpdateSourceStatus.UNAVAILABLE -> "不可用"
-        UpdateSourceStatus.UNKNOWN -> "未检测"
-    }
+    val label = health.status.fullLabel
     val dark = COUITheme.colorScheme.labelPrimary.luminance() > .5f
-    val color = when (health.status) {
-        UpdateSourceStatus.AVAILABLE -> if (dark) Color(0xFF73D4A4) else Color(0xFF24865B)
-        UpdateSourceStatus.LIMITED, UpdateSourceStatus.TIMEOUT -> if (dark) Color(0xFFE8BA69) else Color(0xFFAD731B)
-        UpdateSourceStatus.UNAVAILABLE -> if (dark) Color(0xFFF28F99) else Color(0xFFCD5058)
-        else -> COUITheme.colorScheme.labelSecondaryVariant
-    }
+    val color = sourceStatusColor(health.status, dark)
     Box(Modifier.width(with(LocalDensity.current){44.sp.toDp()}).background(color.copy(alpha = .12f), RoundedCornerShape(8.dp))
         .padding(horizontal = 4.dp, vertical = 5.dp).testTag("update_source_badge_${source.name}")
         .semantics { contentDescription = "${source.menuLabel}：$label" },contentAlignment = Alignment.Center) {
         Text(label, color = color, fontSize = 11.sp, lineHeight = 14.sp,maxLines=1,textAlign = TextAlign.Center)
     }
+}
+
+@Composable internal fun UpdateSourceStatusDot(
+    source: UpdateSource,
+    health: () -> UpdateSourceHealth,
+    modifier: Modifier,
+    onVisibleChange: (Boolean) -> Unit = {},
+) {
+    DisposableEffect(Unit) {
+        onVisibleChange(true)
+        onDispose { onVisibleChange(false) }
+    }
+    val current = health()
+    val dark = COUITheme.colorScheme.labelPrimary.luminance() > .5f
+    val color = sourceStatusColor(current.status, dark)
+    Box(modifier, contentAlignment = Alignment.Center) {
+        Box(Modifier.size(8.dp).background(color, CircleShape)
+            .testTag("update_source_dot_${source.name}")
+            .semantics { contentDescription = "${source.menuLabel}：${current.status.fullLabel}" })
+    }
+}
+
+@Composable internal fun UpdateSourceStatusLabel(
+    source: UpdateSource,
+    health: () -> UpdateSourceHealth,
+) {
+    val current = health()
+    val dark = COUITheme.colorScheme.labelPrimary.luminance() > .5f
+    Text(
+        text = current.status.shortLabel,
+        modifier = Modifier.testTag("update_source_status_${source.name}")
+            .semantics { contentDescription = "${source.menuLabel}：${current.status.fullLabel}" },
+        color = sourceStatusColor(current.status, dark),
+        fontSize = 12.sp,
+        maxLines = 1,
+    )
+}
+
+private val UpdateSourceStatus.fullLabel: String get() = when (this) {
+    UpdateSourceStatus.CHECKING -> "检测中"
+    UpdateSourceStatus.AVAILABLE -> "可用"
+    UpdateSourceStatus.LIMITED -> "限流"
+    UpdateSourceStatus.TIMEOUT -> "超时"
+    UpdateSourceStatus.UNAVAILABLE -> "不可用"
+    UpdateSourceStatus.UNKNOWN -> "未检测"
+}
+
+private val UpdateSourceStatus.shortLabel: String get() = when (this) {
+    UpdateSourceStatus.CHECKING -> "检测"
+    UpdateSourceStatus.AVAILABLE -> "可用"
+    UpdateSourceStatus.LIMITED -> "限流"
+    UpdateSourceStatus.TIMEOUT -> "超时"
+    UpdateSourceStatus.UNAVAILABLE -> "失败"
+    UpdateSourceStatus.UNKNOWN -> "未测"
+}
+
+@Composable private fun sourceStatusColor(status: UpdateSourceStatus, dark: Boolean): Color = when (status) {
+    UpdateSourceStatus.AVAILABLE -> if (dark) Color(0xFF73D4A4) else Color(0xFF24865B)
+    UpdateSourceStatus.LIMITED, UpdateSourceStatus.TIMEOUT -> if (dark) Color(0xFFE8BA69) else Color(0xFFAD731B)
+    UpdateSourceStatus.UNAVAILABLE -> if (dark) Color(0xFFF28F99) else Color(0xFFCD5058)
+    else -> COUITheme.colorScheme.labelSecondaryVariant
 }
