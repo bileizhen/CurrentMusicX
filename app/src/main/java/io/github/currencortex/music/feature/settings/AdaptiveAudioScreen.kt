@@ -62,13 +62,13 @@ import kotlin.math.roundToInt
         val index = selectedBand
         return { it.copy(gains = it.gains.toMutableList().apply { set(index, value) }) }
     }
-    SettingsUiScope {
-        SettingsScrollLayout(Modifier.fillMaxSize().testTag("adaptive_audio_screen"), topBar = {
-            SettingsTopBar("流声音频系统", onBack = { vm.clearAdaptivePreview(); onBack() })
-        }) { topInset ->
-            LazyColumn(Modifier.fillMaxSize().testTag("adaptive_audio_list"), contentPadding = musicScrollPadding(PaddingValues(
-                start = 16.dp, end = 16.dp, top = topInset, bottom = 24.dp)),
-                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    SettingsNativePage(
+        title = "流声音频系统",
+        tag = "adaptive_audio_screen",
+        onBack = { vm.clearAdaptivePreview(); onBack() },
+        padding = PaddingValues(16.dp, 8.dp, 16.dp, 24.dp),
+        verticalSpacing = 12.dp,
+    ) {
                 item("master") {
                     SettingsGroup {
                         SettingsToggle("启用流声音频系统", settings.enabled, { value -> vm.editAdaptive { it.copy(enabled = value) } },
@@ -187,8 +187,6 @@ import kotlin.math.roundToInt
                         }
                     }
                 }
-            }
-        }
     }
 }
 

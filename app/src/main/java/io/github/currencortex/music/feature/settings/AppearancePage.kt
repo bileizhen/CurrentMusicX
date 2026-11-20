@@ -154,7 +154,7 @@ import kotlin.math.roundToInt
 @Composable private fun AppearanceSection(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
     content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsInfoHeader(title, icon)
+        SettingsListHeader(title)
         SettingsGroup(Modifier.padding(horizontal = 16.dp), content)
     }
 }
@@ -165,7 +165,7 @@ import kotlin.math.roundToInt
     var showReset by remember { mutableStateOf(false) }
     val colors = COUITheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsInfoHeader("主题色彩", MusicIcons.Palette, actions = {
+        SettingsListHeader("主题色彩", actions = {
             SettingsFadingReset(config.monet || config.primaryColors != DefaultThemeColors || config.primaryColor != DefaultThemeColors.first() || config.colorStyle != ThemeColorStyle.VIVID,
                 { showReset = true }, "重置主题色", Modifier.testTag("appearance_color_reset"))
         })
@@ -205,7 +205,7 @@ import kotlin.math.roundToInt
     val value = if (config.customTextScale) draft else systemScale
     val colors = COUITheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsInfoHeader("文字缩放", MusicIcons.TextSize, actions = {
+        SettingsListHeader("文字缩放", actions = {
             SettingsFadingReset(config.customTextScale && config.textScale != 1f, { vm.edit { it.copy(textScale = 1f) } }, "重置文字缩放",
                 Modifier.testTag("appearance_text_scale_reset"))
         })

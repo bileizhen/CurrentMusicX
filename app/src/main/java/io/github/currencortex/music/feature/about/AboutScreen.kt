@@ -96,7 +96,8 @@ fun AboutScreenMiuix(state: AboutUiState, actions: AboutScreenActions, enableBlu
         } }
         item("credits") {
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingsInfoHeader("主要贡献者", MusicIcons.Heart, horizontalInset = 0.dp) {
+                SettingsListHeader("主要贡献者",
+                    marginStartType = io.github.suqi8.coui.kmp.preference.PreferenceCategoryMarginStartType.Small) {
                     Text(AboutCredits.all.size.toString(),
                         Modifier.clip(CircleShape).background(colors.cardBackground)
                             .padding(horizontal = 10.dp, vertical = 3.dp),

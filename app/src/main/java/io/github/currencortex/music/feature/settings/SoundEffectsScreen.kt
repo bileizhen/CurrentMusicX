@@ -143,16 +143,17 @@ import kotlinx.serialization.json.*
         runtime.active -> "正在使用本机均衡器"
         else -> "等待连接播放器"
     }
-    SettingsUiScope {
     Box(Modifier.fillMaxSize().background(background), contentAlignment = Alignment.TopCenter) {
-    io.github.currencortex.music.ui.component.nativeui.SettingsScrollLayout(
-        Modifier.widthIn(max = 680.dp).fillMaxSize().testTag("native_sound_effects_page"),background=background,topBar={
-        SettingsTopBar(if (expandedCatalog) "官方精选音效" else "音效",
-            onBack = { if (expandedCatalog) catalogOpen = false else onBack() }, backTag = "sound_effects_back")
-        }) {topInset->
-        LazyColumn(Modifier.fillMaxSize().testTag("sound_effects_screen"), state = if (expandedCatalog) catalogListState else listState,
-            contentPadding = musicScrollPadding(PaddingValues(top=topInset,bottom = 20.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())),
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SettingsNativePage(
+            title = if (expandedCatalog) "官方精选音效" else "音效",
+            tag = "sound_effects_screen",
+            onBack = { if (expandedCatalog) catalogOpen = false else onBack() },
+            backTag = "sound_effects_back",
+            padding = PaddingValues(top = 8.dp, bottom = 20.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
+            verticalSpacing = 8.dp,
+            modifier = Modifier.widthIn(max = 680.dp).fillMaxSize(),
+            state = if (expandedCatalog) catalogListState else listState,
+        ) {
             if (!expandedCatalog) {
             item {
                 Card(Modifier.padding(horizontal = 16.dp)) {
@@ -180,7 +181,7 @@ import kotlinx.serialization.json.*
             }
             if (installed) {
             if (!expandedCatalog) {
-            item { SettingsInfoHeader("大师音效", MusicIcons.Headphones) }
+            item { SettingsListHeader("大师音效") }
             item(key = "masters") {
                 val visible by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == "masters" } } }
                 NativeMasterPager(dark, moodChosen, originalMood.loading,
@@ -385,7 +386,6 @@ import kotlinx.serialization.json.*
 
         }
     }
-    }
     if (installed) tileDetails?.let { tile -> MusicDialog(tile.name, onDismiss = { tileDetails = null }) {
         Text(tile.description, fontSize = 14.sp)
         MusicTextAction("使用", { vm.useTile(tile); tileDetails = null })
@@ -413,7 +413,6 @@ import kotlinx.serialization.json.*
             }, Modifier.testTag("sound_open_netease"))
             MusicTextAction("返回音效页", { selectedEffect = null }, Modifier.testTag("sound_official_close"))
         }
-    }
     }
 }
 

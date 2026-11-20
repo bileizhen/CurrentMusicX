@@ -122,7 +122,8 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
         } }
         if (settings.mode == AudioOutputMode.NETEASE_USB) item("usb") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingsInfoHeader("输出设备", MusicIcons.Device, horizontalInset = 0.dp)
+                SettingsListHeader("输出设备",
+                    marginStartType = io.github.suqi8.coui.kmp.preference.PreferenceCategoryMarginStartType.Small)
                 NeteaseUsbOutputSettings(settings) { key -> save { container.audioOutput.setUsbDevice(key) } }
             }
         } else item("device") { SettingsSection("输出设备", MusicIcons.Device) {
