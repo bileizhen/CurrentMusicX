@@ -54,14 +54,9 @@ import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.basic.Button
 import io.github.suqi8.coui.kmp.basic.ButtonDefaults
 import io.github.suqi8.coui.kmp.basic.ButtonMaterial
-import io.github.suqi8.coui.kmp.basic.DropdownEntry
-import io.github.suqi8.coui.kmp.basic.DropdownItem
-import io.github.suqi8.coui.kmp.basic.DropdownDefaults
 import io.github.suqi8.coui.kmp.icon.COUIIcons
-import io.github.suqi8.coui.kmp.icon.basic.Check
 import io.github.suqi8.coui.kmp.icon.extended.Back
 import io.github.suqi8.coui.kmp.icon.extended.More
-import io.github.suqi8.coui.kmp.overlay.OverlayCascadingListPopup
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.theme.LocalContentColor
 import io.github.suqi8.coui.kmp.theme.darkColorScheme
@@ -146,6 +141,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     var menu by remember { mutableStateOf(false) }
     var menuAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
     var sourceMenuOpen by remember { mutableStateOf(false) }
+    var menuDragging by remember { mutableStateOf(false) }
     val menuAutoCheck = remember { mutableStateOf(settings.autoCheckOnLaunch) }
     val menuChannel = remember { mutableStateOf(settings.channel) }
     LaunchedEffect(settings.autoCheckOnLaunch,settings.channel) {
@@ -154,11 +150,14 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     val currentTransfer by rememberUpdatedState(transferState)
     val sourceHealth = rememberUpdateSourceHealth(release, settings.channel, sourceMenuOpen, sourceCheck)
     LaunchedEffect(menu) {
-        if (!menu) sourceMenuOpen = false
+        if (!menu) {
+            sourceMenuOpen = false
+            menuDragging = false
+        }
     }
     var orderedMenuSources by remember(settings.channel) { mutableStateOf(UpdateSource.forChannel(settings.channel)) }
-    LaunchedEffect(sourceHealth.toMap(), settings.channel) {
-        orderedMenuSources = UpdateSource.forChannel(settings.channel).sortedByHealth(sourceHealth)
+    LaunchedEffect(sourceHealth.toMap(), menuDragging, settings.channel) {
+        if (!menuDragging) orderedMenuSources = UpdateSource.forChannel(settings.channel).sortedByHealth(sourceHealth)
     }
     var confirmCancel by remember { mutableStateOf(false) }
     var chosenSource by remember(settings.downloadSource, settings.channel) {
@@ -335,91 +334,96 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
             }
         }
         }
-        val menuEntries = run {
-            val settingsItems = listOf(
-                DropdownItem(
-                    text = "更新渠道",
-                    hint = {
-                        Text(
-                            if (menuChannel.value == UpdateChannel.STABLE) "正式版" else "CI 版",
-                            color = COUITheme.colorScheme.labelSecondary,
-                            fontSize = 12.sp,
-                            maxLines = 1,
-                            softWrap = false,
-                        )
-                    },
-                    onClick = {
-                        val next = if (menuChannel.value == UpdateChannel.STABLE) UpdateChannel.CI else UpdateChannel.STABLE
-                        menuChannel.value = next
-                        onChannel(next)
-                    },
-                ),
-                DropdownItem(
-                    text = "启动时自动检查",
-                    hint = {
-                        if (menuAutoCheck.value) Icon(
-                            COUIIcons.Basic.Check,
-                            contentDescription = null,
-                            tint = COUITheme.colorScheme.labelPrimary,
-                        )
-                    },
-                    onClick = {
-                        val next = !menuAutoCheck.value
-                        menuAutoCheck.value = next
-                        onAutoCheck(next)
-                    },
-                ),
-            )
-            val sourceItems = orderedMenuSources.map { candidate ->
-                val health: () -> UpdateSourceHealth = {
-                    sourceHealth[candidate] ?: UpdateSourceHealth(UpdateSourceStatus.CHECKING)
-                }
-                DropdownItem(
-                    text = candidate.menuLabel,
-                    selected = candidate == source,
-                    icon = { modifier ->
-                        UpdateSourceStatusDot(candidate, health, modifier) { visible -> sourceMenuOpen = visible }
-                    },
-                    hint = { UpdateSourceStatusLabel(candidate, health) },
-                    onClick = {
-                        menu = false
-                        sourceMenuOpen = false
-                        chosenSource = candidate
-                        onSourceSelected(candidate)
-                        if (source != candidate && currentTransfer.download is UpdateDownloadState.Downloading) {
-                            onChangeSource(candidate)
-                        }
-                    },
-                )
-            }
-            buildList {
-                add(DropdownEntry(
-                    items = listOf(
-                        DropdownItem(text = "更新设置", children = settingsItems),
-                        DropdownItem(text = "下载源", children = sourceItems),
-                        DropdownItem(text = "发布记录", onClick = {
-                            menu = false
-                            onOpenRelease(AppMetadata.RELEASES_URL)
-                        }),
+        val menuActions = buildList {
+            add(GlassMenuItem(
+                "update_menu_action_0", "更新设置", MusicIcons.Update,
+                contentTag = "update_options_sheet",
+                onEnter = {
+                    menuAutoCheck.value = settings.autoCheckOnLaunch
+                    menuChannel.value = settings.channel
+                },
+                children = listOf(
+                    GlassMenuItem(
+                        "update_channel", "更新渠道",
+                        subtitle = if (menuChannel.value == UpdateChannel.STABLE) "正式版" else "CI 版",
+                        children = listOf(
+                            GlassMenuItem(
+                                "update_channel_stable", "正式版",
+                                checked = menuChannel.value == UpdateChannel.STABLE,
+                                keepOpen = true, popOnSelect = true,
+                                onClick = {
+                                    if (menuChannel.value != UpdateChannel.STABLE) {
+                                        menuChannel.value = UpdateChannel.STABLE
+                                        onChannel(UpdateChannel.STABLE)
+                                    }
+                                }),
+                            GlassMenuItem(
+                                "update_channel_ci", "CI 版",
+                                checked = menuChannel.value == UpdateChannel.CI,
+                                keepOpen = true, popOnSelect = true,
+                                onClick = {
+                                    if (menuChannel.value != UpdateChannel.CI) {
+                                        menuChannel.value = UpdateChannel.CI
+                                        onChannel(UpdateChannel.CI)
+                                    }
+                                }),
+                        ),
                     ),
+                    GlassMenuItem(
+                        "update_auto_check", "启动时自动检查",
+                        checked = menuAutoCheck.value, checkable = true, keepOpen = true,
+                        onClick = {
+                            val next = !menuAutoCheck.value
+                            menuAutoCheck.value = next
+                            onAutoCheck(next)
+                            menu = false
+                        }),
+                ),
+            ))
+            add(GlassMenuItem(
+                "update_menu_action_1", "下载源", MusicIcons.Download,
+                contentTag = "update_options_sheet", subMenuMinWidth = 280.dp, animateSubItems = true,
+                children = orderedMenuSources.map { candidate ->
+                    val health = sourceHealth[candidate] ?: UpdateSourceHealth(UpdateSourceStatus.CHECKING)
+                    GlassMenuItem(
+                        "update_source_${candidate.name}", candidate.menuLabel,
+                        checked = candidate == source,
+                        leadingContent = { UpdateSourceBadge(candidate, health) },
+                        onClick = {
+                            menu = false
+                            sourceMenuOpen = false
+                            chosenSource = candidate
+                            onSourceSelected(candidate)
+                            if (source != candidate && currentTransfer.download is UpdateDownloadState.Downloading) {
+                                onChangeSource(candidate)
+                            }
+                        },
+                    )
+                },
+            ))
+            add(GlassMenuItem(
+                "update_menu_action_2", "发布记录", MusicIcons.File,
+                onClick = {
+                    menu = false
+                    onOpenRelease(AppMetadata.RELEASES_URL)
+                },
+            ))
+            if (!checking && !transferState.installing &&
+                transferState.download !is UpdateDownloadState.Downloading &&
+                transferState.download !is UpdateDownloadState.Ready) {
+                add(GlassMenuItem("update_check_again", "重新检查更新", MusicIcons.Update, onClick = {
+                    menu = false
+                    onRetry()
+                }))
+            }
+            if (release != null && transferState.download is UpdateDownloadState.Idle) {
+                add(GlassMenuItem(
+                    "update_menu_action_3", "忽略此版本", MusicIcons.Close,
+                    danger = true, separated = true, onClick = {
+                        menu = false
+                        onIgnore()
+                    },
                 ))
-                val moreItems = buildList {
-                    if (!checking && !transferState.installing &&
-                        transferState.download !is UpdateDownloadState.Downloading &&
-                        transferState.download !is UpdateDownloadState.Ready) {
-                        add(DropdownItem(text = "重新检查更新", onClick = {
-                            menu = false
-                            onRetry()
-                        }))
-                    }
-                    if (release != null && transferState.download is UpdateDownloadState.Idle) {
-                        add(DropdownItem(text = "忽略此版本", alert = true, onClick = {
-                            menu = false
-                            onIgnore()
-                        }))
-                    }
-                }
-                if (moreItems.isNotEmpty()) add(DropdownEntry(items = moreItems))
             }
         }
         SmallTopAppBar(
@@ -440,31 +444,32 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                     }
                 },
                 actions = {
-                    Box {
-                        IconButton(
-                            onClick = { menu = !menu },
-                            modifier = Modifier.testTag("update_menu")
-                                .onGloballyPositioned { menuAnchor = it.boundsInWindow() },
-                            minWidth = 44.dp,
-                            minHeight = 44.dp,
-                            cornerRadius = 22.dp,
-                        ) {
-                            Icon(COUIIcons.More, contentDescription = "更多", tint = pageWhite)
-                        }
-                        OverlayCascadingListPopup(
-                            show = menu,
-                            entries = menuEntries,
-                            onDismissRequest = { menu = false },
-                            popupModifier = Modifier.testTag("update_overflow_panel"),
-                            renderInRootScaffold = true,
-                            alignment = io.github.suqi8.coui.kmp.basic.PopupPositionProvider.Align.End,
-                            dropdownColors = DropdownDefaults.dropdownColors(),
-                            collapseOnSelection = false,
-                            minWidth = 248.dp,
-                        )
+                    IconButton(
+                        onClick = { menu = !menu },
+                        modifier = Modifier.testTag("update_menu")
+                            .onGloballyPositioned { menuAnchor = it.boundsInWindow() },
+                        minWidth = 44.dp,
+                        minHeight = 44.dp,
+                        cornerRadius = 22.dp,
+                    ) {
+                        Icon(COUIIcons.More, contentDescription = "更多", tint = pageWhite)
                     }
                 },
             )
+        UpdateGlassMenu(
+            open = menu,
+            backdrop = glassBackdrop,
+            onDismiss = {
+                menu = false
+                sourceMenuOpen = false
+                menuDragging = false
+            },
+            anchor = menuAnchor,
+            onPathChanged = { path -> sourceMenuOpen = path.contains("update_menu_action_1") },
+            onInteractionChanged = { menuDragging = it },
+            actions = menuActions,
+            toolbar = {},
+        )
         if (confirmCancel) UpdateOptionsDialog("取消下载？",
             summary = "返回页面后仍会在后台下载。取消下载将停止当前任务。",
             onDismiss = { confirmCancel = false }, backdrop = glassBackdrop, actions = {

@@ -5,7 +5,6 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -112,42 +111,6 @@ internal val UpdateSource.menuLabel:String get()=when(this) {
     }
 }
 
-@Composable internal fun UpdateSourceStatusDot(
-    source: UpdateSource,
-    health: () -> UpdateSourceHealth,
-    modifier: Modifier,
-    onVisibleChange: (Boolean) -> Unit = {},
-) {
-    DisposableEffect(Unit) {
-        onVisibleChange(true)
-        onDispose { onVisibleChange(false) }
-    }
-    val current = health()
-    val dark = COUITheme.colorScheme.labelPrimary.luminance() > .5f
-    val color = sourceStatusColor(current.status, dark)
-    Box(modifier, contentAlignment = Alignment.Center) {
-        Box(Modifier.size(8.dp).background(color, CircleShape)
-            .testTag("update_source_dot_${source.name}")
-            .semantics { contentDescription = "${source.menuLabel}：${current.status.fullLabel}" })
-    }
-}
-
-@Composable internal fun UpdateSourceStatusLabel(
-    source: UpdateSource,
-    health: () -> UpdateSourceHealth,
-) {
-    val current = health()
-    val dark = COUITheme.colorScheme.labelPrimary.luminance() > .5f
-    Text(
-        text = current.status.shortLabel,
-        modifier = Modifier.testTag("update_source_status_${source.name}")
-            .semantics { contentDescription = "${source.menuLabel}：${current.status.fullLabel}" },
-        color = sourceStatusColor(current.status, dark),
-        fontSize = 12.sp,
-        maxLines = 1,
-    )
-}
-
 private val UpdateSourceStatus.fullLabel: String get() = when (this) {
     UpdateSourceStatus.CHECKING -> "检测中"
     UpdateSourceStatus.AVAILABLE -> "可用"
@@ -155,15 +118,6 @@ private val UpdateSourceStatus.fullLabel: String get() = when (this) {
     UpdateSourceStatus.TIMEOUT -> "超时"
     UpdateSourceStatus.UNAVAILABLE -> "不可用"
     UpdateSourceStatus.UNKNOWN -> "未检测"
-}
-
-private val UpdateSourceStatus.shortLabel: String get() = when (this) {
-    UpdateSourceStatus.CHECKING -> "检测"
-    UpdateSourceStatus.AVAILABLE -> "可用"
-    UpdateSourceStatus.LIMITED -> "限流"
-    UpdateSourceStatus.TIMEOUT -> "超时"
-    UpdateSourceStatus.UNAVAILABLE -> "失败"
-    UpdateSourceStatus.UNKNOWN -> "未测"
 }
 
 @Composable private fun sourceStatusColor(status: UpdateSourceStatus, dark: Boolean): Color = when (status) {

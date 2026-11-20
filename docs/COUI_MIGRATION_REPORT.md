@@ -28,7 +28,7 @@
 - Settings surfaces now use the official `coui-squircle` `squircleSurface` with ColorOS weights (2.5 for cards, 1.0 for capsules) instead of circular `RoundedCornerShape` corners, covering the settings home, shared settings groups, appearance preview, color palette/sheet, adaptive EQ and sound-effect tiles.
 - Settings entry rows show only their title, semantic icon and chevron; the previous description lines were removed to match the system Settings list density.
 - Font settings were rebuilt as a fixed, non-scrolling ColorOS-style page: three built-in choices (`系统默认`, `OPPO Sans`, `霞鹜文楷`), retained font import, no search field, a fixed 300dp bottom panel and a 22sp/14sp preview hierarchy. OPPO Sans 4.0 is bundled from the user-provided official archive, with its license recorded in `THIRD_PARTY_NOTICES.md` and `app/src/main/assets/legal/`.
-- The software update page now uses a COUI `OverlayCascadingListPopup` two-level menu, COUI top-bar `IconButton`s and a `DropdownItem.hint` for live channel state. Download-source rows use a 20dp status dot plus a trailing live status label instead of forcing `TagView` into the icon slot.
+- The software update page keeps its product-specific `UpdateGlassMenu` liquid-glass overflow menu and download-source badges. The COUI top bar and `IconButton`s remain; the menu intentionally does not use `OverlayCascadingListPopup`.
 - Settings subpages now share a COUI-native `Scaffold` + `SmallTopAppBar` shell. Playback, appearance, network sources, storage, equalizer, audio output, feedback, desktop lyrics, adaptive audio, NetEase effects and sound effects no longer use the old floating glass header.
 - Shared settings sections now use COUI `PreferenceCategory` headers, clickable `SettingsPreference` rows get the native trailing arrow, and option rows use `OverlaySpinnerPreference` instead of the custom glass picker.
 - `THIRD_PARTY_NOTICES.md` and `app/src/main/assets/legal/NOTICES.md`: MIUIX attribution replaced with COUI 2.0 attribution.
@@ -41,7 +41,7 @@
 | Settings subpages / shared cards | Complete | Complete native top bar, category headers, cards, arrows and spinner popups; product-specific quality sheet retained |
 | Font settings | Complete | Complete fixed-layout redesign |
 | Home / discover / library / profile | Complete | Section headings and cards migrated; player-specific visuals intentionally retained |
-| Software update page | Complete | COUI top bar, buttons and two-level menu; cover-derived background retained |
+| Software update page | Complete | COUI top bar and buttons; product-specific liquid-glass menu restored |
 | Player / lyrics / liquid glass | Complete | Product-specific visuals preserved, not replaced by system templates |
 | Dialogs / sheets / popups | Complete at API level | Remaining custom glass surfaces still need a page-by-page visual pass |
 
@@ -57,7 +57,7 @@ These are CurrentMusic product features rather than generic look-alikes, so they
 
 - Liquid glass: `GlassMaterial`, `GlassMenu`, `GlassButtons`, `GlassSwitch`, `GlassSlider`, `PageGlassScene`, `CombinedBackdrop`.
 - `SettingsTopBar` / `SettingsScrollLayout` remain for non-settings utility pages such as legal documents and account forms; settings subpages use the COUI-native shell. `SettingsPreference` and `SettingsGroup` remain as thin adapters over COUI colors, cards, arrows and press feedback.
-- Independent search sheet, player/lyrics visuals, launch animations, playlist ribbon/shelf and the update page's cover-derived color extraction/animation.
+- Independent search sheet, player/lyrics visuals, launch animations, playlist ribbon/shelf, the update page's `UpdateGlassMenu` and its cover-derived color extraction/animation.
 
 The settings home is the exception: it now uses the official COUI page/search/preference structure. Other settings subpages keep their shared custom chrome while their rows already use `Card`, `SwitchPreference`, `PreferenceCategory` and COUI dividers. Settings data, DataStore keys and ViewModel state were not changed.
 
@@ -108,7 +108,7 @@ The signed release (`com.bileizhen.currentmusic`, certificate SHA-256 `FC:3E:63:
 - Custom color sheet (`OverlayBottomSheet`) with preview, HEX field and color grid.
 - Pure dark palette switches correctly and keeps contrast.
 - Font page in light and dark themes: fixed preview, three built-in fonts, import action, fixed 300dp bottom panel and no page scrolling.
-- Update page: COUI two-level menu (`更新设置` / `下载源`), channel toggle stays open and refreshes its hint, download-source status dots and labels update live, and long domains fit without wrapping at the current 248dp shared menu width.
+- Update page: COUI top bar with the restored `UpdateGlassMenu` overflow menu, nested update settings/download source entries, source-health badges and retained cover-derived background.
 - Playback settings: native COUI top bar, compact section headers, cards, trailing arrows and compact text hierarchy.
 - Appearance settings: native top bar, compact `主题模式` / `纯黑模式` headers, preview card and native option rows.
 - Audio output settings: native top bar and a COUI `OverlaySpinnerPreference` popup for the output sample rate; selecting an option updates the row and closes the popup.
@@ -131,7 +131,7 @@ Not verified: player/lyrics animation, audio output, Bluetooth/notification cont
   - [#17](https://github.com/suqi8/coui/issues/17) cascading submenu width/height cannot be configured independently
   - [#18](https://github.com/suqi8/coui/issues/18) per-item dismiss-on-click is not configurable
   - [#19](https://github.com/suqi8/coui/issues/19) cascading depth is limited to two levels
-- Current workarounds: the update menu uses `collapseOnSelection = false` plus explicit `menu = false` for navigation/actions, a 248dp shared `minWidth` so the submenu can fit long domains, and status/label composables that read the `SnapshotStateMap` directly so their visual state still updates while the menu item snapshot is open.
+- Current update-menu behavior: the product-specific glass menu is kept for its nested settings/source flow; source health probes run only while the download-source path is active and sorting is deferred while the menu is being dragged.
 - `docs/` is ignored by the repository; this report must be force-added.
 
 ## 8. Suggested PR
