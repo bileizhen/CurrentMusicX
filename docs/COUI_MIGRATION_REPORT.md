@@ -29,6 +29,8 @@
 - Settings entry rows show only their title, semantic icon and chevron; the previous description lines were removed to match the system Settings list density.
 - Font settings were rebuilt as a fixed, non-scrolling ColorOS-style page: three built-in choices (`系统默认`, `OPPO Sans`, `霞鹜文楷`), retained font import, no search field, a fixed 300dp bottom panel and a 22sp/14sp preview hierarchy. OPPO Sans 4.0 is bundled from the user-provided official archive, with its license recorded in `THIRD_PARTY_NOTICES.md` and `app/src/main/assets/legal/`.
 - The software update page now uses a COUI `OverlayCascadingListPopup` two-level menu, COUI top-bar `IconButton`s and a `DropdownItem.hint` for live channel state. Download-source rows use a 20dp status dot plus a trailing live status label instead of forcing `TagView` into the icon slot.
+- Settings subpages now share a COUI-native `Scaffold` + `SmallTopAppBar` shell. Playback, appearance, network sources, storage, equalizer, audio output, feedback, desktop lyrics, adaptive audio, NetEase effects and sound effects no longer use the old floating glass header.
+- Shared settings sections now use COUI `PreferenceCategory` headers, clickable `SettingsPreference` rows get the native trailing arrow, and option rows use `OverlaySpinnerPreference` instead of the custom glass picker.
 - `THIRD_PARTY_NOTICES.md` and `app/src/main/assets/legal/NOTICES.md`: MIUIX attribution replaced with COUI 2.0 attribution.
 
 ### Migration vs visual status
@@ -36,7 +38,7 @@
 | Area | API migration | Visual redesign |
 | --- | --- | --- |
 | Settings home / search / account card | Complete | Complete ColorOS 17 structure |
-| Settings subpages / shared cards | Complete | Mostly COUI components; some custom chrome retained |
+| Settings subpages / shared cards | Complete | Complete native top bar, category headers, cards, arrows and spinner popups; product-specific quality sheet retained |
 | Font settings | Complete | Complete fixed-layout redesign |
 | Home / discover / library / profile | Complete | Section headings and cards migrated; player-specific visuals intentionally retained |
 | Software update page | Complete | COUI top bar, buttons and two-level menu; cover-derived background retained |
@@ -54,7 +56,7 @@ The settings page records its scrolling content with `rememberLayerBackdrop` and
 These are CurrentMusic product features rather than generic look-alikes, so they were kept and now consume COUI colors/text styles:
 
 - Liquid glass: `GlassMaterial`, `GlassMenu`, `GlassButtons`, `GlassSwitch`, `GlassSlider`, `PageGlassScene`, `CombinedBackdrop`.
-- Custom subpage settings chrome: `SettingsPage`, `SettingsTopBar`, `SettingsPreference`, `SettingsGroup` (COUI typography, colors, press feedback and spacing).
+- `SettingsTopBar` / `SettingsScrollLayout` remain for non-settings utility pages such as legal documents and account forms; settings subpages use the COUI-native shell. `SettingsPreference` and `SettingsGroup` remain as thin adapters over COUI colors, cards, arrows and press feedback.
 - Independent search sheet, player/lyrics visuals, launch animations, playlist ribbon/shelf and the update page's cover-derived color extraction/animation.
 
 The settings home is the exception: it now uses the official COUI page/search/preference structure. Other settings subpages keep their shared custom chrome while their rows already use `Card`, `SwitchPreference`, `PreferenceCategory` and COUI dividers. Settings data, DataStore keys and ViewModel state were not changed.
@@ -107,6 +109,10 @@ The signed release (`com.bileizhen.currentmusic`, certificate SHA-256 `FC:3E:63:
 - Pure dark palette switches correctly and keeps contrast.
 - Font page in light and dark themes: fixed preview, three built-in fonts, import action, fixed 300dp bottom panel and no page scrolling.
 - Update page: COUI two-level menu (`更新设置` / `下载源`), channel toggle stays open and refreshes its hint, download-source status dots and labels update live, and long domains fit without wrapping at the current 248dp shared menu width.
+- Playback settings: native COUI top bar, compact section headers, cards, trailing arrows and compact text hierarchy.
+- Appearance settings: native top bar, compact `主题模式` / `纯黑模式` headers, preview card and native option rows.
+- Audio output settings: native top bar and a COUI `OverlaySpinnerPreference` popup for the output sample rate; selecting an option updates the row and closes the popup.
+- Adaptive audio, NetEase effects package and sound effects pages: native top bars and cards, with the existing audio controls preserved.
 
 Both the updated production package and the verification package are intentionally left installed until the user confirms the visual result.
 
