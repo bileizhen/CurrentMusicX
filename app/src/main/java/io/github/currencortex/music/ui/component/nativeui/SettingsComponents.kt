@@ -46,6 +46,8 @@ import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.suqi8.coui.kmp.preference.SwitchPreference
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 
 /** Limits the new preference controls to settings; music/library rows keep their own design. */
 internal val LocalSettingsComponents = compositionLocalOf {false}
@@ -138,7 +140,11 @@ private val LocalSettingsPicker=compositionLocalOf<((Rect,List<GlassMenuItem>)->
     val colors=COUITheme.colorScheme
     val ink=if(selected)colors.labelOnColor else colors.labelPrimary
     ElasticPress(modifier.selectable(selected,role=Role.RadioButton,onClick=onClick)) {
-        Column(Modifier.clip(RoundedCornerShape(16.dp)).background(if(selected)colors.primary else colors.labelPrimary.copy(alpha=.04f))
+        Column(Modifier.squircleSurface(
+            color = if(selected)colors.primary else colors.labelPrimary.copy(alpha=.04f),
+            cornerRadius = 16.dp,
+            weight = SquircleDefaults.Weight,
+        )
             .padding(12.dp),verticalArrangement=Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(),verticalAlignment=Alignment.CenterVertically) {
                 Text(title,Modifier.weight(1f),fontSize=15.sp,lineHeight=20.sp,fontWeight=FontWeight.Medium,color=ink)
@@ -150,7 +156,11 @@ private val LocalSettingsPicker=compositionLocalOf<((Rect,List<GlassMenuItem>)->
 }
 
 @Composable internal fun SettingsGroup(modifier:Modifier=Modifier,content:@Composable ColumnScope.()->Unit) {
-    Card(modifier = modifier.fillMaxWidth(), insideMargin = PaddingValues(0.dp)) {
+    Column(modifier.fillMaxWidth().squircleSurface(
+        color = COUITheme.colorScheme.cardBackground,
+        cornerRadius = 24.dp,
+        weight = SquircleDefaults.Weight,
+    )) {
         Column(content = content)
     }
 }

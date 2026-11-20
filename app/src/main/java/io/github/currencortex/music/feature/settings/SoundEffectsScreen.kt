@@ -22,6 +22,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
+import io.github.suqi8.coui.kmp.squircle.squircleBorder
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -418,8 +421,16 @@ import kotlinx.serialization.json.*
     status: String, enabled: Boolean, tile: NativeEffectTile? = null, dark: Boolean = false,
     onDetails: () -> Unit, onApply: () -> Unit) {
     val background = if (dark) Color(0xFF1C2028) else Color(0xFFE4EAF2)
-    Box(modifier.clip(RoundedCornerShape(12.dp)).background(background)
-        .border(if (chosen) 1.5.dp else 0.dp, if (chosen) COUITheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(12.dp))) {
+    Box(modifier.squircleSurface(
+        color = background,
+        cornerRadius = 12.dp,
+        weight = SquircleDefaults.Weight,
+    ).then(if (chosen) Modifier.squircleBorder(
+        width = 1.5.dp,
+        color = COUITheme.colorScheme.primary,
+        cornerRadius = 12.dp,
+        weight = SquircleDefaults.Weight,
+    ) else Modifier)) {
         if (tile != null && tile.image(dark).isNotBlank()) EffectsArtwork(tile.image(dark), Modifier.matchParentSize())
         else if (effect.artwork.isNotBlank()) EffectsArtwork(effect.artwork, Modifier.matchParentSize())
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
@@ -444,9 +455,12 @@ import kotlinx.serialization.json.*
 @Composable private fun EffectButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     selected: Boolean = false, enabled: Boolean = true) {
     val colors = COUITheme.colorScheme
-    Box(modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(14.dp))
-        .background(if (selected) colors.primary.copy(alpha = if (enabled) 1f else .35f)
-            else colors.labelPrimary.copy(alpha = if (enabled) .06f else .025f))
+    Box(modifier.heightIn(min = 44.dp).squircleSurface(
+        color = if (selected) colors.primary.copy(alpha = if (enabled) 1f else .35f)
+            else colors.labelPrimary.copy(alpha = if (enabled) .06f else .025f),
+        cornerRadius = 14.dp,
+        weight = SquircleDefaults.Weight,
+    )
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 11.dp),
         contentAlignment = Alignment.Center) {
         Text(label, color = if (selected) colors.labelOnColor else colors.labelPrimary, fontSize = 13.sp)

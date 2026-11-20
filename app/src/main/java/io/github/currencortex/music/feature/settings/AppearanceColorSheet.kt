@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -82,8 +84,12 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
         Column(Modifier.fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState())
             .padding(start = 14.dp, end = 14.dp, top = 0.dp, bottom = 20.dp)
             .navigationBarsPadding(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            BoxWithConstraints(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp))
-                .background(colors.cardPressed).padding(12.dp).testTag("appearance_color_preview")
+            BoxWithConstraints(Modifier.fillMaxWidth()
+                .squircleSurface(
+                    color = colors.cardPressed,
+                    cornerRadius = 24.dp,
+                    weight = SquircleDefaults.Weight,
+                ).padding(12.dp).testTag("appearance_color_preview")
                 .semantics { stateDescription = "#${hexDigits(draft)}" }) {
                 val screenWidth = minOf(72.dp, ((maxWidth - 128.dp) / 2).coerceAtLeast(32.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {

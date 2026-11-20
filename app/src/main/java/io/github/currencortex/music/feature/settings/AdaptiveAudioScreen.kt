@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -98,8 +100,11 @@ import kotlin.math.roundToInt
                             onPreview = { index, value -> vm.previewAdaptive { it.copy(gains = it.gains.toMutableList().apply { set(index, value) }) } },
                             onSave = { index, value -> vm.commitAdaptive { it.copy(gains = it.gains.toMutableList().apply { set(index, value) }) } },
                             onCancel = vm::clearAdaptivePreview, liveGains = runtime.gains.takeIf { liveEq })
-                        Column(Modifier.padding(horizontal = 12.dp).clip(RoundedCornerShape(14.dp))
-                            .background(COUITheme.colorScheme.primary.copy(alpha = if (enabled) .07f else .025f))) {
+                        Column(Modifier.padding(horizontal = 12.dp).squircleSurface(
+                            color = COUITheme.colorScheme.primary.copy(alpha = if (enabled) .07f else .025f),
+                            cornerRadius = 14.dp,
+                            weight = SquircleDefaults.Weight,
+                        )) {
                             AudioAdjustment("${AdaptiveAudioSettings.FREQUENCIES[selectedBand]} Hz · 手动增益", settings.gains[selectedBand], -6f..6f,
                                 ::gainLabel, enabled, "adaptive_band_fine", key = selectedBand,
                                 onPreview = { vm.previewAdaptive(band(it)) }, onCancel = vm::clearAdaptivePreview,
@@ -202,8 +207,11 @@ import kotlin.math.roundToInt
         DynamicEqCurve.BRIGHT -> "清晰、明亮"
     }
     ElasticPress(modifier.selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = onClick), enabled) {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
-            .background(if (selected) colors.primary.copy(alpha = .12f) else colors.labelPrimary.copy(alpha = .035f))
+        Column(Modifier.fillMaxWidth().squircleSurface(
+            color = if (selected) colors.primary.copy(alpha = .12f) else colors.labelPrimary.copy(alpha = .035f),
+            cornerRadius = 14.dp,
+            weight = SquircleDefaults.Weight,
+        )
             .padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(curve.label, Modifier.weight(1f), fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium,

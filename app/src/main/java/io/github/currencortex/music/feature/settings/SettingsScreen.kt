@@ -2,15 +2,12 @@ package io.github.currencortex.music.feature.settings
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
@@ -48,6 +45,8 @@ import io.github.suqi8.coui.kmp.icon.extended.*
 import io.github.suqi8.coui.kmp.preference.ArrowPreference
 import io.github.suqi8.coui.kmp.preference.PreferenceCategory
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
 
 private data class SettingsDestination(
@@ -551,8 +550,11 @@ private fun SettingsCategoryCard(
         if (title != null) PreferenceCategory(title = title)
         Column(
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
-                .clip(RoundedCornerShape(24.dp))
-                .background(COUITheme.colorScheme.cardBackground),
+                .squircleSurface(
+                    color = COUITheme.colorScheme.cardBackground,
+                    cornerRadius = 24.dp,
+                    weight = SquircleDefaults.Weight,
+                ),
         ) {
             CardListGroup(content = content)
         }
@@ -565,8 +567,11 @@ private fun SettingsCard(
     content: CardListGroupScope.() -> Unit,
 ) {
     Column(
-        modifier = modifier.clip(RoundedCornerShape(24.dp))
-            .background(COUITheme.colorScheme.cardBackground),
+        modifier = modifier.squircleSurface(
+            color = COUITheme.colorScheme.cardBackground,
+            cornerRadius = 24.dp,
+            weight = SquircleDefaults.Weight,
+        ),
     ) {
         CardListGroup(content = content)
     }

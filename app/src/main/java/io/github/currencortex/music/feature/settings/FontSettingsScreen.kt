@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -127,11 +129,14 @@ private fun LazyListScope.fontSection(title: String, fonts: List<AppearanceFont>
     item("heading_$title") { SettingsListHeader(title) }
     fonts.forEachIndexed { index, font ->
         item(font.key) {
-            val shape = RoundedCornerShape(topStart = if (index == 0) 20.dp else 0.dp,
+            Column(Modifier.fillMaxWidth().squircleSurface(
+                color = COUITheme.colorScheme.cardBackground,
+                topStart = if (index == 0) 20.dp else 0.dp,
                 topEnd = if (index == 0) 20.dp else 0.dp,
+                bottomEnd = if (index == fonts.lastIndex) 20.dp else 0.dp,
                 bottomStart = if (index == fonts.lastIndex) 20.dp else 0.dp,
-                bottomEnd = if (index == fonts.lastIndex) 20.dp else 0.dp)
-            Column(Modifier.fillMaxWidth().clip(shape).background(COUITheme.colorScheme.cardBackground)) {
+                weight = SquircleDefaults.Weight,
+            )) {
                 FontChoice(font, selected == font.key, enabled, { onSelect(font.key) })
                 if (index != fonts.lastIndex) SettingsDivider()
             }

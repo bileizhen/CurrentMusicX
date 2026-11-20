@@ -10,6 +10,8 @@ import androidx.compose.foundation.interaction.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,8 +42,12 @@ import kotlin.math.floor
     val systemController = remember(dark) { ThemeController(colorSchemeMode = if (dark) ColorSchemeMode.MonetDark else ColorSchemeMode.MonetLight) }
     val systemColor = if (Build.VERSION.SDK_INT >= 31) systemController.currentColors().primary else Color(0xFF007AFF)
     // 16 - (44 - 32) / 2. Dot edges line up with the text in neighbouring list rows.
-    BoxWithConstraints(Modifier.fillMaxWidth().testTag("appearance_palette").clip(RoundedCornerShape(24.dp))
-        .background(colors.cardBackground).padding(10.dp)) {
+    BoxWithConstraints(Modifier.fillMaxWidth().testTag("appearance_palette")
+        .squircleSurface(
+            color = colors.cardBackground,
+            cornerRadius = 24.dp,
+            weight = SquircleDefaults.Weight,
+        ).padding(10.dp)) {
         val columns = floor((maxWidth.value + 6) / 50).toInt().coerceAtLeast(1)
         val desiredGap = if (columns > 1) floor((maxWidth.value - columns * 44) / (columns - 1)).dp else 0.dp
         // Flutter Wrap keeps fractional layout pixels. Compose rounds each gap

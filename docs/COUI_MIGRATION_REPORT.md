@@ -25,6 +25,7 @@
 - Settings neutrals now use the ColorOS palette instead of the wallpaper-derived hue: light `#F2F5F7` pages with white cards, dark near-black/pure-black pages with `#1B1C1D` cards, neutral dividers and labels. The user's accent color is retained for controls.
 - Settings entry icons use COUI semantic colors (blue, orange, green, mint, violet, yellow, red) while remaining the official `COUIIcons` set.
 - Settings home cards use flat ColorOS card surfaces and omit the former `个性化` / `音乐` / `应用` group captions, matching the system Settings card stack without an artificial outline or shadow line.
+- Settings surfaces now use the official `coui-squircle` `squircleSurface` with ColorOS weights (2.5 for cards, 1.0 for capsules) instead of circular `RoundedCornerShape` corners, covering the settings home, shared settings groups, appearance preview, color palette/sheet, adaptive EQ and sound-effect tiles.
 - Settings entry rows show only their title, semantic icon and chevron; the previous description lines were removed to match the system Settings list density.
 - `THIRD_PARTY_NOTICES.md` and `app/src/main/assets/legal/NOTICES.md`: MIUIX attribution replaced with COUI 2.0 attribution.
 

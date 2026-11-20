@@ -12,6 +12,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -171,7 +173,11 @@ internal object PaletteGrid {
 @Composable private fun HsvSliders(hsv: PaletteHsv, onChanged: (PaletteHsv) -> Unit) {
     val colors = COUITheme.colorScheme
     val hueStops = remember { (0..6).map { Color.hsv((it * 60 % 360).toFloat(), 1f, 1f) } }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(colors.cardBackground)
+    Column(Modifier.fillMaxWidth().squircleSurface(
+        color = colors.cardBackground,
+        cornerRadius = 24.dp,
+        weight = SquircleDefaults.Weight,
+    )
         .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         GradientColorSlider("色相", "${hsv.hue.roundToInt()}°", hsv.hue, 360f, hueStops,
             hsv.copy(saturation = 1f, value = 1f).color, "appearance_color_hue") { onChanged(hsv.copy(hue = it)) }

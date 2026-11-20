@@ -10,6 +10,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,8 +36,12 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     val progress = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
     var transition by remember { mutableStateOf<Job?>(null) }
-    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(28.dp))
-        .background(colors.cardBackground).padding(vertical = 24.dp).testTag("theme_preview"),
+    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+        .squircleSurface(
+            color = colors.cardBackground,
+            cornerRadius = 28.dp,
+            weight = SquircleDefaults.Weight,
+        ).padding(vertical = 24.dp).testTag("theme_preview"),
         contentAlignment = Alignment.Center) {
         Box(Modifier.width(168.dp).aspectRatio(9f / 17f).clip(RoundedCornerShape(28.dp))) {
             val paper by animateColorAsState(colors.background, tween(300), label = "preview paper")

@@ -8,6 +8,8 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -84,8 +86,11 @@ private data class EqGainDrag(val manual: Float, val displayed: Float, val limit
     val save by rememberUpdatedState(onSave)
     val cancel by rememberUpdatedState(onCancel)
     fun resolve(v: Float) = (v.coerceIn(-6f, 6f) * 10).roundToInt() / 10f
-    Column(modifier.clip(RoundedCornerShape(10.dp)).background(
-        if (selected) ink.copy(alpha = .07f) else colors.labelPrimary.copy(alpha = 0f)).padding(vertical = 6.dp),
+    Column(modifier.squircleSurface(
+        color = if (selected) ink.copy(alpha = .07f) else colors.labelPrimary.copy(alpha = 0f),
+        cornerRadius = 10.dp,
+        weight = SquircleDefaults.Weight,
+    ).padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Text(String.format(Locale.ROOT, "%+.1f", displayed), Modifier.testTag("adaptive_band_value_$index"), fontSize = 10.sp, maxLines = 1,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
@@ -179,7 +184,11 @@ private data class EqGainDrag(val manual: Float, val displayed: Float, val limit
 @Composable internal fun AdaptiveEqCurve(gains: List<Float>, live: Boolean) {
     val colors = COUITheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
-        .clip(RoundedCornerShape(14.dp)).background(colors.labelPrimary.copy(alpha = .025f)).padding(12.dp),
+        .squircleSurface(
+            color = colors.labelPrimary.copy(alpha = .025f),
+            cornerRadius = 14.dp,
+            weight = SquircleDefaults.Weight,
+        ).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(if (live) "实时曲线 · 手动 + 动态" else "手动曲线 · 等待音乐播放", fontSize = 12.sp,
             lineHeight = 17.sp, fontWeight = FontWeight.Medium, color = if (live) colors.primary else colors.labelSecondaryVariant)
