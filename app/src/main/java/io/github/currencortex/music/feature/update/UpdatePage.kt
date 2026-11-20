@@ -49,6 +49,9 @@ import io.github.currencortex.music.ui.component.ArtworkGlowPalette
 import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
 import kotlinx.coroutines.delay
 import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.basic.Button
+import io.github.suqi8.coui.kmp.basic.ButtonDefaults
+import io.github.suqi8.coui.kmp.basic.ButtonMaterial
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.theme.LocalContentColor
 import io.github.suqi8.coui.kmp.theme.darkColorScheme
@@ -170,9 +173,8 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     }
     val sceneBackdrop = rememberUpdateBackdrop()
     val heroBackdrop = rememberUpdateBackdrop()
-    val titleBackdrop = rememberUpdateBackdrop()
-    val glassBackdrop = if(sceneBackdrop!=null&&heroBackdrop!=null&&titleBackdrop!=null)
-        rememberCombinedBackdrop(rememberCombinedBackdrop(sceneBackdrop,heroBackdrop),titleBackdrop)else sceneBackdrop
+    val glassBackdrop = if(sceneBackdrop!=null&&heroBackdrop!=null)
+        rememberCombinedBackdrop(sceneBackdrop,heroBackdrop)else sceneBackdrop
     val colors = remember { darkColorScheme(primary = Color(0xFF0A84FF), labelPrimary = pageWhite,
         background = Color(0xFF100D29), surface = Color(0xFF201C35), surfaceContainerHighest = Color(0xFF29253F)) }
     COUITheme(colors = colors) {
@@ -196,11 +198,11 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 val fontScale = LocalDensity.current.fontScale
                 val compact = height < 400.dp
                 val targetHeight = when {
-                    transferState.download is UpdateDownloadState.Ready -> 222.dp
-                    busy -> 248.dp
-                    release != null -> 192.dp
-                    state is UpdateState.Failed -> 236.dp
-                    else -> 192.dp
+                    transferState.download is UpdateDownloadState.Ready -> 246.dp
+                    busy -> 272.dp
+                    release != null -> 216.dp
+                    state is UpdateState.Failed -> 260.dp
+                    else -> 216.dp
                 } + (80 * (fontScale - 1).coerceAtLeast(0f)).dp
                 val summaryHeight by animateDpAsState(targetHeight
                     .coerceAtMost((height - 24.dp).coerceAtLeast(120.dp)), tween(480), label = "update_transfer_card_height")
@@ -224,9 +226,10 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 val bottomSpace = (32f - 12f * settled).dp
                 Box(Modifier.align(Alignment.TopCenter).padding(horizontal = (16f + 4f * settled).dp)
                     .offset(y = top).widthIn(max = 620.dp).fillMaxWidth()
-                    .height((height - top - bottomSpace).coerceAtLeast(56.dp)).clip(statusShape)
-                    .background(androidx.compose.ui.graphics.lerp(Color(0xD9100F1D), Color(0xB516151D), settled))
-                    .border(1.dp, Color.White.copy(alpha = .10f + .04f * settled), statusShape)
+                    .height((height - top - bottomSpace).coerceAtLeast(56.dp))
+                    .glassSurface(glassBackdrop, statusShape,
+                        tint = androidx.compose.ui.graphics.lerp(Color(0xE017151F), Color(0xD91E1B2A), settled),
+                        frost = { 10f })
                     .testTag("update_status_card")) {
                     Column(Modifier.fillMaxSize().padding(horizontal = (22f - 4f * settled).dp,
                         vertical = (16f + 2f * settled).dp)
@@ -369,15 +372,28 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 add(GlassMenuItem("update_menu_action_3", "忽略此版本", MusicIcons.Close,
                     danger = true, separated = true, onClick = onIgnore))
         }, toolbar = {
-            io.github.currencortex.music.ui.component.nativeui.SettingsTopBar(
-                if(expanded)"更新说明"else "软件更新",onBack={
+            SmallTopAppBar(
+                title = if(expanded) "更新说明" else "软件更新",
+                color = Color.Transparent,
+                titleColor = pageWhite,
+                navigationIcon = {
+                    GlassIconButton(
+                        onClick = {
                     if (menu) menu = false else if (expanded) expanded = false else onDismiss()
-                },backTag="update_back",titleModifier=if(titleBackdrop!=null)Modifier.layerBackdrop(titleBackdrop)else Modifier) {
-                UpdateGlassButton(glassBackdrop, "update_menu", "更多", onClick = { menu = !menu },
-                    onBoundsChanged = { menuAnchor = it }) {
-                    Icon(Icons.Default.MoreVert, null, tint = pageWhite)
-                }
-            }
+                        },
+                        description = "返回",
+                        modifier = Modifier.testTag("update_back"),
+                    ) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = pageWhite)
+                    }
+                },
+                actions = {
+                    UpdateGlassButton(glassBackdrop, "update_menu", "更多", onClick = { menu = !menu },
+                        onBoundsChanged = { menuAnchor = it }) {
+                        Icon(Icons.Default.MoreVert, null, tint = pageWhite)
+                    }
+                },
+            )
         })
         if (confirmCancel) UpdateOptionsDialog("取消下载？",
             summary = "返回页面后仍会在后台下载。取消下载将停止当前任务。",
@@ -424,8 +440,19 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
 }
 
 @Composable private fun PageButton(label: String, tag: String, primary: Boolean = true, enabled: Boolean = true, onClick: () -> Unit) {
-    GlassActionButton(label, onClick, Modifier.fillMaxWidth().padding(top = 8.dp).testTag(tag),
-        primary = primary, enabled = enabled, minHeight = 46.dp)
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 52.dp).testTag(tag),
+        enabled = enabled,
+        colors = if (primary) ButtonDefaults.buttonColorsPrimary(
+            color = Color(0xFFE9E9E9),
+            contentColor = Color(0xFF17171A),
+        ) else ButtonDefaults.buttonColors(),
+        material = ButtonMaterial.Transparent,
+        insideMargin = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+    ) {
+        Text(label, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+    }
 }
 
 private fun verifiedUpdate(release: AppRelease) = release.apkUrl != null &&

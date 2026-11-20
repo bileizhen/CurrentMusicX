@@ -40,7 +40,7 @@ These are CurrentMusic product features rather than generic look-alikes, so they
 
 - Liquid glass: `GlassMaterial`, `GlassMenu`, `GlassButtons`, `GlassSwitch`, `GlassSlider`, `PageGlassScene`, `CombinedBackdrop`.
 - Custom subpage settings chrome: `SettingsPage`, `SettingsTopBar`, `SettingsPreference`, `SettingsGroup` (COUI typography, colors, press feedback and spacing).
-- Independent search sheet, player/lyrics visuals, launch animations, playlist ribbon/shelf and update page visuals.
+- Independent search sheet, player/lyrics visuals, launch animations, playlist ribbon/shelf and the update page's cover-derived color extraction/animation.
 
 The settings home is the exception: it now uses the official COUI page/search/preference structure. Other settings subpages keep their shared custom chrome while their rows already use `Card`, `SwitchPreference`, `PreferenceCategory` and COUI dividers. Settings data, DataStore keys and ViewModel state were not changed.
 
@@ -82,6 +82,7 @@ The signed release (`com.bileizhen.currentmusic`, certificate SHA-256 `FC:3E:63:
 - Account card shows the real `bileizhen` avatar and nickname; tapping it opens `我的`.
 - Search opens from the top bar, fades the settings content, filters rows in a separate results list, and cancels back to the unchanged page.
 - Settings page light and dark palettes, pinned search bar and scrolled/collapsed state.
+- Software update page now uses COUI `SmallTopAppBar`, COUI primary/secondary capsule `Button`s and a COUI glass material status card while retaining the current song's extracted background palette.
 - Desktop-lyrics subpage inheriting the shared COUI `Card` group container.
 - Home and library section headings using COUI `PreferenceCategory`.
 - Settings toggles using `SwitchPreference` on the interface-effects card.
