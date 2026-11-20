@@ -7,7 +7,6 @@ import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -15,19 +14,17 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.state.ToggleableState
@@ -37,17 +34,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.musicScrollPadding
-import io.github.currencortex.music.ui.component.LocalMusicBottomInset
-import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
 import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.IconButton
+import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.basic.ArrowRight
+import io.github.suqi8.coui.kmp.icon.extended.Back
+import io.github.suqi8.coui.kmp.preference.PreferenceCategoryMarginStartType
+import io.github.suqi8.coui.kmp.preference.OverlaySpinnerPreference
 import io.github.suqi8.coui.kmp.preference.SwitchPreference
 import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
 import io.github.suqi8.coui.kmp.squircle.squircleSurface
+import io.github.suqi8.coui.kmp.utils.overScrollVertical
 
 /** Limits the new preference controls to settings; music/library rows keep their own design. */
 internal val LocalSettingsComponents = compositionLocalOf {false}
@@ -55,48 +60,76 @@ internal val LocalSettingsComponents = compositionLocalOf {false}
     CompositionLocalProvider(LocalSettingsComponents provides true,content=content)
 }
 
-private data class SettingsPicker(val anchor:Rect,val items:List<GlassMenuItem>)
-private val LocalSettingsPicker=compositionLocalOf<((Rect,List<GlassMenuItem>)->Unit)?> {null}
-
-/** Controls sample the background; the floating picker samples the composed page beneath it. */
+/** Common settings subpage shell with COUI's native top bar and preference list. */
 @Composable internal fun SettingsPage(title:String,tag:String,onBack:(()->Unit)?=null,
     subtitle:String?=null,padding:PaddingValues=PaddingValues(16.dp,8.dp,16.dp,32.dp),content:LazyListScope.()->Unit) {
     SettingsUiScope {
         val backdrop=rememberGlassBackdrop()
-        val contentBackdrop=rememberGlassBackdrop()
-        val pickerBackdrop=if(backdrop!=null&&contentBackdrop!=null)
-            rememberCombinedBackdrop(backdrop,contentBackdrop)else backdrop
-        var picker by remember {mutableStateOf<SettingsPicker?>(null)}
-        var pickerOpen by remember {mutableStateOf(false)}
         Box(Modifier.fillMaxSize().testTag("settings_page_$tag")) {
             Box(Modifier.matchParentSize().then(if(backdrop!=null)Modifier.layerBackdrop(backdrop)else Modifier)
                 .background(COUITheme.colorScheme.background))
-            CompositionLocalProvider(LocalGlassBackdrop provides backdrop,
-                LocalSettingsPicker provides {anchor,items->
-                    picker=SettingsPicker(anchor,items.map {item->item.copy(onClick={item.onClick();pickerOpen=false})})
-                    pickerOpen=true
-                }) {
-                // The picker is a sibling of this capture. Controls inside it keep reading
-                // the inert background, so neither capture can recursively sample itself.
-                GlassMenu(pickerOpen,{pickerOpen=it},picker?.items.orEmpty(),picker?.anchor,pickerBackdrop,
-                    GlassMenuTags("settings_choice_panel","settings_choice_dismiss","settings_choice"),
-                    menuWidth=null,bottomInset=LocalMusicBottomInset.current,content={
-                Box(Modifier.widthIn(max=760.dp).fillMaxWidth().align(Alignment.TopCenter).fillMaxHeight()) {
-                    val direction=androidx.compose.ui.platform.LocalLayoutDirection.current
-                    val top=WindowInsets.statusBars.asPaddingValues().calculateTopPadding()+SettingsToolbarHeight
-                    LazyColumn(Modifier.fillMaxSize().testTag(tag)
-                        .then(if(contentBackdrop!=null)Modifier.layerBackdrop(contentBackdrop)else Modifier),
-                        contentPadding=musicScrollPadding(PaddingValues(padding.calculateStartPadding(direction),
-                            top+padding.calculateTopPadding(),padding.calculateEndPadding(direction),padding.calculateBottomPadding())),
-                        verticalArrangement=Arrangement.spacedBy(16.dp)) {
-                        subtitle?.let {item {SettingsHint(it)}}
-                        content()
-                    }
-                    CompositionLocalProvider(LocalGlassBackdrop provides pickerBackdrop) {
-                        SettingsFloatingHeader {SettingsTopBar(title,onBack,tag="${tag}_toolbar")}
-                    }
+            CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
+                Box(Modifier.fillMaxSize(),contentAlignment=Alignment.TopCenter) {
+                    SettingsNativePage(
+                        title=title,
+                        tag=tag,
+                        onBack=onBack,
+                        subtitle=subtitle,
+                        padding=padding,
+                        modifier=Modifier.widthIn(max=760.dp).fillMaxWidth().fillMaxHeight(),
+                        content=content,
+                    )
                 }
-                },toolbar={})
+            }
+        }
+    }
+}
+
+@Composable internal fun SettingsNativePage(title:String,tag:String,onBack:(()->Unit)?=null,
+    subtitle:String?=null,padding:PaddingValues=PaddingValues(16.dp,8.dp,16.dp,32.dp),
+    modifier:Modifier=Modifier,actions:@Composable RowScope.()->Unit={},verticalSpacing:androidx.compose.ui.unit.Dp=16.dp,
+    backTag:String="navigate_back",state:LazyListState?=null,
+    contentModifier:Modifier=Modifier,content:LazyListScope.()->Unit) {
+    val dispatcher=LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
+    val direction=LocalLayoutDirection.current
+    val defaultState=rememberLazyListState()
+    SettingsUiScope {
+        Scaffold(
+            modifier=modifier.fillMaxSize().testTag("settings_page_$tag"),
+            containerColor=COUITheme.colorScheme.background,
+            contentWindowInsets=WindowInsets(0,0,0,0),
+            topBar={
+                SmallTopAppBar(
+                    title=title,
+                    modifier=Modifier.testTag("${tag}_toolbar"),
+                    navigationIcon={
+                        IconButton(
+                            onClick={if(onBack!=null)onBack()else dispatcher?.onBackPressed()},
+                            modifier=Modifier.testTag(backTag),
+                            minWidth=44.dp,
+                            minHeight=44.dp,
+                            cornerRadius=22.dp,
+                        ) { Icon(COUIIcons.Back,contentDescription="返回") }
+                    },
+                    actions=actions,
+                    color=COUITheme.colorScheme.background,
+                    showDivider=false,
+                )
+            },
+        ) { inner ->
+            LazyColumn(
+                state=state ?: defaultState,
+                modifier=Modifier.fillMaxSize().then(contentModifier).testTag(tag).overScrollVertical(),
+                contentPadding=musicScrollPadding(PaddingValues(
+                    start=padding.calculateStartPadding(direction),
+                    top=inner.calculateTopPadding()+padding.calculateTopPadding(),
+                    end=padding.calculateEndPadding(direction),
+                    bottom=inner.calculateBottomPadding()+padding.calculateBottomPadding(),
+                )),
+                verticalArrangement=Arrangement.spacedBy(verticalSpacing),
+            ) {
+                subtitle?.let {item {SettingsHint(it)}}
+                content()
             }
         }
     }
@@ -169,7 +202,10 @@ private val LocalSettingsPicker=compositionLocalOf<((Rect,List<GlassMenuItem>)->
 @Composable internal fun SettingsSection(title:String,icon:ImageVector,modifier:Modifier=Modifier,
     footer:String?=null,content:@Composable ColumnScope.()->Unit) {
     Column(modifier.fillMaxWidth(),verticalArrangement=Arrangement.spacedBy(8.dp)) {
-        SettingsInfoHeader(title,icon,horizontalInset=0.dp)
+        io.github.suqi8.coui.kmp.preference.PreferenceCategory(
+            title=title,
+            marginStartType=PreferenceCategoryMarginStartType.Small,
+        )
         SettingsGroup(content=content)
         footer?.takeIf {it.isNotBlank()}?.let {SettingsHint(it)}
     }
@@ -212,7 +248,13 @@ private val LocalSettingsPicker=compositionLocalOf<((Rect,List<GlassMenuItem>)->
                 summary?.takeIf {it.isNotBlank()}?.let {Text(it,fontSize=13.sp,lineHeight=18.sp,
                     color=COUITheme.colorScheme.labelSecondaryVariant.let {it.copy(alpha=it.alpha*(if(enabled)1f else .45f))})}
             }
-            trailing?.invoke()
+            if (trailing != null) trailing()
+            else if (onClick != null && role == Role.Button) Icon(
+                COUIIcons.Basic.ArrowRight,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = COUITheme.colorScheme.labelTertiary,
+            )
         }
         footer?.let {Box(Modifier.fillMaxWidth().padding(start=16.dp,end=16.dp,bottom=12.dp)){it()}}
     }
@@ -248,31 +290,24 @@ private val LocalSettingsPicker=compositionLocalOf<((Rect,List<GlassMenuItem>)->
 @Immutable internal data class SettingsOption(val id:String,val label:String,val selected:Boolean,
     val summary:String?=null,val leadingContent:(@Composable ()->Unit)?=null,val onSelect:()->Unit)
 
-/** Options expand from the value; selecting an entry saves once and closes the shared glass menu. */
+/** Options open in COUI's native spinner popup; selecting an entry saves once. */
 @Composable internal fun SettingsOptionsRow(title:String,value:String,options:List<SettingsOption>,
     modifier:Modifier=Modifier,summary:String?=null,enabled:Boolean=true,valueLeading:(@Composable ()->Unit)?=null) {
-    val open=LocalSettingsPicker.current
-    var rowBounds by remember {mutableStateOf<Rect?>(null)}
-    var valueBounds by remember {mutableStateOf<Rect?>(null)}
-    GlassMenuAnchor(enabled,onOpen={val anchor=valueBounds?:rowBounds
-            if(anchor!=null)open?.invoke(anchor,options.map {option->GlassMenuItem(option.id,option.label,
-                subtitle=option.summary,checked=option.selected,keepOpen=true,leadingContent=option.leadingContent,onClick=option.onSelect)})}) {openValue,target->
-    SettingsPreference(title,summary,modifier.onGloballyPositioned {rowBounds=it.boundsInWindow()},enabled,
-        onClick=openValue,
-        trailing={Row(target.widthIn(max=196.dp).heightIn(min=40.dp)
-            .onGloballyPositioned {valueBounds=it.boundsInWindow()}.padding(horizontal=8.dp),
-            horizontalArrangement=Arrangement.spacedBy(4.dp),verticalAlignment=Alignment.CenterVertically) {
-            valueLeading?.invoke()
-            Text(value,Modifier.weight(1f,false).widthIn(max=160.dp),fontSize=17.sp,lineHeight=22.sp,maxLines=1,overflow=TextOverflow.Ellipsis,
-                color=COUITheme.colorScheme.labelSecondaryVariant)
-            val ink=COUITheme.colorScheme.labelSecondaryVariant
-            Canvas(Modifier.size(16.dp)) {
-                val stroke=1.2.dp.toPx()
-                drawLine(ink,Offset(size.width*.28f,size.height*.35f),Offset(size.width*.5f,size.height*.15f),stroke,StrokeCap.Round)
-                drawLine(ink,Offset(size.width*.5f,size.height*.15f),Offset(size.width*.72f,size.height*.35f),stroke,StrokeCap.Round)
-                drawLine(ink,Offset(size.width*.28f,size.height*.65f),Offset(size.width*.5f,size.height*.85f),stroke,StrokeCap.Round)
-                drawLine(ink,Offset(size.width*.5f,size.height*.85f),Offset(size.width*.72f,size.height*.65f),stroke,StrokeCap.Round)
-            }
-        }})
-    }
+    val selectedIndex=options.indexOfFirst {it.selected}.takeIf {it>=0}?:0
+    OverlaySpinnerPreference(
+        items=options.map {option->
+            DropdownItem(
+                text=option.label,
+                summary=option.summary,
+                icon=option.leadingContent?.let {content->{ _:Modifier -> content() }},
+            )
+        },
+        selectedIndex=selectedIndex,
+        title=title,
+        modifier=modifier,
+        summary=summary,
+        enabled=enabled,
+        startAction=valueLeading,
+        onSelectedIndexChange={index->options.getOrNull(index)?.onSelect()},
+    )
 }

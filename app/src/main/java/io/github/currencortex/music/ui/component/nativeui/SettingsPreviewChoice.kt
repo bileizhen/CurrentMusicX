@@ -79,7 +79,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     pictogram: @Composable (Int) -> Unit) {
     val colors = COUITheme.colorScheme
     Column(Modifier.testTag(tag), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsInfoHeader(title, icon)
+        SettingsListHeader(title)
         SettingsGroup(Modifier.padding(horizontal = 16.dp).semantics { selectableGroup() }) {
             labels.forEachIndexed { index, label ->
                 SettingsPreference(label, modifier = Modifier.semantics { this.selected = selected == index }
