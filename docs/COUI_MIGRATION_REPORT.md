@@ -27,7 +27,21 @@
 - Settings home cards use flat ColorOS card surfaces and omit the former `个性化` / `音乐` / `应用` group captions, matching the system Settings card stack without an artificial outline or shadow line.
 - Settings surfaces now use the official `coui-squircle` `squircleSurface` with ColorOS weights (2.5 for cards, 1.0 for capsules) instead of circular `RoundedCornerShape` corners, covering the settings home, shared settings groups, appearance preview, color palette/sheet, adaptive EQ and sound-effect tiles.
 - Settings entry rows show only their title, semantic icon and chevron; the previous description lines were removed to match the system Settings list density.
+- Font settings were rebuilt as a fixed, non-scrolling ColorOS-style page: three built-in choices (`系统默认`, `OPPO Sans`, `霞鹜文楷`), retained font import, no search field, a fixed 300dp bottom panel and a 22sp/14sp preview hierarchy. OPPO Sans 4.0 is bundled from the user-provided official archive, with its license recorded in `THIRD_PARTY_NOTICES.md` and `app/src/main/assets/legal/`.
+- The software update page now uses a COUI `OverlayCascadingListPopup` two-level menu, COUI top-bar `IconButton`s and a `DropdownItem.hint` for live channel state. Download-source rows use a 20dp status dot plus a trailing live status label instead of forcing `TagView` into the icon slot.
 - `THIRD_PARTY_NOTICES.md` and `app/src/main/assets/legal/NOTICES.md`: MIUIX attribution replaced with COUI 2.0 attribution.
+
+### Migration vs visual status
+
+| Area | API migration | Visual redesign |
+| --- | --- | --- |
+| Settings home / search / account card | Complete | Complete ColorOS 17 structure |
+| Settings subpages / shared cards | Complete | Mostly COUI components; some custom chrome retained |
+| Font settings | Complete | Complete fixed-layout redesign |
+| Home / discover / library / profile | Complete | Section headings and cards migrated; player-specific visuals intentionally retained |
+| Software update page | Complete | COUI top bar, buttons and two-level menu; cover-derived background retained |
+| Player / lyrics / liquid glass | Complete | Product-specific visuals preserved, not replaced by system templates |
+| Dialogs / sheets / popups | Complete at API level | Remaining custom glass surfaces still need a page-by-page visual pass |
 
 ## 3. Blur and compatibility
 
@@ -61,7 +75,7 @@ Environment: Windows, JDK 21.0.10, AGP 8.13.2, Kotlin 2.4.0, compileSdk 37.
 
 The debug and signed release APKs report `minSdkVersion 33`, `targetSdkVersion 36`, and contain official COUI blur classes with zero `top.yukonga.miuix` classes.
 
-After the settings visual changes, `:app:compileDebugKotlin`, `:app:assembleDebug`, `:app:assembleRelease`, `:app:lintRelease` and `:app:minifyReleaseWithR8` were rerun and passed.
+After the settings, font and update-menu visual changes, `:app:compileDebugKotlin`, `:app:assembleDebug`, `:app:assembleRelease`, `:app:lintRelease`, `:app:minifyReleaseWithR8` and `:app:testDebugUnitTest` were rerun and passed. `:app:testDebugUnitTest` remains `NO-SOURCE` in this checkout.
 
 ### Native build blocker
 
@@ -91,6 +105,8 @@ The signed release (`com.bileizhen.currentmusic`, certificate SHA-256 `FC:3E:63:
 - Appearance page, light and dark themes.
 - Custom color sheet (`OverlayBottomSheet`) with preview, HEX field and color grid.
 - Pure dark palette switches correctly and keeps contrast.
+- Font page in light and dark themes: fixed preview, three built-in fonts, import action, fixed 300dp bottom panel and no page scrolling.
+- Update page: COUI two-level menu (`更新设置` / `下载源`), channel toggle stays open and refreshes its hint, download-source status dots and labels update live, and long domains fit without wrapping at the current 248dp shared menu width.
 
 Both the updated production package and the verification package are intentionally left installed until the user confirms the visual result.
 
@@ -102,6 +118,14 @@ Not verified: player/lyrics animation, audio output, Bluetooth/notification cont
 - A previous attempt that placed a COUI `TopAppBar` inside the existing floating-header backdrop host produced a native RenderThread stack overflow. The settings home now owns a separate COUI `Scaffold`; repeated open/search/cancel/account/back navigation on the production build produced no fatal exception or RenderThread recursion.
 - Official COUI blur is now exercised on the connected Android 17 device. Additional API 33+ devices remain unverified.
 - No performance comparison was measured; the visual pass only checks that page navigation and search remain responsive on the connected device.
+- COUI upstream limitations found during device acceptance are tracked separately; none of them are patched locally:
+  - [#14](https://github.com/suqi8/coui/issues/14) vertical popup drag does not trigger deformation
+  - [#15](https://github.com/suqi8/coui/issues/15) open cascading menus do not accept live content updates or reordering
+  - [#16](https://github.com/suqi8/coui/issues/16) `DropdownItem` has no measured leading/trailing custom-content slot
+  - [#17](https://github.com/suqi8/coui/issues/17) cascading submenu width/height cannot be configured independently
+  - [#18](https://github.com/suqi8/coui/issues/18) per-item dismiss-on-click is not configurable
+  - [#19](https://github.com/suqi8/coui/issues/19) cascading depth is limited to two levels
+- Current workarounds: the update menu uses `collapseOnSelection = false` plus explicit `menu = false` for navigation/actions, a 248dp shared `minWidth` so the submenu can fit long domains, and status/label composables that read the `SnapshotStateMap` directly so their visual state still updates while the menu item snapshot is open.
 - `docs/` is ignored by the repository; this report must be force-added.
 
 ## 8. Suggested PR
