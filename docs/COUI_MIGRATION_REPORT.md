@@ -21,10 +21,11 @@
 - `ui/theme/AppearanceColors.kt`: rebuilt on `io.github.suqi8.coui.kmp.theme.Colors`. Monet/system seed, custom accent, pure black, card/background levels and label opacity are preserved through COUI roles.
 - `app/src/main/AndroidManifest.xml`: removed `tools:overrideLibrary="top.yukonga.miuix.kmp.blur"`. No SDK override is used.
 - `SettingsScreen`: rebuilt as a dedicated COUI `Scaffold` with a 116dp/40sp collapsible SettingsHome header, in-place `TopAppBarSearchBar`, `topAppBarSearchContent`/`topAppBarSearchResults`, `PreferenceCategory`, `Card`, `CardListGroup`, `ArrowPreference`, and `COUIIcons`. The previous floating-header host is no longer used for the settings home.
-- Settings account row now shows the signed-in CurrentMusic account avatar and nickname, with the ColorOS-style summary `管理账号、云服务、查找`; tapping it opens the existing profile tab.
+- Settings account row now shows the signed-in CurrentMusic account avatar and nickname, with the app-specific summary `管理资料、收藏与听歌记录`; tapping it opens the existing profile tab.
 - Settings neutrals now use the ColorOS palette instead of the wallpaper-derived hue: light `#F2F5F7` pages with white cards, dark near-black/pure-black pages with `#1B1C1D` cards, neutral dividers and labels. The user's accent color is retained for controls.
 - Settings entry icons use COUI semantic colors (blue, orange, green, mint, violet, yellow, red) while remaining the official `COUIIcons` set.
 - Settings home cards use flat ColorOS card surfaces and omit the former `个性化` / `音乐` / `应用` group captions, matching the system Settings card stack without an artificial outline or shadow line.
+- Settings entry rows show only their title, semantic icon and chevron; the previous description lines were removed to match the system Settings list density.
 - `THIRD_PARTY_NOTICES.md` and `app/src/main/assets/legal/NOTICES.md`: MIUIX attribution replaced with COUI 2.0 attribution.
 
 ## 3. Blur and compatibility

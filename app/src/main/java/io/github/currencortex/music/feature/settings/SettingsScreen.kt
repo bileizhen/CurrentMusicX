@@ -137,7 +137,7 @@ fun SettingsScreen(
         "查看版本和更新说明" else "查看下载进度、切换来源或安装"
     val displayAccountName = accountName?.takeIf { it.isNotBlank() } ?: "登录账号"
     val destinations = listOf(
-        SettingsDestination("account", displayAccountName, "管理账号、云服务、查找", COUIIcons.Contacts,
+        SettingsDestination("account", displayAccountName, "管理资料、收藏与听歌记录", COUIIcons.Contacts,
             colors.blue, onAccount),
         SettingsDestination("updates", updateTitle, updateSummary, COUIIcons.Update,
             colors.blue) { onUpdates(null) },
@@ -225,7 +225,6 @@ fun SettingsScreen(
                                         item {
                                             ArrowPreference(
                                                 title = "外观",
-                                                summary = "主题、颜色与界面效果",
                                                 startAction = { SettingIcon(COUIIcons.Theme, colors.orange) },
                                                 onClick = onAppearance,
                                                 modifier = Modifier.testTag("open_appearance"),
@@ -234,7 +233,6 @@ fun SettingsScreen(
                                         item {
                                             ArrowPreference(
                                                 title = "桌面悬浮歌词",
-                                                summary = "实时预览、字幕样式与窗口控制",
                                                 startAction = { SettingIcon(COUIIcons.ScreenMirroring, colors.azure) },
                                                 onClick = onDesktopLyrics,
                                                 modifier = Modifier.testTag("open_desktop_lyrics"),
@@ -247,7 +245,6 @@ fun SettingsScreen(
                                         item {
                                             ArrowPreference(
                                                 title = "播放",
-                                                summary = "音质、歌曲衔接、预加载与播放行为",
                                                 startAction = { SettingIcon(COUIIcons.Play, colors.green) },
                                                 onClick = onPlayback,
                                                 modifier = Modifier.testTag("open_playback"),
@@ -256,7 +253,6 @@ fun SettingsScreen(
                                         item {
                                             ArrowPreference(
                                                 title = "音源与网络",
-                                                summary = "音乐音源、歌词来源与服务器",
                                                 startAction = { SettingIcon(COUIIcons.CloudFill, colors.blue) },
                                                 onClick = onNetwork,
                                                 modifier = Modifier.testTag("open_network"),
@@ -265,7 +261,6 @@ fun SettingsScreen(
                                         item {
                                             ArrowPreference(
                                                 title = "音效",
-                                                summary = "智能调音、音效与均衡器",
                                                 startAction = { SettingIcon(COUIIcons.Tune, colors.mint) },
                                                 onClick = onEffects,
                                                 modifier = Modifier.testTag("open_equalizer"),
@@ -274,7 +269,6 @@ fun SettingsScreen(
                                         item {
                                             ArrowPreference(
                                                 title = "音频输出",
-                                                summary = "输出采样率、设备与能力信息",
                                                 startAction = { SettingIcon(COUIIcons.VolumeUp, colors.violet) },
                                                 onClick = onAudioOutput,
                                                 modifier = Modifier.testTag("open_audio_output"),
@@ -287,7 +281,6 @@ fun SettingsScreen(
                                         item {
                                             ArrowPreference(
                                                 title = "默认打开链接",
-                                                summary = "在系统中允许打开网易云和 CurrentMusic 网站链接",
                                                 startAction = { SettingIcon(COUIIcons.Link, colors.blue) },
                                                 onClick = {
                                                     io.github.currencortex.music.ui.util.openAppLinkSettings(context)
@@ -298,7 +291,6 @@ fun SettingsScreen(
                                         item {
                                             ArrowPreference(
                                                 title = "存储空间",
-                                                summary = "缓存与下载占用",
                                                 startAction = { SettingIcon(COUIIcons.FileDownloads, colors.yellow) },
                                                 onClick = onStorage,
                                                 modifier = Modifier.testTag("open_storage"),
@@ -307,7 +299,6 @@ fun SettingsScreen(
                                         item {
                                             ArrowPreference(
                                                 title = "导出日志",
-                                                summary = "保存或分享脱敏诊断文件",
                                                 startAction = { SettingIcon(COUIIcons.File, colors.azure) },
                                                 onClick = onLogs,
                                                 modifier = Modifier.testTag("open_logs"),
@@ -316,7 +307,6 @@ fun SettingsScreen(
                                         item {
                                             ArrowPreference(
                                                 title = "意见反馈",
-                                                summary = "报告问题或提出改进建议",
                                                 startAction = { SettingIcon(COUIIcons.Messages, colors.blue) },
                                                 onClick = onFeedback,
                                                 modifier = Modifier.testTag("open_feedback"),
@@ -325,7 +315,6 @@ fun SettingsScreen(
                                         item {
                                             ArrowPreference(
                                                 title = "支持开发者",
-                                                summary = "自愿赞助项目开发与维护",
                                                 startAction = { SettingIcon(COUIIcons.Favorites, colors.red) },
                                                 onClick = onSupport,
                                                 modifier = Modifier.testTag("open_support"),
@@ -334,7 +323,6 @@ fun SettingsScreen(
                                         item {
                                             ArrowPreference(
                                                 title = "关于",
-                                                summary = "版本、开源许可与隐私",
                                                 startAction = { SettingIcon(COUIIcons.Info, colors.labelSecondaryVariant) },
                                                 onClick = onAbout,
                                                 modifier = Modifier.testTag("open_about"),
@@ -455,7 +443,6 @@ private fun UpdateSettingsCard(
         item {
             ArrowPreference(
                 title = updateTitle,
-                summary = updateSummary,
                 startAction = { SettingIcon(COUIIcons.Update, COUITheme.colorScheme.blue) },
                 onClick = {
                     onUpdates(
@@ -480,7 +467,7 @@ private fun SettingsAccountCard(
         item {
             ArrowPreference(
                 title = name,
-                summary = "管理账号、云服务、查找",
+                summary = "管理资料、收藏与听歌记录",
                 startAction = {
                     DecoratedAvatar(
                         avatarUrl = avatarUrl,
@@ -540,7 +527,6 @@ private fun SettingsSearchResults(
                         item(key = destination.key) {
                             ArrowPreference(
                                 title = destination.title,
-                                summary = destination.summary,
                                 startAction = { SettingIcon(destination.icon, destination.tint) },
                                 onClick = {
                                     onBeforeNavigate()
