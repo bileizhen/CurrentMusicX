@@ -72,10 +72,6 @@ internal fun PostsScreen(vm: PostsViewModel, navigate: (String) -> Unit, content
 
     val menuItems = options?.let { post ->
         buildList {
-            add(GlassMenuItem("post_menu_link", "复制帖子链接", MusicIcons.Share, onClick = {
-                clipboard.setText(AnnotatedString(vm.postLink(post.id)))
-                menuOpen = false
-            }))
             add(GlassMenuItem("post_menu_copy", "复制正文", MusicIcons.Copy, onClick = {
                 clipboard.setText(AnnotatedString(post.content))
                 menuOpen = false

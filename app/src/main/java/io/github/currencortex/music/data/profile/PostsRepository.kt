@@ -4,6 +4,8 @@ import io.github.currencortex.music.core.network.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.*
 
@@ -19,6 +21,7 @@ import kotlinx.serialization.json.*
     val createdAt: Long = 0, val canDelete: Boolean = false, val replyTo: PostReplyTarget? = null)
 @Serializable data class PostComments(val comments: List<PostComment> = emptyList(), val nextAfter: Long? = null)
 @Serializable private data class PostDetails(val post: CommunityPost)
+internal data class PostDetail(val post: CommunityPost, val shareable: Boolean)
 @Serializable private data class CreatedPost(val id: Long)
 @Serializable private data class PostLike(val likeCount: Int)
 data class PostAttachmentPage(val items: List<PostAttachment>, val nextOffset: Int, val hasMore: Boolean)
@@ -30,32 +33,46 @@ internal fun String.postCharacterCount(): Int = trim().let { it.codePointCount(0
 internal fun String.validPostTitle(): Boolean = postCharacterCount() <= POST_TITLE_LIMIT &&
     trim().none { it in "\n\r\u000B\u000C\u001C\u001D\u001E\u0085\u2028\u2029" }
 
-internal data class PostLikeChanges(
+internal data class PostChanges(
     val revision: Long = 0,
     private val session: RequestSession? = null,
-    private val changes: Map<Long, Change> = emptyMap(),
+    private val likes: Map<Long, Like> = emptyMap(),
+    private val deletions: Map<Long, Long> = emptyMap(),
 ) {
-    data class Change(val revision: Long, val liked: Boolean, val count: Int)
+    data class Like(val revision: Long, val liked: Boolean, val count: Int)
 
-    fun forSession(expected: RequestSession): PostLikeChanges =
-        if (expected == session) this else PostLikeChanges(revision, expected)
+    fun forSession(expected: RequestSession): PostChanges =
+        if (expected == session) this else PostChanges(revision, expected)
 
-    fun record(expected: RequestSession, id: Long, liked: Boolean, count: Int): PostLikeChanges {
+    fun recordLike(expected: RequestSession, id: Long, liked: Boolean, count: Int): PostChanges {
+        val current = forSession(expected)
         val next = revision + 1
-        return forSession(expected).let { it.copy(revision = next, changes = it.changes + (id to Change(next, liked, count))) }
+        return current.copy(revision = next, likes = current.likes + (id to Like(next, liked, count)))
     }
+
+    fun recordDeletion(expected: RequestSession, id: Long): PostChanges {
+        val current = forSession(expected)
+        val next = revision + 1
+        return current.copy(revision = next, likes = current.likes - id, deletions = current.deletions + (id to next))
+    }
+
+    fun deletedAfter(expected: RequestSession, since: Long): Set<Long> =
+        if (expected == session) deletions.filterValues { it > since }.keys else emptySet()
+
+    fun isDeleted(id: Long, expected: RequestSession): Boolean = expected == session && id in deletions
 
     fun applyTo(post: CommunityPost, expected: RequestSession, since: Long): CommunityPost {
         if (expected != session) return post
-        val change = changes[post.id]?.takeIf { it.revision > since } ?: return post
+        val change = likes[post.id]?.takeIf { it.revision > since } ?: return post
         return post.copy(likedByMe = change.liked, likeCount = change.count)
     }
 }
 
 class PostsRepository(private val api: ApiClient, private val session: () -> RequestSession) {
-    private val likes = MutableStateFlow(PostLikeChanges())
-    internal val likeChanges = likes.asStateFlow()
-    internal fun resetLikesForCurrentSession() = likes.update { it.forSession(session()) }
+    private val mutations = MutableStateFlow(PostChanges())
+    private val postWrites = List(16) { Mutex() }
+    internal val changes = mutations.asStateFlow()
+    internal fun resetForCurrentSession() = mutations.update { it.forSession(session()) }
 
     private suspend fun request(method: String, path: String, query: Map<String, String> = emptyMap(),
         body: JsonElement? = null, expected: RequestSession = session()): JsonElement {
@@ -67,28 +84,32 @@ class PostsRepository(private val api: ApiClient, private val session: () -> Req
         return result
     }
     suspend fun list(offset: Int = 0, author: Long? = null, expected: RequestSession = session()): PostsPage {
-        val since = likes.value.revision
+        val since = changes.value.revision
         val page = api.decode<PostsPage>(request("GET", "posts", buildMap {
             put("offset", offset.coerceAtLeast(0).toString())
             put("limit", "20")
             if (author != null) put("author", author.toString())
         }, expected = expected))
-        val latest = likes.value
-        return page.copy(posts = page.posts.map { latest.applyTo(it, expected, since) })
+        val latest = changes.value
+        val posts = page.posts.filterNot { latest.isDeleted(it.id, expected) }.map { latest.applyTo(it, expected, since) }
+        return page.copy(posts = posts, total = (page.total - (page.posts.size - posts.size)).coerceAtLeast(0))
     }
-    suspend fun detail(id: Long, cached: CommunityPost? = null, publishedBy: Long? = null): CommunityPost {
+    internal suspend fun detail(id: Long, cached: CommunityPost? = null, publishedBy: Long? = null): PostDetail {
         require(id > 0)
         val expected = session()
-        val since = likes.value.revision
-        val post = try {
-            api.decode<PostDetails>(request("GET", "posts/$id", expected = expected)).post
+        val since = changes.value.revision
+        val detail = try {
+            PostDetail(api.decode<PostDetails>(request("GET", "posts/$id", expected = expected)).post, shareable = true)
         } catch (error: ApiException) {
             if (error.status != 404 || error.userMessage != "未知接口 GET /posts/$id") throw error
-            cached?.takeIf { it.id == id }
+            val post = cached?.takeIf { it.id == id }
                 ?: publishedBy?.let { author -> list(author = author, expected = expected).posts.find { it.id == id } }
                 ?: throw error
+            PostDetail(post, shareable = false)
         }
-        return likes.value.applyTo(post, expected, since)
+        val latest = changes.value
+        if (latest.isDeleted(id, expected)) throw ApiException(ErrorKind.NotFound)
+        return detail.copy(post = latest.applyTo(detail.post, expected, since))
     }
     fun link(id: Long): String {
         require(id > 0)
@@ -131,14 +152,19 @@ class PostsRepository(private val api: ApiClient, private val session: () -> Req
     }
     suspend fun like(id: Long, on: Boolean, expected: RequestSession): Int {
         require(id > 0)
-        val count = api.decode<PostLike>(request("POST", "posts/$id/like",
-            body = buildJsonObject { put("on", on) }, expected = expected)).likeCount
-        likes.update { if (expected == session()) it.record(expected, id, on, count) else it }
-        return count
+        return postWrites[(id % postWrites.size).toInt()].withLock {
+            val count = api.decode<PostLike>(request("POST", "posts/$id/like",
+                body = buildJsonObject { put("on", on) }, expected = expected)).likeCount
+            mutations.update { if (expected == session()) it.recordLike(expected, id, on, count) else it }
+            count
+        }
     }
     suspend fun delete(id: Long, expected: RequestSession) {
         require(id > 0)
-        request("DELETE", "posts/$id", expected = expected)
+        postWrites[(id % postWrites.size).toInt()].withLock {
+            request("DELETE", "posts/$id", expected = expected)
+            mutations.update { if (expected == session()) it.recordDeletion(expected, id) else it }
+        }
     }
     suspend fun comments(id: Long, after: Long = 0): PostComments {
         require(id > 0 && after >= 0)

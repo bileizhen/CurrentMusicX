@@ -48,10 +48,12 @@ import io.github.currencortex.music.core.network.CurrentMusicServer
 import io.github.currencortex.music.ui.util.openExternalLink
 import io.github.currencortex.music.ui.component.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -357,10 +359,15 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         SideEffect {pageNavigation.onClosed={route->
             if(backStack.lastOrNull()==route)backStack=backStack.dropLast(1)
         }}
+        val linkedPostViews = remember { mutableMapOf<String, PostsViewModel>() }
+        val postLinkRequests = remember { mutableStateMapOf<String, String>() }
+        SideEffect { postLinkRequests.keys.retainAll(backStack.toSet()) }
         fun navigateBack() {
             if (roomDialogOpen || playerDialogOpen || miniQueueOpen || songMenu != null) return
             if (backStack.size > 1) {
-                if(pageNavigation.close(backStack.last()))return
+                val route = backStack.last()
+                if (linkedPostViews[route]?.state?.value?.busy == true) return
+                if(pageNavigation.close(route))return
                 if (backStack.last() == SEARCH.toString()) { searchFocusManager.clearFocus(); searchKeyboard?.hide() }
                 playerSheetMotion = if (backStack.last() == PLAYER.toString()) PlayerSheetMotion.CLOSE else PlayerSheetMotion.NONE
                 if (backStack.last() == "lib/video") container.playerController.closeVideo()
@@ -424,7 +431,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         var pendingPlay by remember { mutableStateOf<(() -> Unit)?>(null) }
         var pendingWebLinkId by remember { mutableStateOf<String?>(null) }
-        var postLinkRequest by remember { mutableStateOf<Pair<Long, String>?>(null) }
         var explained by rememberSaveable { mutableStateOf(false) }
         val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
             val action = pendingPlay
@@ -457,8 +463,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     is io.github.currencortex.music.core.links.MusicWebLink.Page -> navigateLibrary(target.route)
                     is io.github.currencortex.music.core.links.MusicWebLink.Post -> {
                         if (CurrentMusicServer.builtIn(container.projectSession().server)) {
-                            postLinkRequest = target.id to request.id
-                            navigateLibrary("user/post/${target.id}")
+                            val route = "user/post/${target.id}"
+                            if (linkedPostViews[route]?.state?.value?.busy != true) postLinkRequests[route] = request.id
+                            navigateLibrary(route)
                         } else openExternalLink(context, target.webUrl.toString(), excludeCurrentApp = true)
                     }
                     is io.github.currencortex.music.core.links.MusicWebLink.ListenTogether -> {
@@ -905,8 +912,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                 route.startsWith("user/post/") -> {
                                     val id = route.substringAfterLast('/').toLongOrNull()?.takeIf { it > 0 }
                                     if (id != null) {
-                                        val requestId = postLinkRequest?.takeIf { it.first == id }?.second
-                                        LinkedPostScreen(container, id, requestId, ::navigateLibrary) {
+                                        val vm = rememberLinkedPostViewModel(container, id, postLinkRequests[route])
+                                        DisposableEffect(route, vm) {
+                                            linkedPostViews[route] = vm
+                                            onDispose {
+                                                if (linkedPostViews[route] === vm) linkedPostViews.remove(route)
+                                            }
+                                        }
+                                        LinkedPostScreen(vm, ::navigateLibrary) {
                                             if (backStack.lastOrNull() == route) navigateBack()
                                         }
                                     }

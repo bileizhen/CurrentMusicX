@@ -17,6 +17,7 @@ internal data class PostsState(val posts: List<CommunityPost> = emptyList(), val
     val attachmentError: String? = null, val attachmentSearched: Boolean = false,
     val attachmentOffset: Int = 0, val attachmentMore: Boolean = false, val attachmentRetryMore: Boolean = false,
     val detailId: Long? = null, val detail: CommunityPost? = null, val detailLoading: Boolean = false,
+    val detailShareable: Boolean = false,
     val detailError: String? = null, val focusComments: Boolean = false, val commentSent: Long = 0, val commentOwner: String? = null,
     val comments: List<PostComment> = emptyList(), val commentsLoading: Boolean = false,
     val commentsError: String? = null, val nextAfter: Long? = null, val commentRetryAfter: Long = 0)
@@ -59,7 +60,7 @@ internal class PostsViewModel(
                     ++generation; ++attachmentGeneration
                     feedTask?.cancel(); detailTask?.cancel(); commentTask?.cancel(); actionTask?.cancel(); attachmentTask?.cancel()
                     activeSession = session()
-                    repository.resetLikesForCurrentSession()
+                    repository.resetForCurrentSession()
                     draftOwner = null
                     publication = null
                     state.value = PostsState(commentOwner = owner()?.key)
@@ -68,19 +69,37 @@ internal class PostsViewModel(
                 }
         }
         viewModelScope.launch {
-            var observed = repository.likeChanges.value.revision
-            repository.likeChanges.collect { changes ->
+            var observed = repository.changes.value.revision
+            repository.changes.collect { changes ->
                 val previous = observed
                 observed = changes.revision
                 val expected = activeSession?.takeIf { it == session() } ?: return@collect
-                if (previous < observed) state.update { current ->
-                    current.copy(
-                        posts = current.posts.map { changes.applyTo(it, expected, previous) },
-                        detail = current.detail?.let { changes.applyTo(it, expected, previous) },
-                    )
-                }
+                if (previous < observed) applyPostChanges(changes, expected, previous)
             }
         }
+    }
+
+    private fun applyPostChanges(changes: PostChanges, expected: RequestSession, since: Long) {
+        val deleted = changes.deletedAfter(expected, since)
+        val detailDeleted = state.value.detailId?.let(deleted::contains) == true
+        if (detailDeleted) {
+            detailTask?.cancel()
+            commentTask?.cancel()
+        }
+        state.update { current ->
+            val posts = current.posts.filterNot { it.id in deleted }.map { changes.applyTo(it, expected, since) }
+            val updated = current.copy(
+                posts = posts,
+                detail = current.detail?.let { changes.applyTo(it, expected, since) },
+                total = (current.total - (current.posts.size - posts.size)).coerceAtLeast(0),
+                offset = if (deleted.isEmpty()) current.offset else 0,
+                done = current.done || deleted.isNotEmpty(),
+            )
+            if (detailDeleted) updated.copy(detail = null, detailLoading = false, detailShareable = false,
+                detailError = ErrorKind.NotFound.message, comments = emptyList(), commentsLoading = false,
+                commentsError = null, nextAfter = null) else updated
+        }
+        if (requested && deleted.isNotEmpty()) reload()
     }
     fun ensureLoaded() { requested = true; if (!state.value.loaded && !state.value.loading) reload() }
     fun postLink(id: Long): String = repository.link(id)
@@ -132,11 +151,6 @@ internal class PostsViewModel(
     fun delete(post: CommunityPost, onDeleted: () -> Unit = {}) {
         if (post.canDelete) action("帖子已删除", { repository.delete(post.id, it) }) {
             if (state.value.detailId == post.id) detail(null)
-            state.update { current -> current.copy(
-                posts = current.posts.filterNot { it.id == post.id },
-                total = (current.total - 1).coerceAtLeast(0),
-            ) }
-            if (requested) reload()
             onDeleted()
         }
     }
@@ -232,7 +246,7 @@ internal class PostsViewModel(
     fun detail(id: Long?, focusComments: Boolean = false) {
         detailTask?.cancel()
         commentTask?.cancel()
-        state.update { it.copy(detailId = id, detail = null, detailLoading = id != null, detailError = null, focusComments = focusComments,
+        state.update { it.copy(detailId = id, detail = null, detailLoading = id != null, detailShareable = false, detailError = null, focusComments = focusComments,
             comments = emptyList(), commentsLoading = false, commentsError = null, nextAfter = null, commentRetryAfter = 0, message = null) }
         if (id == null) return
         val expected = session()
@@ -248,8 +262,8 @@ internal class PostsViewModel(
             when (result) {
                 is AppResult.Success -> {
                     state.update { current ->
-                        val post = result.value
-                        current.copy(detail = post, detailLoading = false,
+                        val post = result.value.post
+                        current.copy(detail = post, detailLoading = false, detailShareable = result.value.shareable,
                             posts = current.posts.map { if (it.id == id) post else it })
                     }
                     loadComments()

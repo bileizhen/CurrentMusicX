@@ -11,6 +11,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -31,6 +32,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.github.currencortex.music.AppContainer
 import io.github.currencortex.music.data.profile.POST_COMMENT_LIMIT
 import io.github.currencortex.music.data.profile.PostComment
+import io.github.currencortex.music.data.profile.PostReplyTarget
 import io.github.currencortex.music.data.profile.postCharacterCount
 import io.github.currencortex.music.feature.update.MarkdownText
 import io.github.currencortex.music.ui.component.*
@@ -53,26 +55,33 @@ internal fun PostDetailDialog(vm: PostsViewModel, state: PostsState, navigate: (
 }
 
 @Composable
-internal fun LinkedPostScreen(
+internal fun rememberLinkedPostViewModel(
     container: AppContainer,
     postId: Long,
     linkRequestId: String?,
-    navigate: (String) -> Unit,
-    onBack: () -> Unit,
-) {
+): PostsViewModel {
     val owner = remember(container, postId, linkRequestId) {
         object : ViewModelStoreOwner {
             override val viewModelStore = ViewModelStore()
         }
     }
     DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
-    val vm: PostsViewModel = viewModel(viewModelStoreOwner = owner,
+    return viewModel(viewModelStoreOwner = owner,
         factory = viewModelFactory { PostsViewModel(container, linkedPostId = postId) })
+}
+
+@Composable
+internal fun LinkedPostScreen(vm: PostsViewModel, navigate: (String) -> Unit, onBack: () -> Unit) {
     val state by vm.state.collectAsPageState()
     val account by vm.container.accountRepository.state.collectAsStateWithLifecycle()
     val close = { if (!state.busy) onBack() }
     PostDetailPage(vm, state, navigate, account.account != null, close, onDeleted = onBack)
 }
+
+private val replyTargetSaver = listSaver<PostReplyTarget?, Any>(
+    save = { if (it == null) emptyList() else listOf(it.id, it.userId, it.nickname) },
+    restore = { if (it.isEmpty()) null else PostReplyTarget(it[0] as Long, it[1] as Long, it[2] as String) },
+)
 
 @Suppress("DEPRECATION")
 @Composable
@@ -96,10 +105,12 @@ private fun PostDetailPage(
     val canComment = signedIn && commentOwner != null
     var deletingPost by remember(id, commentOwner) { mutableStateOf(false) }
     var deletingComment by remember(id, commentOwner) { mutableStateOf<PostComment?>(null) }
-    var replyTo by remember(id, commentOwner) { mutableStateOf<PostComment?>(null) }
-    val input = key(id, commentOwner) {
-        rememberSaveable(saver = TextFieldState.Saver) { TextFieldState() }
+    val (input, replyState) = key(id, commentOwner) {
+        val text = rememberSaveable(saver = TextFieldState.Saver) { TextFieldState() }
+        val target = rememberSaveable(stateSaver = replyTargetSaver) { mutableStateOf<PostReplyTarget?>(null) }
+        text to target
     }
+    var replyTo by replyState
 
     // The first composition for a thread must not clear its restored input.
     var lastSent by remember(id, commentOwner) { mutableLongStateOf(state.commentSent) }
@@ -116,7 +127,7 @@ private fun PostDetailPage(
 
     MusicSubpage("帖子详情", "post_detail", onBack, modifier = Modifier.background(colors.background).imePadding(),
         actions = {
-            if (post != null) PostAction(MusicIcons.Share, "分享帖子", {
+            if (post != null && state.detailShareable) PostAction(MusicIcons.Share, "分享帖子", {
                 val share = Intent(Intent.ACTION_SEND).setType("text/plain")
                     .putExtra(Intent.EXTRA_TEXT, vm.postLink(post.id))
                 context.startActivity(Intent.createChooser(share, "分享帖子"))
@@ -165,7 +176,10 @@ private fun PostDetailPage(
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(postTime(comment.createdAt), Modifier.weight(1f), fontSize = 11.sp,
                                         color = colors.onSurfaceVariantSummary)
-                                    if (canComment) MusicTextAction("回复", { replyTo = comment }, enabled = !state.busy)
+                                    if (canComment) MusicTextAction("回复", {
+                                        val author = comment.author
+                                        replyTo = PostReplyTarget(comment.id, author.id, author.nickname.ifBlank { author.username })
+                                    }, enabled = !state.busy)
                                     if (vm.canDelete(comment)) MusicTextAction("删除", { deletingComment = comment },
                                         Modifier.testTag("post_comment_delete_" + comment.id),
                                         enabled = !state.busy && !state.commentsLoading)
@@ -190,9 +204,9 @@ private fun PostDetailPage(
                 verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 state.message?.let { SettingsHint(it) }
                 if (canComment) {
-                    replyTo?.let { comment ->
+                    replyTo?.let { target ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text("回复 @" + comment.author.nickname.ifBlank { comment.author.username }, Modifier.weight(1f),
+                            Text("回复 @" + target.nickname.ifBlank { "用户" + target.userId }, Modifier.weight(1f),
                                 fontSize = 13.sp, color = colors.primary)
                             MusicTextAction("取消回复", { replyTo = null }, enabled = !state.busy)
                         }
