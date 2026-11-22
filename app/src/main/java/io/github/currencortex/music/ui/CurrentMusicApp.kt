@@ -102,6 +102,7 @@ import io.github.currencortex.music.ui.component.HighApiFloatingNavigation
 import io.github.currencortex.music.ui.theme.LeiTheme
 import io.github.currencortex.music.ui.util.viewModelFactory
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.utils.scrollEndHaptic
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -151,6 +152,7 @@ private const val PLAYER = 22
 private const val SEARCH = 23
 private const val STORAGE = 24
 private const val EQUALIZER = 25
+private const val DEVELOPER_OPTIONS = 26
 private const val HOME_TAB = 0
 private const val DISCOVER_TAB = 1
 private const val ME_TAB = 2
@@ -680,7 +682,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     onSupport = { navigateLibrary(SupportConfig.route) },
                                     onFeedback = { navigateLibrary(FEEDBACK_ROUTE) },
                                     accountName = settingsAccountName, accountAvatarUrl = settingsAvatarUrl,
-                                    onAccount = { navigateLibrary("user/account") })
+                                    onAccount = { navigateLibrary("user/account") },
+                                    developerMode = settings.developerMode,
+                                    onDeveloperOptions = { navigateTo(DEVELOPER_OPTIONS) })
                             }
                             }
                         }
@@ -719,7 +723,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onSupport = { navigateLibrary(SupportConfig.route) },
                             onFeedback = { navigateLibrary(FEEDBACK_ROUTE) },
                             accountName = settingsAccountName, accountAvatarUrl = settingsAvatarUrl,
-                            onAccount = { navigateLibrary("user/account") })
+                            onAccount = { navigateLibrary("user/account") },
+                            developerMode = settings.developerMode,
+                            onDeveloperOptions = { navigateTo(DEVELOPER_OPTIONS) })
+                    }
+                }
+                entry(DEVELOPER_OPTIONS.toString()) {
+                    Box(Modifier.fillMaxSize().navigationBarsPadding()) {
+                        io.github.currencortex.music.feature.settings.DeveloperOptionsScreen(settingsVm, ::navigateBack)
                     }
                 }
                 entry(NETWORK.toString()) {
@@ -807,15 +818,23 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         onOpenMember = { member, group -> memberFocus = MemberFocus(member, group) },
                         onSupport = { navigateLibrary(SupportConfig.route) },
                         updateState = updateState, onCheckUpdates = { origin -> openUpdates(origin) },
-                        accountName = account.account?.username?.trim()?.takeIf { it.isNotBlank() })
+                        accountName = account.account?.username?.trim()?.takeIf { it.isNotBlank() },
+                        developerMode = settings.developerMode,
+                        onDeveloperModeUnlocked = { settingsVm.edit { it.copy(developerMode = true) } })
                 }
                 entry(FEEDBACK_ROUTE) {
                     val owner = remember(account.account?.id, sessionRevision) { feedbackVm.owner() }
                     FeedbackScreen(feedbackVm, owner, container.logger, ::navigateBack,
                         onLogin = { authVm.begin(); navigateLibrary("user/login") })
                 }
-                entry(SupportConfig.route) { SupportScreen(onBack = ::navigateBack,
-                    onOfficialDonation = { navigateLibrary(SupportConfig.donationRoute) }) }
+                entry(SupportConfig.route) {
+                    // The page scrolls under the floating player; keep it above the navigation bar
+                    // so the standard bottom inset keeps the last paragraph clear of both.
+                    Box(Modifier.fillMaxSize().navigationBarsPadding()) {
+                        SupportScreen(onBack = ::navigateBack,
+                            onOfficialDonation = { navigateLibrary(SupportConfig.donationRoute) })
+                    }
+                }
                 entry(SupportConfig.donationRoute) {
                     val vm: io.github.currencortex.music.feature.support.DonationViewModel = viewModel(factory = viewModelFactory {
                         io.github.currencortex.music.feature.support.DonationViewModel(
@@ -1009,7 +1028,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         NavDisplay(
             backStack = pageStack,
             modifier = Modifier.weight(1f).fillMaxSize().testTag("music_navigation")
-                .background(COUITheme.colorScheme.background),
+                .background(COUITheme.colorScheme.background)
+                // 滚动边缘触感: the developer option buzzes once when a list flings into its end.
+                .then(if (settings.scrollEdgeHaptic) Modifier.scrollEndHaptic() else Modifier),
             transition = NavTransitions.COUIDefault,
             effects = NavDisplayEffects(cornerClipRadius = rememberNavSystemCornerRadius()),
             onBack = ::navigateBack,
@@ -1235,6 +1256,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         }
         AvatarFlightOverlay(avatarFlight)
         io.github.currencortex.music.feature.lyrics.desktop.SoundEffectIslandFallback(container)
+        // 显示帧率: a developer pill over everything, tucked under the status bar by default.
+        if (settings.developerMode && settings.showFrameRate) io.github.currencortex.music.ui.component.DeveloperFrameRateOverlay()
         val landingOnHome = selected == HOME_TAB && backStack.last() == ROOT.toString()
         val pageReady = launchReady && startupRouted && (!account.loading || container.nativeNetease != null) &&
             (!landingOnHome || (libraryHome.loaded && !libraryHome.loading))

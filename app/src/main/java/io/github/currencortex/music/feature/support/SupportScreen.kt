@@ -61,8 +61,11 @@ fun SupportScreen(onBack: () -> Unit, afdianUrl: String = SupportConfig.afdianUr
                 }
             }
         }
-        item("privacy") {
+        // One hint per lazy item: two siblings in a single item would draw on top of each other.
+        item("privacy_voluntary") {
             SettingsHint("所有赞助均为自愿行为，不影响 CurrentMusic 的正常使用。赞助不会解锁额外的软件功能或会员权益。")
+        }
+        item("privacy_support") {
             SettingsHint("爱发电无需登录。官方捐赠登记需要登录，提交的金额、交易单号和账号信息仅供站长核对。支付由对应平台处理，应用不会自动读取支付记录或判断支付是否完成。")
         }
     }

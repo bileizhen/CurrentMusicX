@@ -82,6 +82,8 @@ fun SettingsScreen(
     accountName: String? = null,
     accountAvatarUrl: String? = null,
     onAccount: () -> Unit = {},
+    developerMode: Boolean = false,
+    onDeveloperOptions: () -> Unit = {},
 ) {
     val context = LocalContext.current
     var searching by rememberSaveable { mutableStateOf(false) }
@@ -323,6 +325,18 @@ fun SettingsScreen(
                                                 startAction = { SettingIcon(COUIIcons.Info, colors.labelSecondaryVariant) },
                                                 onClick = onAbout,
                                                 modifier = Modifier.testTag("open_about"),
+                                            )
+                                        }
+                                    }
+                                }
+                                if (developerMode) item {
+                                    SettingsCategoryCard(null) {
+                                        item {
+                                            ArrowPreference(
+                                                title = "开发者选项",
+                                                startAction = { SettingIcon(COUIIcons.Tune, colors.labelSecondaryVariant) },
+                                                onClick = onDeveloperOptions,
+                                                modifier = Modifier.testTag("open_developer_options"),
                                             )
                                         }
                                     }
