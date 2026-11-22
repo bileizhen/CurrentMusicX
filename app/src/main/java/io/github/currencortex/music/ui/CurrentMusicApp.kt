@@ -827,8 +827,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     FeedbackScreen(feedbackVm, owner, container.logger, ::navigateBack,
                         onLogin = { authVm.begin(); navigateLibrary("user/login") })
                 }
-                entry(SupportConfig.route) { SupportScreen(onBack = ::navigateBack,
-                    onOfficialDonation = { navigateLibrary(SupportConfig.donationRoute) }) }
+                entry(SupportConfig.route) {
+                    // The page scrolls under the floating player; keep it above the navigation bar
+                    // so the standard bottom inset keeps the last paragraph clear of both.
+                    Box(Modifier.fillMaxSize().navigationBarsPadding()) {
+                        SupportScreen(onBack = ::navigateBack,
+                            onOfficialDonation = { navigateLibrary(SupportConfig.donationRoute) })
+                    }
+                }
                 entry(SupportConfig.donationRoute) {
                     val vm: io.github.currencortex.music.feature.support.DonationViewModel = viewModel(factory = viewModelFactory {
                         io.github.currencortex.music.feature.support.DonationViewModel(
