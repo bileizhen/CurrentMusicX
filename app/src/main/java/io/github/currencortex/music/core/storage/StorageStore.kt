@@ -50,18 +50,20 @@ class StorageStore(private val context: Context, private val audioCache: AudioCa
     suspend fun measure(): StorageUsage = withContext(Dispatchers.IO) {
         audioCache.refreshUsage()
         val parts = cacheParts()
-        val lyrics = parts.lyrics + runCatching { databaseLyricsBytes?.invoke() ?: 0L }.getOrDefault(0L)
+        val databaseLyrics = runCatching { databaseLyricsBytes?.invoke() ?: 0L }.getOrDefault(0L)
         val (downloadBytes, downloadCount) = downloads()
         StorageUsage(
             audio = audioCache.bytes.value,
             audioTracks = audioCache.entries.value,
             images = parts.images,
-            lyrics = lyrics,
+            lyrics = parts.lyrics + databaseLyrics,
             shares = parts.shares,
             other = parts.other,
             downloads = downloadBytes,
             downloadCount = downloadCount,
-            essential = essentialBytes(),
+            // 必要文件 measures the whole database directory, which holds the lyrics rows
+            // counted in the lyrics row above; leave them out so no byte is counted twice.
+            essential = (essentialBytes() - databaseLyrics).coerceAtLeast(0L),
         )
     }
 
