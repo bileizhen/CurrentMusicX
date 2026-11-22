@@ -79,6 +79,12 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     } }
     BackHandler(configuration || filterOpen || vm.nested) { back() }
     LaunchedEffect(message) { message?.let { vm.container.errorNotices.showMessage(it); vm.message.value = null } }
+    val snackbar = io.github.currencortex.music.ui.component.LocalMusicSnackbar.current
+    LaunchedEffect(state.error, state.loading) {
+        val failure = state.error
+        // The load error is a snackbar; the action error below stays inline because it has a 关闭.
+        if (failure != null && !state.loading && snackbar?.show(failure, actionLabel = "重试") == true) vm.refresh()
+    }
     val shownSongs = remember(state.songs, filter) {
         if (filter.isBlank()) state.songs else state.songs.filter { song ->
             listOf(song.name, song.artists, song.album).any { it.contains(filter.trim(), ignoreCase = true) }
@@ -133,9 +139,9 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
                         if (state.page.kind == "playlists") item("create", span = { GridItemSpan(maxLineSpan) }) {
                             MusicSectionHeader("${state.entries.size} 个歌单", "新建歌单", { action("create") })
                         }
-                        if (state.error != null || error != null && dialog.isEmpty()) item("error", span = { GridItemSpan(maxLineSpan) }) {
-                            Column { Text(state.error ?: error.orEmpty(), color = COUITheme.colorScheme.error, fontSize = 13.sp)
-                                MusicTextAction(if (state.error != null) "重试" else "关闭", { if (state.error != null) vm.refresh() else vm.clearError() }) }
+                        if (error != null && dialog.isEmpty()) item("error", span = { GridItemSpan(maxLineSpan) }) {
+                            Column { Text(error.orEmpty(), color = COUITheme.colorScheme.error, fontSize = 13.sp)
+                                MusicTextAction("关闭", { vm.clearError() }) }
                         }
                         if (shownSongs.isNotEmpty()) item("play", span = { GridItemSpan(maxLineSpan) }) {
                             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {

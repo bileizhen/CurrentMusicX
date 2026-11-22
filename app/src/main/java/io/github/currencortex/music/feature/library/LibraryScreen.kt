@@ -159,6 +159,11 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     val editable = vm.editable(state.playlist, account.account?.id ?: 0)
     LaunchedEffect(state.songs) { library.refreshSearchLikes(state.songs) }
     LaunchedEffect(state.refreshError) { state.refreshError?.let { library.container.errorNotices.show("刷新失败，已保留原列表：$it") } }
+    val snackbar = io.github.currencortex.music.ui.component.LocalMusicSnackbar.current
+    LaunchedEffect(state.error, state.loading) {
+        val message = state.error
+        if (message != null && !state.loading && snackbar?.show(message, actionLabel = "重试") == true) vm.reload()
+    }
     // NavDisplay resumes the destination after the transition. Visible rows request their own art.
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     if (LocalMusicPageActive.current && LocalPageContainerSettled.current && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) {
@@ -178,7 +183,6 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
             if (state.cover.isNotBlank()) item { MusicCover(state.cover, Modifier.size(180.dp), 500) }
             if (state.description.isNotBlank()) item { Text(state.description) }
             if (state.playlist?.source == "ncm") item { Text("网易云音乐 · 同步歌单只读") }
-            state.error?.let { error -> item { Text(error); TextButton("重试", onClick = { vm.reload() }) } }
             state.mv?.let { mv -> item { TextButton("播放 MV", onClick = { playMv(mv) }, modifier = Modifier.testTag("play_mv")) } }
             if (state.songs.isNotEmpty()) item {
                 LazyRow {
@@ -234,6 +238,11 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 
 @Composable fun CatalogScreen(vm: CatalogViewModel, onBack: () -> Unit, navigate: (String) -> Unit) {
     val state by vm.state.collectAsPageState()
+    val snackbar = io.github.currencortex.music.ui.component.LocalMusicSnackbar.current
+    LaunchedEffect(state.error, state.loading) {
+        val message = state.error
+        if (message != null && !state.loading && snackbar?.show(message, actionLabel = "重试") == true) vm.search()
+    }
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     fun submit() { keyboard?.hide(); focus.clearFocus(); vm.search() }
@@ -245,7 +254,6 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
                 inputTag = "catalog_query", submitTag = "catalog_submit")
         }
         if (state.loading) item { LoadingSongList(3) }
-        state.error?.let { error -> item { Text(error); MusicTextAction("重试", onClick = { vm.search() }) } }
         if (state.submitted.isNotBlank() && !state.loading && state.entries.isEmpty() && state.error == null) item { Text("没有找到结果") }
         itemsIndexed(state.entries, key = { index, entry -> "${entry.id}-$index" }) { _, entry -> CatalogCard(entry) { navigate("lib/${if (state.albums) "album" else "artist"}/${entry.id}") } }
         if (state.more) item { MusicTextAction("加载更多", onClick = { vm.search(true) }, enabled = !state.loading) }

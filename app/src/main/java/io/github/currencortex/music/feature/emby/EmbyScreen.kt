@@ -56,6 +56,12 @@ data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
     val navigation = remember(vm.selectedTab, selectTab) { EmbyNavigation(vm.selectedTab, selectTab) }
     val navigationChanged by rememberUpdatedState(onNavigationChange)
     LaunchedEffect(navigation, configuration) { navigationChanged?.invoke(navigation.takeUnless { configuration }) }
+    val snackbar = LocalMusicSnackbar.current
+    LaunchedEffect(state.error, state.loading) {
+        val message = state.error
+        if (message != null && !state.loading &&
+            snackbar?.show(message, actionLabel = "重试") == true) vm.refresh(state.loaded && state.page.more)
+    }
     DisposableEffect(Unit) { onDispose { navigationChanged?.invoke(null) } }
     fun back() { if (settings && account.configured) settings = false else if (!vm.back()) onBack() }
     BackHandler(settings || vm.nested) { back() }
@@ -117,10 +123,6 @@ data class EmbyNavigation(val selected: Int, val onSelect: (Int) -> Unit) {
                     }
                 }
                 if (state.loading) item("loading") { LoadingSongList(4) }
-                state.error?.let { message -> item("error") {
-                    Text(message, color = COUITheme.colorScheme.error)
-                    MusicTextAction("重试", { vm.refresh(state.loaded && state.page.more) })
-                } }
                 if (state.loaded && !state.loading && state.page.entries.isEmpty() && state.page.songs.isEmpty())
                     item("empty") { Text("这里还没有音乐", Modifier.padding(vertical = 32.dp)) }
                 if (state.page.more && !state.loading) item("more") { MusicTextAction("加载更多", { vm.refresh(true) }) }

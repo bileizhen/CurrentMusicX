@@ -199,6 +199,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val lyricsFont = io.github.currencortex.music.feature.lyrics.ui.rememberLyricsFont(lyricsFontSettings)
     AppRefreshRateRequest(settings.refreshRate)
     val settingsVm: SettingsViewModel = viewModel(factory = viewModelFactory { SettingsViewModel(container.settings) })
+    val musicSnackbar = io.github.currencortex.music.ui.component.rememberMusicSnackbar()
     val feedbackVm: FeedbackViewModel = viewModel(factory = viewModelFactory { FeedbackViewModel(container) })
     val announcementVm: io.github.currencortex.music.feature.announcement.AnnouncementViewModel =
         viewModel(factory = viewModelFactory { io.github.currencortex.music.feature.announcement.AnnouncementViewModel(container) })
@@ -559,8 +560,14 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val dialogBackdrop = rememberMusicDialogBackdrop()
         CompositionLocalProvider(LocalMusicDialogBackdrop provides dialogBackdrop) {
         io.github.suqi8.coui.kmp.basic.Scaffold(contentWindowInsets = WindowInsets(0, 0, 0, 0),
-            containerColor = COUITheme.colorScheme.background) {
+            containerColor = COUITheme.colorScheme.background,
+            // The floating dock and mini player sit at the bottom, so snackbars ride above them.
+            snackbarHost = {
+                io.github.currencortex.music.ui.component.MusicSnackbarHost(musicSnackbar,
+                    Modifier.navigationBarsPadding().padding(bottom = 92.dp))
+            }) {
         CompositionLocalProvider(LocalSongMenu provides { songMenu = it },
+            io.github.currencortex.music.ui.component.LocalMusicSnackbar provides musicSnackbar,
             LocalSongDownload provides { song -> downloadSongJson = io.github.currencortex.music.core.network.ApiJson.encodeToString(Song.serializer(), song) },
             LocalRoomSongRequest provides roomRequest,
             LocalPlayerSheetDrag provides playerDrag, LocalPlayerArtworkRotation provides artworkRotation,

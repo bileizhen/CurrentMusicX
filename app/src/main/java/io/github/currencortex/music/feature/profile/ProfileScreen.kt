@@ -178,6 +178,12 @@ import kotlinx.coroutines.launch
     val density = LocalDensity.current
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(vm, owner) { owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.pollStats() } }
+    // A failed load is reported as a snackbar with 重试 instead of a banner above the content.
+    val snackbar = io.github.currencortex.music.ui.component.LocalMusicSnackbar.current
+    LaunchedEffect(state.error, state.loading) {
+        val message = state.error
+        if (message != null && !state.loading && snackbar?.show(message, actionLabel = "重试") == true) vm.reload()
+    }
     LaunchedEffect(avatarFlight?.request) {
         if (avatarFlight?.active == true && !avatarFlight.returning) listState.scrollToItem(0)
     }
@@ -191,10 +197,7 @@ import kotlinx.coroutines.launch
         verticalArrangement = Arrangement.spacedBy(0.dp)) {
         rootMotionItems {
         if ((state.loading || account.loading) && user == null) item { LoadingProfileCard() }
-        state.error?.let { message -> item("error") { SettingsGroup {
-            SettingsHint(message, error = true)
-            MusicTextAction("重试", vm::reload, Modifier.padding(start = 16.dp, bottom = 12.dp))
-        } } }
+
         if (user != null) {
             item("identity") { SettingsGroup(Modifier.testTag("profile_identity")) {
                 Row(Modifier.fillMaxWidth().padding(start = 20.dp, top = 20.dp, end = 20.dp, bottom = 12.dp),
