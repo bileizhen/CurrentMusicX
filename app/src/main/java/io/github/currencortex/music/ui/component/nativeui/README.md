@@ -26,16 +26,6 @@ Source attribution is in `THIRD_PARTY_NOTICES.md` and the bundled legal notices.
   tap-lift hold. Owner/row changes lift too. Material's off-thumb outline role maps to the
   theme's muted foreground (Miuix's outline is a dim border);
   lens strength fades with lift, and disabled/glass-off states keep their solid material.
-- `GlassSlider` reuses the button's optical material and `ElasticPress` for its thumb, with a
-  separate capture of the track for refraction. At rest it retains the original Miuix track,
-  rounded fill and opaque 20.16dp knob; only pressing fades in and enlarges the glass lens,
-  and releasing fades it back to the original appearance. This is a native extension; FlClash's own
-  `SliderDefaultsM3` uses Material track/handle shapes. Horizontal drags preview and save once
-  on release, cancellation restores the preview, and vertical swipes stay with the page.
-  It supports ranges, steps/key points, RTL, keyboard and accessibility adjustments, disabled
-  state and the existing liquid-glass switch. The touch area stays 48dp while the thumb grows.
-  The pressed lens is laid out at its actual 40dp size like `GlassSwitch`; it is not a smaller
-  captured lens scaled after rendering. The lens has no extra button press-light overlay.
 - `SettingsPage`, `SettingsTopBar`, `SettingsGroup`, `SettingsPreference` and `SettingsToggle`
   provide the common settings layout. `SettingsOptionsRow` opens the shared glass menu from its
   value and closes after a selection. `SettingsUiScope` opts existing preference adapters into

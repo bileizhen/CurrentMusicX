@@ -30,6 +30,7 @@ import io.github.currencortex.music.core.media.PlaybackNetworkKind
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.SettingsSwitch
 import io.github.currencortex.music.ui.component.nativeui.*
+import io.github.suqi8.coui.kmp.basic.Slider
 import kotlin.math.roundToInt
 
 @Composable fun PlaybackSettingsScreen(vm: MusicSettingsViewModel) {
@@ -92,7 +93,7 @@ import kotlin.math.roundToInt
             AnimatedVisibility(settings.transitionMode == MusicTransitionMode.CROSSFADE,
                 enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                 SettingsPreference("过渡时长", "${seconds.roundToInt()} 秒", footer = {
-                    GlassSlider(seconds, { seconds = it.roundToInt().toFloat() }, valueRange = 1f..12f,
+                    Slider(seconds, { seconds = it.roundToInt().toFloat() }, valueRange = 1f..12f,
                         onValueChangeFinished = { vm.crossfadeSeconds(seconds.roundToInt()) },
                         modifier = Modifier.fillMaxWidth().testTag("crossfade_duration").semantics {
                             setProgress { value ->
