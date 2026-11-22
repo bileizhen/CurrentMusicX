@@ -96,6 +96,9 @@ import java.util.Locale
     LaunchedEffect(active) { if (!active) { keyboard?.hide(); membersOpen = false; menuOpen = false; referenceOpen = false; selected = null; confirming = null; preview = null } }
     LaunchedEffect(state.messages.lastOrNull()?.id) { if (nearBottom) list.animateScrollToItem(0) }
     LaunchedEffect(state.scrollRequest) { if (state.scrollRequest > 0) list.animateScrollToItem(0) }
+    // The chat stays composed inside the retained Discover pager; report only while it is visible.
+    io.github.currencortex.music.ui.component.MusicSnackbarLoadError(state.error, active = active,
+        onAction = vm::retry)
     val menuItems = selected?.let { message -> buildList {
         add(GlassMenuItem("chat_quote", "引用", MusicIcons.Comment, enabled = !state.sending,
             onClick = { vm.quote(message) }))
@@ -173,10 +176,6 @@ import java.util.Locale
                 GlassActionButton("成员 ${state.members.size}", { membersOpen = true },
                     Modifier.testTag("chat_members"), fillWidth = false)
 
-            }
-            if (state.error != null) Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(state.error.orEmpty(), Modifier.weight(1f), fontSize = 12.sp)
-                MusicTextAction("重试", vm::retry, Modifier.testTag("chat_retry"))
             }
         }
         Column(Modifier.align(Alignment.BottomCenter).elasticRootComponent().fillMaxWidth().pointerInput(Unit) { detectTapGestures {} }.onSizeChanged {

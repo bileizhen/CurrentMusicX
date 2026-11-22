@@ -36,6 +36,8 @@ import java.time.format.DateTimeFormatter
     var selected by rememberSaveable { mutableStateOf<Int?>(null) }
     // A refreshed catalog cannot leave a detail dialog pointing at a different announcement.
     LaunchedEffect(state.items) { selected = null }
+    MusicSnackbarLoadError(state.error, active = LocalMusicPageActive.current,
+        loading = state.loading, onAction = { refresh() })
     MusicSubpage("公告", "announcement_archive", onBack, backTag = "announcement_back", actions = {
         MusicTextAction(if (state.loading) "加载中" else "刷新", refresh,
             Modifier.testTag("announcement_refresh"), enabled = !state.loading)
@@ -43,10 +45,6 @@ import java.time.format.DateTimeFormatter
         LazyColumn(Modifier.fillMaxSize().testTag("announcement_list"),
             contentPadding = musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp)),
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            if (state.error != null) item {
-                Text(state.error, fontSize = 13.sp, color = colors.labelSecondaryVariant)
-                MusicTextAction("重试", refresh, Modifier.testTag("announcement_retry"))
-            }
             if (state.loading && state.items.isEmpty()) item {
                 Row(Modifier.fillMaxWidth().padding(vertical = 24.dp), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)) {
