@@ -186,6 +186,15 @@ androidComponents.finalizeDsl { extension ->
     }
 }
 
+configurations.configureEach {
+    resolutionStrategy.force(
+        "androidx.lifecycle:lifecycle-runtime-compose:2.10.0",
+        "androidx.lifecycle:lifecycle-runtime-compose-android:2.10.0",
+        "androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0",
+        "androidx.lifecycle:lifecycle-viewmodel-compose-android:2.10.0",
+    )
+}
+
 dependencies {
     implementation("androidx.credentials:credentials:1.6.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.6.0")
@@ -211,17 +220,18 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.12.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel:2.11.0")
+    implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.1")
     implementation("androidx.compose.material:material-icons-core:1.7.8")
 
-    implementation("io.github.suqi8.coui.kmp:coui-ui-android:2.0.0")
-    implementation("io.github.suqi8.coui.kmp:coui-blur-android:2.0.0")
-    implementation("io.github.suqi8.coui.kmp:coui-icons-android:2.0.0")
-    implementation("io.github.suqi8.coui.kmp:coui-preference-android:2.0.0")
-    implementation("io.github.suqi8.coui.kmp:coui-squircle-android:2.0.0")
+    implementation("io.github.suqi8.coui.kmp:coui-ui-android:2.1.0")
+    implementation("io.github.suqi8.coui.kmp:coui-blur-android:2.1.0")
+    implementation("io.github.suqi8.coui.kmp:coui-icons-android:2.1.0")
+    implementation("io.github.suqi8.coui.kmp:coui-preference-android:2.1.0")
+    implementation("io.github.suqi8.coui.kmp:coui-squircle-android:2.1.0")
     implementation("com.materialkolor:material-color-utilities:4.1.1")
 
-    implementation("androidx.navigation3:navigation3-runtime:1.1.4")
-    implementation("androidx.navigation3:navigation3-ui:1.1.4")
+    implementation("io.github.suqi8.coui.kmp:coui-nav-android:2.1.0")
     implementation("androidx.navigationevent:navigationevent-compose:1.2.0")
     implementation("androidx.datastore:datastore-preferences:1.3.0")
     implementation("androidx.work:work-runtime-ktx:2.12.0")
