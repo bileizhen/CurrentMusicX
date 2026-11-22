@@ -179,11 +179,10 @@ import kotlinx.coroutines.launch
     val owner = LocalLifecycleOwner.current
     LaunchedEffect(vm, owner) { owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) { vm.pollStats() } }
     // A failed load is reported as a snackbar with 重试 instead of a banner above the content.
-    val snackbar = io.github.currencortex.music.ui.component.LocalMusicSnackbar.current
-    LaunchedEffect(state.error, state.loading) {
-        val message = state.error
-        if (message != null && !state.loading && snackbar?.show(message, actionLabel = "重试") == true) vm.reload()
-    }
+    // Retained tabs keep composing while hidden, so the notice waits until this page is visible.
+    io.github.currencortex.music.ui.component.MusicSnackbarLoadError(state.error,
+        active = io.github.currencortex.music.ui.component.LocalMusicPageActive.current,
+        loading = state.loading, onAction = vm::reload)
     LaunchedEffect(avatarFlight?.request) {
         if (avatarFlight?.active == true && !avatarFlight.returning) listState.scrollToItem(0)
     }

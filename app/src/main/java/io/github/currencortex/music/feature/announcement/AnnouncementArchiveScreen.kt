@@ -36,11 +36,8 @@ import java.time.format.DateTimeFormatter
     var selected by rememberSaveable { mutableStateOf<Int?>(null) }
     // A refreshed catalog cannot leave a detail dialog pointing at a different announcement.
     LaunchedEffect(state.items) { selected = null }
-    val snackbar = LocalMusicSnackbar.current
-    LaunchedEffect(state.error, state.loading) {
-        val message = state.error
-        if (message != null && !state.loading && snackbar?.show(message, actionLabel = "重试") == true) refresh()
-    }
+    MusicSnackbarLoadError(state.error, active = LocalMusicPageActive.current,
+        loading = state.loading, onAction = { refresh() })
     MusicSubpage("公告", "announcement_archive", onBack, backTag = "announcement_back", actions = {
         MusicTextAction(if (state.loading) "加载中" else "刷新", refresh,
             Modifier.testTag("announcement_refresh"), enabled = !state.loading)

@@ -82,14 +82,12 @@ import io.github.suqi8.coui.kmp.basic.*
     DisposableEffect(Unit) { onDispose { onDialogActive(false) } }
     val clipboard = LocalClipboard.current; val scope = rememberCoroutineScope()
     LaunchedEffect(live.detail?.room?.id) { if (live.detail != null) create = false }
-    val snackbar = io.github.currencortex.music.ui.component.LocalMusicSnackbar.current
-    LaunchedEffect(browser.error, browser.loading) {
-        val message = browser.error
-        if (message != null && !browser.loading && snackbar?.show(message, actionLabel = "重试") == true) vm.load()
-    }
-    LaunchedEffect(live.error) {
-        live.error?.let { message -> snackbar?.show(message) }
-    }
+    val pageActive = io.github.currencortex.music.ui.component.LocalMusicPageActive.current
+    io.github.currencortex.music.ui.component.MusicSnackbarLoadError(browser.error, active = pageActive,
+        loading = browser.loading, onAction = { vm.load() })
+    // A live-room failure has no retry action; report it only while the page is visible.
+    io.github.currencortex.music.ui.component.MusicSnackbarLoadError(live.error, active = pageActive,
+        actionLabel = null)
     MusicSubpage("一起听", "room_page", onBack) { topInset ->
     Column(Modifier.fillMaxSize().testTag("room_screen")) {
         val detail = live.detail

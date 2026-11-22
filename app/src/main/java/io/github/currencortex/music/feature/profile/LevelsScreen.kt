@@ -36,12 +36,10 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     val trial = state.trial
     val list = rememberLazyListState()
     LaunchedEffect(trial, state.signedIn) { list.scrollToItem(0) }
-    val snackbar = io.github.currencortex.music.ui.component.LocalMusicSnackbar.current
-    LaunchedEffect(state.error, state.loading, trial) {
-        val message = state.error
-        if (message != null && !state.loading &&
-            snackbar?.show(message, actionLabel = if (trial == null) "重试" else null) == true) refresh()
-    }
+    io.github.currencortex.music.ui.component.MusicSnackbarLoadError(state.error,
+        active = io.github.currencortex.music.ui.component.LocalMusicPageActive.current,
+        loading = state.loading, actionLabel = if (trial == null) "重试" else null,
+        onAction = { refresh() })
     BackHandler(trial != null) { closeTrial() }
     MusicSubpage(if (trial == null) "等级与成长" else "等级试炼", "levels_screen",
         onBack = { if (trial != null) closeTrial() else onBack() }, actions = {

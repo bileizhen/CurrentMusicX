@@ -315,6 +315,8 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         var downloadSongJson by rememberSaveable { mutableStateOf<String?>(null) }
         var roomPending by remember { mutableStateOf(setOf<Long>()) }
         var miniHeight by remember { mutableStateOf(72.dp) }
+        // Lifted above the dock, the tabs or the mini player, whichever is showing.
+        var snackbarClearance by remember { mutableStateOf(92.dp) }
         var miniBounds by remember { mutableStateOf<Rect?>(null) }
         var miniCoordinates by remember { mutableStateOf<androidx.compose.ui.layout.LayoutCoordinates?>(null) }
         var dockOrigin by remember { mutableStateOf<(() -> PlayerSheetOrigin?)?>(null) }
@@ -564,7 +566,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             // The floating dock and mini player sit at the bottom, so snackbars ride above them.
             snackbarHost = {
                 io.github.currencortex.music.ui.component.MusicSnackbarHost(musicSnackbar,
-                    Modifier.navigationBarsPadding().padding(bottom = 92.dp))
+                    Modifier.navigationBarsPadding().padding(bottom = snackbarClearance))
             }) {
         CompositionLocalProvider(LocalSongMenu provides { songMenu = it },
             io.github.currencortex.music.ui.component.LocalMusicSnackbar provides musicSnackbar,
@@ -594,6 +596,16 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val miniRoot = backStack.lastOrNull { it != PLAYER.toString() } == ROOT.toString()
         val navigationSpace = if ((miniRoot && !wideLayout || hasEmbyDock) && !keyboardOpen && !dockCollapsed) 92.dp else 0.dp
         val miniLift = animateDpAsState(navigationSpace, tween(if (settings.floatingBar) 180 else 320), label = "mini player lift")
+        // The dock is one surface: 64dp mini row, 58dp of tabs and its own 12dp bottom padding.
+        // Otherwise the tabs keep 92dp and the mini player stacks on top of them. Measured
+        // heights, not a fixed 92dp, so a snackbar never covers the playback controls.
+        val dockExpanded = (miniRoot || hasEmbyDock) && !keyboardOpen && !dockCollapsed
+        val tabsShown = !keyboardOpen && !dockCollapsed &&
+            (showRootNavigation && !rootWide || hasEmbyDock && !playerPresented)
+        val snackbarSpace = if (settings.floatingBar && !wideLayout)
+            (if (miniRetainedAvailable) 64.dp else 0.dp) + (if (dockExpanded) 58.dp else 0.dp) + 12.dp
+        else (if (miniAvailable) miniHeight else 0.dp) + (if (tabsShown) 92.dp else 0.dp)
+        SideEffect { snackbarClearance = snackbarSpace }
         // A scene's insets must not depend on which route is currently on top. Predictive back
         // renders both scenes before committing; changing the shared viewport makes them jump.
         val rootFloating = (settings.floatingBar || wideLayout) && !keyboardOpen

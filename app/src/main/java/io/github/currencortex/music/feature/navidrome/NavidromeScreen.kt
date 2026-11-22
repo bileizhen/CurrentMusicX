@@ -79,12 +79,10 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     } }
     BackHandler(configuration || filterOpen || vm.nested) { back() }
     LaunchedEffect(message) { message?.let { vm.container.errorNotices.showMessage(it); vm.message.value = null } }
-    val snackbar = io.github.currencortex.music.ui.component.LocalMusicSnackbar.current
-    LaunchedEffect(state.error, state.loading) {
-        val failure = state.error
-        // The load error is a snackbar; the action error below stays inline because it has a 关闭.
-        if (failure != null && !state.loading && snackbar?.show(failure, actionLabel = "重试") == true) vm.refresh()
-    }
+    // The load error is a snackbar; the action error below stays inline because it has a 关闭.
+    io.github.currencortex.music.ui.component.MusicSnackbarLoadError(state.error,
+        active = io.github.currencortex.music.ui.component.LocalMusicPageActive.current,
+        loading = state.loading, onAction = { vm.refresh() })
     val shownSongs = remember(state.songs, filter) {
         if (filter.isBlank()) state.songs else state.songs.filter { song ->
             listOf(song.name, song.artists, song.album).any { it.contains(filter.trim(), ignoreCase = true) }

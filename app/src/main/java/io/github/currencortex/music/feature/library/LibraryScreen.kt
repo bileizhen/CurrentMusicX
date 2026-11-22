@@ -159,11 +159,9 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     val editable = vm.editable(state.playlist, account.account?.id ?: 0)
     LaunchedEffect(state.songs) { library.refreshSearchLikes(state.songs) }
     LaunchedEffect(state.refreshError) { state.refreshError?.let { library.container.errorNotices.show("刷新失败，已保留原列表：$it") } }
-    val snackbar = io.github.currencortex.music.ui.component.LocalMusicSnackbar.current
-    LaunchedEffect(state.error, state.loading) {
-        val message = state.error
-        if (message != null && !state.loading && snackbar?.show(message, actionLabel = "重试") == true) vm.reload()
-    }
+    io.github.currencortex.music.ui.component.MusicSnackbarLoadError(state.error,
+        active = io.github.currencortex.music.ui.component.LocalMusicPageActive.current,
+        loading = state.loading, onAction = { vm.reload() })
     // NavDisplay resumes the destination after the transition. Visible rows request their own art.
     val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
     if (LocalMusicPageActive.current && LocalPageContainerSettled.current && lifecycleState.isAtLeast(Lifecycle.State.RESUMED)) {
@@ -238,11 +236,9 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
 
 @Composable fun CatalogScreen(vm: CatalogViewModel, onBack: () -> Unit, navigate: (String) -> Unit) {
     val state by vm.state.collectAsPageState()
-    val snackbar = io.github.currencortex.music.ui.component.LocalMusicSnackbar.current
-    LaunchedEffect(state.error, state.loading) {
-        val message = state.error
-        if (message != null && !state.loading && snackbar?.show(message, actionLabel = "重试") == true) vm.search()
-    }
+    io.github.currencortex.music.ui.component.MusicSnackbarLoadError(state.error,
+        active = io.github.currencortex.music.ui.component.LocalMusicPageActive.current,
+        loading = state.loading, onAction = { vm.search() })
     val keyboard = androidx.compose.ui.platform.LocalSoftwareKeyboardController.current
     val focus = androidx.compose.ui.platform.LocalFocusManager.current
     fun submit() { keyboard?.hide(); focus.clearFocus(); vm.search() }

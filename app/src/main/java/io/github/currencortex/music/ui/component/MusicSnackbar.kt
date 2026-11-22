@@ -2,7 +2,10 @@
 package io.github.currencortex.music.ui.component
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import io.github.suqi8.coui.kmp.basic.SnackbarDuration
@@ -24,6 +27,35 @@ class MusicSnackbarState internal constructor(val host: SnackbarHostState) {
 }
 
 val LocalMusicSnackbar = staticCompositionLocalOf<MusicSnackbarState?> { null }
+
+/**
+ * Reports a page's load failure once per attempt, with an action that starts a retry, and only
+ * while [active]. Retained tabs and covered pages keep composing, so without the gate the notice
+ * appears on whichever page is showing, where it would expire unseen. The effect's keys stay
+ * stable on purpose: relaunching it when [loading] flips cancels a snackbar that is still on
+ * screen, and the host stacks the re-queued copy under the first one.
+ */
+@Composable fun MusicSnackbarLoadError(error: String?, active: Boolean = true, loading: Boolean = false,
+    actionLabel: String? = "重试", onAction: () -> Unit = {}) {
+    val snackbar = LocalMusicSnackbar.current
+    val latestError = rememberUpdatedState(error)
+    val latestActive = rememberUpdatedState(active)
+    val latestLoading = rememberUpdatedState(loading)
+    val latestLabel = rememberUpdatedState(actionLabel)
+    val latestAction = rememberUpdatedState(onAction)
+    LaunchedEffect(snackbar) {
+        val channel = snackbar ?: return@LaunchedEffect
+        var reported: String? = null
+        snapshotFlow { Triple(latestError.value, latestLoading.value, latestActive.value) }
+            .collect { (message, isLoading, isActive) ->
+                if (!isActive) return@collect
+                if (message == null) { reported = null; return@collect }
+                if (isLoading || message == reported) return@collect
+                reported = message
+                if (channel.show(message, latestLabel.value) == true) latestAction.value()
+            }
+    }
+}
 
 @Composable fun rememberMusicSnackbar(): MusicSnackbarState {
     val host = remember { SnackbarHostState() }
