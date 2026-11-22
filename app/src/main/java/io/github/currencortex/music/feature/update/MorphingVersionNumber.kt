@@ -41,7 +41,13 @@ internal val VersionMorphBlurKey = SemanticsPropertyKey<Float>("VersionMorphBlur
 @Composable
 internal fun MorphingVersionNumber(version: String, initialVersion: String, fontSize: TextUnit,
     color: Color, modifier: Modifier = Modifier) {
-    val glyphs = remember { VersionGlyphs() }
+    // Pinned to OPPO Sans whatever the app font setting says: the hero number is a brand mark.
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val displayFace = remember(context) {
+        Typeface.create(io.github.currencortex.music.ui.theme.loadCustomTypeface(
+            context, io.github.currencortex.music.ui.theme.BUILT_IN_OPPO_FONT), Typeface.BOLD)
+    }
+    val glyphs = remember(displayFace) { VersionGlyphs(displayFace) }
     var from by remember { mutableStateOf(glyphs.outline(initialVersion)) }
     var to by remember { mutableStateOf(from) }
     val progress = remember { Animatable(1f) }
@@ -95,10 +101,10 @@ internal fun MorphingVersionNumber(version: String, initialVersion: String, font
 internal data class VersionDigitOutline(val x: Float, val contours: List<FloatArray>)
 internal data class VersionOutline(val version: String, val width: Float, val digits: List<VersionDigitOutline>)
 
-internal class VersionGlyphs {
+internal class VersionGlyphs(face: Typeface? = null) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textSize = EM
-        typeface = Typeface.create("sans-serif", Typeface.BOLD)
+        typeface = face ?: Typeface.create("sans-serif", Typeface.BOLD)
     }
     val top = paint.fontMetrics.top
     val lineHeight = paint.fontMetrics.bottom - top
