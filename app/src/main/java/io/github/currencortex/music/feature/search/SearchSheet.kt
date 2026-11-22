@@ -23,7 +23,7 @@ import androidx.compose.ui.semantics.hideFromAccessibility
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 internal class SearchSheetState(initiallyOpen: Boolean = false) {
     val animation = Animatable(if (initiallyOpen) 1f else 0f)
@@ -64,7 +64,7 @@ private val easing = CubicBezierEasing(.2f, 0f, 0f, 1f)
             translationY = height * (1f - state.progress)
             shape = RoundedCornerShape(topStart = 30.dp * (1f - state.progress), topEnd = 30.dp * (1f - state.progress))
             clip = true
-        }.background(MiuixTheme.colorScheme.background))
+        }.background(COUITheme.colorScheme.background))
         content()
     }
 }

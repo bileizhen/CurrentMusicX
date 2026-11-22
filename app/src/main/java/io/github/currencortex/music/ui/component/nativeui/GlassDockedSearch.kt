@@ -26,8 +26,8 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.unit.*
 import io.github.currencortex.music.ui.component.MusicIcons
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.util.Locale
 import kotlin.math.max
 import kotlin.math.min
@@ -61,7 +61,7 @@ private val dockedSearchCurve = Easing { t ->
     onInputFocus: (Boolean) -> Unit = {}, onSubmit: (() -> Unit)? = null,
     onActivate: (() -> Unit)? = null, submitTag: String? = null, clearTag: String = "${inputTag}_clear",
     onCancel: () -> Unit = {}, leadingContent: (@Composable () -> Unit)? = null) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val density = LocalDensity.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val focus = LocalFocusManager.current
@@ -77,7 +77,7 @@ private val dockedSearchCurve = Easing { t ->
     val cancelPress = rememberElasticPressState()
     val growth = with(density) { 16.dp.toPx() }
     val glass = LocalLiquidGlassEnabled.current && android.os.Build.VERSION.SDK_INT >= 33
-    val dark = colors.onSurface.luminance() > .5f
+    val dark = colors.labelPrimary.luminance() > .5f
     val backdrop = LocalGlassBackdrop.current
     val currentActive by rememberUpdatedState(active)
     val change by rememberUpdatedState(onValueChange)
@@ -159,7 +159,7 @@ private val dockedSearchCurve = Easing { t ->
             glow = { max(fieldPress.amount, cancelPress.amount) })
         else Modifier.dropShadow(shape, Shadow(24.dp, Color.Black.copy(alpha = if (dark) .24f else .08f), offset = DpOffset(0.dp, 8.dp)))
             .dropShadow(shape, Shadow(3.dp, Color.Black.copy(alpha = if (dark) .12f else .04f), offset = DpOffset(0.dp, 1.dp)))
-            .drawBehind { drawOutline(shape.createOutline(size, layoutDirection, this), if (dark) colors.surfaceContainerHigh else colors.surfaceContainer) }
+            .drawBehind { drawOutline(shape.createOutline(size, layoutDirection, this), if (dark) colors.cardPressed else colors.cardBackground) }
         Box(Modifier.matchParentSize().layout { measurable, constraints ->
             val child = measurable.measure(androidx.compose.ui.unit.Constraints.fixed(
                 (paintRight - paintLeft).coerceAtLeast(1), (paintBottom - paintTop).coerceAtLeast(1)))
@@ -185,7 +185,7 @@ private val dockedSearchCurve = Easing { t ->
                     }.semantics { contentDescription = "取消搜索" } else Modifier.clearAndSetSemantics {}),
                 state = cancelPress, enabled = active) {
                 Box(Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center) { Icon(MusicIcons.Close, null, Modifier.size(24.dp), tint = colors.onSurface) }
+                    contentAlignment = Alignment.Center) { Icon(MusicIcons.Close, null, Modifier.size(24.dp), tint = colors.labelPrimary) }
             }
         }
     }

@@ -26,8 +26,8 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.settings.*
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.roundToInt
 import java.util.Locale
 
@@ -35,8 +35,8 @@ import java.util.Locale
     val settings by vm.settings.collectAsStateWithLifecycle()
     val runtime by vm.runtime.collectAsStateWithLifecycle()
     val soundPreferences by vm.soundPreferences.collectAsStateWithLifecycle()
-    val hint = MiuixTheme.colorScheme.onSurfaceVariantSummary
-    val accent = MiuixTheme.colorScheme.primary
+    val hint = COUITheme.colorScheme.labelSecondaryVariant
+    val accent = COUITheme.colorScheme.primary
     var preview by remember(settings.gains) { mutableStateOf(settings.gains) }
     val status = when {
         !runtime.supported -> "此设备未提供均衡器"

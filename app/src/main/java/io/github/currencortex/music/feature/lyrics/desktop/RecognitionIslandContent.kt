@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.recognition.*
 import io.github.currencortex.music.ui.component.MusicIcons
-import top.yukonga.miuix.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Icon
 
 /** A temporary cue inside the original island frame, with the same cover, progress and natural height. */
 @Composable internal fun RecognitionIslandContent(state: RecognitionState, options: DesktopLyricsSettings,

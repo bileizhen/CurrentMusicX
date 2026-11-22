@@ -20,9 +20,9 @@ import io.github.currencortex.music.feature.profile.UserRoleBadge
 import io.github.currencortex.music.feature.profile.UserTitleBadge
 import io.github.currencortex.music.feature.roaming.PersonalRoamingPage
 import kotlinx.coroutines.delay
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun PlayerListeningPage(container: AppContainer, onPlay: () -> Unit,
     onBinding: () -> Unit, onDialogActive: (Boolean) -> Unit, onListening: () -> Unit = {}) {
@@ -36,7 +36,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     LaunchedEffect(container) {
         while (true) { container.todayListening.refresh(); delay(15_000) }
     }
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize()) {
         PersonalRoamingPage(container,
             Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
@@ -58,7 +58,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         verticalAlignment = Alignment.Bottom) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Text("今日听歌", fontSize = 14.sp)
-                            Text("本机播放时长", fontSize = 11.sp, color = colors.onSurfaceVariantSummary)
+                            Text("本机播放时长", fontSize = 11.sp, color = colors.labelSecondaryVariant)
                         }
                         Text(listeningDuration(today), Modifier.testTag("player_today_listening"),
                             fontSize = 22.sp, fontWeight = FontWeight.SemiBold)

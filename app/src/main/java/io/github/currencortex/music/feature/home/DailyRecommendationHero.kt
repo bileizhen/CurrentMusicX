@@ -37,9 +37,9 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.player.LocalPlayerArtworkRotation
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.exp
@@ -58,7 +58,7 @@ import kotlinx.coroutines.launch
     room: RoomSongRequest? = null, discoveryProvider: String = "网易云",
     connectTag: String = "home_connect_netease",
 ) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     var selectedId by rememberSaveable { mutableStateOf<Long?>(null) }
     val selectedIndex = songs.indexOfFirst { it.id == selectedId }.takeIf { it >= 0 } ?: 0
     val selected = songs.getOrNull(selectedIndex)
@@ -81,7 +81,7 @@ import kotlinx.coroutines.launch
             Column(Modifier.weight(1f)) {
                 Text(listOfNotNull(dateLabel.takeIf(String::isNotBlank),
                     if (loading) "更新中" else if (songs.isNotEmpty()) "${songs.size} 首${if (discovery) "新歌推荐" else "为你精选"}" else null).joinToString(" · "),
-                    fontSize = 11.sp, color = colors.onSurface.copy(alpha = .48f))
+                    fontSize = 11.sp, color = colors.labelPrimary.copy(alpha = .48f))
             }
         }
         when {
@@ -97,7 +97,7 @@ import kotlinx.coroutines.launch
                         Text(song.name, Modifier.testTag("home_daily_title"), fontSize = 18.sp,
                             fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text(song.artists.ifBlank { song.album }, Modifier.padding(top = 4.dp), fontSize = 12.sp,
-                            maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.onSurface.copy(alpha = .55f))
+                            maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.labelPrimary.copy(alpha = .55f))
                     }
                 }
                 if (sameSong && playback.error != null && room == null) Text(playback.error,
@@ -111,7 +111,7 @@ import kotlinx.coroutines.launch
                 Text(if (error != null) "推荐暂时没加载出来" else "今日推荐还没有内容", fontSize = 16.sp)
                 Text(error ?: if (discovery) "连接$discoveryProvider，发现适合你的音乐" else "稍后刷新，再来听点新歌",
                     Modifier.padding(horizontal = 12.dp), fontSize = 12.sp, textAlign = TextAlign.Center,
-                    color = colors.onSurface.copy(alpha = .55f))
+                    color = colors.labelPrimary.copy(alpha = .55f))
                 MusicTextAction(if (discovery && error == null) "连接$discoveryProvider ›" else "重新加载",
                     if (discovery && error == null) onConnect else onRetry, Modifier.testTag("home_daily_retry"))
             }
@@ -185,7 +185,7 @@ import kotlinx.coroutines.launch
         spring(dampingRatio = .94f, stiffness = 115f, visibilityThreshold = .001f), label = "recommendation record")
     val rotation = LocalPlayerArtworkRotation.current
     val density = LocalDensity.current
-    val accent = MiuixTheme.colorScheme.primary
+    val accent = COUITheme.colorScheme.primary
     BoxWithConstraints(Modifier.fillMaxWidth().testTag("home_daily_deck")
         .semantics {
             stateDescription = "第 ${selected + 1} 首，共 ${songs.size} 首"
@@ -277,8 +277,8 @@ import kotlinx.coroutines.launch
 @Composable private fun DeckArtwork(cover: String, modifier: Modifier) {
     val context = LocalContext.current
     val model = remember(context, cover) { ImageRequest.Builder(context).data(coverRequestUrl(cover, 480)).size(480).build() }
-    Box(modifier.background(MiuixTheme.colorScheme.surfaceContainer), contentAlignment = Alignment.Center) {
-        Icon(MusicIcons.List, null, Modifier.size(28.dp), tint = MiuixTheme.colorScheme.onSurface.copy(alpha = .16f))
+    Box(modifier.background(COUITheme.colorScheme.cardBackground), contentAlignment = Alignment.Center) {
+        Icon(MusicIcons.List, null, Modifier.size(28.dp), tint = COUITheme.colorScheme.labelPrimary.copy(alpha = .16f))
         if (cover.isNotBlank()) AsyncImage(model, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
     }
 }

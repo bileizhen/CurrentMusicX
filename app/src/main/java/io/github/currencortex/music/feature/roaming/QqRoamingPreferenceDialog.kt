@@ -24,8 +24,8 @@ import io.github.currencortex.music.ui.component.nativeui.SettingsGroup
 import io.github.currencortex.music.ui.component.nativeui.SettingsHint
 import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** QQ Music "我的音乐偏好": heat / mood / familiarity, stored server-side per account. */
 @Composable internal fun QqRoamingPreferenceDialog(container: AppContainer, onDismiss: () -> Unit) {
@@ -85,7 +85,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             Column(Modifier.fillMaxWidth().heightIn(max = 420.dp).verticalScroll(rememberScrollState())
                 .testTag("qq_preference_dialog"), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("调节偏好后，猜你喜欢会按新比例推荐歌曲。", fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    color = COUITheme.colorScheme.labelSecondaryVariant)
                 when {
                     error != null -> SettingsHint(error.orEmpty())
                     groups == null -> Text("正在加载…", fontSize = 13.sp)

@@ -22,7 +22,7 @@ import io.github.currencortex.music.core.network.appResult
 import io.github.currencortex.music.data.qqmusic.QqComment
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Text
 
 @Composable internal fun QqCommentsScreen(container: AppContainer, mid: String, onBack: () -> Unit) {
     val revision by container.accountRepository.sessionRevision.collectAsStateWithLifecycle()

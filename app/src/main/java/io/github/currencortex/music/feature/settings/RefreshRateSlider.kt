@@ -11,9 +11,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.settings.RefreshRatePreference
 import io.github.currencortex.music.ui.component.nativeui.GlassSlider as Slider
-import top.yukonga.miuix.kmp.basic.SliderDefaults
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.SliderDefaults
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -29,7 +29,7 @@ internal fun refreshRateSliderOptions(supported: List<Int>): List<RefreshRatePre
     val index = position.roundToInt().coerceIn(options.indices)
     val label = options[index].label
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(label, Modifier.testTag("refresh_rate_selection"), color = MiuixTheme.colorScheme.primary, fontSize = 16.sp)
+        Text(label, Modifier.testTag("refresh_rate_selection"), color = COUITheme.colorScheme.primary, fontSize = 16.sp)
         if (options.size > 1) {
             Slider(value = position, onValueChange = { position = it },
                 onValueChangeFinished = {
@@ -48,9 +48,9 @@ internal fun refreshRateSliderOptions(supported: List<Int>): List<RefreshRatePre
                     }
                 })
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("跟随系统", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                Text(options.last().label, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                Text("跟随系统", fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
+                Text(options.last().label, fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
             }
-        } else Text("正在读取屏幕刷新率…", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        } else Text("正在读取屏幕刷新率…", fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
     }
 }

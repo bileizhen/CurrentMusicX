@@ -10,6 +10,8 @@ import androidx.compose.foundation.interaction.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,20 +30,24 @@ import io.github.currencortex.music.ui.component.nativeui.SettingsSelectionCheck
 import io.github.currencortex.music.ui.component.nativeui.settingsPressFeedback
 import io.github.currencortex.music.ui.component.nativeui.settingsInkWellColors
 import io.github.currencortex.music.ui.theme.LocalDarkTheme
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.theme.*
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.theme.*
 import kotlin.math.floor
 
 @Composable internal fun AppearanceColorSwatches(config: AppearanceSettings, onSelect: (Long?) -> Unit,
     onEdit: (Long) -> Unit, onAdd: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val ink = settingsInkWellColors()
     val dark = LocalDarkTheme.current
     val systemController = remember(dark) { ThemeController(colorSchemeMode = if (dark) ColorSchemeMode.MonetDark else ColorSchemeMode.MonetLight) }
     val systemColor = if (Build.VERSION.SDK_INT >= 31) systemController.currentColors().primary else Color(0xFF007AFF)
     // 16 - (44 - 32) / 2. Dot edges line up with the text in neighbouring list rows.
-    BoxWithConstraints(Modifier.fillMaxWidth().testTag("appearance_palette").clip(RoundedCornerShape(24.dp))
-        .background(colors.surfaceContainer).padding(10.dp)) {
+    BoxWithConstraints(Modifier.fillMaxWidth().testTag("appearance_palette")
+        .squircleSurface(
+            color = colors.cardBackground,
+            cornerRadius = 24.dp,
+            weight = SquircleDefaults.Weight,
+        ).padding(10.dp)) {
         val columns = floor((maxWidth.value + 6) / 50).toInt().coerceAtLeast(1)
         val desiredGap = if (columns > 1) floor((maxWidth.value - columns * 44) / (columns - 1)).dp else 0.dp
         // Flutter Wrap keeps fractional layout pixels. Compose rounds each gap
@@ -74,9 +80,9 @@ import kotlin.math.floor
                     }, contentAlignment = Alignment.Center) {
                     Box(Modifier.size(32.dp).clip(CircleShape).background(fill))
                     if (color == null) Box(Modifier.align(Alignment.BottomEnd).size(20.dp).clip(CircleShape)
-                        .background(colors.surfaceContainer).padding(2.dp)) {
-                        Box(Modifier.fillMaxSize().clip(CircleShape).background(colors.surfaceContainerHigh), contentAlignment = Alignment.Center) {
-                            Icon(MusicIcons.Eyedropper, null, Modifier.size(12.dp), tint = colors.onSurface)
+                        .background(colors.cardBackground).padding(2.dp)) {
+                        Box(Modifier.fillMaxSize().clip(CircleShape).background(colors.cardPressed), contentAlignment = Alignment.Center) {
+                            Icon(MusicIcons.Eyedropper, null, Modifier.size(12.dp), tint = colors.labelPrimary)
                         }
                     }
                     val luminance = fill.luminance() + .05f
@@ -89,8 +95,8 @@ import kotlin.math.floor
                 .clickable(enabled = config.primaryColors.size < 32, interactionSource = addInteractions, indication = null, onClick = onAdd)
                 .settingsPressFeedback(addInteractions, ink)
                 .semantics { contentDescription = "添加主题色" }.testTag("appearance_color_add"), contentAlignment = Alignment.Center) {
-                Box(Modifier.size(32.dp).clip(CircleShape).background(colors.surfaceContainerHigh), contentAlignment = Alignment.Center) {
-                    Icon(MusicIcons.PaletteAdd, null, Modifier.size(20.dp), tint = colors.onSurfaceVariantSummary)
+                Box(Modifier.size(32.dp).clip(CircleShape).background(colors.cardPressed), contentAlignment = Alignment.Center) {
+                    Icon(MusicIcons.PaletteAdd, null, Modifier.size(20.dp), tint = colors.labelSecondaryVariant)
                 }
             }
         }

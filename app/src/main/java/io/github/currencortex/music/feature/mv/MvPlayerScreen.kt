@@ -45,8 +45,8 @@ import io.github.currencortex.music.feature.player.PlayerTransportButton
 import io.github.currencortex.music.feature.player.PlayerSeekBar
 import io.github.currencortex.music.ui.component.MusicIcons
 import kotlinx.coroutines.delay
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** The service owns playback. Fullscreen only changes presentation of the borrowed surface. */
 @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
@@ -133,15 +133,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         if (controls && state.playing && !state.loading && state.error == null && drag == null) { delay(3500); controls = false }
     }
     fun interact(action: () -> Unit) { interaction++; controls = true; action() }
-    Column(Modifier.fillMaxSize().background(if (immersive) Color(0xff08090b) else MiuixTheme.colorScheme.background)
+    Column(Modifier.fillMaxSize().background(if (immersive) Color(0xff08090b) else COUITheme.colorScheme.background)
         .then(if (immersive) Modifier else Modifier.statusBarsPadding().navigationBarsPadding().verticalScroll(rememberScrollState()))
         .testTag("mv_player"), horizontalAlignment = Alignment.CenterHorizontally) {
         if (!immersive) Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(44.dp).clip(CircleShape).clickable(role = Role.Button, onClick = onBack).testTag("mv_back"), contentAlignment = Alignment.Center) {
-                Icon(MusicIcons.Back, "返回", modifier = Modifier.size(24.dp), tint = MiuixTheme.colorScheme.onSurface)
+                Icon(MusicIcons.Back, "返回", modifier = Modifier.size(24.dp), tint = COUITheme.colorScheme.labelPrimary)
             }
             Spacer(Modifier.weight(1f))
-            Text("音乐视频", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f), modifier = Modifier.padding(end = 16.dp))
+            Text("音乐视频", fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f), modifier = Modifier.padding(end = 16.dp))
         }
         Box((if (immersive) Modifier.fillMaxWidth().weight(1f) else Modifier.padding(horizontal = 16.dp).widthIn(max = 840.dp)
             .fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(20.dp)))
@@ -188,13 +188,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         }
         if (!immersive) Column(Modifier.widthIn(max = 840.dp).fillMaxWidth().padding(24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(state.song?.name ?: "MV", fontSize = 26.sp, fontWeight = FontWeight.SemiBold, maxLines = 3, overflow = TextOverflow.Ellipsis)
-            Text(state.song?.artists.orEmpty(), fontSize = 15.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+            Text(state.song?.artists.orEmpty(), fontSize = 15.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
             Row(Modifier.fillMaxWidth().padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 TextButton(downloadLabel, onDownload, Modifier.weight(1f).testTag("mv_download"),
-                    colors = ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.primary, textColor = MiuixTheme.colorScheme.onPrimary))
+                    colors = ButtonDefaults.textButtonColors(color = COUITheme.colorScheme.primary, textColor = COUITheme.colorScheme.labelOnColor))
                 TextButton("全屏观看", onFullscreen, Modifier.weight(1f))
             }
-            Text("点按画面显示控制 · 双击播放或暂停", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .4f))
+            Text("点按画面显示控制 · 双击播放或暂停", fontSize = 12.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .4f))
         }
     }
 }

@@ -18,8 +18,8 @@ import io.github.currencortex.music.data.admin.*
 import io.github.currencortex.music.feature.update.MarkdownText
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 internal fun LazyListScope.adminOverview(state: AdminState) {
     val stats = state.overview ?: return
@@ -73,7 +73,7 @@ internal fun LazyListScope.adminOverview(state: AdminState) {
             val rows = traffic.rows(if (hourly) "hourly" else "daily")
             AdminChart(rows.map { it.number("bytes") ?: 0 }, "出站流量", rows.map { row -> row.number("t")?.let { java.text.SimpleDateFormat(if (hourly) "MM/dd HH:mm" else "MM/dd", java.util.Locale.getDefault()).format(java.util.Date(it * 1000)) } ?: row.text("t").takeLast(5) }, bytes = true, line = true, tag = "admin_chart_traffic")
             Text("更新于 ${adminTime(traffic.number("generatedAt") ?: 0)}", fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                color = COUITheme.colorScheme.labelSecondaryVariant)
         } else Text(if (state.loading && traffic == null) "正在加载流量统计…" else state.trafficError ?: traffic?.text("error")?.takeIf { it.isNotBlank() } ?: "当前服务器暂未提供流量统计", fontSize = 13.sp)
     }
 }

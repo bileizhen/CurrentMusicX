@@ -33,9 +33,9 @@ import io.github.currencortex.music.ui.component.coverRequestUrl
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
 import io.github.currencortex.music.ui.theme.LocalDarkTheme
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.theme.LocalContentColor
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.theme.LocalContentColor
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 internal val LocalPlaylistStatusBarStyle = compositionLocalOf<((Boolean) -> Unit)?> { null }
 
@@ -43,7 +43,7 @@ internal val LocalPlaylistStatusBarStyle = compositionLocalOf<((Boolean) -> Unit
 @Composable internal fun PlaylistPageLayout(cover: String, list: LazyListState,
     heroHeightPx: Int, tag: String, toolbar: @Composable (Float) -> Unit,
     content: @Composable (Dp) -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val density = LocalDensity.current
     val topInset = WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + SettingsToolbarHeight
     val heroHeight = with(density) { heroHeightPx.takeIf { it > 0 }?.toDp() ?: 240.dp }
@@ -70,7 +70,7 @@ internal val LocalPlaylistStatusBarStyle = compositionLocalOf<((Boolean) -> Unit
     val contentColumn = Modifier.windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal))
         .widthIn(max = 840.dp).fillMaxWidth()
     SettingsUiScope {
-    CompositionLocalProvider(LocalContentColor provides colors.onSurface) {
+    CompositionLocalProvider(LocalContentColor provides colors.labelPrimary) {
     Box(Modifier.fillMaxSize().graphicsLayer {
         // Reuse the composited page while it slides in. When it leaves, the remaining
         // visible area shrinks; drawing that directly avoids a full-page offscreen pass.

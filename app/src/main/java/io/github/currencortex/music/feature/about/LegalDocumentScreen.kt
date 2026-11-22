@@ -32,8 +32,8 @@ import io.github.currencortex.music.core.config.AppMetadata
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.BasicComponent
+import io.github.suqi8.coui.kmp.basic.Text
 
 enum class LegalDocument(val title: String, val asset: String) {
     LICENSE("开源许可", "legal/GPL-3.0.txt"),
@@ -71,7 +71,7 @@ fun LegalDocumentScreen(document: LegalDocument, onBack: () -> Unit, onOpenDocum
         if (document == LegalDocument.LICENSE) item {
             SettingsSection("组件许可", MusicIcons.File) {
             io.github.currencortex.music.ui.component.PageNavigationPreference(title = "Apache License 2.0",
-                summary = "MIUIX、AndroidX 等组件的许可", onClick = { onOpenDocument(LegalDocument.APACHE) })
+                summary = "COUI、AndroidX 等组件的许可", onClick = { onOpenDocument(LegalDocument.APACHE) })
             io.github.currencortex.music.ui.component.PageNavigationPreference(title = "GNU LGPL 3.0",
                 summary = "歌曲标签组件 Jaudiotagger 的许可", onClick = { onOpenDocument(LegalDocument.LGPL) })
             SettingsDivider()

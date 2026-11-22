@@ -44,8 +44,8 @@ import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.util.collectAsPageState
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun DiscoverUsersPage(vm: DiscoverViewModel, navigate: (String) -> Unit, active: Boolean) {
     val state by vm.state.collectAsPageState()
@@ -87,8 +87,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 }.padding(start = 12.dp, end = 4.dp).testTag("discover_sort"),
                     verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(userSortOptions.first { it.first == state.sort }.second, fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = .65f))
-                    Icon(MusicIcons.Sort, "排序方式", Modifier.size(17.dp), tint = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                        color = COUITheme.colorScheme.labelPrimary.copy(alpha = .65f))
+                    Icon(MusicIcons.Sort, "排序方式", Modifier.size(17.dp), tint = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                 }
             }
         }
@@ -104,16 +104,16 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         state.listening -> "${state.total} 位正在听歌的用户"
                         else -> "${state.stats.users} 位用户 · ${state.stats.listening} 人正在听歌"
                     }, Modifier.padding(start = 2.dp, bottom = 4.dp), fontSize = 11.sp,
-                        maxLines = 1, overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .45f))
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .45f))
                 }
                 if (state.loading && state.users.isEmpty()) items(4, key = { "placeholder-$it" }) { UserRowPlaceholder() }
                 if (state.loaded && !state.loading && state.users.isEmpty() && state.error == null) item(key = "empty") {
                     Column(Modifier.fillMaxWidth().padding(vertical = 40.dp), horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Icon(Icons.Default.Person, null, Modifier.size(32.dp), tint = MiuixTheme.colorScheme.onSurface.copy(alpha = .28f))
+                        Icon(Icons.Default.Person, null, Modifier.size(32.dp), tint = COUITheme.colorScheme.labelPrimary.copy(alpha = .28f))
                         Text(if (state.listening) "当前没有正在听歌的用户" else "没有匹配的用户", fontSize = 14.sp)
                         Text(if (state.submitted.isNotEmpty()) "换个关键词，或清除搜索试试" else "稍后刷新，看看谁来了", fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                            color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                         if (state.submitted.isNotEmpty()) MusicTextAction("清除搜索", vm::clearQuery)
                         else if (state.listening) MusicTextAction("查看全部用户", { vm.filter(false) })
                     }
@@ -121,7 +121,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 items(state.users, key = { "user-${it.id}" }) { user -> UserDirectoryRow(user, vm) { navigate("user/profile/${user.id}") } }
                 state.error?.let { error -> item(key = "error") {
                     Column(Modifier.fillMaxWidth().padding(vertical = 14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(error, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                        Text(error, fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
                         MusicTextAction(if (state.failedMore) "重试加载更多" else "重新加载", vm::retry, Modifier.testTag("discover_retry"))
                     }
                 } }
@@ -130,7 +130,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         when {
                             state.loadingMore -> CircularProgressIndicator(Modifier.size(18.dp))
                             state.hasMore -> MusicTextAction("加载更多", { vm.submit(more = true) }, Modifier.testTag("discover_more"), enabled = !state.loading)
-                            else -> Text("已显示全部 ${state.users.size} 位用户", fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .35f))
+                            else -> Text("已显示全部 ${state.users.size} 位用户", fontSize = 11.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .35f))
                         }
                     }
                 }
@@ -149,14 +149,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable private fun UserFilterChip(selected: Boolean, click: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val background by animateColorAsState(if (selected) colors.primary.copy(alpha = .1f) else Color.Transparent, tween(180), label = "listener filter")
     Row(Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(12.dp)).background(background)
         .toggleable(selected, role = Role.Checkbox, onValueChange = { click() }).padding(horizontal = 10.dp).testTag("discover_listening"),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-        Icon(MusicIcons.Headphones, null, Modifier.size(16.dp), tint = if (selected) colors.primary else colors.onSurface.copy(alpha = .5f))
+        Icon(MusicIcons.Headphones, null, Modifier.size(16.dp), tint = if (selected) colors.primary else colors.labelPrimary.copy(alpha = .5f))
         Text("正在听歌", Modifier.semantics { contentDescription = "仅显示正在听歌" }, fontSize = 12.sp,
-            color = if (selected) colors.primary else colors.onSurface.copy(alpha = .65f))
+            color = if (selected) colors.primary else colors.labelPrimary.copy(alpha = .65f))
         if (selected) Icon(Icons.Default.Check, null, Modifier.size(14.dp), tint = colors.primary)
     }
 }
@@ -166,7 +166,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val pressed by interaction.collectIsPressedAsState()
     val scale by animateFloatAsState(if (pressed) .985f else 1f, tween(120), label = "user row press")
     Row(Modifier.fillMaxWidth().graphicsLayer { scaleX = scale; scaleY = scale }.clip(RoundedCornerShape(18.dp))
-        .background(MiuixTheme.colorScheme.surface).clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = open)
+        .background(COUITheme.colorScheme.cardBackground).clickable(interactionSource = interaction, indication = null, role = Role.Button, onClick = open)
         .testTag("discover_user_${user.id}").heightIn(min = 84.dp).padding(horizontal = 14.dp, vertical = 13.dp),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         UserAvatar(user.profileUser(), vm.container, 44.dp, reserveOverlay = false)
@@ -178,13 +178,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
             UserIdentityDetails(user.title, user.ipRegion)
             if (user.bio.isNotBlank()) Text(user.bio, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f))
             Text("听歌 ${user.days} 天 · ${listeningDuration(user.listenMs)}", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .4f))
+                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .4f))
             user.current?.let { current ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Icon(Icons.Default.PlayArrow, null, Modifier.size(13.dp), tint = MiuixTheme.colorScheme.primary)
-                    Text("正在听：${current.name}", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.primary)
+                    Icon(Icons.Default.PlayArrow, null, Modifier.size(13.dp), tint = COUITheme.colorScheme.primary)
+                    Text("正在听：${current.name}", fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = COUITheme.colorScheme.primary)
                 }
             }
         }
@@ -193,7 +193,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable private fun UserRowPlaceholder() {
     MusicPlaceholderScope {
-        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(MiuixTheme.colorScheme.surface).padding(14.dp),
+        Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp)).background(COUITheme.colorScheme.cardBackground).padding(14.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             MusicPlaceholder(Modifier.size(44.dp), shape = CircleShape)
             Column(Modifier.weight(1f)) {

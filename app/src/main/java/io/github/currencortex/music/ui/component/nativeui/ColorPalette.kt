@@ -12,6 +12,8 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,8 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.materialkolor.hct.Hct
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.*
 
 internal data class PaletteHsv(val hue: Float, val saturation: Float, val value: Float) {
@@ -169,9 +171,13 @@ internal object PaletteGrid {
 }
 
 @Composable private fun HsvSliders(hsv: PaletteHsv, onChanged: (PaletteHsv) -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val hueStops = remember { (0..6).map { Color.hsv((it * 60 % 360).toFloat(), 1f, 1f) } }
-    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(24.dp)).background(colors.surfaceContainer)
+    Column(Modifier.fillMaxWidth().squircleSurface(
+        color = colors.cardBackground,
+        cornerRadius = 24.dp,
+        weight = SquircleDefaults.Weight,
+    )
         .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
         GradientColorSlider("色相", "${hsv.hue.roundToInt()}°", hsv.hue, 360f, hueStops,
             hsv.copy(saturation = 1f, value = 1f).color, "appearance_color_hue") { onChanged(hsv.copy(hue = it)) }
@@ -186,14 +192,14 @@ internal object PaletteGrid {
 
 @Composable private fun GradientColorSlider(label: String, text: String, value: Float, max: Float,
     stops: List<Color>, thumb: Color, tag: String, onChanged: (Float) -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     var pressed by remember { mutableStateOf(false) }
     val edgePx = with(LocalDensity.current) { 14.dp.toPx() }
     val activation by animateFloatAsState(if (pressed) 1f else 0f, tween(100), label = "color slider press")
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Row(Modifier.fillMaxWidth()) {
-            Text(label, Modifier.weight(1f), fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurfaceVariantSummary)
-            Text(text, fontSize = 15.sp, lineHeight = 20.sp, color = colors.onSurfaceVariantSummary)
+            Text(label, Modifier.weight(1f), fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, color = colors.labelSecondaryVariant)
+            Text(text, fontSize = 15.sp, lineHeight = 20.sp, color = colors.labelSecondaryVariant)
         }
         Canvas(Modifier.fillMaxWidth().height(28.dp).testTag(tag)
             .pickArea({ point, size ->
@@ -212,7 +218,7 @@ internal object PaletteGrid {
             val edge = 14.dp.toPx(); val trackHeight = 20.dp.toPx(); val top = (size.height - trackHeight) / 2
             val brush = Brush.horizontalGradient(stops, edge, size.width - edge)
             drawRoundRect(brush, Offset(0f, top), Size(size.width, trackHeight), CornerRadius(trackHeight / 2))
-            drawRoundRect(colors.dividerLine.copy(alpha = .6f), Offset(.5.dp.toPx(), top + .5.dp.toPx()),
+            drawRoundRect(colors.divider.copy(alpha = .6f), Offset(.5.dp.toPx(), top + .5.dp.toPx()),
                 Size(size.width - 1.dp.toPx(), trackHeight - 1.dp.toPx()), CornerRadius(trackHeight / 2), style = Stroke(1.dp.toPx()))
             colorThumb(Offset(edge + (size.width - 2 * edge) * value / max, size.height / 2), (14 + activation * 2).dp.toPx(), thumb)
         }

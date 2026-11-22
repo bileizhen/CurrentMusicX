@@ -157,6 +157,6 @@ internal suspend fun scanLocalMusic(context: Context): List<Song> {
             scopeOpen = false; chooseScope(null)
             if (!allowed) request.launch(permission)
         }, chevron = false, modifier = androidx.compose.ui.Modifier.testTag("local_music_scan_device"))
-        top.yukonga.miuix.kmp.basic.Text("文件夹模式仅扫描所选目录及其子目录，不改变当前播放队列。")
+        io.github.suqi8.coui.kmp.basic.Text("文件夹模式仅扫描所选目录及其子目录，不改变当前播放队列。")
     }
 }

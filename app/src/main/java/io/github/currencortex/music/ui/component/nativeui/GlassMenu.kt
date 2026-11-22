@@ -51,10 +51,10 @@ import androidx.compose.ui.unit.*
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.blur.Backdrop
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.*
 import io.github.currencortex.music.ui.theme.LocalCustomFont
 
@@ -98,7 +98,7 @@ private data class MenuHit(val index: Int, val bounds: Rect, val action: () -> U
 
 /** menuShadows from liquid_glass.dart: one wide, downward shadow; no tight halo. */
 @Composable private fun Modifier.popupShadow(pane:Shape,progress:()->Float):Modifier {
-    val dark=MiuixTheme.colorScheme.onBackground.luminance()>.5f
+    val dark=COUITheme.colorScheme.labelPrimary.luminance()>.5f
     val shadowShape=remember(pane){object:Shape {
         var previous:Outline?=null
         var cached:Outline?=null
@@ -125,7 +125,7 @@ private data class MenuHit(val index: Int, val bounds: Rect, val action: () -> U
 
 /** LiquidGlassRim.paintLine: an outside hairline, independent of the Gaussian frost. */
 @Composable private fun Modifier.popupRim(pane:Shape,progress:()->Float):Modifier {
-    val dark=MiuixTheme.colorScheme.onBackground.luminance()>.5f
+    val dark=COUITheme.colorScheme.labelPrimary.luminance()>.5f
     val enabled=LocalLiquidGlassEnabled.current
     return if(!enabled)this else drawWithContent {
         drawContent()
@@ -251,8 +251,8 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
     val subtitleStyle=remember(font){TextStyle(fontFamily=font,fontSize=13.sp,lineHeight=18.sp)}
     val contentHeights=remember(density.density,density.fontScale){mutableStateMapOf<List<String>,Int>()}
     val haptics=LocalHapticFeedback.current
-    val ink=MiuixTheme.colorScheme.onBackground
-    val dimColor=MiuixTheme.colorScheme.surface
+    val ink=COUITheme.colorScheme.labelPrimary
+    val dimColor=COUITheme.colorScheme.surface
     val path=remember { mutableStateListOf<MenuStep>() }
     val retainedPath=remember {mutableStateListOf<MenuStep>()}
     var hasShown by remember {mutableStateOf(false)}
@@ -736,7 +736,7 @@ private class PopupShape(val frame: () -> GlassPopupFrame, val origin: Offset) :
                                 Column(Modifier.weight(1f)) {
                                     Text(item.label,color=if(item.danger)Color(0xFFFF6464)else ink.copy(alpha=if(item.enabled)1f else .38f),
                                         fontSize=15.sp,lineHeight=20.sp,maxLines=1,overflow=TextOverflow.Ellipsis)
-                                    item.subtitle?.let{Text(it,color=MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                    item.subtitle?.let{Text(it,color=COUITheme.colorScheme.labelSecondaryVariant,
                                         fontSize=13.sp,lineHeight=18.sp,maxLines=2,overflow=TextOverflow.Ellipsis)}
                                 }
                                 }

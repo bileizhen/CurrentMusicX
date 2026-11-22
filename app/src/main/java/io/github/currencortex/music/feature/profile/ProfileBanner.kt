@@ -14,12 +14,12 @@ import coil3.compose.AsyncImage
 import io.github.currencortex.music.ui.component.MusicDialog
 import io.github.currencortex.music.ui.component.MusicDialogActions
 import io.github.currencortex.music.ui.component.MusicDialogButton
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable
 internal fun ProfileBannerImage(model: Any?, modifier: Modifier = Modifier) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Box(modifier.fillMaxWidth().aspectRatio(4f).clip(RoundedCornerShape(14.dp))
         .background(Brush.linearGradient(listOf(colors.primary.copy(alpha = .65f), colors.surface)))) {
         if (model != null) AsyncImage(model, contentDescription = null, modifier = Modifier.matchParentSize(),

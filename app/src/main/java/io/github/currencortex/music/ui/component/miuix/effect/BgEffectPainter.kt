@@ -6,8 +6,8 @@ package io.github.currencortex.music.ui.component.miuix.effect
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.ui.graphics.Brush
-import top.yukonga.miuix.kmp.shader.RuntimeShader
-import top.yukonga.miuix.kmp.shader.asBrush
+import io.github.suqi8.coui.kmp.shader.RuntimeShader
+import io.github.suqi8.coui.kmp.shader.asBrush
 import kotlin.math.cos
 import kotlin.math.sin
 

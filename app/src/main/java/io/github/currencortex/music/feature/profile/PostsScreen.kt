@@ -23,10 +23,10 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.util.collectAsPageState
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -96,7 +96,7 @@ internal fun PostsScreen(vm: PostsViewModel, navigate: (String) -> Unit, content
                                             modifier = Modifier.testTag("post_create"), onClick = {
                                                 if (account.account == null) navigate("user/login") else vm.editor(true)
                                             }, leading = { Icon(MusicIcons.Add, null, Modifier.size(24.dp),
-                                                tint = MiuixTheme.colorScheme.primary) })
+                                                tint = COUITheme.colorScheme.primary) })
                                     }
                                 }
                                 state.message?.let { item { SettingsHint(it) } }
@@ -126,7 +126,7 @@ internal fun PostsScreen(vm: PostsViewModel, navigate: (String) -> Unit, content
                                                     fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
                                                 val excerpt = remember(post.content) { postExcerpt(post.content) }
                                                 Text(excerpt.ifEmpty { "查看正文" }, fontSize = 14.sp, maxLines = 3,
-                                                    overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                                    overflow = TextOverflow.Ellipsis, color = COUITheme.colorScheme.labelSecondaryVariant)
                                             }
                                             PostMusic(post, vm.container, navigate)
                                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -175,7 +175,7 @@ internal fun PostAuthor(post: CommunityPost, container: AppContainer, navigate: 
                 UserRoleBadge(post.author.role)
             }
             UserIdentityDetails(post.author.title, post.author.ipRegion)
-            Text(postTime(post.createdAt), fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            Text(postTime(post.createdAt), fontSize = 11.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         }
     }
 }

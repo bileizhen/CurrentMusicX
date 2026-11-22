@@ -25,9 +25,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.MusicIcons
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun SettingsInfoHeader(title: String, icon: ImageVector, modifier: Modifier = Modifier,
     horizontalInset: androidx.compose.ui.unit.Dp = 16.dp,
@@ -38,9 +38,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     val height = (kotlin.math.max(24f, 20f * fontScale) + inset * 2).dp
     Row(modifier.fillMaxWidth().padding(horizontal = horizontalInset).heightIn(min = height),
         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        Icon(icon, null, Modifier.size(24.dp), tint = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        Icon(icon, null, Modifier.size(24.dp), tint = COUITheme.colorScheme.labelSecondaryVariant)
         Text(title, Modifier.weight(1f), fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            color = COUITheme.colorScheme.labelSecondaryVariant)
         actions()
     }
 }
@@ -54,7 +54,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable internal fun SettingsSelectionCheck(selected: Boolean, modifier: Modifier = Modifier.size(20.dp),
-    color: Color = MiuixTheme.colorScheme.primary) {
+    color: Color = COUITheme.colorScheme.primary) {
     val amount by animateFloatAsState(if (selected) 1f else 0f,
         tween(200, easing = CubicBezierEasing(.175f, .885f, .32f, 1.275f)), label = "selection check")
     Icon(MusicIcons.Check, null, modifier.graphicsLayer {
@@ -66,9 +66,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable internal fun SettingsHeaderReset(onClick: () -> Unit, description: String, modifier: Modifier = Modifier) {
     ElasticPress(modifier.size(36.dp).semantics { contentDescription = description }
         .clip(CircleShape).clickable(role = Role.Button, onClick = onClick)) {
-        Box(Modifier.fillMaxSize().clip(CircleShape).background(MiuixTheme.colorScheme.surfaceContainer),
+        Box(Modifier.fillMaxSize().clip(CircleShape).background(COUITheme.colorScheme.cardBackground),
             contentAlignment = Alignment.Center) {
-            Icon(MusicIcons.Reset, null, Modifier.size(20.dp), tint = MiuixTheme.colorScheme.onSurface)
+            Icon(MusicIcons.Reset, null, Modifier.size(20.dp), tint = COUITheme.colorScheme.labelPrimary)
         }
     }
 }
@@ -77,15 +77,15 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable internal fun SettingsPreviewChoiceGroup(title: String, icon: ImageVector, labels: List<String>,
     selected: Int, onSelect: (Int) -> Unit, tag: String, enabled: (Int) -> Boolean = { true },
     pictogram: @Composable (Int) -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Column(Modifier.testTag(tag), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsInfoHeader(title, icon)
+        SettingsListHeader(title)
         SettingsGroup(Modifier.padding(horizontal = 16.dp).semantics { selectableGroup() }) {
             labels.forEachIndexed { index, label ->
                 SettingsPreference(label, modifier = Modifier.semantics { this.selected = selected == index }
                     .testTag("${tag}_$index").drawWithContent {
                         drawContent()
-                        if (index < labels.lastIndex) drawLine(colors.onSurface.copy(alpha = .08f),
+                        if (index < labels.lastIndex) drawLine(colors.labelPrimary.copy(alpha = .08f),
                             Offset(72.dp.toPx(), size.height), Offset(size.width - 16.dp.toPx(), size.height), .5.dp.toPx())
                     }, enabled = enabled(index), onClick = { onSelect(index) }, role = Role.RadioButton,
                     leading = { Box(Modifier.clearAndSetSemantics { }) { pictogram(index) } },

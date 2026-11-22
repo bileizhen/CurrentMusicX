@@ -10,8 +10,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.profile.PostAttachment
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun MusicAttachmentCard(card: PostAttachment, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().testTag("music_attachment_${card.type}_${card.id}").clickable(onClick = onClick)
@@ -21,7 +21,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(card.name, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(card.sub.ifBlank { when (card.type) { "song" -> "歌曲"; "album" -> "专辑"; "artist" -> "歌手"; else -> "歌单" } },
-                fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = COUITheme.colorScheme.labelSecondaryVariant)
         }
     }
 }

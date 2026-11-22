@@ -49,7 +49,7 @@ import io.github.currencortex.music.ui.component.coverRequestUrl
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Text
 import kotlin.math.*
 
 internal val LocalRecordFlightTarget = staticCompositionLocalOf<() -> Rect?> { { null } }

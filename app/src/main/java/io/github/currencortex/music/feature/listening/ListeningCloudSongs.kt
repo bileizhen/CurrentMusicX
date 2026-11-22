@@ -8,9 +8,9 @@ import io.github.currencortex.music.ui.component.nativeui.LocalGlassBackdrop
 import io.github.currencortex.music.ui.component.nativeui.rememberGlassBackdrop
 import io.github.currencortex.music.ui.component.nativeui.SettingsFloatingHeader
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -293,7 +293,7 @@ private val WallListBackground: Color @Composable get() = if (FootprintDark) Foo
             }
             GlassIconButton(dismiss,"返回",Modifier.align(Alignment.CenterStart).padding(start=12.dp)
                 .testTag("listening_songs_back")) {
-                Icon(MusicIcons.Back,null,tint=MiuixTheme.colorScheme.onBackground)
+                Icon(MusicIcons.Back,null,tint=COUITheme.colorScheme.labelPrimary)
             }
         }
     }

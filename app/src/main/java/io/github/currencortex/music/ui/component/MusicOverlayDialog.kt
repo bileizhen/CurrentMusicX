@@ -17,16 +17,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.Alignment
-import top.yukonga.miuix.kmp.theme.LocalContentColor
+import io.github.suqi8.coui.kmp.theme.LocalContentColor
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.layout.DialogDefaults
-import top.yukonga.miuix.kmp.overlay.OverlayDialog
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.DialogLayout
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.overlay.OverlayDialog
+import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.utils.COUIPopupUtils.Companion.DialogLayout
 
 /** The root host owns removal, so conditional callers may disappear without cancelling exit. */
 @Composable
@@ -49,13 +47,13 @@ fun MusicOverlayDialog(
     SideEffect { visible.value = show }
     val dismiss = rememberUpdatedState(onDismissRequest)
     val styled = backgroundColor == null
-    val colors = rememberUpdatedState(if (styled) musicDialogColors() else MiuixTheme.colorScheme)
+    val colors = rememberUpdatedState(if (styled) musicDialogColors() else COUITheme.colorScheme)
     val backdrop = rememberUpdatedState(LocalMusicDialogBackdrop.current)
     val liquidGlass = rememberUpdatedState(io.github.currencortex.music.ui.component.nativeui.LocalLiquidGlassEnabled.current)
     val blur = rememberUpdatedState(io.github.currencortex.music.ui.component.nativeui.LocalGlassBlurEnabled.current)
     val commonStyle = rememberUpdatedState(styled)
     val edgeContent = rememberUpdatedState(edgeToEdgeContent)
-    val styles = rememberUpdatedState(MiuixTheme.textStyles)
+    val styles = rememberUpdatedState(COUITheme.textStyles)
     val currentModifier = rememberUpdatedState(modifier)
     val currentTitle = rememberUpdatedState(title)
     val currentSummary = rememberUpdatedState(summary)
@@ -76,7 +74,7 @@ fun MusicOverlayDialog(
             CompositionLocalProvider(
                 io.github.currencortex.music.ui.component.nativeui.LocalLiquidGlassEnabled provides liquidGlass.value,
                 io.github.currencortex.music.ui.component.nativeui.LocalGlassBlurEnabled provides blur.value) {
-                MiuixTheme(colors = colors.value, textStyles = styles.value) {
+                COUITheme(colors = colors.value, textStyles = styles.value) {
                     // A local host keeps native presentation inside the root's animated layer.
                     Scaffold(containerColor = Color.Transparent, contentWindowInsets = WindowInsets(0, 0, 0, 0)) {
                         OverlayDialog(show = true, modifier = currentModifier.value.then(if (panelMotion.value)
@@ -91,15 +89,15 @@ fun MusicOverlayDialog(
                                 val inset = currentInsideMargin.value
                                 CompositionLocalProvider(LocalMusicDialogContent provides true,
                                     LocalMusicDialogEdgeToEdge provides edgeContent.value,
-                                    LocalContentColor provides colors.value.onBackground) {
+                                    LocalContentColor provides colors.value.labelPrimary) {
                                     Column(Modifier.fillMaxWidth().padding(top = inset.height, bottom = if (edgeContent.value) 16.dp else inset.height)) {
                                         currentTitle.value?.let { Text(it, Modifier.fillMaxWidth().padding(horizontal = inset.width)
                                             .testTag("music_dialog_title"), fontSize = 20.sp, lineHeight = 27.sp,
                                             fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center,
-                                            color = colors.value.onBackground) }
+                                            color = colors.value.labelPrimary) }
                                         currentSummary.value?.let { Text(it,
                                             Modifier.fillMaxWidth().padding(horizontal = inset.width).padding(top = 12.dp),
-                                            fontSize = 14.sp, lineHeight = 22.sp, color = colors.value.onSurfaceVariantSummary) }
+                                            fontSize = 14.sp, lineHeight = 22.sp, color = colors.value.labelSecondaryVariant) }
                                         Box(Modifier.fillMaxWidth().padding(top = if (currentTitle.value != null || currentSummary.value != null) (if (edgeContent.value) 8.dp else 16.dp) else 0.dp)
                                             .padding(horizontal = if (edgeContent.value) 0.dp else inset.width)) { body.value() }
                                     }

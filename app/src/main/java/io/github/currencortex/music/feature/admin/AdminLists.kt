@@ -24,8 +24,8 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.admin.*
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 private val adminSorts = listOf("reg" to "最新注册", "reg_asc" to "最早注册", "name" to "昵称", "active" to "最近活跃",
     "sessions" to "在线设备", "likes" to "点赞", "plays" to "播放", "role" to "角色")
@@ -48,14 +48,14 @@ private val adminSorts = listOf("reg" to "最新注册", "reg_asc" to "最早注
             clearTag = "admin_search_clear", onCancel = { query = ""; focus.clearFocus(); keyboard?.hide() })
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Text(if (state.loading) "正在查找…" else "${state.users?.total ?: 0} 位用户", Modifier.weight(1f), fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                color = COUITheme.colorScheme.labelSecondaryVariant)
             Row(Modifier.heightIn(min = 48.dp).clickable(enabled = !state.busy, role = Role.Button) {
                 focus.clearFocus(); keyboard?.hide(); sorting = true
             }.testTag("admin_sort").padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(adminSorts.firstOrNull { it.first == state.sort }?.second ?: "排序", fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.primary)
-                Icon(MusicIcons.Sort, null, Modifier.size(16.dp), tint = MiuixTheme.colorScheme.primary)
+                    color = COUITheme.colorScheme.primary)
+                Icon(MusicIcons.Sort, null, Modifier.size(16.dp), tint = COUITheme.colorScheme.primary)
             }
         }
     }
@@ -74,26 +74,26 @@ internal fun LazyListScope.adminUsers(state: AdminState, actions: AdminActions, 
     items(result.users, key = { "user-${it.id}" }) { user -> SettingsGroup {
         Row(Modifier.fillMaxWidth().clickable(role = Role.Button, enabled = !state.loading && !state.busy) { open(AdminDestination.User(user)) }
             .testTag("admin_manage_${user.id}").padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.size(44.dp).clip(CircleShape).background(MiuixTheme.colorScheme.primary.copy(alpha = .12f)), contentAlignment = Alignment.Center) {
-                Text(user.name.take(1).uppercase(), fontSize = 20.sp, fontWeight = FontWeight.Medium, color = MiuixTheme.colorScheme.primary)
+            Box(Modifier.size(44.dp).clip(CircleShape).background(COUITheme.colorScheme.primary.copy(alpha = .12f)), contentAlignment = Alignment.Center) {
+                Text(user.name.take(1).uppercase(), fontSize = 20.sp, fontWeight = FontWeight.Medium, color = COUITheme.colorScheme.primary)
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(user.name, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("@${user.username}", fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                Text("@${user.username}", fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = COUITheme.colorScheme.labelSecondaryVariant)
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (user.isAdmin || user.isSuper || user.isOwner) AdminBadge(adminRole(user))
                     if (user.disabled) AdminBadge("已禁用", warning = true)
-                    if (user.sessions > 0) Text("${user.sessions} 台在线", fontSize = 11.sp, color = MiuixTheme.colorScheme.primary)
+                    if (user.sessions > 0) Text("${user.sessions} 台在线", fontSize = 11.sp, color = COUITheme.colorScheme.primary)
                 }
             }
-            Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = COUITheme.colorScheme.labelSecondaryVariant)
         }
     } }
     if (result.total > 0 || state.offset > 0) item { Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween) {
         MusicTextAction("上一页", { actions.page(-1) }, Modifier.testTag("admin_previous_page"), enabled = !state.loading && !state.busy && state.offset > 0)
         Text("${state.offset / AdminRepository.PAGE_SIZE + 1} / ${((result.total + AdminRepository.PAGE_SIZE - 1) / AdminRepository.PAGE_SIZE).coerceAtLeast(1)}",
-            fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         MusicTextAction("下一页", { actions.page(1) }, Modifier.testTag("admin_next_page"),
             enabled = !state.loading && !state.busy && state.offset + AdminRepository.PAGE_SIZE < result.total)
     } }
@@ -110,9 +110,9 @@ internal fun LazyListScope.adminAnnouncements(state: AdminState, open: (AdminDes
                 if (!item.canEdit) AdminBadge("只读")
             }
             Text(item.title, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(item.body, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            Text(item.body, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis, color = COUITheme.colorScheme.labelSecondaryVariant)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("${item.author} · ${adminTime(item.createdAt)}", Modifier.weight(1f), fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                Text("${item.author} · ${adminTime(item.createdAt)}", Modifier.weight(1f), fontSize = 11.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
                 Icon(MusicIcons.Forward, null, Modifier.size(16.dp))
             }
         }
@@ -123,7 +123,7 @@ internal fun LazyListScope.adminDevices(state: AdminState, confirm: (AdminConfir
     val sessions = state.sessions ?: return
     val groups = sessions.groupBy { it.user_id }.values.toList()
     item { Text("${groups.size} 位用户 · ${sessions.size} 台设备" + if (sessions.size >= 100) "（最多显示 100 台）" else "",
-        Modifier.padding(horizontal = 2.dp, vertical = 4.dp), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }
+        Modifier.padding(horizontal = 2.dp, vertical = 4.dp), fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant) }
     if (groups.isEmpty()) item { AdminEmpty("暂无在线设备", "新会话会在刷新后显示。") }
     items(groups, key = { "devices-${it.first().user_id}" }) { rows ->
         val first = rows.first()
@@ -131,7 +131,7 @@ internal fun LazyListScope.adminDevices(state: AdminState, confirm: (AdminConfir
             rows.forEachIndexed { index, session ->
                 if (index > 0) SettingsDivider(0.dp)
                 Text(session.device, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Text("${session.platform} · 最近活跃 ${adminTime(session.last_seen)}", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                Text("${session.platform} · 最近活跃 ${adminTime(session.last_seen)}", fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
             }
             if (first.user_id == state.actor?.id) SettingsHint("当前账号，请在账号与安全中管理自己的登录。")
             else MusicTextAction("全部设备下线", { confirm(AdminConfirmation.Kick(first)) }, enabled = !state.loading && !state.busy, destructive = true)

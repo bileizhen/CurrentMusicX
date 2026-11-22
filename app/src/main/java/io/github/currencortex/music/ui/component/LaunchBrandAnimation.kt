@@ -40,15 +40,15 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.shader.isRuntimeShaderSupported
+import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.shader.isRuntimeShaderSupported
 import io.github.currencortex.music.ui.component.miuix.effect.BgEffectBackground
 import io.github.currencortex.music.ui.component.miuix.effect.ColorBlendToken
 import io.github.currencortex.music.ui.theme.LocalDarkTheme
-import top.yukonga.miuix.kmp.blur.BlurColors
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.blur.textureBlur
+import io.github.suqi8.coui.kmp.blur.BlurColors
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
+import io.github.suqi8.coui.kmp.blur.textureBlur
 import kotlin.coroutines.coroutineContext
 
 private const val BRAND = "Current Music"
@@ -71,7 +71,7 @@ val LocalLaunchBrand = staticCompositionLocalOf<LaunchBrandState?> { null }
 /** The destination and animated wordmark share one font and measurement, including user scaling. */
 @Composable fun HomeBrandTitle() {
     val launch = LocalLaunchBrand.current
-    BasicText(BRAND, style = brandStyle.copy(color = MiuixTheme.colorScheme.onSurface,
+    BasicText(BRAND, style = brandStyle.copy(color = COUITheme.colorScheme.labelPrimary,
         fontFamily = io.github.currencortex.music.ui.theme.LocalCustomFont.current ?: FontFamily.SansSerif),
         modifier = Modifier.testTag("home_brand_title").onGloballyPositioned { launch?.anchor = it.boundsInRoot() }
             .graphicsLayer { alpha = if (launch?.active == true) 0f else 1f })
@@ -125,7 +125,7 @@ private fun curve(start: Offset, control: Offset, end: Offset, progress: Float):
         if (avatar == null) avatarReveal.snapTo(0f)
         else avatarReveal.animateTo(1f, tween(280))
     }
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val blurEnabled = enableBlur && android.os.Build.VERSION.SDK_INT >= 33 &&
         LocalView.current.isHardwareAccelerated && isRuntimeShaderSupported()
     val effectBackground = blurEnabled && android.os.Build.VERSION.SDK_INT >= 35
@@ -141,7 +141,7 @@ private fun curve(start: Offset, control: Offset, end: Offset, progress: Float):
         .skipLaunchOnDoubleTap(finish)) {
         BgEffectBackground(dynamicBackground = effectBackground && !reducedMotion,
             modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f - smooth(state.flight.value) }
-                .background(colors.surface),
+                .background(colors.cardBackground),
             bgModifier = Modifier.layerBackdrop(backdrop),
             isFullSize = true, effectBackground = effectBackground, animationSpeed = 3f) { }
         val viewportWidth = with(displayDensity) { maxWidth.toPx() }
@@ -191,7 +191,7 @@ private fun curve(start: Offset, control: Offset, end: Offset, progress: Float):
         }
         Canvas(wordmark.then(if (blurEnabled) Modifier else Modifier.testTag("launch_wordmark"))
             .graphicsLayer { alpha = if (blurEnabled) smooth(state.flight.value) else 1f }) {
-            drawWordmark(layout, state.reveal.value, colors.onSurface)
+            drawWordmark(layout, state.reveal.value, colors.labelPrimary)
         }
     }
 }

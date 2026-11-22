@@ -7,8 +7,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.theme.LocalContentColor
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.LocalContentColor
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Shared page chrome for account forms, grids and music lists with their own scroll state. */
 @Composable internal fun MusicSubpage(title: String, tag: String, onBack: (() -> Unit)? = null,
@@ -16,7 +16,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     actions: @Composable RowScope.() -> Unit = {}, toolbar: (@Composable () -> Unit)? = null,
     content: @Composable (Dp) -> Unit) {
     SettingsUiScope {
-        CompositionLocalProvider(LocalContentColor provides MiuixTheme.colorScheme.onSurface) {
+        CompositionLocalProvider(LocalContentColor provides COUITheme.colorScheme.labelPrimary) {
             Box(modifier.fillMaxSize().navigationBarsPadding()) {
                 SettingsScrollLayout(Modifier.widthIn(max = 840.dp).fillMaxSize().align(androidx.compose.ui.Alignment.TopCenter)
                     .testTag(tag), topBar = {

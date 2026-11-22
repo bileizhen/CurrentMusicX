@@ -17,8 +17,8 @@ import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.toBitmap
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Swap any two tiles to complete the current song's cover; the recommendation mode stays native. */
 @Composable internal fun RoamingCoverPuzzle(cover: String, songId: Long?, showCaption: Boolean = true) {
@@ -46,7 +46,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         values.forEachIndexed { column, tile ->
                             val index = row * 3 + column
                             Canvas(Modifier.weight(1f).fillMaxHeight().border(if (selected == index) 2.dp else 0.dp,
-                                MiuixTheme.colorScheme.primary).clickable(enabled = !complete) {
+                                COUITheme.colorScheme.primary).clickable(enabled = !complete) {
                                 val first = selected
                                 if (first == null) selected = index else {
                                     tiles = tiles.toMutableList().apply { val old = this[first]; this[first] = this[index]; this[index] = old }
@@ -64,7 +64,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
         }
         if (showCaption) Text(if (complete) "拼好了，继续聆听这首歌" else if (failed) "封面暂不可用，歌曲继续播放" else "轻点两块碎片交换位置",
-            fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         if (complete && showCaption) MusicTextAction("再拼一次", { tiles = (0..8).shuffled(); selected = null })
     }
 }

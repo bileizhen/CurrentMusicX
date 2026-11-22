@@ -21,8 +21,8 @@ import io.github.currencortex.music.data.profile.userLevelLabel
 import io.github.currencortex.music.feature.update.MarkdownText
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun AdminDetail(destination: AdminDestination, state: AdminState, actions: AdminActions,
     open: (AdminDestination) -> Unit, confirm: (AdminConfirmation) -> Unit, onBack: () -> Unit) {
@@ -38,7 +38,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable private fun AdminUserDetail(initial: AdminUser, state: AdminState, open: (AdminDestination) -> Unit,
     confirm: (AdminConfirmation) -> Unit, onBack: () -> Unit) {
     val user = state.users?.users?.find { it.id == initial.id } ?: initial
-    MusicSubpage("用户管理", "admin_user_detail", onBack, modifier = Modifier.background(MiuixTheme.colorScheme.background)) { inset ->
+    MusicSubpage("用户管理", "admin_user_detail", onBack, modifier = Modifier.background(COUITheme.colorScheme.background)) { inset ->
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = inset + 12.dp,
             bottom = LocalMusicBottomInset.current + 24.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             AdminCard(user.name, "@${user.username} · ID ${user.id}") {
@@ -146,7 +146,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 if (pinned) AdminBadge("置顶")
                 if (item?.removed == true) AdminBadge("已移除", true)
                 if (body.isNotBlank()) MarkdownText(body, compact = true, onLinkClick = {}) else Text("正文预览将在这里显示", fontSize = 13.sp)
-                if (link.isNotBlank()) Text(link, fontSize = 12.sp, color = MiuixTheme.colorScheme.primary)
+                if (link.isNotBlank()) Text(link, fontSize = 12.sp, color = COUITheme.colorScheme.primary)
             }
         } else {
             SettingsGroup { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -181,7 +181,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable private fun AdminField(label: String, value: String, change: (String) -> Unit, tag: String,
     enabled: Boolean, password: Boolean = false, number: Boolean = false, multiline: Boolean = false) {
-    Text(label, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+    Text(label, fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
     TextField(value, change, enabled = enabled, singleLine = !multiline,
         modifier = Modifier.fillMaxWidth().then(if (multiline) Modifier.heightIn(min = 180.dp) else Modifier).testTag(tag),
         visualTransformation = if (password) PasswordVisualTransformation() else VisualTransformation.None,
@@ -195,7 +195,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     fun leave() { if (!state.busy) { focus.clearFocus(); if (dirty) discard = true else onBack() } }
     BackHandler { leave() }
     val keyboardVisible = WindowInsets.ime.getBottom(LocalDensity.current) > 0
-    MusicSubpage(title, tag, ::leave, modifier = Modifier.background(MiuixTheme.colorScheme.background)) { inset ->
+    MusicSubpage(title, tag, ::leave, modifier = Modifier.background(COUITheme.colorScheme.background)) { inset ->
         Column(Modifier.fillMaxSize().padding(top = inset).imePadding()) {
             Column(Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(14.dp), content = content)

@@ -1,4 +1,4 @@
-// Bottom dialog layout adapted from 123PanX / XBlocker / MIUIX, GPL-3.0-only.
+// Bottom dialog layout adapted from 123PanX / XBlocker / COUI, GPL-3.0-only.
 package io.github.currencortex.music.feature.update
 
 import io.github.currencortex.music.ui.component.MusicDialogButton
@@ -30,9 +30,9 @@ import io.github.currencortex.music.BuildConfig
 import io.github.currencortex.music.ui.util.openExternalLink
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.*
+import io.github.suqi8.coui.kmp.basic.*
 import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDialog
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable
 fun UpdatePage(service: UpdateService, transfer: UpdateTransfer, cover: String = "",
@@ -125,15 +125,15 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
             Text(if (release != null && downloadExperience) "下载体验" else if (release != null) "发现新版本" else "检查更新", fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
             if (release != null) Text("v${release.version}", fontSize = 14.sp,
-                fontWeight = FontWeight.Medium, color = MiuixTheme.colorScheme.primary,
+                fontWeight = FontWeight.Medium, color = COUITheme.colorScheme.primary,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (release != null) Text("${if (release.isCi) "CI 版" else "正式版"} · 安装包 ${formatSize(release.size)}",
-            fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant,
             modifier = Modifier.padding(top = 4.dp))
         Spacer(Modifier.height(14.dp))
         if (downloadExperience) Text("下载进度优先显示在灵动岛；完成后可点击查看更新详情。", fontSize = 13.sp,
-            color = MiuixTheme.colorScheme.primary, modifier = Modifier.padding(bottom = 10.dp))
+            color = COUITheme.colorScheme.primary, modifier = Modifier.padding(bottom = 10.dp))
         val message = when (state) {
             UpdateState.Idle, UpdateState.Checking -> "正在检查更新…"
             UpdateState.UpToDate -> "当前已是最新版本"
@@ -154,7 +154,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                 role = Role.Button, onClick = { showSources = true })
                 .padding(vertical = 14.dp).testTag("update_source"), verticalAlignment = Alignment.CenterVertically) {
                 Text("下载源 · ${source.compactLabel()}", modifier = Modifier.weight(1f), fontSize = 15.sp)
-                Text("选择 ›", color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp)
+                Text("选择 ›", color = COUITheme.colorScheme.labelSecondaryVariant, fontSize = 13.sp)
             }
             when {
                 previewDownloading -> {
@@ -172,13 +172,13 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
                         LinearProgressIndicator(progress = animatedProgress,
                             modifier = Modifier.fillMaxWidth().padding(top = 8.dp))
                         Text("关闭弹窗后继续下载，可从设置或通知查看进度", fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary, modifier = Modifier.padding(top = 6.dp))
+                            color = COUITheme.colorScheme.labelSecondaryVariant, modifier = Modifier.padding(top = 6.dp))
                     }
                     is UpdateDownloadState.Ready -> Text("下载完成，已校验安装包", fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.primary)
+                        color = COUITheme.colorScheme.primary)
                     is UpdateDownloadState.Failed -> Text(download.message, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     UpdateDownloadState.Idle -> Text("下载失败时自动尝试其他来源", fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                        color = COUITheme.colorScheme.labelSecondaryVariant)
                 }
             }
             transferState.message?.let { Text(it, fontSize = 13.sp, maxLines = 3, overflow = TextOverflow.Ellipsis) }
@@ -187,7 +187,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
             MusicDialogButton(if (downloading) "后台下载" else "关闭", onClick = onDismiss,
                 enabled = !transferState.installing, minHeight = 48.dp, cornerRadius = 16.dp,
                 insideMargin = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
-                textStyle = MiuixTheme.textStyles.body1.copy(fontSize = 15.sp),
+                textStyle = COUITheme.textStyles.bodyXL.copy(fontSize = 15.sp),
                 modifier = Modifier.weight(1f).testTag("update_close"))
             if (release != null) {
                 val verifiedAsset = release.apkUrl != null && release.size in 1..UpdateDownloader.MAX_APK_BYTES &&
@@ -222,7 +222,7 @@ fun UpdateDialogContent(state: UpdateState, onDismiss: () -> Unit, onRetry: () -
         if (release != null && !downloading && !ready && !transferState.installing) Box(
             Modifier.fillMaxWidth().heightIn(min = 40.dp).clickable(role = Role.Button, onClick = onIgnore)
                 .testTag("update_ignore"), contentAlignment = Alignment.Center) {
-            Text("忽略此版本", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            Text("忽略此版本", fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         }
         }
     }

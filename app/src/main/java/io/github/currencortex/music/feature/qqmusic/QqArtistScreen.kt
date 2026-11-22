@@ -49,8 +49,8 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 data class QqArtistUiState(
     val loading: Boolean = true,
@@ -218,7 +218,7 @@ fun QqArtistScreen(
                         tab,
                         { tab = it },
                         "qq_artist_tab",
-                        Modifier.background(MiuixTheme.colorScheme.background),
+                        Modifier.background(COUITheme.colorScheme.background),
                     )
                 }
                 state.error?.let { message ->
@@ -242,7 +242,7 @@ fun QqArtistScreen(
                         Text(
                             "一起听房间内暂不支持直接播放 QQ 歌手歌曲",
                             fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                            color = COUITheme.colorScheme.labelSecondaryVariant,
                         )
                     }
                     itemsIndexed(playingSongs, key = { _, song -> "${tab}_song_${song.id}" }) { index, song ->
@@ -435,7 +435,7 @@ private fun QqArtistPlayHeader(title: String, count: Int, enabled: Boolean, onPl
         MusicTransportButton("播放全部", onPlay, Modifier.size(48.dp), prominent = true, enabled = enabled)
         Column(Modifier.padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(title, fontSize = 18.sp, fontWeight = FontWeight.Medium)
-            Text("$count 首", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            Text("$count 首", fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         }
     }
 }
@@ -474,7 +474,7 @@ private fun QqArtistAlbumRow(album: QqCatalogEntry, onClick: () -> Unit) {
                 Text(
                     readableText(it),
                     fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    color = COUITheme.colorScheme.labelSecondaryVariant,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -488,7 +488,7 @@ private fun QqArtistBiography(detail: QqArtistDetail, onOpen: () -> Unit) {
     QqArtistSectionTitle("歌手简介") { if (detail.brief.isNotBlank()) onOpen() }
     Column(
         Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp))
-            .background(MiuixTheme.colorScheme.surfaceContainer)
+            .background(COUITheme.colorScheme.cardBackground)
             .clickable(enabled = detail.brief.isNotBlank(), role = Role.Button, onClick = onOpen)
             .testTag("qq_artist_brief")
             .padding(18.dp),
@@ -504,7 +504,7 @@ private fun QqArtistBiography(detail: QqArtistDetail, onOpen: () -> Unit) {
             lineHeight = 23.sp,
             maxLines = 4,
             overflow = TextOverflow.Ellipsis,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            color = COUITheme.colorScheme.labelSecondaryVariant,
         )
     }
 }
@@ -515,7 +515,7 @@ private fun QqArtistEmpty(message: String) {
         message,
         Modifier.padding(vertical = 12.dp),
         fontSize = 14.sp,
-        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        color = COUITheme.colorScheme.labelSecondaryVariant,
     )
 }
 
@@ -525,14 +525,14 @@ private fun QqArtistHint(message: String) {
         message,
         Modifier.fillMaxWidth().padding(vertical = 8.dp),
         fontSize = 12.sp,
-        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+        color = COUITheme.colorScheme.labelSecondaryVariant,
     )
 }
 
 @Composable
 private fun QqArtistSectionError(message: String, retry: String, onRetry: () -> Unit, loading: Boolean) {
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(message, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        Text(message, fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         MusicTextAction(retry, onRetry, enabled = !loading)
     }
 }

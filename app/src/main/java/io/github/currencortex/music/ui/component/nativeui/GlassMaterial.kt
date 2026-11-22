@@ -18,8 +18,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.blur.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.blur.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.*
 
 /** The existing appearance switch controls the full optical material; there is no quality tier UI. */
@@ -40,7 +40,7 @@ internal data class GlassOpticalGeometry(val pane: Rect, val radius: Float,
     menuProgress: () -> Float = { if(menu)1f else 0f }, frost:()->Float = {if(menu)12f else 2.5f},
     clipToShape:Boolean=true,strength:()->Float={1f},materialStrength:()->Float=strength,
     alert: Boolean = false): Modifier {
-    val dark = MiuixTheme.colorScheme.onBackground.luminance() > .5f
+    val dark = COUITheme.colorScheme.labelPrimary.luminance() > .5f
     val glass = LocalLiquidGlassEnabled.current && Build.VERSION.SDK_INT >= 33
     val frosted = LocalGlassBlurEnabled.current
     val source = LocalContext.current.assets

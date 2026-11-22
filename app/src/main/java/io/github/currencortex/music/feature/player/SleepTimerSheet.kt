@@ -21,12 +21,10 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.core.media.SleepTimer
 import io.github.currencortex.music.ui.component.MusicDialog
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.NumberPicker
-import top.yukonga.miuix.kmp.basic.Switch
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Button
+import io.github.suqi8.coui.kmp.basic.NumberPicker
+import io.github.suqi8.coui.kmp.basic.Switch
+import io.github.suqi8.coui.kmp.basic.Text
 import java.util.Locale
 
 private val SLEEP_PRESETS = listOf(10, 20, 30, 45, 60, 90)
@@ -43,7 +41,7 @@ private const val DEFAULT_SLEEP_MINUTES = 30
         val colors = io.github.currencortex.music.ui.component.musicDialogColors()
         Column(Modifier.testTag("sleep_timer_sheet").heightIn(max = 460.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Column(Modifier.fillMaxWidth().background(colors.onSurface.copy(alpha = .05f), RoundedCornerShape(20.dp))
+            Column(Modifier.fillMaxWidth().background(colors.labelPrimary.copy(alpha = .05f), RoundedCornerShape(20.dp))
                 .padding(horizontal = 16.dp, vertical = 14.dp)) {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Text(
@@ -54,7 +52,7 @@ private const val DEFAULT_SLEEP_MINUTES = 30
                         },
                         Modifier.weight(1f).testTag("sleep_timer_countdown"),
                         fontSize = if (state.waitingForSongEnd) 17.sp else 24.sp,
-                        fontWeight = FontWeight.Bold, color = colors.onSurface)
+                        fontWeight = FontWeight.Bold, color = colors.labelPrimary)
                     Switch(state.enabled, { checked ->
                         if (checked) timer.start(state.minutes.coerceAtLeast(1).takeIf { state.minutes > 0 } ?: DEFAULT_SLEEP_MINUTES)
                         else timer.stop()
@@ -67,33 +65,33 @@ private const val DEFAULT_SLEEP_MINUTES = 30
                     SLEEP_PRESETS.forEach { minutes ->
                         val active = state.enabled && state.minutes == minutes
                         Box(Modifier.weight(1f).aspectRatio(1f)
-                            .background(if (active) colors.primary else colors.onSurface.copy(alpha = .07f), CircleShape)
+                            .background(if (active) colors.primary else colors.labelPrimary.copy(alpha = .07f), CircleShape)
                             .clickable(role = Role.RadioButton) { timer.start(minutes, state.extendToSongEnd) }
                             .testTag("sleep_preset_$minutes"), contentAlignment = Alignment.Center) {
                             Text("$minutes", fontSize = 15.sp, maxLines = 1, softWrap = false,
                                 fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-                                color = if (active) colors.onPrimary else colors.onSurface)
+                                color = if (active) colors.labelOnColor else colors.labelPrimary)
                         }
                     }
                 }
                 Spacer(Modifier.height(6.dp))
-                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.dividerLine))
+                Box(Modifier.fillMaxWidth().height(1.dp).background(colors.divider))
                 Text("自定义", Modifier.fillMaxWidth().clickable(role = Role.Button) { custom = true }
                     .testTag("sleep_timer_custom").padding(vertical = 14.dp),
                     textAlign = TextAlign.Center, fontSize = 14.sp, color = colors.primary)
             }
-            Row(Modifier.fillMaxWidth().background(colors.onSurface.copy(alpha = .05f), RoundedCornerShape(20.dp))
+            Row(Modifier.fillMaxWidth().background(colors.labelPrimary.copy(alpha = .05f), RoundedCornerShape(20.dp))
                 .clickable(role = Role.Switch) { timer.setExtendToSongEnd(!state.extendToSongEnd) }
                 .padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f).padding(end = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Text("自动延长到整首歌播完", fontSize = 15.sp, color = colors.onSurface)
-                    Text("时间到时若还在播放，会等当前歌曲唱完再暂停", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                    Text("自动延长到整首歌播完", fontSize = 15.sp, color = colors.labelPrimary)
+                    Text("时间到时若还在播放，会等当前歌曲唱完再暂停", fontSize = 12.sp, color = colors.labelSecondaryVariant)
                 }
                 Switch(state.extendToSongEnd, { timer.setExtendToSongEnd(it) }, Modifier.testTag("sleep_extend_switch"))
             }
             Text("定时结束后暂停播放，不会清空播放队列。关闭弹窗或切到后台仍会计时。",
                 Modifier.padding(horizontal = 4.dp).testTag("sleep_timer_note"),
-                fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                fontSize = 12.sp, color = colors.labelSecondaryVariant)
         }
     }
 }
@@ -104,16 +102,16 @@ private const val DEFAULT_SLEEP_MINUTES = 30
     var hours by rememberSaveable { mutableStateOf(0) }
     var minutes by rememberSaveable { mutableStateOf(0) }
     MusicDialog("自定义关闭", onDismiss) {
-        Column(Modifier.fillMaxWidth().background(colors.onSurface.copy(alpha = .05f), RoundedCornerShape(20.dp))
+        Column(Modifier.fillMaxWidth().background(colors.labelPrimary.copy(alpha = .05f), RoundedCornerShape(20.dp))
             .padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 NumberPicker(hours, { hours = it }, Modifier.weight(1f).testTag("sleep_custom_hours"),
                     range = 0..23, label = { "%02d".format(it) }, visibleItemCount = 3)
-                Text("小时", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
-                Box(Modifier.width(1.dp).height(28.dp).background(colors.dividerLine))
+                Text("小时", fontSize = 13.sp, color = colors.labelSecondaryVariant)
+                Box(Modifier.width(1.dp).height(28.dp).background(colors.divider))
                 NumberPicker(minutes, { minutes = it }, Modifier.weight(1f).testTag("sleep_custom_minutes"),
                     range = 0..59, label = { "%02d".format(it) }, visibleItemCount = 3)
-                Text("分钟", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                Text("分钟", fontSize = 13.sp, color = colors.labelSecondaryVariant)
             }
         }
         io.github.currencortex.music.ui.component.MusicDialogActions {

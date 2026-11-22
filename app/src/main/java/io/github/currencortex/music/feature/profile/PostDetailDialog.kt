@@ -39,8 +39,8 @@ import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.util.collectAsPageState
 import io.github.currencortex.music.ui.util.viewModelFactory
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable
 internal fun PostDetailDialog(vm: PostsViewModel, state: PostsState, navigate: (String) -> Unit, signedIn: Boolean) {
@@ -97,7 +97,7 @@ private fun PostDetailPage(
     val post = state.detail
     val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val list = rememberLazyListState()
     val bottomInset = LocalMusicBottomInset.current
     val openRoute: (String) -> Unit = { route -> if (!state.busy) navigate(route) }
@@ -175,7 +175,7 @@ private fun PostDetailPage(
                                 SelectionContainer { Text(comment.content, fontSize = 14.sp) }
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     Text(postTime(comment.createdAt), Modifier.weight(1f), fontSize = 11.sp,
-                                        color = colors.onSurfaceVariantSummary)
+                                        color = colors.labelSecondaryVariant)
                                     if (canComment) MusicTextAction("回复", {
                                         val author = comment.author
                                         replyTo = PostReplyTarget(comment.id, author.id, author.nickname.ifBlank { author.username })

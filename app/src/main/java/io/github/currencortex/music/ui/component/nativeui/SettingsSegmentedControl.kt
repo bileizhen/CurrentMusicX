@@ -19,16 +19,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun SettingsSegmentedControl(labels: List<String>, selected: Int, onSelect: (Int) -> Unit,
     modifier: Modifier = Modifier, tag: String = "settings_segment", role: Role = Role.RadioButton,
     enabled: Boolean = true, onReselect: () -> Unit = {}, itemTag: (Int) -> String = { "${tag}_$it" }) {
     require(labels.isNotEmpty())
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val position by animateFloatAsState(selected.toFloat(), tween(250, easing = CubicBezierEasing(.215f, .61f, .355f, 1f)), label = "segmented selection")
-    BoxWithConstraints(modifier.fillMaxWidth().height(44.dp).clip(CircleShape).background(colors.surfaceContainer)
+    BoxWithConstraints(modifier.fillMaxWidth().height(44.dp).clip(CircleShape).background(colors.cardBackground)
         .padding(4.dp).semantics { selectableGroup() }.testTag(tag)) {
         val width = maxWidth / labels.size
         if (selected in labels.indices) Box(Modifier.offset(x = width * position).width(width).fillMaxHeight()
@@ -36,7 +36,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         Row(Modifier.fillMaxSize()) {
             labels.forEachIndexed { index, label ->
                 val isSelected = index == selected
-                val ink by animateColorAsState(if (isSelected) colors.onPrimary else colors.onSurfaceVariantSummary,
+                val ink by animateColorAsState(if (isSelected) colors.labelOnColor else colors.labelSecondaryVariant,
                     tween(200), label = "segment text")
                 Box(Modifier.weight(1f).fillMaxHeight().clip(CircleShape)
                     .selectable(isSelected, enabled = enabled, role = role, onClick = { if (!isSelected) onSelect(index) else onReselect() })

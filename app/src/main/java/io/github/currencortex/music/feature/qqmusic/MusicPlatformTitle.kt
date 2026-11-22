@@ -24,7 +24,7 @@ import io.github.currencortex.music.ui.component.nativeui.GlassMenuTags
 import io.github.currencortex.music.ui.component.nativeui.SettingsScrollLayout
 import io.github.currencortex.music.ui.component.nativeui.rememberGlassBackdrop
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 
 /** The platform menu is drawn over the page, anchored to the home wordmark. */
 @Composable internal fun MusicPlatformScrollLayout(

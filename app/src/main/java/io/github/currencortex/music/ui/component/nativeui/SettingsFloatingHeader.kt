@@ -26,9 +26,9 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.LocalRootTabSwipe
 import io.github.currencortex.music.ui.component.RootMotionItem
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 internal val SettingsToolbarHeight=72.dp
 
@@ -43,7 +43,7 @@ internal val SettingsToolbarHeight=72.dp
             if(titleContent!=null)Box(Modifier.weight(1f)){titleContent()}
             else Text(title,Modifier.weight(1f).semantics {heading()},fontSize=24.sp,lineHeight=30.sp,
                 fontWeight=FontWeight.SemiBold,maxLines=1,overflow=TextOverflow.Ellipsis,
-                color=MiuixTheme.colorScheme.onSurface)
+                color=COUITheme.colorScheme.labelPrimary)
             actions()
         }
         }
@@ -53,7 +53,7 @@ internal val SettingsToolbarHeight=72.dp
 /** A sibling of the captured body, never part of its own backdrop. Its visual overhang is
  * pointer-transparent; the status/toolbar area blocks taps through to scrolled preferences. */
 @Composable internal fun SettingsFloatingHeader(modifier:Modifier=Modifier,
-    background:Color=MiuixTheme.colorScheme.background,
+    background:Color=COUITheme.colorScheme.background,
     toolbarHeight:Dp=SettingsToolbarHeight,
     opacity:()->Float={ .9f },
     content:@Composable ()->Unit) {
@@ -77,7 +77,7 @@ internal val SettingsToolbarHeight=72.dp
 
 /** Host for settings screens with their own list/content rather than SettingsPage's picker. */
 @Composable internal fun SettingsScrollLayout(modifier:Modifier=Modifier,
-    background:Color=MiuixTheme.colorScheme.background,topBar:@Composable ()->Unit,
+    background:Color=COUITheme.colorScheme.background,topBar:@Composable ()->Unit,
     toolbarHeight:Dp=SettingsToolbarHeight,
     footer:@Composable androidx.compose.foundation.layout.BoxScope.()->Unit={},
     glassOverContent:Boolean=true,

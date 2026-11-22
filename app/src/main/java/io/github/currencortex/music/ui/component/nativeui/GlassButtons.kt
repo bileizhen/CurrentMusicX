@@ -40,9 +40,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.blur.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.blur.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun rememberGlassBackdrop(): LayerBackdrop? {
     if (Build.VERSION.SDK_INT < 33 || !LocalView.current.isHardwareAccelerated || !isRuntimeShaderSupported()) return null
@@ -174,10 +174,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable fun GlassActionButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     primary: Boolean = false, destructive: Boolean = false, enabled: Boolean = true,
     minHeight: Dp = 44.dp, backdrop: Backdrop? = LocalGlassBackdrop.current, fillWidth:Boolean=true) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val press = rememberElasticPressState()
     val fill = if (destructive) colors.error else colors.primary
-    val ink = if(destructive)Color.White else if(primary)colors.onPrimary else colors.onBackground
+    val ink = if(destructive)Color.White else if(primary)colors.labelOnColor else colors.labelPrimary
     ElasticPress(modifier.clickable(enabled=enabled,role=Role.Button,
         interactionSource=remember{MutableInteractionSource()},indication=null,onClick=onClick), enabled, press) {
         Box(Modifier.then(if(fillWidth)Modifier.fillMaxWidth()else Modifier).heightIn(min = minHeight).clip(CircleShape)
@@ -205,7 +205,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable fun GlassGroupIconButton(onClick: () -> Unit, description: String, modifier: Modifier = Modifier,
     size: Dp = 44.dp, enabled: Boolean = true, content: @Composable () -> Unit) {
     val press = rememberElasticPressState()
-    val ink = MiuixTheme.colorScheme.onSurface
+    val ink = COUITheme.colorScheme.labelPrimary
     ElasticPress(modifier.size(size).semantics { contentDescription = description }
         .clickable(enabled = enabled, role = Role.Button, interactionSource = remember { MutableInteractionSource() },
             indication = null, onClick = onClick), enabled, press) {

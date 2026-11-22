@@ -63,8 +63,8 @@ import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.collectLatest
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Cover-first library entrance; the existing create dialog and server ownership stay in the host. */
 @Composable internal fun PlaylistIndexBody(vm: LibraryViewModel,
@@ -117,10 +117,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             if (!loading && sourcePlaylists.isEmpty() && sourceErrors["我的歌单"] == null)
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Column(Modifier.fillMaxWidth().padding(vertical = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(MusicIcons.List, null, Modifier.size(40.dp), tint = MiuixTheme.colorScheme.primary.copy(alpha = .6f))
+                        Icon(MusicIcons.List, null, Modifier.size(40.dp), tint = COUITheme.colorScheme.primary.copy(alpha = .6f))
                         Text(if (qqPlaylists != null && !qqAccount.loggedIn) "登录 QQ 音乐后查看你的歌单" else if (account.account == null) "登录后查看你的歌单" else "为喜欢的音乐建一个歌单", Modifier.padding(top = 16.dp), fontSize = 17.sp)
                         Text(if (qqPlaylists != null && !qqAccount.loggedIn) "同步 QQ 音乐的自建与收藏歌单" else if (account.account == null) "绑定网易云账号后也可同步收藏" else "点右上角 + 开始收藏", Modifier.padding(top = 8.dp),
-                            fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                            fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                     }
                 }
             if (!loading && sourcePlaylists.isNotEmpty() && playlists.isEmpty() && sourceErrors["我的歌单"] == null)
@@ -139,7 +139,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     Text(playlist.name, Modifier.padding(top = 10.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium,
                         maxLines = 2, overflow = TextOverflow.Ellipsis)
                     Text("${playlist.count.takeIf { it > 0 } ?: playlist.songs.size} 首 · ${when (playlist.source) { "ncm", "netease" -> "网易云音乐"; "qqmusic" -> "QQ 音乐"; else -> "CurrentMusic" }}",
-                        Modifier.padding(top = 4.dp), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                        Modifier.padding(top = 4.dp), fontSize = 12.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                 }
             }
         }
@@ -215,7 +215,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
             .ifBlank { state.songs.firstOrNull { it.cover.isNotBlank() }?.cover.orEmpty() }
     }
     val tint = rememberStyleTint(cover)
-    val surface = MiuixTheme.colorScheme.background
+    val surface = COUITheme.colorScheme.background
     val list = rememberLazyListState()
     var heroHeightPx by remember { mutableIntStateOf(0) }
     val pullMotion = rememberPlaylistPullMotion(state.loading || state.refreshing, ::refresh)
@@ -436,10 +436,10 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                                 .padding(horizontal = 14.dp)) {
                                 Text("播放全部", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                                 Text(if (query.isBlank()) remember(songs) { playlistDurationLabel(songs) } else "找到 ${songs.size} 首 / 共 ${state.songs.size} 首",
-                                    Modifier.padding(top = 3.dp), fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                                    Modifier.padding(top = 3.dp), fontSize = 12.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                             }
                             PlaylistIconAction(MusicIcons.Sort, "歌曲排序", { sortOpen = true }, Modifier.testTag("playlist_sort"),
-                                ink = MiuixTheme.colorScheme.onSurface, background = Color.Transparent)
+                                ink = COUITheme.colorScheme.labelPrimary, background = Color.Transparent)
                         }
 
                     }
@@ -468,7 +468,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                 if (resume != null) item(key = "resume") {
                     Row(Modifier.fillMaxWidth().playlistPullSurface(pullMotion).background(surface).clickable(role = Role.Button) { vm.container.playerController.toggle() }
                         .padding(horizontal = 20.dp, vertical = 12.dp).testTag("playlist_resume"), verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.PlayArrow, null, Modifier.size(16.dp), tint = MiuixTheme.colorScheme.primary)
+                        Icon(Icons.Default.PlayArrow, null, Modifier.size(16.dp), tint = COUITheme.colorScheme.primary)
                         Text("继续播放：${resume.name}", Modifier.padding(start = 10.dp), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
@@ -496,7 +496,7 @@ internal data class LocalMusicPlaylistActions(val allowed: Boolean, val rescan: 
                         else if (vm.route == "qq/daily") "今天暂时没有推荐，稍后再来看看"
                         else if (vm.route == "qq/recent") "本周暂无常听记录，播放 QQ 音乐后再来看看"
                         else "这里还没有歌曲，可在搜索结果中加入歌单",
-                        Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(24.dp), fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+                        Modifier.fillMaxWidth().playlistPullSurface(pullMotion).padding(24.dp), fontSize = 14.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f))
                 }
                 itemsIndexed(songs, key = { index, _ -> songKeys[index] }, contentType = { _, _ -> "track" }) { index, song ->
                     Box(Modifier.fillMaxWidth().animateItem(fadeInSpec = tween(280), placementSpec = tween(300), fadeOutSpec = tween(160))
@@ -632,9 +632,9 @@ internal fun playlistDurationLabel(songs: List<Song>): String {
         onLongClickLabel = "预览歌曲与操作", onLongClick = if (selectionMode) null else ({ openMenu(preview = true) }))
         .semantics { if (selectionMode) toggleableState = ToggleableState(selectionChecked) }
         .padding(vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (selectionMode) Box(Modifier.padding(end = 12.dp).size(24.dp).border(1.dp, MiuixTheme.colorScheme.primary, CircleShape),
+        if (selectionMode) Box(Modifier.padding(end = 12.dp).size(24.dp).border(1.dp, COUITheme.colorScheme.primary, CircleShape),
             contentAlignment = Alignment.Center) {
-            if (selectionChecked) Icon(MusicIcons.Check, "已选择", Modifier.size(18.dp), tint = MiuixTheme.colorScheme.primary)
+            if (selectionChecked) Icon(MusicIcons.Check, "已选择", Modifier.size(18.dp), tint = COUITheme.colorScheme.primary)
         }
         MusicCover(song.cover, Modifier.size(48.dp).onGloballyPositioned { coordinates ->
             coverBounds = Rect(coordinates.localToWindow(Offset.Zero),
@@ -642,18 +642,18 @@ internal fun playlistDurationLabel(songs: List<Song>): String {
         }, cornerRadius = 10.dp)
         Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(song.name, fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface)
+                color = if (selected) COUITheme.colorScheme.primary else COUITheme.colorScheme.labelPrimary)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                 if (liked) Image(painterResource(R.drawable.player_symbol_favorite_fill1), "已喜欢", Modifier.size(12.dp),
-                    colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.primary))
+                    colorFilter = ColorFilter.tint(COUITheme.colorScheme.primary))
                 Text(if (pending) "正在提交点歌…" else listOf(song.artists, song.album).filter(String::isNotBlank).joinToString(" · "),
-                    fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                    fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
             }
-            if (song.mv > 0) Text("MV", fontSize = 10.sp, color = MiuixTheme.colorScheme.primary)
+            if (song.mv > 0) Text("MV", fontSize = 10.sp, color = COUITheme.colorScheme.primary)
         }
         if (!selectionMode) PlaylistIconAction(Icons.Default.MoreVert, "歌曲操作", {
             openMenu(preview = false)
-        }, Modifier.testTag("song_menu_${song.id}"), ink = MiuixTheme.colorScheme.onSurface.copy(alpha = .4f),
+        }, Modifier.testTag("song_menu_${song.id}"), ink = COUITheme.colorScheme.labelPrimary.copy(alpha = .4f),
             background = Color.Transparent, enabled = !pending)
     }
     menu?.let { SongActionsSheet(it) { menu = null } }

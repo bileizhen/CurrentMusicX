@@ -24,8 +24,8 @@ import io.github.currencortex.music.feature.lyrics.domain.LyricsSynchronizer
 import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
 import io.github.currencortex.music.feature.lyrics.ui.rememberLyricsPosition
 import io.github.currencortex.music.ui.component.nativeui.SettingsGroup as Card
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import androidx.compose.ui.graphics.Color
 
 /** Uses the same island renderer and clock without requiring overlay permission. */
@@ -55,12 +55,12 @@ import androidx.compose.ui.graphics.Color
     val reveal = rememberIslandPresentation(songKey, fpsMode || (!content.loading && content.matches(playback.song)), motion).value
     val width = rememberIslandWidth(size.width + (size.headingWidth - size.width) *
         (1f - reveal / .55f).coerceIn(0f, 1f), motion)
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Card(Modifier.fillMaxWidth().testTag("desktop_preview")) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth()) {
                 Text("实时预览", Modifier.weight(1f), fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                Text(if (fpsMode) "帧率" else if (playback.playing) "跟随播放" else "已暂停", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                Text(if (fpsMode) "帧率" else if (playback.playing) "跟随播放" else "已暂停", fontSize = 12.sp, color = colors.labelSecondaryVariant)
             }
             Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(18.dp))
                 .background(Brush.linearGradient(listOf(Color(0xFF303646), Color(0xFF161A25)))).padding(12.dp), contentAlignment = Alignment.Center) {
@@ -87,7 +87,7 @@ import androidx.compose.ui.graphics.Color
                 }
                 }
             }
-            Text("可先调整样式，再开启悬浮窗。", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+            Text("可先调整样式，再开启悬浮窗。", fontSize = 12.sp, color = colors.labelSecondaryVariant)
         }
     }
 }

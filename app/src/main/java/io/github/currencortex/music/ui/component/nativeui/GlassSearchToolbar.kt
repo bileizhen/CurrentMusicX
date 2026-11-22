@@ -27,9 +27,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.*
 import io.github.currencortex.music.ui.component.MusicIcons
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.*
 
 internal data class GlassToolbarAction(val icon: ImageVector, val label: String,
@@ -45,7 +45,7 @@ internal val BarSearchPanesKey = SemanticsPropertyKey<BarSearchPanes>("BarSearch
     action: GlassToolbarAction, trailing: GlassToolbarAction, modifier: Modifier = Modifier,
     inputTag: String = "bar_query", searchTag: String = "bar_search_toggle", placeholder: String = "搜索",
     onSubmit: (() -> Unit)? = null) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val density = LocalDensity.current
     val rtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     val focus = LocalFocusManager.current
@@ -130,7 +130,7 @@ internal val BarSearchPanesKey = SemanticsPropertyKey<BarSearchPanes>("BarSearch
                 .graphicsLayer { alpha = frame.leading }, enabled = !active) { Icon(MusicIcons.Back, null) }
             Text(title, Modifier.weight(1f).barSearchFade(frame.title * titleOpacity),
                 fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.onSurface)
+                maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.labelPrimary)
             ElasticPress(Modifier.height(44.dp).width(44.dp * (2 - frame.collapse))
                 .onGloballyPositioned { if (!active && frame.growth == 0f) measuredGroup = it.boundsInWindow().translate(-rootOrigin) }
                 .graphicsLayer {
@@ -217,9 +217,9 @@ private fun Modifier.barSearchFlank(rect: Rect, height: Float): Modifier = size(
 /** The capture follows the deformed pills, rather than clipping at the toolbar's box. */
 @Composable private fun SearchToolbarSurface(pane: Rect, left: Rect, drop: Rect,
     fieldPress: Float, leftPress: Float, rightPress: Float, opacity: Float, modifier: Modifier) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val glass = LocalLiquidGlassEnabled.current && android.os.Build.VERSION.SDK_INT >= 33
-    val dark = colors.onSurface.luminance() > .5f
+    val dark = colors.labelPrimary.luminance() > .5f
     val press = maxOf(fieldPress, leftPress, rightPress)
     val union = Rect(minOf(pane.left, left.left, drop.left), minOf(pane.top, left.top, drop.top),
         maxOf(pane.right, left.right, drop.right), maxOf(pane.bottom, left.bottom, drop.bottom))
@@ -234,7 +234,7 @@ private fun Modifier.barSearchFlank(rect: Rect, height: Float): Modifier = size(
     val shape = remember(a, b, c, leftBlend, rightBlend) { GlassGooRowShape(a, b, c, leftBlend, rightBlend) }
     val surface = if (glass) Modifier.glassSurface(LocalGlassBackdrop.current, shape, clipToShape = false, glow = { press })
         else Modifier.dropShadow(shape, Shadow(24.dp, Color.Black.copy(alpha = if (dark) .24f else .08f), offset = DpOffset(0.dp, 8.dp)))
-            .drawBehind { drawOutline(shape.createOutline(size, layoutDirection, this), if (dark) colors.surfaceContainerHigh else colors.surfaceContainer) }
+            .drawBehind { drawOutline(shape.createOutline(size, layoutDirection, this), if (dark) colors.cardPressed else colors.cardBackground) }
     Box(modifier.layout { measurable, constraints ->
         val child = measurable.measure(Constraints.fixed((ceil(union.right) - start.x).toInt().coerceAtLeast(1),
             (ceil(union.bottom) - start.y).toInt().coerceAtLeast(1)))

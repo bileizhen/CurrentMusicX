@@ -39,8 +39,8 @@ import io.github.currencortex.music.ui.util.showMusicError
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 private data class ListenPageSnapshot(val archive: ListenTogetherArchiveState, val fate: ListenTogetherFateState) {
     val key: String get() = when {
@@ -223,7 +223,7 @@ internal data class NeteaseListenTogetherActions(
     onBack: () -> Unit, onSearch: () -> Unit, onPlayer: () -> Unit,
     onBinding: (() -> Unit)? = null, currentMusicRoomActive: Boolean = false,
     onDialogActive: (Boolean) -> Unit = {}, onHistory: (() -> Unit)? = null, initialInvitation: String? = null) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val ready = account.loggedIn && !account.stale && (account.profile?.uid ?: 0) > 0
     val canStart = ready && !state.busy && !currentMusicRoomActive
     val showAccountCard = !ready
@@ -276,16 +276,16 @@ internal data class NeteaseListenTogetherActions(
             }
             if (showAccountCard) item { SettingsGroup(Modifier.fillMaxWidth()) { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("网易云账号", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                Text(accountSummary, Modifier.testTag("netease_listen_account"), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                Text(accountSummary, Modifier.testTag("netease_listen_account"), fontSize = 13.sp, color = colors.labelSecondaryVariant)
                 if (!ready) {
-                    Text("登录后，与网易云音乐好友同步听同一首歌。", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                    Text("登录后，与网易云音乐好友同步听同一首歌。", fontSize = 13.sp, color = colors.labelSecondaryVariant)
                     if (onBinding != null) MusicTextAction(if (account.stale) "重新登录网易云" else "登录网易云", onBinding,
                         Modifier.testTag("netease_listen_login"))
                 }
             } } }
             if (currentMusicRoomActive) item { SettingsGroup(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text("正在使用 CurrentMusic 房间", fontWeight = FontWeight.SemiBold)
-                Text("请先退出当前房间，再开启网易云双人一起听。", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                Text("请先退出当前房间，再开启网易云双人一起听。", fontSize = 13.sp, color = colors.labelSecondaryVariant)
                 MusicTextAction("返回房间", onBack)
             } } }
             state.error?.let { error -> item { SettingsGroup(Modifier.fillMaxWidth().testTag("netease_listen_error")) {
@@ -301,7 +301,7 @@ internal data class NeteaseListenTogetherActions(
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                             Text("收到一起听邀请", fontWeight = FontWeight.SemiBold)
                             Text("请先退出当前会话，再确认加入邀请中的会话。邀请链接已保留。",
-                                fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                                fontSize = 13.sp, color = colors.labelSecondaryVariant)
                         }
                     }
                 }
@@ -313,7 +313,7 @@ internal data class NeteaseListenTogetherActions(
                         Column(Modifier.weight(1f).padding(start = 16.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                             Text(if (participants.size >= 2) "正在一起听" else "等待好友加入", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                             Text(participants.joinToString(" · ") { it.nickname.ifBlank { "网易云用户" } }.ifBlank { account.profile?.nickname.orEmpty() },
-                                fontSize = 13.sp, color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                fontSize = 13.sp, color = colors.labelSecondaryVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             AnimatedContent(when {
                                 state.operation == ListenTogetherOperation.LEAVE -> "正在退出一起听…"
                                 state.busy -> "正在同步…"
@@ -342,7 +342,7 @@ internal data class NeteaseListenTogetherActions(
                         enabled = !invitation.isNullOrBlank() && !copying && !state.busy, primary = true,
                         modifier = Modifier.fillMaxWidth().testTag("netease_listen_copy"))
                     Text(clipboardMessage ?: "好友可在网易云音乐打开链接加入。", Modifier.fillMaxWidth().padding(top = 8.dp),
-                        fontSize = 11.sp, color = if (clipboardMessage == null) colors.onSurfaceVariantSummary else colors.primary,
+                        fontSize = 11.sp, color = if (clipboardMessage == null) colors.labelSecondaryVariant else colors.primary,
                         textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                     Spacer(Modifier.height(16.dp))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -359,11 +359,11 @@ internal data class NeteaseListenTogetherActions(
                         MusicCover(song?.cover.orEmpty(), Modifier.size(56.dp), cornerRadius = 12.dp)
                         Column(Modifier.weight(1f).padding(start = 12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                                Text("正在播放", Modifier.weight(1f), fontSize = 11.sp, color = colors.onSurfaceVariantSummary)
-                                Text("${state.queueCount} 首", fontSize = 11.sp, color = colors.onSurfaceVariantSummary)
+                                Text("正在播放", Modifier.weight(1f), fontSize = 11.sp, color = colors.labelSecondaryVariant)
+                                Text("${state.queueCount} 首", fontSize = 11.sp, color = colors.labelSecondaryVariant)
                             }
                             Text(song?.name ?: "等待选择歌曲", maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 17.sp, fontWeight = FontWeight.Medium)
-                            song?.artists?.takeIf(String::isNotBlank)?.let { Text(it, fontSize = 12.sp, color = colors.onSurfaceVariantSummary,
+                            song?.artists?.takeIf(String::isNotBlank)?.let { Text(it, fontSize = 12.sp, color = colors.labelSecondaryVariant,
                                 maxLines = 1, overflow = TextOverflow.Ellipsis) }
                         } }
                         }
@@ -376,13 +376,13 @@ internal data class NeteaseListenTogetherActions(
             } else {
                 if (state.availableRoom != null) item { SettingsGroup(Modifier.fillMaxWidth()) { Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("发现已有一起听会话", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
-                    Text("恢复后在本机继续同步播放。", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                    Text("恢复后在本机继续同步播放。", fontSize = 13.sp, color = colors.labelSecondaryVariant)
                     GlassActionButton(if (state.operation == ListenTogetherOperation.RESTORE) "正在恢复…" else "恢复一起听",
                         actions.resume, Modifier.fillMaxWidth().testTag("netease_listen_resume"), enabled = canStart)
                 } } }
                 item { SettingsGroup(Modifier.fillMaxWidth()) { Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("和好友听同一首歌", fontSize = 21.sp, fontWeight = FontWeight.SemiBold)
-                    Text("创建双人会话，复制邀请链接，与好友同步播放、暂停和切歌。", fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+                    Text("创建双人会话，复制邀请链接，与好友同步播放、暂停和切歌。", fontSize = 14.sp, color = colors.labelSecondaryVariant)
                     GlassActionButton(if (state.operation == ListenTogetherOperation.CREATE) "正在创建…" else "创建一起听",
                         actions.create, Modifier.fillMaxWidth().testTag("netease_listen_create"), primary = true, enabled = canStart)
                 } } }
@@ -391,7 +391,7 @@ internal data class NeteaseListenTogetherActions(
                     TextField(invite, { invite = it; inputError = null; clipboardMessage = null }, label = "网易云一起听邀请链接",
                         enabled = !state.busy, modifier = Modifier.fillMaxWidth().testTag("netease_listen_invite"))
                     inputError?.let { Text(it, Modifier.testTag("netease_listen_invite_error"), fontSize = 12.sp, color = colors.error) }
-                    clipboardMessage?.let { Text(it, fontSize = 12.sp, color = colors.onSurfaceVariantSummary) }
+                    clipboardMessage?.let { Text(it, fontSize = 12.sp, color = colors.labelSecondaryVariant) }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         MusicTextAction(if (pasting) "正在粘贴…" else "粘贴邀请", {
                             scope.launch {
@@ -411,7 +411,7 @@ internal data class NeteaseListenTogetherActions(
                         }, Modifier.testTag("netease_listen_join"), enabled = canStart && invite.isNotBlank())
                     }
                     if (state.operation == ListenTogetherOperation.JOIN) ListenLoadingLabel("正在连接好友的会话…", Modifier.testTag("netease_listen_join_loading"))
-                    Text("请使用网易云音乐的邀请链接；CurrentMusic 六位房间号请返回房间页加入。", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                    Text("请使用网易云音乐的邀请链接；CurrentMusic 六位房间号请返回房间页加入。", fontSize = 12.sp, color = colors.labelSecondaryVariant)
                 } } }
                 if (ready && onHistory != null) item {
                     SettingsGroup { MusicDestinationRow("一起听记录", onHistory, summary = "历史、排行与缘分报告") }

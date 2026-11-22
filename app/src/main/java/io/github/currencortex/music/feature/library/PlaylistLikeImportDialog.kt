@@ -14,9 +14,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.library.PlaylistLikeImportState
 import io.github.currencortex.music.ui.component.MusicDialog
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun PlaylistLikeImportDialog(state: PlaylistLikeImportState,
     onClose: () -> Unit, onStop: () -> Unit, onRetry: () -> Unit) {
@@ -27,14 +26,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             Text(if (state.running && state.total == 0) "正在读取歌单与网易云账号…"
                 else "${state.processed} / ${state.total} 首", fontSize = 14.sp)
             if (state.running) Box(Modifier.fillMaxWidth().height(6.dp)
-                .background(MiuixTheme.colorScheme.onSurface.copy(alpha = .08f), RoundedCornerShape(3.dp))) {
+                .background(COUITheme.colorScheme.labelPrimary.copy(alpha = .08f), RoundedCornerShape(3.dp))) {
                 val progress = if (state.total > 0) state.processed.toFloat() / state.total else 0f
                 Box(Modifier.fillMaxWidth(progress.coerceIn(0f, 1f)).fillMaxHeight()
-                    .background(MiuixTheme.colorScheme.primary, RoundedCornerShape(3.dp)))
+                    .background(COUITheme.colorScheme.primary, RoundedCornerShape(3.dp)))
             }
             Text("成功 ${state.imported} · 跳过 ${state.skipped} · 失败 ${state.failed}", fontSize = 15.sp)
             Text("跳过已喜欢、重复及非网易云歌曲。", fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
             state.error?.let { Text(it, fontSize = 14.sp) }
             if (state.processed < state.total && !state.running)
                 Text("还有 ${state.total - state.processed} 首未处理，可重试补齐。", fontSize = 13.sp)

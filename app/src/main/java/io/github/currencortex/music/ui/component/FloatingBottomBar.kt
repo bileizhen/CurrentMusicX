@@ -70,17 +70,17 @@ import io.github.currencortex.music.ui.component.miuix.animation.DampedDragAnima
 import io.github.currencortex.music.ui.component.miuix.animation.InteractiveHighlight
 import io.github.currencortex.music.ui.theme.isInDarkTheme
 import io.github.currencortex.music.ui.util.TiltLightDirection
-import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.blur.blur
-import top.yukonga.miuix.kmp.blur.drawBackdrop
-import top.yukonga.miuix.kmp.blur.highlight.BloomStroke
-import top.yukonga.miuix.kmp.blur.highlight.Highlight
-import top.yukonga.miuix.kmp.blur.highlight.LightPosition
-import top.yukonga.miuix.kmp.blur.highlight.LightSource
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.blur.rememberLayerBackdrop
-import top.yukonga.miuix.kmp.blur.sensor.rememberDeviceTilt
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.blur.Backdrop
+import io.github.suqi8.coui.kmp.blur.blur
+import io.github.suqi8.coui.kmp.blur.drawBackdrop
+import io.github.suqi8.coui.kmp.blur.highlight.BloomStroke
+import io.github.suqi8.coui.kmp.blur.highlight.Highlight
+import io.github.suqi8.coui.kmp.blur.highlight.LightPosition
+import io.github.suqi8.coui.kmp.blur.highlight.LightSource
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
+import io.github.suqi8.coui.kmp.blur.sensor.rememberDeviceTilt
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
@@ -198,8 +198,8 @@ fun FloatingBottomBar(
 ) {
     val isInDark = isInDarkTheme()
     val pillShape = remember { CircleShape }
-    val accentColor = MiuixTheme.colorScheme.primary
-    val surface = if (isInDark) MiuixTheme.colorScheme.surfaceContainer else Color.White
+    val accentColor = COUITheme.colorScheme.primary
+    val surface = if (isInDark) COUITheme.colorScheme.cardBackground else Color.White
     val containerColor = if (isBlurEnabled) surface.copy(alpha = 0.4f) else surface
 
     val tabsBackdrop = rememberLayerBackdrop()

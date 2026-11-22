@@ -21,13 +21,13 @@ import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.ui.component.liquid.lens
 import io.github.currencortex.music.ui.component.liquid.vibrancy
 import io.github.currencortex.music.ui.theme.isInDarkTheme
-import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.blur.blur
-import top.yukonga.miuix.kmp.blur.drawBackdrop
-import top.yukonga.miuix.kmp.blur.highlight.Highlight
-import top.yukonga.miuix.kmp.blur.highlight.HighlightStyle
-import top.yukonga.miuix.kmp.blur.RuntimeShaderCache
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.blur.Backdrop
+import io.github.suqi8.coui.kmp.blur.blur
+import io.github.suqi8.coui.kmp.blur.drawBackdrop
+import io.github.suqi8.coui.kmp.blur.highlight.Highlight
+import io.github.suqi8.coui.kmp.blur.highlight.HighlightStyle
+import io.github.suqi8.coui.kmp.blur.RuntimeShaderCache
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Match the lit edge to the visible outline, even when the retained layout is taller. */
 private class OutlineHighlightStyle(private val delegate: HighlightStyle) : HighlightStyle by delegate {
@@ -46,7 +46,7 @@ private class OutlineHighlightStyle(private val delegate: HighlightStyle) : High
 internal fun Modifier.musicGlassMaterial(backdrop: Backdrop, blurEnabled: Boolean, glassEnabled: Boolean,
     highlight: Highlight, shape: () -> Shape = { CircleShape }, layerBlock: GraphicsLayerScope.() -> Unit = {}): Modifier {
     val dark = isInDarkTheme()
-    val surface = if (dark) MiuixTheme.colorScheme.surfaceContainer else Color.White
+    val surface = if (dark) COUITheme.colorScheme.cardBackground else Color.White
     val tint = surface.copy(alpha = if (blurEnabled) .4f else 1f)
     val outlineHighlight = remember(highlight) { highlight.copy(style = OutlineHighlightStyle(highlight.style)) }
     return if (blurEnabled) drawBackdrop(backdrop = backdrop, shape = shape, effects = {

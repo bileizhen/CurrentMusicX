@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.*
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
 import io.github.currencortex.music.ui.component.MusicCover
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Text
 
 internal val LocalMiniQueueTransition = staticCompositionLocalOf<MiniQueueTransition?> { null }
 internal val MiniQueueArtworkGeometry = SemanticsPropertyKey<PlayerSheetTextFrame>("MiniQueueArtworkGeometry")

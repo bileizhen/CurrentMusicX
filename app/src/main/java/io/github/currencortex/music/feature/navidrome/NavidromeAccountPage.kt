@@ -21,8 +21,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun NavidromeAccountPage(vm: NavidromeViewModel, onConnected: () -> Unit, onDisconnect: () -> Unit,
     topInset:androidx.compose.ui.unit.Dp=0.dp) {
@@ -65,7 +65,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { connect() }), modifier = Modifier.testTag("navidrome_password"))
             MusicTextAction(if (visible) "隐藏密码" else "显示密码", { visible = !visible }, enabled = !busy)
-            error?.let { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 13.sp, modifier = Modifier.testTag("navidrome_account_error")) }
+            error?.let { Text(it, color = COUITheme.colorScheme.error, fontSize = 13.sp, modifier = Modifier.testTag("navidrome_account_error")) }
         } } }
         // Keep the primary action in its own lazy item. A form taller than the IME viewport
         // otherwise brings the whole card into view and can place its action under the header.
@@ -73,7 +73,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             GlassActionButton(if (busy) "正在连接…" else if (account.configured) "确认更换" else "连接服务器", ::connect,
                 primary=true,enabled = canConnect, modifier = Modifier.fillMaxWidth().testTag("navidrome_connect"))
         }
-        if (!edit) error?.let { item { Text(it, color = MiuixTheme.colorScheme.error, fontSize = 13.sp) } }
+        if (!edit) error?.let { item { Text(it, color = COUITheme.colorScheme.error, fontSize = 13.sp) } }
         if (account.configured) item { Card { SettingsPreference("断开连接", "仅退出此服务器，不影响其他音乐账号",
             Modifier.testTag("navidrome_disconnect"), enabled = !busy, onClick = onDisconnect) } }
     }

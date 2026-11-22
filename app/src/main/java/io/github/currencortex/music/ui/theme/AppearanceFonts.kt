@@ -13,6 +13,8 @@ import org.xmlpull.v1.XmlPullParser
 import kotlin.math.abs
 
 internal const val SYSTEM_FONT_PREFIX = "system:"
+internal const val BUILT_IN_OPPO_FONT = "builtin:oppo-sans"
+internal const val BUILT_IN_WENKAI_FONT = "builtin:wenkai"
 internal data class AppearanceFont(val key: String, val label: String)
 private val importedFontName = Regex("[0-9a-f-]{36}\\.font")
 
@@ -108,6 +110,8 @@ internal fun importAppearanceFont(context: Context, uri: Uri): AppearanceFont {
 
 internal fun appearanceFontLabel(context: Context, key: String): String = when {
     key.isBlank() -> "默认"
+    key == BUILT_IN_OPPO_FONT -> "OPPO Sans"
+    key == BUILT_IN_WENKAI_FONT -> "霞鹜文楷"
     key.startsWith(SYSTEM_FONT_PREFIX) -> key.removePrefix(SYSTEM_FONT_PREFIX)
     else -> importedAppearanceFonts(context, key).firstOrNull { it.key == key }?.label ?: "导入字体"
 }

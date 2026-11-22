@@ -30,8 +30,8 @@ import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.theme.rememberAppearanceColors
 import kotlinx.coroutines.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.roundToInt
 
 @Composable internal fun AppearanceSettingsPage(viewModel: SettingsViewModel, onBack: () -> Unit,
@@ -48,7 +48,7 @@ import kotlin.math.roundToInt
     val dark = rememberAppearanceColors(config, true)
     val standardDark = rememberAppearanceColors(config.copy(pureBlack = false), true)
     val black = rememberAppearanceColors(config.copy(pureBlack = true), true)
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val glass = config.liquidGlass && Build.VERSION.SDK_INT >= 33
     SettingsUiScope {
         SettingsPage("外观", "appearance_screen", onBack, padding = PaddingValues(bottom = 32.dp)) {
@@ -98,7 +98,7 @@ import kotlin.math.roundToInt
                     SettingsPreference(fontLabel, modifier = Modifier.testTag("setting_custom_font").then(source.modifier),
                         onClick = { source.open(onOpenFont) }, leading = {
                             Text("Aa", fontSize = 17.sp, lineHeight = 22.sp, fontWeight = FontWeight.SemiBold)
-                        }, trailing = { Icon(MusicIcons.Forward, null, Modifier.size(20.dp), tint = colors.onSurfaceVariantSummary) })
+                        }, trailing = { Icon(MusicIcons.Forward, null, Modifier.size(20.dp), tint = colors.labelSecondaryVariant) })
                 }
             }
             item("text_scale") { AppearanceTextScale(config, viewModel) }
@@ -121,7 +121,7 @@ import kotlin.math.roundToInt
                 AppearanceSection("显示缩放", MusicIcons.Scale) {
                     var draft by remember(config.uiScale) { mutableFloatStateOf(config.uiScale) }
                     SettingsPreference("显示缩放", "调整界面整体缩放", onClick = onOpenScale,
-                        trailing = { Text("${(config.uiScale * 100).roundToInt()}%", color = colors.onSurfaceVariantSummary) })
+                        trailing = { Text("${(config.uiScale * 100).roundToInt()}%", color = colors.labelSecondaryVariant) })
                     // Keep the slider outside the header's button semantics and tap target.
                     Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
                             GlassSlider(draft, { draft = it }, onValueChangeFinished = { viewModel.edit { it.copy(uiScale = draft) } },
@@ -142,7 +142,7 @@ import kotlin.math.roundToInt
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 RefreshRateSlider(config.refreshRate, display.supported) { option -> viewModel.edit { it.copy(refreshRate = option) } }
                                 Text("当前刷新率：${display.current.roundToInt()} Hz · 屏幕支持：${display.supported.joinToString(" / ")} Hz",
-                                    Modifier.testTag("refresh_rate_actual"), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                                    Modifier.testTag("refresh_rate_actual"), fontSize = 12.sp, color = colors.labelSecondaryVariant)
                             }
                         })
                 }
@@ -154,7 +154,7 @@ import kotlin.math.roundToInt
 @Composable private fun AppearanceSection(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector,
     content: @Composable ColumnScope.() -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsInfoHeader(title, icon)
+        SettingsListHeader(title)
         SettingsGroup(Modifier.padding(horizontal = 16.dp), content)
     }
 }
@@ -163,9 +163,9 @@ import kotlin.math.roundToInt
     var showEditor by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<Long?>(null) }
     var showReset by remember { mutableStateOf(false) }
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsInfoHeader("主题色彩", MusicIcons.Palette, actions = {
+        SettingsListHeader("主题色彩", actions = {
             SettingsFadingReset(config.monet || config.primaryColors != DefaultThemeColors || config.primaryColor != DefaultThemeColors.first() || config.colorStyle != ThemeColorStyle.VIVID,
                 { showReset = true }, "重置主题色", Modifier.testTag("appearance_color_reset"))
         })
@@ -203,9 +203,9 @@ import kotlin.math.roundToInt
     var draft by remember(config.textScale, config.customTextScale) { mutableFloatStateOf(config.textScale) }
     val systemScale = LocalConfiguration.current.fontScale.coerceIn(.8f, 1.4f)
     val value = if (config.customTextScale) draft else systemScale
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        SettingsInfoHeader("文字缩放", MusicIcons.TextSize, actions = {
+        SettingsListHeader("文字缩放", actions = {
             SettingsFadingReset(config.customTextScale && config.textScale != 1f, { vm.edit { it.copy(textScale = 1f) } }, "重置文字缩放",
                 Modifier.testTag("appearance_text_scale_reset"))
         })
@@ -219,21 +219,21 @@ import kotlin.math.roundToInt
                         CompositionLocalProvider(LocalDensity provides Density(density.density, value)) {
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                                 Text("Aa", fontSize = 20.sp, lineHeight = 25.sp, fontWeight = FontWeight.SemiBold)
-                                Text("应用内的文字将以这个大小显示", fontSize = 15.sp, lineHeight = 20.sp, color = colors.onSurfaceVariantSummary)
+                                Text("应用内的文字将以这个大小显示", fontSize = 15.sp, lineHeight = 20.sp, color = colors.labelSecondaryVariant)
                             }
                         }
-                        Text("${(value * 100).roundToInt()}%", Modifier.clip(CircleShape).background(colors.surfaceContainerHigh).padding(horizontal = 10.dp, vertical = 4.dp),
-                            fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurfaceVariantSummary)
+                        Text("${(value * 100).roundToInt()}%", Modifier.clip(CircleShape).background(colors.cardPressed).padding(horizontal = 10.dp, vertical = 4.dp),
+                            fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.SemiBold, color = colors.labelSecondaryVariant)
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        Text("A", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                        Text("A", fontSize = 13.sp, color = colors.labelSecondaryVariant)
                         GlassSlider(value, { draft = it }, enabled = config.customTextScale, valueRange = .8f..1.4f, steps = 11, showKeyPoints = true,
                             keyPoints = (0..12).map { .8f + it * .05f }, magnetThreshold = .015f,
                             onValueChangeFinished = { vm.edit { it.copy(textScale = draft) } },
                             modifier = Modifier.weight(1f).testTag("appearance_text_scale_slider").semantics { setProgress { target ->
                                 if (config.customTextScale) { draft = target.coerceIn(.8f, 1.4f); vm.edit { it.copy(textScale = draft) }; true } else false
                             } })
-                        Text("A", fontSize = 22.sp, color = colors.onSurfaceVariantSummary)
+                        Text("A", fontSize = 22.sp, color = colors.labelSecondaryVariant)
                     }
                 }
             }

@@ -14,10 +14,10 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.settings.AppleMusicLyricsOptions
 import io.github.currencortex.music.data.settings.LyricsDisplayOptions
 import io.github.currencortex.music.data.settings.LyricsTypography
-import top.yukonga.miuix.kmp.basic.Slider
-import top.yukonga.miuix.kmp.basic.Switch
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Slider
+import io.github.suqi8.coui.kmp.basic.Switch
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.util.Locale
 import kotlin.math.roundToInt
 
@@ -25,11 +25,11 @@ import kotlin.math.roundToInt
 @Composable internal fun AppleMusicLyricsControls(display: LyricsDisplayOptions,
     onDisplay: ((LyricsDisplayOptions) -> LyricsDisplayOptions) -> Unit, modifier: Modifier = Modifier) {
     val options = display.appleMusic.normalized()
-    val ink = MiuixTheme.colorScheme.onSurface
+    val ink = COUITheme.colorScheme.labelPrimary
     Column(modifier.fillMaxWidth().testTag("apple_lyrics_controls")) {
         Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Apple Music 效果", fontSize = 16.sp, color = ink, modifier = Modifier.weight(1f))
-            Text("重置参数", fontSize = 13.sp, color = MiuixTheme.colorScheme.primary,
+            Text("重置参数", fontSize = 13.sp, color = COUITheme.colorScheme.primary,
                 modifier = Modifier.testTag("apple_lyrics_reset").clickable(role = Role.Button) {
                     onDisplay { it.copy(appleMusic = AppleMusicLyricsOptions()) }
                 }.padding(start = 12.dp, top = 14.dp, bottom = 14.dp))
@@ -75,7 +75,7 @@ import kotlin.math.roundToInt
     tag: String, summary: String, format: (Float) -> String, enabled: Boolean = true, step: Float = .05f,
     onCommit: (Float) -> Unit) {
     var preview by remember(value) { mutableFloatStateOf(value) }
-    val ink = MiuixTheme.colorScheme.onSurface
+    val ink = COUITheme.colorScheme.labelPrimary
     fun rounded(target: Float) = ((target / step).roundToInt() * step).coerceIn(range.start, range.endInclusive)
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -104,7 +104,7 @@ import kotlin.math.roundToInt
         .clickable(enabled = enabled, role = Role.Switch) { onChange(!checked) }
         .semantics { toggleableState = if (checked) ToggleableState.On else ToggleableState.Off; if (!enabled) disabled() }
         .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text(title, fontSize = 16.sp, color = MiuixTheme.colorScheme.onSurface,
+        Text(title, fontSize = 16.sp, color = COUITheme.colorScheme.labelPrimary,
             modifier = Modifier.weight(1f).padding(end = 12.dp))
         Switch(checked = checked, onCheckedChange = onChange, enabled = enabled)
     }

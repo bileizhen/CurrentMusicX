@@ -42,8 +42,8 @@ import com.google.zxing.qrcode.QRCodeWriter
 import io.github.currencortex.music.ui.component.MusicDialog
 import kotlinx.coroutines.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 fun qrPixels(url: String, size: Int = 512): IntArray {
     val matrix = QRCodeWriter().encode(url, BarcodeFormat.QR_CODE, size, size,
@@ -112,7 +112,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text("先登录 CurrentMusic", fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
                     Text("请先注册并登录 CurrentMusic 账号，再登录网易云。已有账号可直接登录。",
-                        fontSize = 14.sp, lineHeight = 22.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                        fontSize = 14.sp, lineHeight = 22.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
                     GlassActionButton("注册 / 登录 CurrentMusic", onCurrentMusicLogin, primary = true,
                         modifier = Modifier.fillMaxWidth().testTag("binding_currentmusic_login"))
                 }
@@ -123,7 +123,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     MusicPlaceholder(Modifier.fillMaxWidth(.65f).height(24.dp))
                     MusicPlaceholder(Modifier.fillMaxWidth(.9f).height(14.dp))
-                    Text("正在检查绑定…", fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                    Text("正在检查绑定…", fontSize = 12.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                 }
             }
         }
@@ -165,7 +165,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                 Column(Modifier.padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("连接你的音乐库", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
                     Text("连接网易云的我喜欢和歌单，在 CurrentMusic 中继续聆听。", fontSize = 13.sp, lineHeight = 21.sp,
-                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+                        color = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f))
                 }
             }
         }
@@ -176,7 +176,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                         val result = io.github.currencortex.music.core.network.appResult { vm.container.neteaseTaskPreferences.enable(enabled) }
                         if (result is io.github.currencortex.music.core.network.AppResult.Failure) vm.container.errorNotices.show(result.message)
                     }
-                }, Modifier.testTag("netease_tasks_enabled"), summary = "开启后在“我的”的网易云账号下方显示任务入口", enabled = tasksEnabled != null)
+                }, Modifier.testTag("netease_tasks_enabled"), summary = "开启后在“我的”的音乐服务中显示任务入口", enabled = tasksEnabled != null)
             }
             Spacer(Modifier.height(12.dp))
             Text(if (vm.container.apiClient.hasLocalNeteaseLogin)
@@ -184,7 +184,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                 else if (state.binding?.bound == true)
                     "已复用当前 CurrentMusic 账号的云端网易云绑定，无需再次扫码。本机登录可用于直连和原版音效。"
                 else "注册并登录 CurrentMusic 后，可在此登录网易云。网易云凭据加密保存在此设备，原生接口仍直连网易云。",
-                fontSize = 12.sp, lineHeight = 19.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f),
+                fontSize = 12.sp, lineHeight = 19.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f),
                 modifier = Modifier.testTag("netease_direct_notice"))
         }
         item {
@@ -227,7 +227,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                             }
                             if (state.codeFailed) {
                                 Text("若已收到短信，可直接填写；未收到可等倒计时结束后尝试备用发送。", fontSize = 12.sp, lineHeight = 19.sp,
-                                    color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                                    color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
                                 BindingAction("备用发送验证码", { vm.code(phone, country, alternate = true) },
                                     Modifier.testTag("send_binding_code_alternate"),
                                     phone.length >= 5 && country.isNotBlank() && !busy && now >= state.codeUntil)
@@ -236,7 +236,7 @@ fun qrPixels(url: String, size: Int = 512): IntArray {
                                 enabled = phone.length >= 5 && captcha.isNotBlank() && country.isNotBlank() && !busy,
                                 modifier = Modifier.fillMaxWidth().testTag("confirm_phone_binding"))
                             Text("验证码由网易云发送。绑定后按所选方式连接音乐库。", fontSize = 12.sp, lineHeight = 19.sp,
-                                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .45f))
+                                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .45f))
                         }
                     }
                 }

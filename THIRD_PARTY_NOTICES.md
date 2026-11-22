@@ -24,7 +24,8 @@ The native Kotlin task center uses the existing NetEase transport. Feature organ
 This template uses the following libraries at runtime:
 
 - MaterialKolor color utilities by Jordond and Google contributors (`com.materialkolor:material-color-utilities`), Apache-2.0; used for the FlClash HCT theme-color adaptation.
-- MIUIX KMP by Yukonga and contributors (`top.yukonga.miuix.kmp`), Apache-2.0.
+- COUI 2.0 (ColorOS 17 component kit) by suqi8 and contributors (`io.github.suqi8.coui.kmp`), Apache-2.0: https://github.com/suqi8/coui.
+- The `coui-blur-compat` module vendors the COUI 2.0 `coui-blur` sources under Apache-2.0 because the published Android artifact requires minSdk 33. Copyright 2026, compose-coui-ui contributors; the original file headers are retained.
 - AndroidX / Jetpack Compose, under the Apache License 2.0.
 - AndroidX WorkManager provides persistent, cancellable song-download tasks (Apache-2.0).
 - Jaudiotagger 3.0.1 by JThink / Paul Taylor, Raphael Slinckx and contributors is used under LGPL-2.1-or-later (the LGPL-3.0 option). Unmodified source: https://repo.maven.apache.org/maven2/net/jthink/jaudiotagger/3.0.1/jaudiotagger-3.0.1-sources.jar. The complete LGPL text is bundled in `legal/LGPL-3.0.txt`. The public application's Gradle source and build instructions allow rebuilding with a modified/replacement library; no library modifications are distributed. The Android artwork adapter is in `core/download/SongDownloadMetadata.kt`.
@@ -57,11 +58,11 @@ Full GPL-3.0 and Apache-2.0 texts are packaged in `app/src/main/assets/legal/` a
 
 ## Shared settings, About, diagnostic and update UI
 
-The saveable page stack, MIUIX NavDisplay navigation and non-predictive NavigationBackHandler fallback in `ui/CurrentMusicApp.kt` are adapted from local XBlocker `ui/MainActivity.kt`, whose navigation pattern derives from SukiSU-Ultra v4.1.3 (`0ca744a`), GPL-3.0-only. MIUIX owns gesture seeking, cancellation, settling, corner clipping and dimming. Dialogs are hosted once outside navigation entries and retain back-event priority.
+The saveable page stack, Navigation 3 NavDisplay navigation and non-predictive NavigationBackHandler fallback in `ui/CurrentMusicApp.kt` are adapted from local XBlocker `ui/MainActivity.kt`, whose navigation pattern derives from SukiSU-Ultra v4.1.3 (`0ca744a`), GPL-3.0-only. CurrentMusic owns gesture seeking, cancellation, settling, corner clipping and dimming. Dialogs are hosted once outside navigation entries and retain back-event priority.
 
 The phone theme preview, icon paths, appearance layout, LeiFetch About logo/fade layout, grouped member layout, QQ avatar rows, member dialogs, AnimatedList entry motion and blurred bars, animated About background shaders, bottom dialogs and update Markdown renderer are adapted from the local 123PanX / LeiFetch / XBlocker / SukiSU-Ultra source chain. GPL-3.0-only attribution headers are retained. CurrentMusic branding and product configuration replace application-specific data.
 
-The contributor bubble wall, its pan/zoom/momentum geometry, and the contributor-name wordmark are adapted from [eltavine/Duck-Detector-Refactoring](https://github.com/eltavine/Duck-Detector-Refactoring) through SukiSU-Nova's `ContributorWall.kt` and `ContributorNameWordmark.kt`. Copyright 2026 Duck Apps Contributor, Apache-2.0. The native adaptation maps Material theme surfaces to the app's MIUIX colors and replaces GitHub avatar loading with the existing QQ avatar loader; the hexagonal packing, edge compression, momentum settling and character-filled wordmark follow the upstream implementation.
+The contributor bubble wall, its pan/zoom/momentum geometry, and the contributor-name wordmark are adapted from [eltavine/Duck-Detector-Refactoring](https://github.com/eltavine/Duck-Detector-Refactoring) through SukiSU-Nova's `ContributorWall.kt` and `ContributorNameWordmark.kt`. Copyright 2026 Duck Apps Contributor, Apache-2.0. The native adaptation maps Material theme surfaces to the app's COUI colors and replaces GitHub avatar loading with the existing QQ avatar loader; the hexagonal packing, edge compression, momentum settling and character-filled wordmark follow the upstream implementation.
 
 The cancellable HTTPS download and verification helper is adapted from 123PanX `UpdateDownloader.kt`, originally XBlocker `data/AppUpdates.kt`. OkHttp and Okio are used under Apache-2.0. The upstream helper's MIT permission follows:
 
@@ -126,6 +127,19 @@ Copyright 2020 The Klee Project Authors (https://github.com/fontworks-fonts/Klee
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:
 https://openfontlicense.org
+
+
+## OPPO Sans font
+
+Unmodified OPPO Sans 4.0 (`OPPO_Sans_4.0.ttf`, SHA-256
+`6C7D5864C661516E1F400D9F21E4297F2E2A0719909691E29607CC4EF484A9F4`)
+is bundled as the app font option "OPPO Sans" and is not distributed separately.
+
+Copyright 2024 Guangdong OPPO Mobile Telecommunications Corp., Ltd.
+
+OPPO Sans Fonts Software is licensed under the OPPO Sans Fonts License Agreement.
+The complete agreement is bundled offline at `legal/OPPO-Sans-License.txt` and is
+available from OPPO at https://openfs.oppomobile.com/open/oop/202410/18/62d51f494591f1a9040d83b597745911.zip .
 
 
 -----------------------------------------------------------

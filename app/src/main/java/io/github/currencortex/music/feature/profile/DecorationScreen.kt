@@ -30,8 +30,8 @@ import io.github.currencortex.music.data.profile.*
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.util.collectAsPageState
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun DecorationScreen(vm: DecorationViewModel, onBack: () -> Unit = {}) {
     val state by vm.state.collectAsPageState()
@@ -49,8 +49,8 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
 @Composable internal fun DecorationPage(state: DecorationState, busy: Boolean, message: String?, onBack: () -> Unit,
     reload: () -> Unit, query: (String) -> Unit, preview: (Decoration?) -> Unit, apply: (String) -> Unit,
     avatar: @Composable (String, Dp) -> Unit) {
-    val colors = MiuixTheme.colorScheme
-    val hint = colors.onSurfaceVariantSummary
+    val colors = COUITheme.colorScheme
+    val hint = colors.labelSecondaryVariant
     val catalog = state.catalog
     val selectedId = state.preview?.id ?: catalog?.current.orEmpty()
     val chosen = state.preview ?: catalog?.decorations?.firstOrNull { it.id == selectedId }
@@ -86,7 +86,7 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
                             }
                             if (!catalog.unlocked) {
                                 val progress = if (catalog.minListenMs > 0) (catalog.listenMs.toFloat() / catalog.minListenMs).coerceIn(0f, 1f) else 0f
-                                Box(Modifier.fillMaxWidth().height(3.dp).clip(CircleShape).background(colors.onSurface.copy(alpha = .06f))) {
+                                Box(Modifier.fillMaxWidth().height(3.dp).clip(CircleShape).background(colors.labelPrimary.copy(alpha = .06f))) {
                                     if (progress > 0f) Box(Modifier.fillMaxWidth(progress).fillMaxHeight().background(colors.primary))
                                 }
                             }
@@ -151,9 +151,9 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
 
 @Composable private fun DecorationTile(item: Decoration, selected: Boolean, worn: Boolean, busy: Boolean,
     onClick: () -> Unit, avatar: @Composable (String, Dp) -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val shape = RoundedCornerShape(16.dp)
-    Column(Modifier.fillMaxWidth().clip(shape).background(if (selected) colors.primary.copy(alpha = .08f) else colors.surfaceContainer)
+    Column(Modifier.fillMaxWidth().clip(shape).background(if (selected) colors.primary.copy(alpha = .08f) else colors.cardBackground)
         .border(if (selected) 1.5.dp else 0.dp, if (selected) colors.primary.copy(alpha = .65f) else androidx.compose.ui.graphics.Color.Transparent, shape)
         .clickable(enabled = !busy, role = Role.RadioButton, onClick = onClick).semantics { this.selected = selected }
         .testTag("decoration_${item.id.ifEmpty { "none" }}").padding(horizontal = 6.dp, vertical = 8.dp),
@@ -165,6 +165,6 @@ private fun Decoration.label() = name.ifBlank { id }.removePrefix("key-").ifBlan
         Text(item.label(), fontSize = 12.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
             maxLines = 1, overflow = TextOverflow.Ellipsis)
         Text(if (worn) (if (item.id.isEmpty()) "当前" else "已佩戴") else if (selected) "试戴中" else "", fontSize = 10.sp, lineHeight = 14.sp,
-            color = if (selected) colors.primary else colors.onSurfaceVariantSummary)
+            color = if (selected) colors.primary else colors.labelSecondaryVariant)
     }
 }

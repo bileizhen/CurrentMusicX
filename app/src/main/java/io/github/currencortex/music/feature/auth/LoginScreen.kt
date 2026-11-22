@@ -27,8 +27,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import android.os.SystemClock
 import kotlinx.coroutines.delay
 import io.github.currencortex.music.data.auth.RegistrationInput
@@ -70,8 +70,8 @@ import io.github.currencortex.music.data.auth.RegistrationInput
     }
     // Editing any field clears the previous outcome, so the message never describes stale input.
     fun edit(block: () -> Unit) { block(); if (state.message != null) vm.clearMessage() }
-    val colors = MiuixTheme.colorScheme
-    val secondary = colors.onSurfaceVariantSummary
+    val colors = COUITheme.colorScheme
+    val secondary = colors.labelSecondaryVariant
     val form: @Composable (androidx.compose.ui.unit.Dp) -> Unit = { topInset ->
     Column(Modifier.fillMaxSize().imePadding().verticalScroll(rememberScrollState())
         .padding(musicScrollPadding(PaddingValues(16.dp, topInset + 8.dp, 16.dp, 32.dp))).testTag("login_screen"),

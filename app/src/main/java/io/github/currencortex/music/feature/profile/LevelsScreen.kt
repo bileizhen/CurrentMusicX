@@ -21,8 +21,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import io.github.currencortex.music.data.profile.*
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun LevelsScreen(vm: LevelsViewModel, onBack: () -> Unit) {
     val state by vm.state.collectAsStateWithLifecycle()
@@ -66,7 +66,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                 .selectable(selected, enabled = !state.busy, role = Role.RadioButton, onClick = { answer(index, option) })
                                 .testTag("trial_answer_${index}_$option").padding(vertical = 8.dp),
                                 horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text(if (selected) "●" else "○", color = MiuixTheme.colorScheme.primary)
+                                Text(if (selected) "●" else "○", color = COUITheme.colorScheme.primary)
                                 Text(text, Modifier.weight(1f), fontSize = 14.sp)
                             }
                         }
@@ -80,14 +80,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 if (progress != null) item { SettingsGroup {
                     Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(userLevelLabel(progress.level).orEmpty(), Modifier.testTag("current_user_level"),
-                            fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.primary)
+                            fontSize = 28.sp, fontWeight = FontWeight.SemiBold, color = COUITheme.colorScheme.primary)
                         Text("累计 ${progress.points} 积分", Modifier.testTag("current_user_points"), fontSize = 17.sp)
                         rules?.let {
                             val next = it.next(progress)
                             Text(if (progress.level == it.trial.plusLevel) "已通过等级试炼"
                                 else if (next == null) "已达到常规最高等级，可参加等级试炼"
                                 else "距 ${userLevelLabel(next.level)} 还需 ${(next.points - progress.points).coerceAtLeast(0)} 积分",
-                                fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                                fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
                         }
                     }
                 } }

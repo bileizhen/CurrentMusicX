@@ -34,8 +34,8 @@ import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun AudioOutputScreen(container: AppContainer) {
     SettingsUiScope {
@@ -74,7 +74,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         try { action(); error = null } catch (e: kotlinx.coroutines.CancellationException) { throw e }
         catch (_: Exception) { error = "保存失败，请重试" }
     } }
-    val hint = MiuixTheme.colorScheme.onSurfaceVariantSummary
+    val hint = COUITheme.colorScheme.labelSecondaryVariant
 
     val modeDescriptions = mapOf(
         AudioOutputMode.AUDIO_TRACK to "系统音轨，支持系统音效",
@@ -122,7 +122,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         } }
         if (settings.mode == AudioOutputMode.NETEASE_USB) item("usb") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                SettingsInfoHeader("输出设备", MusicIcons.Device, horizontalInset = 0.dp)
+                SettingsListHeader("输出设备",
+                    marginStartType = io.github.suqi8.coui.kmp.preference.PreferenceCategoryMarginStartType.Small)
                 NeteaseUsbOutputSettings(settings) { key -> save { container.audioOutput.setUsbDevice(key) } }
             }
         } else item("device") { SettingsSection("输出设备", MusicIcons.Device) {

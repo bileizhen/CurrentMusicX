@@ -10,6 +10,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,23 +25,27 @@ import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.data.settings.AppearanceSettings
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.theme.Colors
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.Colors
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun AppearanceLivePreview(config: AppearanceSettings) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val renderer = rememberCurrentMusicPreviewRenderer()
     var selected by remember { mutableIntStateOf(0) }
     var previous by remember { mutableStateOf<Int?>(null) }
     val progress = remember { Animatable(1f) }
     val scope = rememberCoroutineScope()
     var transition by remember { mutableStateOf<Job?>(null) }
-    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp).clip(RoundedCornerShape(28.dp))
-        .background(colors.surfaceContainer).padding(vertical = 24.dp).testTag("theme_preview"),
+    Box(Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+        .squircleSurface(
+            color = colors.cardBackground,
+            cornerRadius = 28.dp,
+            weight = SquircleDefaults.Weight,
+        ).padding(vertical = 24.dp).testTag("theme_preview"),
         contentAlignment = Alignment.Center) {
         Box(Modifier.width(168.dp).aspectRatio(9f / 17f).clip(RoundedCornerShape(28.dp))) {
             val paper by animateColorAsState(colors.background, tween(300), label = "preview paper")
-            val card by animateColorAsState(colors.surfaceContainer, tween(300), label = "preview card")
+            val card by animateColorAsState(colors.cardBackground, tween(300), label = "preview card")
             val primary by animateColorAsState(colors.primary, tween(300), label = "preview accent")
             Canvas(Modifier.fillMaxSize()) {
                 renderer.draw(this, colors, config.floatingBar, config.liquidGlass, selected, previous, progress.value,

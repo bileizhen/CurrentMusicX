@@ -20,7 +20,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.random.Random
@@ -29,13 +29,13 @@ internal data class SettingsInkColors(val splash: Color, val highlight: Color, v
 
 /** CommonCard's foregroundColor derives FilledButton.styleFrom's .10/.08/.10 overlays. */
 @Composable internal fun settingsCardInkColors(): SettingsInkColors {
-    val color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+    val color = COUITheme.colorScheme.labelSecondaryVariant
     return SettingsInkColors(color.copy(alpha = .1f), color.copy(alpha = .1f), color.copy(alpha = .08f), color.copy(alpha = .1f))
 }
 
 /** Palette InkWell inherits these ThemeData colors, rather than FilledButton's. */
 @Composable internal fun settingsInkWellColors(): SettingsInkColors {
-    val dark = MiuixTheme.colorScheme.onSurface.luminance() > .5f
+    val dark = COUITheme.colorScheme.labelPrimary.luminance() > .5f
     val ink = if (dark) Color.White else Color.Black
     return SettingsInkColors(if (dark) Color(0x40CCCCCC) else Color(0x66C8C8C8),
         if (dark) Color(0x40CCCCCC) else Color(0x66BCBCBC), ink.copy(alpha = .04f), ink.copy(alpha = .12f))

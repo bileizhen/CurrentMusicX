@@ -55,9 +55,9 @@ import io.github.currencortex.music.ui.component.nativeui.GlassActionButton
 import io.github.currencortex.music.ui.component.nativeui.LocalGlassBackdrop
 import io.github.currencortex.music.ui.component.nativeui.rememberGlassBackdrop
 import io.github.currencortex.music.ui.component.nativeui.SettingsFloatingHeader
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.io.File
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -216,7 +216,7 @@ import kotlin.math.absoluteValue
                             Modifier.align(Alignment.Center),size=17f,color=Color.White,weight=FontWeight.SemiBold)
                         GlassIconButton(onClose,"返回",Modifier.align(Alignment.CenterStart).padding(start=12.dp)
                             .testTag("listening_export_close")) {
-                            Icon(MusicIcons.Back,null,tint=MiuixTheme.colorScheme.onBackground)
+                            Icon(MusicIcons.Back,null,tint=COUITheme.colorScheme.labelPrimary)
                         }
                     }
                 }

@@ -37,9 +37,9 @@ import io.github.currencortex.music.ui.component.MusicDialog
 import io.github.currencortex.music.ui.component.DecoratedAvatar
 import io.github.currencortex.music.ui.component.MusicOverlayDialog
 import io.github.currencortex.music.ui.component.MusicPlaceholder
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.LocalContentColor
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.LocalContentColor
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -78,16 +78,16 @@ import kotlinx.coroutines.flow.drop
     }
     val close = { focusManager.clearFocus(); keyboard?.hide(); dismiss() }
     MusicOverlayDialog(show = true, onDismissRequest = close, insideMargin = DpSize(20.dp, 16.dp)) {
-        CompositionLocalProvider(LocalContentColor provides colors.onSurface, LocalIndication provides indication) {
+        CompositionLocalProvider(LocalContentColor provides colors.labelPrimary, LocalIndication provides indication) {
         Column(Modifier.fillMaxWidth().heightIn(max = maxHeight), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(title, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                state.total?.let { Text(" $it", Modifier.weight(1f), fontSize = 13.sp, color = colors.onSurfaceVariantSummary) }
+                state.total?.let { Text(" $it", Modifier.weight(1f), fontSize = 13.sp, color = colors.labelSecondaryVariant) }
                     ?: Spacer(Modifier.weight(1f))
                 CommentAction(if (state.loading) "刷新中…" else "刷新", "refresh_comments", !state.loading && !composer.sending && state.busy.isEmpty(), reload)
                 Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).clickable(onClick = close)
                     .semantics { contentDescription = "关闭评论"; role = Role.Button }.testTag("close_comments"), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Close, null, Modifier.size(20.dp), tint = colors.onSurfaceVariantSummary)
+                    Icon(Icons.Default.Close, null, Modifier.size(20.dp), tint = colors.labelSecondaryVariant)
                 }
             }
             if (state.enhanced != false) Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -149,12 +149,12 @@ import kotlinx.coroutines.flow.drop
                     Column(Modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("还没有评论", fontSize = 17.sp, fontWeight = FontWeight.Medium)
-                        Text("写下你的感受，成为第一位听友", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                        Text("写下你的感受，成为第一位听友", fontSize = 13.sp, color = colors.labelSecondaryVariant)
                     }
                 }
                 state.error?.let { error -> item {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(error, fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                        Text(error, fontSize = 13.sp, color = colors.labelSecondaryVariant)
                         CommentAction("重试", "retry_comments", !state.loading, { if (state.retryMore) more() else reload() })
                     }
                 } }
@@ -165,17 +165,17 @@ import kotlinx.coroutines.flow.drop
                 }
                 if (!showHot && rows.isNotEmpty() && !state.more && !state.loading && state.error == null) item {
                     Text("已显示全部评论", Modifier.fillMaxWidth().padding(vertical = 8.dp), fontSize = 12.sp,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = colors.onSurfaceVariantSummary)
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center, color = colors.labelSecondaryVariant)
                 }
             }
-            HorizontalDivider(color = colors.onSurface.copy(alpha = .08f))
+            HorizontalDivider(color = colors.labelPrimary.copy(alpha = .08f))
             state.actionError?.let { Text(it, fontSize = 12.sp, modifier = Modifier.testTag("comment_action_error")) }
             composer.replyTo?.let { comment ->
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.onSurface.copy(alpha = .04f)).padding(start = 12.dp),
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(colors.labelPrimary.copy(alpha = .04f)).padding(start = 12.dp),
                     verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                         Text("回复 ${comment.user.nickname.ifBlank { fallbackUser }}", fontSize = 12.sp, color = colors.primary)
-                        Text(comment.content, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.onSurfaceVariantSummary)
+                        Text(comment.content, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.labelSecondaryVariant)
                     }
                     CommentAction("取消", "cancel_comment_reply", !composer.sending) { reply(null) }
                 }
@@ -184,16 +184,16 @@ import kotlinx.coroutines.flow.drop
                 TextField(state = composer.input, modifier = Modifier.fillMaxWidth().then(Modifier.weight(1f).focusRequester(focus).testTag("player_comment_draft")),
                     label = if (composer.replyTo == null) "写下你的评论" else "写下你的回复", useLabelAsPlaceholder = true,
                     insideMargin = DpSize(14.dp, 12.dp), cornerRadius = 16.dp, lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 3),
-                    textStyle = MiuixTheme.textStyles.main.copy(fontSize = 15.sp), readOnly = composer.sending)
+                    textStyle = COUITheme.textStyles.bodyXL.copy(fontSize = 15.sp), readOnly = composer.sending)
                 MusicDialogButton(if (composer.sending) "发送中…" else "发送", send, Modifier.testTag("player_comment_send"),
                     enabled = !composer.sending && !state.loading && state.busy.isEmpty() && composer.draft.isNotBlank() && composer.draft.length <= 1000, fillWidth = false)
             }
             val feedback = if (composer.draft.length > 1000) "评论最多 1000 字，请删减后发送" else composer.error ?: composer.message
             if (feedback != null || composer.draft.isNotEmpty()) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Text(feedback ?: "", Modifier.weight(1f).testTag(if (composer.error != null || composer.draft.length > 1000) "player_comment_error" else "player_comment_result")
-                    .semantics { liveRegion = LiveRegionMode.Polite }, fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                    .semantics { liveRegion = LiveRegionMode.Polite }, fontSize = 12.sp, color = colors.labelSecondaryVariant)
                 if (composer.draft.isNotEmpty()) Text("${composer.draft.length}/1000", Modifier.padding(start = 8.dp), fontSize = 11.sp,
-                    color = if (composer.draft.length >= 1000) colors.primary else colors.onSurfaceVariantSummary)
+                    color = if (composer.draft.length >= 1000) colors.primary else colors.labelSecondaryVariant)
             }
         }
         }
@@ -214,7 +214,7 @@ import kotlinx.coroutines.flow.drop
     Column(Modifier.clip(RoundedCornerShape(4.dp)).clickable(onClick = onClick).semantics { this.selected = selected; role = Role.Tab }
         .testTag(tag).padding(horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Text(title, Modifier.padding(top = 4.dp, bottom = 10.dp), fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected) colors.onSurface else colors.onSurfaceVariantSummary)
+            color = if (selected) colors.labelPrimary else colors.labelSecondaryVariant)
         Box(Modifier.width(18.dp).height(3.dp).clip(RoundedCornerShape(2.dp)).background(if (selected) colors.primary else androidx.compose.ui.graphics.Color.Transparent))
     }
 }
@@ -222,7 +222,7 @@ import kotlinx.coroutines.flow.drop
 @Composable private fun CommentAction(title: String, tag: String, enabled: Boolean = true, onClick: () -> Unit) {
     Text(title, Modifier.clip(RoundedCornerShape(10.dp)).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .testTag(tag).padding(horizontal = 10.dp, vertical = 12.dp), fontSize = 13.sp,
-        color = MiuixTheme.colorScheme.primary.copy(alpha = if (enabled) 1f else .45f))
+        color = COUITheme.colorScheme.primary.copy(alpha = if (enabled) 1f else .45f))
 }
 
 @Composable private fun CommentContent(comment: NeteaseComment, enabled: Boolean, enhanced: Boolean = false,
@@ -239,10 +239,10 @@ import kotlinx.coroutines.flow.drop
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(comment.user.nickname.ifBlank { fallbackUser }, Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Medium,
-                    color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    color = colors.labelSecondaryVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (enhanced) CommentAction("${if (comment.likedByMe) "已赞" else "赞"} ${comment.likedCount}",
                     "like_comment_${comment.id}", !busy, like)
-                else if (comment.likedCount > 0) Text("${comment.likedCount} 赞", Modifier.padding(start = 8.dp), fontSize = 11.sp, color = colors.onSurfaceVariantSummary)
+                else if (comment.likedCount > 0) Text("${comment.likedCount} 赞", Modifier.padding(start = 8.dp), fontSize = 11.sp, color = colors.labelSecondaryVariant)
             }
             SelectionContainer {
                 Text(comment.content, fontSize = 15.sp, lineHeight = 23.sp, maxLines = if (expanded) Int.MAX_VALUE else 6,
@@ -251,11 +251,11 @@ import kotlinx.coroutines.flow.drop
             if (overflow || expanded) CommentAction(if (expanded) "收起" else "展开全文", "expand_comment_${comment.id}") { expanded = !expanded }
             comment.beReplied.firstOrNull()?.let { quote ->
                 Text("${quote.user?.nickname?.ifBlank { fallbackUser } ?: fallbackUser}：${quote.content ?: "原评论已删除"}",
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.onSurface.copy(alpha = .04f)).padding(10.dp),
-                    fontSize = 12.sp, lineHeight = 18.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, color = colors.onSurfaceVariantSummary)
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(colors.labelPrimary.copy(alpha = .04f)).padding(10.dp),
+                    fontSize = 12.sp, lineHeight = 18.sp, maxLines = 3, overflow = TextOverflow.Ellipsis, color = colors.labelSecondaryVariant)
             }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(time, Modifier.weight(1f), fontSize = 11.sp, color = colors.onSurfaceVariantSummary)
+                Text(time, Modifier.weight(1f), fontSize = 11.sp, color = colors.labelSecondaryVariant)
                 if (enhanced && own) CommentAction("删除", "delete_comment_${comment.id}", !busy, delete)
                 CommentAction("回复", "reply_comment_${comment.id}", enabled, reply)
             }

@@ -24,9 +24,9 @@ import io.github.currencortex.music.ui.component.rememberPageNavigationSource
 import io.github.currencortex.music.ui.component.LocalRootTabSwipe
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun ProfilePageTitle(navigate: (String) -> Unit, onSettings: (() -> Unit)?,
     public: Boolean = false, loading: Boolean = false, reload: () -> Unit = {}) {
@@ -43,7 +43,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         if (public) Row(Modifier.fillMaxWidth().height(SettingsToolbarHeight).padding(horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("用户主页", Modifier.weight(1f), fontSize = 24.sp, lineHeight = 30.sp,
-                fontWeight = FontWeight.SemiBold, color = MiuixTheme.colorScheme.onSurface)
+                fontWeight = FontWeight.SemiBold, color = COUITheme.colorScheme.labelPrimary)
             actions()
         }
         else SettingsRootTopBar("我的", Modifier.testTag("me_root_toolbar"), actions = actions)
@@ -66,7 +66,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     SettingsUiScope {
         SettingsPreference(title, summary, Modifier.testTag(tag).then(source.modifier), onClick = { source.open(onClick) },
             leading = { Icon(icon, null, Modifier.size(24.dp)) },
-            trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = MiuixTheme.colorScheme.onSurfaceVariantSummary) })
+            trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = COUITheme.colorScheme.labelSecondaryVariant) })
     }
 }
 
@@ -102,11 +102,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 /** Native and CurrentMusic accounts share destinations and the same list geometry. */
+/** Account rows live on the account page opened from settings; services stay here. */
 @Composable internal fun ProfileServicesSection(navigate: (String) -> Unit, tasks: Boolean,
-    native: Boolean = false, bound: Boolean = true,
     navidromeConfigured: Boolean = false, embyConfigured: Boolean = false,
     platform: MusicPlatform = MusicPlatform.NETEASE, qqBound: Boolean = false) {
     SettingsListSection("音乐服务") {
+        var divided = false
         if (platform == MusicPlatform.QQ_MUSIC) {
             ProfileDestination(if (qqBound) "QQ 音乐账号" else "登录 QQ 音乐",
                 if (qqBound) "已连接，管理个人收藏、歌单与推荐" else "扫码登录后访问个人音乐库与推荐",
@@ -115,33 +116,33 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             ProfileDestination("收藏的专辑", "管理 QQ 音乐收藏专辑", MusicIcons.List, "open_qq_albums") {
                 navigate("qq/albums")
             }
-        } else {
-            ProfileDestination(if (native && !bound) "登录网易云" else "网易云账号",
-                if (native && !bound) "需先注册并登录 CurrentMusic" else "绑定账号、同步歌单",
-                MusicIcons.Account, "open_binding") { navigate("user/binding") }
+            divided = true
         }
         if (tasks && platform == MusicPlatform.NETEASE) {
-            SettingsDivider(52.dp)
+            if (divided) SettingsDivider(52.dp)
             ProfileDestination("网易云任务", "签到、云贝与会员成长", MusicIcons.Check, "open_netease_tasks") { navigate("user/netease-tasks") }
+            divided = true
         }
         if (platform == MusicPlatform.NETEASE) {
-            SettingsDivider(52.dp)
+            if (divided) SettingsDivider(52.dp)
             ProfileDestination("导入歌单", "链接、文字、图片与本地歌曲", MusicIcons.Transfer, "profile_playlist_import") {
                 navigate("user/playlist-import")
             }
+            divided = true
         }
         if (navidromeConfigured) {
-            SettingsDivider(52.dp)
+            if (divided) SettingsDivider(52.dp)
             ProfileDestination("Navidrome 曲库", "自己的音乐服务器", MusicIcons.Storage, "profile_navidrome") { navigate("navidrome") }
+            divided = true
         }
         if (embyConfigured) {
-            SettingsDivider(52.dp)
+            if (divided) SettingsDivider(52.dp)
             ProfileDestination("Emby 曲库", "自己的音乐服务器", MusicIcons.Storage, "profile_emby") { navigate("emby") }
         }
     }
 }
 
-@Composable internal fun ProfileAccountSection(navigate: (String) -> Unit, native: Boolean = false, administrator: Boolean = false) {
+@Composable internal fun ProfileAccountSection(navigate: (String) -> Unit, native: Boolean = false) {
     SettingsListSection("账号") {
         if (native) ProfileDestination("CurrentMusic 账户", "注册与登录、头像装饰与一起听", MusicIcons.Account,
             "open_currentmusic_login") { navigate("user/login") }
@@ -149,12 +150,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             ProfileDestination("等级与成长", "查看积分、每日进度与等级试炼", MusicIcons.Check, "open_levels") { navigate("user/levels") }
             SettingsDivider(52.dp)
             ProfileDestination("头像挂件", "装饰你的头像", MusicIcons.Image, "open_decorations") { navigate("user/decorations") }
-            SettingsDivider(52.dp)
-            ProfileDestination("账号与安全", "切换账号、修改密码与退出登录", MusicIcons.Account, "open_security") { navigate("user/security") }
-            if (administrator) {
-                SettingsDivider(52.dp)
-                ProfileDestination("管理员面板", "用户、公告、设备与系统管理", MusicIcons.Account, "open_admin") { navigate("user/admin") }
-            }
         }
     }
 }
@@ -162,7 +157,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun ProfileStatsBlock(stats: ProfileStats, likesLabel: String = "点赞",
     likesValue: String = "${stats.likes}", onLikes: (() -> Unit)? = null, onListening: (() -> Unit)? = null) {
-    val muted = MiuixTheme.colorScheme.onSurfaceVariantSummary
+    val muted = COUITheme.colorScheme.labelSecondaryVariant
     Column(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 16.dp).testTag("profile_stats"),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp),
@@ -182,7 +177,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         val columns = if (maxWidth >= 280.dp * LocalDensity.current.fontScale + 10.dp) 2 else 1
         FlowRow(Modifier.fillMaxWidth(), maxItemsInEachRow = columns,
             horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            val tile = Modifier.weight(1f).background(MiuixTheme.colorScheme.onSurface.copy(alpha = .035f), RoundedCornerShape(16.dp))
+            val tile = Modifier.weight(1f).background(COUITheme.colorScheme.labelPrimary.copy(alpha = .035f), RoundedCornerShape(16.dp))
                 .padding(horizontal = 12.dp, vertical = 10.dp)
             Column(tile, verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text("听歌天数", fontSize = 12.sp, lineHeight = 16.sp, color = muted)

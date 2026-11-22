@@ -50,8 +50,8 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 data class QqAlbumUiState(
     val loading: Boolean = true,
@@ -340,7 +340,7 @@ fun QqAlbumScreen(
                 }
                 item("playback") {
                     Row(
-                        Modifier.fillMaxWidth().background(MiuixTheme.colorScheme.background)
+                        Modifier.fillMaxWidth().background(COUITheme.colorScheme.background)
                             .padding(horizontal = 16.dp, vertical = 12.dp)
                             .testTag("qq_album_playback_panel"),
                         verticalAlignment = Alignment.CenterVertically,
@@ -367,7 +367,7 @@ fun QqAlbumScreen(
                                 },
                                 Modifier.padding(top = 3.dp),
                                 fontSize = 12.sp,
-                                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f),
+                                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f),
                             )
                         }
                     }
@@ -394,7 +394,7 @@ fun QqAlbumScreen(
                         if (query.isNotBlank()) "没有找到匹配的歌曲" else "这张专辑还没有可播放歌曲",
                         Modifier.fillMaxWidth().padding(24.dp),
                         fontSize = 14.sp,
-                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f),
+                        color = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f),
                     )
                 }
                 itemsIndexed(songs, key = { _, song -> "qq_album_song_${song.id}" }) { index, song ->
@@ -418,7 +418,7 @@ fun QqAlbumScreen(
                     item("songs_error") {
                         Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                             verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(message, fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                            Text(message, fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
                             MusicTextAction("重试加载更多", vm::loadMoreSongs, enabled = !state.songsLoading)
                         }
                     }
@@ -430,7 +430,7 @@ fun QqAlbumScreen(
                             Text(
                                 "QQ 音乐专辑接口每批最多读取 300 首",
                                 fontSize = 12.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                                color = COUITheme.colorScheme.labelSecondaryVariant,
                             )
                         }
                         MusicTextAction(

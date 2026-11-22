@@ -76,7 +76,7 @@ jobs:
         if: needs.scope.outputs.required == 'true'
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       # Ubuntu 24.04 images already include most Android SDK packages.
       - name: Ensure required Android SDK components
         if: needs.scope.outputs.required == 'true'
@@ -126,7 +126,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - name: Ensure required Android SDK components
         shell: bash
         run: |

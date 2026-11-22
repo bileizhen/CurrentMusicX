@@ -1,7 +1,5 @@
 package io.github.currencortex.music.ui.component.nativeui
 
-import androidx.compose.animation.EnterExitState
-import androidx.compose.animation.core.Transition
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -14,13 +12,16 @@ import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.unit.Density
 import io.github.currencortex.music.ui.component.liquid.CombinedBackdrop
-import top.yukonga.miuix.kmp.blur.Backdrop
+import io.github.suqi8.coui.kmp.blur.Backdrop
 
 internal val LocalPageGlassScene = compositionLocalOf<PageGlassScene?> { null }
 
-internal class PageGlassScene(private val transition: Transition<EnterExitState>) {
-    fun moving() = transition.currentState != transition.targetState
-    fun entering() = transition.currentState == EnterExitState.PreEnter && transition.targetState == EnterExitState.Visible
+internal class PageGlassScene(
+    private val movingState: () -> Boolean = { false },
+    private val enteringState: () -> Boolean = { false },
+) {
+    fun moving() = movingState()
+    fun entering() = enteringState()
 
     val sources = mutableStateListOf<Backdrop>()
     var origin: LayoutCoordinates? = null

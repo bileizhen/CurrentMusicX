@@ -14,8 +14,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -39,9 +39,9 @@ import java.time.format.DateTimeFormatter
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(artist?.name ?: "艺人", fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
                         if (!artist?.description.isNullOrBlank()) Text(artist.description, fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                            color = COUITheme.colorScheme.labelSecondaryVariant)
                         state.fans?.let { Text("${artistCount(it.fans)} 粉丝 · ${artistCount(it.follows)} 关注", fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }
+                            color = COUITheme.colorScheme.labelSecondaryVariant) }
                     }
                 }
             }
@@ -91,5 +91,5 @@ import java.time.format.DateTimeFormatter
 private fun artistProfileDate(value: Long) = Instant.ofEpochMilli(value).atZone(ZoneId.of("Asia/Shanghai"))
     .format(DateTimeFormatter.ISO_LOCAL_DATE)
 @Composable private fun BiographyLine(value: String) {
-    Text(value, fontSize = 15.sp, lineHeight = 26.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+    Text(value, fontSize = 15.sp, lineHeight = 26.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
 }

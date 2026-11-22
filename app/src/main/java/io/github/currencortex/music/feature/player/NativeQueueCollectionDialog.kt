@@ -13,8 +13,7 @@ import io.github.currencortex.music.data.library.Playlist
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
+import io.github.suqi8.coui.kmp.basic.Text
 
 /** Same destination picker as a single song; no new queue or search screen. */
 @Composable internal fun NativeQueueCollectionDialog(vm: PlayerViewModel, songs: List<Song>, show: Boolean, onDismiss: () -> Unit) {

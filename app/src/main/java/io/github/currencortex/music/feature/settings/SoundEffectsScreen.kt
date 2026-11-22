@@ -22,6 +22,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
+import io.github.suqi8.coui.kmp.squircle.squircleBorder
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -50,8 +53,8 @@ import io.github.currencortex.music.data.effects.NeteaseSoundEffect
 import io.github.currencortex.music.data.effects.NativeEffectTile
 import io.github.currencortex.music.data.settings.EqualizerPreset
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.util.Locale
 import kotlin.math.roundToInt
 import kotlin.math.sin
@@ -83,7 +86,7 @@ import kotlinx.serialization.json.*
     val originalSpeaker by vm.originalSpeaker.collectAsStateWithLifecycle()
     val installed by vm.originalEffectsReady.collectAsStateWithLifecycle()
     val transfer by vm.originalImport.collectAsStateWithLifecycle()
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val dark = colors.background.luminance() < .5f
     val background = colors.background
     val listState = rememberLazyListState()
@@ -140,27 +143,22 @@ import kotlinx.serialization.json.*
         runtime.active -> "正在使用本机均衡器"
         else -> "等待连接播放器"
     }
-    SettingsUiScope {
     Box(Modifier.fillMaxSize().background(background), contentAlignment = Alignment.TopCenter) {
-    io.github.currencortex.music.ui.component.nativeui.SettingsScrollLayout(
-        Modifier.widthIn(max = 680.dp).fillMaxSize().testTag("native_sound_effects_page"),background=background,topBar={
-        SettingsTopBar(if (expandedCatalog) "官方精选音效" else "音效",
-            onBack = { if (expandedCatalog) catalogOpen = false else onBack() }, backTag = "sound_effects_back")
-        }) {topInset->
-        LazyColumn(Modifier.fillMaxSize().testTag("sound_effects_screen"), state = if (expandedCatalog) catalogListState else listState,
-            contentPadding = musicScrollPadding(PaddingValues(top=topInset,bottom = 20.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding())),
-            verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        SettingsNativePage(
+            title = if (expandedCatalog) "官方精选音效" else "音效",
+            tag = "sound_effects_screen",
+            onBack = { if (expandedCatalog) catalogOpen = false else onBack() },
+            backTag = "sound_effects_back",
+            padding = PaddingValues(top = 8.dp, bottom = 20.dp + WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()),
+            verticalSpacing = 8.dp,
+            modifier = Modifier.widthIn(max = 680.dp).fillMaxSize(),
+            state = if (expandedCatalog) catalogListState else listState,
+        ) {
             if (!expandedCatalog) {
             item {
                 Card(Modifier.padding(horizontal = 16.dp)) {
                     SettingsPreference("流声音频系统", if (adaptive.enabled) "已开启 · 动态 EQ / 虚拟低频 / 马达驱动" else "动态 EQ · 虚拟低频 · 马达驱动",
                         Modifier.testTag("open_adaptive_audio"), onClick = onAdaptive)
-                    SettingsDivider()
-                    SettingsPreference("均衡器", if (manual.enabled) manual.preset.label else "手动调节音色",
-                        Modifier.testTag("open_sound_equalizer"), onClick = onEqualizer)
-                    SettingsDivider()
-                    SettingsToggle("本机智能调音", options.smartEnabled, vm::smartEnabled,
-                        modifier = Modifier.testTag("sound_local_smart"), summary = status, enabled = canApply)
                 }
             }
             item {
@@ -177,7 +175,7 @@ import kotlinx.serialization.json.*
             }
             if (installed) {
             if (!expandedCatalog) {
-            item { SettingsInfoHeader("大师音效", MusicIcons.Headphones) }
+            item { SettingsListHeader("大师音效") }
             item(key = "masters") {
                 val visible by remember { derivedStateOf { listState.layoutInfo.visibleItemsInfo.any { it.key == "masters" } } }
                 NativeMasterPager(dark, moodChosen, originalMood.loading,
@@ -201,7 +199,7 @@ import kotlinx.serialization.json.*
                 originalMaster.message != io.github.currencortex.music.core.media.OriginalAiMasterState().message) item {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(originalMaster.message, Modifier.weight(1f).testTag("sound_master_status"), fontSize = 12.sp,
-                        color = colors.onSurfaceVariantSummary)
+                        color = colors.labelSecondaryVariant)
                     if (!originalMaster.loading) MusicTextAction("重试", { vm.originalAiMasterEnabled(true) })
                 }
             }
@@ -209,14 +207,14 @@ import kotlinx.serialization.json.*
                 originalSpeaker.message != io.github.currencortex.music.core.media.OriginalSpeakerState().message) item {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(originalSpeaker.message, Modifier.weight(1f).testTag("sound_speaker_status"), fontSize = 12.sp,
-                        color = colors.onSurfaceVariantSummary)
+                        color = colors.labelSecondaryVariant)
                     if (!originalSpeaker.loading) MusicTextAction("重试", { vm.originalSpeakerEnabled(true) })
                 }
             }
             if (moodFailed || moodChosen && !originalMood.loading && !originalMood.enabled) item {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(originalMood.message, Modifier.weight(1f).testTag("sound_original_mood_status"), fontSize = 12.sp,
-                        color = colors.onSurfaceVariantSummary)
+                        color = colors.labelSecondaryVariant)
                     MusicTextAction("重试", vm::retryOriginalMood, Modifier.testTag("sound_original_mood_retry"))
                 }
             }
@@ -228,12 +226,12 @@ import kotlinx.serialization.json.*
                         Modifier.testTag("sound_catalog_expand").clip(RoundedCornerShape(8.dp))
                             .clickable(role = Role.Button) { catalogOpen = true }
                             .padding(start = 12.dp, top = 4.dp, bottom = 4.dp),
-                        fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                        fontSize = 13.sp, color = colors.labelSecondaryVariant)
                 }
             }
             if (smartFailed) item {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(originalSmart.message, Modifier.weight(1f), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                    Text(originalSmart.message, Modifier.weight(1f), fontSize = 12.sp, color = colors.labelSecondaryVariant)
                     MusicTextAction("重试", vm::retryOriginalSmart, Modifier.testTag("sound_original_smart_retry"))
                 }
             }
@@ -257,24 +255,24 @@ import kotlinx.serialization.json.*
             }
             if (page.error != null && !expandedCatalog) item {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(page.error!!, Modifier.weight(1f), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                    Text(page.error!!, Modifier.weight(1f), fontSize = 12.sp, color = colors.labelSecondaryVariant)
                     MusicTextAction("重试", vm::refreshPage, Modifier.testTag("sound_page_retry"))
                 }
             }
             if (actionError != null) item {
                 Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(actionError!!, Modifier.weight(1f).testTag("sound_tile_error"), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                    Text(actionError!!, Modifier.weight(1f).testTag("sound_tile_error"), fontSize = 12.sp, color = colors.labelSecondaryVariant)
                     MusicTextAction("关闭", { vm.actionError.value = null })
                 }
             }
             if (!expandedCatalog && catalog.loading) item { Text("正在获取网易云音效…", Modifier.padding(horizontal = 16.dp)
-                .testTag("sound_catalog_loading"), fontSize = 13.sp, color = colors.onSurfaceVariantSummary) }
+                .testTag("sound_catalog_loading"), fontSize = 13.sp, color = colors.labelSecondaryVariant) }
             if (!expandedCatalog && catalog.error != null) item { Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(catalog.error!!, Modifier.weight(1f), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                Text(catalog.error!!, Modifier.weight(1f), fontSize = 12.sp, color = colors.labelSecondaryVariant)
                 MusicTextAction("重试", vm::refreshCatalog, Modifier.testTag("sound_catalog_retry"))
             } }
             if (!expandedCatalog && !catalog.loading && catalog.error == null && catalog.items.isEmpty()) item {
-                Text("网易云暂未返回可用音效", Modifier.padding(horizontal = 16.dp), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                Text("网易云暂未返回可用音效", Modifier.padding(horizontal = 16.dp), fontSize = 13.sp, color = colors.labelSecondaryVariant)
             }
             if (!expandedCatalog) item {
                 BoxWithConstraints(Modifier.fillMaxWidth().testTag("sound_official_effects")) {
@@ -309,13 +307,13 @@ import kotlinx.serialization.json.*
                 }
             } else {
                 if (more.loading) item { Text("正在获取官方精选音效…", Modifier.padding(16.dp), fontSize = 13.sp,
-                    color = colors.onSurfaceVariantSummary) }
+                    color = colors.labelSecondaryVariant) }
                 if (more.error != null) item { Row(Modifier.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Text(more.error!!, Modifier.weight(1f), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                    Text(more.error!!, Modifier.weight(1f), fontSize = 12.sp, color = colors.labelSecondaryVariant)
                     MusicTextAction("重试", vm::refreshMore, Modifier.testTag("sound_more_retry"))
                 } }
                 if (!more.loading && more.error == null && more.featured.isEmpty()) item {
-                    Text("暂无官方精选音效", Modifier.padding(16.dp), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                    Text("暂无官方精选音效", Modifier.padding(16.dp), fontSize = 13.sp, color = colors.labelSecondaryVariant)
                 }
                 items(more.featured, key = { "more_${it.id}" }) { tile ->
                     val chosen = tileLoading == tile.id || (if (tile.smart) smartChosen else (original.requestedId ?: original.selectedId) == tile.id)
@@ -335,7 +333,7 @@ import kotlinx.serialization.json.*
                         else -> "正在下载并校验 ${original.requestedName.orEmpty()}…"
                         }, Modifier.testTag("sound_original_loading"), fontSize = 13.sp)
                     }
-                    original.error?.let { Text(it, Modifier.testTag("sound_original_error"), color = colors.onSurfaceVariantSummary, fontSize = 13.sp) }
+                    original.error?.let { Text(it, Modifier.testTag("sound_original_error"), color = colors.labelSecondaryVariant, fontSize = 13.sp) }
                     if (original.selectedId != null) {
                         Text(when {
                             original.requestedId != null && original.requestedId != original.selectedId ->
@@ -343,8 +341,8 @@ import kotlinx.serialization.json.*
                             !playback.playing -> "预设已就绪，开始本机播放后处理"
                             original.processing -> "正在使用原版引擎处理音频"
                             else -> "等待原版引擎处理音频…"
-                        }, Modifier.testTag("sound_original_processing"), color = colors.onSurfaceVariantSummary, fontSize = 13.sp)
-                        Text("均衡器参数已保留，可随时切回", color = colors.onSurfaceVariantSummary, fontSize = 12.sp)
+                        }, Modifier.testTag("sound_original_processing"), color = colors.labelSecondaryVariant, fontSize = 13.sp)
+                        Text("均衡器参数已保留，可随时切回", color = colors.labelSecondaryVariant, fontSize = 12.sp)
                     }
                     if (original.error != null && original.available && original.requestedId != null &&
                         original.requestedId !in original.unsupported && !original.loading)
@@ -360,7 +358,7 @@ import kotlinx.serialization.json.*
                     Text(playback.song?.name ?: "等待播放", fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     val analysis = tuning.analysis
                     when {
-                        tuning.loading -> Text("正在读取歌曲的声音特征…", color = colors.onSurfaceVariantSummary, fontSize = 13.sp)
+                        tuning.loading -> Text("正在读取歌曲的声音特征…", color = colors.labelSecondaryVariant, fontSize = 13.sp)
                         analysis != null -> {
                             val metadata = buildList {
                                 analysis.bpm?.let { add("${it.roundToInt()} BPM") }
@@ -368,9 +366,9 @@ import kotlinx.serialization.json.*
                             }.joinToString(" · ")
                             if (metadata.isNotBlank()) Text(metadata, Modifier.testTag("sound_song_analysis"), fontSize = 13.sp, color = colors.primary)
                             if (analysis.emotions.isNotEmpty()) Text(analysis.emotions.take(4).joinToString(" · "),
-                                maxLines = 2, color = colors.onSurfaceVariantSummary, fontSize = 13.sp)
+                                maxLines = 2, color = colors.labelSecondaryVariant, fontSize = 13.sp)
                         }
-                        else -> Text(tuning.message, color = colors.onSurfaceVariantSummary, fontSize = 13.sp)
+                        else -> Text(tuning.message, color = colors.labelSecondaryVariant, fontSize = 13.sp)
                     }
                     tuning.gains?.let { gains ->
                         Text(if (canApply && runtime.active && tuning.active) "当前歌曲调音已生效" else "开始本机播放后生效",
@@ -382,7 +380,6 @@ import kotlinx.serialization.json.*
 
         }
     }
-    }
     if (installed) tileDetails?.let { tile -> MusicDialog(tile.name, onDismiss = { tileDetails = null }) {
         Text(tile.description, fontSize = 14.sp)
         MusicTextAction("使用", { vm.useTile(tile); tileDetails = null })
@@ -393,14 +390,14 @@ import kotlinx.serialization.json.*
         MusicDialog(effect.name, onDismiss = { selectedEffect = null }) {
             Text(effect.description, fontSize = 15.sp)
             Text(unavailable ?: if (effect.legacyMemberOriginal)
-                "此音效需要有效的网易云${if (effect.memberType == 4) "SVIP" else "黑胶会员"}。使用前会向网易云核验当前账号权益，到期自动关闭；可在“我的 → 网易云账号”登录。选择会保存，重启后重新核验。"
+                "此音效需要有效的网易云${if (effect.memberType == 4) "SVIP" else "黑胶会员"}。使用前会向网易云核验当前账号权益，到期自动关闭；可在“设置 → 账号”登录。选择会保存，重启后重新核验。"
                 else "使用网易云公开的原版预设与原生音效引擎。选择会保存，重启后重新下载并校验；启用后暂时替代本机智能调音和均衡器。",
-                color = colors.onSurfaceVariantSummary, fontSize = 13.sp)
+                color = colors.labelSecondaryVariant, fontSize = 13.sp)
             MusicTextAction(if (unavailable != null) "重新检查并使用" else if (effect.legacyMemberOriginal) "核验权益并使用" else if (original.selectedId == effect.id) "重新载入原版音效" else "使用原版音效", {
                 vm.useOriginal(effect)
                 selectedEffect = null
             }, Modifier.testTag("sound_use_original"))
-            launchError?.let { Text(it, color = colors.onSurfaceVariantSummary, fontSize = 13.sp) }
+            launchError?.let { Text(it, color = colors.labelSecondaryVariant, fontSize = 13.sp) }
             MusicTextAction("前往网易云音效", {
                 try {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("orpheus://effect")).setPackage("com.netease.cloudmusic"))
@@ -411,28 +408,35 @@ import kotlinx.serialization.json.*
             MusicTextAction("返回音效页", { selectedEffect = null }, Modifier.testTag("sound_official_close"))
         }
     }
-    }
 }
 
 @Composable private fun OfficialSoundCard(effect: NeteaseSoundEffect, modifier: Modifier, chosen: Boolean,
     status: String, enabled: Boolean, tile: NativeEffectTile? = null, dark: Boolean = false,
     onDetails: () -> Unit, onApply: () -> Unit) {
     val background = if (dark) Color(0xFF1C2028) else Color(0xFFE4EAF2)
-    Box(modifier.clip(RoundedCornerShape(12.dp)).background(background)
-        .border(if (chosen) 1.5.dp else 0.dp, if (chosen) MiuixTheme.colorScheme.primary else Color.Transparent, RoundedCornerShape(12.dp))) {
+    Box(modifier.squircleSurface(
+        color = background,
+        cornerRadius = 12.dp,
+        weight = SquircleDefaults.Weight,
+    ).then(if (chosen) Modifier.squircleBorder(
+        width = 1.5.dp,
+        color = COUITheme.colorScheme.primary,
+        cornerRadius = 12.dp,
+        weight = SquircleDefaults.Weight,
+    ) else Modifier)) {
         if (tile != null && tile.image(dark).isNotBlank()) EffectsArtwork(tile.image(dark), Modifier.matchParentSize())
         else if (effect.artwork.isNotBlank()) EffectsArtwork(effect.artwork, Modifier.matchParentSize())
         Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
             Box(Modifier.fillMaxWidth().height(62.dp)) {
                 EffectsMembership(tile?.membership ?: effect.memberType, Modifier.align(Alignment.TopEnd).padding(8.dp))
                 if (tile == null && effect.artwork.isBlank()) Icon(MusicIcons.Headphones, null,
-                    Modifier.align(Alignment.Center).size(28.dp), tint = MiuixTheme.colorScheme.onSurface.copy(alpha = .4f))
+                    Modifier.align(Alignment.Center).size(28.dp), tint = COUITheme.colorScheme.labelPrimary.copy(alpha = .4f))
             }
             Column(Modifier.fillMaxWidth().testTag("sound_official_${effect.id}").semantics { selected = chosen }
                 .clickable(role = Role.Button, onClick = onDetails).padding(horizontal = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(effect.name, fontSize = 14.sp, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(tile?.description ?: effect.description, Modifier.padding(top = 2.dp),
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 10.sp,
+                    color = COUITheme.colorScheme.labelSecondaryVariant, fontSize = 10.sp,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             SoundAction(if (chosen) (if (status == "加载中…") "加载中…" else "取消") else "使用", onApply,
@@ -443,13 +447,16 @@ import kotlinx.serialization.json.*
 
 @Composable private fun EffectButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier,
     selected: Boolean = false, enabled: Boolean = true) {
-    val colors = MiuixTheme.colorScheme
-    Box(modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(14.dp))
-        .background(if (selected) colors.primary.copy(alpha = if (enabled) 1f else .35f)
-            else colors.onSurface.copy(alpha = if (enabled) .06f else .025f))
+    val colors = COUITheme.colorScheme
+    Box(modifier.heightIn(min = 44.dp).squircleSurface(
+        color = if (selected) colors.primary.copy(alpha = if (enabled) 1f else .35f)
+            else colors.labelPrimary.copy(alpha = if (enabled) .06f else .025f),
+        cornerRadius = 14.dp,
+        weight = SquircleDefaults.Weight,
+    )
         .clickable(enabled = enabled, role = Role.Button, onClick = onClick).padding(horizontal = 16.dp, vertical = 11.dp),
         contentAlignment = Alignment.Center) {
-        Text(label, color = if (selected) colors.onPrimary else colors.onSurface, fontSize = 13.sp)
+        Text(label, color = if (selected) colors.labelOnColor else colors.labelPrimary, fontSize = 13.sp)
     }
 }
 
@@ -458,8 +465,8 @@ import kotlinx.serialization.json.*
 }
 
 @Composable private fun TuningCurve(gains: List<Int>) {
-    val accent = MiuixTheme.colorScheme.primary
-    val grid = MiuixTheme.colorScheme.onSurfaceVariantSummary.copy(alpha = .18f)
+    val accent = COUITheme.colorScheme.primary
+    val grid = COUITheme.colorScheme.labelSecondaryVariant.copy(alpha = .18f)
     Canvas(Modifier.fillMaxWidth().height(60.dp).testTag("sound_tuning_curve")) {
         drawLine(grid, Offset(0f, size.height / 2), Offset(size.width, size.height / 2), 1.dp.toPx())
         val path = Path()

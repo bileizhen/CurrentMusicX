@@ -168,7 +168,7 @@ class OriginalSoundEffectsController internal constructor(
                 val permission = if (effect.legacyMemberOriginal) {
                     mutableState.value = state.value.copy(permissionPending = true)
                     val uid = owner.ownerKey.removePrefix("netease:").toLongOrNull()
-                        ?: throw OriginalEffectPermissionException("请先在“我的 → 网易云账号”登录，再核验黑胶会员权益")
+                        ?: throw OriginalEffectPermissionException("请先在“设置 → 账号”登录，再核验黑胶会员权益")
                     val rights = entitlement()
                     if (token != generation || owner != currentAccount) return@launch
                     val deadline = rights.expiryFor(effect.memberType)
@@ -203,7 +203,7 @@ class OriginalSoundEffectsController internal constructor(
                 permissionFailed(token, restoring, failure.message.orEmpty())
             } catch (failure: ApiException) {
                 if (failure.kind == ErrorKind.NeteaseBindingRequired)
-                    permissionFailed(token, restoring, "网易云登录已失效，请在“我的 → 网易云账号”重新登录")
+                    permissionFailed(token, restoring, "网易云登录已失效，请在“设置 → 账号”重新登录")
                 else if (failure.kind == ErrorKind.Forbidden)
                     permissionFailed(token, restoring, "网易云未授予当前账号此音效的使用权益")
                 else if (token == generation) mutableState.value = state.value.copy(loading = false, permissionPending = false,

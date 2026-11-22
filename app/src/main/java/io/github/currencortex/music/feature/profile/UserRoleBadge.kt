@@ -15,13 +15,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.profile.UserRole
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun UserRoleBadge(role: UserRole?, modifier: Modifier = Modifier) {
     if (role == null) return
-    val tint = if (role == UserRole.SUPER_ADMIN || role == UserRole.OWNER) Color(0xffb78324) else MiuixTheme.colorScheme.primary
+    val tint = if (role == UserRole.SUPER_ADMIN || role == UserRole.OWNER) Color(0xffb78324) else COUITheme.colorScheme.primary
     UserIdentityBadge(role.label, tint, .10f, modifier.testTag("user_role_${role.name.lowercase()}"))
 }
 
@@ -40,7 +40,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         UserTitleBadge(title)
         if (region.isNotEmpty()) Row(Modifier.testTag("user_ip_region").padding(vertical = 2.dp),
             verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-            val color = MiuixTheme.colorScheme.onSurface.copy(alpha = .45f)
+            val color = COUITheme.colorScheme.labelPrimary.copy(alpha = .45f)
             Icon(Icons.Default.LocationOn, null, Modifier.size(12.dp), tint = color)
             Text("IP属地：$region", fontSize = 11.sp, color = color, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -49,7 +49,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable internal fun UserLevelBadge(level: Int?, modifier: Modifier = Modifier) {
     val label = io.github.currencortex.music.data.profile.userLevelLabel(level) ?: return
-    val color = MiuixTheme.colorScheme.primary
+    val color = COUITheme.colorScheme.primary
     UserIdentityBadge(label, color, .08f, modifier.testTag("user_level"))
 }
 

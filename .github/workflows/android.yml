@@ -55,7 +55,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       # ubuntu-24.04 includes these exact Android SDK/NDK/CMake versions.
       # Avoid the expensive, repeated sdkmanager invocation on every CI run.
       - name: Ensure required Android SDK components

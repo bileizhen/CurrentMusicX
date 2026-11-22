@@ -236,7 +236,7 @@ Issues and pull requests are welcome. Describe the problem and what you verified
 
 ## Build from source and test on a device
 
-Use JDK 17 or later, Android SDK Platform 37.0, and Build Tools 35.0.0. Set the SDK path with `ANDROID_HOME` or `sdk.dir` in local `local.properties`.
+Use JDK 21 or later, Android SDK Platform 37.0, and Build Tools 35.0.0. Set the SDK path with `ANDROID_HOME` or `sdk.dir` in local `local.properties`.
 
 On Windows, run the following in PowerShell.
 

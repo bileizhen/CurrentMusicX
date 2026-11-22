@@ -42,11 +42,11 @@ import io.github.currencortex.music.data.settings.LyricsWeight
 import io.github.currencortex.music.data.settings.KaraokeScope
 import io.github.currencortex.music.data.settings.LyricsStyle
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.darkColorScheme
-import top.yukonga.miuix.kmp.theme.ThemeController
-import top.yukonga.miuix.kmp.theme.ColorSchemeMode
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.theme.darkColorScheme
+import io.github.suqi8.coui.kmp.theme.ThemeController
+import io.github.suqi8.coui.kmp.theme.ColorSchemeMode
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -289,7 +289,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
                 else if (pager.currentPage == 0) 1f else -1f },
             pagerScrolling = { pager.isScrollInProgress },
             excludedArea = { controlsCoordinates }, side = {
-                MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
+                COUITheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
                     if (sidePage.direction > 0f) PlayerListeningPage(vm.container, onPlay = sidePage::close,
                         onBinding = { sidePage.close(); onAiNavigate(if (vm.container.activePersonalRoamingIsQq) "qq/account" else "user/binding") },
                         onListening = { sidePage.close(); onAiNavigate("user/listening") },
@@ -307,7 +307,7 @@ internal val PlayerPagePosition = SemanticsPropertyKey<Float>("PlayerPagePositio
             active = expanded && !sidePage.active, dynamicBackground = appearance.playerDynamicBackground,
             motionSpeed = { backgroundSpeed.value })
         // The artwork viewport uses light ink; dialogs below inherit the app appearance.
-        MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
+        COUITheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true, darkColors = colors) }) {
         CompositionLocalProvider(LocalIndication provides indication) {
         CompositionLocalProvider(LocalPlayerPagerArtwork provides pagerArtwork, LocalPlayerCoverMotion provides coverMotion) {
         Box(Modifier.fillMaxSize().onGloballyPositioned { pagerArtwork.root = it; pagerArtwork.updateBounds() }) {

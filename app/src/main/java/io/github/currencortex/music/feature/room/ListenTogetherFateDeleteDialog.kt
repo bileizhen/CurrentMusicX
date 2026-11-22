@@ -13,7 +13,7 @@ import io.github.currencortex.music.ui.component.MusicTextAction
 import io.github.currencortex.music.ui.component.MusicDialogActions
 import io.github.currencortex.music.ui.component.MusicDialogButton
 import io.github.currencortex.music.ui.component.nativeui.SettingsToggle
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Text
 
 @Composable internal fun ListenTogetherFateDeleteDialog(report: ListenTogetherFateReport,
     onDismiss: () -> Unit, onConfirm: (Boolean) -> Unit) {

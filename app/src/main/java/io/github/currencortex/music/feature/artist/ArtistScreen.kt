@@ -21,8 +21,8 @@ import io.github.currencortex.music.feature.library.LibraryViewModel
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.util.collectAsPageState
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable fun ArtistScreen(vm: ArtistViewModel, library: LibraryViewModel, onBack: () -> Unit,
@@ -58,7 +58,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 if (tab == "home") item("hero") { ArtistHero(state.displayArtist, state.fans) { encyclopedia = true } }
                 stickyHeader("tabs") {
                     MusicCategoryTabs(listOf("home" to "音乐", "songs" to "歌曲", "albums" to "专辑", "mvs" to "MV"),
-                        tab, { tab = it }, "artist_tab", Modifier.background(MiuixTheme.colorScheme.background))
+                        tab, { tab = it }, "artist_tab", Modifier.background(COUITheme.colorScheme.background))
                 }
                 state.error?.let { error -> item("main_error") { ArtistSectionError(error, "重试艺人主页", vm::reload, state.loading) } }
                 if (state.loading && state.artist == null) item("loading") { LoadingSongList(4) }

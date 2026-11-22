@@ -27,15 +27,15 @@ import io.github.currencortex.music.data.local.SearchHistoryEntity
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable internal fun SearchLandingContent(history: List<SearchHistoryEntity>, landing: SearchLandingState,
     charts: SearchChartsState, recommendations: List<Song>, recent: List<Song>, onSearch: (String) -> Unit,
     onClearHistory: () -> Unit, onDeleteHistory: (String) -> Unit, onRetryHot: () -> Unit, onRetryCharts: () -> Unit,
     onLoadChart: (String, Boolean) -> Unit, roomSearch: Boolean) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     var expanded by rememberSaveable { mutableStateOf(false) }
     var recommendationOffset by rememberSaveable { mutableIntStateOf(0) }
     Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
@@ -44,22 +44,22 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 SectionTitle("搜索历史", Modifier.weight(1f))
                 if (history.isNotEmpty()) Box(Modifier.size(36.dp).clickable(role = Role.Button, onClick = onClearHistory)
                     .testTag("search_clear_history"), contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Delete, "清空搜索历史", Modifier.size(18.dp), tint = colors.onSurface.copy(alpha = .38f))
+                    Icon(Icons.Default.Delete, "清空搜索历史", Modifier.size(18.dp), tint = colors.labelPrimary.copy(alpha = .38f))
                 }
             }
             if (history.isEmpty()) Text("搜索过的音乐会留在这里", Modifier.padding(top = 10.dp), fontSize = 13.sp,
-                color = colors.onSurface.copy(alpha = .4f))
+                color = colors.labelPrimary.copy(alpha = .4f))
             else FlowRow(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 (if (expanded) history else history.take(3)).forEach { h ->
                     Box(Modifier.widthIn(max = 180.dp).clip(RoundedCornerShape(18.dp))
-                        .background(colors.surfaceContainer).combinedClickable(role = Role.Button,
+                        .background(colors.cardBackground).combinedClickable(role = Role.Button,
                             onClick = { onSearch(h.keyword) }, onLongClick = { onDeleteHistory(h.keyword) }, onLongClickLabel = "删除这条搜索记录")
                         .padding(horizontal = 13.dp, vertical = 8.dp)) {
                         Text(h.keyword, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
-                if (history.size > 3) Box(Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).background(colors.surfaceContainer)
+                if (history.size > 3) Box(Modifier.size(36.dp).clip(RoundedCornerShape(18.dp)).background(colors.cardBackground)
                     .clickable(role = Role.Button) { expanded = !expanded }.testTag("search_history_expand"), contentAlignment = Alignment.Center) {
                     SearchChevron(if (expanded) "收起搜索历史" else "展开搜索历史", Modifier.size(18.dp).graphicsLayer { rotationZ = if (expanded) -90f else 90f })
                 }
@@ -71,7 +71,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 SectionTitle("猜你喜欢", Modifier.weight(1f))
                 Box(Modifier.size(36.dp).clickable(role = Role.Button) { recommendationOffset = (recommendationOffset + 6) % unique.size },
                     contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Refresh, "换一批", Modifier.size(18.dp), tint = colors.onSurface.copy(alpha = .38f))
+                    Icon(Icons.Default.Refresh, "换一批", Modifier.size(18.dp), tint = colors.labelPrimary.copy(alpha = .38f))
                 }
             }
             val offset = recommendationOffset % unique.size
@@ -79,7 +79,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             words.chunked(2).forEach { pair -> Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 pair.forEach { song -> Text(song.name, Modifier.weight(1f).clickable(role = Role.Button) { onSearch(song.name) }
                     .padding(vertical = 9.dp), fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                    color = if (song == words.first()) colors.primary else colors.onSurface.copy(alpha = .78f)) }
+                    color = if (song == words.first()) colors.primary else colors.labelPrimary.copy(alpha = .78f)) }
                 if (pair.size == 1) Spacer(Modifier.weight(1f))
             } }
         }
@@ -134,7 +134,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable private fun SearchRankingCard(title: String, subtitle: String, modifier: Modifier, onOpen: (() -> Unit)? = null,
     content: @Composable ColumnScope.() -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     SettingsGroup(modifier.heightIn(min = 476.dp)) {
     Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp)) {
         Row(Modifier.fillMaxWidth().heightIn(min = 36.dp).then(if (onOpen != null) Modifier.clickable(role = Role.Button, onClick = onOpen) else Modifier),
@@ -142,28 +142,28 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             Text(title, Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (onOpen != null) SearchChevron("查看完整$title", Modifier.size(18.dp))
         }
-        if (subtitle.isNotBlank()) Text(subtitle, Modifier.padding(bottom = 10.dp), fontSize = 13.sp, color = colors.onSurface.copy(alpha = .4f))
+        if (subtitle.isNotBlank()) Text(subtitle, Modifier.padding(bottom = 10.dp), fontSize = 13.sp, color = colors.labelPrimary.copy(alpha = .4f))
         content()
     }
     }
 }
 
 @Composable private fun RankingRow(index: Int, title: String, subtitle: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     SettingsPreference(title, subtitle, modifier, onClick = onClick, leading = {
         Text("${index + 1}", Modifier.width(26.dp), fontSize = 15.sp, fontWeight = FontWeight.Medium,
-            color = if (index < 3) colors.primary else colors.onSurfaceVariantSummary)
+            color = if (index < 3) colors.primary else colors.labelSecondaryVariant)
     })
 }
 
 @Composable internal fun SearchSuggestionsContent(query: String, suggestions: SearchSuggestions, onSearch: (String) -> Unit, modifier: Modifier, header: @Composable () -> Unit = {}) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     LazyColumn(modifier.testTag("search_suggestions"), contentPadding = PaddingValues(horizontal = 20.dp, vertical = 12.dp)) {
         item { header() }
-        item { Text("搜索建议", Modifier.padding(bottom = 8.dp), fontSize = 13.sp, color = colors.onSurface.copy(alpha = .45f)) }
+        item { Text("搜索建议", Modifier.padding(bottom = 8.dp), fontSize = 13.sp, color = colors.labelPrimary.copy(alpha = .45f)) }
         itemsIndexed(suggestions.words, key = { _, word -> word }) { index, word ->
             SettingsPreference(word, modifier = Modifier.testTag("search_suggestion_$index"), onClick = { onSearch(word) },
-                leading = { Icon(MusicIcons.Search, null, Modifier.size(20.dp), tint = colors.onSurfaceVariantSummary) })
+                leading = { Icon(MusicIcons.Search, null, Modifier.size(20.dp), tint = colors.labelSecondaryVariant) })
         }
         if (suggestions.words.isEmpty()) item {
             if (suggestions.loading) LoadingTextList(3, leading = true)
@@ -173,7 +173,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable private fun SearchChevron(description: String, modifier: Modifier) {
-    val ink = MiuixTheme.colorScheme.onSurface.copy(alpha = .38f)
+    val ink = COUITheme.colorScheme.labelPrimary.copy(alpha = .38f)
     Canvas(modifier.semantics { contentDescription = description }) {
         drawLine(ink, Offset(size.width * .35f, size.height * .2f), Offset(size.width * .65f, size.height * .5f), 1.7.dp.toPx(), StrokeCap.Round)
         drawLine(ink, Offset(size.width * .65f, size.height * .5f), Offset(size.width * .35f, size.height * .8f), 1.7.dp.toPx(), StrokeCap.Round)
