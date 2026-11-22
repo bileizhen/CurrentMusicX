@@ -145,12 +145,14 @@ private fun PlayerState.miniTransport() =
                 }
             }) {
             if (pair != null) ListeningPairArtwork(pair, Modifier.fillMaxSize().testTag("mini_pair_artwork")
-                .combinedClickable(onClick = onOpen, onLongClick = onLocateCurrentSong,
+                .combinedClickable(interactionSource = null, indication = null,
+                    onClick = onOpen, onLongClick = onLocateCurrentSong,
                     onLongClickLabel = if (onLocateCurrentSong != null) "定位当前歌曲" else null))
             else MusicCover(song?.cover.orEmpty(), Modifier.size(42.dp).testTag("mini_cover")
                 .playerMotionDiagnostics { this[CoverRotation] = rotation.value }
                 .graphicsLayer { rotationZ = rotation.value; alpha = if (artworkVisible()) 1f else 0f }.clip(CircleShape)
-                .border(2.dp, coverBorder, CircleShape).combinedClickable(onClick = onOpen, onLongClick = onLocateCurrentSong,
+                .border(2.dp, coverBorder, CircleShape).combinedClickable(interactionSource = null, indication = null,
+                    onClick = onOpen, onLongClick = onLocateCurrentSong,
                     onLongClickLabel = if (onLocateCurrentSong != null) "定位当前歌曲" else null))
             }
             Column(Modifier.weight(1f).heightIn(min = 48.dp).padding(horizontal = 8.dp).clip(androidx.compose.foundation.shape.RoundedCornerShape(8.dp))
@@ -163,7 +165,8 @@ private fun PlayerState.miniTransport() =
                             val offset = dragged; dragged = 0f
                             if (allowed && abs(offset) >= threshold) { if (offset < 0f) next() else previous() }
                         })
-                }.combinedClickable(onClick = onOpen, onLongClick = onLocateCurrentSong,
+                }.combinedClickable(interactionSource = null, indication = null,
+                    onClick = onOpen, onLongClick = onLocateCurrentSong,
                     onLongClickLabel = if (onLocateCurrentSong != null) "定位当前歌曲" else null).semantics {
                     if (enabled) customActions = listOf(CustomAccessibilityAction("上一首") { previous(); true }, CustomAccessibilityAction("下一首") { next(); true })
                 }, verticalArrangement = Arrangement.Center) {
@@ -209,7 +212,8 @@ private fun PlayerState.miniTransport() =
 @Composable private fun MiniControl(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
     content: @Composable BoxScope.(androidx.compose.ui.graphics.Color) -> Unit) {
     val ink = COUITheme.colorScheme.labelPrimary.copy(alpha = if (enabled) .9f else .3f)
-    Box(modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+    Box(modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button,
+        interactionSource = null, indication = null, onClick = onClick)
         .semantics { contentDescription = label; if (!enabled) disabled() }, contentAlignment = Alignment.Center) {
         content(ink)
     }

@@ -44,7 +44,8 @@ fun PlainFloatingBar(selected: Int, labels: List<String>, icons: List<ImageVecto
             Column(
                 Modifier.weight(1f).fillMaxHeight().testTag("tab_$index").clip(CircleShape)
                     .background(if (selected == index) tint.copy(alpha = .12f) else Color.Transparent)
-                    .selectable(selected == index, role = Role.Tab, onClick = { onSelect(index) }),
+                    .selectable(selected == index, interactionSource = null, indication = null,
+                        role = Role.Tab, onClick = { onSelect(index) }),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(1.dp, Alignment.CenterVertically),
             ) {
@@ -83,7 +84,8 @@ fun MainSidebar(selected: Int, labels: List<String>, icons: List<ImageVector>, o
             Row(
                 Modifier.fillMaxWidth().height(56.dp).clip(CircleShape)
                     .background(if (selected == index) tint.copy(alpha = .12f) else Color.Transparent)
-                    .selectable(selected == index, role = Role.Tab, onClick = { onSelect(index) })
+                    .selectable(selected == index, interactionSource = null, indication = null,
+                        role = Role.Tab, onClick = { onSelect(index) })
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically,
             ) {

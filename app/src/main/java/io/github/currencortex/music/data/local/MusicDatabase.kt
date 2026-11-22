@@ -19,6 +19,8 @@ import kotlinx.coroutines.flow.Flow
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun cacheLyrics(value: CachedLyrics)
     @Query("SELECT * FROM CachedLyrics WHERE id = :id AND scope = :scope") suspend fun lyrics(id: Long, scope: String = "netease"): CachedLyrics?
     @Query("DELETE FROM CachedLyrics") suspend fun clearLyrics()
+    /** Encoded payload bytes; LENGTH on TEXT counts characters, so cast to BLOB first. */
+    @Query("SELECT COALESCE(SUM(LENGTH(CAST(payload AS BLOB))), 0) FROM CachedLyrics") suspend fun lyricsBytes(): Long
 }
 @Database(entities = [SearchHistoryEntity::class, QueueSnapshotEntity::class, CachedSong::class, CachedLyrics::class], version = 2, exportSchema = true)
 abstract class MusicDatabase : RoomDatabase() {

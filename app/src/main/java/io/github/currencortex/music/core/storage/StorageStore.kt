@@ -36,27 +36,34 @@ data class StorageUsage(
     val total: Long get() = audio + data + downloads + essential
 }
 
+/** Cached lyrics mostly live in the music database rather than cache/lyrics; both are reported. */
 class StorageStore(private val context: Context, private val audioCache: AudioCache,
     private val clearImages: () -> Unit = { coil3.SingletonImageLoader.get(context).let { loader ->
         loader.memoryCache?.clear(); loader.diskCache?.clear()
-    } }) {
+    } },
+    private val databaseLyricsBytes: (suspend () -> Long)? = null,
+    private val clearDatabaseLyrics: (suspend () -> Unit)? = null,
+) {
     /** The audio cache lives under cacheDir but is reported and cleared on its own. */
     private val audioDirName: String get() = File(context.cacheDir, "audio").name
 
     suspend fun measure(): StorageUsage = withContext(Dispatchers.IO) {
         audioCache.refreshUsage()
         val parts = cacheParts()
+        val databaseLyrics = runCatching { databaseLyricsBytes?.invoke() ?: 0L }.getOrDefault(0L)
         val (downloadBytes, downloadCount) = downloads()
         StorageUsage(
             audio = audioCache.bytes.value,
             audioTracks = audioCache.entries.value,
             images = parts.images,
-            lyrics = parts.lyrics,
+            lyrics = parts.lyrics + databaseLyrics,
             shares = parts.shares,
             other = parts.other,
             downloads = downloadBytes,
             downloadCount = downloadCount,
-            essential = essentialBytes(),
+            // 必要文件 measures the whole database directory, which holds the lyrics rows
+            // counted in the lyrics row above; leave them out so no byte is counted twice.
+            essential = (essentialBytes() - databaseLyrics).coerceAtLeast(0L),
         )
     }
 
@@ -85,6 +92,9 @@ class StorageStore(private val context: Context, private val audioCache: AudioCa
      */
     suspend fun clearDataCache(category: DataCacheCategory? = null): Long = withContext(Dispatchers.IO) {
         if (category == null || category == DataCacheCategory.IMAGES) clearImages()
+        if (category == null || category == DataCacheCategory.LYRICS) {
+            runCatching { clearDatabaseLyrics?.invoke() }
+        }
         val files = when (category) {
             null -> cacheEntries().filterNot { isImages(it.name) }
             DataCacheCategory.IMAGES -> emptyList()
@@ -95,7 +105,7 @@ class StorageStore(private val context: Context, private val audioCache: AudioCa
         files.forEach { file ->
             check(file.deleteRecursively() || !file.exists()) { "部分缓存无法清理，请稍后重试" }
         }
-        dataCacheBytes()
+        dataCacheBytes() + runCatching { databaseLyricsBytes?.invoke() ?: 0L }.getOrDefault(0L)
     }
 
     suspend fun clearAudioCache() = audioCache.clear()
