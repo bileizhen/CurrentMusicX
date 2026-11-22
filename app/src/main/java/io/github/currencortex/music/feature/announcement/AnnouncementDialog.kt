@@ -4,7 +4,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
@@ -13,7 +12,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.getValue
@@ -40,7 +38,7 @@ import io.github.currencortex.music.ui.component.MusicDialog
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
-import kotlinx.coroutines.launch
+import io.github.suqi8.coui.kmp.basic.PageIndicator
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.currencortex.music.ui.component.MusicDialogButton as TextButton
 import io.github.suqi8.coui.kmp.theme.COUITheme
@@ -52,7 +50,6 @@ fun AnnouncementDialog(items: List<Announcement>, suppressByDefault: Boolean = f
     if (items.isEmpty()) return
     val context = LocalContext.current
     val pager = rememberPagerState(initialPage = initialIndex.coerceIn(items.indices), pageCount = { items.size })
-    val scope = rememberCoroutineScope()
     val heights = remember(items) { mutableStateMapOf<Int, Int>() }
     var footerMeasured by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
@@ -73,18 +70,11 @@ fun AnnouncementDialog(items: List<Announcement>, suppressByDefault: Boolean = f
     MusicDialog(if (items.size == 1) "公告" else "公告（${items.size}）", dismiss, alignContent = false,
         footer = {
             Column(Modifier.fillMaxWidth().onSizeChanged { footerMeasured = it.height }) {
-                if (items.size > 1) Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically) {
-                    if (items.size <= 7) items.indices.forEach { index ->
-                        Box(Modifier.size(24.dp).semantics { contentDescription = "第${index + 1}条公告" }
-                            .clickable { scope.launch { pager.animateScrollToPage(index) } }, contentAlignment = Alignment.Center) {
-                            Box(Modifier.size(6.dp).background(COUITheme.colorScheme.primary.copy(
-                                alpha = if (pager.currentPage == index) 1f else .2f), RoundedCornerShape(3.dp)))
-                        }
-                    }
-                    Text("${pager.currentPage + 1} / ${items.size}", fontSize = 12.sp,
-                        color = COUITheme.colorScheme.labelSecondaryVariant,
-                        modifier = Modifier.padding(start = 8.dp).testTag("announcement_page"))
+                if (items.size > 1) Row(Modifier.fillMaxWidth().heightIn(min = 24.dp),
+                    horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+                    PageIndicator(pagerState = pager, modifier = Modifier
+                        .semantics { contentDescription = "第${pager.currentPage + 1}条公告，共${items.size}条" }
+                        .testTag("announcement_indicator"))
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     val style = TextStyle(fontSize = 15.sp)
