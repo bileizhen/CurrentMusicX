@@ -112,8 +112,7 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
         item("modes") {
             SettingsSegmentedControl(PlaylistImportMode.entries.map { it.label.removeSuffix("导入") }, state.mode.ordinal, {
                 focus.clearFocus(); keyboard?.hide(); vm.mode(PlaylistImportMode.entries[it])
-            }, enabled = editable, tag = "playlist_import_modes", role = Role.Tab,
-                itemTag = { "playlist_import_tab_${PlaylistImportMode.entries[it].name}" })
+            }, enabled = editable, tag = "playlist_import_modes")
         }
             if (!connected) item {
                 Text(if (account.stale) "网易云登录已过期，请重新登录后导入。" else "登录网易云后即可导入歌单。",
