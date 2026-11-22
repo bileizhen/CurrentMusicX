@@ -213,6 +213,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
     val suppressReadAnnouncements by announcementVm.suppressRead.collectAsStateWithLifecycle()
     val updateRequested by container.updates.dialogVisible.collectAsStateWithLifecycle()
     val updatePrompt by container.updates.prompt.collectAsStateWithLifecycle()
+    val updateState by container.updates.state.collectAsStateWithLifecycle()
     var updateTransitionVisible by remember { mutableStateOf(false) }
     var updateLaunchOrigin by remember { mutableStateOf<io.github.currencortex.music.feature.update.UpdatePageOrigin?>(null) }
     var updatePreviewVersion by rememberSaveable { mutableStateOf(BuildConfig.UPDATE_ANIMATION_PREVIEW_VERSION) }
@@ -797,10 +798,16 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                     }
                 }
                 entry(ABOUT.toString()) {
+                    val storageVm: StorageViewModel = viewModel(key = "about-storage", factory = viewModelFactory {
+                        StorageViewModel(container)
+                    })
                     AboutScreen(onBack = ::navigateBack, enableBlur = settings.blur,
+                        storageVm = storageVm, onStorage = { navigateTo(STORAGE) },
                         onOpenDocument = { navigateTo(it.route()) },
                         onOpenMember = { member, group -> memberFocus = MemberFocus(member, group) },
-                        onSupport = { navigateLibrary(SupportConfig.route) })
+                        onSupport = { navigateLibrary(SupportConfig.route) },
+                        updateState = updateState, onCheckUpdates = { origin -> openUpdates(origin) },
+                        accountName = account.account?.username?.trim()?.takeIf { it.isNotBlank() })
                 }
                 entry(FEEDBACK_ROUTE) {
                     val owner = remember(account.account?.id, sessionRevision) { feedbackVm.owner() }

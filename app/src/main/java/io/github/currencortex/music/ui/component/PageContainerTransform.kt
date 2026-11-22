@@ -33,7 +33,7 @@ internal val LocalPageContainerSettled = compositionLocalOf { true }
 data class PageContainerOrigin(val coordinates: LayoutCoordinates, val color: Color,
     val title: String, val summary: String, val icon: androidx.compose.ui.graphics.vector.ImageVector? = MusicIcons.Download,
     val currentColor: State<Color>? = null, val sourceLayer: GraphicsLayer? = null,
-    val playlistMotion: PlaylistContainerMotion? = null)
+    val playlistMotion: PlaylistContainerMotion? = null, val heroTextMotion: HeroTextMotion? = null)
 
 internal data class PageContainerFrame(val progress: Float, val bounds: Rect, val radius: Float)
 internal val PageContainerGeometry = SemanticsPropertyKey<PageContainerFrame>("PageContainerGeometry")
@@ -59,9 +59,16 @@ private class ContainerClip(private val frame: PageContainerFrame) : Shape {
     DisposableEffect(Unit) { onDispose { report(false) } }
     var destination by remember { mutableStateOf<LayoutCoordinates?>(null) }
     val playlistMotion = origin?.playlistMotion
-    SideEffect { playlistMotion?.let { it.progress = progress; it.viewport = destination } }
+    val heroTextMotion = origin?.heroTextMotion
+    SideEffect {
+        playlistMotion?.let { it.progress = progress; it.viewport = destination }
+        heroTextMotion?.let { it.progress = progress; it.viewport = destination }
+    }
     DisposableEffect(playlistMotion) {
         onDispose { playlistMotion?.let { it.progress = null; it.viewport = null } }
+    }
+    DisposableEffect(heroTextMotion) {
+        onDispose { heroTextMotion?.let { it.progress = null; it.viewport = null } }
     }
     var lastOrigin by remember { mutableStateOf<CapturedOrigin?>(null) }
     var captured by remember(visible) { mutableStateOf<CapturedOrigin?>(null) }
@@ -119,7 +126,8 @@ private class ContainerClip(private val frame: PageContainerFrame) : Shape {
                     alpha = if (source == null) 1f else ((progress.value - .12f) / .5f).coerceIn(0f, 1f)
                 }) {
                     CompositionLocalProvider(LocalPageContainerSettled provides (parentSettled && settled),
-                        LocalPlaylistContainerMotion provides playlistMotion) { content() }
+                        LocalPlaylistContainerMotion provides playlistMotion,
+                        LocalHeroTextMotion provides heroTextMotion) { content() }
                 }
                 source?.let { entry -> entry.layer?.let { layer ->
                     // Reuse the real row's glyphs and layout. A reconstructed ArrowPreference
@@ -141,6 +149,8 @@ private class ContainerClip(private val frame: PageContainerFrame) : Shape {
             }
             // Shared artwork may bow outside the expanding container's clipping bounds.
             playlistMotion?.let { PlaylistMotionOverlay(it) }
+            // Hero texts bow above the container as well, on their way to the destination.
+            heroTextMotion?.let { HeroTextMotionOverlay(it) }
         }
     }
     // Consume repeated back presses until the source card has finished returning.

@@ -48,6 +48,8 @@ import io.github.currencortex.music.core.config.AppMetadata
 import io.github.currencortex.music.core.update.*
 import io.github.currencortex.music.data.update.UpdateSettings
 import io.github.currencortex.music.ui.component.ArtworkGlowPalette
+import io.github.currencortex.music.ui.component.LocalHeroTextMotion
+import io.github.currencortex.music.ui.component.heroTextMotionElement
 import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
 import kotlinx.coroutines.delay
 import io.github.suqi8.coui.kmp.basic.*
@@ -137,6 +139,8 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
         }
     }
     val checking = state == UpdateState.Checking || state == UpdateState.Idle
+    // When the About hero opened this page, its app name and version fly here on a parabola.
+    val heroTextMotion = LocalHeroTextMotion.current
     var expanded by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var menuAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
@@ -224,13 +228,17 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 Column(Modifier.fillMaxWidth().offset(y = heroY)
                     .then(if(heroBackdrop!=null)Modifier.layerBackdrop(heroBackdrop)else Modifier).graphicsLayer {
                     alpha = 1f - detail; scaleX = 1f - .18f * detail; scaleY = scaleX
-                }, horizontalAlignment = Alignment.CenterHorizontally) {
+                }, horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     MorphingVersionNumber(heroVersion, installedVersion,
                         fontSize = if (width < 360.dp) 66.sp else 78.sp, color = pageWhite,
-                        modifier = Modifier.testTag("update_hero_version"))
-                    Text("CurrentMusic", color = pageWhite, fontSize = 25.sp, fontWeight = FontWeight.Light)
+                        modifier = Modifier.testTag("update_hero_version")
+                            .then(heroTextMotionElement(heroTextMotion, 1, destination = true)))
+                    Text("CurrentMusic",
+                        modifier = heroTextMotionElement(heroTextMotion, 0, destination = true),
+                        color = pageWhite, fontSize = 25.sp, fontWeight = FontWeight.Light)
                     Text(versionLabel,
-                        color = pageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp).testTag("update_version_type"))
+                        color = pageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp).testTag("update_version_type"))
                 }
                 val statusShape = RoundedCornerShape((36f - 10f * settled).dp)
                 val bottomSpace = (32f - 12f * settled).dp
