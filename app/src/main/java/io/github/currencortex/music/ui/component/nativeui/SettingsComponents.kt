@@ -24,7 +24,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.state.ToggleableState
@@ -34,15 +36,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.musicScrollPadding
+import io.github.currencortex.music.ui.component.springChainSettingsItems
 import io.github.suqi8.coui.kmp.basic.Card
 import io.github.suqi8.coui.kmp.basic.DropdownItem
 import io.github.suqi8.coui.kmp.basic.HorizontalDivider
 import io.github.suqi8.coui.kmp.basic.Icon
 import io.github.suqi8.coui.kmp.basic.IconButton
 import io.github.suqi8.coui.kmp.basic.Scaffold
+import io.github.suqi8.coui.kmp.basic.COUIScrollBehavior
+import io.github.suqi8.coui.kmp.basic.glowScrollOffsetPx
 import io.github.suqi8.coui.kmp.basic.SmallTopAppBar
 import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.TopAppBar
+import io.github.suqi8.coui.kmp.blur.LayerBackdrop
+import io.github.suqi8.coui.kmp.blur.TopAppBarGlow
+import io.github.suqi8.coui.kmp.blur.isRuntimeShaderSupported
 import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.rememberLayerBackdrop
 import io.github.suqi8.coui.kmp.icon.COUIIcons
 import io.github.suqi8.coui.kmp.icon.basic.ArrowRight
 import io.github.suqi8.coui.kmp.icon.extended.Back
@@ -50,6 +60,8 @@ import io.github.suqi8.coui.kmp.preference.PreferenceCategoryMarginStartType
 import io.github.suqi8.coui.kmp.preference.OverlaySpinnerPreference
 import io.github.suqi8.coui.kmp.preference.SwitchPreference
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.effect.rememberSpringChainState
+import io.github.suqi8.coui.kmp.effect.springChain
 import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
 import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
@@ -62,10 +74,15 @@ internal val LocalSettingsComponents = compositionLocalOf {false}
 
 /** Common settings subpage shell with COUI's native top bar and preference list. */
 @Composable internal fun SettingsPage(title:String,tag:String,onBack:(()->Unit)?=null,
-    subtitle:String?=null,padding:PaddingValues=PaddingValues(16.dp,8.dp,16.dp,32.dp),content:LazyListScope.()->Unit) {
+    subtitle:String?=null,padding:PaddingValues=PaddingValues(16.dp,8.dp,16.dp,32.dp),
+    largeTitle:Boolean=false,content:LazyListScope.()->Unit) {
     SettingsUiScope {
         val backdrop=rememberGlassBackdrop()
         Box(Modifier.fillMaxSize().testTag("settings_page_$tag")) {
+            // This layer records only the flat background, so content may sample it safely.
+            // The scrolling list is recorded separately for the top bar glow; sampling the layer
+            // that records the list from inside the list makes hwui's RenderNode tree reference
+            // itself, and RenderThread overflows its stack while preparing that tree.
             Box(Modifier.matchParentSize().then(if(backdrop!=null)Modifier.layerBackdrop(backdrop)else Modifier)
                 .background(COUITheme.colorScheme.background))
             CompositionLocalProvider(LocalGlassBackdrop provides backdrop) {
@@ -77,6 +94,7 @@ internal val LocalSettingsComponents = compositionLocalOf {false}
                         subtitle=subtitle,
                         padding=padding,
                         modifier=Modifier.widthIn(max=760.dp).fillMaxWidth().fillMaxHeight(),
+                        largeTitle=largeTitle,
                         content=content,
                     )
                 }
@@ -85,41 +103,97 @@ internal val LocalSettingsComponents = compositionLocalOf {false}
     }
 }
 
+/**
+ * The top-bar sample, recorded the way COUI's page scaffold records it: the window fill
+ * under the page, then the content. Sampling a transparent layer makes the downscaled
+ * glow blur step into hard blocks behind high-contrast rows.
+ */
+@Composable private fun rememberGlowBackdrop():LayerBackdrop? {
+    if(android.os.Build.VERSION.SDK_INT<33||!LocalView.current.isHardwareAccelerated||
+        !isRuntimeShaderSupported())return null
+    val background=COUITheme.colorScheme.background
+    return rememberLayerBackdrop {drawRect(background);drawContent()}
+}
+
 @Composable internal fun SettingsNativePage(title:String,tag:String,onBack:(()->Unit)?=null,
     subtitle:String?=null,padding:PaddingValues=PaddingValues(16.dp,8.dp,16.dp,32.dp),
     modifier:Modifier=Modifier,actions:@Composable RowScope.()->Unit={},verticalSpacing:androidx.compose.ui.unit.Dp=16.dp,
     backTag:String="navigate_back",state:LazyListState?=null,
-    contentModifier:Modifier=Modifier,content:LazyListScope.()->Unit) {
+    largeTitle:Boolean=false,contentModifier:Modifier=Modifier,content:LazyListScope.()->Unit) {
     val dispatcher=LocalOnBackPressedDispatcherOwner.current?.onBackPressedDispatcher
     val direction=LocalLayoutDirection.current
     val defaultState=rememberLazyListState()
+    val listState=state ?: defaultState
+    val springChainState=rememberSpringChainState(listState)
+    // Records the list itself for the top bar glow. It is deliberately not exposed through
+    // LocalGlassBackdrop: this layer contains every row, including its glass controls.
+    // The pinned small bar needs it too, otherwise scrolled rows disappear under an opaque band.
+    // COUI's page scaffold records the window fill under the page for this sample; without it
+    // the downscaled glow blur steps visibly where the list is transparent.
+    val glowBackdrop=rememberGlowBackdrop()
+    val scrollBehavior=COUIScrollBehavior()
     SettingsUiScope {
         Scaffold(
             modifier=modifier.fillMaxSize().testTag("settings_page_$tag"),
             containerColor=COUITheme.colorScheme.background,
             contentWindowInsets=WindowInsets(0,0,0,0),
             topBar={
-                SmallTopAppBar(
-                    title=title,
-                    modifier=Modifier.testTag("${tag}_toolbar"),
-                    navigationIcon={
-                        IconButton(
-                            onClick={if(onBack!=null)onBack()else dispatcher?.onBackPressed()},
-                            modifier=Modifier.testTag(backTag),
-                            minWidth=44.dp,
-                            minHeight=44.dp,
-                            cornerRadius=22.dp,
-                        ) { Icon(COUIIcons.Back,contentDescription="返回") }
-                    },
-                    actions=actions,
-                    color=COUITheme.colorScheme.background,
-                    showDivider=false,
-                )
+                val navigationIcon: @Composable () -> Unit = {
+                    IconButton(
+                        onClick={if(onBack!=null)onBack()else dispatcher?.onBackPressed()},
+                        modifier=Modifier.testTag(backTag),
+                        minWidth=44.dp,
+                        minHeight=44.dp,
+                        cornerRadius=22.dp,
+                        // No material: the bar is a transparent glow, and a material button without
+                        // a backdrop falls back to a flat disc that reads as a defect.
+                        material=false,
+                    ) { Icon(COUIIcons.Back,contentDescription="返回") }
+                }
+                // A transparent bar plus frost is COUI 17's material bar; without a backdrop
+                // (no runtime shader) keep the opaque bar as the fallback.
+                val glow: (@Composable androidx.compose.foundation.layout.BoxScope.() -> Unit)? =
+                    if (glowBackdrop != null) {{
+                        TopAppBarGlow(
+                            backdrop=glowBackdrop,
+                            scrollOffsetPx=scrollBehavior.glowScrollOffsetPx(),
+                            isDark=COUITheme.isDark,
+                            baseColor=COUITheme.colorScheme.background,
+                            enabled=true,
+                        )
+                    }} else null
+                val barColor=if (glowBackdrop != null) Color.Transparent else COUITheme.colorScheme.background
+                if (largeTitle) {
+                    TopAppBar(
+                        title=title,
+                        modifier=Modifier.testTag("${tag}_toolbar"),
+                        navigationIcon=navigationIcon,
+                        actions=actions,
+                        color=barColor,
+                        scrollBehavior=scrollBehavior,
+                        glow=glow,
+                        showDivider=false,
+                    )
+                } else {
+                    SmallTopAppBar(
+                        title=title,
+                        modifier=Modifier.testTag("${tag}_toolbar"),
+                        navigationIcon=navigationIcon,
+                        actions=actions,
+                        color=barColor,
+                        scrollBehavior=scrollBehavior,
+                        glow=glow,
+                        showDivider=false,
+                    )
+                }
             },
         ) { inner ->
             LazyColumn(
-                state=state ?: defaultState,
-                modifier=Modifier.fillMaxSize().then(contentModifier).testTag(tag).overScrollVertical(),
+                state=listState,
+                modifier=Modifier.fillMaxSize().then(contentModifier).testTag(tag).overScrollVertical()
+                    .springChain(springChainState)
+                    .then(if(glowBackdrop!=null)Modifier.layerBackdrop(glowBackdrop)else Modifier)
+                    .nestedScroll(scrollBehavior.nestedScrollConnection),
                 contentPadding=musicScrollPadding(PaddingValues(
                     start=padding.calculateStartPadding(direction),
                     top=inner.calculateTopPadding()+padding.calculateTopPadding(),
@@ -129,7 +203,7 @@ internal val LocalSettingsComponents = compositionLocalOf {false}
                 verticalArrangement=Arrangement.spacedBy(verticalSpacing),
             ) {
                 subtitle?.let {item {SettingsHint(it)}}
-                content()
+                springChainSettingsItems(springChainState) { content() }
             }
         }
     }

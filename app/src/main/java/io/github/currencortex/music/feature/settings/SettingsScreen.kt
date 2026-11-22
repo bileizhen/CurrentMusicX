@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -34,6 +35,7 @@ import io.github.currencortex.music.ui.component.LocalPageContainerSource
 import io.github.currencortex.music.ui.component.PageContainerOrigin
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import io.github.currencortex.music.ui.component.rootMotionItems
+import io.github.currencortex.music.ui.component.springChainSettingsItems
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.suqi8.coui.kmp.basic.*
 import io.github.suqi8.coui.kmp.blur.Backdrop
@@ -45,6 +47,8 @@ import io.github.suqi8.coui.kmp.icon.extended.*
 import io.github.suqi8.coui.kmp.preference.ArrowPreference
 import io.github.suqi8.coui.kmp.preference.PreferenceCategory
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.effect.rememberSpringChainState
+import io.github.suqi8.coui.kmp.effect.springChain
 import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
 import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import io.github.suqi8.coui.kmp.utils.overScrollVertical
@@ -84,6 +88,8 @@ fun SettingsScreen(
     var searching by rememberSaveable { mutableStateOf(false) }
     var query by rememberSaveable { mutableStateOf("") }
     val searchState = rememberTopAppBarSearchState(active = searching)
+    val settingsListState = rememberLazyListState()
+    val springChainState = rememberSpringChainState(settingsListState)
     val density = LocalDensity.current
     val titleHeight = 116.dp
     val titleHeightPx = with(density) { titleHeight.toPx() }
@@ -195,15 +201,18 @@ fun SettingsScreen(
                 Box(Modifier.fillMaxSize().layerBackdrop(backdrop)) {
                     if (searchState.isContentVisible) {
                         LazyColumn(
+                            state = settingsListState,
                             modifier = Modifier.fillMaxSize()
                                 .testTag("settings_screen")
                                 .topAppBarSearchContent(searchState)
                                 .overScrollVertical()
+                                .springChain(springChainState)
                                 .nestedScroll(headerConnection),
                             contentPadding = musicScrollPadding(
                                 PaddingValues(16.dp, contentTopPadding + 8.dp, 16.dp, 20.dp)
                             ),
                         ) {
+                            springChainSettingsItems(springChainState) {
                             rootMotionItems {
                                 item {
                                     UpdateSettingsCard(
@@ -329,6 +338,7 @@ fun SettingsScreen(
                                         }
                                     }
                                 }
+                            }
                             }
                         }
                     }
