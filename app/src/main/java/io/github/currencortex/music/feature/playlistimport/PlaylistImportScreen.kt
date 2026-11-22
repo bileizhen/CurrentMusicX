@@ -39,8 +39,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun PlaylistImportScreen(vm: PlaylistImportViewModel, onBack: () -> Unit,
     onLogin: () -> Unit, onPlaylist: (Long) -> Unit) {
@@ -70,7 +70,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         lifecycle.lifecycle.addObserver(observer)
         onDispose { lifecycle.lifecycle.removeObserver(observer) }
     }
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val connected = account.loggedIn && !account.stale
     val editable = connected && !state.busy && !state.imagesLoading && state.task == null
     val clipboard = LocalClipboardManager.current
@@ -93,13 +93,13 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 if (connected) Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text("网易云 · ${account.profile?.nickname.orEmpty()}", fontSize = 11.sp,
-                        color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        color = colors.labelSecondaryVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     if (state.mode != PlaylistImportMode.IMAGES) Row(Modifier.fillMaxWidth().heightIn(min = 32.dp),
                         verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text("加入「我喜欢」", Modifier.weight(1f), fontSize = 13.sp,
-                            color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            color = colors.labelSecondaryVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         GlassSwitch(state.importStar, vm::importStar, enabled = editable, modifier = Modifier.testTag("playlist_import_star"))
-                    } else Text("保存到所选歌单", fontSize = 13.sp, color = colors.onSurfaceVariantSummary,
+                    } else Text("保存到所选歌单", fontSize = 13.sp, color = colors.labelSecondaryVariant,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 GlassActionButton(if (!connected) "登录网易云后导入" else if (state.busy) "正在提交…" else "开始导入", {
@@ -117,7 +117,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         }
             if (!connected) item {
                 Text(if (account.stale) "网易云登录已过期，请重新登录后导入。" else "登录网易云后即可导入歌单。",
-                    fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+                    fontSize = 14.sp, color = colors.labelSecondaryVariant)
             }
             run {
                 if (state.task == null) {
@@ -136,18 +136,18 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                             if (state.links.size < 10) item {
                                 ImportTextAction("＋ 添加其他链接", vm::addLink, editable, Modifier.testTag("playlist_import_add_link"))
                             }
-                            item { Text("最多 10 个链接，支持歌单、个人主页和文章。", fontSize = 12.sp, color = colors.onSurfaceVariantSummary) }
+                            item { Text("最多 10 个链接，支持歌单、个人主页和文章。", fontSize = 12.sp, color = colors.labelSecondaryVariant) }
                         }
                         PlaylistImportMode.TEXT -> item {
                             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                 ImportStep(1, "粘贴歌曲文字")
-                                Text("每行一首，使用“歌名 - 歌手”更容易识别。", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                                Text("每行一首，使用“歌名 - 歌手”更容易识别。", fontSize = 13.sp, color = colors.labelSecondaryVariant)
                                 BasicTextField(state.text, vm::text, enabled = editable,
-                                    textStyle = TextStyle(fontSize = 15.sp, color = colors.onBackground), cursorBrush = SolidColor(colors.primary),
+                                    textStyle = TextStyle(fontSize = 15.sp, color = colors.labelPrimary), cursorBrush = SolidColor(colors.primary),
                                     modifier = Modifier.fillMaxWidth().heightIn(min = 220.dp).clip(RoundedCornerShape(20.dp))
-                                        .background(colors.surfaceContainer).padding(18.dp).testTag("playlist_import_text"),
-                                    decorationBox = { inner -> if (state.text.isEmpty()) Text("歌名 - 歌手\n歌名 - 歌手", fontSize = 15.sp, color = colors.onSurfaceVariantSummary); inner() })
-                                Text("支持多首歌曲，网易云会自动匹配。", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                                        .background(colors.cardBackground).padding(18.dp).testTag("playlist_import_text"),
+                                    decorationBox = { inner -> if (state.text.isEmpty()) Text("歌名 - 歌手\n歌名 - 歌手", fontSize = 15.sp, color = colors.labelSecondaryVariant); inner() })
+                                Text("支持多首歌曲，网易云会自动匹配。", fontSize = 12.sp, color = colors.labelSecondaryVariant)
                             }
                         }
                         PlaylistImportMode.IMAGES -> {
@@ -155,9 +155,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     ImportStep(1, "选择歌单图片")
                                     Text("选择歌单截图或歌曲列表图片，最多 9 张，每张不超过 8 MB。",
-                                        fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+                                        fontSize = 14.sp, color = colors.labelSecondaryVariant)
                                     Text("点击开始导入后，会将所选图片上传到网易云识别，并将歌曲加入你选择的歌单。",
-                                        fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+                                        fontSize = 14.sp, color = colors.labelSecondaryVariant)
                                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                         Text(if (state.imagesLoading) "正在读取图片…" else "已选择 ${state.images.size} / 9 张",
                                             Modifier.weight(1f).testTag("playlist_import_image_count"), fontSize = 14.sp)
@@ -183,7 +183,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                         MusicTextAction(if (state.targetsLoading) "读取中…" else "刷新", vm::loadTargets,
                                             Modifier.testTag("playlist_import_reload_targets"), enabled = editable && !state.targetsLoading)
                                     }
-                                    Text("请选择一个你可编辑的网易云歌单。", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                                    Text("请选择一个你可编辑的网易云歌单。", fontSize = 13.sp, color = colors.labelSecondaryVariant)
                                     state.targetsError?.let { Text(it, fontSize = 13.sp, color = colors.error) }
                                     if (state.targetsLoaded && state.targets.isEmpty()) Text("暂无可编辑的歌单，请先在网易云创建歌单，再返回刷新。",
                                         fontSize = 14.sp, modifier = Modifier.testTag("playlist_import_targets_empty"))
@@ -196,7 +196,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                                 .testTag("playlist_import_target_${target.id}").padding(vertical = 12.dp),
                                                 verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                                 Text(target.name, Modifier.weight(1f), fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                                                Text(if (selected) "✓" else "○", color = if (selected) colors.primary else colors.onSurfaceVariantSummary)
+                                                Text(if (selected) "✓" else "○", color = if (selected) colors.primary else colors.labelSecondaryVariant)
                                             }
                                         }
                                     }
@@ -208,7 +208,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                     ImportStep(1, "选择本地歌曲")
                                     Text("扫描后选择要匹配的歌曲。开始导入时仅发送所选歌曲信息，不上传音频文件。",
-                                        fontSize = 14.sp, color = colors.onSurfaceVariantSummary)
+                                        fontSize = 14.sp, color = colors.labelSecondaryVariant)
                                     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                                         MusicTextAction(if (state.scanning) "扫描中…" else if (state.scanned) "重新扫描" else "扫描本地音乐", {
                                             permissionError = null
@@ -231,12 +231,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                                         Row(Modifier.fillMaxWidth().selectable(selected, enabled = editable, role = Role.Checkbox, onClick = { vm.select(song) })
                                             .padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically,
                                             horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                            Box(Modifier.size(28.dp).clip(CircleShape).background(if (selected) colors.primary else colors.surfaceContainer), contentAlignment = Alignment.Center) {
-                                                Text(if (selected) "✓" else "", color = colors.onPrimary, fontSize = 16.sp)
+                                            Box(Modifier.size(28.dp).clip(CircleShape).background(if (selected) colors.primary else colors.cardBackground), contentAlignment = Alignment.Center) {
+                                                Text(if (selected) "✓" else "", color = colors.labelOnColor, fontSize = 16.sp)
                                             }
                                             Column(Modifier.weight(1f)) {
                                                 Text(song.name, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                                                Text(song.artists, fontSize = 12.sp, color = colors.onSurfaceVariantSummary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                                Text(song.artists, fontSize = 12.sp, color = colors.labelSecondaryVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                                             }
                                         }
                                     }
@@ -250,7 +250,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         Text(if (state.result?.finished == true) "导入结果" else "导入处理中",
                             fontSize = 18.sp, fontWeight = FontWeight.Medium)
                         state.message?.let { Text(it, fontSize = 14.sp, modifier = Modifier.testTag("playlist_import_status")) }
-                        Text("任务已提交到网易云，离开页面不会撤回任务。", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                        Text("任务已提交到网易云，离开页面不会撤回任务。", fontSize = 12.sp, color = colors.labelSecondaryVariant)
                         if (state.result?.finished != true) MusicDialogButton(if (state.busy) "正在查询进度…" else "刷新进度", vm::refresh,
                             Modifier.testTag("playlist_import_refresh"), enabled = !state.busy)
                         state.result?.playlistIds.orEmpty().forEachIndexed { index, id ->
@@ -274,19 +274,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable private fun ImportLinkField(value: String, onValue: (String) -> Unit, label: String, enabled: Boolean,
     onPaste: () -> Unit, onRemove: (() -> Unit)?, modifier: Modifier, tag: String) {
-    val colors = MiuixTheme.colorScheme
-    Column(modifier.clip(RoundedCornerShape(18.dp)).background(colors.surfaceContainer)
+    val colors = COUITheme.colorScheme
+    Column(modifier.clip(RoundedCornerShape(18.dp)).background(colors.cardBackground)
         .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-            Text(label, Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.onSurfaceVariantSummary)
+            Text(label, Modifier.weight(1f), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.labelSecondaryVariant)
             ImportTextAction("粘贴", onPaste, enabled)
             onRemove?.let { ImportTextAction("删除", it, enabled, Modifier.testTag("${tag}_remove")) }
         }
         BasicTextField(value, onValue, enabled = enabled, singleLine = true,
             modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).testTag(tag),
-            textStyle = TextStyle(color = colors.onBackground, fontSize = 15.sp), cursorBrush = SolidColor(colors.primary),
+            textStyle = TextStyle(color = colors.labelPrimary, fontSize = 15.sp), cursorBrush = SolidColor(colors.primary),
             decorationBox = { inner -> if (value.isEmpty()) Text("粘贴链接或整段分享内容", fontSize = 14.sp,
-                color = colors.onSurfaceVariantSummary.copy(alpha = .65f), maxLines = 1, overflow = TextOverflow.Ellipsis); inner() })
+                color = colors.labelSecondaryVariant.copy(alpha = .65f), maxLines = 1, overflow = TextOverflow.Ellipsis); inner() })
     }
 }

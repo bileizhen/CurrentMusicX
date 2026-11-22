@@ -33,8 +33,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.data.netease.tasks.*
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -46,7 +46,7 @@ import java.time.format.DateTimeFormatter
     val options by vm.options.collectAsStateWithLifecycle()
     val busy by vm.automation.busy.collectAsStateWithLifecycle()
     val action by vm.currentAction.collectAsStateWithLifecycle()
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val connected = account.loggedIn && !account.stale
     val list = remember(state.group) { LazyListState() }
     var expandedLogs by rememberSaveable(account.profile?.uid) { mutableStateOf(false) }
@@ -60,7 +60,7 @@ import java.time.format.DateTimeFormatter
         item("account") { SettingsGroup {
             SettingsPreference(account.profile?.nickname ?: "尚未登录网易云",
                 if (connected) "本机直连" else "需要本机登录", leading = {
-                    Box(Modifier.size(8.dp).background(if (connected) colors.primary else colors.onSurfaceVariantSummary, CircleShape))
+                    Box(Modifier.size(8.dp).background(if (connected) colors.primary else colors.labelSecondaryVariant, CircleShape))
                 })
         } }
         if (connected) item("categories") {
@@ -72,7 +72,7 @@ import java.time.format.DateTimeFormatter
                 SettingsGroup(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text(if (account.stale) "网易云登录已过期" else "连接网易云账号", fontSize = 18.sp, fontWeight = FontWeight.Medium)
-                        Text("登录后查看任务、签到和已完成的奖励。", fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                        Text("登录后查看任务、签到和已完成的奖励。", fontSize = 13.sp, color = colors.labelSecondaryVariant)
                         TaskAction(if (account.stale) "重新登录网易云" else "登录网易云", onLogin, Modifier.testTag("tasks_login"), primary = true)
                     }
                 }
@@ -93,13 +93,13 @@ import java.time.format.DateTimeFormatter
                                 }, Modifier.weight(1f), fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
                                 if (done) Text("今日已签到", fontSize = 11.sp, color = colors.primary)
                             }
-                            state.page?.summary?.let { Text(it, fontSize = 13.sp, color = colors.onSurfaceVariantSummary) }
+                            state.page?.summary?.let { Text(it, fontSize = 13.sp, color = colors.labelSecondaryVariant) }
                             if (state.page == null) Text(when (kind) {
                                 NeteaseCheckIn.DAILY -> "每天签到，继续积累听歌经验"
                                 NeteaseCheckIn.YUNBEI -> "查看云贝余额与任务进度"
                                 NeteaseCheckIn.VIP -> "黑胶乐签与会员成长值"
                                 NeteaseCheckIn.MUSICIAN -> "需要已认证的网易云音乐人账号"
-                            }, fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                            }, fontSize = 13.sp, color = colors.labelSecondaryVariant)
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
                                 TaskAction(if (action == NeteaseTaskAction.SIGN) "签到中…" else if (done) "已签到" else "签到",
                                     { vm.sign(kind) }, Modifier.testTag("tasks_sign"), primary = !done,
@@ -129,7 +129,7 @@ import java.time.format.DateTimeFormatter
                     SettingsGroup(Modifier.fillMaxWidth()) {
                         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text("暂时无法读取${state.group.title}任务", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text(error, fontSize = 12.sp, lineHeight = 18.sp, color = colors.onSurfaceVariantSummary)
+                            Text(error, fontSize = 12.sp, lineHeight = 18.sp, color = colors.labelSecondaryVariant)
                             TaskAction("重新加载", vm::refresh, Modifier.testTag("tasks_retry"), enabled = !busy && !state.loading)
                         }
                     }
@@ -138,11 +138,11 @@ import java.time.format.DateTimeFormatter
                     if (state.group != NeteaseTaskGroup.DAILY) {
                         item { Row(Modifier.fillMaxWidth().padding(start = 2.dp, end = 2.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text("任务进度", Modifier.weight(1f), fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                            Text("${page.items.size} 项", fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                            Text("${page.items.size} 项", fontSize = 12.sp, color = colors.labelSecondaryVariant)
                         } }
                         if (page.items.isEmpty()) item {
                             Text("暂无可展示的任务，可能未开通对应权益。", Modifier.padding(4.dp).testTag("tasks_empty"),
-                                fontSize = 13.sp, lineHeight = 20.sp, color = colors.onSurfaceVariantSummary)
+                                fontSize = 13.sp, lineHeight = 20.sp, color = colors.labelSecondaryVariant)
                         }
                     }
                     items(page.items, key = { it.id }) { item ->
@@ -150,7 +150,7 @@ import java.time.format.DateTimeFormatter
                             Column(Modifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(item.title, fontSize = 15.sp, fontWeight = FontWeight.Medium)
                                 if (item.detail.isNotBlank()) Text(item.detail, fontSize = 12.sp, lineHeight = 18.sp,
-                                    maxLines = 3, overflow = TextOverflow.Ellipsis, color = colors.onSurfaceVariantSummary)
+                                    maxLines = 3, overflow = TextOverflow.Ellipsis, color = colors.labelSecondaryVariant)
                                 if (item.progress != "以网易云任务状态为准") Text(item.progress, fontSize = 11.sp, color = colors.primary)
                                 if (item.destination.isNotBlank()) MusicTextAction("去听日推", { onNavigate(item.destination) })
                             }
@@ -173,7 +173,7 @@ import java.time.format.DateTimeFormatter
                                         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                                             Text(log.label, Modifier.weight(1f), fontSize = 12.sp, lineHeight = 18.sp)
                                             Text(DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault())
-                                                .format(Instant.ofEpochMilli(log.time)), fontSize = 10.sp, color = colors.onSurfaceVariantSummary)
+                                                .format(Instant.ofEpochMilli(log.time)), fontSize = 10.sp, color = colors.labelSecondaryVariant)
                                         }
                                     }
                                 }
@@ -182,7 +182,7 @@ import java.time.format.DateTimeFormatter
                     }
                 }
                 item { Text("进度与奖励由网易云确认；听歌任务按实际播放统计。", Modifier.padding(horizontal = 2.dp, vertical = 4.dp),
-                    fontSize = 11.sp, lineHeight = 17.sp, color = colors.onSurfaceVariantSummary) }
+                    fontSize = 11.sp, lineHeight = 17.sp, color = colors.labelSecondaryVariant) }
             }
         }
     }

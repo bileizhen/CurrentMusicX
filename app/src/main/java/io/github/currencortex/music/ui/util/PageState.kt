@@ -6,7 +6,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.flow.StateFlow
 
-/** MIUIX NavDisplay keeps moving scenes STARTED and resumes them only once settled.
+/** Navigation 3 NavDisplay keeps moving scenes STARTED and resumes them only once settled.
  * Hold dataset updates during that motion to avoid replacing skeletons/remeasuring lists mid-frame.
  * Cached initial content stays visible, and predictive-back cancellation resumes the same page.
  */

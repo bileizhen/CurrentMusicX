@@ -34,7 +34,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.TextUnit
 import io.github.currencortex.music.data.song.Song
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Text
 import kotlin.math.round
 
 internal enum class PlayerPagerArtworkRole { COVER, LYRICS, QUEUE }

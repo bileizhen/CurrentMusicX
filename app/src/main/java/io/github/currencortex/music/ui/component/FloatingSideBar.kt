@@ -39,9 +39,9 @@ import androidx.compose.ui.semantics.SemanticsPropertyKey
 import io.github.currencortex.music.ui.component.miuix.animation.DampedDragAnimation
 import io.github.currencortex.music.ui.component.nativeui.ElasticPress
 import io.github.currencortex.music.ui.theme.isInDarkTheme
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.roundToInt
 
 /** The page and mini player reserve this strip; the actual floating panel is narrower. */
@@ -58,7 +58,7 @@ internal val LocalMusicSideWaterDrop = staticCompositionLocalOf<(@Composable
     val dark = isInDarkTheme()
     val shape = remember { RoundedCornerShape(32.dp) }
     val selectionShape = remember { RoundedCornerShape(26.dp) }
-    val primary = MiuixTheme.colorScheme.primary
+    val primary = COUITheme.colorScheme.primary
     val scroll = rememberScrollState()
     val density = LocalDensity.current
     val waterDrop = LocalMusicSideWaterDrop.current
@@ -171,7 +171,7 @@ internal val LocalMusicSideWaterDrop = staticCompositionLocalOf<(@Composable
             val pressed by interactions.collectIsPressedAsState()
             val scale = animateFloatAsState(if (pressed) .94f else 1f,
                 tween(if (pressed) 90 else 150), label = "side tab press")
-            val tint = animateColorAsState(if (selected == index) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurface,
+            val tint = animateColorAsState(if (selected == index) COUITheme.colorScheme.primary else COUITheme.colorScheme.labelPrimary,
                 tween(180), label = "side tab tint")
             Column(Modifier.fillMaxWidth().height(itemHeight)
                 .then(if (mirror) Modifier else Modifier.testTag("tab_$index").clip(shape)

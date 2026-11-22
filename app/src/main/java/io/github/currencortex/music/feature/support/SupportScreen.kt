@@ -15,9 +15,9 @@ import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.util.showMusicError
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable
 fun SupportScreen(onBack: () -> Unit, afdianUrl: String = SupportConfig.afdianUrl,
@@ -34,8 +34,8 @@ fun SupportScreen(onBack: () -> Unit, afdianUrl: String = SupportConfig.afdianUr
                     Image(appIcon, "CurrentMusic 图标", Modifier.size(64.dp))
                     Text("CurrentMusic", fontSize = 26.sp, fontWeight = FontWeight.SemiBold)
                     Text("CurrentMusic 由独立开发者持续维护。如果你喜欢这款音乐播放器，欢迎通过自愿赞助支持项目的开发与维护。",
-                        fontSize = 15.sp, lineHeight = 23.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
-                    Text("开发者 · bileizhen", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                        fontSize = 15.sp, lineHeight = 23.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
+                    Text("开发者 · bileizhen", fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
                 }
             }
         }

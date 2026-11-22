@@ -19,7 +19,7 @@ import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalDensity
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.theme.LocalCustomTypeface
-import top.yukonga.miuix.kmp.theme.Colors
+import io.github.suqi8.coui.kmp.theme.Colors
 
 @Composable internal fun rememberCurrentMusicPreviewRenderer(): CurrentMusicPreviewRenderer {
     val font = LocalCustomTypeface.current
@@ -45,7 +45,7 @@ internal class CurrentMusicPreviewRenderer(font: Typeface?, private val fontScal
 
     fun draw(scope: DrawScope, colors: Colors, floating: Boolean, glass: Boolean, selected: Int,
         previous: Int? = null, progress: Float = 1f, extent: Size = scope.size,
-        paper: Color = colors.background, card: Color = colors.surfaceContainer,
+        paper: Color = colors.background, card: Color = colors.cardBackground,
         primary: Color = colors.primary, fade: Boolean = false) = with(scope) {
         val factor = extent.width / Width
         val height = extent.height / factor
@@ -74,13 +74,13 @@ internal class CurrentMusicPreviewRenderer(font: Typeface?, private val fontScal
                 page(selected, direction * Width * (1 - progress))
             }
             scene.dock(height, selected, floating, glass)
-            drawRoundRect(colors.onSurface.copy(alpha = .3f), Offset(142f, height - 8f), Size(76f, 3f), CornerRadius(2f))
+            drawRoundRect(colors.labelPrimary.copy(alpha = .3f), Offset(142f, height - 8f), Size(76f, 3f), CornerRadius(2f))
         }
     }
 
     private inner class Scene(val scope: DrawScope, val c: Colors, val card: Color, val accent: Color) {
-        private val ink = c.onSurface
-        private val muted = c.onSurfaceVariantSummary
+        private val ink = c.labelPrimary
+        private val muted = c.labelSecondaryVariant
         private val nav = listOf("home", "discover", "me", "settings")
         private val labels = listOf("首页", "发现", "我的", "设置")
         private fun text(value: String, x: Float, y: Float, size: Float, color: Color = ink,
@@ -138,7 +138,7 @@ internal class CurrentMusicPreviewRenderer(font: Typeface?, private val fontScal
             panel(20f, 424f, 320f, 64f)
             text("私人漫游", 36f, 450f, 16f)
             text("按你的喜好，连续听点好音乐", 36f, 470f, 12f, muted, maxWidth = 235f)
-            drawCircle(accent, 19f, Offset(305f, 456f)); play(300f, 448f, 16f, c.onPrimary)
+            drawCircle(accent, 19f, Offset(305f, 456f)); play(300f, 448f, 16f, c.labelOnColor)
             panel(20f, 502f, 320f, 76f)
             val shortcutIcons = listOf("heart", "list", "mic", "headphones")
             listOf("我喜欢", "歌单", "听歌识曲", "一起听").forEachIndexed { index, title ->
@@ -162,7 +162,7 @@ internal class CurrentMusicPreviewRenderer(font: Typeface?, private val fontScal
             panel(16f, 72f, 328f, 44f, radius = 22f)
             panel(20f, 76f, 80f, 36f, accent, 18f)
             listOf("音乐", "用户", "帖子", "Chat").forEachIndexed { i, title ->
-                text(title, 60f + i * 80, 101f, 15f, if (i == 0) c.onPrimary else muted,
+                text(title, 60f + i * 80, 101f, 15f, if (i == 0) c.labelOnColor else muted,
                     strong = i == 0, align = AndroidPaint.Align.CENTER, maxWidth = 74f)
             }
             panel(16f, 152f, 328f, 124f, radius = 20f)

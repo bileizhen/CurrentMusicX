@@ -41,8 +41,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.*
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.*
 
 /** Viewing is available on public profiles too; changing the image remains owner-only. */
 @Composable internal fun AvatarPreviewDialog(user: ProfileUser, container: AppContainer,
@@ -80,7 +80,7 @@ import top.yukonga.miuix.kmp.theme.*
             } }
             onDispose { }
         }
-        MiuixTheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true) }) {
+        COUITheme(controller = remember { ThemeController(colorSchemeMode = ColorSchemeMode.Dark, isDark = true) }) {
             Column(Modifier.fillMaxSize().background(Color.Black).safeDrawingPadding().testTag("avatar_preview")) {
                 Box(Modifier.padding(start = 12.dp, top = 8.dp).size(48.dp)
                     .clickable(role = Role.Button, onClick = onDismiss)

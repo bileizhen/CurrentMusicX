@@ -3,6 +3,7 @@ package io.github.currencortex.music.ui.theme
 import android.content.Context
 import android.graphics.Typeface
 import android.net.Uri
+import androidx.core.content.res.ResourcesCompat
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
@@ -24,6 +25,12 @@ private fun fontFile(context: Context, name: String): File? =
     name.takeIf { validName.matches(it) }?.let { File(context.filesDir, "custom-fonts/$it") }
 
 internal fun loadCustomTypeface(context: Context, name: String): Typeface? = when {
+    name == BUILT_IN_OPPO_FONT -> runCatching {
+        ResourcesCompat.getFont(context, io.github.currencortex.music.R.font.oppo_sans_regular)
+    }.getOrNull()
+    name == BUILT_IN_WENKAI_FONT -> runCatching {
+        ResourcesCompat.getFont(context, io.github.currencortex.music.R.font.lxgw_wenkai_regular)
+    }.getOrNull()
     name.startsWith(SYSTEM_FONT_PREFIX) -> name.removePrefix(SYSTEM_FONT_PREFIX)
         .takeIf { it.isNotBlank() }?.let(::loadSystemTypeface)
     else -> fontFile(context, name)?.takeIf { it.isFile }

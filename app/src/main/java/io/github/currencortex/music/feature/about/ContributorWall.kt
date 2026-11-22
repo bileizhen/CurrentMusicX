@@ -77,7 +77,7 @@ import io.github.currencortex.music.core.config.AboutCredit
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.abs
 import kotlin.math.atan2
 import kotlin.math.max
@@ -231,8 +231,8 @@ internal fun ContributorWall(
                                 translationY = bubble.position.y
                             }
                             .clip(CircleShape)
-                            .background(MiuixTheme.colorScheme.surface)
-                            .border(1.dp, MiuixTheme.colorScheme.onSurface.copy(alpha = .12f), CircleShape)
+                            .background(COUITheme.colorScheme.cardBackground)
+                            .border(1.dp, COUITheme.colorScheme.labelPrimary.copy(alpha = .12f), CircleShape)
                             .clickable(role = Role.Button) { onSelect(credit) }
                             .semantics { contentDescription = credit.member.name },
                         contentAlignment = Alignment.Center,

@@ -29,8 +29,8 @@ import io.github.currencortex.music.data.library.MvDto
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.library.LibraryDetailState
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun MvDetailScreen(state: LibraryDetailState, container: AppContainer, onBack: () -> Unit,
     onPlay: (MvDto) -> Unit, onArtist: (Long) -> Unit, onRefresh: () -> Unit,
@@ -55,7 +55,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable internal fun MvDetailContent(state: LibraryDetailState, downloadLabel: String, onBack: () -> Unit,
     onPlay: () -> Unit, onDownload: () -> Unit, onArtist: () -> Unit, onRetry: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize().background(colors.background).statusBarsPadding().navigationBarsPadding()
         .testTag("mv_detail")) {
         val wide = maxWidth >= 720.dp
@@ -80,11 +80,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 }
             } else if (state.loading) {
                 MusicPlaceholder(Modifier.widthIn(max = 640.dp).fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(24.dp)))
-                Text("正在加载 MV…", Modifier.padding(24.dp), fontSize = 14.sp, color = colors.onSurface.copy(alpha = .55f))
+                Text("正在加载 MV…", Modifier.padding(24.dp), fontSize = 14.sp, color = colors.labelPrimary.copy(alpha = .55f))
             } else Column(Modifier.fillMaxWidth().padding(vertical = 72.dp), horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 Text("暂时无法打开 MV", fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
-                Text(state.error ?: "未找到视频信息", fontSize = 14.sp, color = colors.onSurface.copy(alpha = .6f))
+                Text(state.error ?: "未找到视频信息", fontSize = 14.sp, color = colors.labelPrimary.copy(alpha = .6f))
                 TextButton("重新加载", onRetry, Modifier.testTag("mv_detail_retry"))
             }
         }
@@ -93,7 +93,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable private fun MvDetailCover(mv: MvDto, onPlay: () -> Unit, modifier: Modifier) {
     Box(modifier.aspectRatio(16f / 9f).clip(RoundedCornerShape(24.dp))
-        .background(MiuixTheme.colorScheme.onSurface.copy(alpha = .08f))
+        .background(COUITheme.colorScheme.labelPrimary.copy(alpha = .08f))
         .clickable(role = Role.Button, onClick = onPlay).testTag("mv_detail_cover")) {
         // Keep the original video thumbnail ratio; album artwork requests use square crops.
         AsyncImage(mv.cover, null, Modifier.matchParentSize(), contentScale = ContentScale.Crop)
@@ -113,7 +113,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 @Composable private fun MvDetailInfo(mv: MvDto, downloadLabel: String, onPlay: () -> Unit,
     onDownload: () -> Unit, onArtist: () -> Unit, modifier: Modifier) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     var expanded by rememberSaveable(mv.id) { mutableStateOf(false) }
     var overflows by remember(mv.id) { mutableStateOf(false) }
     Column(modifier, verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -121,19 +121,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         if (mv.artistName.isNotBlank()) Row(Modifier.heightIn(min = 44.dp).clip(RoundedCornerShape(8.dp))
             .clickable(enabled = mv.artistId > 0, role = Role.Button, onClick = onArtist).testTag("mv_detail_artist"),
             verticalAlignment = Alignment.CenterVertically) {
-            Text(mv.artistName, Modifier.weight(1f, fill = false), fontSize = 15.sp, color = colors.onSurface.copy(alpha = .6f))
-            if (mv.artistId > 0) Text("›", Modifier.padding(start = 8.dp), fontSize = 20.sp, color = colors.onSurface.copy(alpha = .4f))
+            Text(mv.artistName, Modifier.weight(1f, fill = false), fontSize = 15.sp, color = colors.labelPrimary.copy(alpha = .6f))
+            if (mv.artistId > 0) Text("›", Modifier.padding(start = 8.dp), fontSize = 20.sp, color = colors.labelPrimary.copy(alpha = .4f))
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp, bottom = 16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             TextButton("播放 MV", onPlay, Modifier.weight(1f).testTag("play_mv"),
-                colors = ButtonDefaults.textButtonColors(color = colors.primary, textColor = colors.onPrimary))
+                colors = ButtonDefaults.textButtonColors(color = colors.primary, textColor = colors.labelOnColor))
             TextButton(downloadLabel, onDownload, Modifier.weight(1f).testTag("mv_detail_download"))
         }
         mv.desc?.trim()?.takeIf { it.isNotBlank() }?.let { description ->
-            HorizontalDivider(color = colors.onSurface.copy(alpha = .08f))
+            HorizontalDivider(color = colors.labelPrimary.copy(alpha = .08f))
             Text("视频简介", Modifier.padding(top = 14.dp, bottom = 4.dp), fontSize = 16.sp, fontWeight = FontWeight.Medium)
             Column(Modifier.animateContentSize()) {
-                Text(description, fontSize = 14.sp, lineHeight = 23.sp, color = colors.onSurface.copy(alpha = .6f),
+                Text(description, fontSize = 14.sp, lineHeight = 23.sp, color = colors.labelPrimary.copy(alpha = .6f),
                     maxLines = if (expanded) Int.MAX_VALUE else 5, overflow = TextOverflow.Ellipsis,
                     onTextLayout = { if (!expanded) overflows = it.hasVisualOverflow }, modifier = Modifier.testTag("mv_detail_description"))
                 if (overflows || expanded) MusicTextAction(if (expanded) "收起简介" else "展开简介", { expanded = !expanded }, Modifier.testTag("mv_detail_expand"))

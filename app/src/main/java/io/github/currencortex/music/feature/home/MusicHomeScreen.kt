@@ -19,8 +19,8 @@ import io.github.currencortex.music.data.library.Playlist
 import io.github.currencortex.music.data.profile.ProfileUser
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.core.network.ErrorKind
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -133,7 +133,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
             } }
             if (!dailyLoading && home.forYou.isEmpty()) item(key = "for-you-empty") {
                 Text(if (home.errors["每日推荐"] != null) "推荐暂时不可用，稍后重试" else "暂无推荐，先从每日精选开始听",
-                    fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                    fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
             }
             item(key = "recommended-playlists-header") { SettingsListHeader("每日推荐歌单") }
             if (recommendedPlaylistsLoading && home.recommendedPlaylists.isEmpty())
@@ -156,7 +156,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
                         MusicTextAction("连接网易云音乐，获取每日推荐歌单 ›", { navigate("user/binding") })
                     error != null -> MusicTextAction("歌单推荐暂时不可用，重新加载", vm::refresh, enabled = !home.loading)
                     home.recommendedPlaylists.isEmpty() -> Text("今天暂无推荐歌单，稍后再来看看",
-                        fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                        fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                 }
             }
             item(key = "recent-header") { HomeSectionHeader("最近播放", "全部") { navigate("lib/recent") } }
@@ -168,7 +168,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
             }
             if ("最近播放" in home.pendingSections && home.recent.isEmpty()) item { LoadingSongList(count = 2) }
             if ((!account.loading || direct) && "最近播放" !in home.pendingSections && home.recent.isEmpty() && home.errors["最近播放"] == null)
-                item { Text("听过的音乐，会留在这里", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f)) }
+                item { Text("听过的音乐，会留在这里", fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f)) }
             item(key = "playlists-header") { HomeSectionHeader("我的歌单", "管理") { navigate("lib/playlists") } }
             home.errors["我的歌单"]?.let { item { Text(it, fontSize = 13.sp) } }
             if ("我的歌单" in home.pendingSections && home.playlists.isEmpty()) item { LoadingArtworkCards(artworkCardWidth) }
@@ -182,7 +182,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
                 }
             } }
             if ((!account.loading || direct) && "我的歌单" !in home.pendingSections && home.playlists.isEmpty() && home.errors["我的歌单"] == null)
-                item { Text("把喜欢的音乐，收进自己的歌单", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f)) }
+                item { Text("把喜欢的音乐，收进自己的歌单", fontSize = 13.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f)) }
             item(key = "refresh") { MusicTextAction(if (home.loading) "正在更新音乐库…" else "刷新音乐库", vm::refresh,
                 Modifier.fillMaxWidth().testTag("refresh_home"), !home.loading) }
             account.error?.let { item { Text(it, fontSize = 13.sp) } }
@@ -225,7 +225,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
         SettingsPreference(if (qqMusic) "猜你喜欢" else "私人漫游",
             if (qqMusic) "推荐歌曲" else "按你的喜好，连续听点好音乐",
             Modifier.testTag("open_personal_roaming"), onClick = onOpen,
-            leading = { Icon(MusicIcons.Headphones, null, Modifier.size(24.dp), tint = MiuixTheme.colorScheme.primary) },
+            leading = { Icon(MusicIcons.Headphones, null, Modifier.size(24.dp), tint = COUITheme.colorScheme.primary) },
             trailing = { MusicTransportButton(if (qqMusic) "播放推荐歌曲" else "打开私人漫游", onOpen) })
     }
 }

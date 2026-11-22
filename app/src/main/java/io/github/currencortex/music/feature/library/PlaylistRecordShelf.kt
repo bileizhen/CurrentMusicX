@@ -39,17 +39,17 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.Backdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.currencortex.music.feature.update.UpdateGlassButton
 import io.github.currencortex.music.feature.update.rememberUpdateBackdrop
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.data.settings.RecordShelfPreviewMode
 import kotlinx.coroutines.flow.Flow
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.TextField
 
 @Composable internal fun PlaylistRecordShelf(songs: List<Song>, canPlay: Boolean,
     onPlay: (Int) -> Unit, onClose: () -> Unit,

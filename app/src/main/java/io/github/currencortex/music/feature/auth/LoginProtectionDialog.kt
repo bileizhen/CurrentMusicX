@@ -30,9 +30,9 @@ import io.github.currencortex.music.ui.component.MusicDialogButton
 import io.github.currencortex.music.ui.component.SettingsSwitch
 import io.github.currencortex.music.ui.component.nativeui.*
 import kotlinx.coroutines.*
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.TextField
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 private fun Context.activity(): Activity? = when (this) {
     is Activity -> this
@@ -183,7 +183,7 @@ private fun <T> AppResult<T>.valueOrThrow(): T = when (this) {
                         }
                     }
                 }
-                error?.let { Text(it, color = MiuixTheme.colorScheme.error, modifier = Modifier.testTag("security_error")) }
+                error?.let { Text(it, color = COUITheme.colorScheme.error, modifier = Modifier.testTag("security_error")) }
                 if (busy) Text("正在处理…")
             }
         }

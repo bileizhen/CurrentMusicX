@@ -23,11 +23,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.Switch
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.blur.*
-import top.yukonga.miuix.kmp.theme.LocalContentColor
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Switch
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.blur.*
+import io.github.suqi8.coui.kmp.theme.LocalContentColor
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Update-specific layout using the same material, actions and choices as every app dialog. */
 @Composable internal fun UpdateOptionsDialog(title: String, summary: String? = null,
@@ -35,8 +35,8 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     actions: (@Composable RowScope.() -> Unit)? = null, choiceLayout: Boolean = false,
     content: @Composable ColumnScope.() -> Unit) {
     val colors = musicDialogColors()
-    MiuixTheme(colors = colors) {
-        CompositionLocalProvider(LocalContentColor provides colors.onBackground, LocalGlassBackdrop provides backdrop) {
+    COUITheme(colors = colors) {
+        CompositionLocalProvider(LocalContentColor provides colors.labelPrimary, LocalGlassBackdrop provides backdrop) {
         MusicOverlayDialog(show = true, onDismissRequest = onDismiss, onDismissFinished = onDismissFinished,
             matchPanelMotion = true,
             backgroundColor = Color.Transparent, insideMargin = DpSize(0.dp, 0.dp),
@@ -48,10 +48,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 else Modifier.padding(24.dp))
                 .testTag("update_options_sheet")) {
                 Text(title, Modifier.fillMaxWidth().padding(horizontal = if (choiceLayout) 24.dp else 0.dp).testTag("update_options_title"),
-                    color = colors.onBackground, fontSize = 20.sp, lineHeight = 27.sp,
+                    color = colors.labelPrimary, fontSize = 20.sp, lineHeight = 27.sp,
                     fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
                 summary?.let {
-                    Text(it, color = colors.onSurfaceVariantSummary, fontSize = 14.sp, lineHeight = 22.sp,
+                    Text(it, color = colors.labelSecondaryVariant, fontSize = 14.sp, lineHeight = 22.sp,
                         modifier = Modifier.padding(horizontal = if (choiceLayout) 24.dp else 0.dp).padding(top = 12.dp))
                 }
                 Column(Modifier.fillMaxWidth()
@@ -87,19 +87,19 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable internal fun UpdateAutoCheckRow(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
     val press = rememberMusicDialogPress()
     val clickInteractions = remember { MutableInteractionSource() }
-    val ink = MiuixTheme.colorScheme.onBackground
+    val ink = COUITheme.colorScheme.labelPrimary
     Row(Modifier.fillMaxWidth().testTag("update_auto_check")
         .drawBehind { drawRect(ink.copy(alpha = .06f * press.amount.value)) }
         .musicDialogRowPress(press)
         .toggleable(checked, role = Role.Switch, interactionSource = clickInteractions, indication = null, onValueChange = onCheckedChange)
         .heightIn(min = 48.dp).padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("启动时自动检查", color = MiuixTheme.colorScheme.onBackground, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        Text("启动时自动检查", color = COUITheme.colorScheme.labelPrimary, fontSize = 15.sp, modifier = Modifier.weight(1f))
         Spacer(Modifier.width(12.dp))
         GlassSwitch(checked, null, pressed = press.amount.value > .1f)
     }
 }
 
 @Composable internal fun UpdateOptionSectionLabel(label: String) {
-    Text(label, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 13.sp,
+    Text(label, color = COUITheme.colorScheme.labelSecondaryVariant, fontSize = 13.sp,
         modifier = Modifier.padding(start = 24.dp, top = 12.dp, end = 24.dp, bottom = 4.dp))
 }

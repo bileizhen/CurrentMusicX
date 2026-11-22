@@ -43,9 +43,9 @@ import io.github.currencortex.music.ui.component.nativeui.GlassIconButton
 import io.github.currencortex.music.ui.component.nativeui.ElasticPress
 import io.github.currencortex.music.ui.component.nativeui.GlassButtonGroup
 import io.github.currencortex.music.ui.component.nativeui.GlassGroupIconButton
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Only literal query matches receive accent ink; metadata stays readable in both themes. */
 internal fun searchMatchText(text: String, query: String, accent: Color): AnnotatedString {
@@ -80,7 +80,7 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
     onNext: () -> Unit, onQueue: () -> Unit, lyric: SearchLyricContext? = null,
     quickActions: (@Composable () -> Unit)? = null, extraActions: (@Composable () -> Unit)? = null,
     compactActions: Boolean = false, retryLyric: () -> Unit = {}) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val request = LocalRoomSongRequest.current
     val pending = request?.pending?.invoke(song.id) == true
     val primary = { if (request != null) request.request(song) else onPlay() }
@@ -112,19 +112,19 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
                     if (song.mv > 0) Text("MV", fontSize = 9.sp, color = colors.primary,
                         modifier = Modifier.background(colors.primary.copy(alpha = .08f)).padding(horizontal = 3.dp, vertical = 1.dp))
                     Text(searchMatchText(subtitle, query, colors.primary.copy(alpha = .8f)), fontSize = 12.sp,
-                        color = colors.onSurface.copy(alpha = .5f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        color = colors.labelPrimary.copy(alpha = .5f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.testTag("search_result_subtitle_${song.id}"))
                 }
             }
             val lyricBlock = @Composable {
                 lyric?.let { match ->
-                    if (match.before != null || match.status == null) Text(match.before ?: "……", fontSize = 12.sp, color = colors.onSurface.copy(alpha = .58f),
+                    if (match.before != null || match.status == null) Text(match.before ?: "……", fontSize = 12.sp, color = colors.labelPrimary.copy(alpha = .58f),
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.testTag("search_lyric_before_${song.id}"))
                     Text(searchMatchText(lyricMatchWindow(match.matched, query), query, colors.primary), fontSize = 12.sp,
-                        color = colors.onSurface.copy(alpha = .58f), maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        color = colors.labelPrimary.copy(alpha = .58f), maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.testTag("search_lyric_${song.id}"))
-                    if (match.after != null || match.status == null) Text(match.after ?: "……", fontSize = 12.sp, color = colors.onSurface.copy(alpha = .58f),
+                    if (match.after != null || match.status == null) Text(match.after ?: "……", fontSize = 12.sp, color = colors.labelPrimary.copy(alpha = .58f),
                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.testTag("search_lyric_after_${song.id}"))
                     val status = when (match.status) {
@@ -135,7 +135,7 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
                         "single_line" -> "完整歌词仅有一句"
                         else -> null
                     }
-                    status?.let { Text(it, fontSize = 12.sp, color = colors.onSurface.copy(alpha = .58f)) }
+                    status?.let { Text(it, fontSize = 12.sp, color = colors.labelPrimary.copy(alpha = .58f)) }
                     if (match.retryable) Text("重试前后文", fontSize = 12.sp, color = colors.primary,
                         modifier = Modifier.clickable(role = Role.Button, onClick = retryLyric)
                             .testTag("retry_lyric_${song.id}").padding(vertical = 8.dp))
@@ -172,15 +172,15 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
 
 /** Show the translated title when it explains a Chinese hit; retain the original for identification. */
 @Composable private fun SearchSongTitles(song: Song, query: String, active: Boolean) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val word = query.trim()
     val translated = song.alternateNames.firstOrNull { name ->
         word.isNotEmpty() && name.contains(word, ignoreCase = true)
     }
     Text(searchMatchText(translated ?: song.name, query, colors.primary), fontSize = 16.sp, fontWeight = FontWeight.Medium,
-        color = if (active) colors.primary else colors.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis,
+        color = if (active) colors.primary else colors.labelPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis,
         modifier = Modifier.testTag("search_result_title_${song.id}"))
-    if (translated != null) Text(song.name, fontSize = 12.sp, color = colors.onSurface.copy(alpha = .55f),
+    if (translated != null) Text(song.name, fontSize = 12.sp, color = colors.labelPrimary.copy(alpha = .55f),
         maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.testTag("search_result_original_${song.id}"))
 }
 
@@ -216,7 +216,7 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
 }
 
 @Composable internal fun SearchResultsToolbar(count: Int, total: Int, onPlayAll: () -> Unit, onQueueAll: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Row(Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.weight(1f).heightIn(min = 48.dp).clickable(role = Role.Button, onClick = onPlayAll)
             .testTag("search_play_all"), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -225,7 +225,7 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
             }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text("播放全部", fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                Text("已加载 $count 首 · 共 $total 首", fontSize = 10.sp, color = colors.onSurface.copy(alpha = .4f))
+                Text("已加载 $count 首 · 共 $total 首", fontSize = 10.sp, color = colors.labelPrimary.copy(alpha = .4f))
             }
         }
         SearchResultIconAction(MusicIcons.List, "将已加载的 $count 首歌曲加入队列", Modifier.testTag("search_queue_all"), onClick = onQueueAll)
@@ -234,10 +234,10 @@ internal fun lyricMatchWindow(text: String, query: String, limit: Int = 24): Str
 
 @Composable private fun SearchResultIconAction(icon: ImageVector, description: String, modifier: Modifier = Modifier,
     enabled: Boolean = true, accent: Boolean = false, grouped: Boolean = false, onClick: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val content: @Composable () -> Unit = {
         Icon(icon, null, Modifier.size(21.dp),
-            tint = (if (accent) colors.primary else colors.onSurfaceVariantSummary).let { it.copy(alpha = it.alpha * if (enabled) 1f else .38f) })
+            tint = (if (accent) colors.primary else colors.labelSecondaryVariant).let { it.copy(alpha = it.alpha * if (enabled) 1f else .38f) })
     }
     if (grouped) GlassGroupIconButton(onClick, description, modifier, enabled = enabled, content = content)
     else GlassIconButton(onClick, description, modifier, enabled = enabled, content = content)

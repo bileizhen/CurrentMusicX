@@ -23,7 +23,6 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import io.github.currencortex.music.feature.lyrics.data.SongLyricsStore
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -33,8 +32,7 @@ import io.github.currencortex.music.core.media.PlayerState
 import io.github.currencortex.music.core.media.ListenTogetherPair
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlin.math.abs
@@ -111,7 +109,7 @@ private fun PlayerState.miniTransport() =
     val pair = state.listenTogether
     val rotation = LocalPlayerArtworkRotation.current ?: rememberCoverRotation(song?.id, active && pair == null && state.playing && song?.video != true)
     val coverAngle by rememberUpdatedState(rotation)
-    val coverBorder = MiuixTheme.colorScheme.onSurface.copy(alpha = .85f)
+    val coverBorder = COUITheme.colorScheme.labelPrimary.copy(alpha = .85f)
     val borderColor by rememberUpdatedState(coverBorder)
     val loading = state.loading
     val openAreas = remember { arrayOfNulls<Rect>(2) }
@@ -169,11 +167,11 @@ private fun PlayerState.miniTransport() =
                     onLongClickLabel = if (onLocateCurrentSong != null) "定位当前歌曲" else null).semantics {
                     if (enabled) customActions = listOf(CustomAccessibilityAction("上一首") { previous(); true }, CustomAccessibilityAction("下一首") { next(); true })
                 }, verticalArrangement = Arrangement.Center) {
-                val artistColor = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f)
+                val artistColor = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f)
                 MiniPlayerSongText(song?.name ?: "等待房间点歌", Modifier.fillMaxWidth().testTag("mini_title")
                     .then(if (active) Modifier else Modifier.clearAndSetSemantics {}).graphicsLayer {
                     translationX = dragged.coerceIn(-threshold * 2, threshold * 2) * .15f
-                }, color = MiuixTheme.colorScheme.onSurface, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                }, color = COUITheme.colorScheme.labelPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 val lyric = if (currentMatches) miniPlayerLyric(vm, songKey, song?.id, state.mode, active) else ""
                 MiniPlayerSongText(lyric.ifBlank { subtitle }, Modifier.fillMaxWidth().testTag("mini_lyric")
                     .then(if (active) Modifier else Modifier.clearAndSetSemantics {}).graphicsLayer {
@@ -210,7 +208,7 @@ private fun PlayerState.miniTransport() =
 
 @Composable private fun MiniControl(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true,
     content: @Composable BoxScope.(androidx.compose.ui.graphics.Color) -> Unit) {
-    val ink = MiuixTheme.colorScheme.onSurface.copy(alpha = if (enabled) .9f else .3f)
+    val ink = COUITheme.colorScheme.labelPrimary.copy(alpha = if (enabled) .9f else .3f)
     Box(modifier.size(48.dp).clickable(enabled = enabled, role = Role.Button, onClick = onClick)
         .semantics { contentDescription = label; if (!enabled) disabled() }, contentAlignment = Alignment.Center) {
         content(ink)

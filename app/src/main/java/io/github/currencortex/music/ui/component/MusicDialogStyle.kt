@@ -36,9 +36,9 @@ import io.github.currencortex.music.ui.component.nativeui.LocalLiquidGlassEnable
 import io.github.currencortex.music.ui.component.nativeui.LocalGlassBlurEnabled
 import io.github.currencortex.music.ui.component.nativeui.LiquidGlassOpticsKey
 import io.github.currencortex.music.ui.component.nativeui.glassSurface
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.blur.*
-import top.yukonga.miuix.kmp.theme.*
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.blur.*
+import io.github.suqi8.coui.kmp.theme.*
 
 internal val MusicDialogShape = RoundedCornerShape(32.dp)
 internal val LocalMusicDialogBackdrop = staticCompositionLocalOf<LayerBackdrop?> { null }
@@ -46,9 +46,9 @@ internal val LocalMusicDialogEdgeToEdge = staticCompositionLocalOf { false }
 
 @Composable internal fun musicDialogColors() = if (isInDarkTheme())
     darkColorScheme(primary = Color(0xFF6BA5FF), background = Color(0xFF292A2D),
-        surface = Color(0xFF37383C), onBackground = Color(0xFFF5F5F7))
+        surface = Color(0xFF37383C), labelPrimary = Color(0xFFF5F5F7))
 else lightColorScheme(primary = Color(0xFF3485FF), background = Color(0xFFF2F3F5),
-    surface = Color.White, onBackground = Color(0xFF17181B))
+    surface = Color.White, labelPrimary = Color(0xFF17181B))
 
 @Composable internal fun musicDialogFallbackColor() = if (isInDarkTheme()) Color(0xF22C2D30) else Color(0xDDF2F3F5)
 
@@ -117,10 +117,10 @@ private fun Modifier.frostedMusicDialog(backdrop: Backdrop, dark: Boolean, shape
 @Composable fun MusicDialogChoiceRow(label: String, selected: Boolean, onClick: () -> Unit,
     modifier: Modifier = Modifier, summary: String? = null, enabled: Boolean = true, showDivider: Boolean = true,
     leadingContent: (@Composable () -> Unit)? = null) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     if(io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents.current) {
         io.github.currencortex.music.ui.component.nativeui.SettingsChoiceRow(label,selected,onClick,
-            modifier.drawBehind {if(showDivider)drawLine(colors.onBackground.copy(alpha=.06f),
+            modifier.drawBehind {if(showDivider)drawLine(colors.labelPrimary.copy(alpha=.06f),
                 Offset((if(leadingContent==null)16.dp else 52.dp).toPx(),size.height),
                 Offset(size.width-16.dp.toPx(),size.height),.5.dp.toPx())},summary,enabled,leadingContent)
         return
@@ -130,8 +130,8 @@ private fun Modifier.frostedMusicDialog(backdrop: Backdrop, dark: Boolean, shape
     val clicks = remember { MutableInteractionSource() }
     val progress = animateFloatAsState(if (selected) 1f else 0f, tween(180), label = "dialog choice ring")
     Row(modifier.fillMaxWidth().drawBehind {
-        drawRect(colors.onBackground.copy(alpha = .06f * press.amount.value))
-        if (showDivider) drawLine(colors.onBackground.copy(alpha = if (dark) .065f else .045f),
+        drawRect(colors.labelPrimary.copy(alpha = .06f * press.amount.value))
+        if (showDivider) drawLine(colors.labelPrimary.copy(alpha = if (dark) .065f else .045f),
             Offset(24.dp.toPx(), size.height), Offset(size.width - 24.dp.toPx(), size.height), .5.dp.toPx())
     }.then(if (enabled) Modifier.musicDialogRowPress(press) else Modifier)
         .selectable(selected, enabled = enabled, role = Role.RadioButton, interactionSource = clicks, indication = null, onClick = onClick)
@@ -141,17 +141,17 @@ private fun Modifier.frostedMusicDialog(backdrop: Backdrop, dark: Boolean, shape
             Spacer(Modifier.width(12.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(label, color = colors.onBackground.copy(alpha = if (enabled) 1f else .4f), fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            summary?.let { Text(it, color = colors.onSurfaceVariantSummary.copy(alpha = if (enabled) 1f else .4f), fontSize = 12.sp, lineHeight = 18.sp) }
+            Text(label, color = colors.labelPrimary.copy(alpha = if (enabled) 1f else .4f), fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            summary?.let { Text(it, color = colors.labelSecondaryVariant.copy(alpha = if (enabled) 1f else .4f), fontSize = 12.sp, lineHeight = 18.sp) }
         }
         Spacer(Modifier.width(16.dp))
         Canvas(Modifier.size(20.dp)) {
             val stroke = 1.5.dp.toPx()
-            drawCircle(colors.onSurfaceVariantSummary.copy(alpha = if (dark) .32f else .27f),
+            drawCircle(colors.labelSecondaryVariant.copy(alpha = if (dark) .32f else .27f),
                 radius = (size.minDimension - stroke) / 2, style = Stroke(stroke))
             val fraction = progress.value
             if (fraction > 0f) {
-                val ring = androidx.compose.ui.graphics.lerp(colors.primary, colors.onBackground, .12f)
+                val ring = androidx.compose.ui.graphics.lerp(colors.primary, colors.labelPrimary, .12f)
                 drawCircle(ring.copy(alpha = .78f * fraction * if (enabled) 1f else .4f),
                     radius = size.minDimension / 2 * (.75f + .25f * fraction))
                 drawCircle(Color.White.copy(alpha = fraction), radius = 6.dp.toPx() * (.75f + .25f * fraction))

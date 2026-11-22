@@ -22,7 +22,7 @@ import io.github.currencortex.music.ui.component.MusicDialogButton
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.MusicTextAction
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.TextField
+import io.github.suqi8.coui.kmp.basic.TextField
 
 /** Sources and connections only; playback and other settings each have one owner. */
 @Composable fun MusicSettingsScreen(vm: MusicSettingsViewModel, onNavidrome: () -> Unit = {}, onEmby: () -> Unit = {},

@@ -5,6 +5,7 @@ package io.github.currencortex.music.feature.settings
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.github.currencortex.music.ui.component.MusicDialogActions
@@ -12,8 +13,8 @@ import io.github.currencortex.music.ui.component.MusicDialogButton
 import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
 import io.github.currencortex.music.ui.component.nativeui.LocalSettingsComponents
 import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDialog
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.TextField
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.TextField
 import kotlin.math.roundToInt
 
 @Composable
@@ -42,6 +43,8 @@ fun ScaleDialog(show: Boolean, viewModel: SettingsViewModel, onDismiss: () -> Un
 }
 
 @Composable
-internal fun SettingIcon(icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Icon(icon, contentDescription = null, modifier = (if(LocalSettingsComponents.current)Modifier else Modifier.padding(end=12.dp)).size(24.dp))
+internal fun SettingIcon(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color? = null) {
+    val modifier = (if(LocalSettingsComponents.current)Modifier else Modifier.padding(end=12.dp)).size(24.dp)
+    if (tint != null) Icon(icon, contentDescription = null, modifier = modifier, tint = tint)
+    else Icon(icon, contentDescription = null, modifier = modifier)
 }

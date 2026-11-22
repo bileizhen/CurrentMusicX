@@ -16,9 +16,9 @@ import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.runtime.remember
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun HomeLibraryShortcuts(navigate: (String) -> Unit, inRoom: Boolean,
     likesRoute: String = "lib/likes", playlistsRoute: String = "lib/playlists",
@@ -42,7 +42,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         indication = null, onClick = onClick)) {
     Column(Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 2.dp, vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(7.dp)) {
-        Icon(icon, null, Modifier.size(23.dp), tint = MiuixTheme.colorScheme.primary)
+        Icon(icon, null, Modifier.size(23.dp), tint = COUITheme.colorScheme.primary)
         Text(title, fontSize = 12.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     }

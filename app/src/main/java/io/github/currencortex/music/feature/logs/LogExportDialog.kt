@@ -19,9 +19,9 @@ import io.github.currencortex.music.core.logging.DiagnosticExporter
 import io.github.currencortex.music.ui.component.MusicIcons
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.*
+import io.github.suqi8.coui.kmp.basic.*
 import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDialog
-import top.yukonga.miuix.kmp.preference.ArrowPreference
+import io.github.suqi8.coui.kmp.preference.ArrowPreference
 
 @Composable
 fun LogExportDialog(

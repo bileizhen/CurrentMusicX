@@ -28,6 +28,8 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
@@ -46,13 +48,21 @@ import io.github.currencortex.music.core.config.AppMetadata
 import io.github.currencortex.music.core.update.*
 import io.github.currencortex.music.data.update.UpdateSettings
 import io.github.currencortex.music.ui.component.ArtworkGlowPalette
+import io.github.currencortex.music.ui.component.LocalHeroTextMotion
+import io.github.currencortex.music.ui.component.heroTextMotionElement
 import io.github.currencortex.music.ui.component.rememberArtworkGlowPalette
 import kotlinx.coroutines.delay
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.theme.LocalContentColor
-import top.yukonga.miuix.kmp.theme.darkColorScheme
-import top.yukonga.miuix.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.basic.Button
+import io.github.suqi8.coui.kmp.basic.ButtonDefaults
+import io.github.suqi8.coui.kmp.basic.ButtonMaterial
+import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.extended.Back
+import io.github.suqi8.coui.kmp.icon.extended.More
+import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.theme.LocalContentColor
+import io.github.suqi8.coui.kmp.theme.darkColorScheme
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
 
 private val pageWhite = Color(0xFFF7F4FF)
@@ -129,19 +139,26 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
         }
     }
     val checking = state == UpdateState.Checking || state == UpdateState.Idle
+    // When the About hero opened this page, its app name and version fly here on a parabola.
+    val heroTextMotion = LocalHeroTextMotion.current
     var expanded by rememberSaveable { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     var menuAnchor by remember { mutableStateOf<androidx.compose.ui.geometry.Rect?>(null) }
-    var activeMenuPath by remember { mutableStateOf<List<String>>(emptyList()) }
+    var sourceMenuOpen by remember { mutableStateOf(false) }
     var menuDragging by remember { mutableStateOf(false) }
-    var menuAutoCheck by remember { mutableStateOf(settings.autoCheckOnLaunch) }
-    var menuChannel by remember { mutableStateOf(settings.channel) }
+    val menuAutoCheck = remember { mutableStateOf(settings.autoCheckOnLaunch) }
+    val menuChannel = remember { mutableStateOf(settings.channel) }
     LaunchedEffect(settings.autoCheckOnLaunch,settings.channel) {
-        menuAutoCheck=settings.autoCheckOnLaunch;menuChannel=settings.channel
+        menuAutoCheck.value=settings.autoCheckOnLaunch;menuChannel.value=settings.channel
     }
     val currentTransfer by rememberUpdatedState(transferState)
-    val sourceHealth = rememberUpdateSourceHealth(release, settings.channel,
-        { menu && activeMenuPath.contains("update_menu_action_1") }, sourceCheck)
+    val sourceHealth = rememberUpdateSourceHealth(release, settings.channel, sourceMenuOpen, sourceCheck)
+    LaunchedEffect(menu) {
+        if (!menu) {
+            sourceMenuOpen = false
+            menuDragging = false
+        }
+    }
     var orderedMenuSources by remember(settings.channel) { mutableStateOf(UpdateSource.forChannel(settings.channel)) }
     LaunchedEffect(sourceHealth.toMap(), menuDragging, settings.channel) {
         if (!menuDragging) orderedMenuSources = UpdateSource.forChannel(settings.channel).sortedByHealth(sourceHealth)
@@ -157,7 +174,7 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     val detail by animateFloatAsState(if (expanded) 1f else 0f, tween(600, easing = FastOutSlowInEasing), label = "update_details_morph")
     val notesScroll = rememberScrollState()
     val artworkPalette by rememberArtworkGlowPalette(cover)
-    val accent = MiuixTheme.colorScheme.primary
+    val accent = COUITheme.colorScheme.primary
     val palette = if (cover.isBlank()) ArtworkGlowPalette(accent.toArgb(),
         androidx.compose.ui.graphics.lerp(accent, Color(0xFFFF9FFC), .4f).toArgb()) else artworkPalette
     BackHandler {
@@ -170,12 +187,11 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
     }
     val sceneBackdrop = rememberUpdateBackdrop()
     val heroBackdrop = rememberUpdateBackdrop()
-    val titleBackdrop = rememberUpdateBackdrop()
-    val glassBackdrop = if(sceneBackdrop!=null&&heroBackdrop!=null&&titleBackdrop!=null)
-        rememberCombinedBackdrop(rememberCombinedBackdrop(sceneBackdrop,heroBackdrop),titleBackdrop)else sceneBackdrop
-    val colors = remember { darkColorScheme(primary = Color(0xFF0A84FF), onBackground = pageWhite,
-        background = Color(0xFF100D29), surface = Color(0xFF201C35), surfaceContainer = Color(0xFF29253F)) }
-    MiuixTheme(colors = colors) {
+    val glassBackdrop = if(sceneBackdrop!=null&&heroBackdrop!=null)
+        rememberCombinedBackdrop(sceneBackdrop,heroBackdrop)else sceneBackdrop
+    val colors = remember { darkColorScheme(primary = Color(0xFF0A84FF), labelPrimary = pageWhite,
+        background = Color(0xFF100D29), surface = Color(0xFF201C35), surfaceContainerHighest = Color(0xFF29253F)) }
+    COUITheme(colors = colors) {
     CompositionLocalProvider(LocalContentColor provides pageWhite, LocalGlassBackdrop provides glassBackdrop) {
     Box(Modifier.fillMaxSize().testTag("update_page").background(Color(0xFF0A0A0A))
         .pointerInput(Unit) { detectTapGestures {
@@ -196,11 +212,11 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 val fontScale = LocalDensity.current.fontScale
                 val compact = height < 400.dp
                 val targetHeight = when {
-                    transferState.download is UpdateDownloadState.Ready -> 222.dp
-                    busy -> 248.dp
-                    release != null -> 192.dp
-                    state is UpdateState.Failed -> 236.dp
-                    else -> 192.dp
+                    transferState.download is UpdateDownloadState.Ready -> 246.dp
+                    busy -> 272.dp
+                    release != null -> 216.dp
+                    state is UpdateState.Failed -> 260.dp
+                    else -> 216.dp
                 } + (80 * (fontScale - 1).coerceAtLeast(0f)).dp
                 val summaryHeight by animateDpAsState(targetHeight
                     .coerceAtMost((height - 24.dp).coerceAtLeast(120.dp)), tween(480), label = "update_transfer_card_height")
@@ -212,21 +228,26 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
                 Column(Modifier.fillMaxWidth().offset(y = heroY)
                     .then(if(heroBackdrop!=null)Modifier.layerBackdrop(heroBackdrop)else Modifier).graphicsLayer {
                     alpha = 1f - detail; scaleX = 1f - .18f * detail; scaleY = scaleX
-                }, horizontalAlignment = Alignment.CenterHorizontally) {
+                }, horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     MorphingVersionNumber(heroVersion, installedVersion,
                         fontSize = if (width < 360.dp) 66.sp else 78.sp, color = pageWhite,
-                        modifier = Modifier.testTag("update_hero_version"))
-                    Text("CurrentMusic", color = pageWhite, fontSize = 25.sp, fontWeight = FontWeight.Light)
+                        modifier = Modifier.testTag("update_hero_version")
+                            .then(heroTextMotionElement(heroTextMotion, 1, destination = true)))
+                    Text("CurrentMusic",
+                        modifier = heroTextMotionElement(heroTextMotion, 0, destination = true),
+                        color = pageWhite, fontSize = 25.sp, fontWeight = FontWeight.Light)
                     Text(versionLabel,
-                        color = pageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 5.dp).testTag("update_version_type"))
+                        color = pageMuted, fontSize = 12.sp, modifier = Modifier.padding(top = 2.dp).testTag("update_version_type"))
                 }
                 val statusShape = RoundedCornerShape((36f - 10f * settled).dp)
                 val bottomSpace = (32f - 12f * settled).dp
                 Box(Modifier.align(Alignment.TopCenter).padding(horizontal = (16f + 4f * settled).dp)
                     .offset(y = top).widthIn(max = 620.dp).fillMaxWidth()
-                    .height((height - top - bottomSpace).coerceAtLeast(56.dp)).clip(statusShape)
-                    .background(androidx.compose.ui.graphics.lerp(Color(0xD9100F1D), Color(0xB516151D), settled))
-                    .border(1.dp, Color.White.copy(alpha = .10f + .04f * settled), statusShape)
+                    .height((height - top - bottomSpace).coerceAtLeast(56.dp))
+                    .glassSurface(glassBackdrop, statusShape,
+                        tint = androidx.compose.ui.graphics.lerp(Color(0xE017151F), Color(0xD91E1B2A), settled),
+                        frost = { 10f })
                     .testTag("update_status_card")) {
                     Column(Modifier.fillMaxSize().padding(horizontal = (22f - 4f * settled).dp,
                         vertical = (16f + 2f * settled).dp)
@@ -321,64 +342,142 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
             }
         }
         }
-        UpdateGlassMenu(menu, glassBackdrop, onDismiss = { menu = false }, anchor = menuAnchor,
-            onPathChanged = { activeMenuPath = it }, onInteractionChanged = { menuDragging = it },
-            actions = buildList {
-            add(GlassMenuItem("update_menu_action_0", "更新设置", MusicIcons.Update,
-                contentTag = "update_options_sheet", onEnter = {
-                    menuAutoCheck = settings.autoCheckOnLaunch; menuChannel = settings.channel
-                }, children = listOf(
-                    GlassMenuItem("update_channel", "更新渠道", subtitle = if(menuChannel == UpdateChannel.STABLE) "正式版" else "CI 版",
+        val menuActions = buildList {
+            add(GlassMenuItem(
+                "update_menu_action_0", "更新设置", MusicIcons.Update,
+                contentTag = "update_options_sheet",
+                onEnter = {
+                    menuAutoCheck.value = settings.autoCheckOnLaunch
+                    menuChannel.value = settings.channel
+                },
+                children = listOf(
+                    GlassMenuItem(
+                        "update_channel", "更新渠道",
+                        subtitle = if (menuChannel.value == UpdateChannel.STABLE) "正式版" else "CI 版",
                         children = listOf(
-                            GlassMenuItem("update_channel_stable", "正式版", checked = menuChannel == UpdateChannel.STABLE,
-                                keepOpen = true, popOnSelect = true, onClick = {
-                                    if(menuChannel!=UpdateChannel.STABLE) {menuChannel=UpdateChannel.STABLE;onChannel(menuChannel)}
+                            GlassMenuItem(
+                                "update_channel_stable", "正式版",
+                                checked = menuChannel.value == UpdateChannel.STABLE,
+                                keepOpen = true, popOnSelect = true,
+                                onClick = {
+                                    if (menuChannel.value != UpdateChannel.STABLE) {
+                                        menuChannel.value = UpdateChannel.STABLE
+                                        onChannel(UpdateChannel.STABLE)
+                                    }
                                 }),
-                            GlassMenuItem("update_channel_ci", "CI 版", checked = menuChannel == UpdateChannel.CI,
-                                keepOpen = true, popOnSelect = true, onClick = {
-                                    if(menuChannel!=UpdateChannel.CI) {menuChannel=UpdateChannel.CI;onChannel(menuChannel)}
-                                })
-                        )),
-                    GlassMenuItem("update_auto_check", "启动时自动检查", checked = menuAutoCheck,
-                        checkable = true, keepOpen = true, onClick = {
-                            menuAutoCheck = !menuAutoCheck;onAutoCheck(menuAutoCheck)
-                            menu = false
-                        })
-                )))
-            add(GlassMenuItem("update_menu_action_1", "下载源", MusicIcons.Download,
-                contentTag = "update_options_sheet", subMenuMinWidth = 280.dp,animateSubItems=true, children = orderedMenuSources.map { candidate ->
-                    val health = sourceHealth[candidate] ?: UpdateSourceHealth(UpdateSourceStatus.CHECKING)
-                    GlassMenuItem("update_source_${candidate.name}", candidate.menuLabel, checked = candidate == source,
-                        leadingContent = { UpdateSourceBadge(candidate,health) },
+                            GlassMenuItem(
+                                "update_channel_ci", "CI 版",
+                                checked = menuChannel.value == UpdateChannel.CI,
+                                keepOpen = true, popOnSelect = true,
+                                onClick = {
+                                    if (menuChannel.value != UpdateChannel.CI) {
+                                        menuChannel.value = UpdateChannel.CI
+                                        onChannel(UpdateChannel.CI)
+                                    }
+                                }),
+                        ),
+                    ),
+                    GlassMenuItem(
+                        "update_auto_check", "启动时自动检查",
+                        checked = menuAutoCheck.value, checkable = true, keepOpen = true,
                         onClick = {
+                            val next = !menuAutoCheck.value
+                            menuAutoCheck.value = next
+                            onAutoCheck(next)
+                            menu = false
+                        }),
+                ),
+            ))
+            add(GlassMenuItem(
+                "update_menu_action_1", "下载源", MusicIcons.Download,
+                contentTag = "update_options_sheet", subMenuMinWidth = 280.dp, animateSubItems = true,
+                children = orderedMenuSources.map { candidate ->
+                    val health = sourceHealth[candidate] ?: UpdateSourceHealth(UpdateSourceStatus.CHECKING)
+                    GlassMenuItem(
+                        "update_source_${candidate.name}", candidate.menuLabel,
+                        checked = candidate == source,
+                        leadingContent = { UpdateSourceBadge(candidate, health) },
+                        onClick = {
+                            menu = false
+                            sourceMenuOpen = false
                             chosenSource = candidate
                             onSourceSelected(candidate)
-                            if(source != candidate) {
-                                if(currentTransfer.download is UpdateDownloadState.Downloading) onChangeSource(candidate)
+                            if (source != candidate && currentTransfer.download is UpdateDownloadState.Downloading) {
+                                onChangeSource(candidate)
                             }
-                        })
-                }))
-            add(GlassMenuItem("update_menu_action_2", "发布记录", MusicIcons.File,
-                onClick = { onOpenRelease(AppMetadata.RELEASES_URL) }))
+                        },
+                    )
+                },
+            ))
+            add(GlassMenuItem(
+                "update_menu_action_2", "发布记录", MusicIcons.File,
+                onClick = {
+                    menu = false
+                    onOpenRelease(AppMetadata.RELEASES_URL)
+                },
+            ))
             if (!checking && !transferState.installing &&
                 transferState.download !is UpdateDownloadState.Downloading &&
-                transferState.download !is UpdateDownloadState.Ready)
-                add(GlassMenuItem("update_check_again", "重新检查更新", MusicIcons.Update,
-                    onClick = onRetry))
-            if(release != null && transferState.download is UpdateDownloadState.Idle)
-                add(GlassMenuItem("update_menu_action_3", "忽略此版本", MusicIcons.Close,
-                    danger = true, separated = true, onClick = onIgnore))
-        }, toolbar = {
-            io.github.currencortex.music.ui.component.nativeui.SettingsTopBar(
-                if(expanded)"更新说明"else "软件更新",onBack={
-                    if (menu) menu = false else if (expanded) expanded = false else onDismiss()
-                },backTag="update_back",titleModifier=if(titleBackdrop!=null)Modifier.layerBackdrop(titleBackdrop)else Modifier) {
-                UpdateGlassButton(glassBackdrop, "update_menu", "更多", onClick = { menu = !menu },
-                    onBoundsChanged = { menuAnchor = it }) {
-                    Icon(Icons.Default.MoreVert, null, tint = pageWhite)
-                }
+                transferState.download !is UpdateDownloadState.Ready) {
+                add(GlassMenuItem("update_check_again", "重新检查更新", MusicIcons.Update, onClick = {
+                    menu = false
+                    onRetry()
+                }))
             }
-        })
+            if (release != null && transferState.download is UpdateDownloadState.Idle) {
+                add(GlassMenuItem(
+                    "update_menu_action_3", "忽略此版本", MusicIcons.Close,
+                    danger = true, separated = true, onClick = {
+                        menu = false
+                        onIgnore()
+                    },
+                ))
+            }
+        }
+        SmallTopAppBar(
+                title = if(expanded) "更新说明" else "软件更新",
+                color = Color.Transparent,
+                titleColor = pageWhite,
+                navigationIcon = {
+                    IconButton(
+                        onClick = {
+                            if (menu) menu = false else if (expanded) expanded = false else onDismiss()
+                        },
+                        modifier = Modifier.testTag("update_back"),
+                        minWidth = 44.dp,
+                        minHeight = 44.dp,
+                        cornerRadius = 22.dp,
+                    ) {
+                        Icon(COUIIcons.Back, contentDescription = "返回", tint = pageWhite)
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { menu = !menu },
+                        modifier = Modifier.testTag("update_menu")
+                            .onGloballyPositioned { menuAnchor = it.boundsInWindow() },
+                        minWidth = 44.dp,
+                        minHeight = 44.dp,
+                        cornerRadius = 22.dp,
+                    ) {
+                        Icon(COUIIcons.More, contentDescription = "更多", tint = pageWhite)
+                    }
+                },
+            )
+        UpdateGlassMenu(
+            open = menu,
+            backdrop = glassBackdrop,
+            onDismiss = {
+                menu = false
+                sourceMenuOpen = false
+                menuDragging = false
+            },
+            anchor = menuAnchor,
+            onPathChanged = { path -> sourceMenuOpen = path.contains("update_menu_action_1") },
+            onInteractionChanged = { menuDragging = it },
+            actions = menuActions,
+            toolbar = {},
+        )
         if (confirmCancel) UpdateOptionsDialog("取消下载？",
             summary = "返回页面后仍会在后台下载。取消下载将停止当前任务。",
             onDismiss = { confirmCancel = false }, backdrop = glassBackdrop, actions = {
@@ -424,8 +523,19 @@ fun UpdatePageContent(state: UpdateState, transferState: UpdateTransferState = U
 }
 
 @Composable private fun PageButton(label: String, tag: String, primary: Boolean = true, enabled: Boolean = true, onClick: () -> Unit) {
-    GlassActionButton(label, onClick, Modifier.fillMaxWidth().padding(top = 8.dp).testTag(tag),
-        primary = primary, enabled = enabled, minHeight = 46.dp)
+    Button(
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp).heightIn(min = 52.dp).testTag(tag),
+        enabled = enabled,
+        colors = if (primary) ButtonDefaults.buttonColorsPrimary(
+            color = Color(0xFFE9E9E9),
+            contentColor = Color(0xFF17171A),
+        ) else ButtonDefaults.buttonColors(),
+        material = ButtonMaterial.Transparent,
+        insideMargin = PaddingValues(horizontal = 20.dp, vertical = 12.dp),
+    ) {
+        Text(label, fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+    }
 }
 
 private fun verifiedUpdate(release: AppRelease) = release.apkUrl != null &&

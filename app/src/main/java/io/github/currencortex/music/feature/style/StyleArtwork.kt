@@ -23,15 +23,15 @@ import io.github.currencortex.music.ui.component.coverRequestUrl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Artwork and ambient surface share the first song's image, including Coil's existing cache. */
 @Composable internal fun rememberStyleTint(cover: String): MutableState<Color?> =
     remember(cover) { mutableStateOf(null) }
 
 @Composable internal fun styleSurface(tint: Color?): Color {
-    val surface = MiuixTheme.colorScheme.surfaceContainer
+    val surface = COUITheme.colorScheme.cardBackground
     val dark = surface.luminance() < .3f
     return animateColorAsState(lerp(surface, tint ?: surface, if (dark) .28f else .20f), tween(220), label = "style tint").value
 }
@@ -44,9 +44,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     var loading by remember(cover) { mutableStateOf(cover.isNotBlank()) }
     var failed by remember(cover) { mutableStateOf(cover.isBlank()) }
     SideEffect { onArtworkReady?.invoke(!loading && !pending) }
-    Box(modifier.background(MiuixTheme.colorScheme.onSurface.copy(alpha = .06f)), contentAlignment = Alignment.Center) {
+    Box(modifier.background(COUITheme.colorScheme.labelPrimary.copy(alpha = .06f)), contentAlignment = Alignment.Center) {
         if (loading || pending) MusicPlaceholder(Modifier.matchParentSize())
-        if (failed && !pending) Text("♪", fontSize = 32.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .22f))
+        if (failed && !pending) Text("♪", fontSize = 32.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .22f))
         if (cover.isNotBlank()) AsyncImage(
             model = remember(context, cover, pixels) { ImageRequest.Builder(context)
                 .data(coverRequestUrl(cover, pixels)).size(pixels).allowHardware(false).build() },

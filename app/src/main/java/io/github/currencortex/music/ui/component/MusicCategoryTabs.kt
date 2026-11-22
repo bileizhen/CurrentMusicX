@@ -20,8 +20,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable fun MusicCategoryTabs(tabs: List<Pair<String, String>>, selectedKey: String, onSelect: (String) -> Unit,
     tagPrefix: String, modifier: Modifier = Modifier) {
@@ -31,14 +31,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             tag = tagPrefix, role = Role.Tab, itemTag = { "${tagPrefix}_${tabs[it].first}" }, onReselect = { onSelect(selectedKey) })
         return
     }
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Row(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         tabs.forEach { (key, label) ->
             val active = key == selectedKey
             val source = remember(key) { MutableInteractionSource() }
             val pressed by source.collectIsPressedAsState()
             val scale by animateFloatAsState(if (pressed) .96f else 1f, tween(160), label = "category press")
-            val ink by animateColorAsState(if (active) colors.primary else colors.onSurface.copy(alpha = .55f), tween(200), label = "category ink")
+            val ink by animateColorAsState(if (active) colors.primary else colors.labelPrimary.copy(alpha = .55f), tween(200), label = "category ink")
             val indicator by animateFloatAsState(if (active) 1f else 0f, tween(200), label = "category indicator")
             Column(Modifier.weight(1f).heightIn(min = 52.dp).graphicsLayer { scaleX = scale; scaleY = scale }
                 .semantics { selected = active }.clickable(source, indication = null, role = Role.Tab) { onSelect(key) }

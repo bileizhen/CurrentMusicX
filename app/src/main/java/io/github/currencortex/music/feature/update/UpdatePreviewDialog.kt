@@ -30,9 +30,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Confirm after dismissal so the keyboard does not resize the following version morph. */
 @Composable
@@ -57,35 +57,35 @@ fun UpdatePreviewDialog(initialVersion: String, onDismiss: () -> Unit, onConfirm
             UpdateDialogAction("取消", ::dismiss, Modifier.weight(1f).testTag("update_preview_cancel"))
             UpdateDialogAction("开始预览", ::submit, Modifier.weight(1f).testTag("update_preview_confirm"), enabled = valid)
         }) {
-        val colors = MiuixTheme.colorScheme
+        val colors = COUITheme.colorScheme
         Column(Modifier.fillMaxWidth().testTag("update_preview_dialog")) {
             Row(Modifier.fillMaxWidth().heightIn(min = 52.dp), verticalAlignment = Alignment.CenterVertically) {
                 BasicTextField(input, { input = it }, singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Done),
                     keyboardActions = KeyboardActions(onDone = { submit() }),
-                    textStyle = TextStyle(color = colors.onBackground, fontSize = 19.sp, fontWeight = FontWeight.Medium),
+                    textStyle = TextStyle(color = colors.labelPrimary, fontSize = 19.sp, fontWeight = FontWeight.Medium),
                     cursorBrush = SolidColor(colors.primary),
                     modifier = Modifier.weight(1f).focusRequester(focus).onFocusChanged { focused = it.isFocused }
                         .testTag("update_preview_version").semantics { contentDescription = "目标版本" })
                 Text("${input.text.length}/32", Modifier.padding(start = 8.dp).testTag("update_preview_count"),
-                    fontSize = 12.sp, color = if (input.text.length > 32) colors.error else colors.onSurfaceVariantSummary)
+                    fontSize = 12.sp, color = if (input.text.length > 32) colors.error else colors.labelSecondaryVariant)
                 Box(Modifier.padding(start = 4.dp).size(44.dp).clip(CircleShape)
                     .clickable(enabled = input.text.isNotEmpty(), role = Role.Button) {
                         input = TextFieldValue(""); focus.requestFocus(); keyboard?.show()
                     }.testTag("update_preview_clear"), contentAlignment = Alignment.Center) {
-                    Box(Modifier.size(20.dp).clip(CircleShape).background(colors.onSurfaceVariantSummary.copy(alpha = .65f)),
+                    Box(Modifier.size(20.dp).clip(CircleShape).background(colors.labelSecondaryVariant.copy(alpha = .65f)),
                         contentAlignment = Alignment.Center) {
                         Icon(Icons.Default.Close, "清空版本", Modifier.size(14.dp), tint = colors.background)
                     }
                 }
             }
             Spacer(Modifier.fillMaxWidth().height(if (focused) 1.5.dp else 1.dp)
-                .background(if (focused) colors.primary else colors.onSurfaceVariantSummary.copy(alpha = .3f)))
+                .background(if (focused) colors.primary else colors.labelSecondaryVariant.copy(alpha = .3f)))
             Text(if (input.text.length > 32) "版本文字最多 32 个字符"
                 else if (candidate.isNotEmpty() && !valid) "版本号不能包含空白或控制字符"
                 else "仅预览数字形变，不会更改实际版本或下载内容。",
                 Modifier.padding(top = 12.dp), fontSize = 12.sp, lineHeight = 19.sp,
-                color = if (candidate.isNotEmpty() && !valid) colors.error else colors.onSurfaceVariantSummary)
+                color = if (candidate.isNotEmpty() && !valid) colors.error else colors.labelSecondaryVariant)
         }
         LaunchedEffect(Unit) { withFrameNanos { }; focus.requestFocus(); keyboard?.show() }
     }

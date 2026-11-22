@@ -29,8 +29,8 @@ import io.github.currencortex.music.ui.component.PlaylistContainerMotion
 import io.github.currencortex.music.ui.component.LocalPageContainerSource
 import io.github.currencortex.music.ui.component.playlistMotionElement
 import io.github.currencortex.music.ui.component.rememberPageNavigationSource
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Shared cover tile for home recommendations, playlists and artist albums. */
 @Composable internal fun MusicArtworkCard(cover: String, title: String, subtitle: String,
@@ -50,7 +50,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     // ellipsized down to one line just to fit the shared slot.
     val titleHeight = with(density) { 20.sp.toDp() * 2 + 8.sp.toDp() }
     val subtitleHeight = with(density) { 20.sp.toDp() }
-    val labelStyle = MiuixTheme.textStyles.main.copy(
+    val labelStyle = COUITheme.textStyles.bodyXL.copy(
         platformStyle = PlatformTextStyle(includeFontPadding = false),
         lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None),
     )
@@ -69,14 +69,14 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 coordinates.size.width - coverInset)),
         )
     }, enabled = enabled) {
-        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MiuixTheme.colorScheme.surfaceContainer)
+        Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(COUITheme.colorScheme.cardBackground)
             .padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             MusicCover(cover, Modifier.fillMaxWidth().aspectRatio(1f).then(playlistMotionElement(motion, 0)), pixels = pixels, cornerRadius = 12.dp)
             Text(title, Modifier.height(titleHeight).then(playlistMotionElement(motion, 1)), style = labelStyle,
                 fontSize = 15.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium,
                 minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(subtitle, Modifier.height(subtitleHeight), style = labelStyle, fontSize = 12.sp, lineHeight = 16.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary, minLines = 1, maxLines = 1,
+                color = COUITheme.colorScheme.labelSecondaryVariant, minLines = 1, maxLines = 1,
                 overflow = TextOverflow.Ellipsis)
         }
     }

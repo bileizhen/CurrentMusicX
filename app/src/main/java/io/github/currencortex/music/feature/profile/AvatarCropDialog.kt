@@ -30,9 +30,9 @@ import io.github.currencortex.music.ui.component.MusicDialogButton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.Slider
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
+import io.github.suqi8.coui.kmp.basic.Slider
+import io.github.suqi8.coui.kmp.basic.Text
 import kotlin.math.min
 import kotlin.math.roundToInt
 

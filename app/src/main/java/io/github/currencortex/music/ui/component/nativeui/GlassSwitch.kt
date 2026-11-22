@@ -32,8 +32,8 @@ import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.*
 
 private val switchBack=CubicBezierEasing(.175f,.885f,.32f,1.275f)
@@ -47,7 +47,7 @@ val GlassSwitchGeometry=SemanticsPropertyKey<GlassSwitchFrame>("GlassSwitchGeome
  * A null callback lets a containing menu row own interaction and pass its pressed state. */
 @Composable fun GlassSwitch(checked:Boolean,onCheckedChange:((Boolean)->Unit)?,modifier:Modifier=Modifier,
     enabled:Boolean=true,pressed:Boolean=false) {
-    val colors=MiuixTheme.colorScheme
+    val colors=COUITheme.colorScheme
     val scope=rememberCoroutineScope()
     val toggle=remember {Animatable(if(checked)1f else 0f)}
     val press=remember {Animatable(0f)}
@@ -109,10 +109,10 @@ val GlassSwitchGeometry=SemanticsPropertyKey<GlassSwitchFrame>("GlassSwitchGeome
     val thumbHeight=glassLerp(glassLerp(24f,22f,stretch),40f-2f*stretch,lift)
     val lens=LocalLiquidGlassEnabled.current&&Build.VERSION.SDK_INT>=33&&thumbBackdrop!=null&&lift>0f
     val trackColor=if(enabled)lerp(colors.surfaceContainerHighest,colors.primary,raw)
-        else lerp(colors.surfaceContainerHighest.copy(alpha=.12f),colors.onSurface.copy(alpha=.12f),raw)
+        else lerp(colors.surfaceContainerHighest.copy(alpha=.12f),colors.labelPrimary.copy(alpha=.12f),raw)
     // Miuix's outline is a dim border, not Material's medium-gray outline role.
-    val thumbColor=if(enabled)lerp(colors.onBackgroundVariant,colors.onPrimary,raw)
-        else lerp(colors.onSurface.copy(alpha=.38f),colors.surface,raw)
+    val thumbColor=if(enabled)lerp(colors.labelSecondary,colors.labelOnColor,raw)
+        else lerp(colors.labelPrimary.copy(alpha=.38f),colors.cardBackground,raw)
     val thumbFill=if(lens)thumbColor.copy(alpha=thumbColor.alpha*(1-lift))else lerp(thumbColor,Color.White,lift)
     Box(modifier.size(60.dp,48.dp).semantics {
         this[GlassSwitchPosition]=raw

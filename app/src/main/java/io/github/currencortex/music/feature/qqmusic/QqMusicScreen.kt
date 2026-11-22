@@ -27,9 +27,9 @@ import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.util.viewModelFactory
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.TextField
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.net.URLDecoder
 import java.net.URLEncoder
 
@@ -354,7 +354,7 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
                 }
             }
             error?.let { message -> item {
-                Text(message, color = MiuixTheme.colorScheme.onSurfaceVariantSummary, fontSize = 14.sp)
+                Text(message, color = COUITheme.colorScheme.labelSecondaryVariant, fontSize = 14.sp)
                 MusicTextAction("重新加载", { offset = 0; radioPage = 1; refresh++ }, enabled = !loading)
             } }
             notice?.let { item { SettingsHint(it) } }
@@ -364,7 +364,7 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(pageTitle, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
                         if (page.description.isNotBlank()) Text(readableText(page.description), fontSize = 13.sp, maxLines = 5,
-                            overflow = TextOverflow.Ellipsis, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                            overflow = TextOverflow.Ellipsis, color = COUITheme.colorScheme.labelSecondaryVariant)
                     }
                 }
             }
@@ -486,5 +486,5 @@ private fun qqPlaylistSubtitle(playlist: Playlist): String = when {
     val detail = readableText(subtitle)
     SettingsPreference(title, detail.ifBlank { null }, onClick = onClick,
         leading = { MusicCover(cover, Modifier.size(52.dp), pixels = 220) },
-        trailing = { Text("›", fontSize = 24.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary) })
+        trailing = { Text("›", fontSize = 24.sp, color = COUITheme.colorScheme.labelSecondaryVariant) })
 }

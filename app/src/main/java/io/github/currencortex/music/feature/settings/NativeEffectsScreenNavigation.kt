@@ -25,7 +25,7 @@ import io.github.currencortex.music.ui.component.MusicTextAction
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Text
 
 private const val NETEASE_EFFECTS_PACKAGE = "netease_effects_package"
 private val neteaseEffectDetails = setOf(SoundEffectKind.MOOD.name, SoundEffectKind.SPEAKER.name, SoundEffectKind.AI_MASTER.name)

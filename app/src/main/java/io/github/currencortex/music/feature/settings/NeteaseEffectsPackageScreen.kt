@@ -23,7 +23,7 @@ import io.github.currencortex.music.core.update.UpdateSource
 import io.github.currencortex.music.data.effects.NeteaseEffectsAssetRepository
 import io.github.currencortex.music.ui.component.musicScrollPadding
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.LinearProgressIndicator
+import io.github.suqi8.coui.kmp.basic.LinearProgressIndicator
 
 @Composable
 internal fun NeteaseEffectsPackageScreen(vm: SoundEffectsViewModel, onBack: () -> Unit) {
@@ -44,13 +44,13 @@ internal fun NeteaseEffectsPackageScreen(vm: SoundEffectsViewModel, onBack: () -
         uri?.let(vm::importOriginal)
     }
 
-    SettingsUiScope {
-        SettingsScrollLayout(Modifier.fillMaxSize().testTag("netease_effects_package"), topBar = {
-            SettingsTopBar("网易云音效", onBack = onBack)
-        }) { topInset ->
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = musicScrollPadding(
-                PaddingValues(start = 16.dp, end = 16.dp, top = topInset, bottom = 24.dp)),
-                verticalArrangement = Arrangement.spacedBy(16.dp)) {
+    SettingsNativePage(
+        title = "网易云音效",
+        tag = "netease_effects_package",
+        onBack = onBack,
+        padding = PaddingValues(16.dp, 8.dp, 16.dp, 24.dp),
+        verticalSpacing = 16.dp,
+    ) {
                 item {
                     SettingsGroup {
                         SettingsPreference("网易云音效包", when {
@@ -121,7 +121,5 @@ internal fun NeteaseEffectsPackageScreen(vm: SoundEffectsViewModel, onBack: () -
                         }
                     }
                 }
-            }
-        }
     }
 }

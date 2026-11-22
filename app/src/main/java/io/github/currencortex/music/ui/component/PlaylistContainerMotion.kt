@@ -109,3 +109,61 @@ private fun DrawScope.drawMotionLayer(layer: GraphicsLayer, position: Offset,
         drawContext.canvas.restore()
     }
 }
+
+/**
+ * Two texts of a source card that fly to a destination hero along a parabolic arc, used when the
+ * About hero opens the update page: the app name and version leave the card and land on the
+ * update hero. Unlike playlist artwork, text scales uniformly so glyphs are never stretched.
+ */
+class HeroTextMotion internal constructor() {
+    internal val source = List(2) { PlaylistMotionElement() }
+    internal val destination = List(2) { PlaylistMotionElement() }
+    internal var progress: State<Float>? by mutableStateOf(null)
+    internal var viewport by mutableStateOf<LayoutCoordinates?>(null)
+}
+
+internal val LocalHeroTextMotion = compositionLocalOf<HeroTextMotion?> { null }
+
+/** Records one hero text and suppresses only the copy that the overlay is drawing. */
+@Composable internal fun heroTextMotionElement(motion: HeroTextMotion?, index: Int,
+    destination: Boolean = false): Modifier {
+    if (motion == null) return Modifier
+    val element = (if (destination) motion.destination else motion.source)[index]
+    val layer = rememberGraphicsLayer()
+    DisposableEffect(element, layer) {
+        element.layer = layer
+        onDispose { element.coordinates = null; element.layer = null }
+    }
+    return Modifier.onGloballyPositioned { element.coordinates = it }.drawWithContent {
+        layer.record { this@drawWithContent.drawContent() }
+        val p = motion.progress?.value
+        val matched = motion.source[index].bounds(motion.viewport) != null &&
+            motion.destination[index].bounds(motion.viewport) != null
+        if (p == null || !matched || (!destination && p <= 0f) || (destination && p >= 1f)) drawLayer(layer)
+    }
+}
+
+@Composable internal fun HeroTextMotionOverlay(motion: HeroTextMotion) {
+    Canvas(Modifier.fillMaxSize().clearAndSetSemantics {}) {
+        val p = motion.progress?.value ?: return@Canvas
+        if (p <= 0f || p >= 1f) return@Canvas
+        for (index in 0..1) {
+            val source = motion.source[index]
+            val target = motion.destination[index]
+            val from = source.bounds(motion.viewport) ?: continue
+            val to = target.bounds(motion.viewport) ?: continue
+            val bounds = playlistArcBounds(from, to, p, 72.dp.toPx())
+            val mix = ((p - .35f) / .55f).coerceIn(0f, 1f)
+            fun draw(element: PlaylistMotionElement, alpha: Float) {
+                val layer = element.layer ?: return
+                if (alpha <= 0f || layer.size.width == 0 || layer.size.height == 0) return
+                val scale = bounds.height / layer.size.height
+                val position = Offset(bounds.center.x - layer.size.width * scale / 2f,
+                    bounds.center.y - layer.size.height * scale / 2f)
+                drawMotionLayer(layer, position, scale, scale, alpha)
+            }
+            draw(source, 1f - mix)
+            draw(target, mix)
+        }
+    }
+}

@@ -44,8 +44,8 @@ import io.github.currencortex.music.ui.component.MusicTextAction
 import io.github.currencortex.music.ui.component.qualityFileSummary
 import io.github.currencortex.music.core.media.AudioQuality
 import io.github.currencortex.music.ui.component.MusicBottomSheet
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Quality is a requested level, never a claim about the stream returned by the provider. */
 @Composable internal fun AudioQualitySheet(selected: AudioQuality, onSelect: (AudioQuality) -> Unit,
@@ -154,7 +154,7 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
     enabled: Boolean = true, onNetwork: (() -> Unit)? = null, modifier: Modifier = Modifier,
     available: Collection<AudioQuality>? = null, isQq: Boolean = false,
     extraContent: @Composable () -> Unit = {}) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val regularOptions = (available ?: listOf(AudioQuality.VIVID, AudioQuality.DOLBY, AudioQuality.JYEFFECT,
         AudioQuality.HIRES, AudioQuality.LOSSLESS, AudioQuality.EXHIGH, AudioQuality.HIGHER, AudioQuality.STANDARD))
         .filter { it != AudioQuality.AUTO }
@@ -170,7 +170,7 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
         verticalArrangement = Arrangement.spacedBy(8.dp)) {
         run {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("已选 · ${selected.qualityLabel(isQq)}", Modifier.weight(1f), fontSize = 13.sp, color = colors.onSurfaceVariantSummary)
+                Text("已选 · ${selected.qualityLabel(isQq)}", Modifier.weight(1f), fontSize = 13.sp, color = colors.labelSecondaryVariant)
                 onNetwork?.let { action -> Text("网络与播放 ›", Modifier.heightIn(min = 48.dp).testTag("quality_network_settings")
                     .clickable(role = Role.Button, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = action)
                     .padding(horizontal = 8.dp, vertical = 14.dp), fontSize = 12.sp, color = colors.primary) }
@@ -199,7 +199,7 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
                 else -> "按所选档位请求音源，实际音质取决于歌曲、音源及账号权限。自动最高会优先请求可用高音质。"
             },
                 Modifier.padding(horizontal = 4.dp, vertical = 8.dp).testTag("quality_note"),
-                fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+                fontSize = 12.sp, color = colors.labelSecondaryVariant)
         }
         extraContent()
     }
@@ -227,9 +227,9 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
                 result.value.forEach { file ->
                     Text(file.label.ifBlank { file.level }, fontSize = 14.sp)
                     Text(qualityFileSummary(file.br, file.size, file.sr), fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                        color = COUITheme.colorScheme.labelSecondaryVariant)
                     file.variants.forEach { variant -> Text("${variant.immerseType.ifBlank { "音质变体" }} · ${qualityFileSummary(variant.br, variant.size, variant.sr)}",
-                        fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }
+                        fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant) }
                 }
             }
         }
@@ -238,7 +238,7 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
 
 @Composable private fun FeaturedQuality(quality: AudioQuality, selected: AudioQuality, enabled: Boolean,
     onSelect: (AudioQuality) -> Unit, isQq: Boolean, modifier: Modifier) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val active = selected == quality
     val shape = RoundedCornerShape(22.dp)
     Column(modifier.qualityClick(quality, active, enabled) { onSelect(quality) }
@@ -252,14 +252,14 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
             QualityCheck(active)
         }
         Spacer(Modifier.height(10.dp))
-        Text(quality.qualityLabel(isQq), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.onSurface)
-        Text(quality.description(isQq), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+        Text(quality.qualityLabel(isQq), fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = colors.labelPrimary)
+        Text(quality.description(isQq), fontSize = 12.sp, color = colors.labelSecondaryVariant)
     }
 }
 
 @Composable private fun QualityRow(quality: AudioQuality, selected: AudioQuality, enabled: Boolean,
     onSelect: (AudioQuality) -> Unit, isQq: Boolean) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val active = quality == selected
     Row(Modifier.fillMaxWidth().qualityClick(quality, active, enabled) { onSelect(quality) }
         .background(if (active) colors.primary.copy(alpha = .08f) else Color.Transparent, RoundedCornerShape(18.dp))
@@ -270,8 +270,8 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
             Text(quality.shortName(), fontSize = 12.sp, fontWeight = FontWeight.Medium, color = colors.primary)
         }
         Column(Modifier.weight(1f).padding(horizontal = 12.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-            Text(quality.qualityLabel(isQq), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = colors.onSurface)
-            Text(quality.description(isQq), fontSize = 12.sp, color = colors.onSurfaceVariantSummary)
+            Text(quality.qualityLabel(isQq), fontSize = 16.sp, fontWeight = FontWeight.Medium, color = colors.labelPrimary)
+            Text(quality.description(isQq), fontSize = 12.sp, color = colors.labelSecondaryVariant)
         }
         QualityCheck(active)
     }
@@ -288,9 +288,9 @@ internal fun qqAudioQualities(access: AudioProviderState, sources: List<LxSource
 }
 
 @Composable private fun QualityCheck(active: Boolean) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Box(Modifier.size(24.dp).background(if (active) colors.primary else Color.Transparent, CircleShape), contentAlignment = Alignment.Center) {
-        if (active) Image(Icons.Default.Check, null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(colors.onPrimary))
+        if (active) Image(Icons.Default.Check, null, Modifier.size(16.dp), colorFilter = ColorFilter.tint(colors.labelOnColor))
     }
 }
 

@@ -20,8 +20,8 @@ import io.github.currencortex.music.feature.lyrics.ui.lyricsFontWeight
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.AppleMusicLyricsControls
 import io.github.currencortex.music.feature.lyrics.ui.currentLyricsFontFamily
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.roundToInt
 
 @Composable internal fun LyricsDisplaySettings(fontSize: Float, onFontSize: (Float) -> Unit, weightMode: LyricsWeight, onWeight: () -> Unit,
@@ -30,7 +30,7 @@ import kotlin.math.roundToInt
     font: io.github.currencortex.music.data.settings.LyricsFont = io.github.currencortex.music.data.settings.LyricsFont.SYSTEM,
     fontFile: String = "", onFont: (io.github.currencortex.music.data.settings.LyricsFont) -> Unit = {},
     onFontFile: suspend (String) -> Unit = {}, previewText: String = "暂无歌词") {
-    val ink = MiuixTheme.colorScheme.onSurface
+    val ink = COUITheme.colorScheme.labelPrimary
     val classic = display.style == LyricsStyle.CLASSIC
     val staged = classic && (display.smoke || display.particles)
     var preview by remember(fontSize) { mutableFloatStateOf(fontSize) }
@@ -110,7 +110,7 @@ import kotlin.math.roundToInt
 
 @Composable private fun LyricsToggle(title: String, checked: Boolean, onChange: (Boolean) -> Unit, tag: String,
     summary: String? = null, enabled: Boolean = true) {
-    val ink = MiuixTheme.colorScheme.onSurface
+    val ink = COUITheme.colorScheme.labelPrimary
     Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).testTag(tag).clickable(enabled = enabled, role = Role.Switch) { onChange(!checked) }
         .semantics { toggleableState = if (checked) ToggleableState.On else ToggleableState.Off; if (!enabled) disabled() }
         .padding(vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {

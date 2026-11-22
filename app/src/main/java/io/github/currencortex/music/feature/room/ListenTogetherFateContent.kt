@@ -26,8 +26,8 @@ import io.github.currencortex.music.ui.component.musicScrollPadding
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Native relationship statistics are read-only here. Deletion only requests the caller's confirmation. */
 @Composable internal fun ListenTogetherFateContent(
@@ -46,7 +46,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     onInvite: ((ListenTogetherFateReport) -> Unit)? = null,
     activeRoom: Boolean = false,
 ) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     MusicSubpage("缘分报告", "listen_fate_screen", onBack, backTag = "listen_fate_back") { topInset ->
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp).testTag("listen_fate_list"),
             contentPadding = musicScrollPadding(PaddingValues(top = topInset + 8.dp, bottom = 24.dp)),
@@ -157,7 +157,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 }
 
 @Composable private fun FateMuted(text: String) {
-    Text(text, fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+    Text(text, fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
 }
 
 @Composable private fun FateStatus(title: String, tag: String, message: String? = null, retry: (() -> Unit)? = null) {

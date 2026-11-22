@@ -28,8 +28,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Fetch during home loading, then reveal only after both the image and launch have settled. */
 @Composable fun HomeProfileAvatar(url: String?, ready: Boolean, onOpen: (String?, Rect?) -> Unit,
@@ -105,10 +105,10 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     flight?.homeLanding = landing.takeIf { rect -> rect.width > 0f && rect.height > 0f &&
                         rect.top >= 0f && placement?.visible(rect) != false }
                 }) {
-                Box(Modifier.fillMaxSize().clip(CircleShape).background(MiuixTheme.colorScheme.primary.copy(alpha = .08f)),
+                Box(Modifier.fillMaxSize().clip(CircleShape).background(COUITheme.colorScheme.primary.copy(alpha = .08f)),
                     contentAlignment = Alignment.Center) {
                     if (failed) Icon(Icons.Default.Person, null, Modifier.size(24.dp).testTag("home_avatar_fallback"),
-                        tint = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+                        tint = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f))
                     if (url != null) AsyncImage(rememberAvatarRequest(url), contentDescription = null,
                         contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize()
                             .testTag(if (settled && !failed) "home_avatar_image" else "home_avatar_pending"),
@@ -137,9 +137,9 @@ internal fun boundedDecorationScale(scale: Double) = scale.takeIf { it.isFinite(
     decorationUrl: String? = null, decorationScale: Double = 1.0) {
     Box(modifier,
         contentAlignment = Alignment.Center) {
-        Box(Modifier.fillMaxSize().clip(CircleShape).background(MiuixTheme.colorScheme.primary.copy(alpha = .08f)),
+        Box(Modifier.fillMaxSize().clip(CircleShape).background(COUITheme.colorScheme.primary.copy(alpha = .08f)),
             contentAlignment = Alignment.Center) {
-        if (url == null) Icon(Icons.Default.Person, null, Modifier.size(32.dp), tint = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+        if (url == null) Icon(Icons.Default.Person, null, Modifier.size(32.dp), tint = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f))
         if (url != null) AsyncImage(rememberAvatarRequest(url), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
         }
         if (decorationUrl != null) AsyncImage(rememberDecorationRequest(decorationUrl), null,

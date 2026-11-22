@@ -16,17 +16,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Velocity
-import top.yukonga.miuix.kmp.basic.PullToRefresh
-import top.yukonga.miuix.kmp.basic.RefreshState
-import top.yukonga.miuix.kmp.basic.rememberPullToRefreshState
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.PullToRefresh
+import io.github.suqi8.coui.kmp.basic.RefreshState
+import io.github.suqi8.coui.kmp.basic.rememberPullToRefreshState
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Loading data on entry must not start the refresh header's viewport-resizing spring.
  * Only a user's pull gesture owns that header; initial loading uses the page placeholders.
  */
 @Composable
 fun MusicPullToRefresh(loading: Boolean, onRefresh: () -> Unit, modifier: Modifier = Modifier,
-    indicatorColor: Color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f),
+    indicatorColor: Color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f),
     showIndicator: Boolean = true,
     enabled: Boolean = true,
     content: @Composable () -> Unit) {

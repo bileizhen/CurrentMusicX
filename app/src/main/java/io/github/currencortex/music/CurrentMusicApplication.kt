@@ -2,13 +2,19 @@ package io.github.currencortex.music
 
 import android.app.Application
 import android.content.Context
+import android.os.Build
 import android.os.Process
+import android.util.Log
 import coil3.ImageLoader
 import okio.Path.Companion.toOkioPath
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import io.github.currencortex.music.core.logging.CrashLogger
+import io.github.currencortex.music.ui.util.PredictiveBackOptIn
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
 import okhttp3.OkHttpClient
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 open class CurrentMusicApplication : Application(), SingletonImageLoader.Factory {
@@ -24,6 +30,15 @@ open class CurrentMusicApplication : Application(), SingletonImageLoader.Factory
         // The isolated script service has a separate UID and does not start app infrastructure.
         if (Process.myUid() != applicationInfo.uid) return
         container = createContainer()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            val predictiveBack = try {
+                runBlocking(Dispatchers.IO) { container.settings.snapshot().predictiveBack }
+            } catch (error: IOException) {
+                Log.w("CurrentMusic", "Cannot restore predictive back setting", error)
+                container.settings.state.value.predictiveBack
+            }
+            PredictiveBackOptIn.apply(applicationInfo, predictiveBack)
+        }
         containerReady.complete(container)
         CrashLogger.install(container.logger)
         container.logger.info("Application", "Application started")

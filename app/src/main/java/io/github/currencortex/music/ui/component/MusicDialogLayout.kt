@@ -13,15 +13,15 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import io.github.currencortex.music.ui.theme.isInDarkTheme
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.TextButtonColors
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.ButtonDefaults
+import io.github.suqi8.coui.kmp.basic.TextButtonColors
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Dialog-only spacing; page rows keep their existing insets. */
 internal val LocalMusicDialogContent = staticCompositionLocalOf { false }
@@ -53,8 +53,8 @@ fun MusicDialogButton(text: String, onClick: () -> Unit, modifier: Modifier = Mo
         return
     }
     val press = rememberMusicDialogPress()
-    val inkWash = MiuixTheme.colorScheme.onBackground
-    val ink = if (destructive) MiuixTheme.colorScheme.error.copy(alpha = if (enabled) 1f else .35f)
+    val inkWash = COUITheme.colorScheme.labelPrimary
+    val ink = if (destructive) COUITheme.colorScheme.error.copy(alpha = if (enabled) 1f else .35f)
         else if (enabled) colors.textColor else colors.disabledTextColor
     Box(modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
         .then(if (LocalDialogActionRow.current) Modifier.fillMaxHeight() else Modifier)
@@ -65,7 +65,7 @@ fun MusicDialogButton(text: String, onClick: () -> Unit, modifier: Modifier = Mo
         .clickable(enabled = enabled, role = Role.Button, interactionSource = press.source, indication = null, onClick = onClick)
         .padding(insideMargin), contentAlignment = Alignment.Center) {
         Text(text, color = ink, textAlign = TextAlign.Center,
-            style = textStyle ?: MiuixTheme.textStyles.button.copy(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium))
+            style = textStyle ?: COUITheme.textStyles.buttonL.copy(fontSize = 16.sp, lineHeight = 22.sp, fontWeight = FontWeight.Medium))
     }
 }
 
@@ -73,5 +73,5 @@ fun MusicDialogButton(text: String, onClick: () -> Unit, modifier: Modifier = Mo
     val dark = isInDarkTheme()
     return ButtonDefaults.textButtonColors(
         color = Color.White.copy(alpha = if (dark) .13f else .66f),
-        textColor = MiuixTheme.colorScheme.onBackground)
+        textColor = COUITheme.colorScheme.labelPrimary)
 }

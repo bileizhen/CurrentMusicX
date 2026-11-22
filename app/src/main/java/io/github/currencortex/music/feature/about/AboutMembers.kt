@@ -35,11 +35,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.basic.ArrowRight
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.icon.COUIIcons
+import io.github.suqi8.coui.kmp.icon.basic.ArrowRight
 import io.github.currencortex.music.ui.component.MusicOverlayDialog as OverlayDialog
-import top.yukonga.miuix.kmp.theme.MiuixTheme.colorScheme
+import io.github.suqi8.coui.kmp.theme.COUITheme.colorScheme
 
 internal data class MemberFocus(val member: AboutMember, val group: String)
 
@@ -82,11 +82,11 @@ private object QqAvatarCache {
 internal fun QqAvatar(qq: String, size: Dp = 44.dp, spec: Int = 100, modifier: Modifier = Modifier) {
     val bitmap by produceState<Bitmap?>(null, qq, spec) { value = QqAvatarCache.load(qq, spec) }
     Box(modifier.size(size).clip(CircleShape)
-        .background(colorScheme.onSurface.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
+        .background(colorScheme.labelPrimary.copy(alpha = 0.06f)), contentAlignment = Alignment.Center) {
         val loaded = bitmap
         if (loaded != null) Image(loaded.asImageBitmap(), contentDescription = null,
             contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
-        else Text(qq.takeLast(2), fontSize = (size.value * 0.27f).sp, color = colorScheme.onSurfaceVariantSummary)
+        else Text(qq.takeLast(2), fontSize = (size.value * 0.27f).sp, color = colorScheme.labelSecondaryVariant)
     }
 }
 
@@ -99,9 +99,9 @@ internal fun MemberRow(member: AboutMember, onClick: () -> Unit) {
         endActions = {
             // 与下方链接行同一箭头，提示这一行可以点开。
             Image(
-                imageVector = MiuixIcons.Basic.ArrowRight,
+                imageVector = COUIIcons.Basic.ArrowRight,
                 contentDescription = null,
-                colorFilter = ColorFilter.tint(colorScheme.onSurfaceVariantActions),
+                colorFilter = ColorFilter.tint(colorScheme.labelTertiary),
                 modifier = Modifier.size(width = 10.dp, height = 16.dp).align(Alignment.CenterVertically),
             )
         },
@@ -179,16 +179,16 @@ internal fun MemberDetailDialog(show: Boolean, focus: MemberFocus?, onDismiss: (
                     QqAvatar(current.member.qq, size = 76.dp, spec = 640)
                     Text(current.member.name, fontSize = 20.sp, fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(top = 12.dp))
-                    Text(current.group, fontSize = 13.sp, color = colorScheme.onSurfaceVariantSummary,
+                    Text(current.group, fontSize = 13.sp, color = colorScheme.labelSecondaryVariant,
                         modifier = Modifier.padding(top = 4.dp))
                     HorizontalDivider(Modifier.padding(vertical = 16.dp),
-                        color = colorScheme.onSurface.copy(alpha = 0.08f))
+                        color = colorScheme.labelPrimary.copy(alpha = 0.08f))
                     MemberInfoRow("分工", current.member.role)
                 }
                 current.member.detail?.let { detail ->
                     // 详情可能有多行（作者的贡献说明是分条的），限高后可滚动，不挤走下面的关闭按钮。
                     Text(detail, fontSize = 13.sp, lineHeight = 21.sp,
-                        color = colorScheme.onSurface,
+                        color = colorScheme.labelPrimary,
                         modifier = Modifier.weight(1f, fill = false).fillMaxWidth().heightIn(max = 300.dp)
                             .verticalScroll(rememberScrollState())
                             .padding(top = 12.dp))
@@ -208,7 +208,7 @@ internal fun MemberDetailDialog(show: Boolean, focus: MemberFocus?, onDismiss: (
 private fun MemberInfoRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text(label, fontSize = 13.sp, color = colorScheme.onSurfaceVariantSummary,
+        Text(label, fontSize = 13.sp, color = colorScheme.labelSecondaryVariant,
             modifier = Modifier.width(48.dp))
         Text(value, fontSize = 13.sp, modifier = Modifier.weight(1f))
     }

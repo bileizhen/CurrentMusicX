@@ -25,8 +25,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.effects.NativeEffectTile
 import kotlinx.coroutines.delay
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.abs
 import java.util.Locale
 
@@ -186,9 +186,9 @@ private val MASTER_CARD_EMOTIONS = setOf("ecstatic", "passionate", "energetic", 
 
 @Composable internal fun NativeMoreEffectRow(tile: NativeEffectTile, chosen: Boolean, loading: Boolean,
     enabled: Boolean, onDetails: () -> Unit, onApply: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Row(Modifier.padding(horizontal = 16.dp).fillMaxWidth().heightIn(min = 84.dp)
-        .clip(RoundedCornerShape(6.dp)).background(colors.surface)
+        .clip(RoundedCornerShape(6.dp)).background(colors.cardBackground)
         .padding(horizontal = 12.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         Column(Modifier.weight(1f).testTag("sound_more_${tile.id}").clickable(role = Role.Button, onClick = onDetails),
@@ -198,18 +198,18 @@ private val MASTER_CARD_EMOTIONS = setOf("ecstatic", "passionate", "energetic", 
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 EffectsMembership(tile.membership)
             }
-            if (tile.description.isNotBlank()) Text(tile.description, fontSize = 12.sp, color = colors.onSurfaceVariantSummary,
+            if (tile.description.isNotBlank()) Text(tile.description, fontSize = 12.sp, color = colors.labelSecondaryVariant,
                 maxLines = 1, overflow = TextOverflow.Ellipsis)
             fun number(value: Long) = if (value < 10000) value.toString() else String.format(Locale.ROOT, "%.1f万", value / 10000.0)
             tile.useCount?.let { count -> Text("${number(count)}人使用" + (tile.trackCount?.let { " | ${number(it)}条动态" } ?: ""),
-                fontSize = 11.sp, color = colors.onSurfaceVariantSummary) }
+                fontSize = 11.sp, color = colors.labelSecondaryVariant) }
         }
         Box(Modifier.widthIn(min = 60.dp).heightIn(min = 32.dp).clip(RoundedCornerShape(24.dp))
-            .background((if (chosen) colors.onSurfaceVariantSummary else colors.primary).copy(alpha = .08f))
+            .background((if (chosen) colors.labelSecondaryVariant else colors.primary).copy(alpha = .08f))
             .clickable(enabled = enabled, role = Role.Button, onClick = onApply).padding(horizontal = 14.dp, vertical = 6.dp),
             contentAlignment = Alignment.Center) {
             Text(if (chosen) (if (loading) "取消加载" else "取消") else "使用", fontSize = 13.sp,
-                color = if (enabled) colors.primary else colors.onSurfaceVariantSummary)
+                color = if (enabled) colors.primary else colors.labelSecondaryVariant)
         }
     }
 }

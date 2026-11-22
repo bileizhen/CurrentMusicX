@@ -15,8 +15,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.profile.PostAttachment
 import io.github.currencortex.music.ui.component.*
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 internal fun postAttachmentLabel(type: String) = when (type) {
     "song" -> "单曲"; "album" -> "专辑"; "artist" -> "歌手"; "playlist" -> "歌单"; else -> "音乐内容"
@@ -24,8 +24,8 @@ internal fun postAttachmentLabel(type: String) = when (type) {
 
 @Composable internal fun PostAttachmentTile(card: PostAttachment, modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null, enabled: Boolean = true, trailing: @Composable RowScope.() -> Unit = {}) {
-    val colors = MiuixTheme.colorScheme
-    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(colors.onSurface.copy(alpha = .04f))
+    val colors = COUITheme.colorScheme
+    Row(modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp)).background(colors.labelPrimary.copy(alpha = .04f))
         .then(if (onClick != null) Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick) else Modifier)
         .heightIn(min = 68.dp).padding(10.dp), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -33,7 +33,7 @@ internal fun postAttachmentLabel(type: String) = when (type) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(card.name, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
             Text(listOf(postAttachmentLabel(card.type), card.sub).filter(String::isNotBlank).joinToString(" · "),
-                fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.onSurfaceVariantSummary)
+                fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = colors.labelSecondaryVariant)
         }
         trailing()
     }
@@ -41,7 +41,7 @@ internal fun postAttachmentLabel(type: String) = when (type) {
 
 @Composable internal fun PostAction(icon: ImageVector, label: String, click: () -> Unit, modifier: Modifier = Modifier,
     count: Int? = null, selected: Boolean = false, enabled: Boolean = true) {
-    val color = if (selected) MiuixTheme.colorScheme.primary else MiuixTheme.colorScheme.onSurfaceVariantSummary
+    val color = if (selected) COUITheme.colorScheme.primary else COUITheme.colorScheme.labelSecondaryVariant
     GlassIconButton(click, label, modifier.semantics { this.selected = selected }, enabled = enabled) {
         if (count == null) {
             Icon(icon, null, Modifier.size(21.dp), tint = color.copy(alpha = if (enabled) 1f else .4f))

@@ -12,7 +12,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.currencortex.music.ui.util.collectAsPageState
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -22,7 +22,7 @@ import io.github.currencortex.music.data.library.*
 import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.*
+import io.github.suqi8.coui.kmp.basic.*
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -36,7 +36,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
                 Card(Modifier.weight(1f).fillMaxHeight().testTag(tag), onClick = { navigate(route) }, showIndication = true) {
                     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Text("打开音乐库", fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+                        Text("打开音乐库", fontSize = 11.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f))
                     }
                 }
             }
@@ -44,7 +44,7 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
         Card(Modifier.fillMaxWidth().testTag("open_local_music"), onClick = { navigate("lib/local") }, showIndication = true) {
             Column(Modifier.padding(14.dp)) {
                 Text("本地音乐", fontSize = 15.sp, fontWeight = FontWeight.Medium)
-                Text("扫描手机里的音乐", fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .55f))
+                Text("扫描手机里的音乐", fontSize = 11.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .55f))
             }
         }
     }
@@ -257,6 +257,6 @@ fun catalogRoute(album: Boolean, query: String = "") = "lib/browse/${if (album) 
     SettingsGroup {
         SettingsPreference(entry.name, entry.subtitle, Modifier.testTag("catalog_entry_${entry.id}"), onClick = open,
             leading = { MusicCover(entry.cover, Modifier.size(56.dp), cornerRadius = 12.dp) },
-            trailing = { Text("›", fontSize = 22.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary) })
+            trailing = { Text("›", fontSize = 22.sp, color = COUITheme.colorScheme.labelSecondaryVariant) })
     }
 }

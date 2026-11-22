@@ -28,10 +28,10 @@ import io.github.currencortex.music.ui.component.LocalDocumentRequests
 import io.github.currencortex.music.ui.component.nativeui.SettingsSegmentedControl
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
+import io.github.suqi8.coui.kmp.basic.ButtonDefaults
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun SongShareDialog(song: Song, onDismiss: () -> Unit) {
     val context = LocalContext.current
@@ -69,7 +69,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 } else Text("海报生成失败，请重试", Modifier.testTag("song_share_error"))
             }
             if (poster != null && !poster.coverLoaded) Text("封面暂未加载，可重新生成海报", fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
             MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MusicDialogButton("保存图片", onClick = {
                     if (poster != null) scope.launch {
@@ -85,7 +85,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                     catch (cancelled: CancellationException) { throw cancelled }
                     catch (_: Exception) { message("无法打开分享面板，请保存图片后分享", error = true) }
                 }, enabled = poster != null, colors = ButtonDefaults.textButtonColors(
-                    color = MiuixTheme.colorScheme.primary, textColor = MiuixTheme.colorScheme.onPrimary),
+                    color = COUITheme.colorScheme.primary, textColor = COUITheme.colorScheme.labelOnColor),
                     modifier = Modifier.weight(1f).testTag("song_share_send"))
             }
             MusicDialogActions(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

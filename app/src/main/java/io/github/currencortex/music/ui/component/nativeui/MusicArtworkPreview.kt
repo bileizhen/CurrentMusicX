@@ -51,13 +51,13 @@ import io.github.currencortex.music.ui.component.MusicCover
 import io.github.currencortex.music.ui.component.MusicIcons
 import io.github.currencortex.music.ui.component.musicDialogMaterial
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.blur.blur
-import top.yukonga.miuix.kmp.blur.drawBackdrop
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.DialogLayout
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.blur.Backdrop
+import io.github.suqi8.coui.kmp.blur.blur
+import io.github.suqi8.coui.kmp.blur.drawBackdrop
+import io.github.suqi8.coui.kmp.theme.COUITheme
+import io.github.suqi8.coui.kmp.utils.COUIPopupUtils.Companion.DialogLayout
 import kotlin.math.abs
 
 /** A root overlay: only the page is sampled, so neither the lifted cover nor the menu blurs itself. */
@@ -114,7 +114,7 @@ import kotlin.math.abs
 ) {
     val density = LocalDensity.current
     val blurEnabled = LocalGlassBlurEnabled.current
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     var origin by remember { mutableStateOf(Offset.Zero) }
     var panelHeight by remember { mutableIntStateOf(0) }
     LaunchedEffect(panelHeight) { if (panelHeight > 0) onContentReady() }
@@ -180,7 +180,7 @@ import kotlin.math.abs
         .testTag("artwork_preview_${item.id}")
         .onGloballyPositioned { rows[item.id] = it }
         .drawBehind {
-            if (selected == item.id) drawRoundRect(colors.onSurface.copy(alpha = .12f),
+            if (selected == item.id) drawRoundRect(colors.labelPrimary.copy(alpha = .12f),
                 cornerRadius = CornerRadius(16.dp.toPx()))
         }.clickable(enabled = currentEnabled && item.enabled, role = Role.Button,
             interactionSource = remember { MutableInteractionSource() }, indication = null) { currentActivate(item) }
@@ -293,9 +293,9 @@ import kotlin.math.abs
                     Column(Modifier.weight(1f).then(itemModifier(action))
                         .padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        action.icon?.let { Icon(it, null, Modifier.size(20.dp), tint = colors.onSurface) }
+                        action.icon?.let { Icon(it, null, Modifier.size(20.dp), tint = colors.labelPrimary) }
                         Text(action.label, fontSize = 11.sp, maxLines = 1,
-                            color = colors.onSurface.copy(alpha = if (enabled && action.enabled) 1f else .38f))
+                            color = colors.labelPrimary.copy(alpha = if (enabled && action.enabled) 1f else .38f))
                     }
                 }
             }
@@ -307,7 +307,7 @@ import kotlin.math.abs
                     .padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(action.label, Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.Normal,
                         maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    if (action.children.isNotEmpty()) Icon(MusicIcons.Forward, null, Modifier.size(14.dp), tint = colors.onSurface.copy(alpha = .5f))
+                    if (action.children.isNotEmpty()) Icon(MusicIcons.Forward, null, Modifier.size(14.dp), tint = colors.labelPrimary.copy(alpha = .5f))
                 }
             }
             if (menuAbove) quickActions()

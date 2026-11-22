@@ -27,9 +27,9 @@ import io.github.currencortex.music.data.settings.MusicPlatform
 import io.github.currencortex.music.feature.qqmusic.qqRoute
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.component.nativeui.*
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun SearchScreen(vm: SearchViewModel, player: PlayerController,
     actions: (@Composable (Song) -> Unit)? = null, roomName: String? = null, onBack: (() -> Unit)? = null,
@@ -95,7 +95,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     LaunchedEffect(page.songs) { if (page.songs.isNotEmpty()) onResults(page.songs) }
     fun submit(keyword: String = state.query) { focus.clearFocus(); keyboard?.hide(); vm.search(keyword) }
     fun back() { focus.clearFocus(); keyboard?.hide(); onBack?.invoke() }
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     val showSuggestions = inputFocused && state.query.isNotBlank() && state.query.trim() != state.submitted && suggestions.query == state.query.trim()
     var headerHeight by remember { mutableIntStateOf(0) }
     val density = LocalDensity.current
@@ -162,11 +162,11 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
             }
             if (roomName == null && page.songs.isNotEmpty() && onPlayAll != null)
                 SearchResultsToolbar(page.songs.size, page.total, { onPlayAll(page.songs) }, { page.songs.forEach { player.add(it) } })
-            else Text("找到 $count", Modifier.padding(vertical = 12.dp), fontSize = 13.sp, color = colors.onSurface.copy(alpha = .45f))
+            else Text("找到 $count", Modifier.padding(vertical = 12.dp), fontSize = 13.sp, color = colors.labelPrimary.copy(alpha = .45f))
         }
         if (state.searched && page.loaded && !page.loading && page.error == null && page.count == 0) item {
             Text("没有找到${category.labelFor(platform)}，试试其他关键词", fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f))
+                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f))
         }
         itemsIndexed(page.entries, key = { _, entry -> "${category.route}-${entry.stableId}" },
             contentType = { _, _ -> "catalog" }) { _, entry ->
@@ -185,9 +185,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                         SearchCategory.PLAYLIST -> if (platform == MusicPlatform.QQ_MUSIC) "QQ 音乐歌单" else "网易云歌单"
                         else -> "专辑"
                     } }, fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurface.copy(alpha = .6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        color = COUITheme.colorScheme.labelPrimary.copy(alpha = .6f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                Text("›", fontSize = 22.sp, color = MiuixTheme.colorScheme.onSurface.copy(alpha = .35f))
+                Text("›", fontSize = 22.sp, color = COUITheme.colorScheme.labelPrimary.copy(alpha = .35f))
             }
         }
         itemsIndexed(page.songs, key = { _, song -> song.id }, contentType = { _, _ -> category }) { _, song ->

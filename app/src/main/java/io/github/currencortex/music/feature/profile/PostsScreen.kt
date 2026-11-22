@@ -12,7 +12,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Rect
-import top.yukonga.miuix.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
@@ -27,8 +27,8 @@ import io.github.currencortex.music.data.song.Song
 import io.github.currencortex.music.feature.update.MarkdownText
 import io.github.currencortex.music.ui.component.*
 import io.github.currencortex.music.ui.util.collectAsPageState
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -80,24 +80,24 @@ private fun postTime(seconds: Long): String {
                 SettingsPreference(if (account.account == null) "登录后分享" else "分享此刻",
                     "聊聊音乐，记录你的日常", Modifier.testTag("post_create"), onClick = {
                         if (account.account == null) navigate("user/login") else vm.editor(true)
-                    }, leading = { Icon(MusicIcons.Add, null, Modifier.size(24.dp), tint = MiuixTheme.colorScheme.primary) },
-                    trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = MiuixTheme.colorScheme.onSurfaceVariantSummary) })
+                    }, leading = { Icon(MusicIcons.Add, null, Modifier.size(24.dp), tint = COUITheme.colorScheme.primary) },
+                    trailing = { Icon(MusicIcons.Forward, null, Modifier.size(16.dp), tint = COUITheme.colorScheme.labelSecondaryVariant) })
             }
         }
         item { Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("社区动态", Modifier.weight(1f), fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
-            Text(if (state.loaded) "${state.total} 条" else "", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            Text(if (state.loaded) "${state.total} 条" else "", fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
         } }
-        state.message?.let { item { Text(it, fontSize = 13.sp, color = MiuixTheme.colorScheme.primary) } }
+        state.message?.let { item { Text(it, fontSize = 13.sp, color = COUITheme.colorScheme.primary) } }
         state.error?.let { item { Text(it); MusicTextAction("重试", { vm.reload() }, Modifier.testTag("post_retry")) } }
         if (state.loading && state.posts.isEmpty()) item { LoadingPostList() }
         if (state.loaded && !state.loading && state.posts.isEmpty() && state.error == null) item {
             SettingsGroup {
                 Column(Modifier.fillMaxWidth().padding(24.dp).testTag("posts_empty"),
                     horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(MusicIcons.Comment, null, Modifier.size(32.dp), tint = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    Icon(MusicIcons.Comment, null, Modifier.size(32.dp), tint = COUITheme.colorScheme.labelSecondaryVariant)
                     Text("还没有动态", fontSize = 17.sp, fontWeight = FontWeight.Medium)
-                    Text("分享一首歌，开启一段交流", fontSize = 13.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                    Text("分享一首歌，开启一段交流", fontSize = 13.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
                 }
             }
         }
@@ -115,7 +115,7 @@ private fun postTime(seconds: Long): String {
                                 UserRoleBadge(post.author.role)
                             }
                             UserIdentityDetails(post.author.title, post.author.ipRegion)
-                            Text(postTime(post.createdAt), fontSize = 11.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                            Text(postTime(post.createdAt), fontSize = 11.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
                         }
                     }
                     var bounds by remember(post.id) { mutableStateOf<Rect?>(null) }
@@ -179,7 +179,7 @@ private fun postTime(seconds: Long): String {
                         Text(comment.content, fontSize = 14.sp)
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(postTime(comment.createdAt), Modifier.weight(1f), fontSize = 11.sp,
-                                color = MiuixTheme.colorScheme.onSurface.copy(alpha = .5f))
+                                color = COUITheme.colorScheme.labelPrimary.copy(alpha = .5f))
                             if (comment.canDelete) MusicTextAction("删除", { deletingComment = comment },
                                 Modifier.testTag("post_comment_delete_${comment.id}"), enabled = !state.busy)
                         }

@@ -32,10 +32,10 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
-import top.yukonga.miuix.kmp.basic.SliderDefaults
-import top.yukonga.miuix.kmp.blur.Backdrop
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.SliderDefaults
+import io.github.suqi8.coui.kmp.blur.Backdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -53,7 +53,7 @@ val GlassSliderGeometry=SemanticsPropertyKey<GlassSliderFrame>("GlassSliderGeome
     backdrop:Backdrop?=LocalGlassBackdrop.current,onValueChangeCancelled:(()->Unit)?=null) {
     require(valueRange.start.isFinite()&&valueRange.endInclusive.isFinite()&&valueRange.start<valueRange.endInclusive)
     require(steps>=0)
-    val colors=MiuixTheme.colorScheme
+    val colors=COUITheme.colorScheme
     val density=LocalDensity.current
     val reversed=(LocalLayoutDirection.current==LayoutDirection.Rtl)!=reverseDirection
     val haptics=LocalHapticFeedback.current
@@ -174,9 +174,9 @@ val GlassSliderGeometry=SemanticsPropertyKey<GlassSliderFrame>("GlassSliderGeome
         },contentAlignment=Alignment.CenterStart) {
         // Capture only the inert track, never a parent layer containing the thumb itself.
         val center=radius+(if(reversed)1-fraction else fraction)*(width-2*radius).coerceAtLeast(0f)
-        val trackColor=if(enabled)colors.sliderBackground else colors.disabledSecondary
-        val fillColor=if(enabled)colors.primary else colors.disabledPrimarySlider
-        val thumbColor=if(enabled)colors.onPrimary else colors.disabledOnPrimary
+        val trackColor=if(enabled)colors.sliderBackground else colors.disable
+        val fillColor=if(enabled)colors.primary else colors.disable
+        val thumbColor=if(enabled)colors.labelOnColor else colors.disabledSliderThumb
         Canvas(Modifier.fillMaxWidth().height(28.dp)
             .then(if(trackBackdrop!=null)Modifier.layerBackdrop(trackBackdrop)else Modifier)
             .clip(CircleShape).background(trackColor)) {
@@ -186,7 +186,7 @@ val GlassSliderGeometry=SemanticsPropertyKey<GlassSliderFrame>("GlassSliderGeome
                 if(showKeyPoints)points.forEach {point->
                     val p=(point-valueRange.start)/span
                     val x=radius+(if(reversed)1-p else p)*(size.width-2*radius).coerceAtLeast(0f)
-                    drawCircle(if(p<=fraction)colors.sliderKeyPointForeground else colors.sliderKeyPoint,
+                    drawCircle(if(p<=fraction)colors.labelOnColor else colors.labelTertiary,
                         size.height/7.5f,Offset(x,size.height/2))
                 }
         }

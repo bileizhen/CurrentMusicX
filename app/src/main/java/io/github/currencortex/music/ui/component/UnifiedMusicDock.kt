@@ -27,13 +27,13 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.currencortex.music.ui.component.nativeui.ElasticPress
 
 internal val DockExpansion = SemanticsPropertyKey<Float>("DockExpansion")
 internal val LocalMusicDockNavigation = staticCompositionLocalOf<(@Composable (Modifier) -> Unit)?> { null }
 internal val LocalMusicDockSurface = staticCompositionLocalOf<@Composable (Modifier, () -> Shape, @Composable () -> Unit) -> Unit> {
-    { modifier, shape, body -> Box(modifier.background(MiuixTheme.colorScheme.surfaceContainer, shape())) { body() } }
+    { modifier, shape, body -> Box(modifier.background(COUITheme.colorScheme.cardBackground, shape())) { body() } }
 }
 
 private class DockShape(val height: Float, topStart: CornerSize, topEnd: CornerSize,

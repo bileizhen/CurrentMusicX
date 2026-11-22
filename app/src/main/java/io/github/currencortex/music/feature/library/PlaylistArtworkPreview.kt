@@ -24,7 +24,7 @@ import io.github.currencortex.music.ui.component.MusicDialogButton
 import io.github.currencortex.music.ui.component.nativeui.SettingsUiScope
 import io.github.currencortex.music.ui.component.nativeui.GlassMenuItem
 import io.github.currencortex.music.ui.component.nativeui.MusicArtworkPreview
-import top.yukonga.miuix.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.Text
 
 @Composable internal fun PlaylistArtworkPreview(
     vm: LibraryViewModel, playlist: Playlist, anchor: Rect, canPlay: Boolean, onPlay: (shuffle: Boolean) -> Unit,

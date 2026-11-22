@@ -8,11 +8,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** API neutral surface host. The root supplies the shared backdrop only on supported devices. */
 val LocalMusicGlassSurface = staticCompositionLocalOf<@Composable (Modifier, @Composable BoxScope.() -> Unit) -> Unit> {
     { modifier, content ->
-        Box(modifier.clip(CircleShape).background(MiuixTheme.colorScheme.surfaceContainer)) { content() }
+        Box(modifier.clip(CircleShape).background(COUITheme.colorScheme.cardBackground)) { content() }
     }
 }

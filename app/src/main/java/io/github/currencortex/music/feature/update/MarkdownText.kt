@@ -37,13 +37,13 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.HorizontalDivider
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.HorizontalDivider
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import top.yukonga.miuix.kmp.basic.TextButton
+import io.github.suqi8.coui.kmp.basic.TextButton
 
 /** Ordered-list items: the number is kept so the rendering stays readable when copied. */
 private val orderedItem = Regex("""^(\d{1,3})[.)]\s+(.+)$""")
@@ -147,7 +147,7 @@ internal fun stripVersionHeadings(version: String, notes: String): String {
 internal fun MarkdownText(markdown: String, modifier: Modifier = Modifier, onLinkClick: ((String) -> Unit)? = null,
                           compact: Boolean = false, allowImages: Boolean = true) {
     val context = LocalContext.current
-    val linkStyle = SpanStyle(color = MiuixTheme.colorScheme.primary, textDecoration = TextDecoration.Underline)
+    val linkStyle = SpanStyle(color = COUITheme.colorScheme.primary, textDecoration = TextDecoration.Underline)
     val blocks = remember(markdown, allowImages) { markdownBlocks(markdown).map {
         if (!allowImages && it.kind == MarkdownKind.IMAGE) MarkdownBlock(MarkdownKind.TEXT, it.text) else it
     } }
@@ -173,7 +173,7 @@ internal fun MarkdownText(markdown: String, modifier: Modifier = Modifier, onLin
                         fontSize = if (compact) 15.sp else 17.sp, lineHeight = if (compact) 21.sp else 24.sp)
                 }
                 MarkdownKind.CODE -> Text(block.text, fontFamily = FontFamily.Monospace, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
-                MarkdownKind.QUOTE -> Text(inlineMarkdown(block.text, linkStyle, onLink), modifier = Modifier.padding(start = 12.dp), color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                MarkdownKind.QUOTE -> Text(inlineMarkdown(block.text, linkStyle, onLink), modifier = Modifier.padding(start = 12.dp), color = COUITheme.colorScheme.labelSecondaryVariant)
                 MarkdownKind.TEXT -> Text(inlineMarkdown(block.text, linkStyle, onLink),
                     fontSize = if (compact) 15.sp else 17.sp, lineHeight = if (compact) 21.sp else 24.sp)
             }
@@ -191,7 +191,7 @@ private fun ReleaseNoteImage(url: String, alt: String, compact: Boolean = false)
     val imageSize = if (compact) Modifier.heightIn(max = 152.dp).aspectRatio(16f / 9f)
         else Modifier.heightIn(max = 240.dp).aspectRatio(ratio)
     Box(Modifier.fillMaxWidth().then(imageSize)
-        .clip(RoundedCornerShape(16.dp)).background(MiuixTheme.colorScheme.onSurface.copy(alpha = .05f))
+        .clip(RoundedCornerShape(16.dp)).background(COUITheme.colorScheme.labelPrimary.copy(alpha = .05f))
         .testTag("update_note_image"), contentAlignment = Alignment.Center) {
         AsyncImage(model = remember(context, url, attempt) {
             ImageRequest.Builder(context).data(url).size(1200, 1200)
@@ -205,7 +205,7 @@ private fun ReleaseNoteImage(url: String, alt: String, compact: Boolean = false)
             Text("图片暂时无法加载", fontSize = 13.sp, modifier = Modifier.testTag("update_note_image_error"))
             TextButton("重新加载图片", onClick = { attempt++ })
         } else if (!loaded) Text("图片加载中…", fontSize = 13.sp,
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+            color = COUITheme.colorScheme.labelSecondaryVariant)
     }
 }
 

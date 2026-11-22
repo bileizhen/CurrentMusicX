@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import io.github.currencortex.music.R
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** The overlay has its own bounds so scaled server decorations never crop the avatar. */
 @Composable fun DecoratedAvatar(avatarUrl: String?, decorationUrl: String?, modifier: Modifier = Modifier,
@@ -28,9 +28,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     // Row layouts need a constant footprint; the ring then overflows unclipped via requiredSize.
     Box(modifier.size(if (reserveOverlay && decorationUrl != null) overlaySize else size), contentAlignment = Alignment.Center) {
         // Accounts without an avatar get a person glyph on a tinted disc, never a bare music note.
-        Box(Modifier.size(size).clip(CircleShape).background(MiuixTheme.colorScheme.tertiaryContainer), contentAlignment = Alignment.Center) {
+        Box(Modifier.size(size).clip(CircleShape).background(COUITheme.colorScheme.secondary), contentAlignment = Alignment.Center) {
             Image(painterResource(R.drawable.user_avatar_placeholder), null, Modifier.fillMaxSize(.6f),
-                colorFilter = ColorFilter.tint(MiuixTheme.colorScheme.onSurfaceVariantSummary))
+                colorFilter = ColorFilter.tint(COUITheme.colorScheme.labelSecondaryVariant))
             if (avatarUrl != null) AsyncImage(ImageRequest.Builder(LocalContext.current).data(avatarUrl).size(256).build(),
                 contentDescription = "用户头像", contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
                 onError = { onImageError(it.result.throwable) })

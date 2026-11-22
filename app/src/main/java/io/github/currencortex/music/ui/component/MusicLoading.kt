@@ -24,7 +24,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 private val coverPrefetchPermits = Semaphore(3)
 private val LocalPlaceholderPulse = staticCompositionLocalOf<State<Float>?> { null }
@@ -45,7 +45,7 @@ private val LocalPlaceholderPulse = staticCompositionLocalOf<State<Float>?> { nu
     shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(12.dp)) {
     val pulse = if (animated) LocalPlaceholderPulse.current ?: rememberPlaceholderPulse() else null
     Box(modifier.graphicsLayer { alpha = pulse?.value ?: 1f }
-        .background(MiuixTheme.colorScheme.onSurface.copy(alpha = .08f), shape))
+        .background(COUITheme.colorScheme.labelPrimary.copy(alpha = .08f), shape))
 }
 
 /** Use the same font metrics and line-height trim as the final native text, including custom fonts. */
@@ -55,7 +55,7 @@ private val LocalPlaceholderPulse = staticCompositionLocalOf<State<Float>?> { nu
     modifier: Modifier = Modifier) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     Box(modifier.fillMaxWidth()) {
-        top.yukonga.miuix.kmp.basic.Text(List(widths.size) { "音乐" }.joinToString("\n"),
+        io.github.suqi8.coui.kmp.basic.Text(List(widths.size) { "音乐" }.joinToString("\n"),
             Modifier.clearAndSetSemantics { }, fontSize = fontSize, lineHeight = lineHeight, fontWeight = weight,
             color = androidx.compose.ui.graphics.Color.Transparent, minLines = widths.size, maxLines = widths.size)
         Column(Modifier.matchParentSize(), verticalArrangement = Arrangement.SpaceAround) {

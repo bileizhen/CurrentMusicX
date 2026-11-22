@@ -39,14 +39,14 @@ import io.github.currencortex.music.ui.component.MusicCover
 import io.github.currencortex.music.ui.component.MusicDestinationRow
 import io.github.currencortex.music.ui.component.nativeui.LocalGlassBackdrop
 import io.github.currencortex.music.ui.component.nativeui.rememberGlassBackdrop
-import top.yukonga.miuix.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Card
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import kotlin.math.abs
 import kotlin.math.sign
 
@@ -246,7 +246,7 @@ internal class PlayerSidePageState(private val scope: CoroutineScope) {
 
 @Composable internal fun PlayerSidePageContent(song: Song?, navigation: PlayerSongNavigation,
     aiEnabled: Boolean, onAi: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     BoxWithConstraints(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding()
             .padding(start = maxWidth * (1f - SIDE_TRAVEL)).testTag("player_side_scroll"),
@@ -262,7 +262,7 @@ internal class PlayerSidePageState(private val scope: CoroutineScope) {
                     if (song != null && song.durationMs > 0) {
                         val seconds = song.durationMs / 1000
                         Text("时长 ${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}",
-                            color = colors.onSurfaceVariantSummary, fontSize = 13.sp)
+                            color = colors.labelSecondaryVariant, fontSize = 13.sp)
                     }
                 }
             } } }

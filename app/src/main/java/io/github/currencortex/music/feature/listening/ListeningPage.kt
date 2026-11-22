@@ -48,23 +48,23 @@ import io.github.currencortex.music.ui.component.nativeui.GlassIconButton
 import io.github.currencortex.music.ui.component.nativeui.SettingsSegmentedControl
 import io.github.currencortex.music.ui.component.nativeui.LocalGlassBackdrop
 import io.github.currencortex.music.ui.component.nativeui.rememberGlassBackdrop
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Icon
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import io.github.currencortex.music.ui.component.LocalMusicBottomInset
 import java.time.LocalDate
 
 internal val FootprintDark: Boolean @Composable get() = io.github.currencortex.music.ui.theme.isInDarkTheme()
-internal val FootprintInk: Color @Composable get() = if (FootprintDark) MiuixTheme.colorScheme.onSurface else Color(0xFF283248)
-internal val FootprintMuted: Color @Composable get() = if (FootprintDark) MiuixTheme.colorScheme.onSurfaceVariantSummary else Color(0xFF9296A2)
+internal val FootprintInk: Color @Composable get() = if (FootprintDark) COUITheme.colorScheme.labelPrimary else Color(0xFF283248)
+internal val FootprintMuted: Color @Composable get() = if (FootprintDark) COUITheme.colorScheme.labelSecondaryVariant else Color(0xFF9296A2)
 internal val FootprintRed = Color(0xFFFF3A3A)
 internal val FootprintPale: Color @Composable get() = if (FootprintDark) FootprintInk.copy(alpha = .30f) else Color(0xFFE4E5E9)
-internal val FootprintSurface: Color @Composable get() = if (FootprintDark) MiuixTheme.colorScheme.surfaceContainer else Color.White
-internal val FootprintInset: Color @Composable get() = if (FootprintDark) MiuixTheme.colorScheme.surfaceContainerHigh else Color(0xFFF0F0F2)
+internal val FootprintSurface: Color @Composable get() = if (FootprintDark) COUITheme.colorScheme.cardBackground else Color.White
+internal val FootprintInset: Color @Composable get() = if (FootprintDark) COUITheme.colorScheme.cardPressed else Color(0xFFF0F0F2)
 internal val FootprintSoftRed: Color @Composable get() = if (FootprintDark) Color(0xFF633039) else Color(0xFFFFDDDD)
 internal val FootprintSoftBlue: Color @Composable get() = if (FootprintDark) Color(0xFF253E61) else Color(0xFFDCE8FA)
 internal val LocalFootprintScale = staticCompositionLocalOf { 1f }
-internal val FootprintBackground: Color @Composable get() = if (FootprintDark) MiuixTheme.colorScheme.background else Color(0xFFF8F7F9)
+internal val FootprintBackground: Color @Composable get() = if (FootprintDark) COUITheme.colorScheme.background else Color(0xFFF8F7F9)
 private val Outfit = FontFamily(Font(R.font.listening_outfit, FontWeight.Normal), Font(R.font.listening_outfit_semibold, FontWeight.SemiBold), Font(R.font.listening_outfit_bold, FontWeight.Bold), Font(R.font.listening_outfit_black, FontWeight.Black))
 private val MiSans = FontFamily(Font(R.font.listening_misans_semibold, FontWeight.SemiBold), Font(R.font.listening_misans_bold, FontWeight.Bold))
 private val MiSansSmall = FontFamily(Font(R.font.listening_misans_semibold, FontWeight.SemiBold))
@@ -252,7 +252,7 @@ private val MiSansSmall = FontFamily(Font(R.font.listening_misans_semibold, Font
                 Box(Modifier.fillMaxWidth().statusBarsPadding().height((54*s).dp)) {
                     GlassIconButton(onBack, "返回", Modifier.align(Alignment.CenterStart)
                         .padding(start=12.dp).testTag("navigate_back")) {
-                        Icon(MusicIcons.Back, null, tint=MiuixTheme.colorScheme.onBackground)
+                        Icon(MusicIcons.Back, null, tint=COUITheme.colorScheme.labelPrimary)
                     }
                     Column(Modifier.align(Alignment.Center).alpha(1f-collapsed).testTag("listening_title"),horizontalAlignment=Alignment.CenterHorizontally,verticalArrangement=Arrangement.spacedBy((4*s).dp)) {
                         FootprintText(if(source==ListeningSource.NETEASE) "云村听歌足迹" else "本机听歌足迹",size=17f,weight=FontWeight.Bold)
@@ -260,7 +260,7 @@ private val MiSansSmall = FontFamily(Font(R.font.listening_misans_semibold, Font
                     }
                     GlassIconButton({ rules=true }, "听歌足迹规则", Modifier.align(Alignment.CenterEnd)
                         .padding(end=12.dp).testTag("listening_rules")) {
-                        Icon(MusicIcons.File, null, tint=MiuixTheme.colorScheme.onBackground)
+                        Icon(MusicIcons.File, null, tint=COUITheme.colorScheme.labelPrimary)
                     }
                 }
                 }
@@ -295,7 +295,7 @@ private val MiSansSmall = FontFamily(Font(R.font.listening_misans_semibold, Font
 @Composable private fun ListeningDurationInfo(open: () -> Unit, onBounds: (Rect) -> Unit, modifier: Modifier = Modifier) {
     GlassIconButton(open, "收听时长说明", modifier.testTag("listening_duration_info"), size=32.dp,
         opensMenu=true, onBoundsChanged=onBounds) {
-        Icon(MusicIcons.Info, null, Modifier.size(20.dp), tint=MiuixTheme.colorScheme.onBackground)
+        Icon(MusicIcons.Info, null, Modifier.size(20.dp), tint=COUITheme.colorScheme.labelPrimary)
     }
 }
 
@@ -303,7 +303,7 @@ private val MiSansSmall = FontFamily(Font(R.font.listening_misans_semibold, Font
     Box(Modifier.width((49.667f*LocalFootprintScale.current).dp).height(44.dp), contentAlignment=Alignment.Center) {
         GlassIconButton(click, if(next) "下一周期" else "上一周期", modifier=modifier, enabled=enabled) {
             Icon(MusicIcons.Forward, null, Modifier.size(20.dp).rotate(if(next) 0f else 180f),
-                tint=MiuixTheme.colorScheme.onBackground.copy(alpha=if(enabled) 1f else .38f))
+                tint=COUITheme.colorScheme.labelPrimary.copy(alpha=if(enabled) 1f else .38f))
         }
     }
 }

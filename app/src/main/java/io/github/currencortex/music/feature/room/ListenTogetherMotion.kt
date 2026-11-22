@@ -26,11 +26,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
-import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.CircularProgressIndicator
+import io.github.suqi8.coui.kmp.basic.ProgressIndicatorDefaults
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** Snapshots keep outgoing content intact; only the destination accepts input and back. */
 @Composable internal fun <T> ListenTogetherPageTransition(
@@ -79,12 +78,12 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 @Composable internal fun ListenLoadingLabel(text: String, modifier: Modifier = Modifier, primary: Boolean = false) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         ListenProgress(primary = primary)
-        Text(text, fontSize = 12.sp, color = if (primary) MiuixTheme.colorScheme.onPrimary else MiuixTheme.colorScheme.onSurfaceVariantSummary)
+        Text(text, fontSize = 12.sp, color = if (primary) COUITheme.colorScheme.labelOnColor else COUITheme.colorScheme.labelSecondaryVariant)
     }
 }
 
 @Composable internal fun ListenProgress(modifier: Modifier = Modifier, size: Dp = 16.dp, primary: Boolean = false) {
-    val ink = if (primary) MiuixTheme.colorScheme.onPrimary else MiuixTheme.colorScheme.primary
+    val ink = if (primary) COUITheme.colorScheme.labelOnColor else COUITheme.colorScheme.primary
     if (LocalMusicPageActive.current) CircularProgressIndicator(modifier.size(size), size = size, strokeWidth = 2.dp,
         colors = ProgressIndicatorDefaults.progressIndicatorColors(foregroundColor = ink, backgroundColor = ink.copy(alpha = .12f)))
     else Spacer(modifier.size(size))

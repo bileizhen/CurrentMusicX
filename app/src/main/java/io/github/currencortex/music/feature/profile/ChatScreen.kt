@@ -25,8 +25,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.luminance
 import io.github.currencortex.music.ui.component.nativeui.*
 import io.github.currencortex.music.ui.component.liquid.rememberCombinedBackdrop
-import top.yukonga.miuix.kmp.blur.layerBackdrop
-import top.yukonga.miuix.kmp.theme.LocalContentColor
+import io.github.suqi8.coui.kmp.blur.layerBackdrop
+import io.github.suqi8.coui.kmp.theme.LocalContentColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.input.pointer.pointerInput
@@ -53,8 +53,8 @@ import io.github.currencortex.music.data.profile.validMusicAttachments
 import io.github.currencortex.music.feature.update.MarkdownText
 import io.github.currencortex.music.ui.component.*
 import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.*
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -109,7 +109,7 @@ import java.util.Locale
         GlassMenuItem("chat_attach_current", "引用音乐", MusicIcons.Headphones, enabled = !state.sending,
             onClick = { referenceOpen = true }))
     SettingsUiScope {
-    CompositionLocalProvider(LocalContentColor provides MiuixTheme.colorScheme.onSurface) {
+    CompositionLocalProvider(LocalContentColor provides COUITheme.colorScheme.labelPrimary) {
     Box(Modifier.fillMaxSize().padding(bottom = bottom).testTag("discover_chat")) {
     GlassMenu(menuOpen, { menuOpen = it }, menuItems, menuAnchor, controlsBackdrop,
         GlassMenuTags("chat_menu_panel", "chat_menu_dismiss", "chat_menu_action"), menuWidth = null, content = {
@@ -164,10 +164,10 @@ import java.util.Locale
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Text("公共聊天室", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Box(Modifier.size(5.dp).background(if (state.connected) MiuixTheme.colorScheme.primary
-                            else MiuixTheme.colorScheme.onSurfaceVariantSummary, CircleShape))
+                        Box(Modifier.size(5.dp).background(if (state.connected) COUITheme.colorScheme.primary
+                            else COUITheme.colorScheme.labelSecondaryVariant, CircleShape))
                         Text(if (state.connected) "实时消息" else if (state.loaded) "正在连接…" else "与大家聊聊音乐",
-                            fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                            fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant)
                     }
                 }
                 GlassActionButton("成员 ${state.members.size}", { membersOpen = true },
@@ -183,9 +183,9 @@ import java.util.Locale
             composerHeight = with(density) { it.height.toDp() }
         }.navigationBarsPadding()) {
             state.actionError?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 6.dp), fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.error) }
+                color = COUITheme.colorScheme.error) }
             quoteHint?.let { Text(it, Modifier.padding(horizontal = 20.dp, vertical = 6.dp).testTag("chat_quote_hint"),
-                fontSize = 12.sp, color = MiuixTheme.colorScheme.onSurfaceVariantSummary) }
+                fontSize = 12.sp, color = COUITheme.colorScheme.labelSecondaryVariant) }
             state.quoting?.let { q ->
                 SettingsGroup(Modifier.padding(horizontal = 16.dp, vertical = 4.dp).testTag("chat_quoting")) {
                     SettingsPreference("引用 ${q.user?.nickname?.ifBlank { q.user.username } ?: "成员"}",
@@ -282,7 +282,7 @@ import java.util.Locale
                         leading = { UserAvatar(member, vm.container, 36.dp, reserveOverlay = false) }, trailing = {
                             if (account.account != null) GlassIconButton({ vm.mention(member); membersOpen = false },
                                 "提及 ${member.nickname}", Modifier.testTag("chat_mention_${member.id}"), surface = false) {
-                                Text("@", fontSize = 19.sp, color = MiuixTheme.colorScheme.primary)
+                                Text("@", fontSize = 19.sp, color = COUITheme.colorScheme.primary)
                             }
                         })
                 }
@@ -307,7 +307,7 @@ import java.util.Locale
     onProfile: (Long) -> Unit, onImage: (String) -> Unit, onMenu: (Rect) -> Unit, onQuote: (Long) -> Unit,
     onCard: (io.github.currencortex.music.data.profile.PostAttachment) -> Unit) {
     val user = message.user ?: ProfileUser(id = message.userId, nickname = "已注销用户")
-    val color = MiuixTheme.colorScheme
+    val color = COUITheme.colorScheme
     var actionBounds by remember(message.id) { mutableStateOf<Rect?>(null) }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // Avatar, gap, and a small opposite gutter; long messages retain their reading width.
@@ -327,16 +327,16 @@ import java.util.Locale
                     if (user.isBot) Text("AI", fontSize = 10.sp, color = color.primary)
                     GlassIconButton({ actionBounds?.let(onMenu) }, "消息操作", Modifier.testTag("chat_menu_${message.id}"),
                         size = 32.dp, opensMenu = true, surface = false, onBoundsChanged = { actionBounds = it }) {
-                        Icon(MusicIcons.More, null, Modifier.size(17.dp).rotate(90f), tint = color.onSurfaceVariantSummary)
+                        Icon(MusicIcons.More, null, Modifier.size(17.dp).rotate(90f), tint = color.labelSecondaryVariant)
                     }
                 }
                 Column(Modifier.testTag("chat_bubble_${message.id}")
                     .clip(RoundedCornerShape(if (mine) 18.dp else 6.dp, if (mine) 6.dp else 18.dp, 18.dp, 18.dp))
-                    .background(if (mine) color.primary.copy(alpha = if (color.onSurface.luminance() > .5f) .16f else .09f) else color.surfaceContainer).padding(horizontal = 12.dp, vertical = 10.dp),
+                    .background(if (mine) color.primary.copy(alpha = if (color.labelPrimary.luminance() > .5f) .16f else .09f) else color.cardBackground).padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     message.quote?.let { q ->
                         Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(8.dp))
-                            .background(color.onSurface.copy(alpha = .06f))
+                            .background(color.labelPrimary.copy(alpha = .06f))
                             .clickable { onQuote(q.id) }
                             .padding(horizontal = 8.dp, vertical = 6.dp)
                             .testTag("chat_quote_${message.id}"),
@@ -344,14 +344,14 @@ import java.util.Locale
                             Text(q.nickname.ifBlank { "引用消息" }, fontSize = 11.sp, fontWeight = FontWeight.Medium,
                                 color = color.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             Text(q.excerpt.ifBlank { "[消息]" }, fontSize = 11.sp,
-                                color = color.onSurface.copy(alpha = .6f), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                                color = color.labelPrimary.copy(alpha = .6f), maxLines = 2, overflow = TextOverflow.Ellipsis)
                         }
                     }
                     if (message.content.isNotEmpty()) SelectionContainer {
                         MarkdownText(message.content, Modifier.testTag("chat_body_${message.id}"), compact = true, allowImages = false)
                     }
                     if (message.streaming) Text(if (message.content.isEmpty()) "正在思考…" else "正在回答…",
-                        fontSize = 11.sp, color = color.onSurfaceVariantSummary)
+                        fontSize = 11.sp, color = color.labelSecondaryVariant)
                     validMusicAttachments(message.atts).forEach { card -> MusicAttachmentCard(card) { onCard(card) } }
                     vm.repository.imageUrl(vm.container.projectSession().server, message.image)?.let { url ->
                         AsyncImage(url, "聊天图片", Modifier.widthIn(max = 230.dp).fillMaxWidth().heightIn(min = 120.dp, max = 240.dp)
@@ -361,7 +361,7 @@ import java.util.Locale
                 if (message.createdAt > 0) Text(remember(message.createdAt) {
                     SimpleDateFormat("MM-dd HH:mm", Locale.getDefault()).format(Date(message.createdAt * 1000))
                 }, Modifier.padding(horizontal = 12.dp).testTag("chat_time_${message.id}"),
-                    fontSize = 10.sp, color = color.onSurface.copy(alpha = .4f))
+                    fontSize = 10.sp, color = color.labelPrimary.copy(alpha = .4f))
             }
             if (mine) Box(Modifier.padding(start = 10.dp).testTag("chat_avatar_${message.id}")
                 .combinedClickable(enabled = user.id > 0, onClick = { onProfile(user.id) }, onLongClick = { vm.mention(user) })) {

@@ -8,6 +8,8 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.github.suqi8.coui.kmp.squircle.SquircleDefaults
+import io.github.suqi8.coui.kmp.squircle.squircleSurface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,8 +28,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import io.github.currencortex.music.data.settings.AdaptiveAudioSettings
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.theme.COUITheme
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -67,8 +69,8 @@ private data class EqGainDrag(val manual: Float, val displayed: Float, val limit
 
 @Composable private fun EqFader(index: Int, value: Float, liveValue: Float?, selected: Boolean, enabled: Boolean, modifier: Modifier,
     onSelect: () -> Unit, onPreview: (Float) -> Unit, onSave: (Float) -> Unit, onCancel: () -> Unit) {
-    val colors = MiuixTheme.colorScheme
-    val ink = if (enabled) colors.primary else colors.onSurfaceVariantSummary.copy(alpha = .35f)
+    val colors = COUITheme.colorScheme
+    val ink = if (enabled) colors.primary else colors.labelSecondaryVariant.copy(alpha = .35f)
     val frequency = AdaptiveAudioSettings.FREQUENCIES[index]
     var preview by remember(value) { mutableFloatStateOf(value) }
     var drag by remember { mutableStateOf<EqGainDrag?>(null) }
@@ -84,12 +86,15 @@ private data class EqGainDrag(val manual: Float, val displayed: Float, val limit
     val save by rememberUpdatedState(onSave)
     val cancel by rememberUpdatedState(onCancel)
     fun resolve(v: Float) = (v.coerceIn(-6f, 6f) * 10).roundToInt() / 10f
-    Column(modifier.clip(RoundedCornerShape(10.dp)).background(
-        if (selected) ink.copy(alpha = .07f) else colors.onSurface.copy(alpha = 0f)).padding(vertical = 6.dp),
+    Column(modifier.squircleSurface(
+        color = if (selected) ink.copy(alpha = .07f) else colors.labelPrimary.copy(alpha = 0f),
+        cornerRadius = 10.dp,
+        weight = SquircleDefaults.Weight,
+    ).padding(vertical = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally) {
         Text(String.format(Locale.ROOT, "%+.1f", displayed), Modifier.testTag("adaptive_band_value_$index"), fontSize = 10.sp, maxLines = 1,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected && enabled) ink else colors.onSurfaceVariantSummary)
+            color = if (selected && enabled) ink else colors.labelSecondaryVariant)
         Canvas(Modifier.fillMaxWidth().height(148.dp).testTag("adaptive_band_$index")
             .semantics {
                 contentDescription = "$frequency Hz"
@@ -159,38 +164,42 @@ private data class EqGainDrag(val manual: Float, val displayed: Float, val limit
             val x = size.width / 2
             val zero = size.height / 2
             val y = top + (limit - displayed) / (2 * limit) * (bottom - top)
-            drawLine(colors.onSurface.copy(alpha = .10f), Offset(x, top), Offset(x, bottom), 5.dp.toPx(), StrokeCap.Round)
-            drawLine(colors.onSurface.copy(alpha = .12f), Offset(0f, zero), Offset(size.width, zero), 1.dp.toPx())
+            drawLine(colors.labelPrimary.copy(alpha = .10f), Offset(x, top), Offset(x, bottom), 5.dp.toPx(), StrokeCap.Round)
+            drawLine(colors.labelPrimary.copy(alpha = .12f), Offset(0f, zero), Offset(size.width, zero), 1.dp.toPx())
             for (fraction in listOf(.25f, .75f)) {
                 val tick = top + fraction * (bottom - top)
-                drawLine(colors.onSurface.copy(alpha = .13f), Offset(x - 3.dp.toPx(), tick), Offset(x + 3.dp.toPx(), tick), 1.dp.toPx())
+                drawLine(colors.labelPrimary.copy(alpha = .13f), Offset(x - 3.dp.toPx(), tick), Offset(x + 3.dp.toPx(), tick), 1.dp.toPx())
             }
             drawLine(ink.copy(alpha = .5f), Offset(x, zero), Offset(x, y), 5.dp.toPx(), StrokeCap.Round)
             if (selected && enabled) drawCircle(ink.copy(alpha = .12f), 12.dp.toPx(), Offset(x, y))
             drawCircle(ink, 7.dp.toPx(), Offset(x, y))
-            drawCircle(colors.onPrimary, 2.5.dp.toPx(), Offset(x, y))
+            drawCircle(colors.labelOnColor, 2.5.dp.toPx(), Offset(x, y))
         }
         Text(if (frequency < 1000) "$frequency" else "${frequency / 1000}k", fontSize = 11.sp, maxLines = 1,
             fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-            color = if (selected && enabled) ink else colors.onSurfaceVariantSummary)
+            color = if (selected && enabled) ink else colors.labelSecondaryVariant)
     }
 }
 
 @Composable internal fun AdaptiveEqCurve(gains: List<Float>, live: Boolean) {
-    val colors = MiuixTheme.colorScheme
+    val colors = COUITheme.colorScheme
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)
-        .clip(RoundedCornerShape(14.dp)).background(colors.onSurface.copy(alpha = .025f)).padding(12.dp),
+        .squircleSurface(
+            color = colors.labelPrimary.copy(alpha = .025f),
+            cornerRadius = 14.dp,
+            weight = SquircleDefaults.Weight,
+        ).padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(if (live) "实时曲线 · 手动 + 动态" else "手动曲线 · 等待音乐播放", fontSize = 12.sp,
-            lineHeight = 17.sp, fontWeight = FontWeight.Medium, color = if (live) colors.primary else colors.onSurfaceVariantSummary)
-        Text("±9 dB · 中线为 0 dB", fontSize = 10.sp, color = colors.onSurfaceVariantSummary)
+            lineHeight = 17.sp, fontWeight = FontWeight.Medium, color = if (live) colors.primary else colors.labelSecondaryVariant)
+        Text("±9 dB · 中线为 0 dB", fontSize = 10.sp, color = colors.labelSecondaryVariant)
         Canvas(Modifier.fillMaxWidth().height(72.dp).padding(vertical = 4.dp).testTag("adaptive_eq_curve")
             .semantics { contentDescription = if (live) "十段均衡实时输出曲线" else "十段均衡手动曲线" }) {
             val mid = size.height / 2
-            for (fraction in listOf(0f, .5f, 1f)) drawLine(colors.onSurface.copy(alpha = if (fraction == .5f) .16f else .06f),
+            for (fraction in listOf(0f, .5f, 1f)) drawLine(colors.labelPrimary.copy(alpha = if (fraction == .5f) .16f else .06f),
                 Offset(0f, size.height * fraction), Offset(size.width, size.height * fraction))
             val points = List(10) { i -> Offset(size.width * i / 9, size.height * (.5f - (gains.getOrNull(i) ?: 0f).coerceIn(-9f, 9f) / 18)) }
-            points.forEach { point -> drawLine(colors.onSurface.copy(alpha = .045f), Offset(point.x, 0f), Offset(point.x, size.height)) }
+            points.forEach { point -> drawLine(colors.labelPrimary.copy(alpha = .045f), Offset(point.x, 0f), Offset(point.x, size.height)) }
             val path = Path().apply {
                 moveTo(points[0].x, points[0].y)
                 points.zipWithNext { a, b -> cubicTo((a.x + b.x) / 2, a.y, (a.x + b.x) / 2, b.y, b.x, b.y) }
@@ -201,7 +210,7 @@ private data class EqGainDrag(val manual: Float, val displayed: Float, val limit
             points.forEach { drawCircle(colors.primary.copy(alpha = if (live) 1f else .45f), 2.dp.toPx(), it) }
         }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            listOf("31 Hz", "16 kHz").forEach { Text(it, fontSize = 10.sp, color = colors.onSurfaceVariantSummary) }
+            listOf("31 Hz", "16 kHz").forEach { Text(it, fontSize = 10.sp, color = colors.labelSecondaryVariant) }
         }
     }
 }

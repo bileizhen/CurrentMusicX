@@ -19,7 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import io.github.currencortex.music.ui.component.LocalMusicPageActive
 import io.github.currencortex.music.ui.component.LocalPageContainerSettled
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 /** A player destination covers the retained player; it never docks or reopens the player. */
 @Composable internal fun PlayerEffectsOverlay(open: Boolean, onDismiss: () -> Unit,
@@ -30,7 +30,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
     visibility.targetState = open
     val presented = visibility.currentState || visibility.targetState
     val window = LocalActivity.current?.window
-    val lightBars = MiuixTheme.colorScheme.background.luminance() >= .5f
+    val lightBars = COUITheme.colorScheme.background.luminance() >= .5f
     DisposableEffect(window, presented, lightBars) {
         val controller = window?.let { WindowCompat.getInsetsController(it, it.decorView) }
         val oldStatus = controller?.isAppearanceLightStatusBars
@@ -52,7 +52,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
         exit = slideOutHorizontally(tween(260)) { it / 4 } + fadeOut(tween(180))) {
         CompositionLocalProvider(LocalMusicPageActive provides open,
             LocalPageContainerSettled provides (open && visibility.isIdle)) {
-            Box(Modifier.fillMaxSize().background(MiuixTheme.colorScheme.background).testTag("player_effects_overlay").pointerInput(Unit) {
+            Box(Modifier.fillMaxSize().background(COUITheme.colorScheme.background).testTag("player_effects_overlay").pointerInput(Unit) {
                 // Being a full-size pointer target already excludes the retained player
                 // behind this sibling. Consuming in Final cancels child touch-slop
                 // detection after small moves, preventing normal finger scrolling.

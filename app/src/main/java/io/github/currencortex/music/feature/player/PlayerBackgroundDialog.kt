@@ -25,10 +25,10 @@ import io.github.currencortex.music.ui.component.MusicDialogButton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
-import top.yukonga.miuix.kmp.basic.Slider
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import io.github.suqi8.coui.kmp.basic.Slider
+import io.github.suqi8.coui.kmp.basic.Text
+import io.github.suqi8.coui.kmp.basic.ButtonDefaults
+import io.github.suqi8.coui.kmp.theme.COUITheme
 
 @Composable internal fun PlayerBackgroundDialog(container: AppContainer, onDismiss: () -> Unit) {
     val config by container.settings.state.collectAsStateWithLifecycle()
@@ -73,23 +73,23 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
                 else if (config.playerBackground.isNotBlank()) "图片不可用，请重新选择"
                 else if (config.playerDynamicBackground) "流动背景 · 随播放中的实时节奏变化"
                 else "封面毛玻璃 · 播放与歌词共用柔和背景", fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                color = COUITheme.colorScheme.labelSecondaryVariant)
             MusicDialogActions(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 listOf(false to "封面毛玻璃", true to "流动背景").forEach { (dynamic, label) ->
                     val chosen = file == null && config.playerDynamicBackground == dynamic
                     MusicDialogButton(if (chosen) "✓ $label" else label, enabled = !busy && file == null,
-                        colors = if (chosen) ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.primary,
-                            textColor = MiuixTheme.colorScheme.onPrimary) else ButtonDefaults.textButtonColors(),
+                        colors = if (chosen) ButtonDefaults.textButtonColors(color = COUITheme.colorScheme.primary,
+                            textColor = COUITheme.colorScheme.labelOnColor) else ButtonDefaults.textButtonColors(),
                         modifier = Modifier.weight(1f).testTag(if (dynamic) "player_dynamic_background" else "player_frosted_background")
                             .semantics { selected = chosen },
                         onClick = { scope.launch { container.settings.edit { it.copy(playerDynamicBackground = dynamic) } } })
                 }
             }
             if (file != null) Text("恢复默认背景后可选择封面效果", fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary)
+                color = COUITheme.colorScheme.labelSecondaryVariant)
             MusicDialogActions(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 MusicDialogButton(if (file == null) "选择图片" else "更换图片",
-                    colors = ButtonDefaults.textButtonColors(color = MiuixTheme.colorScheme.primary, textColor = MiuixTheme.colorScheme.onPrimary),
+                    colors = ButtonDefaults.textButtonColors(color = COUITheme.colorScheme.primary, textColor = COUITheme.colorScheme.labelOnColor),
                     enabled = !busy, modifier = Modifier.weight(1f).testTag("player_background_choose"),
                     onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) })
                 MusicDialogButton("恢复默认", enabled = config.playerBackground.isNotBlank() && !busy,
