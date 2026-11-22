@@ -237,7 +237,7 @@ Emby 可从「设置 → 音源与网络 → 自建曲库 → Emby」连接，�
 
 ## 从源码构建与设备测试
 
-准备 JDK 17 及以上、Android SDK Platform 37.0 和 Build Tools 35.0.0。通过 `ANDROID_HOME` 或本机 `local.properties` 的 `sdk.dir` 指定 SDK 路径。
+准备 JDK 21 及以上、Android SDK Platform 37.0 和 Build Tools 35.0.0。通过 `ANDROID_HOME` 或本机 `local.properties` 的 `sdk.dir` 指定 SDK 路径。
 
 Windows / PowerShell：
 
