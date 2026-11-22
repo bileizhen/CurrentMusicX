@@ -66,7 +66,6 @@ private data class SettingsDestination(
 fun SettingsScreen(
     onAppearance: () -> Unit,
     onNetwork: () -> Unit,
-    onStorage: () -> Unit,
     onLogs: () -> Unit,
     onAbout: () -> Unit,
     onUpdates: (UpdatePageOrigin?) -> Unit,
@@ -160,8 +159,6 @@ fun SettingsScreen(
             colors.violet, onAudioOutput),
         SettingsDestination("app_links", "默认打开链接", "在系统中允许打开网易云和 CurrentMusic 网站链接",
             COUIIcons.Link, colors.blue) { io.github.currencortex.music.ui.util.openAppLinkSettings(context) },
-        SettingsDestination("storage", "存储空间", "缓存与下载占用", COUIIcons.FileDownloads,
-            colors.yellow, onStorage),
         SettingsDestination("logs", "导出日志", "保存或分享脱敏诊断文件", COUIIcons.File,
             colors.azure, onLogs),
         SettingsDestination("feedback", "意见反馈", "报告问题或提出改进建议", COUIIcons.Messages,
@@ -294,14 +291,6 @@ fun SettingsScreen(
                                                     io.github.currencortex.music.ui.util.openAppLinkSettings(context)
                                                 },
                                                 modifier = Modifier.testTag("open_app_links"),
-                                            )
-                                        }
-                                        item {
-                                            ArrowPreference(
-                                                title = "存储空间",
-                                                startAction = { SettingIcon(COUIIcons.FileDownloads, colors.yellow) },
-                                                onClick = onStorage,
-                                                modifier = Modifier.testTag("open_storage"),
                                             )
                                         }
                                         item {

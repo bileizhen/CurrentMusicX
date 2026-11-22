@@ -3,6 +3,7 @@ package io.github.currencortex.music.feature.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.github.currencortex.music.AppContainer
+import io.github.currencortex.music.core.storage.DataCacheCategory
 import io.github.currencortex.music.core.storage.StorageUsage
 import io.github.currencortex.music.data.settings.AudioCacheLimit
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +24,15 @@ class StorageViewModel(private val container: AppContainer) : ViewModel() {
     }
 
     fun clearData() = action("已清理数据缓存") { container.storage.clearDataCache() }
+
+    fun clearDataCategory(category: DataCacheCategory) =
+        action("已清理${category.label}") { container.storage.clearDataCache(category) }
+
+    /** The pinned round action: both caches in one pass, so the busy guard runs once. */
+    fun clearAll() = action("已清理全部缓存") {
+        container.storage.clearAudioCache()
+        container.storage.clearDataCache()
+    }
 
     fun clearAudio() = action("已清理音乐缓存") { container.storage.clearAudioCache() }
 
