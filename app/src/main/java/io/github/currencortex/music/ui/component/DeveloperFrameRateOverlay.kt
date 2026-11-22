@@ -29,12 +29,17 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import io.github.suqi8.coui.kmp.basic.Text
 import io.github.suqi8.coui.kmp.theme.COUITheme
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 
 /**
  * Developer frame-rate pill: average FPS and the 1% low over a rolling 5-second window,
  * refreshed twice a second. Colors compare against the best average seen in the last 30
  * seconds, so a change of display rate or thermal throttling moves the reference too.
+ * Foreground stalls count as slow frames; only a pause/resume gap restarts the window.
  * The pill can be dragged anywhere inside its bounds.
  */
 @Composable
@@ -85,19 +90,43 @@ fun DeveloperFrameRateOverlay(modifier: Modifier = Modifier) {
         }
     }
 
+    // A pause or resume splits the stream: the gap it leaves is not a rendered frame and must
+    // not enter the statistics, while a foreground stall of the same length must.
+    val pauseTicks = remember { AtomicInteger(0) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE || event == Lifecycle.Event.ON_RESUME) pauseTicks.incrementAndGet()
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     LaunchedEffect(Unit) {
         val samples = ArrayDeque<Long>(WINDOW_FRAME_CAP)
         val averages = ArrayDeque<AverageTick>(REFERENCE_HISTORY_CAP)
         var sumNanos = 0L
         var lastFrameNanos = 0L
         var nextRefreshNanos = 0L
+        var lastPauseTicks = pauseTicks.get()
         while (true) {
             withFrameNanos { frameNanos ->
                 if (lastFrameNanos != 0L) {
                     val delta = frameNanos - lastFrameNanos
-                    if (delta in 1L..IDLE_NANOS) {
-                        samples.addLast(delta)
-                        sumNanos += delta
+                    if (pauseTicks.get() != lastPauseTicks) {
+                        // The app left and came back: start a fresh window.
+                        samples.clear()
+                        sumNanos = 0L
+                        averages.clear()
+                        referenceFps = 0
+                        stats = FpsStats.Empty
+                        nextRefreshNanos = 0L
+                    } else if (delta > 0L) {
+                        // A long paused-to-resumed gap was handled above; a delta this large here
+                        // is a foreground stall, so keep it (capped at the window) to show up in LOW.
+                        val sample = delta.coerceAtMost(WINDOW_NANOS)
+                        samples.addLast(sample)
+                        sumNanos += sample
                         while (sumNanos > WINDOW_NANOS && samples.size > MIN_SAMPLES) sumNanos -= samples.removeFirst()
                         while (samples.size > WINDOW_FRAME_CAP) sumNanos -= samples.removeFirst()
                         if (frameNanos >= nextRefreshNanos && samples.size >= MIN_SAMPLES) {
@@ -111,6 +140,7 @@ fun DeveloperFrameRateOverlay(modifier: Modifier = Modifier) {
                         }
                     }
                 }
+                lastPauseTicks = pauseTicks.get()
                 lastFrameNanos = frameNanos
             }
         }
@@ -154,6 +184,5 @@ private const val WINDOW_NANOS = 5L * 1_000_000_000L
 private const val WINDOW_FRAME_CAP = 1_200
 private const val MIN_SAMPLES = 30
 private const val REFRESH_NANOS = 500_000_000L
-private const val IDLE_NANOS = 500_000_000L
 private const val REFERENCE_NANOS = 30L * 1_000_000_000L
 private const val REFERENCE_HISTORY_CAP = 120
