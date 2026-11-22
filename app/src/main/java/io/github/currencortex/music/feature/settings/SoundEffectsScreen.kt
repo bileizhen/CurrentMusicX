@@ -159,12 +159,6 @@ import kotlinx.serialization.json.*
                 Card(Modifier.padding(horizontal = 16.dp)) {
                     SettingsPreference("流声音频系统", if (adaptive.enabled) "已开启 · 动态 EQ / 虚拟低频 / 马达驱动" else "动态 EQ · 虚拟低频 · 马达驱动",
                         Modifier.testTag("open_adaptive_audio"), onClick = onAdaptive)
-                    SettingsDivider()
-                    SettingsPreference("均衡器", if (manual.enabled) manual.preset.label else "手动调节音色",
-                        Modifier.testTag("open_sound_equalizer"), onClick = onEqualizer)
-                    SettingsDivider()
-                    SettingsToggle("本机智能调音", options.smartEnabled, vm::smartEnabled,
-                        modifier = Modifier.testTag("sound_local_smart"), summary = status, enabled = canApply)
                 }
             }
             item {
