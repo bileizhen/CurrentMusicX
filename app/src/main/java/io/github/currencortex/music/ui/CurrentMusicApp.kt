@@ -63,10 +63,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.runtime.NavEntryDecorator
-import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
-import androidx.navigation3.ui.NavDisplay
+import androidx.compose.runtime.toMutableStateList
+import io.github.suqi8.coui.kmp.nav.core.NavDisplay
+import io.github.suqi8.coui.kmp.nav.core.NavDisplayEffects
+import io.github.suqi8.coui.kmp.nav.core.NavKey
+import io.github.suqi8.coui.kmp.nav.core.rememberNavSystemCornerRadius
+import io.github.suqi8.coui.kmp.nav.transition.NavSwipeDirection
+import io.github.suqi8.coui.kmp.nav.transition.NavTransitions
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import androidx.navigationevent.compose.rememberNavigationEventDispatcherOwner
@@ -153,6 +156,7 @@ private const val DISCOVER_TAB = 1
 private const val ME_TAB = 2
 private const val SETTINGS_TAB = 3
 private fun LegalDocument.route() = 3 + ordinal
+private data class MusicPageKey(val route: String, val position: Int) : NavKey
 private val NavigationStackSaver = androidx.compose.runtime.saveable.listSaver<List<String>, String>(
     save = { it },
     // An older app version may have saved routes that have since been removed.
@@ -354,19 +358,9 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         var playerDialogOpen by remember { mutableStateOf(false) }
         var playerEffectsOpen by rememberSaveable { mutableStateOf(false) }
         var playerEffectsPresented by remember { mutableStateOf(false) }
-        val pageNavigation=remember {PageContainerNavigation()}
-        val pageSceneStrategy=remember(pageNavigation) {PageContainerSceneStrategy(pageNavigation,
-            setOf(ROOT.toString(),SETTINGS.toString(),APPEARANCE.toString(),NETWORK.toString(),STORAGE.toString(),ABOUT.toString(),
-                "user/security","user/binding","user/netease-tasks","user/playlist-import","user/decorations",
-                EQUALIZER.toString(),"appearance-font","playback-settings","audio-output","desktop-lyrics","sound-equalizer","navidrome","emby",SupportConfig.route,SupportConfig.donationRoute,FEEDBACK_ROUTE)+
-                LegalDocument.entries.map {it.route().toString()})}
-        SideEffect {pageNavigation.onClosed={route->
-            if(backStack.lastOrNull()==route)backStack=backStack.dropLast(1)
-        }}
         fun navigateBack() {
             if (roomDialogOpen || playerDialogOpen || miniQueueOpen || songMenu != null) return
             if (backStack.size > 1) {
-                if(pageNavigation.close(backStack.last()))return
                 if (backStack.last() == SEARCH.toString()) { searchFocusManager.clearFocus(); searchKeyboard?.hide() }
                 playerSheetMotion = if (backStack.last() == PLAYER.toString()) PlayerSheetMotion.CLOSE else PlayerSheetMotion.NONE
                 if (backStack.last() == "lib/video") container.playerController.closeVideo()
@@ -389,7 +383,6 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
             }
             else playerSheetMotion = PlayerSheetMotion.NONE
             if (route == SEARCH) { searchSheet.source = searchBounds; searchFocus = true }
-            pageNavigation.record(route.toString())
             backStack = backStack + route.toString()
         }
         var roamingRequest by rememberSaveable { mutableIntStateOf(0) }
@@ -400,7 +393,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                 searchKeyboard?.hide()
             }
             if (route in setOf("lib/roaming", "qq/roaming")) { roamingRequest++; navigateTo(PLAYER); return }
-            if (backStack.last() != route) { pageNavigation.record(route); playerSheetMotion = PlayerSheetMotion.NONE; backStack = backStack + route }
+            if (backStack.last() != route) { playerSheetMotion = PlayerSheetMotion.NONE; backStack = backStack + route }
         }
         LaunchedEffect(Unit) {
             if ("lib/roaming" in backStack) {
@@ -418,6 +411,20 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         LaunchedEffect(memberFocus) { memberFocus?.let { shownMember = it } }
         val scope = androidx.compose.runtime.rememberCoroutineScope()
         val context = androidx.compose.ui.platform.LocalContext.current
+        val requestedPredictiveBack = Build.VERSION.SDK_INT >= 34 && settings.predictiveBack
+        var previousPredictiveBack by remember { mutableStateOf(requestedPredictiveBack) }
+        LaunchedEffect(requestedPredictiveBack) {
+            if (previousPredictiveBack != requestedPredictiveBack) {
+                (context.applicationContext as? android.app.Application)?.let { application ->
+                    io.github.currencortex.music.ui.util.PredictiveBackOptIn.apply(
+                        application.applicationInfo,
+                        requestedPredictiveBack,
+                    )
+                }
+                previousPredictiveBack = requestedPredictiveBack
+                (context as? android.app.Activity)?.recreate()
+            }
+        }
         fun launchUpdates() {
             scope.launch { container.updates.present(container.updateTransfer) }
         }
@@ -583,41 +590,25 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
         val rootTabSpace = if (!wideLayout && !keyboardOpen && !settings.floatingBar) 92.dp else 0.dp
         val ribbonEnabled = androidx.compose.runtime.rememberUpdatedState(settings.playlistDepthRibbon || settings.playlistRecordShelf)
         val availableMini = androidx.compose.runtime.rememberUpdatedState(miniAvailable)
-        val miniInset = androidx.compose.runtime.rememberUpdatedState(miniHeight)
-        val pageInteractive = androidx.compose.runtime.rememberUpdatedState(!playerPresented && !searchCoversScene)
-        val activeScene = androidx.compose.runtime.rememberUpdatedState(sceneStack.last())
-        // Update layout values without replacing the decorator that retains each page.
-        val sceneInsets = remember {
-            NavEntryDecorator<String> { entry ->
-                val playlistScene = supportsPlaylistOverlay(entry.contentKey.toString())
-                val ribbonScene = ribbonEnabled.value && playlistScene
-                val miniSpace = if (availableMini.value && entry.contentKey !in setOf(ROOT.toString(), PLAYER.toString(), "lib/video", "appearance-font")) miniInset.value else 0.dp
-                // Each moving scene must cover the outgoing page and its dim scrim, including
-                // its inset areas. A background on NavDisplay alone sits behind both scenes.
-                Box(Modifier.fillMaxSize().background(if (ribbonScene) androidx.compose.ui.graphics.Color(0xFF0A0A0A) else COUITheme.colorScheme.background)
-                    .testTag("music_scene_${entry.contentKey}")) {
-                    // Keep the scene viewport full size so the glass samples page content.
-                    // Clearance belongs to the end of each scrollable list, not to its bounds.
-                    CompositionLocalProvider(LocalMusicBottomInset provides miniSpace,
-                        LocalMusicPageActive provides (pageInteractive.value && entry.contentKey == activeScene.value)) { entry.Content() }
-                }
-            }
+        val pageStack = remember(sceneStack) {
+            sceneStack.mapIndexed { position, route -> MusicPageKey(route, position) as NavKey }.toMutableStateList()
         }
-        // Retained container scenes still own back callbacks. Keep their dispatcher active
-        // only when predictive back is enabled, and stop it while the player owns navigation.
-        // The legacy NavigationBackHandler below handles ordinary back when this is off.
+        var pageTransitionRunning by remember { mutableStateOf(false) }
+        LaunchedEffect(pageStack.toList()) {
+            pageTransitionRunning = true
+            kotlinx.coroutines.delay(450)
+            pageTransitionRunning = false
+        }
+        val currentPagePosition = (pageStack.lastOrNull() as? MusicPageKey)?.position ?: 0
         val pageBackOwner = rememberNavigationEventDispatcherOwner(enabled = predictiveBack && !playerPresented)
+        val overlayBackOwner = checkNotNull(LocalNavigationEventDispatcherOwner.current)
         val pageContent: @Composable () -> Unit = {
         Box(Modifier.fillMaxSize().then(if (launchBrand.active || launchPreview != null || playerPresented || miniQueueOpen || updateDialogVisible) Modifier.semantics { hideFromAccessibility() } else Modifier)) {
         Column(Modifier.fillMaxSize().then(if (searchCoversScene) Modifier else Modifier.imePadding())) {
-        NavDisplay(
-            backStack = sceneStack,
-            modifier = Modifier.weight(1f).fillMaxSize().then(pageSceneStrategy.blur.viewport)
-                .testTag("music_navigation").background(COUITheme.colorScheme.background),
-            entryDecorators = listOf(rememberSaveableStateHolderNavEntryDecorator(), sceneInsets),
-            sceneStrategies = listOf(pageSceneStrategy),
-            onBack = ::navigateBack,
-            entryProvider = entryProvider {
+        val pages = buildMap<String, @Composable () -> Unit> {
+                fun entry(route: String, content: @Composable () -> Unit) {
+                    put(route, content)
+                }
                 entry(ROOT.toString()) {
                     Box(Modifier.fillMaxSize()) {
                     Box(Modifier.fillMaxSize()
@@ -685,7 +676,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                                     onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
                                     onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") },
                                     onPlayback = { navigateLibrary("playback-settings") }, onEffects = { navigateTo(EQUALIZER) },
-                                    updateTransfer = updateTransferState, onNavigateFrom = pageNavigation::from,
+                                    updateTransfer = updateTransferState,
                                     onSupport = { navigateLibrary(SupportConfig.route) },
                                     onFeedback = { navigateLibrary(FEEDBACK_ROUTE) },
                                     accountName = settingsAccountName, accountAvatarUrl = settingsAvatarUrl,
@@ -723,7 +714,7 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                             onLogs = { showLogs = true }, onAbout = { navigateTo(ABOUT) }, onUpdates = openUpdates,
                             onDesktopLyrics = { navigateLibrary("desktop-lyrics") }, onAudioOutput = { navigateLibrary("audio-output") },
                             onPlayback = { navigateLibrary("playback-settings") }, onEffects = { navigateTo(EQUALIZER) },
-                            updateTransfer = updateTransferState, onNavigateFrom = pageNavigation::from, onBack = ::navigateBack,
+                            updateTransfer = updateTransferState, onBack = ::navigateBack,
                             onSupport = { navigateLibrary(SupportConfig.route) },
                             onFeedback = { navigateLibrary(FEEDBACK_ROUTE) },
                             accountName = settingsAccountName, accountAvatarUrl = settingsAvatarUrl,
@@ -1005,8 +996,32 @@ fun CurrentMusicApp(container: AppContainer, animateLaunch: Boolean = false, lau
                         }
                     }
                 }
-            },
-        )
+        }
+        NavDisplay(
+            backStack = pageStack,
+            modifier = Modifier.weight(1f).fillMaxSize().testTag("music_navigation")
+                .background(COUITheme.colorScheme.background),
+            transition = NavTransitions.COUIDefault,
+            effects = NavDisplayEffects(cornerClipRadius = rememberNavSystemCornerRadius()),
+            onBack = ::navigateBack,
+        ) {
+            entry<MusicPageKey>(swipeDismiss = NavSwipeDirection.None) { page ->
+                val content = pages[page.route]
+                val lastContent = remember(page) { mutableStateOf(content) }
+                SideEffect { if (content != null) lastContent.value = content }
+                val ribbonScene = ribbonEnabled.value && supportsPlaylistOverlay(page.route)
+                val miniSpace = if (availableMini.value && page.route !in setOf(ROOT.toString(), "lib/video", "appearance-font")) miniHeight else 0.dp
+                MusicNavigationPage(
+                    route = page.route,
+                    background = if (ribbonScene) androidx.compose.ui.graphics.Color(0xFF0A0A0A) else COUITheme.colorScheme.background,
+                    active = !playerPresented && !searchCoversScene && page == pageStack.last(),
+                    bottomInset = miniSpace,
+                    moving = pageTransitionRunning,
+                    covered = page.position < currentPagePosition,
+                    entering = pageTransitionRunning && page.route == (pageStack.lastOrNull() as? MusicPageKey)?.route,
+                ) { (content ?: lastContent.value)?.invoke() }
+            }
+        }
         }
         }
         }

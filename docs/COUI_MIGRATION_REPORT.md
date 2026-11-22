@@ -4,18 +4,18 @@
 
 | Area | Before | After |
 | --- | --- | --- |
-| UI toolkit | MIUIX KMP 0.9.3 (`top.yukonga.miuix.kmp`) | COUI 2.0.0 (`io.github.suqi8.coui.kmp`) |
+| UI toolkit | MIUIX KMP 0.9.3 (`top.yukonga.miuix.kmp`) | COUI 2.1.0 (`io.github.suqi8.coui.kmp`) |
 | Design language | HyperOS / Miuix | ColorOS 17 / COUI 17 |
 | Theme entry | `LeiTheme` -> `MiuixTheme(colors, textStyles)` | `LeiTheme` -> `COUITheme(colors, textStyles)` |
 | Color roles | Miuix role names (`onSurface`, `onSurfaceVariantSummary`, `surfaceContainer`, ...) | COUI 17 roles (`labelPrimary`, `labelSecondaryVariant`, `cardBackground`, ...) |
 | Text roles | `main`, `body1/2`, `footnote1/2`, `title1..4` | `bodyXL/L/M/S/XS`, `headlineS/XS`, `displayS/XS`, ... |
-| Material | MIUIX blur + CurrentMusic liquid glass | Official COUI 2.0 blur + CurrentMusic liquid glass |
-| Navigation | Navigation 3 runtime + MIUIX navigation3 adapter | Navigation 3 runtime/UI, CurrentMusic transitions preserved |
+| Material | MIUIX blur + CurrentMusic liquid glass | Official COUI 2.1 blur + CurrentMusic liquid glass |
+| Navigation | Navigation 3 runtime + MIUIX navigation3 adapter | COUI 2.1 navigation runtime (`coui-nav`) with COUI page transitions |
 | minSdk | 26 | 33 |
 
 ## 2. Main changes
 
-- `app/build.gradle.kts`: replaced MIUIX artifacts with `coui-ui-android`, `coui-blur-android`, `coui-icons-android`, `coui-preference-android`, `coui-squircle-android`, and added `navigation3-ui` (previously supplied transitively by the MIUIX navigation adapter). `minSdk` is now 33.
+- `app/build.gradle.kts`: replaced MIUIX artifacts with `coui-ui-android`, `coui-blur-android`, `coui-icons-android`, `coui-preference-android`, `coui-squircle-android`, and `coui-nav-android` at 2.1.0. `minSdk` is now 33.
 - About 190 Kotlin files had MIUIX imports; 211 Kotlin files were rewritten in total (imports, `Miuix*` symbols, color slots, text styles).
 - `ui/theme/Theme.kt`: theme now uses `COUITheme`; removed the global transparent `LocalIndication` override so COUI's press/hover/focus feedback is active.
 - `ui/theme/AppearanceColors.kt`: rebuilt on `io.github.suqi8.coui.kmp.theme.Colors`. Monet/system seed, custom accent, pure black, card/background levels and label opacity are preserved through COUI roles.
@@ -47,7 +47,7 @@
 
 ## 3. Blur and compatibility
 
-`coui-blur-android:2.0.0` is now used directly and the application minimum SDK is 33. The former `coui-blur-compat` module and its manifest/dependency wiring were removed. The old `tools:overrideLibrary` entry is also absent.
+`coui-blur-android:2.1.0` is now used directly and the application minimum SDK is 33. The former `coui-blur-compat` module and its manifest/dependency wiring were removed. The old `tools:overrideLibrary` entry is also absent.
 
 The settings page records its scrolling content with `rememberLayerBackdrop` and passes it to COUI's `TopAppBarGlow`. The scroll-driven condensed-light overlay provides the ColorOS 17 progressive blur, 30dp alpha threshold and 24dp fade strip below the bar. A dedicated collapsing header uses the 116dp/40sp SettingsHome metrics, but removes the generic `TopAppBar` 52dp collapsed toolbar slot: the title height reaches zero and the pinned search bar sits directly below the status bar, matching the system Settings page without an empty band. Without runtime shader support, `TopAppBarGlow` falls back to the opaque page surface.
 
@@ -75,7 +75,7 @@ Environment: Windows, JDK 21.0.10, AGP 8.13.2, Kotlin 2.4.0, compileSdk 37.
 | `:app:assembleDebug` | PASS when the local CMake task is excluded, as in the existing verification workflow |
 | `:app:assembleRelease` | PASS with the local CMake tasks excluded; signed APK assembled from the checked-in native libraries |
 
-The debug and signed release APKs report `minSdkVersion 33`, `targetSdkVersion 36`, and contain official COUI blur classes with zero `top.yukonga.miuix` classes.
+The debug and signed release APKs report `minSdkVersion 33`, `targetSdkVersion 36`, and contain official COUI blur classes. Navigation also uses COUI's own 2.1.0 runtime; no MIUIX navigation artifact remains on the runtime classpath.
 
 After the settings, font and update-menu visual changes, `:app:compileDebugKotlin`, `:app:assembleDebug`, `:app:assembleRelease`, `:app:lintRelease`, `:app:minifyReleaseWithR8` and `:app:testDebugUnitTest` were rerun and passed. `:app:testDebugUnitTest` remains `NO-SOURCE` in this checkout.
 
@@ -88,6 +88,16 @@ Every `configureCMakeDebug[abi]` task aborts with Windows exit code `-1073740791
 - NDK 30 clang and lld compile/link the same probe file successfully when invoked directly.
 
 The signed APK can still be assembled locally when the CMake tasks are excluded because the required native libraries are committed under `jniLibs`. A clean native rebuild/AAB still needs a working CMake host or CI.
+
+## 5.1 Predictive back follows SukiSU-Nova
+
+Ordinary pages now use COUI 2.1.0's `coui-nav-android` navigation runtime: one `NavDisplay` owns the route stack and the library's predictive-back handler owns gesture progress, velocity, commit and cancel. This replaces the previous AndroidX Navigation3 host plus page-specific return animator, which had competing back handlers and never reliably delivered the system gesture to the page animation.
+
+The `预测性返回手势` preference also follows Nova's Android 14+ application opt-in: `ApplicationInfo.setEnableOnBackInvokedCallback` is invoked through `HiddenApiBypass`, and changing the preference recreates the activity so Android installs the matching callback policy. COUI's `COUIDefault` transition drives the page and underlying page together; no custom container shrink is used for normal page navigation.
+
+The COUI screen components, settings UI and player/update overlays remain in CurrentMusic. Custom fullscreen update and search overlays retain their existing ownership and back handling outside the navigation stack.
+
+On the isolated verification package on RMX5060 (ColorOS 17), the final COUI 2.1 build was recorded with full-page horizontal movement before release and only one pop on commit. Left- and right-edge commit and gesture cancellation were checked on Settings/Appearance. The preceding verification build also covered returning from Font through Appearance to Settings and switching prediction off and back on, including ordinary back while prediction was disabled. Release assembly and lint passed; unit tests had no sources. The production package was not replaced for this change.
 
 ## 6. Device verification
 
