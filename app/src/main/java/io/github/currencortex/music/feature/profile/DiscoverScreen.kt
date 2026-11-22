@@ -36,7 +36,7 @@ import io.github.suqi8.coui.kmp.basic.*
         Column(Modifier.fillMaxSize().padding(top = topInset)) {
             SettingsSegmentedControl(listOf("音乐", "用户", "帖子", "Chat"), pager.targetPage,
                 { index -> scope.launch { pager.animateScrollToPage(index) } },
-                Modifier.elasticRootComponent().padding(horizontal = 16.dp).padding(bottom = 12.dp), tag = "discover_tabs", role = Role.Tab)
+                Modifier.elasticRootComponent().padding(horizontal = 16.dp).padding(bottom = 12.dp), tag = "discover_tabs")
             HorizontalPager(pager, Modifier.weight(1f).fillMaxWidth().clipToBounds()
                 .testTag("discover_pager")) { page ->
                 when (page) {

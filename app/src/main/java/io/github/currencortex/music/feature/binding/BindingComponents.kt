@@ -128,8 +128,7 @@ import java.util.Locale
 
 @Composable internal fun BindingMethods(qr: Boolean, enabled: Boolean, onSelect: (Boolean) -> Unit) {
     SettingsSegmentedControl(listOf("扫码登录", "手机验证码"), if (qr) 0 else 1,
-        { onSelect(it == 0) }, enabled = enabled, role = Role.Tab,
-        tag = "binding_method", itemTag = { if (it == 0) "qr_binding" else "phone_binding_tab" })
+        { onSelect(it == 0) }, enabled = enabled, tag = "binding_method")
 
 }
 

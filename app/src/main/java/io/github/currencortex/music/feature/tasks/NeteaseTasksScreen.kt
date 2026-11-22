@@ -65,8 +65,7 @@ import java.time.format.DateTimeFormatter
         } }
         if (connected) item("categories") {
             SettingsSegmentedControl(NeteaseTaskGroup.entries.map { it.title }, state.group.ordinal,
-                { vm.select(NeteaseTaskGroup.entries[it]) }, tag = "tasks_categories", role = Role.Tab,
-                itemTag = { "tasks_tab_${NeteaseTaskGroup.entries[it].name}" })
+                { vm.select(NeteaseTaskGroup.entries[it]) }, tag = "tasks_categories")
         }
             if (!connected) item {
                 SettingsGroup(Modifier.fillMaxWidth()) {

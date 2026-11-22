@@ -124,7 +124,7 @@ import kotlin.math.roundToInt
                         trailing = { Text("${(config.uiScale * 100).roundToInt()}%", color = colors.labelSecondaryVariant) })
                     // Keep the slider outside the header's button semantics and tap target.
                     Box(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp)) {
-                            GlassSlider(draft, { draft = it }, onValueChangeFinished = { viewModel.edit { it.copy(uiScale = draft) } },
+                            Slider(draft, { draft = it }, onValueChangeFinished = { viewModel.edit { it.copy(uiScale = draft) } },
                                 valueRange = AppearanceSettings.MIN_SCALE..AppearanceSettings.MAX_SCALE, showKeyPoints = true,
                                 keyPoints = listOf(.8f, .9f, 1f, 1.1f, 1.2f), magnetThreshold = .01f,
                                 modifier = Modifier.testTag("setting_scale").semantics { setProgress { value ->
@@ -227,7 +227,7 @@ import kotlin.math.roundToInt
                     }
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("A", fontSize = 13.sp, color = colors.labelSecondaryVariant)
-                        GlassSlider(value, { draft = it }, enabled = config.customTextScale, valueRange = .8f..1.4f, steps = 11, showKeyPoints = true,
+                        Slider(value, { draft = it }, enabled = config.customTextScale, valueRange = .8f..1.4f, steps = 11, showKeyPoints = true,
                             keyPoints = (0..12).map { .8f + it * .05f }, magnetThreshold = .015f,
                             onValueChangeFinished = { vm.edit { it.copy(textScale = draft) } },
                             modifier = Modifier.weight(1f).testTag("appearance_text_scale_slider").semantics { setProgress { target ->

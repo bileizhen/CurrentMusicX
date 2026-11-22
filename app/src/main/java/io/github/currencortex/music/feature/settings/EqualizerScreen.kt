@@ -2,7 +2,7 @@ package io.github.currencortex.music.feature.settings
 
 import io.github.currencortex.music.ui.component.nativeui.*
 
-import io.github.currencortex.music.ui.component.nativeui.GlassSlider as Slider
+import io.github.suqi8.coui.kmp.basic.Slider
 
 import io.github.currencortex.music.ui.component.nativeui.SettingsChoiceButton
 
