@@ -22,6 +22,7 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
     private val autoMatch: (suspend (Song) -> SavedLyrics?)? = null,
     private val alignMatch: (suspend (Song, SavedLyrics) -> SavedLyrics)? = null,
     private val localLyrics: (suspend (Song) -> SavedLyrics?)? = null,
+    private val matchedCache: MatchedLyricsCache? = null,
     private val now: () -> Long = System::currentTimeMillis) {
     private val lock = Mutex()
     private data class MemoryEntry(val result: LyricsResult, val savedAtMillis: Long, val expiresAtMillis: Long?)
@@ -73,6 +74,8 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
         var automaticFailed = false
         suspend fun matchAutomatically(): LyricsResult? = try {
             autoMatch?.invoke(song)?.takeIf { it.document.lines.isNotEmpty() }?.let {
+                // Keep the winner on disk so the next load can fall back without a network.
+                matchedCache?.write(song, it)
                 remember(it.timingAlignment?.applyTo(it.document) ?: it.document, it.origin, it.document, it.timingAlignment)
             }
         } catch (e: CancellationException) { throw e }
@@ -88,6 +91,12 @@ class LyricsRepository(private val ttml: LyricsProvider, private val fallback: L
         // QQ still gets the direct provider fallback below when auto matching finds nothing.
         if (selected?.automatic == true) {
             matchAutomatically()?.let { return@withLock it }
+            // Matching compares providers afresh every load; only when it fails is the last
+            // winner used, so an offline session still shows lyrics.
+            matchedCache?.read(song)?.let {
+                return@withLock remember(it.timingAlignment?.applyTo(it.document) ?: it.document,
+                    it.origin, it.document, it.timingAlignment)
+            }
             if (!qqMusic) return@withLock unavailable()
         }
         memory[memoryKey]?.takeIf { keys.isNotEmpty() }?.let { entry ->

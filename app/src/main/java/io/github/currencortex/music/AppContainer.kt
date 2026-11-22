@@ -338,7 +338,11 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
     }
     val audioCache = AudioCache(context.applicationContext, java.io.File(context.cacheDir, "audio$storageSuffix"), navidromeMedia,
         initialMaxBytes = AudioCache.UNLIMITED_BYTES, initialCapacityReady = false)
-    val storage = io.github.currencortex.music.core.storage.StorageStore(context.applicationContext, audioCache)
+    // The lyrics cache is mostly rows in the music database, so the storage page measures and
+    // clears them through it rather than only counting cache/lyrics files.
+    val storage = io.github.currencortex.music.core.storage.StorageStore(context.applicationContext, audioCache,
+        databaseLyricsBytes = { database.music().lyricsBytes() },
+        clearDatabaseLyrics = { database.music().clearLyrics() })
     val audioSources = AudioSourceResolver(audioCache,
         { audioSession() },
         currentProvider = { audioSettings.access().identity },
@@ -482,7 +486,9 @@ class AppContainer(context: Context, storageNamespace: String = "", externalPlay
                     io.github.currencortex.music.feature.lyrics.data.LyricsOrigin(source.label, source.name.lowercase()),
                     automatic = source == io.github.currencortex.music.data.settings.LyricsSource.AUTO)
             }
-        }, overrides = songLyrics, autoMatch = if (automaticLyricsProvider != null || (storageNamespace.isEmpty() && ttmlProvider == null)) {
+        }, overrides = songLyrics, matchedCache = io.github.currencortex.music.feature.lyrics.data.MatchedLyricsCache(
+            java.io.File(context.cacheDir, "lyrics.matched$storageSuffix")),
+        autoMatch = if (automaticLyricsProvider != null || (storageNamespace.isEmpty() && ttmlProvider == null)) {
             { song ->
                 when {
                     musicSettings.state.value.lyricsSource != io.github.currencortex.music.data.settings.LyricsSource.AUTO -> null
