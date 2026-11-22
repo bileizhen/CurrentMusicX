@@ -36,6 +36,10 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
     val trial = state.trial
     val list = rememberLazyListState()
     LaunchedEffect(trial, state.signedIn) { list.scrollToItem(0) }
+    io.github.currencortex.music.ui.component.MusicSnackbarLoadError(state.error,
+        active = io.github.currencortex.music.ui.component.LocalMusicPageActive.current,
+        loading = state.loading, actionLabel = if (trial == null) "重试" else null,
+        onAction = { refresh() })
     BackHandler(trial != null) { closeTrial() }
     MusicSubpage(if (trial == null) "等级与成长" else "等级试炼", "levels_screen",
         onBack = { if (trial != null) closeTrial() else onBack() }, actions = {
@@ -47,11 +51,6 @@ import io.github.suqi8.coui.kmp.theme.COUITheme
             verticalArrangement = Arrangement.spacedBy(12.dp)) {
             if (!state.signedIn) item { SettingsHint("登录 CurrentMusic 后查看等级与成长进度") }
             if (state.loading && state.progress == null) item { SettingsHint("正在获取等级…") }
-            state.error?.let { error -> item { SettingsGroup {
-                SettingsHint(error, error = true)
-                if (trial == null) MusicTextAction("重试", refresh, Modifier.padding(horizontal = 16.dp),
-                    enabled = !state.loading && !state.busy)
-            } } }
             if (trial != null) {
                 item { SettingsGroup { Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("已完成 ${state.answers.count { it >= 0 }} / ${trial.questions.size} 题", fontWeight = FontWeight.SemiBold)
