@@ -3,8 +3,9 @@ on:
   push:
     branches: [main]
   pull_request_target:
-    # Retargeting away from main must also wake a pending batch.
-    types: [closed, edited]
+    # Retargeting away from main or converting the last blocking PR into
+    # a draft must wake the pending batch even without a new main commit.
+    types: [closed, edited, converted_to_draft]
 permissions:
   contents: read
   actions: write
@@ -15,7 +16,8 @@ jobs:
       github.repository == 'bileizhen/CurrentMusicX' &&
       (github.event_name == 'push' ||
        (github.event.action == 'closed' && !github.event.pull_request.merged && github.event.pull_request.base.ref == 'main') ||
-       (github.event.action == 'edited' && github.event.changes.base.ref.from == 'main' && github.event.pull_request.base.ref != 'main'))
+       (github.event.action == 'edited' && github.event.changes.base.ref.from == 'main' && github.event.pull_request.base.ref != 'main') ||
+       (github.event.action == 'converted_to_draft' && github.event.pull_request.base.ref == 'main'))
     concurrency:
       group: ci-batch-wakeup-main
       cancel-in-progress: false
